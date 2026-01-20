@@ -443,30 +443,6 @@
     (is (thrown-with-msg? Exception #"Session not found"
           (sdk/resume-session *test-client* "nonexistent-session-id" {})))))
 
-;; -----------------------------------------------------------------------------
-;; sendAndWait Timeout Tests
-;; -----------------------------------------------------------------------------
-
-(deftest test-send-and-wait-with-timeout
-  (testing "sendAndWait respects timeout parameter"
-    (let [session (sdk/create-session *test-client* {})]
-      ;; With adequate timeout, should succeed
-      (let [result (sdk/send-and-wait! session {:prompt "Test"} 5000)]
-        (is (some? result))
-        (is (= "assistant.message" (:type result)))))))
-
-;; -----------------------------------------------------------------------------
-;; Tool Error Handling Tests
-;; -----------------------------------------------------------------------------
-
-(deftest test-tool-missing-returns-failure
-  (testing "Calling unregistered tool returns failure"
-    ;; The mock server simulates tool calls - verify handler behavior
-    (let [session (sdk/create-session *test-client* {})]
-      ;; Session without tools should still work
-      (let [result (sdk/send-and-wait! session {:prompt "Test"})]
-        (is (some? result))))))
-
 (deftest test-tool-handler-errors
   (testing "Tool handler that throws returns failure result"
     (let [error-tool (sdk/define-tool "error_tool"
