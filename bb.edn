@@ -1,0 +1,29 @@
+{:paths ["src"]
+ :deps {org.clojure/clojure {:mvn/version "1.12.4"}}
+ :tasks
+ {:require [[clojure.string :as str]]
+
+  test {:doc "Run the test suite."
+        :task (clojure "-M:test" "-m" "cognitect.test-runner")}
+
+  test:bb {:doc "Run the test suite using Babashka to check compatibility."
+           :extra-paths ["test"]
+           :extra-deps  {io.github.cognitect-labs/test-runner {:git/tag "v0.5.1" :git/sha "dfb30dd"}}
+           :task (exec 'cognitect.test-runner.api/test)}
+
+  test:all {:doc "Run the test suite with both Clojure and Babashka."
+            :depends [test test:bb]}
+
+  docs {:doc "Generate API documentation with codox."
+        :task (clojure "-X:codox")}
+
+  ci {:doc "Run the CI pipeline of tests and build the JAR."
+      :depends [test:all]
+      :task (clojure "-T:build" "jar")}
+
+  ci:deploy {:doc "Run the CI pipeline and deploy the JAR."
+             :depends [ci]
+             :task (clojure "-T:build" "deploy")}
+
+  install {:doc "Install the JAR locally (build via ci)."
+           :task (clojure "-T:build" "install")}}}
