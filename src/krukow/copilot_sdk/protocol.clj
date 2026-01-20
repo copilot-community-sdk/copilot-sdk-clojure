@@ -19,7 +19,8 @@
            [java.nio ByteBuffer]
            [java.nio.channels Channels ReadableByteChannel WritableByteChannel ClosedChannelException]
            [java.nio.channels AsynchronousCloseException]
-           [java.nio.charset StandardCharsets]))
+           [java.nio.charset StandardCharsets]
+           [java.util.concurrent LinkedBlockingQueue]))
 
 (def ^:private content-length-header "Content-Length: ")
 
@@ -113,6 +114,8 @@
      state-atom                    ; atom owned by client, contains :connection key
      incoming-ch                   ; channel for incoming messages (responses + notifications)
      outgoing-ch                   ; channel for outgoing messages
+     notification-queue            ; queue for notifications to avoid blocking reader
+     notification-thread           ; Thread
      read-thread])                 ; Thread
 
 ;; State path helpers
@@ -194,7 +197,7 @@
       (:method normalized)
       (do
         (log/debug "Received notification: method=" (:method normalized))
-        (put! incoming-ch normalized))
+        (.put ^LinkedBlockingQueue (:notification-queue conn) normalized))
       
       :else nil)))
 
@@ -312,6 +315,7 @@
         write-ch (Channels/newChannel out)
         incoming-ch (chan 1024)
         outgoing-ch (chan 1024)
+        notification-queue (LinkedBlockingQueue.)
         conn (map->Connection
               {:read-channel read-ch
                :write-channel write-ch
@@ -319,10 +323,32 @@
                :state-atom state-atom
                :incoming-ch incoming-ch
                :outgoing-ch outgoing-ch
+               :notification-queue notification-queue
+               :notification-thread nil
                :read-thread nil})]
     
     ;; Start writer loop
     (start-write-loop! conn)
+    
+    ;; Start notification dispatcher thread
+    (let [thread (Thread.
+                  (fn []
+                    (log/debug "Notification dispatcher started")
+                    (try
+                      (loop []
+                        (when-let [msg (.take notification-queue)]
+                          (when (>!! incoming-ch msg)
+                            (recur))))
+                      (catch InterruptedException _
+                        (log/debug "Notification dispatcher interrupted"))
+                      (catch Exception e
+                        (log/error "Notification dispatcher exception: " (ex-message e)))
+                      (finally
+                        (log/debug "Notification dispatcher ending")))))]
+      (.setDaemon thread true)
+      (.setName thread "jsonrpc-notification-dispatcher")
+      (.start thread)
+      (update-conn! state-atom assoc :notification-thread thread))
     
     ;; Start reader thread
     (let [thread (start-read-loop! conn)]
@@ -349,6 +375,11 @@
       (.interrupt writer)
       (try (.join writer 500) (catch Exception _)))
     
+    ;; Interrupt notification dispatcher thread
+    (when-let [^Thread thread (:notification-thread (conn-state state-atom))]
+      (.interrupt thread)
+      (try (.join thread 500) (catch Exception _)))
+
     ;; Close NIO channels - this unblocks any blocked reads
     (try (.close ^ReadableByteChannel (:read-channel conn)) (catch Exception _))
     (try (.close ^WritableByteChannel (:write-channel conn)) (catch Exception _))

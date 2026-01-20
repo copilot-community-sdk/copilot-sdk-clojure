@@ -1,5 +1,6 @@
 (ns krukow.copilot-sdk.protocol-test
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.core.async :as async :refer [>!! <!!]]
             [krukow.copilot-sdk.protocol :as protocol])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream
             PipedInputStream PipedOutputStream]))

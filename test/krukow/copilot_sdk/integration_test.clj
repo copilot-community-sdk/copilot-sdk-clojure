@@ -5,6 +5,7 @@
             [clojure.tools.logging :as log]
             [krukow.copilot-sdk :as sdk]
             [krukow.copilot-sdk.client :as client]
+            [krukow.copilot-sdk.protocol :as protocol]
             [krukow.copilot-sdk.session :as session]
             [krukow.copilot-sdk.mock-server :as mock]))
 
@@ -269,18 +270,45 @@
 
 (deftest test-dispatch-event-blocks-when-full
   (testing "dispatch-event! waits for space instead of dropping events"
-    (let [session (sdk/create-session *test-client* {})
-          session-id (sdk/session-id session)
-          small-ch (chan 1)]
-      (swap! (:state *test-client*) assoc-in [:session-io session-id :event-chan] small-ch)
-      (swap! (:state *test-client*) assoc-in [:session-io session-id :event-mult] nil)
+    (let [session-id "session-test"
+          small-ch (chan 1)
+          client {:state (atom {:sessions {session-id {:destroyed? false}}
+                                :session-io {session-id {:event-chan small-ch}}})}]
       (>!! small-ch {:type "dummy"})
-      (let [dispatch-future (future (session/dispatch-event! *test-client* session-id
-                                                            {:type "session.idle"}))]
+      (let [dispatch-future (future (session/dispatch-event! client session-id
+                                                             {:type "session.idle"}))]
         (is (= ::timeout (deref dispatch-future 50 ::timeout)))
         (is (= "dummy" (:type (<!! small-ch))))
         (is (not= ::timeout (deref dispatch-future 200 ::timeout)))
         (is (= "session.idle" (:type (<!! small-ch))))))))
+
+(deftest test-protocol-notification-queue
+  (testing "Protocol notifications queue without blocking reader thread"
+    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
+          in (java.io.PipedInputStream.)
+          _ (java.io.PipedOutputStream. in)
+          out (java.io.ByteArrayOutputStream.)
+          conn (protocol/connect in out state-atom)
+          incoming (:incoming-ch conn)
+          msg {:jsonrpc "2.0"
+               :method "session.event"
+               :params {:sessionId "s-1"
+                        :event {:type "session.idle"}}}]
+      (try
+        (dotimes [i 1024]
+          (>!! incoming {:i i}))
+        (let [dispatch (future (#'protocol/dispatch-message! conn msg))]
+          (Thread/sleep 50)
+          (is (true? (realized? dispatch)))
+          (<!! incoming)
+          (let [seen (loop []
+                       (when-let [v (<!! incoming)]
+                         (if (= "session.event" (:method v))
+                           v
+                           (recur))))]
+            (is (= "session.event" (:method seen)))))
+        (finally
+          (protocol/disconnect conn))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool Handler Tests
