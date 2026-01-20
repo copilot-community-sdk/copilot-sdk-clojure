@@ -301,3 +301,11 @@
                              :toolName tool-name
                              :arguments arguments}})
     tool-call-id))
+
+(defn send-notification!
+  "Send a generic notification to the client."
+  [server method params]
+  (write-message (:writer server)
+                 {:jsonrpc "2.0"
+                  :method method
+                  :params params}))

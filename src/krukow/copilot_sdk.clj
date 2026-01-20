@@ -88,6 +88,12 @@
   [client]
   (client/state client))
 
+(defn notifications
+  "Get the channel that receives non-session notifications.
+   Notifications are dropped if the channel is full."
+  [client]
+  (client/notifications client))
+
 (defn ping
   "Ping the server to check connectivity.
    Returns {:message :timestamp :protocol-version}"

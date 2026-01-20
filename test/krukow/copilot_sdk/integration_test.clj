@@ -268,6 +268,16 @@
         (is (pos? (count @events))))
       (sdk/unsubscribe-events session events-ch))))
 
+(deftest test-non-session-notification-routed
+  (testing "Non-session notifications are delivered to client notifications channel"
+    (let [notif-ch (sdk/notifications *test-client*)
+          payload {:status "ok" :version "1.2.3"}]
+      (mock/send-notification! *mock-server* "cli.status" payload)
+      (let [[notif _] (alts!! [notif-ch (timeout 1000)])]
+        (is (some? notif))
+        (is (= "cli.status" (:method notif)))
+        (is (= payload (:params notif)))))))
+
 (deftest test-dispatch-event-blocks-when-full
   (testing "dispatch-event! waits for space instead of dropping events"
     (let [session-id "session-test"

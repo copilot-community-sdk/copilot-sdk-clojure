@@ -1,6 +1,6 @@
 (ns krukow.copilot-sdk.client
   "CopilotClient - manages connection to the Copilot CLI server."
-  (:require [clojure.core.async :as async :refer [go go-loop <! >! chan close!]]
+  (:require [clojure.core.async :as async :refer [go go-loop <! >! >!! chan close!]]
             [clojure.spec.alpha :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
@@ -11,7 +11,8 @@
             [krukow.copilot-sdk.session :as session]
             [krukow.copilot-sdk.util :as util]
             [krukow.copilot-sdk.logging :as log])
-  (:import [java.net Socket]))
+  (:import [java.net Socket]
+           [java.util.concurrent LinkedBlockingQueue]))
 
 (def ^:private sdk-protocol-version 1)
 
@@ -75,6 +76,9 @@
    :session-io {}            ; session IO resources by session-id
    :actual-port port
    :router-ch nil
+   :router-queue nil
+   :router-thread nil
+   :router-running? false
    :stopping? false
    :restarting? false
    :force-stopping? false})
@@ -129,24 +133,55 @@
   [client]
   (let [{:keys [connection-io]} @(:state client)
         notif-ch (proto/notifications connection-io)
-        router-ch (chan 1024)]
+        router-ch (chan 1024)
+        router-queue (LinkedBlockingQueue.)
+        router-thread (Thread.
+                       (fn []
+                         (log/debug "Notification router dispatcher started")
+                         (try
+                           (loop []
+                             (when (:router-running? @(:state client))
+                               (when-let [notif (.take router-queue)]
+                                 (>!! router-ch notif)
+                                 (recur))))
+                           (catch InterruptedException _
+                             (log/debug "Notification router dispatcher interrupted"))
+                           (catch Exception e
+                             (log/error "Notification router dispatcher exception: " (ex-message e)))
+                           (finally
+                             (log/debug "Notification router dispatcher ending")))))]
     ;; Store the router channel
-    (swap! (:state client) assoc :router-ch router-ch)
+    (swap! (:state client) assoc
+           :router-ch router-ch
+           :router-queue router-queue
+           :router-thread router-thread
+           :router-running? true)
+    (.setDaemon router-thread true)
+    (.setName router-thread "notification-router-dispatcher")
+    (.start router-thread)
     
     ;; Simple routing - read from notification-chan and dispatch
     (go-loop []
       (if-let [notif (<! notif-ch)]
         (do
-          (when (= (:method notif) "session.event")
+          (if (= (:method notif) "session.event")
             (let [{:keys [session-id event]} (:params notif)]
               (log/debug "Routing event to session " session-id ": type=" (:type event))
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
                 (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-                  (>! event-chan event)))))
+                  (>! event-chan event))))
+            (do
+              (.put router-queue notif)))
           (recur))
         (do
           (log/debug "Notification channel closed")
           (maybe-reconnect! client "connection-closed"))))))
+
+(defn notifications
+  "Get the channel that receives non-session notifications.
+   Notifications are dropped if the channel is full."
+  [client]
+  (:router-ch @(:state client)))
 
 (defn- mark-restarting!
   "Atomically mark the client as restarting. Returns true if this caller won."
@@ -312,6 +347,15 @@
   (let [errors (atom [])
         {:keys [sessions session-io process connection-io socket]} @(:state client)]
     (try
+      ;; 0. Stop notification routing
+      (swap! (:state client) assoc :router-running? false)
+      (when-let [^Thread router-thread (:router-thread @(:state client))]
+        (.interrupt router-thread)
+        (try (.join router-thread 500) (catch Exception _)))
+      (when-let [router-ch (:router-ch @(:state client))]
+        (close! router-ch))
+      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+
       ;; 1. Destroy all sessions
       (doseq [[session-id _] sessions]
         (try
@@ -364,6 +408,15 @@
       ;; Clear sessions without destroying
       (swap! (:state client) assoc :sessions {} :session-io {})
 
+      ;; Stop notification routing
+      (swap! (:state client) assoc :router-running? false)
+      (when-let [^Thread router-thread (:router-thread @(:state client))]
+        (.interrupt router-thread)
+        (try (.join router-thread 500) (catch Exception _)))
+      (when-let [router-ch (:router-ch @(:state client))]
+        (close! router-ch))
+      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+
       ;; Force close connection
       (when connection-io
         (try (proto/disconnect connection-io) (catch Exception _)))
@@ -385,6 +438,10 @@
           :socket nil
           :process nil
           :actual-port nil
+          :router-ch nil
+          :router-queue nil
+          :router-thread nil
+          :router-running? false
           :force-stopping? false})
   nil)
 
