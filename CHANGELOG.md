@@ -1,0 +1,38 @@
+# Change Log
+All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
+
+## [Unreleased]
+
+## [0.1.0] - 2026-01-18
+### Added
+- Initial release of copilot-sdk-clojure
+- Full port of JavaScript Copilot SDK to idiomatic Clojure
+- JSON-RPC protocol layer with Content-Length framing
+- CopilotClient for managing CLI server lifecycle
+  - stdio and TCP transport support
+  - Auto-start and auto-restart capabilities
+- CopilotSession for conversation management
+  - `send!`, `send-and-wait!`, `send-async` message methods
+  - Event handling via core.async mult channels
+  - Tool registration and invocation
+  - Permission request handling
+- Tool definition helpers with result builders
+- System message configuration (append/replace modes)
+- MCP server configuration support
+- Custom agent configuration support
+- Provider configuration (BYOK - Bring Your Own Key)
+- Streaming support for assistant messages
+- Comprehensive clojure.spec definitions
+- Example applications:
+  - Basic Q&A conversation
+  - Custom tool integration
+  - Multi-agent orchestration with core.async
+
+### Dependencies
+- org.clojure/clojure 1.12.4
+- org.clojure/core.async 1.6.681
+- org.clojure/spec.alpha 0.5.238
+- cheshire/cheshire 5.13.0
+
+[Unreleased]: https://github.com/krukow/copilot-sdk-clojure/compare/0.1.0...HEAD
+[0.1.0]: https://github.com/krukow/copilot-sdk-clojure/releases/tag/0.1.0
