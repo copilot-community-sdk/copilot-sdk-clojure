@@ -177,6 +177,7 @@
 (defn send-and-wait!
   "Send a message and wait until the session becomes idle.
    Returns the final assistant message event, or nil if none received.
+   Serialized per session to avoid mixing concurrent sends.
 
    Options: same as send!, plus:
    - :timeout-ms   - Timeout in milliseconds (default: 60000)
@@ -194,6 +195,7 @@
 (defn send-async
   "Send a message and return a core.async channel that receives events.
    The channel closes after session.idle or session.error.
+   Serialized per session to avoid mixing concurrent sends.
 
    Example:
    ```clojure

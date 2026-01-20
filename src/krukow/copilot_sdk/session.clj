@@ -48,6 +48,7 @@
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan 1024)
         event-mult (mult event-chan)
+        send-lock (java.util.concurrent.Semaphore. 1)
         tool-handlers (into {} (map (fn [t] [(:tool-name t) (:tool-handler t)]) tools))]
     ;; Store session state and IO in client's atom
     (swap! (:state client) 
@@ -59,7 +60,8 @@
                             :destroyed? false})
                  (assoc-in [:session-io session-id]
                            {:event-chan event-chan
-                            :event-mult event-mult}))))
+                            :event-mult event-mult
+                            :send-lock send-lock}))))
     (log/info "Session created: " session-id)
     ;; Return lightweight handle
     (->CopilotSession session-id client)))
@@ -183,6 +185,7 @@
 (defn send-and-wait!
   "Send a message and wait until the session becomes idle.
    Returns the final assistant message event, or nil if none received.
+   Serialized per session to avoid mixing concurrent sends.
    
    Options: same as send!
    
@@ -198,7 +201,12 @@
      
      (let [event-ch (chan 1024)
            last-assistant-msg (atom nil)
-           {:keys [event-mult]} (session-io client session-id)]
+           {:keys [event-mult send-lock]} (session-io client session-id)]
+       (try
+         (.acquire send-lock)
+         (catch InterruptedException e
+           (.interrupt (Thread/currentThread))
+           (throw (ex-info "Interrupted while waiting to send message" {} e))))
        
        ;; Tap the mult BEFORE sending - ensures we don't miss events
        (log/debug "send-and-wait! tapping event mult for session " session-id)
@@ -251,11 +259,13 @@
          (finally
            (log/debug "send-and-wait! cleaning up subscription")
            (untap event-mult event-ch)
-           (close! event-ch)))))))
+           (close! event-ch)
+           (.release send-lock)))))))
 
 (defn send-async
   "Send a message and return a channel that receives events until session.idle.
-   The channel closes after session.idle or session.error."
+   The channel closes after session.idle or session.error.
+   Serialized per session to avoid mixing concurrent sends."
   [session opts]
   (let [{:keys [session-id client]} session]
     (when (:destroyed? (session-state client session-id))
@@ -263,46 +273,57 @@
     
     (let [out-ch (chan 1024)
           event-ch (chan 1024)
-          {:keys [event-mult]} (session-io client session-id)]
+          {:keys [event-mult send-lock]} (session-io client session-id)
+          released? (atom false)
+          release-lock! (fn []
+                          (when (compare-and-set! released? false true)
+                            (.release send-lock)))]
+      (try
+        (.acquire send-lock)
+        (catch InterruptedException e
+          (.interrupt (Thread/currentThread))
+          (throw (ex-info "Interrupted while waiting to send message" {} e))))
       
       ;; Tap the mult for events
       (tap event-mult event-ch)
       
-      ;; Forward events until idle/error
-      (go-loop []
-        (let [event (<! event-ch)]
-          (cond
-            (nil? event)
-            (do
-              (untap event-mult event-ch)
-              (close! out-ch))
-            
-            (= "session.idle" (:type event))
-            (do
-              (>! out-ch event)
-              (untap event-mult event-ch)
-              (close! event-ch)
-              (close! out-ch))
-            
-            (= "session.error" (:type event))
-            (do
-              (>! out-ch event)
-              (untap event-mult event-ch)
-              (close! event-ch)
-              (close! out-ch))
-            
-            :else
-            (do
-              (>! out-ch event)
-              (recur)))))
-      
       ;; Send the message
       (try
         (send! session opts)
+        (go-loop []
+          (let [event (<! event-ch)]
+            (cond
+              (nil? event)
+              (do
+                (untap event-mult event-ch)
+                (close! out-ch)
+                (release-lock!))
+
+              (= "session.idle" (:type event))
+              (do
+                (>! out-ch event)
+                (untap event-mult event-ch)
+                (close! event-ch)
+                (close! out-ch)
+                (release-lock!))
+
+              (= "session.error" (:type event))
+              (do
+                (>! out-ch event)
+                (untap event-mult event-ch)
+                (close! event-ch)
+                (close! out-ch)
+                (release-lock!))
+
+              :else
+              (do
+                (>! out-ch event)
+                (recur)))))
         (catch Exception e
           (untap event-mult event-ch)
           (close! event-ch)
           (close! out-ch)
+          (release-lock!)
           (throw e)))
       
       out-ch)))

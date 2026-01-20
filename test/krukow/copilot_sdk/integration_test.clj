@@ -157,6 +157,32 @@
       (is (= "assistant.message" (:type result)))
       (is (string? (get-in result [:data :content]))))))
 
+(deftest test-send-and-wait-serializes
+  (testing "send-and-wait serializes concurrent calls"
+    (let [session (sdk/create-session *test-client* {})
+          session-id (sdk/session-id session)
+          client (:client session)
+          send-calls (atom 0)]
+      (with-redefs [session/send! (fn [_ _]
+                                    (swap! send-calls inc)
+                                    "msg")]
+        (let [first-f (future (session/send-and-wait! session {:prompt "A"} 1000))
+              second-f (future (session/send-and-wait! session {:prompt "B"} 1000))]
+          (Thread/sleep 50)
+          (is (= 1 @send-calls))
+          (session/dispatch-event! client session-id
+                                   {:type "assistant.message"
+                                    :data {:content "first"}})
+          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (is (map? (deref first-f 1000 ::timeout)))
+          (Thread/sleep 50)
+          (is (= 2 @send-calls))
+          (session/dispatch-event! client session-id
+                                   {:type "assistant.message"
+                                    :data {:content "second"}})
+          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (is (map? (deref second-f 1000 ::timeout))))))))
+
 (deftest test-send-async
   (testing "Send async returns channel with events"
     (let [session (sdk/create-session *test-client* {})
@@ -172,6 +198,34 @@
       (is (pos? (count @events)))
       ;; Should include idle event
       (is (some #(= "session.idle" (:type %)) @events)))))
+
+(deftest test-send-async-serializes
+  (testing "send-async serializes concurrent calls"
+    (let [session (sdk/create-session *test-client* {})
+          session-id (sdk/session-id session)
+          client (:client session)
+          send-calls (atom 0)]
+      (with-redefs [session/send! (fn [_ _]
+                                    (swap! send-calls inc)
+                                    "msg")]
+        (let [ch1 (session/send-async session {:prompt "A"})
+              ch2-f (future (session/send-async session {:prompt "B"}))]
+          (Thread/sleep 50)
+          (is (= 1 @send-calls))
+          (session/dispatch-event! client session-id
+                                   {:type "assistant.message"
+                                    :data {:content "first"}})
+          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (is (not= ::timeout (deref ch2-f 1000 ::timeout)))
+          (is (= 2 @send-calls))
+          (session/dispatch-event! client session-id
+                                   {:type "assistant.message"
+                                    :data {:content "second"}})
+          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (loop []
+            (let [[v _] (alts!! [ch1 (timeout 1000)])]
+              (when (some? v)
+                (recur)))))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session Operations Tests
