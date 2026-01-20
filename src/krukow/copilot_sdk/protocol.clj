@@ -366,17 +366,32 @@
     (put! (:outgoing-ch conn) msg)
     p))
 
+(defn- remove-pending-by-promise!
+  "Remove a pending request entry by promise identity."
+  [state-atom p]
+  (update-conn! state-atom update :pending-requests
+                (fn [pending]
+                  (reduce-kv (fn [m id {:keys [promise] :as entry}]
+                               (if (identical? promise p)
+                                 m
+                                 (assoc m id entry)))
+                             {}
+                             pending))))
+
 (defn send-request!
   "Send a JSON-RPC request and block for the response.
    Returns result or throws on error."
   ([conn method params]
    (send-request! conn method params 60000))
   ([conn method params timeout-ms]
-   (let [p (send-request conn method params)
+   (let [state-atom (:state-atom conn)
+         p (send-request conn method params)
          result (deref p timeout-ms ::timeout)]
      (cond
        (= result ::timeout)
-       (throw (ex-info "Request timeout" {:method method :timeout-ms timeout-ms}))
+       (do
+         (remove-pending-by-promise! state-atom p)
+         (throw (ex-info "Request timeout" {:method method :timeout-ms timeout-ms})))
        
        (:error result)
        (throw (ex-info (get-in result [:error :message] "RPC error")

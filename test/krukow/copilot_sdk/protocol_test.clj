@@ -1,7 +1,8 @@
 (ns krukow.copilot-sdk.protocol-test
   (:require [clojure.test :refer [deftest is testing]]
             [krukow.copilot-sdk.protocol :as protocol])
-  (:import [java.io ByteArrayInputStream ByteArrayOutputStream]))
+  (:import [java.io ByteArrayInputStream ByteArrayOutputStream
+            PipedInputStream PipedOutputStream]))
 
 (defn- wait-for
   [pred timeout-ms]
@@ -25,5 +26,22 @@
         (let [result (deref pending-promise 200 ::timeout)]
           (is (not= ::timeout result))
           (is (= -32000 (get-in result [:error :code]))))
+        (finally
+          (protocol/disconnect conn))))))
+
+(deftest test-send-request-timeout-clears-pending
+  (testing "Timeout removes pending request entry"
+    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
+          in (PipedInputStream.)
+          _ (PipedOutputStream. in)
+          out (ByteArrayOutputStream.)
+          conn (protocol/connect in out state-atom)]
+      (try
+        (try
+          (protocol/send-request! conn "ping" {} 10)
+          (is false "Expected request timeout")
+          (catch clojure.lang.ExceptionInfo e
+            (is (re-find #"Request timeout" (ex-message e)))))
+        (is (empty? (get-in @state-atom [:connection :pending-requests])))
         (finally
           (protocol/disconnect conn))))))

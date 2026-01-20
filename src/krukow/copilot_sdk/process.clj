@@ -126,7 +126,14 @@
             (let [new-buffer (str buffer (char ch))
                   matcher (re-find #"listening on port (\d+)" (str/lower-case new-buffer))]
               (if matcher
-                (parse-long (second matcher))
+                (do
+                  (async/thread
+                    (try
+                      (loop []
+                        (when (.readLine reader)
+                          (recur)))
+                      (catch Exception _)))
+                  (parse-long (second matcher)))
                 (recur new-buffer)))))
         (do
           (Thread/sleep 50)

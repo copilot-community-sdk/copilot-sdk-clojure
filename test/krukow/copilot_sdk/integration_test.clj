@@ -2,6 +2,7 @@
   "Integration tests using mock JSON-RPC server."
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [clojure.core.async :as async :refer [<!! >!! chan close! go timeout alts!!]]
+            [clojure.tools.logging :as log]
             [krukow.copilot-sdk :as sdk]
             [krukow.copilot-sdk.client :as client]
             [krukow.copilot-sdk.session :as session]
@@ -45,6 +46,7 @@
   (testing "auto-restart triggers on connection close"
     (let [starts (atom 0)
           stops (atom 0)]
+      (log/info "Warnings expected in this test: connection close triggers auto-restart.")
       (with-redefs [client/stop! (fn [c]
                                    (swap! stops inc)
                                    (swap! (:state c) assoc :status :disconnected)
@@ -64,6 +66,7 @@
           stops (atom 0)
           exit-ch (chan 1)
           watch-exit (var client/watch-process-exit!)]
+      (log/info "Warnings expected in this test: simulated process exit triggers auto-restart.")
       (with-redefs [client/stop! (fn [c]
                                    (swap! stops inc)
                                    (swap! (:state c) assoc :status :disconnected)

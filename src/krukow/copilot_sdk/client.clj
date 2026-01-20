@@ -184,10 +184,13 @@
   (when-let [exit-ch (:exit-chan mp)]
     (go
       (when-let [{:keys [exit-code]} (<! exit-ch)]
-        (if (:stopping? @(:state client))
-          (log/debug "CLI process exited with code" exit-code "(expected during stop)")
-          (log/warn "CLI process exited with code" exit-code))
-        (maybe-reconnect! client (str "cli-process-exit-" exit-code))))))
+        (let [stopping? (:stopping? @(:state client))]
+          (if stopping?
+            (log/debug "CLI process exited with code" exit-code "(expected during stop)")
+            (log/warn "CLI process exited with code" exit-code))
+          (maybe-reconnect! client (str "cli-process-exit-" exit-code))
+          (when stopping?
+            (swap! (:state client) assoc :stopping? false)))))))
 
 (defn- setup-request-handler!
   "Set up handler for incoming requests (tool calls, permission requests)."
@@ -254,7 +257,7 @@
   [client]
   (when-not (= :connected (:status @(:state client)))
     (log/info "Starting Copilot client...")
-    (swap! (:state client) assoc :status :connecting)
+    (swap! (:state client) assoc :stopping? false :status :connecting)
 
     ;; Set log level from options
     (when-let [level (:log-level (:options client))]
@@ -349,9 +352,7 @@
       (swap! (:state client) assoc :status :disconnected :actual-port nil)
 
       (log/info "Copilot client stopped")
-      @errors
-      (finally
-        (swap! (:state client) assoc :stopping? false)))))
+      @errors)))
 
 (defn force-stop!
   "Force stop the CLI server without graceful cleanup."
@@ -375,7 +376,7 @@
       (when (and (not (:external-server? client)) process)
         (try (proc/destroy-forcibly! process) (catch Exception _)))
       (finally
-        (swap! (:state client) assoc :stopping? false))))
+        nil)))
 
   (swap! (:state client) merge
          {:status :disconnected
