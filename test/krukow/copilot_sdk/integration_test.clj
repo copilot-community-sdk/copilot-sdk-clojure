@@ -394,25 +394,33 @@
           _ (sdk/create-session *test-client*
                                 {:provider {:base-url "https://example.test"
                                             :api-key "key"}
-                                 :mcp-servers [{:base-url "https://mcp.test"
-                                                :auth-token "token"}]
+                                 :mcp-servers {"srv-1" {:mcp-server-type :http
+                                                        :mcp-url "https://mcp.test"
+                                                        :mcp-tools ["*"]
+                                                        :mcp-timeout 1000}}
                                  :custom-agents [{:agent-id "agent-1"
                                                   :display-name "Agent One"}]})
           session-id (sdk/get-last-session-id *test-client*)
           _ (sdk/resume-session *test-client* session-id
                                 {:provider {:base-url "https://resume.test"}
-                                 :mcp-servers [{:server-id "srv-1"}]
+                                 :mcp-servers {"srv-2" {:mcp-server-type :sse
+                                                        :mcp-url "https://mcp.resume.test"
+                                                        :mcp-tools ["*"]}}
                                  :custom-agents [{:agent-id "agent-2"}]})
           create-params (get @seen "session.create")
           resume-params (get @seen "session.resume")]
       (is (= "https://example.test" (get-in create-params [:provider :baseUrl])))
       (is (= "key" (get-in create-params [:provider :apiKey])))
-      (is (= "https://mcp.test" (get-in create-params [:mcpServers 0 :baseUrl])))
-      (is (= "token" (get-in create-params [:mcpServers 0 :authToken])))
+      (is (= "http" (get-in create-params [:mcpServers :srv-1 :mcpServerType])))
+      (is (= "https://mcp.test" (get-in create-params [:mcpServers :srv-1 :mcpUrl])))
+      (is (= ["*"] (get-in create-params [:mcpServers :srv-1 :mcpTools])))
+      (is (= 1000 (get-in create-params [:mcpServers :srv-1 :mcpTimeout])))
       (is (= "agent-1" (get-in create-params [:customAgents 0 :agentId])))
       (is (= "Agent One" (get-in create-params [:customAgents 0 :displayName])))
       (is (= "https://resume.test" (get-in resume-params [:provider :baseUrl])))
-      (is (= "srv-1" (get-in resume-params [:mcpServers 0 :serverId])))
+      (is (= "sse" (get-in resume-params [:mcpServers :srv-2 :mcpServerType])))
+      (is (= "https://mcp.resume.test" (get-in resume-params [:mcpServers :srv-2 :mcpUrl])))
+      (is (= ["*"] (get-in resume-params [:mcpServers :srv-2 :mcpTools])))
       (is (= "agent-2" (get-in resume-params [:customAgents 0 :agentId]))))))
 
 ;; -----------------------------------------------------------------------------

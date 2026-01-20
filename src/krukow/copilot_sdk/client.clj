@@ -49,6 +49,14 @@
    :auto-restart? true
    :env nil})
 
+(defn- ensure-valid-mcp-servers!
+  [servers]
+  (when-not (s/valid? ::specs/mcp-servers servers)
+    (throw (ex-info "Invalid :mcp-servers config (expected map keyed by server ID)."
+                    {:spec ::specs/mcp-servers
+                     :mcp-servers servers
+                     :explain (s/explain-data ::specs/mcp-servers servers)}))))
+
 ;; Client is a simple map with a single state atom
 ;; The state atom contains all mutable state as an immutable map:
 ;; {:status :disconnected/:connecting/:connected/:error
@@ -479,7 +487,7 @@
    - :provider           - Custom provider config (BYOK)
    - :on-permission-request - Permission handler function
    - :streaming?         - Enable streaming
-   - :mcp-servers        - MCP server configs
+   - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
    
    Returns a CopilotSession."
@@ -489,6 +497,8 @@
    (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
    (ensure-connected! client)
    (let [{:keys [connection-io]} @(:state client)
+         _ (when-let [servers (:mcp-servers config)]
+             (ensure-valid-mcp-servers! servers))
          ;; Convert tools to wire format
          wire-tools (when (:tools config)
                       (mapv (fn [t]
@@ -507,7 +517,7 @@
          wire-provider (when-let [provider (:provider config)]
                          (util/clj->wire provider))
          wire-mcp-servers (when-let [servers (:mcp-servers config)]
-                            (mapv util/clj->wire servers))
+                            (into {} (map (fn [[k v]] [k (util/clj->wire v)])) servers))
          wire-custom-agents (when-let [agents (:custom-agents config)]
                               (mapv util/clj->wire agents))
          ;; Build request params
@@ -549,6 +559,8 @@
   ([client session-id config]
    (ensure-connected! client)
    (let [{:keys [connection-io]} @(:state client)
+         _ (when-let [servers (:mcp-servers config)]
+             (ensure-valid-mcp-servers! servers))
          wire-tools (when (:tools config)
                       (mapv (fn [t]
                               {:name (:tool-name t)
@@ -558,7 +570,7 @@
          wire-provider (when-let [provider (:provider config)]
                          (util/clj->wire provider))
          wire-mcp-servers (when-let [servers (:mcp-servers config)]
-                            (mapv util/clj->wire servers))
+                            (into {} (map (fn [[k v]] [k (util/clj->wire v)])) servers))
          wire-custom-agents (when-let [agents (:custom-agents config)]
                               (mapv util/clj->wire agents))
          params (cond-> {:session-id session-id}

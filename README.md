@@ -146,7 +146,7 @@ Create a session and ensure `destroy!` runs on exit.
 | `:available-tools` | vector | List of allowed tool names |
 | `:excluded-tools` | vector | List of excluded tool names |
 | `:provider` | map | Provider config for BYOK |
-| `:mcp-servers` | vector | MCP server configs |
+| `:mcp-servers` | map | MCP server configs keyed by server ID |
 | `:custom-agents` | vector | Custom agent configs |
 | `:on-permission-request` | fn | Permission handler function |
 | `:streaming?` | boolean | Enable streaming deltas |

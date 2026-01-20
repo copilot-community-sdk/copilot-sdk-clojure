@@ -133,7 +133,7 @@
    - :provider             - Custom provider config (BYOK)
    - :on-permission-request - Permission handler function
    - :streaming?           - Enable streaming deltas
-   - :mcp-servers          - MCP server configs
+   - :mcp-servers          - MCP server configs map (keyed by server ID)
    - :custom-agents        - Custom agent configs
 
    Example:

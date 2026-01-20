@@ -8,17 +8,29 @@
 ;; Convert between wire format (camelCase) and Clojure idiom (kebab-case)
 ;; -----------------------------------------------------------------------------
 
+(defn- keyword->camel
+  [k]
+  (if (keyword? k)
+    (csk/->camelCaseKeyword k)
+    k))
+
+(defn- keyword->kebab
+  [k]
+  (if (keyword? k)
+    (csk/->kebab-case-keyword k)
+    k))
+
 (defn ->wire-keys
   "Convert map keys from kebab-case to camelCase for wire format.
-   Works recursively on nested maps."
+   Works recursively on nested maps. Non-keyword keys are preserved."
   [m]
-  (cske/transform-keys csk/->camelCaseKeyword m))
+  (cske/transform-keys keyword->camel m))
 
 (defn ->clj-keys
   "Convert map keys from camelCase to kebab-case for Clojure idiom.
-   Works recursively on nested maps."
+   Works recursively on nested maps. Non-keyword keys are preserved."
   [m]
-  (cske/transform-keys csk/->kebab-case-keyword m))
+  (cske/transform-keys keyword->kebab m))
 
 (defn wire->clj
   "Convert a wire-format map to Clojure idiom.

@@ -78,7 +78,7 @@
           :opt-un [::mcp-timeout ::mcp-headers]))
 
 (s/def ::mcp-server (s/or :local ::mcp-local-server :remote ::mcp-remote-server))
-(s/def ::mcp-servers (s/coll-of ::mcp-server))
+(s/def ::mcp-servers (s/map-of #(or (keyword? %) (string? %)) ::mcp-server))
 
 ;; -----------------------------------------------------------------------------
 ;; Custom agent configuration
