@@ -200,13 +200,24 @@
      (fn []
        (log/debug "Read loop started")
        (try
-         (while (:running? (conn-state state-atom))
-           (when-let [msg (read-message read-channel single-byte-buf)]
-             (dispatch-message! conn msg)))
+         (loop []
+           (when (:running? (conn-state state-atom))
+             (if-let [msg (read-message read-channel single-byte-buf)]
+               (do
+                 (dispatch-message! conn msg)
+                 (recur))
+               (do
+                 (log/debug "Read loop: EOF from remote")
+                 (update-conn! state-atom assoc :running? false)
+                 ;; Signal error to pending requests
+                 (doseq [[_ {:keys [promise]}] (:pending-requests (conn-state state-atom))]
+                   (deliver promise {:error {:code -32000
+                                             :message "Connection closed by remote"}}))
+                 (update-conn! state-atom assoc :pending-requests {})))))
          (catch AsynchronousCloseException _
            (log/debug "Read loop: channel closed asynchronously"))
          (catch ClosedChannelException _
-           (log/debug "Read loop: channel already closed"))
+            (log/debug "Read loop: channel already closed"))
          (catch IOException e
            ;; "Pipe closed" is normal during shutdown when other end closes
            (if (= "Pipe closed" (ex-message e))
