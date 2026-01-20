@@ -123,6 +123,12 @@ Create a new conversation session.
 | `:model` | string | Model to use (`"gpt-5"`, `"claude-sonnet-4.5"`, etc.) |
 | `:tools` | vector | Custom tools exposed to the CLI |
 | `:system-message` | map | System message customization (see below) |
+| `:available-tools` | vector | List of allowed tool names |
+| `:excluded-tools` | vector | List of excluded tool names |
+| `:provider` | map | Provider config for BYOK |
+| `:mcp-servers` | vector | MCP server configs |
+| `:custom-agents` | vector | Custom agent configs |
+| `:on-permission-request` | fn | Permission handler function |
 | `:streaming?` | boolean | Enable streaming deltas |
 
 ##### `resume-session`
@@ -150,6 +156,14 @@ Ping the server to check connectivity. Returns `{:message "..." :timestamp ...}`
 ```
 
 Get current connection state: `:disconnected` | `:connecting` | `:connected` | `:error`
+
+##### `notifications`
+
+```clojure
+(copilot/notifications client)
+```
+
+Get a channel that receives non-session notifications. The channel is unbounded; do not leave it unconsumed.
 
 ##### `list-sessions`
 
@@ -419,7 +433,7 @@ For full control (removes all guardrails), use `:mode :replace`:
 ```clojure
 (copilot/send! session
   {:prompt "Analyze this file"
-   :attachments [{:type "file"
+   :attachments [{:type :file
                   :path "/path/to/file.clj"
                   :display-name "My File"}]})
 ```
@@ -579,16 +593,7 @@ API documentation is generated to `doc/api/`.
 
 ## Testing
 
-The test suite includes:
-
-| Test Type | Count | Description |
-|-----------|-------|-------------|
-| Unit tests | 7 | Test individual components (protocol, specs, tools) |
-| Integration tests | 16 | Test full client/session flows with mock server |
-| Example tests | 9 | Verify all examples compile and have valid structure |
-| E2E tests | 8 | Test against real Copilot CLI (disabled by default) |
-
-**Total: 40 tests, 89 assertions**
+The test suite includes unit, integration, example, and E2E tests (E2E disabled by default).
 
 To enable E2E tests:
 
