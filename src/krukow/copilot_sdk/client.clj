@@ -9,6 +9,7 @@
             [krukow.copilot-sdk.process :as proc]
             [krukow.copilot-sdk.specs :as specs]
             [krukow.copilot-sdk.session :as session]
+            [krukow.copilot-sdk.util :as util]
             [krukow.copilot-sdk.logging :as log])
   (:import [java.net Socket]))
 
@@ -386,6 +387,12 @@
                           
                           :else
                           {:mode "append" :content (:content sm)}))
+         wire-provider (when-let [provider (:provider config)]
+                         (util/clj->wire provider))
+         wire-mcp-servers (when-let [servers (:mcp-servers config)]
+                            (mapv util/clj->wire servers))
+         wire-custom-agents (when-let [agents (:custom-agents config)]
+                              (mapv util/clj->wire agents))
          ;; Build request params
          params (cond-> {}
                   (:session-id config) (assoc :sessionId (:session-id config))
@@ -394,11 +401,11 @@
                   wire-sys-msg (assoc :systemMessage wire-sys-msg)
                   (:available-tools config) (assoc :availableTools (:available-tools config))
                   (:excluded-tools config) (assoc :excludedTools (:excluded-tools config))
-                  (:provider config) (assoc :provider (:provider config))
+                  wire-provider (assoc :provider wire-provider)
                   (:on-permission-request config) (assoc :requestPermission true)
                   (:streaming? config) (assoc :streaming (:streaming? config))
-                  (:mcp-servers config) (assoc :mcpServers (:mcp-servers config))
-                  (:custom-agents config) (assoc :customAgents (:custom-agents config)))
+                  wire-mcp-servers (assoc :mcpServers wire-mcp-servers)
+                  wire-custom-agents (assoc :customAgents wire-custom-agents))
          result (proto/send-request! connection-io "session.create" params)
          session-id (:sessionId result)
          ;; Session state is stored by session/create-session in client's atom
@@ -431,13 +438,19 @@
                                :description (:tool-description t)
                                :parameters (:tool-parameters t)})
                             (:tools config)))
+         wire-provider (when-let [provider (:provider config)]
+                         (util/clj->wire provider))
+         wire-mcp-servers (when-let [servers (:mcp-servers config)]
+                            (mapv util/clj->wire servers))
+         wire-custom-agents (when-let [agents (:custom-agents config)]
+                              (mapv util/clj->wire agents))
          params (cond-> {:sessionId session-id}
                   wire-tools (assoc :tools wire-tools)
-                  (:provider config) (assoc :provider (:provider config))
+                  wire-provider (assoc :provider wire-provider)
                   (:on-permission-request config) (assoc :requestPermission true)
                   (:streaming? config) (assoc :streaming (:streaming? config))
-                  (:mcp-servers config) (assoc :mcpServers (:mcp-servers config))
-                  (:custom-agents config) (assoc :customAgents (:custom-agents config)))
+                  wire-mcp-servers (assoc :mcpServers wire-mcp-servers)
+                  wire-custom-agents (assoc :customAgents wire-custom-agents))
          result (proto/send-request! connection-io "session.resume" params)
          resumed-id (:sessionId result)
          ;; Session state is stored by session/create-session in client's atom

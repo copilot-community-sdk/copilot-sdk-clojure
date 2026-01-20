@@ -204,6 +204,53 @@
       (is (contains? (get-in response [:result :result]) :textResultForLlm))
       (is (not (contains? (get-in response [:result :result]) :result))))))
 
+(deftest test-tool-handler-runs-on-blocking-thread
+  (testing "tool handler executes on a blocking thread"
+    (let [thread-name (atom nil)
+          tool (sdk/define-tool "thread_check"
+                 {:handler (fn [_ _]
+                             (reset! thread-name (.getName (Thread/currentThread)))
+                             "ok")})
+          session (sdk/create-session *test-client* {:tools [tool]})
+          handler (get-in @(:state *test-client*) [:connection :request-handler])]
+      (<!! (handler "tool.call" {:sessionId (sdk/session-id session)
+                                 :toolCallId "tc-2"
+                                 :toolName "thread_check"
+                                 :arguments {}}))
+      (is (string? @thread-name))
+      (is (re-find #"async-(thread|mixed)" @thread-name))
+      (is (not (clojure.string/starts-with? @thread-name "async-dispatch"))))))
+
+(deftest test-session-config-wire-keys
+  (testing "session config maps are converted to wire keys"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:provider {:base-url "https://example.test"
+                                            :api-key "key"}
+                                 :mcp-servers [{:base-url "https://mcp.test"
+                                                :auth-token "token"}]
+                                 :custom-agents [{:agent-id "agent-1"
+                                                  :display-name "Agent One"}]})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:provider {:base-url "https://resume.test"}
+                                 :mcp-servers [{:server-id "srv-1"}]
+                                 :custom-agents [{:agent-id "agent-2"}]})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (= "https://example.test" (get-in create-params [:provider :baseUrl])))
+      (is (= "key" (get-in create-params [:provider :apiKey])))
+      (is (= "https://mcp.test" (get-in create-params [:mcpServers 0 :baseUrl])))
+      (is (= "token" (get-in create-params [:mcpServers 0 :authToken])))
+      (is (= "agent-1" (get-in create-params [:customAgents 0 :agentId])))
+      (is (= "Agent One" (get-in create-params [:customAgents 0 :displayName])))
+      (is (= "https://resume.test" (get-in resume-params [:provider :baseUrl])))
+      (is (= "srv-1" (get-in resume-params [:mcpServers 0 :serverId])))
+      (is (= "agent-2" (get-in resume-params [:customAgents 0 :agentId]))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
 ;; -----------------------------------------------------------------------------
