@@ -60,7 +60,7 @@
 ;; Client is a simple map with a single state atom
 ;; The state atom contains all mutable state as an immutable map:
 ;; {:status :disconnected/:connecting/:connected/:error
-;;  :connection {:running? :pending-requests :request-handler :writer-thread :next-request-id}
+;;  :connection {:running? :pending-requests :request-handler :writer-thread}
 ;;  :connection-io nil or protocol/Connection (IO resources only)
 ;;  :process nil or process/ManagedProcess  
 ;;  :socket nil or Socket (for TCP mode)

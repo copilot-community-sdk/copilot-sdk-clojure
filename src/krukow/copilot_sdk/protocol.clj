@@ -299,8 +299,7 @@
   {:running? true
    :pending-requests {}
    :request-handler nil
-   :writer-thread nil
-   :next-request-id 0})
+   :writer-thread nil})
 
 (defn connect
   "Create a JSON-RPC connection from input/output streams.
@@ -396,9 +395,7 @@
   "Send a JSON-RPC request and return a promise for the response."
   [conn method params]
   (let [state-atom (:state-atom conn)
-        ;; Atomically increment and get the new ID
-        id (get-in (swap! state-atom update-in [:connection :next-request-id] inc)
-                   [:connection :next-request-id])
+        id (str (java.util.UUID/randomUUID))
         p (promise)
         wire-params (when params (util/clj->wire params))
         msg {:jsonrpc "2.0"
