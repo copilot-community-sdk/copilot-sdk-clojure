@@ -78,7 +78,7 @@
           :opt-un [::mcp-timeout ::mcp-headers]))
 
 (s/def ::mcp-server (s/or :local ::mcp-local-server :remote ::mcp-remote-server))
-(s/def ::mcp-servers (s/map-of keyword? ::mcp-server))
+(s/def ::mcp-servers (s/coll-of ::mcp-server))
 
 ;; -----------------------------------------------------------------------------
 ;; Custom agent configuration
@@ -151,11 +151,11 @@
           :opt-un [::display-name]))
 
 (s/def ::attachments (s/coll-of ::attachment))
-(s/def ::message-mode #{:enqueue :immediate})
+(s/def ::mode #{:enqueue :immediate})
 
 (s/def ::send-options
   (s/keys :req-un [::prompt]
-          :opt-un [::attachments ::message-mode]))
+          :opt-un [::attachments ::mode]))
 
 (s/def ::timeout-ms pos-int?)
 
@@ -246,7 +246,9 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::tool-call-id ::non-blank-string)
-(s/def ::result-type #{:success :failure :rejected :denied})
+(s/def ::result-type
+  (s/or :keyword #{:success :failure :rejected :denied}
+        :string #{"success" "failure" "rejected" "denied"}))
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
 (s/def ::tool-telemetry map?)
