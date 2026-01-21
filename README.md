@@ -16,7 +16,7 @@ Add to your `deps.edn`:
 ```clojure
 ;; Git dependency (use a SHA)
 {:deps {io.github.krukow/copilot-sdk {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
-                                     :git/sha "d9d17a4238518b62c533011b9d427bad5af79180"}}}
+                                     :git/sha "16544a61a429bd8b3b8738a0624c09e52cd617d1"}}}
 ```
 
 Update the SHA automatically:
