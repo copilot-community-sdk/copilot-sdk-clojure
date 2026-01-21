@@ -1,6 +1,7 @@
 (ns build
   (:refer-clojure :exclude [test])
-  (:require [clojure.string :as str]
+  (:require [clojure.java.shell :as shell]
+            [clojure.string :as str]
             [clojure.tools.build.api :as b]
             [deps-deploy.deps-deploy :as dd]))
 
@@ -62,9 +63,10 @@
 (defn update-readme-sha
   "Update README.md git dependency SHA to the current HEAD."
   [_opts]
-  (let [sha (-> (b/process {:command-args ["git" "rev-parse" "HEAD"]})
-                :out
-                str/trim)
+  (let [{:keys [exit out err]} (shell/sh "git" "rev-parse" "HEAD")
+        _ (when-not (zero? exit)
+            (throw (ex-info "Failed to read git SHA" {:exit exit :err err})))
+        sha (str/trim out)
         contents (slurp readme-path)
         updated (str/replace contents #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
     (when (= contents updated)
