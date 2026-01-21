@@ -173,11 +173,12 @@
       (if-let [notif (<! notif-ch)]
         (do
           (if (= (:method notif) "session.event")
-            (let [{:keys [session-id event]} (:params notif)]
-              (log/debug "Routing event to session " session-id ": type=" (:type event))
+            (let [{:keys [session-id event]} (:params notif)
+                  normalized-event (update event :type util/event-type->keyword)]
+              (log/debug "Routing event to session " session-id ": type=" (:type normalized-event))
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
                 (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-                  (>! event-chan event))))
+                  (>! event-chan normalized-event))))
             (do
               (.put router-queue notif)))
           (recur))
@@ -489,6 +490,10 @@
    - :streaming?         - Enable streaming
    - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
+   - :config-dir         - Override config directory for CLI (configDir)
+   - :skill-directories  - Additional skill directories to load
+   - :disabled-skills    - Disable specific skills by name
+   - :large-output       - Tool output handling config {:enabled :max-size-bytes :output-dir}
    
    Returns a CopilotSession."
   ([client]
@@ -532,7 +537,11 @@
                   (:on-permission-request config) (assoc :request-permission true)
                   (:streaming? config) (assoc :streaming (:streaming? config))
                   wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
-                  wire-custom-agents (assoc :custom-agents wire-custom-agents))
+                  wire-custom-agents (assoc :custom-agents wire-custom-agents)
+                  (:config-dir config) (assoc :config-dir (:config-dir config))
+                  (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+                  (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
+                  (:large-output config) (assoc :large-output (:large-output config)))
          result (proto/send-request! connection-io "session.create" params)
          session-id (:session-id result)
          ;; Session state is stored by session/create-session in client's atom
@@ -552,6 +561,8 @@
    - :on-permission-request
    - :mcp-servers
    - :custom-agents
+   - :skill-directories
+   - :disabled-skills
    
    Returns a CopilotSession."
   ([client session-id]
@@ -579,7 +590,9 @@
                   (:on-permission-request config) (assoc :request-permission true)
                   (:streaming? config) (assoc :streaming (:streaming? config))
                   wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
-                  wire-custom-agents (assoc :custom-agents wire-custom-agents))
+                  wire-custom-agents (assoc :custom-agents wire-custom-agents)
+                  (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+                  (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config)))
          result (proto/send-request! connection-io "session.resume" params)
          resumed-id (:session-id result)
          ;; Session state is stored by session/create-session in client's atom

@@ -25,6 +25,9 @@ clojure -A:examples -M -m tool-integration
 
 # Multi-agent orchestration
 clojure -A:examples -M -m multi-agent
+
+# Streaming responses
+clojure -A:examples -M -m streaming-chat
 ```
 
 Or with a custom CLI path:
@@ -456,6 +459,14 @@ const response = await session.sendAndWait({ prompt: "Hello" });
 ```
 
 ---
+
+## Example 4: Streaming Chat (`streaming_chat.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** Streaming deltas, event handling, incremental output
+
+Demonstrates how to enable streaming and render assistant output incrementally as
+`:assistant.message_delta` events arrive, then print the final message on idle.
 
 ## Troubleshooting
 

@@ -33,8 +33,8 @@ Add to your `deps.edn`:
   (go-loop []
     (when-let [event (<! events-ch)]
       (case (:type event)
-        "assistant.message" (println (get-in event [:data :content]))
-        "session.idle" (deliver done true)
+        :assistant.message (println (get-in event [:data :content]))
+        :session.idle (deliver done true)
         nil)
       (recur)))
 
@@ -150,6 +150,10 @@ Create a session and ensure `destroy!` runs on exit.
 | `:custom-agents` | vector | Custom agent configs |
 | `:on-permission-request` | fn | Permission handler function |
 | `:streaming?` | boolean | Enable streaming deltas |
+| `:config-dir` | string | Override config directory for CLI |
+| `:skill-directories` | vector | Additional skill directories to load |
+| `:disabled-skills` | vector | Disable specific skills by name |
+| `:large-output` | map | Tool output handling config |
 
 ##### `resume-session`
 
@@ -191,7 +195,8 @@ Get a channel that receives non-session notifications. The channel is buffered; 
 (copilot/list-sessions client)
 ```
 
-List all available sessions. Returns vector of session metadata.
+List all available sessions. Returns vector of session metadata with
+`:start-time` and `:modified-time` as `java.time.Instant`.
 
 ##### `delete-session!`
 
@@ -271,7 +276,7 @@ Get the core.async `mult` for session events. Use `tap` to subscribe:
 
 ```clojure
 (copilot/events->chan session {:buffer 256
-                               :xf (filter #(= "assistant.message" (:type %)))})
+                               :xf (filter #(= :assistant.message (:type %)))})
 ```
 
 Subscribe to session events with optional buffer size and transducer.
@@ -324,15 +329,18 @@ Sessions emit various events during processing:
 
 | Event Type | Description |
 |------------|-------------|
-| `user.message` | User message added |
-| `assistant.message` | Complete assistant response |
-| `assistant.message_delta` | Streaming response chunk |
-| `assistant.reasoning` | Model reasoning (if supported) |
-| `assistant.reasoning_delta` | Streaming reasoning chunk |
-| `tool.execution_start` | Tool execution started |
-| `tool.execution_partial_result` | Tool execution partial result |
-| `tool.execution_complete` | Tool execution completed |
-| `session.idle` | Session finished processing |
+| `:user.message` | User message added |
+| `:assistant.message` | Complete assistant response |
+| `:assistant.message_delta` | Streaming response chunk |
+| `:assistant.reasoning` | Model reasoning (if supported) |
+| `:assistant.reasoning_delta` | Streaming reasoning chunk |
+| `:tool.execution_start` | Tool execution started |
+| `:tool.execution_partial_result` | Tool execution partial result |
+| `:tool.execution_complete` | Tool execution completed |
+| `:session.idle` | Session finished processing |
+
+Event `:type` values are keywords derived from the wire strings, e.g.
+`"assistant.message_delta"` becomes `:assistant.message_delta`.
 
 ## Streaming
 
@@ -348,15 +356,21 @@ Enable streaming to receive assistant response chunks as they're generated:
   (go-loop []
     (when-let [event (<! ch)]
       (case (:type event)
-        "assistant.message_delta"
+        :assistant.message_delta
           ;; Streaming chunk - print incrementally
           (print (get-in event [:data :delta-content]))
 
-        "assistant.reasoning_delta"
-          ;; Streaming reasoning (model-dependent)
-          (print (get-in event [:data :delta-content]))
+        :assistant.reasoning_delta
+          ;; Streaming reasoning (model-dependent). Send to stderr.
+          (binding [*out* *err*]
+            (print (get-in event [:data :delta-content])))
 
-        "assistant.message"
+        :assistant.reasoning
+          (binding [*out* *err*]
+            (println "\n--- Final Reasoning ---")
+            (println (get-in event [:data :content])))
+
+        :assistant.message
           ;; Final complete message
           (println "\n--- Final ---")
           (println (get-in event [:data :content]))
@@ -364,13 +378,14 @@ Enable streaming to receive assistant response chunks as they're generated:
         nil)
       (recur))))
 
-(copilot/send! session {:prompt "Tell me a short story"})
+(copilot/send! session {:prompt "Solve a logic puzzle and show your reasoning."})
 ```
 
 When `:streaming? true`:
-- `assistant.message_delta` events contain incremental text in `:delta-content`
+- `:assistant.message_delta` events contain incremental text in `:delta-content`
+- `:assistant.reasoning_delta` events contain incremental reasoning in `:delta-content` (model-dependent)
 - Accumulate delta values to build the full response progressively
-- The final `assistant.message` event always contains the complete content
+- The final `:assistant.message` event always contains the complete content
 
 ## Advanced Usage
 
@@ -503,6 +518,7 @@ See the [`examples/`](./examples/) directory for complete working examples:
 | [`basic_chat.clj`](./examples/basic_chat.clj) | Beginner | Simple Q&A conversation with multi-turn context |
 | [`tool_integration.clj`](./examples/tool_integration.clj) | Intermediate | Custom tools that the LLM can invoke |
 | [`multi_agent.clj`](./examples/multi_agent.clj) | Advanced | Multi-agent orchestration with core.async |
+| [`streaming_chat.clj`](./examples/streaming_chat.clj) | Intermediate | Streaming deltas with incremental output |
 
 Run examples:
 
@@ -510,6 +526,7 @@ Run examples:
 clojure -A:examples -M -m basic-chat
 clojure -A:examples -M -m tool-integration
 clojure -A:examples -M -m multi-agent
+clojure -A:examples -M -m streaming-chat
 ```
 
 See [`examples/README.md`](./examples/README.md) for detailed walkthroughs and explanations.
@@ -599,7 +616,7 @@ await client.stop();
   (tap (copilot/events session) ch)
   (go-loop []
     (when-let [event (<! ch)]
-      (when (= (:type event) "assistant.message")
+      (when (= (:type event) :assistant.message)
         (println (get-in event [:data :content])))
       (recur))))
 

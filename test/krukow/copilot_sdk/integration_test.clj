@@ -155,7 +155,7 @@
           result (sdk/send-and-wait! session {:prompt "Test message"})]
       ;; Returns the last assistant message event (map)
       (is (map? result))
-      (is (= "assistant.message" (:type result)))
+      (is (= :assistant.message (:type result)))
       (is (string? (get-in result [:data :content]))))))
 
 (deftest test-send-and-wait-serializes
@@ -172,16 +172,16 @@
           (Thread/sleep 50)
           (is (= 1 @send-calls))
           (session/dispatch-event! client session-id
-                                   {:type "assistant.message"
+                                   {:type :assistant.message
                                     :data {:content "first"}})
-          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (session/dispatch-event! client session-id {:type :session.idle :data {}})
           (is (map? (deref first-f 1000 ::timeout)))
           (Thread/sleep 50)
           (is (= 2 @send-calls))
           (session/dispatch-event! client session-id
-                                   {:type "assistant.message"
+                                   {:type :assistant.message
                                     :data {:content "second"}})
-          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (session/dispatch-event! client session-id {:type :session.idle :data {}})
           (is (map? (deref second-f 1000 ::timeout))))))))
 
 (deftest test-send-async
@@ -198,7 +198,7 @@
       ;; Should have received events
       (is (pos? (count @events)))
       ;; Should include idle event
-      (is (some #(= "session.idle" (:type %)) @events)))))
+      (is (some #(= :session.idle (:type %)) @events)))))
 
 (deftest test-send-async-with-id
   (testing "send-async-with-id returns message-id and matching events"
@@ -210,7 +210,7 @@
                         (let [[event _] (alts!! [events-ch (timeout 1000)])]
                           (cond
                             (nil? event) nil
-                            (and (= "assistant.message" (:type event))
+                            (and (= :assistant.message (:type event))
                                  (= message-id (get-in event [:data :message-id])))
                             event
                             :else (recur (inc count))))))]
@@ -230,15 +230,15 @@
           (Thread/sleep 50)
           (is (= 1 @send-calls))
           (session/dispatch-event! client session-id
-                                   {:type "assistant.message"
+                                   {:type :assistant.message
                                     :data {:content "first"}})
-          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (session/dispatch-event! client session-id {:type :session.idle :data {}})
           (is (not= ::timeout (deref ch2-f 1000 ::timeout)))
           (is (= 2 @send-calls))
           (session/dispatch-event! client session-id
-                                   {:type "assistant.message"
+                                   {:type :assistant.message
                                     :data {:content "second"}})
-          (session/dispatch-event! client session-id {:type "session.idle" :data {}})
+          (session/dispatch-event! client session-id {:type :session.idle :data {}})
           (loop []
             (let [[v _] (alts!! [ch1 (timeout 1000)])]
               (when (some? v)
@@ -300,13 +300,13 @@
           small-ch (chan 1)
           client {:state (atom {:sessions {session-id {:destroyed? false}}
                                 :session-io {session-id {:event-chan small-ch}}})}]
-      (>!! small-ch {:type "dummy"})
+      (>!! small-ch {:type :dummy})
       (let [dispatch-future (future (session/dispatch-event! client session-id
-                                                             {:type "session.idle"}))]
+                                                             {:type :session.idle}))]
         (is (= ::timeout (deref dispatch-future 50 ::timeout)))
-        (is (= "dummy" (:type (<!! small-ch))))
+        (is (= :dummy (:type (<!! small-ch))))
         (is (not= ::timeout (deref dispatch-future 200 ::timeout)))
-        (is (= "session.idle" (:type (<!! small-ch))))))))
+        (is (= :session.idle (:type (<!! small-ch))))))))
 
 (deftest test-protocol-notification-queue
   (testing "Protocol notifications queue without blocking reader thread"
@@ -319,7 +319,7 @@
           msg {:jsonrpc "2.0"
                :method "session.event"
                :params {:sessionId "s-1"
-                        :event {:type "session.idle"}}}]
+                        :event {:type :session.idle}}}]
       (try
         (dotimes [i 1024]
           (>!! incoming {:i i}))

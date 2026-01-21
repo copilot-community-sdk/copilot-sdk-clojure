@@ -9,6 +9,7 @@
 (s/def ::non-blank-string (s/and string? (complement clojure.string/blank?)))
 (s/def ::timestamp string?)
 (s/def ::session-id ::non-blank-string)
+(s/def ::instant #(instance? java.time.Instant %))
 
 ;; -----------------------------------------------------------------------------
 ;; Client options
@@ -125,16 +126,26 @@
 (s/def ::excluded-tools (s/coll-of string?))
 (s/def ::streaming? boolean?)
 (s/def ::on-permission-request fn?)
+(s/def ::config-dir ::non-blank-string)
+(s/def ::skill-directories (s/coll-of ::non-blank-string))
+(s/def ::disabled-skills (s/coll-of ::non-blank-string))
+(s/def ::enabled boolean?)
+(s/def ::max-size-bytes pos-int?)
+(s/def ::output-dir ::non-blank-string)
+(s/def ::large-output
+  (s/keys :opt-un [::enabled ::max-size-bytes ::output-dir]))
 
 (s/def ::session-config
   (s/keys :opt-un [::session-id ::model ::tools ::system-message
                    ::available-tools ::excluded-tools ::provider
                    ::on-permission-request ::streaming? ::mcp-servers
-                   ::custom-agents]))
+                   ::custom-agents ::config-dir ::skill-directories
+                   ::disabled-skills ::large-output]))
 
 (s/def ::resume-session-config
   (s/keys :opt-un [::tools ::provider ::streaming? ::on-permission-request
-                   ::mcp-servers ::custom-agents]))
+                   ::mcp-servers ::custom-agents ::skill-directories
+                   ::disabled-skills]))
 
 ;; -----------------------------------------------------------------------------
 ;; Message options
@@ -169,13 +180,13 @@
 ;; Session metadata
 ;; -----------------------------------------------------------------------------
 
-(s/def ::start-time inst?)
-(s/def ::modified-time inst?)
+(s/def ::start-time ::instant)
+(s/def ::modified-time ::instant)
 (s/def ::summary string?)
-(s/def ::is-remote? boolean?)
+(s/def ::remote? boolean?)
 
 (s/def ::session-metadata
-  (s/keys :req-un [::session-id ::start-time ::modified-time ::is-remote?]
+  (s/keys :req-un [::session-id ::start-time ::modified-time ::remote?]
           :opt-un [::summary]))
 
 ;; -----------------------------------------------------------------------------

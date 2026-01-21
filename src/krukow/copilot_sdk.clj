@@ -135,6 +135,10 @@
    - :streaming?           - Enable streaming deltas
    - :mcp-servers          - MCP server configs map (keyed by server ID)
    - :custom-agents        - Custom agent configs
+   - :config-dir           - Override config directory for CLI (configDir)
+   - :skill-directories    - Additional skill directories to load
+   - :disabled-skills      - Disable specific skills by name
+   - :large-output         - Tool output handling config {:enabled :max-size-bytes :output-dir}
 
    Example:
    ```clojure

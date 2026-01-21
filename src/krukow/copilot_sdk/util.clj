@@ -43,3 +43,16 @@
    Alias for ->wire-keys."
   [m]
   (->wire-keys m))
+
+;; -----------------------------------------------------------------------------
+;; Event type normalization
+;; -----------------------------------------------------------------------------
+
+(defn event-type->keyword
+  "Normalize event :type values to keywords.
+   Example: \"assistant.message_delta\" -> :assistant.message_delta."
+  [event-type]
+  (cond
+    (keyword? event-type) event-type
+    (string? event-type) (keyword event-type)
+    :else event-type))

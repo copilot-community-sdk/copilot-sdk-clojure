@@ -70,10 +70,11 @@
 (defn dispatch-event!
   "Dispatch an event to all subscribers via the mult. Called by client notification router."
   [client session-id event]
-  (log/debug "Dispatching event to session " session-id ": type=" (:type event))
-  (when-not (:destroyed? (session-state client session-id))
-    (when-let [{:keys [event-chan]} (session-io client session-id)]
-      (>!! event-chan event))))
+  (let [normalized-event (update event :type util/event-type->keyword)]
+    (log/debug "Dispatching event to session " session-id ": type=" (:type normalized-event))
+    (when-not (:destroyed? (session-state client session-id))
+      (when-let [{:keys [event-chan]} (session-io client session-id)]
+        (>!! event-chan normalized-event)))))
 
 (defn- normalize-tool-result
   "Normalize a tool result to the wire format."
@@ -239,18 +240,18 @@
                    (log/debug "send-and-wait! event channel closed for session " session-id)
                    (throw (ex-info "Event channel closed unexpectedly" {})))
                  
-                 (= "assistant.message" (:type event))
+                 (= :assistant.message (:type event))
                  (do
                    (log/debug "send-and-wait! got assistant.message, continuing to wait for idle")
                    (reset! last-assistant-msg event)
                    (recur))
                  
-                 (= "session.idle" (:type event))
+                 (= :session.idle (:type event))
                  (do
                    (log/debug "send-and-wait! got session.idle, returning result for session " session-id)
                    @last-assistant-msg)
                  
-                 (= "session.error" (:type event))
+                 (= :session.error (:type event))
                  (do
                    (log/error "send-and-wait! got session.error for session " session-id)
                    (throw (ex-info (get-in event [:data :message] "Session error")
@@ -302,7 +303,7 @@
                   (close! out-ch)
                   (release-lock!))
 
-                (= "session.idle" (:type event))
+                (= :session.idle (:type event))
                 (do
                   (>! out-ch event)
                   (untap event-mult event-ch)
@@ -310,7 +311,7 @@
                   (close! out-ch)
                   (release-lock!))
 
-                (= "session.error" (:type event))
+                (= :session.error (:type event))
                 (do
                   (>! out-ch event)
                   (untap event-mult event-ch)
@@ -361,7 +362,7 @@
       (throw (ex-info "Session has been destroyed" {:session-id session-id})))
     (let [conn (connection-io client)
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
-      (:events result))))
+      (mapv #(update % :type util/event-type->keyword) (:events result)))))
 
 (defn destroy!
   "Destroy the session and free resources.
