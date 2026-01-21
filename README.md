@@ -9,7 +9,20 @@ Clojure SDK for programmatic control of GitHub Copilot CLI via JSON-RPC.
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {io.github.krukow/copilot-sdk {:mvn/version "0.1.0"}}}
+;; Clojars (released artifacts)
+{:deps {net.clojars.krukow/copilot-sdk {:mvn/version "0.1.0"}}}
+```
+
+```clojure
+;; Git dependency (use a SHA)
+{:deps {io.github.krukow/copilot-sdk {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
+                                     :git/sha "c3876d57aed8e7eefb85c2d91d14fe1cbc988076"}}}
+```
+
+Update the SHA automatically:
+
+```bash
+bb readme:sha
 ```
 
 ## Quick Start
@@ -718,6 +731,22 @@ bb install
 ```
 
 API documentation is generated to `doc/api/`.
+
+### Publishing to Clojars
+
+Set credentials:
+
+```bash
+export CLOJARS_USERNAME=your-username
+export CLOJARS_PASSWORD=your-token
+```
+
+Then publish:
+
+```bash
+bb jar
+bb deploy:clojars
+```
 
 ## Testing
 

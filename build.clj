@@ -1,6 +1,7 @@
 (ns build
   (:refer-clojure :exclude [test])
-  (:require [clojure.tools.build.api :as b]
+  (:require [clojure.string :as str]
+            [clojure.tools.build.api :as b]
             [deps-deploy.deps-deploy :as dd]))
 
 (def lib 'net.clojars.krukow/copilot-sdk)
@@ -8,14 +9,15 @@
 #_ ; alternatively, use MAJOR.MINOR.COMMITS:
 (def version (format "1.0.%s" (b/git-count-revs nil)))
 (def class-dir "target/classes")
+(def readme-path "README.md")
 
 (defn- pom-template [version]
-  [[:description "FIXME: my new library."]
+  [[:description "Clojure SDK for GitHub Copilot CLI."]
    [:url "https://github.com/krukow/copilot-sdk"]
    [:licenses
     [:license
-     [:name "Eclipse Public License"]
-     [:url "http://www.eclipse.org/legal/epl-v10.html"]]]
+     [:name "MIT License"]
+     [:url "https://opensource.org/licenses/MIT"]]]
    [:developers
     [:developer
      [:name "Krukow"]]]
@@ -56,3 +58,17 @@
     (dd/deploy {:installer :remote :artifact (b/resolve-path jar-file)
                 :pom-file (b/pom-path (select-keys opts [:lib :class-dir]))}))
   opts)
+
+(defn update-readme-sha
+  "Update README.md git dependency SHA to the current HEAD."
+  [_opts]
+  (let [sha (-> (b/process {:command-args ["git" "rev-parse" "HEAD"]})
+                :out
+                str/trim)
+        contents (slurp readme-path)
+        updated (str/replace contents #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
+    (when (= contents updated)
+      (throw (ex-info "README.md git SHA not updated (pattern not found)." {})))
+    (spit readme-path updated)
+    (println "Updated README.md git SHA to" sha)
+    {:sha sha}))

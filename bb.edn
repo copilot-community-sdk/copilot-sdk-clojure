@@ -17,6 +17,12 @@
   docs {:doc "Generate API documentation with codox."
         :task (clojure "-X:codox")}
 
+  jar {:doc "Build the JAR and POM."
+       :task (clojure "-T:build" "jar")}
+
+  readme:sha {:doc "Update README git dependency SHA to HEAD."
+              :task (clojure "-T:build" "update-readme-sha")}
+
   ci {:doc "Run the CI pipeline of tests and build the JAR."
       :depends [test:all]
       :task (clojure "-T:build" "jar")}
@@ -24,6 +30,9 @@
   ci:deploy {:doc "Run the CI pipeline and deploy the JAR."
              :depends [ci]
              :task (clojure "-T:build" "deploy")}
+
+  deploy:clojars {:doc "Deploy the JAR to Clojars (requires CLOJARS_USERNAME/CLOJARS_PASSWORD)."
+                  :task (clojure "-T:build" "deploy")}
 
   install {:doc "Install the JAR locally (build via ci)."
            :task (clojure "-T:build" "install")}}}
