@@ -563,6 +563,7 @@ See the [`examples/`](./examples/) directory for complete working examples:
 | [`multi_agent.clj`](./examples/multi_agent.clj) | Advanced | Multi-agent orchestration with core.async |
 | [`streaming_chat.clj`](./examples/streaming_chat.clj) | Intermediate | Streaming deltas with incremental output |
 | [`config_skill_output.clj`](./examples/config_skill_output.clj) | Intermediate | Config dir, skills, and large output settings |
+| [`permission_bash.clj`](./examples/permission_bash.clj) | Intermediate | Permission handling with bash |
 
 Run examples:
 
@@ -572,6 +573,7 @@ clojure -A:examples -M -m tool-integration
 clojure -A:examples -M -m multi-agent
 clojure -A:examples -M -m streaming-chat
 clojure -A:examples -M -m config-skill-output
+clojure -A:examples -M -m permission-bash
 ```
 
 See [`examples/README.md`](./examples/README.md) for detailed walkthroughs and explanations.

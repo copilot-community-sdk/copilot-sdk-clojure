@@ -480,7 +480,16 @@ Shows how to:
 - set a custom config directory
 - provide additional skill directories
 - disable specific skills by name
- - configure large tool output handling with a custom tool
+- configure large tool output handling with a custom tool
+
+## Example 6: Permission Handling (`permission_bash.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** permission requests, bash tool, approval callback
+
+Shows how to:
+- handle `permission.request` via `:on-permission-request`
+- invoke the built-in shell tool with auto-approval
 
 ## Troubleshooting
 
