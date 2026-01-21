@@ -746,4 +746,4 @@ bb test
 
 Copyright © 2026 Krukow
 
-Distributed under the Eclipse Public License version 1.0.
+Distributed under the MIT License.
