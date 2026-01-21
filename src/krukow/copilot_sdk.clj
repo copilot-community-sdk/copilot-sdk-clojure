@@ -10,7 +10,7 @@
    (copilot/start! client)
 
    ;; Create a session
-   (def session (copilot/create-session client {:model \"gpt-5\"}))
+   (def session (copilot/create-session client {:model \"gpt-5.2\"}))
 
    ;; Send a message and wait for response
    (def response (copilot/send-and-wait! session {:prompt \"What is 2+2?\"}))
@@ -125,13 +125,19 @@
 
    Config options:
    - :session-id           - Custom session ID
-   - :model                - Model to use (e.g., \"gpt-5\", \"claude-sonnet-4.5\")
+   - :model                - Model to use (e.g., \"gpt-5.2\", \"claude-sonnet-4.5\")
    - :tools                - Vector of tool definitions (use define-tool)
    - :system-message       - {:mode :append/:replace :content \"...\"}
    - :available-tools      - List of allowed tool names
    - :excluded-tools       - List of excluded tool names
    - :provider             - Custom provider config (BYOK)
    - :on-permission-request - Permission handler function
+     Must return a map compatible with the permission result payload.
+     The SDK wraps this into the JSON-RPC response as {:result <your-map>}:
+     {:kind :approved}
+     {:kind :denied-by-rules :rules [{:kind \"shell\" :argument \"echo hi\"}]}
+     {:kind :denied-no-approval-rule-and-could-not-request-from-user}
+     {:kind :denied-interactively-by-user :feedback \"optional\"}
    - :streaming?           - Enable streaming deltas
    - :mcp-servers          - MCP server configs map (keyed by server ID)
    - :custom-agents        - Custom agent configs
@@ -142,7 +148,7 @@
 
    Example:
    ```clojure
-   (def session (copilot/create-session client {:model \"gpt-5\"}))
+   (def session (copilot/create-session client {:model \"gpt-5.2\"}))
    ```"
   ([client]
    (client/create-session client))
@@ -153,7 +159,7 @@
   "Create a session and ensure destroy! on exit.
 
    Usage:
-   (with-session [s client {:model \"gpt-5\"}]
+   (with-session [s client {:model \"gpt-5.2\"}]
      ...)"
   [[session-sym client & [config]] & body]
   `(let [~session-sym ~(if config

@@ -22,7 +22,7 @@
         (println "✅ Connected!\n")
 
         (println "📝 Creating streaming session...")
-        (copilot/with-session [session client {:model "gpt-5"
+        (copilot/with-session [session client {:model "gpt-5.2"
                                                :streaming? true}]
           (println (str "✅ Session created: " (copilot/session-id session) "\n"))
 

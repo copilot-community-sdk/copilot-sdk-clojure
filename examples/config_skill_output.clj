@@ -86,7 +86,7 @@
         (println "✅ Connected!\n")
         (println "📝 Creating session with config-dir, skills, and large-output...")
         (copilot/with-session [session client
-                               {:model "gpt-5"
+                               {:model "gpt-5.2"
                                 :config-dir config-dir
                                 :skill-directories [skill-dir]
                                 :disabled-skills ["demo-skill"]

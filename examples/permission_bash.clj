@@ -6,8 +6,9 @@
    - bash tool invocation with auto-approval
 
    Run with: clojure -A:examples -M -m permission-bash"
-  (:require [clojure.core.async :as async :refer [<! <!! alts!! timeout]]
-            [krukow.copilot-sdk :as copilot]))
+  (:require [clojure.core.async :as async :refer [<!]]
+            [krukow.copilot-sdk :as copilot]
+            [clojure.pprint :as pprint]))
 
 (defn- windows?
   []
@@ -25,56 +26,51 @@
   (println "🔐 Permission Handling Example (Bash)")
   (println "======================================\n")
   (let [cli-path (or (System/getenv "COPILOT_CLI_PATH") "copilot")
-        {:keys [tool command]} (shell-config)]
+        {:keys [tool command]} (shell-config)
+        denied-command (str command " && echo 'denied'")
+        allowed-commands #{command}]
     (try
       (println "📡 Starting Copilot client...")
       (copilot/with-client [client {:cli-path cli-path
-                                    :log-level :info}]
+                                    :log-level :debug}]
         (println "✅ Connected!\n")
         (println "📝 Creating session with permission callback...")
         (copilot/with-session [session client
-                               {:model "gpt-5"
+                               {:model "gpt-5.2"
                                 :available-tools [tool]
                                 :on-permission-request (fn [request _ctx]
-                                                         (println "🔐 Permission request:" (:kind request))
-                                                         (println "    Command:" (:full-command-text request))
-                                                         {:kind :approved})}]
+                                                         (println "🔐 Permission request:")
+                                                         (pprint/pprint request)
+                                                         (if (contains? allowed-commands (:full-command-text request))
+                                                           {:kind :approved}
+                                                           {:kind :denied-by-rules
+                                                            :rules [{:kind "shell"
+                                                                     :argument (:full-command-text request)}]}))}]
           (println (str "✅ Session created: " (copilot/session-id session) "\n"))
-          (println "💬 Asking: Run a shell command and reply DONE.")
-          (let [event-ch (copilot/send-async
+          (let [ch (copilot/subscribe-events session)]
+            (async/go-loop []
+              (when-let [event (<! ch)]
+                (println "Event:" (:type event))
+                (recur))))
+          (println "💬 Asking: Run an allowed shell command and reply DONE.")
+          (let [response (copilot/send-and-wait!
                           session
                           {:prompt (str "Run this command with the "
                                         tool
                                         " tool, then reply with just DONE:\n\n"
-                                        command)})
-                deadline (timeout 60000)]
-            (loop []
-              (let [[event ch] (alts!! [event-ch deadline])]
-                (cond
-                  (= ch deadline)
-                  (println "⚠️  Timed out waiting for completion.")
-
-                  (nil? event)
-                  (println "⚠️  Event stream closed.")
-
-                  :else
-                  (do
-                    (println "Event:" (:type event))
-                    (case (:type event)
-                      :tool.execution_complete
-                      (do
-                        (println "🧰 Tool completed.")
-                        (copilot/abort! session))
-                      :assistant.message
-                      (when-let [content (get-in event [:data :content])]
-                        (println "🤖 Response:")
-                        (println content))
-                      :session.idle
-                      (println "✅ Session idle.")
-                      nil)
-                    (when-not (= :session.idle (:type event))
-                      (recur))))))))
+                                        command)})]
+            (println "🤖 Allowed response:")
+            (println (get-in response [:data :content])))
+          (println "\n💬 Asking: Run a denied shell command and reply DONE.")
+          (let [response (copilot/send-and-wait!
+                          session
+                          {:prompt (str "Run this command with the "
+                                        tool
+                                        " tool, then reply with just DONE:\n\n"
+                                        denied-command)})]
+            (println "🤖 Denied response:")
+            (println (get-in response [:data :content])))))
       (println "\n✅ Done!")
       (catch Exception e
         (println (str "❌ Error: " (.getMessage e)))
-        (System/exit 1))))))
+        (System/exit 1)))))

@@ -20,7 +20,7 @@ subscribing to streaming events using core.async.
 (def client (copilot/client {:log-level :info}))
 (copilot/start! client)
 
-(def session (copilot/create-session client {:model "gpt-5"}))
+(def session (copilot/create-session client {:model "gpt-5.2"}))
 (def response (copilot/send-and-wait! session {:prompt "What is 2+2?"}))
 (println (get-in response [:data :content]))
 

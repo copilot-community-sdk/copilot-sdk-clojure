@@ -63,7 +63,7 @@ The simplest use case—create a client, start a conversation, and get responses
 (copilot/with-client [client {:cli-path "copilot"
                               :log-level :info}]
   ;; 2. Create a session (specifying model)
-  (copilot/with-session [session client {:model "gpt-5"}]
+  (copilot/with-session [session client {:model "gpt-5.2"}]
     ;; 3. Send a message and wait for the complete response
     (def response (copilot/send-and-wait! session
                     {:prompt "What is the capital of France?"}))
@@ -151,7 +151,7 @@ Shows how to let the LLM call back into your application when it needs capabilit
 
 ;; Create session with tools
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :tools [lookup-tool calculator-tool]}))
 
 ;; When you send a prompt, the LLM may invoke your tools
@@ -269,11 +269,11 @@ Demonstrates a sophisticated pattern where multiple specialized agents collabora
 ;; Create agents with different personas
 (def researcher (create-agent client "Researcher"
                   "You are a research assistant. Focus on facts."
-                  "gpt-5"))
+                  "gpt-5.2"))
 
 (def analyst (create-agent client "Analyst"
                "You are an analyst. Identify patterns and insights."
-               "gpt-5"))
+               "gpt-5.2"))
 ```
 
 #### Async Response Helper
@@ -489,7 +489,8 @@ Shows how to:
 
 Shows how to:
 - handle `permission.request` via `:on-permission-request`
-- invoke the built-in shell tool with auto-approval
+- invoke the built-in shell tool with allow/deny decisions
+- log the full permission request payload for inspection
 
 ## Troubleshooting
 

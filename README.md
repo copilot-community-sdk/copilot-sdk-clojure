@@ -128,7 +128,7 @@ Create a new conversation session.
 ##### `with-session`
 
 ```clojure
-(copilot/with-session [session client {:model "gpt-5"}]
+(copilot/with-session [session client {:model "gpt-5.2"}]
   ;; use session
   )
 ```
@@ -140,7 +140,7 @@ Create a session and ensure `destroy!` runs on exit.
 | Key | Type | Description |
 |-----|------|-------------|
 | `:session-id` | string | Custom session ID (optional) |
-| `:model` | string | Model to use (`"gpt-5"`, `"claude-sonnet-4.5"`, etc.) |
+| `:model` | string | Model to use (`"gpt-5.2"`, `"claude-sonnet-4.5"`, etc.) |
 | `:tools` | vector | Custom tools exposed to the CLI |
 | `:system-message` | map | System message customization (see below) |
 | `:available-tools` | vector | List of allowed tool names |
@@ -348,7 +348,7 @@ Enable streaming to receive assistant response chunks as they're generated:
 
 ```clojure
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :streaming? true}))
 
 (let [ch (chan 100)]
@@ -420,7 +420,7 @@ Let the CLI call back into your process when the model needs capabilities you pr
                   (copilot/result-success issue)))}))
 
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :tools [lookup-tool]}))
 ```
 
@@ -449,7 +449,7 @@ Control the system prompt:
 
 ```clojure
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :system-message
                   {:content "
 <workflow_rules>
@@ -465,7 +465,7 @@ For full control (removes all guardrails), use `:mode :replace`:
 
 ```clojure
 (copilot/create-session client
-  {:model "gpt-5"
+  {:model "gpt-5.2"
    :system-message {:mode :replace
                     :content "You are a helpful assistant."}})
 ```
@@ -477,7 +477,7 @@ It does not define custom agents. Custom agents are provided via `:custom-agents
 
 ```clojure
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :config-dir "/tmp/copilot-config"
                 :skill-directories ["/path/to/skills" "/opt/team-skills"]
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
@@ -489,7 +489,7 @@ Configure how large tool outputs are handled before being sent back to the model
 
 ```clojure
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :large-output {:enabled true
                                :max-size-bytes 65536
                                :output-dir "/tmp/copilot-tool-output"}}))
@@ -513,10 +513,36 @@ Note: large output handling is applied by the CLI for built-in tools (like the s
 For external tools you define in the SDK, consider handling oversized outputs yourself
 (e.g., write to a file and return a short preview).
 
+### Permission Handling
+
+When the CLI needs approval (e.g., shell or file write), it sends a JSON-RPC
+`permission.request` to the SDK. Your `:on-permission-request` callback must
+return a map compatible with the permission result payload; the SDK wraps this
+into the JSON-RPC response as `{:result <your-map>}`:
+
+The `permission_bash.clj` example demonstrates both an allowed and a denied
+shell command and prints the full permission request payload so you can inspect
+fields like `:full-command-text`, `:commands`, and `:possible-paths`.
+
+```clojure
+;; Approve
+{:kind :approved}
+
+;; Deny with rules
+{:kind :denied-by-rules
+ :rules [{:kind "shell" :argument "echo hi"}]}
+
+;; Deny without interactive approval
+{:kind :denied-no-approval-rule-and-could-not-request-from-user}
+
+;; Deny after user interaction (optional feedback)
+{:kind :denied-interactively-by-user :feedback "Not allowed"}
+```
+
 ### Multiple Sessions
 
 ```clojure
-(def session1 (copilot/create-session client {:model "gpt-5"}))
+(def session1 (copilot/create-session client {:model "gpt-5.2"}))
 (def session2 (copilot/create-session client {:model "claude-sonnet-4.5"}))
 
 ;; Both sessions are independent
@@ -617,7 +643,7 @@ const client = new CopilotClient();
 await client.start();
 
 const session = await client.createSession({
-  model: "gpt-5",
+  model: "gpt-5.2",
   tools: [
     defineTool("greet", {
       description: "Greet someone",
@@ -656,7 +682,7 @@ await client.stop();
                 (str "Hello, " name "!"))}))
 
 (def session (copilot/create-session client
-               {:model "gpt-5"
+               {:model "gpt-5.2"
                 :tools [greet-tool]}))
 
 (let [ch (chan 100)]

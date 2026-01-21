@@ -144,16 +144,27 @@
   (async/thread
     (let [handler (:permission-handler (session-state client session-id))]
       (if-not handler
-        {:kind "denied-no-approval-rule-and-could-not-request-from-user"}
+        {:result {:kind "denied-no-approval-rule-and-could-not-request-from-user"}}
         (try
           (let [result (handler request {:session-id session-id})
                 ;; If handler returns a channel, await it
                 result (if (channel? result)
                          (<!! result)
                          result)]
-            result)
+            (cond
+              (and (map? result) (contains? result :kind))
+              {:result result}
+
+              (and (map? result) (contains? result :result)
+                   (map? (:result result)) (contains? (:result result) :kind))
+              result
+
+              :else
+              (do
+                (log/warn "Invalid permission response for session " session-id ": " result)
+                {:result {:kind "denied-no-approval-rule-and-could-not-request-from-user"}})))
           (catch Exception _
-            {:kind "denied-no-approval-rule-and-could-not-request-from-user"}))))))
+            {:result {:kind "denied-no-approval-rule-and-could-not-request-from-user"}}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API - functions that take CopilotSession handle

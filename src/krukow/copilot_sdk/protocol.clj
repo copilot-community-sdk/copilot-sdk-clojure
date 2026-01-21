@@ -264,6 +264,13 @@
                               (when-let [msg (.poll write-queue 100 java.util.concurrent.TimeUnit/MILLISECONDS)]
                                 (when (and (:running? (conn-state state-atom)) (.isOpen write-channel))
                                   (try
+                                    (when (and (:id msg)
+                                               (not (:method msg))
+                                               (map? (:result msg))
+                                               (or (contains? (:result msg) :kind)
+                                                   (and (map? (:result (:result msg)))
+                                                        (contains? (:result (:result msg)) :kind))))
+                                      (log/debug "Sending permission response: " (json/generate-string msg)))
                                     (log/debug "Writing message: " (if (:id msg) (str "id=" (:id msg)) "notification"))
                                     (write-message! write-channel msg)
                                     (.flush output-stream)

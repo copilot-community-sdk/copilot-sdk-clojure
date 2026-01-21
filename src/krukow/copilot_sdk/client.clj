@@ -254,7 +254,9 @@
             (let [{:keys [session-id permission-request]} params]
               (if-not (get-in @(:state client) [:sessions session-id])
                 {:result {:kind "denied-no-approval-rule-and-could-not-request-from-user"}}
-                {:result (<! (session/handle-permission-request! client session-id permission-request))}))
+                (let [result (<! (session/handle-permission-request! client session-id permission-request))]
+                  (log/debug "Permission response for session " session-id ": " result)
+                  {:result result})))
 
             {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
 
@@ -480,7 +482,7 @@
    
    Config options:
    - :session-id         - Custom session ID
-   - :model              - Model to use (e.g., \"gpt-5\")
+   - :model              - Model to use (e.g., \"gpt-5.2\")
    - :tools              - Vector of tool definitions
    - :system-message     - System message config
    - :available-tools    - List of allowed tool names

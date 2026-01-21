@@ -9,7 +9,7 @@
 (copilot/start! client)
 
 ;; Create a session
-(def session (copilot/create-session client {:model "gpt-5"}))
+(def session (copilot/create-session client {:model "gpt-5.2"}))
 
 ;; Send a message and wait for response
 (def response (copilot/send-and-wait! session {:prompt "What is 2+2?"}))
@@ -26,9 +26,9 @@
 <pre><code class="language-clojure">(def client (copilot/client {:log-level :debug}))
 </code></pre>
 </div></div></div><div class="public anchor" id="var-create-session"><h3>create-session</h3><div class="usage"><code>(create-session client)</code><code>(create-session client config)</code></div><div class="doc"><div class="markdown"><p>Create a new conversation session.</p>
-<p>Config options: - :session-id           - Custom session ID - :model                - Model to use (e.g., “gpt-5”, “claude-sonnet-4.5”) - :tools                - Vector of tool definitions (use define-tool) - :system-message       - {:mode :append/:replace :content “…”} - :available-tools      - List of allowed tool names - :excluded-tools       - List of excluded tool names - :provider             - Custom provider config (BYOK) - :on-permission-request - Permission handler function - :streaming?           - Enable streaming deltas - :mcp-servers          - MCP server configs map (keyed by server ID) - :custom-agents        - Custom agent configs</p>
+<p>Config options: - :session-id           - Custom session ID - :model                - Model to use (e.g., “gpt-5.2”, “claude-sonnet-4.5”) - :tools                - Vector of tool definitions (use define-tool) - :system-message       - {:mode :append/:replace :content “…”} - :available-tools      - List of allowed tool names - :excluded-tools       - List of excluded tool names - :provider             - Custom provider config (BYOK) - :on-permission-request - Permission handler function - :streaming?           - Enable streaming deltas - :mcp-servers          - MCP server configs map (keyed by server ID) - :custom-agents        - Custom agent configs</p>
 <p>Example:</p>
-<pre><code class="language-clojure">(def session (copilot/create-session client {:model "gpt-5"}))
+<pre><code class="language-clojure">(def session (copilot/create-session client {:model "gpt-5.2"}))
 </code></pre>
 </div></div></div><div class="public anchor" id="var-define-tool"><h3>define-tool</h3><div class="usage"><code>(define-tool name opts)</code></div><div class="doc"><div class="markdown"><p>Define a tool with a handler function.</p>
 <p>Arguments: - name        - Tool name (string) - opts map: - :description - Tool description - :parameters  - JSON schema for parameters - :handler     - Function (fn <a href="args invocation">args invocation</a> -&gt; result)</p>
@@ -117,5 +117,5 @@
 </div></div></div><div class="public anchor" id="var-with-client"><h3>with-client</h3><h4 class="type">macro</h4><div class="usage"><code>(with-client [client-sym &amp; [opts]] &amp; body)</code></div><div class="doc"><div class="markdown"><p>Create a client, start it, and ensure stop! on exit.</p>
 <p>Usage: (with-client <a href="c {:log-level :info}">c {:log-level :info}</a> …)</p>
 </div></div></div><div class="public anchor" id="var-with-session"><h3>with-session</h3><h4 class="type">macro</h4><div class="usage"><code>(with-session [session-sym client &amp; [config]] &amp; body)</code></div><div class="doc"><div class="markdown"><p>Create a session and ensure destroy! on exit.</p>
-<p>Usage: (with-session <a href="s client {:model &quot;gpt-5&quot;}">s client {:model “gpt-5”}</a> …)</p>
+<p>Usage: (with-session <a href="s client {:model &quot;gpt-5.2&quot;}">s client {:model “gpt-5.2”}</a> …)</p>
 </div></div></div></div></body></html>
