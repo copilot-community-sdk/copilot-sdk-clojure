@@ -37,16 +37,16 @@
 (deftest test-basic-chat-structure
   (testing "basic_chat has expected public functions"
     (let [ns-obj (find-ns 'basic-chat)]
-      (is (some? (ns-resolve ns-obj '-main))
-          "Should have -main function"))))
+      (is (some? (ns-resolve ns-obj 'run))
+          "Should have run function"))))
 
 (deftest test-tool-integration-structure
   (testing "tool_integration has expected public functions and tools"
     (let [ns-obj (find-ns 'tool-integration)]
       (is (some? (ns-resolve ns-obj 'lookup-tool))
           "Should have lookup-tool")
-      (is (some? (ns-resolve ns-obj '-main))
-          "Should have -main function"))))
+      (is (some? (ns-resolve ns-obj 'run))
+          "Should have run function"))))
 
 (deftest test-multi-agent-structure
   (testing "multi_agent has expected public functions"
@@ -57,8 +57,8 @@
           "Should have agent-respond!")
       (is (some? (ns-resolve ns-obj 'run-parallel-research!))
           "Should have run-parallel-research!")
-      (is (some? (ns-resolve ns-obj '-main))
-          "Should have -main function"))))
+      (is (some? (ns-resolve ns-obj 'run))
+          "Should have run function"))))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool Definition Tests - verify tools are properly defined

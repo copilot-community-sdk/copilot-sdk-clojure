@@ -1,8 +1,35 @@
 #!/bin/bash
+# Run all examples using -X invocation
 
-clojure -A:examples -M -m basic-chat && \
-  clojure -A:examples -M -m tool-integration && \
-  clojure -A:examples -M -m multi-agent && \
-  clojure -A:examples -M -m streaming-chat && \
-  clojure -A:examples -M -m config-skill-output && \
-  clojure -A:examples -M -m permission-bash
+set -e
+
+echo "=== basic-chat ==="
+clojure -A:examples -X basic-chat/run
+
+echo ""
+echo "=== helpers-query ==="
+clojure -A:examples -X helpers-query/run
+
+echo ""
+echo "=== helpers-query/run-multi ==="
+clojure -A:examples -X helpers-query/run-multi
+
+echo ""
+echo "=== tool-integration ==="
+clojure -A:examples -X tool-integration/run
+
+echo ""
+echo "=== multi-agent ==="
+clojure -A:examples -X multi-agent/run
+
+echo ""
+echo "=== streaming-chat ==="
+clojure -A:examples -X streaming-chat/run
+
+echo ""
+echo "=== config-skill-output ==="
+clojure -A:examples -X config-skill-output/run
+
+echo ""
+echo "=== permission-bash ==="
+clojure -A:examples -X permission-bash/run
