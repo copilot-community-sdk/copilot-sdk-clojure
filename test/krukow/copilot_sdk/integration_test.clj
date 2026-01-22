@@ -101,8 +101,34 @@
 (deftest test-ping
   (testing "Ping returns protocol version"
     (let [result (sdk/ping *test-client*)]
-      (is (= 1 (:protocol-version result)))
+      (is (= 2 (:protocol-version result)))
       (is (number? (:timestamp result))))))
+
+(deftest test-get-status
+  (testing "Get CLI status returns version and protocol"
+    (let [result (sdk/get-status *test-client*)]
+      (is (string? (:version result)))
+      (is (= 2 (:protocol-version result))))))
+
+(deftest test-get-auth-status
+  (testing "Get auth status returns authentication info"
+    (let [result (sdk/get-auth-status *test-client*)]
+      (is (boolean? (:authenticated? result)))
+      (when (:authenticated? result)
+        (is (keyword? (:auth-type result)))
+        (is (string? (:login result)))))))
+
+(deftest test-list-models
+  (testing "List models returns available models"
+    (let [models (sdk/list-models *test-client*)]
+      (is (vector? models))
+      (is (pos? (count models)))
+      (let [model (first models)]
+        (is (string? (:id model)))
+        (is (string? (:name model)))
+        (is (string? (:vendor model)))
+        (is (number? (:max-input-tokens model)))
+        (is (number? (:max-output-tokens model)))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session Lifecycle Tests

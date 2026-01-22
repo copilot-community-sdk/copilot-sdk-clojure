@@ -116,6 +116,49 @@
   ([client message]
    (client/ping client message)))
 
+(defn get-status
+  "Get CLI status including version and protocol information.
+   Returns {:version :protocol-version}.
+
+   Example:
+   ```clojure
+   (let [{:keys [version protocol-version]} (copilot/get-status client)]
+     (println \"CLI version:\" version \"protocol:\" protocol-version))
+   ```"
+  [client]
+  (client/get-status client))
+
+(defn get-auth-status
+  "Get current authentication status.
+   Returns {:authenticated? :auth-type :host :login :status-message}.
+
+   Example:
+   ```clojure
+   (let [{:keys [authenticated? login]} (copilot/get-auth-status client)]
+     (if authenticated?
+       (println \"Logged in as\" login)
+       (println \"Not authenticated\")))
+   ```"
+  [client]
+  (client/get-auth-status client))
+
+(defn list-models
+  "List available models with their metadata.
+   Requires authentication.
+   
+   Returns a vector of model info maps with keys:
+   :id :name :vendor :family :version :max-input-tokens :max-output-tokens
+   :preview? :default-temperature :model-picker-priority :model-policy
+   :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size}
+
+   Example:
+   ```clojure
+   (doseq [model (copilot/list-models client)]
+     (println (:name model) \"-\" (:id model)))
+   ```"
+  [client]
+  (client/list-models client))
+
 ;; =============================================================================
 ;; Session Management
 ;; =============================================================================

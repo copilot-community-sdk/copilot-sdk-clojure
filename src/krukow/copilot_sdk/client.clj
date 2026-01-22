@@ -14,7 +14,7 @@
   (:import [java.net Socket]
            [java.util.concurrent LinkedBlockingQueue]))
 
-(def ^:private sdk-protocol-version 1)
+(def ^:private sdk-protocol-version 2)
 
 (defn- parse-cli-url
   "Parse CLI URL into {:host :port}."
@@ -476,6 +476,59 @@
     {:message (:message result)
      :timestamp (:timestamp result)
      :protocol-version (:protocol-version result)})))
+
+(defn get-status
+  "Get CLI status including version and protocol information.
+   Returns {:version :protocol-version}."
+  [client]
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "status.get" {})]
+    {:version (:version result)
+     :protocol-version (:protocol-version result)}))
+
+(defn get-auth-status
+  "Get current authentication status.
+   Returns {:authenticated? :auth-type :host :login :status-message}."
+  [client]
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "auth.getStatus" {})]
+    {:authenticated? (:is-authenticated result)
+     :auth-type (some-> (:auth-type result) keyword)
+     :host (:host result)
+     :login (:login result)
+     :status-message (:status-message result)}))
+
+(defn list-models
+  "List available models with their metadata.
+   Requires authentication.
+   Returns a vector of model info maps with keys:
+   :id :name :vendor :family :version :max-input-tokens :max-output-tokens
+   :preview? :default-temperature :model-picker-priority :model-policy
+   :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size}"
+  [client]
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "models.list" {})
+        models (:models result)]
+    (mapv (fn [m]
+            (cond-> {:id (:id m)
+                     :name (:name m)
+                     :vendor (:vendor m)
+                     :family (:family m)
+                     :version (:version m)
+                     :max-input-tokens (:max-input-tokens m)
+                     :max-output-tokens (:max-output-tokens m)
+                     :preview? (:preview m)}
+              (:default-temperature m) (assoc :default-temperature (:default-temperature m))
+              (:model-picker-priority m) (assoc :model-picker-priority (:model-picker-priority m))
+              (:model-policy m) (assoc :model-policy (keyword (:model-policy m)))
+              (:vision-limits m) (assoc :vision-limits
+                                        {:supported-media-types (get-in m [:vision-limits :supported-media-types])
+                                         :max-prompt-images (get-in m [:vision-limits :max-prompt-images])
+                                         :max-prompt-image-size (get-in m [:vision-limits :max-prompt-image-size])})))
+          models)))
 
 (defn create-session
   "Create a new conversation session.

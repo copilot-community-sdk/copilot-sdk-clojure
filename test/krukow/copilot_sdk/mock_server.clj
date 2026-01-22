@@ -7,7 +7,7 @@
             PipedInputStream PipedOutputStream]
            [java.util.concurrent.atomic AtomicLong]))
 
-(def ^:private PROTOCOL_VERSION 1)
+(def ^:private PROTOCOL_VERSION 2)
 
 (defn- write-message
   "Write a JSON-RPC message with Content-Length framing."
@@ -92,6 +92,38 @@
   {:message (:message params)
    :timestamp (System/currentTimeMillis)
    :protocolVersion PROTOCOL_VERSION})
+
+(defn- handle-status-get [server params]
+  {:version "0.0.389-mock"
+   :protocolVersion PROTOCOL_VERSION})
+
+(defn- handle-auth-get-status [server params]
+  {:isAuthenticated true
+   :authType "user"
+   :host "github.com"
+   :login "test-user"
+   :statusMessage "Authenticated as test-user"})
+
+(defn- handle-models-list [server params]
+  {:models [{:id "gpt-5.2"
+             :name "GPT-5.2"
+             :vendor "openai"
+             :family "gpt-5.2"
+             :version "gpt-5.2"
+             :max_input_tokens 128000
+             :max_output_tokens 16384
+             :preview false}
+            {:id "claude-sonnet-4.5"
+             :name "Claude Sonnet 4.5"
+             :vendor "anthropic"
+             :family "claude-sonnet"
+             :version "claude-sonnet-4.5"
+             :max_input_tokens 200000
+             :max_output_tokens 8192
+             :preview false
+             :vision_limits {:supported_media_types ["image/png" "image/jpeg" "image/gif" "image/webp"]
+                             :max_prompt_images 20
+                             :max_prompt_image_size 20971520}}]})
 
 (defn- handle-session-create [server params]
   (let [session-id (or (:sessionId params) (str "session-" (generate-id (:message-id server))))
@@ -190,6 +222,9 @@
             (hook method params))
         result (case method
                  "ping" (handle-ping server params)
+                 "status.get" (handle-status-get server params)
+                 "auth.getStatus" (handle-auth-get-status server params)
+                 "models.list" (handle-models-list server params)
                  "session.create" (handle-session-create server params)
                  "session.resume" (handle-session-resume server params)
                  "session.send" (handle-session-send server params)

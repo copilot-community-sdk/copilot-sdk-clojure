@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added
+- New metadata APIs (upstream PR #77):
+  - `get-status` - Get CLI version and protocol information
+  - `get-auth-status` - Get current authentication status
+  - `list-models` - List available models with metadata
+- New event type `:tool.execution_progress` for progress updates during long-running tool executions
+
+### Changed
+- Protocol version bumped from 1 to 2 (requires CLI 0.0.389+)
+
 ## [0.1.0] - 2026-01-18
 ### Added
 - Initial release of copilot-sdk-clojure

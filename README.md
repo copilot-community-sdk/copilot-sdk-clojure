@@ -183,7 +183,52 @@ Resume an existing session by ID.
 (copilot/ping client message)
 ```
 
-Ping the server to check connectivity. Returns `{:message "..." :timestamp ...}`.
+Ping the server to check connectivity. Returns `{:message "..." :timestamp ... :protocol-version ...}`.
+
+##### `get-status`
+
+```clojure
+(copilot/get-status client)
+```
+
+Get CLI status including version and protocol information. Returns `{:version "0.0.389" :protocol-version 2}`.
+
+##### `get-auth-status`
+
+```clojure
+(copilot/get-auth-status client)
+```
+
+Get current authentication status. Returns:
+```clojure
+{:authenticated? true
+ :auth-type :user        ; :user | :env | :gh-cli | :hmac | :api-key | :token
+ :host "github.com"
+ :login "username"
+ :status-message "Authenticated as username"}
+```
+
+##### `list-models`
+
+```clojure
+(copilot/list-models client)
+```
+
+List available models with their metadata. Requires authentication. Returns a vector of model info maps:
+```clojure
+[{:id "gpt-5.2"
+  :name "GPT-5.2"
+  :vendor "openai"
+  :family "gpt-5.2"
+  :version "gpt-5.2"
+  :max-input-tokens 128000
+  :max-output-tokens 16384
+  :preview? false
+  :vision-limits {:supported-media-types ["image/png" "image/jpeg"]
+                  :max-prompt-images 10
+                  :max-prompt-image-size 20971520}}
+ ...]
+```
 
 ##### `state`
 
@@ -347,6 +392,7 @@ Sessions emit various events during processing:
 | `:assistant.reasoning` | Model reasoning (if supported) |
 | `:assistant.reasoning_delta` | Streaming reasoning chunk |
 | `:tool.execution_start` | Tool execution started |
+| `:tool.execution_progress` | Tool execution progress update |
 | `:tool.execution_partial_result` | Tool execution partial result |
 | `:tool.execution_complete` | Tool execution completed |
 | `:session.idle` | Session finished processing |

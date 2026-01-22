@@ -211,7 +211,8 @@
     :assistant.turn_start :assistant.intent :assistant.reasoning :assistant.reasoning_delta
     :assistant.message :assistant.message_delta :assistant.turn_end :assistant.usage
     :abort
-    :tool.user_requested :tool.execution_start :tool.execution_partial_result :tool.execution_complete
+    :tool.user_requested :tool.execution_start :tool.execution_partial_result
+    :tool.execution_progress :tool.execution_complete
     :subagent.started :subagent.completed :subagent.failed :subagent.selected
     :hook.start :hook.end
     :system.message})
@@ -242,6 +243,11 @@
 (s/def ::tool.execution_start-data
   (s/keys :req-un [::tool-call-id ::tool-name]
           :opt-un [::arguments ::parent-tool-call-id]))
+
+(s/def ::progress-message string?)
+
+(s/def ::tool.execution_progress-data
+  (s/keys :req-un [::tool-call-id ::progress-message]))
 
 (s/def ::tool.execution_complete-data
   (s/keys :req-un [::tool-call-id ::success?]
