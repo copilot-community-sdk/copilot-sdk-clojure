@@ -318,6 +318,19 @@
   [session opts]
   (session/send-async session opts))
 
+(defn <send!
+  "Send a message and return a channel that delivers the final content string.
+   This is the async equivalent of send-and-wait! - use inside go blocks.
+
+   Example:
+   ```clojure
+   (go
+     (let [answer (<! (copilot/<send! session {:prompt \"What is 2+2?\"}))]
+       (println answer)))
+   ```"
+  [session opts]
+  (session/<send! session opts))
+
 (defn send-async-with-id
   "Send a message and return {:message-id :events-ch}."
   [session opts]
