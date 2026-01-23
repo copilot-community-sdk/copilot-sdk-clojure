@@ -6,16 +6,36 @@ Java API for programmatic control of GitHub Copilot CLI via JSON-RPC.
 
 ## Installation
 
-Add to your `pom.xml`:
+### Maven Central
 
 ```xml
 <dependency>
     <groupId>io.github.krukow</groupId>
     <artifactId>copilot-sdk</artifactId>
-    <version>0.1.1-SNAPSHOT</version>
+    <version>0.1.2-SNAPSHOT</version>
+</dependency>
+```
+
+### Clojars (alternative)
+
+```xml
+<dependency>
+    <groupId>net.clojars.krukow</groupId>
+    <artifactId>copilot-sdk</artifactId>
+    <version>0.1.2-SNAPSHOT</version>
 </dependency>
 
-<!-- Required Clojure runtime dependencies -->
+<repositories>
+    <repository>
+        <id>clojars</id>
+        <url>https://repo.clojars.org</url>
+    </repository>
+</repositories>
+```
+
+### Required Dependencies
+
+```xml
 <dependency>
     <groupId>org.clojure</groupId>
     <artifactId>clojure</artifactId>
@@ -31,17 +51,6 @@ Add to your `pom.xml`:
     <artifactId>cheshire</artifactId>
     <version>6.1.0</version>
 </dependency>
-```
-
-You'll also need the Clojars repository:
-
-```xml
-<repositories>
-    <repository>
-        <id>clojars</id>
-        <url>https://repo.clojars.org</url>
-    </repository>
-</repositories>
 ```
 
 Or build from source:

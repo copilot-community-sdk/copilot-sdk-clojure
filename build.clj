@@ -3,19 +3,14 @@
   (:require [clojure.java.shell :as shell]
             [clojure.string :as str]
             [clojure.tools.build.api :as b]
-            [deps-deploy.deps-deploy :as dd]))
+            [clojure.xml :as xml]
+            [deps-deploy.deps-deploy :as dd])
+  (:import [java.io File]))
 
-;; Library coordinates
-;; For Clojars: net.clojars.krukow/copilot-sdk
-;; For Maven Central: io.github.krukow/copilot-sdk (requires domain verification)
 (def lib 'io.github.krukow/copilot-sdk)
-(def version "0.1.1-SNAPSHOT")
-#_ ; alternatively, use MAJOR.MINOR.COMMITS:
-(def version (format "1.0.%s" (b/git-count-revs nil)))
+(def clojars-lib 'net.clojars.krukow/copilot-sdk)
+(def version "0.1.2-SNAPSHOT")
 (def class-dir "target/classes")
-(def readme-path "README.md")
-
-;; Namespaces to AOT compile for Java interop
 (def aot-namespaces ['krukow.copilot-sdk.java-api])
 
 (defn- pom-template [version]
@@ -38,208 +33,181 @@
 
 (defn- jar-opts [opts]
   (assoc opts
-          :lib lib   :version version
-          :jar-file  (format "target/%s-%s.jar" lib version)
-          :basis     (b/create-basis {})
-          :class-dir class-dir
-          :target    "target"
-          :src-dirs  ["src"]
-          :pom-data  (pom-template version)))
+         :lib lib
+         :version version
+         :jar-file (format "target/%s-%s.jar" lib version)
+         :basis (b/create-basis {})
+         :class-dir class-dir
+         :target "target"
+         :src-dirs ["src"]
+         :pom-data (pom-template version)))
 
-(defn jar "Build the JAR (source only, no AOT)." [opts]
+(defn jar "Build source-only JAR." [opts]
   (b/delete {:path "target"})
   (let [opts (jar-opts opts)]
     (println "\nWriting pom.xml...")
     (b/write-pom opts)
-    (println "\nCopying source...")
+    (println "Copying source...")
     (b/copy-dir {:src-dirs ["resources" "src"] :target-dir class-dir})
-    (println "\nBuilding JAR..." (:jar-file opts))
+    (println "Building JAR..." (:jar-file opts))
     (b/jar opts))
   opts)
 
-(defn aot-jar
-  "Build the JAR with AOT compilation for Java interop.
-
-   This compiles the Java API class so it can be used directly from Java:
-
-   ```java
-   import krukow.copilot_sdk.Copilot;
-   String answer = Copilot.query(\"What is 2+2?\");
-   ```
-
-   Uses direct linking for faster invocation and smaller class sizes."
-  [opts]
+(defn aot-jar "Build AOT-compiled JAR for Java interop." [opts]
   (b/delete {:path "target"})
   (let [opts (jar-opts opts)
-        basis (b/create-basis {})]
+        basis (:basis opts)]
     (println "\nWriting pom.xml...")
     (b/write-pom opts)
-    (println "\nCopying Clojure source...")
+    (println "Copying source...")
     (b/copy-dir {:src-dirs ["resources" "src"] :target-dir class-dir})
-    (println "\nAOT compiling with direct linking:" aot-namespaces)
+    (println "AOT compiling:" aot-namespaces)
     (b/compile-clj {:basis basis
                     :ns-compile aot-namespaces
                     :class-dir class-dir
                     :compiler-options {:direct-linking true}})
-    (println "\nBuilding JAR..." (:jar-file opts))
+    (println "Building JAR..." (:jar-file opts))
     (b/jar opts))
   opts)
 
-(defn uber
-  "Build an uberjar with all dependencies and AOT compilation.
-
-   Creates a standalone JAR that can be used from Java without
-   additional Clojure dependencies on the classpath.
-
-   Uses direct linking for faster invocation and smaller class sizes."
-  [opts]
-  (b/delete {:path "target"})
-  (let [opts (assoc (jar-opts opts)
-                    :uber-file (format "target/%s-%s-standalone.jar" lib version))
-        basis (b/create-basis {})]
-    (println "\nWriting pom.xml...")
-    (b/write-pom opts)
-    (println "\nCopying Clojure source...")
-    (b/copy-dir {:src-dirs ["resources" "src"] :target-dir class-dir})
-    (println "\nAOT compiling with direct linking:" aot-namespaces)
-    (b/compile-clj {:basis basis
-                    :ns-compile aot-namespaces
-                    :class-dir class-dir
-                    :compiler-options {:direct-linking true}})
-    (println "\nBuilding uberjar..." (:uber-file opts))
-    (b/uber opts))
+(defn install "Install JAR to local Maven repo." [opts]
+  (b/install (jar-opts opts))
   opts)
 
-(defn install "Install the JAR locally." [opts]
-  (let [opts (jar-opts opts)]
-    (b/install opts))
+(defn deploy "Deploy JAR to Clojars (net.clojars.krukow/copilot-sdk)." [opts]
+  (aot-jar opts)
+  (let [jar-file (format "target/%s-%s.jar" lib version)
+        pom-path (b/pom-path {:lib clojars-lib :class-dir class-dir})]
+    ;; Rewrite pom.xml with Clojars coordinates
+    (b/write-pom (assoc (jar-opts opts) :lib clojars-lib))
+    (dd/deploy {:installer :remote
+                :artifact (b/resolve-path jar-file)
+                :pom-file pom-path}))
   opts)
 
-(defn deploy "Deploy the JAR to Clojars." [opts]
-  (let [{:keys [jar-file] :as opts} (jar-opts opts)]
-    (dd/deploy {:installer :remote :artifact (b/resolve-path jar-file)
-                :pom-file (b/pom-path (select-keys opts [:lib :class-dir]))}))
-  opts)
+;;; Maven Central publishing
+
+(defn- read-maven-settings [server-id]
+  (let [settings-file (File. (System/getProperty "user.home") ".m2/settings.xml")]
+    (when (.exists settings-file)
+      (let [xml (xml/parse settings-file)
+            servers (->> (:content xml)
+                         (filter #(= :servers (:tag %)))
+                         first :content
+                         (filter #(= :server (:tag %))))]
+        (->> servers
+             (filter #(= server-id
+                         (->> % :content
+                              (filter (fn [e] (= :id (:tag e))))
+                              first :content first)))
+             first :content
+             (reduce #(assoc %1 (:tag %2) (first (:content %2))) {}))))))
+
+(defn- get-central-credentials []
+  (let [settings (read-maven-settings "central")
+        username (or (System/getenv "CENTRAL_USERNAME") (:username settings))
+        password (or (System/getenv "CENTRAL_PASSWORD") (:password settings))]
+    (when (or (str/blank? username) (str/blank? password))
+      (throw (ex-info "Credentials not found. Set CENTRAL_USERNAME/CENTRAL_PASSWORD or configure ~/.m2/settings.xml with server id 'central'" {})))
+    {:username username :password password}))
 
 (defn bundle
-  "Create a bundle for manual upload to Maven Central.
-
-   The new Sonatype Central Portal requires uploading a bundle zip.
-
-   Usage:
-     clj -T:build bundle :version '\"0.1.0\"'
-
-   Then upload at https://central.sonatype.com/publishing"
-  [{release-version :version :as opts}]
-  (when-not release-version
-    (throw (ex-info "Version required. Usage: clj -T:build bundle :version '\"0.1.0\"'" {})))
-  (when (str/ends-with? release-version "-SNAPSHOT")
-    (throw (ex-info "SNAPSHOT versions not supported by Maven Central" {:version release-version})))
-  ;; Override version
-  (alter-var-root #'build/version (constantly release-version))
-  ;; Build the AOT jar
-  (aot-jar opts)
-  (let [jar-file (format "target/%s-%s.jar" lib release-version)
-        pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
-        bundle-dir "target/bundle"
-        artifact-dir (str bundle-dir "/io/github/krukow/copilot-sdk/" release-version)
-        jar-name (format "copilot-sdk-%s.jar" release-version)
-        sources-jar-name (format "copilot-sdk-%s-sources.jar" release-version)
-        javadoc-jar-name (format "copilot-sdk-%s-javadoc.jar" release-version)
-        pom-name (format "copilot-sdk-%s.pom" release-version)]
-    ;; Create bundle directory structure
-    (b/delete {:path bundle-dir})
-    (shell/sh "mkdir" "-p" artifact-dir)
-
-    ;; Create sources JAR
-    (println "\nCreating sources JAR...")
-    (let [sources-jar (str artifact-dir "/" sources-jar-name)]
-      (b/jar {:class-dir "src"
-              :jar-file sources-jar}))
-
-    ;; Create javadoc JAR (placeholder with README for Clojure projects)
+  "Create bundle zip for Maven Central. Usage: clj -T:build bundle"
+  [opts]
+  (let [v (or (:version opts) version)]
+    (when (:version opts) (alter-var-root #'version (constantly v)))
+    (aot-jar opts)
+    (let [artifact-dir (str "target/bundle/io/github/krukow/copilot-sdk/" v)
+          pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
+          files {:jar (format "copilot-sdk-%s.jar" v)
+                 :sources (format "copilot-sdk-%s-sources.jar" v)
+                 :javadoc (format "copilot-sdk-%s-javadoc.jar" v)
+                 :pom (format "copilot-sdk-%s.pom" v)}]
+      (b/delete {:path "target/bundle"})
+      (shell/sh "mkdir" "-p" artifact-dir)
+      ;; Sources JAR
+      (println "\nCreating sources JAR...")
+    (b/jar {:class-dir "src" :jar-file (str artifact-dir "/" (:sources files))})
+    ;; Javadoc JAR (placeholder)
     (println "Creating javadoc JAR...")
-    (let [javadoc-dir "target/javadoc"
-          javadoc-jar (str artifact-dir "/" javadoc-jar-name)]
+    (let [javadoc-dir "target/javadoc"]
       (b/delete {:path javadoc-dir})
       (shell/sh "mkdir" "-p" javadoc-dir)
-      (spit (str javadoc-dir "/README.md")
-            (str "# Copilot SDK for Clojure\n\n"
-                 "This is a Clojure library. API documentation is available in the source code.\n\n"
-                 "See https://github.com/krukow/copilot-sdk-clojure for documentation.\n"))
-      (b/jar {:class-dir javadoc-dir
-              :jar-file javadoc-jar}))
-
-    ;; Copy main artifacts
-    (println "\nCopying artifacts to bundle...")
-    (println "  JAR:" jar-file)
-    (println "  POM:" pom-file)
-    (let [cp-jar (shell/sh "cp" jar-file (str artifact-dir "/" jar-name))
-          cp-pom (shell/sh "cp" pom-file (str artifact-dir "/" pom-name))]
-      (when-not (zero? (:exit cp-jar))
-        (throw (ex-info "Failed to copy JAR" {:jar-file jar-file :result cp-jar})))
-      (when-not (zero? (:exit cp-pom))
-        (throw (ex-info "Failed to copy POM" {:pom-file pom-file :result cp-pom}))))
-
-    ;; Sign all artifacts
-    (println "\nSigning artifacts with GPG...")
-    (let [jar-path (str artifact-dir "/" jar-name)
-          sources-path (str artifact-dir "/" sources-jar-name)
-          javadoc-path (str artifact-dir "/" javadoc-jar-name)
-          pom-path (str artifact-dir "/" pom-name)]
-      (doseq [path [jar-path sources-path javadoc-path pom-path]]
-        (let [result (shell/sh "gpg" "-ab" path)]
-          (when-not (zero? (:exit result))
-            (throw (ex-info (str "Failed to sign " path) result)))))
-
-      ;; Generate checksums for all artifacts
-      (println "Generating checksums...")
-      (doseq [path [jar-path sources-path javadoc-path pom-path]]
+      (spit (str javadoc-dir "/README.md") "Clojure library. See https://github.com/krukow/copilot-sdk-clojure")
+      (b/jar {:class-dir javadoc-dir :jar-file (str artifact-dir "/" (:javadoc files))}))
+      ;; Copy main JAR and POM
+      (println "Copying artifacts...")
+      (shell/sh "cp" (format "target/%s-%s.jar" lib v) (str artifact-dir "/" (:jar files)))
+      (shell/sh "cp" pom-file (str artifact-dir "/" (:pom files)))
+      ;; Sign and checksum
+      (println "Signing and checksumming...")
+      (doseq [f (vals files)
+              :let [path (str artifact-dir "/" f)]]
+        (shell/sh "gpg" "-ab" path)
         (spit (str path ".md5") (str/trim (:out (shell/sh "md5" "-q" path))))
-        (spit (str path ".sha1") (first (str/split (:out (shell/sh "shasum" "-a" "1" path)) #"\s+")))))
+        (spit (str path ".sha1") (first (str/split (:out (shell/sh "shasum" "-a" "1" path)) #"\s+"))))
+      ;; Create zip
+      (let [bundle-zip (str "target/copilot-sdk-" v "-bundle.zip")]
+        (shell/sh "sh" "-c" (str "cd target/bundle && zip -r ../copilot-sdk-" v "-bundle.zip ."))
+        (println "\n✅ Bundle created:" bundle-zip)
+        bundle-zip))))
 
-    ;; Create bundle zip
-    (println "Creating bundle zip...")
-    (let [bundle-zip (str "target/copilot-sdk-" release-version "-bundle.zip")
-          zip-result (shell/sh "sh" "-c" (str "cd " bundle-dir " && zip -r ../copilot-sdk-" release-version "-bundle.zip ."))]
-      (when-not (zero? (:exit zip-result))
-        (throw (ex-info "Failed to create zip" zip-result)))
-      (println "\n✅ Bundle created:" bundle-zip)
-      (println "\n📦 Bundle contents:")
-      (println (:out (shell/sh "unzip" "-l" bundle-zip)))
-      (println "Next steps:")
-      (println "1. Go to https://central.sonatype.com/publishing")
-      (println "2. Click 'Publish Component'")
-      (println "3. Upload:" bundle-zip)
-      (println "4. Wait for validation and click 'Publish'")))
-  opts)
+(defn- deploy-snapshot
+  "Deploy SNAPSHOT to Maven Central snapshots repository."
+  [opts]
+  (let [{:keys [username password]} (get-central-credentials)
+        v (or (:version opts) version)]
+    (aot-jar opts)
+    ;; Use curl to PUT artifacts to snapshots repo (mvn deploy compatible)
+    (let [base-url "https://central.sonatype.com/repository/maven-snapshots"
+          auth (str username ":" password)
+          jar-file (format "target/%s-%s.jar" lib v)
+          pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
+          remote-path (format "io/github/krukow/copilot-sdk/%s" v)]
+      (println "\n📤 Uploading SNAPSHOT to Maven Central...")
+      (doseq [[local-file remote-name] [[jar-file (format "copilot-sdk-%s.jar" v)]
+                                         [pom-file (format "copilot-sdk-%s.pom" v)]]]
+        (let [url (format "%s/%s/%s" base-url remote-path remote-name)
+              result (shell/sh "curl" "--silent" "--show-error" "--fail"
+                               "--user" auth
+                               "--upload-file" local-file
+                               url)]
+          (when-not (zero? (:exit result))
+            (throw (ex-info (str "Failed to upload " local-file) result)))
+          (println "  ✓" remote-name)))
+      (println "✅ SNAPSHOT published!")
+      (println "Add this repository to consume:")
+      (println "  https://central.sonatype.com/repository/maven-snapshots/"))))
 
-(defn release
-  "Prepare and deploy a release version to Maven Central.
+(defn deploy-central
+  "Deploy to Maven Central. Usage: clj -T:build deploy-central"
+  [opts]
+  (let [v (or (:version opts) version)]
+    (if (str/ends-with? v "-SNAPSHOT")
+      (deploy-snapshot opts)
+      (let [{:keys [username password]} (get-central-credentials)
+            bundle-zip (bundle opts)
+            auth-token (.encodeToString (java.util.Base64/getEncoder)
+                                        (.getBytes (str username ":" password) "UTF-8"))]
+        (println "\n📤 Uploading to Maven Central...")
+        (let [result (shell/sh "curl" "--silent" "--show-error" "--fail"
+                               "--request" "POST"
+                               "--header" (str "Authorization: Bearer " auth-token)
+                               "--form" (str "bundle=@" bundle-zip)
+                               "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC")]
+          (if (zero? (:exit result))
+            (do (println "✅ Upload successful! Deployment ID:" (:out result))
+                (println "Check status: https://central.sonatype.com/publishing"))
+            (throw (ex-info "Upload failed" result))))))))
 
-   Usage:
-     clj -T:build release :version '\"0.1.0\"'
+(defn release "Alias for deploy-central." [opts] (deploy-central opts))
 
-   This will:
-   1. Build the AOT-compiled JAR
-   2. Sign with GPG
-   3. Create bundle for upload
-
-   Then manually upload at https://central.sonatype.com/publishing"
-  [{:keys [version] :as opts}]
-  (bundle opts))
-
-(defn update-readme-sha
-  "Update README.md git dependency SHA to the current HEAD."
-  [_opts]
-  (let [{:keys [exit out err]} (shell/sh "git" "rev-parse" "HEAD")
-        _ (when-not (zero? exit)
-            (throw (ex-info "Failed to read git SHA" {:exit exit :err err})))
+(defn update-readme-sha "Update README.md git SHA to HEAD." [_opts]
+  (let [{:keys [exit out]} (shell/sh "git" "rev-parse" "HEAD")
         sha (str/trim out)
-        contents (slurp readme-path)
-        updated (str/replace contents #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
-    (when (= contents updated)
-      (throw (ex-info "README.md git SHA not updated (pattern not found)." {})))
-    (spit readme-path updated)
-    (println "Updated README.md git SHA to" sha)
-    {:sha sha}))
+        readme (slurp "README.md")
+        updated (str/replace readme #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
+    (when-not (zero? exit) (throw (ex-info "Failed to read git SHA" {})))
+    (when (= readme updated) (throw (ex-info "Pattern not found in README.md" {})))
+    (spit "README.md" updated)
+    (println "Updated README.md SHA to" sha)))
