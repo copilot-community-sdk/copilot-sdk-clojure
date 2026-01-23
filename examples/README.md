@@ -349,6 +349,134 @@ clojure -A:examples -X permission-bash/run
 
 ---
 
+## Example 8: Java Integration (`JavaExample.java`)
+
+**Difficulty:** Intermediate  
+**Concepts:** Java interop, AOT compilation, static API
+
+Shows how to use the SDK from Java code.
+
+### Building for Java
+
+The SDK can be used from Java via AOT-compiled classes. See [examples/java/](java/) for a complete Maven project.
+
+#### Option 1: Maven Dependency (Recommended)
+
+Once published to Maven Central, add to your `pom.xml`:
+
+```xml
+<dependency>
+    <groupId>io.github.krukow</groupId>
+    <artifactId>copilot-sdk</artifactId>
+    <version>0.1.0</version>
+</dependency>
+
+<!-- Required Clojure runtime dependencies -->
+<dependency>
+    <groupId>org.clojure</groupId>
+    <artifactId>clojure</artifactId>
+    <version>1.12.4</version>
+</dependency>
+<dependency>
+    <groupId>org.clojure</groupId>
+    <artifactId>core.async</artifactId>
+    <version>1.8.741</version>
+</dependency>
+<dependency>
+    <groupId>cheshire</groupId>
+    <artifactId>cheshire</artifactId>
+    <version>6.1.0</version>
+</dependency>
+```
+
+You'll also need the Clojars repository:
+
+```xml
+<repositories>
+    <repository>
+        <id>clojars</id>
+        <url>https://repo.clojars.org</url>
+    </repository>
+</repositories>
+```
+
+#### Option 2: Local Build
+
+```bash
+# Build and install to local Maven repo
+clj -T:build aot-jar
+clj -T:build install
+
+# Then in your Maven project, use the dependency above
+```
+
+#### Option 3: Standalone Uberjar
+
+```bash
+# Build uberjar with all dependencies
+clj -T:build uber
+
+# Compile your Java code
+javac -cp target/io.github.krukow/copilot-sdk-0.1.0-SNAPSHOT-standalone.jar \
+      MyApp.java
+
+# Run
+java -cp "target/io.github.krukow/copilot-sdk-0.1.0-SNAPSHOT-standalone.jar:." \
+     MyApp
+```
+
+#### Publishing to Maven Central
+
+To publish a release:
+
+```bash
+# Create signed bundle for Maven Central
+clj -T:build bundle :version '"0.1.0"'
+
+# Upload target/copilot-sdk-0.1.0-bundle.zip at:
+# https://central.sonatype.com/publishing
+```
+
+See [PUBLISHING.md](../PUBLISHING.md) for detailed instructions.
+
+### Code Walkthrough
+
+```java
+import krukow.copilot_sdk.Copilot;
+import krukow.copilot_sdk.SessionOptions;
+import krukow.copilot_sdk.SessionOptionsBuilder;
+
+// Simple one-liner query
+String answer = Copilot.query("What is 2+2?");
+
+// Query with options
+SessionOptionsBuilder builder = new SessionOptionsBuilder();
+builder.model("gpt-5.2");
+SessionOptions opts = (SessionOptions) builder.build();
+String answer = Copilot.query("Explain monads", opts);
+
+// Query with timeout
+String answer = Copilot.query("Complex question", opts, 60000);
+
+// Streaming
+Copilot.queryStreaming("Tell me a story", opts, event -> {
+    if (event.isMessageDelta()) {
+        System.out.print(event.getDeltaContent());
+    }
+});
+
+// Full client/session control for multi-turn conversations
+Object client = Copilot.createClient(null);
+Copilot.startClient(client);
+Object session = Copilot.createSession(client, opts);
+String a1 = Copilot.sendAndWait(session, "What is the capital of France?", 60000);
+String a2 = Copilot.sendAndWait(session, "What is its population?", 60000); // context preserved
+Copilot.destroySession(session);
+Copilot.stopClient(client);
+```
+
+---
+
 ## Clojure vs JavaScript Comparison
 
 Here's how common patterns compare between the Clojure and JavaScript SDKs:

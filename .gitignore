@@ -30,3 +30,4 @@
 /target
 .clj-kondo/
 prompt.md
+*.asc
