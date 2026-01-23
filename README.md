@@ -4,6 +4,8 @@ Clojure SDK for programmatic control of GitHub Copilot CLI via JSON-RPC.
 
 > **Note:** This SDK is in technical preview and may change in breaking ways.
 
+**Java users:** See [README-java.md](./README-java.md) for the Java API documentation.
+
 ## Installation
 
 Add to your `deps.edn`:
@@ -293,7 +295,6 @@ Send a message to the session. Returns immediately with the message ID.
 (copilot/send-and-wait! session options)
 (copilot/send-and-wait! session options timeout-ms)
 ```
-
 Send a message and block until the session becomes idle. Returns the final assistant message event.
 
 ##### `send-async`

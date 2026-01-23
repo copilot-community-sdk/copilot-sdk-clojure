@@ -358,7 +358,7 @@ Shows how to use the SDK from Java code.
 
 ### Building for Java
 
-The SDK can be used from Java via AOT-compiled classes. See [examples/java/](java/) for a complete Maven project.
+The SDK can be used from Java via AOT-compiled classes. See [examples/java/](java/) for a complete Maven project with 9 example programs.
 
 #### Option 1: Maven Dependency (Recommended)
 
@@ -439,12 +439,24 @@ clj -T:build bundle :version '"0.1.0"'
 
 See [PUBLISHING.md](../PUBLISHING.md) for detailed instructions.
 
+### Java Examples Overview
+
+| Example | Description |
+|---------|-------------|
+| `JavaExample.java` | Basic query API |
+| `StreamingJavaExample.java` | Real-time streaming |
+| `ConversationJavaExample.java` | Multi-turn conversations |
+| `ToolIntegrationExample.java` | Custom tools |
+| `PermissionBashExample.java` | Permission handling |
+| `MultiAgentExample.java` | Multi-agent collaboration |
+| `ParallelQueriesExample.java` | Concurrent queries |
+| `EventHandlingExample.java` | Event processing |
+| `InteractiveChatExample.java` | Interactive chat |
+
 ### Code Walkthrough
 
 ```java
-import krukow.copilot_sdk.Copilot;
-import krukow.copilot_sdk.SessionOptions;
-import krukow.copilot_sdk.SessionOptionsBuilder;
+import krukow.copilot_sdk.*;
 
 // Simple one-liner query
 String answer = Copilot.query("What is 2+2?");
@@ -455,9 +467,6 @@ builder.model("gpt-5.2");
 SessionOptions opts = (SessionOptions) builder.build();
 String answer = Copilot.query("Explain monads", opts);
 
-// Query with timeout
-String answer = Copilot.query("Complex question", opts, 60000);
-
 // Streaming
 Copilot.queryStreaming("Tell me a story", opts, event -> {
     if (event.isMessageDelta()) {
@@ -465,15 +474,54 @@ Copilot.queryStreaming("Tell me a story", opts, event -> {
     }
 });
 
-// Full client/session control for multi-turn conversations
-Object client = Copilot.createClient(null);
-Copilot.startClient(client);
-Object session = Copilot.createSession(client, opts);
-String a1 = Copilot.sendAndWait(session, "What is the capital of France?", 60000);
-String a2 = Copilot.sendAndWait(session, "What is its population?", 60000); // context preserved
-Copilot.destroySession(session);
-Copilot.stopClient(client);
+// Full client/session control with typed interfaces
+ICopilotClient client = Copilot.createClient(null);
+client.start();
+ICopilotSession session = client.createSession(opts);
+String a1 = session.sendAndWait("What is the capital of France?", 60000);
+String a2 = session.sendAndWait("What is its population?", 60000);
+session.destroy();
+client.stop();
 ```
+
+### Custom Tools in Java
+
+```java
+// Define tool with handler
+Tool lookupTool = new Tool(
+    "lookup_data",
+    "Look up information",
+    Map.of("type", "object",
+           "properties", Map.of("id", Map.of("type", "string")),
+           "required", List.of("id")),
+    (args, invocation) -> {
+        String id = (String) args.get("id");
+        return Tool.success(fetchData(id));
+    }
+);
+
+SessionOptionsBuilder builder = new SessionOptionsBuilder();
+builder.model("gpt-5.2");
+builder.tool(lookupTool);
+```
+
+### Permission Handling in Java
+
+```java
+SessionOptionsBuilder builder = new SessionOptionsBuilder();
+builder.allowedTool("bash");
+builder.onPermissionRequest(request -> {
+    String command = (String) request.get("full-command-text");
+    if (isSafe(command)) {
+        return PermissionResult.approved();
+    }
+    return PermissionResult.deniedByRules(List.of(
+        Map.of("kind", "shell", "argument", command)
+    ));
+});
+```
+
+See [examples/java/README.md](java/README.md) for complete API reference and all configuration options.
 
 ---
 
