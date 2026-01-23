@@ -38,6 +38,8 @@ public class AsyncApiExample {
         } finally {
             client.stop();
         }
+        // System.exit triggers shutdown hook cleanly (needed for Maven exec:java)
+        System.exit(0);
     }
 
     /**

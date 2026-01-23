@@ -9,7 +9,7 @@
 
 (def lib 'io.github.krukow/copilot-sdk)
 (def clojars-lib 'net.clojars.krukow/copilot-sdk)
-(def version "0.1.3-SNAPSHOT")
+(def version "0.1.4-SNAPSHOT")
 (def class-dir "target/classes")
 (def aot-namespaces ['krukow.copilot-sdk.java-api])
 
@@ -76,7 +76,8 @@
     (b/jar opts))
   opts)
 
-(defn install "Install JAR to local Maven repo." [opts]
+(defn install "Install AOT-compiled JAR to local Maven repo." [opts]
+  (aot-jar opts)
   (b/install (jar-opts opts))
   opts)
 

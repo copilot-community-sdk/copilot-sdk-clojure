@@ -416,7 +416,9 @@
 
 (defn- convert-client-opts [^krukow.copilot_sdk.ClientOptions opts]
   (when opts
-    (java-map->clj-map (.toMap opts))))
+    (let [m (java-map->clj-map (.toMap opts))]
+      (cond-> m
+        (string? (:log-level m)) (update :log-level keyword)))))
 
 (defn- clj-event->java [event]
   (krukow.copilot_sdk.Event. (name (:type event))
