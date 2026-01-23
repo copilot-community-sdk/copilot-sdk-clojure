@@ -4,6 +4,17 @@ Clojure SDK for programmatic control of GitHub Copilot CLI via JSON-RPC.
 
 > **Note:** This SDK is in technical preview and may change in breaking ways.
 
+A fully-featured Clojure port of the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk), designed with idiomatic functional programming patterns. The SDK uses immutable data structures throughout, manages client/session state via Clojure's concurrency primitives (atoms, agents), and leverages [core.async](https://github.com/clojure/core.async) for non-blocking event streams and async operations.
+
+Key features:
+- **Blocking and async APIs** — `send-and-wait!` for simple use cases, `send!` + event channels for reactive patterns
+- **Custom tools** — Let the LLM call back into your application
+- **Streaming** — Incremental response deltas via `:assistant.message_delta` events
+- **Multi-session support** — Run multiple independent conversations concurrently
+- **Java interop** — A Java-friendly API for JVM applications (requires Clojure runtime as dependency)
+
+See [`examples/`](./examples/) for working code demonstrating common patterns.
+
 **Java users:** See [README-java.md](./README-java.md) for the Java API documentation.
 
 ## Installation
@@ -19,13 +30,7 @@ io.github.krukow/copilot-sdk {:mvn/version "0.1.2-SNAPSHOT"}
 
 ;; Or git dependency
 io.github.krukow/copilot-sdk {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
-                              :git/sha "24ea222a4b52c932c8e213f065624b84b28dd5b9"}
-```
-
-Update the SHA automatically:
-
-```bash
-bb readme:sha
+                              :git/sha "7c8c14d9f2bd269c6e189ab8e5479b992d358b1e"}
 ```
 
 ## Quick Start
@@ -33,43 +38,28 @@ bb readme:sha
 ```clojure
 (require '[krukow.copilot-sdk :as copilot])
 
-;; Create and start client
+;; with-client-session handles client/session lifecycle automatically
+(copilot/with-client-session [session {:model "gpt-5.2"}]
+  (println "Q: What is the capital of France?")
+  (println "🤖:" (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
+                     (get-in [:data :content]))))
+```
+
+For more control, create the client and session explicitly:
+
+```clojure
 (def client (copilot/client {:log-level :info}))
 (copilot/start! client)
 
-;; Create a session
 (def session (copilot/create-session client {:model "gpt-5.2"}))
 
-;; Wait for response using events
-(require '[clojure.core.async :refer [chan tap go-loop <!]])
-
-(let [events-ch (chan 100)
-      done (promise)]
-  (tap (copilot/events session) events-ch)
-  (go-loop []
-    (when-let [event (<! events-ch)]
-      (case (:type event)
-        :assistant.message (println (get-in event [:data :content]))
-        :session.idle (deliver done true)
-        nil)
-      (recur)))
-
-  ;; Send a message and wait for completion
-  (copilot/send! session {:prompt "What is 2+2?"})
-  @done)
+;; Multi-turn conversation (session maintains context)
+(copilot/send-and-wait! session {:prompt "What is the capital of France?"})
+(copilot/send-and-wait! session {:prompt "What is its population approximately?"})
 
 ;; Clean up
 (copilot/destroy! session)
 (copilot/stop! client)
-```
-
-Or use the simpler blocking API:
-
-```clojure
-;; Send and wait for response in one call
-(def response (copilot/send-and-wait! session {:prompt "What is 2+2?"}))
-(println (get-in response [:data :content]))
-;; => "4"
 ```
 
 ## API Reference
