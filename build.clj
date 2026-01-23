@@ -152,29 +152,40 @@
         (println "\n✅ Bundle created:" bundle-zip)
         bundle-zip))))
 
+(defn- upload-with-checksums
+  "Upload a file with MD5 and SHA1 checksums."
+  [auth base-url remote-path local-file remote-name]
+  (let [url (format "%s/%s/%s" base-url remote-path remote-name)
+        md5 (str/trim (:out (shell/sh "md5" "-q" local-file)))
+        sha1 (first (str/split (:out (shell/sh "shasum" "-a" "1" local-file)) #"\s+"))]
+    ;; Upload main file
+    (let [result (shell/sh "curl" "--silent" "--show-error" "--fail"
+                           "--user" auth "--upload-file" local-file url)]
+      (when-not (zero? (:exit result))
+        (throw (ex-info (str "Failed to upload " local-file) result))))
+    ;; Upload checksums
+    (shell/sh "curl" "--silent" "--show-error" "--fail"
+              "--user" auth "--upload-file" "-" (str url ".md5")
+              :in md5)
+    (shell/sh "curl" "--silent" "--show-error" "--fail"
+              "--user" auth "--upload-file" "-" (str url ".sha1")
+              :in sha1)
+    (println "  ✓" remote-name)))
+
 (defn- deploy-snapshot
   "Deploy SNAPSHOT to Maven Central snapshots repository."
   [opts]
   (let [{:keys [username password]} (get-central-credentials)
         v (or (:version opts) version)]
     (aot-jar opts)
-    ;; Use curl to PUT artifacts to snapshots repo (mvn deploy compatible)
     (let [base-url "https://central.sonatype.com/repository/maven-snapshots"
           auth (str username ":" password)
           jar-file (format "target/%s-%s.jar" lib v)
           pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
           remote-path (format "io/github/krukow/copilot-sdk/%s" v)]
       (println "\n📤 Uploading SNAPSHOT to Maven Central...")
-      (doseq [[local-file remote-name] [[jar-file (format "copilot-sdk-%s.jar" v)]
-                                         [pom-file (format "copilot-sdk-%s.pom" v)]]]
-        (let [url (format "%s/%s/%s" base-url remote-path remote-name)
-              result (shell/sh "curl" "--silent" "--show-error" "--fail"
-                               "--user" auth
-                               "--upload-file" local-file
-                               url)]
-          (when-not (zero? (:exit result))
-            (throw (ex-info (str "Failed to upload " local-file) result)))
-          (println "  ✓" remote-name)))
+      (upload-with-checksums auth base-url remote-path jar-file (format "copilot-sdk-%s.jar" v))
+      (upload-with-checksums auth base-url remote-path pom-file (format "copilot-sdk-%s.pom" v))
       (println "✅ SNAPSHOT published!")
       (println "Add this repository to consume:")
       (println "  https://central.sonatype.com/repository/maven-snapshots/"))))

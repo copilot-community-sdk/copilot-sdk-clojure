@@ -16,12 +16,19 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <copilot-sdk.version>0.1.1-SNAPSHOT</copilot-sdk.version>
+        <copilot-sdk.version>0.1.2-SNAPSHOT</copilot-sdk.version>
         <clojure.version>1.12.4</clojure.version>
         <core.async.version>1.8.741</core.async.version>
     </properties>
 
     <repositories>
+        <!-- Maven Central Snapshots -->
+        <repository>
+            <id>central-snapshots</id>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases><enabled>false</enabled></releases>
+            <snapshots><enabled>true</enabled></snapshots>
+        </repository>
         <!-- Clojars for Clojure libraries -->
         <repository>
             <id>clojars</id>
