@@ -16,14 +16,7 @@
 (def readme-path "README.md")
 
 ;; Namespaces to AOT compile for Java interop
-;; Order matters: options before builders (builders require options)
-(def aot-namespaces ['krukow.copilot-sdk.java.event-handler
-                     'krukow.copilot-sdk.java.event
-                     'krukow.copilot-sdk.java.client-options
-                     'krukow.copilot-sdk.java.client-options-builder
-                     'krukow.copilot-sdk.java.session-options
-                     'krukow.copilot-sdk.java.session-options-builder
-                     'krukow.copilot-sdk.java-api])
+(def aot-namespaces ['krukow.copilot-sdk.java-api])
 
 (defn- pom-template [version]
   [[:description "Clojure SDK for GitHub Copilot CLI with Java interop support."]
