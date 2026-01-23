@@ -350,6 +350,23 @@
   [session opts]
   (:events-ch (send-async* session opts)))
 
+(defn <send!
+  "Send a message and return a channel that delivers the final content string.
+   This is the async equivalent of send-and-wait! - use inside go blocks.
+   
+   The returned channel delivers a single value (the response content) then closes."
+  [session opts]
+  (let [events-ch (send-async session opts)
+        out-ch (chan 1)]
+    (go
+      (loop []
+        (when-let [event (<! events-ch)]
+          (case (:type event)
+            :assistant.message (>! out-ch (get-in event [:data :content]))
+            (recur))))
+      (close! out-ch))
+    out-ch))
+
 (defn send-async-with-id
   "Send a message and return {:message-id :events-ch}."
   [session opts]
