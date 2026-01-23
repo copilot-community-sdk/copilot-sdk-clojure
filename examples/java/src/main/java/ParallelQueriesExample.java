@@ -32,7 +32,7 @@ public class ParallelQueriesExample {
             
             // Create session options
             SessionOptionsBuilder sb = new SessionOptionsBuilder();
-            sb.model("gpt-4.1");
+            sb.model("gpt-5.2");
             SessionOptions opts = (SessionOptions) sb.build();
             
             // Create sessions and futures

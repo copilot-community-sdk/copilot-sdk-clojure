@@ -16,7 +16,7 @@ public class AsyncApiExample {
 
         try {
             SessionOptionsBuilder sb = new SessionOptionsBuilder();
-            sb.model("gpt-4.1");
+            sb.model("gpt-5.2");
             ICopilotSession session = client.createSession((SessionOptions) sb.build());
 
             try {
@@ -89,7 +89,7 @@ public class AsyncApiExample {
     static void demoConcurrentQueries(ICopilotClient client) throws Exception {
         // Create separate sessions for parallel queries
         SessionOptionsBuilder sb = new SessionOptionsBuilder();
-        sb.model("gpt-4.1");
+        sb.model("gpt-5.2");
         SessionOptions opts = (SessionOptions) sb.build();
 
         ICopilotSession session1 = client.createSession(opts);

@@ -108,7 +108,7 @@ public class MultiAgentExample {
     
     private static ICopilotSession createAgent(ICopilotClient client, String systemPrompt) {
         SessionOptionsBuilder sb = new SessionOptionsBuilder();
-        sb.model("gpt-4.1");
+        sb.model("gpt-5.2");
         sb.systemPrompt(systemPrompt);
         return client.createSession((SessionOptions) sb.build());
     }

@@ -20,7 +20,7 @@ public class EventHandlingExample {
         
         try {
             SessionOptionsBuilder sb = new SessionOptionsBuilder();
-            sb.model("gpt-4.1");
+            sb.model("gpt-5.2");
             ICopilotSession session = client.createSession((SessionOptions) sb.build());
             
             try {

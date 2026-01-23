@@ -6,7 +6,19 @@ Java API for programmatic control of GitHub Copilot CLI via JSON-RPC.
 
 ## Installation
 
-### Maven Central
+### Maven Central (Release)
+
+```xml
+<dependency>
+    <groupId>io.github.krukow</groupId>
+    <artifactId>copilot-sdk</artifactId>
+    <version>0.1.2</version>
+</dependency>
+```
+
+### Maven Central (Snapshot)
+
+For the latest development version, use snapshots from the Maven Central snapshots repository:
 
 ```xml
 <dependency>
@@ -14,6 +26,15 @@ Java API for programmatic control of GitHub Copilot CLI via JSON-RPC.
     <artifactId>copilot-sdk</artifactId>
     <version>0.1.2-SNAPSHOT</version>
 </dependency>
+
+<repositories>
+    <repository>
+        <id>central-snapshots</id>
+        <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+        <releases><enabled>false</enabled></releases>
+        <snapshots><enabled>true</enabled></snapshots>
+    </repository>
+</repositories>
 ```
 
 ### Clojars (alternative)
@@ -81,7 +102,7 @@ client.start();
 
 try {
     SessionOptionsBuilder sb = new SessionOptionsBuilder();
-    sb.model("gpt-4.1");
+    sb.model("gpt-5.2");
     ICopilotSession session = client.createSession((SessionOptions) sb.build());
     
     try {
@@ -208,7 +229,7 @@ ClientOptions opts = (ClientOptions) cb.build();
 
 ```java
 SessionOptionsBuilder sb = new SessionOptionsBuilder();
-sb.model("gpt-4.1");
+sb.model("gpt-5.2");
 sb.systemPrompt("You are a helpful assistant.");
 SessionOptions opts = (SessionOptions) sb.build();
 ```
@@ -216,7 +237,7 @@ SessionOptions opts = (SessionOptions) sb.build();
 | Method | Type | Description |
 |--------|------|-------------|
 | `sessionId(id)` | String | Custom session ID |
-| `model(name)` | String | Model name (e.g., `"gpt-4.1"`, `"claude-sonnet-4.5"`) |
+| `model(name)` | String | Model name (e.g., `"gpt-5.2"`, `"claude-sonnet-4.5"`) |
 | `streaming(bool)` | boolean | Enable streaming deltas |
 | `systemPrompt(text)` | String | System prompt (appended to default) |
 | `systemMessage(mode, content)` | String, String | System message with mode (`"append"` or `"replace"`) |
@@ -367,7 +388,7 @@ Tool searchTool = new Tool(
 
 // Use in session
 SessionOptionsBuilder sb = new SessionOptionsBuilder();
-sb.model("gpt-4.1");
+sb.model("gpt-5.2");
 sb.tool(searchTool);
 ICopilotSession session = client.createSession((SessionOptions) sb.build());
 ```
@@ -385,7 +406,7 @@ Handle permission requests when the LLM wants to run shell commands or write fil
 
 ```java
 SessionOptionsBuilder sb = new SessionOptionsBuilder();
-sb.model("gpt-4.1");
+sb.model("gpt-5.2");
 sb.allowedTool("bash");  // Enable shell tool
 sb.onPermissionRequest(request -> {
     String command = (String) request.get("full-command-text");
