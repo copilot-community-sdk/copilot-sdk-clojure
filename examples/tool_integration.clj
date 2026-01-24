@@ -38,6 +38,6 @@
     (doseq [lang languages]
       (println (str "Looking up: " lang))
       (println (-> (copilot/send-and-wait! session
-                     {:prompt (str "What is " lang "? Use the lookup_language tool to find out.")})
+                                           {:prompt (str "What is " lang "? Use the lookup_language tool to find out.")})
                    (get-in [:data :content])))
       (println))))

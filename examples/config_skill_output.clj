@@ -17,14 +17,14 @@
         output-dir (str base-dir "/tool-output")
         max-size-bytes 2000
         big-output-tool (tools/define-tool
-                         "big_output"
-                         {:description "Return a large output payload for testing large output handling."
-                          :parameters {:type "object" :properties {} :required []}
-                          :handler (fn [_ _]
-                                     (let [content (large-output-text)
-                                           bytes (count (.getBytes content "UTF-8"))]
-                                       (tools/result-success
-                                        (str "Generated " bytes " bytes.\n\n" content))))})]
+                          "big_output"
+                          {:description "Return a large output payload for testing large output handling."
+                           :parameters {:type "object" :properties {} :required []}
+                           :handler (fn [_ _]
+                                      (let [content (large-output-text)
+                                            bytes (count (.getBytes content "UTF-8"))]
+                                        (tools/result-success
+                                         (str "Generated " bytes " bytes.\n\n" content))))})]
     (.mkdirs (java.io.File. skill-dir))
     (.mkdirs (java.io.File. output-dir))
     (write-demo-skill! skill-dir)

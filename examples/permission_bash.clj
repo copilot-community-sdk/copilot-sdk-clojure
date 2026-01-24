@@ -31,10 +31,10 @@
                                                                        :rules [{:kind "shell"
                                                                                 :argument (:full-command-text request)}]}))}]
       (println (-> (copilot/send-and-wait! session
-                     {:prompt (str "Run this command with the " tool
-                                   "tool, then reply with success(output from tool) if permitted or denied if not:\n\n" command)})
+                                           {:prompt (str "Run this command with the " tool
+                                                         "tool, then reply with success(output from tool) if permitted or denied if not:\n\n" command)})
                    (get-in [:data :content])))
       (println (-> (copilot/send-and-wait! session
-                     {:prompt (str "Run this command with the " tool
-                                   " tool, then reply with success(output from tool) if permitted or denied if not:\n\n" denied-command)})
+                                           {:prompt (str "Run this command with the " tool
+                                                         " tool, then reply with success(output from tool) if permitted or denied if not:\n\n" denied-command)})
                    (get-in [:data :content]))))))
