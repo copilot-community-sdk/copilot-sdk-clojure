@@ -35,32 +35,58 @@ io.github.krukow/copilot-sdk {:git/url "https://github.com/krukow/copilot-sdk-cl
 
 ## Quick Start
 
+The simplest way to use the SDK is with the `query` helper:
+
+```clojure
+(require '[krukow.copilot-sdk.helpers :as h])
+
+;; One-liner query
+(h/query "What is 2+2?")
+;; => "4"
+
+;; With model selection
+(h/query "Explain monads in one sentence" :session {:model "claude-sonnet-4.5"})
+
+;; With a system prompt
+(h/query "What is Clojure?" :session {:system-prompt "You are a helpful assistant. Be concise."})
+```
+
+### More Control
+
+For multi-turn conversations or custom configuration, use the full client/session API:
+
 ```clojure
 (require '[krukow.copilot-sdk :as copilot])
 
-;; with-client-session handles client/session lifecycle automatically
+;; with-client-session handles lifecycle automatically
 (copilot/with-client-session [session {:model "gpt-5.2"}]
-  (println "Q: What is the capital of France?")
-  (println "🤖:" (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
-                     (get-in [:data :content]))))
+  ;; Multi-turn conversation (session maintains context)
+  (println (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
+               (get-in [:data :content])))
+  (println (-> (copilot/send-and-wait! session {:prompt "What is its population?"})
+               (get-in [:data :content]))))
 ```
 
-For more control, create the client and session explicitly:
+### Async Example
+
+Use `<send!` with core.async for non-blocking operations:
 
 ```clojure
-(def client (copilot/client {:log-level :info}))
-(copilot/start! client)
+(require '[krukow.copilot-sdk :as copilot])
+(require '[clojure.core.async :refer [<!!]])
 
-(def session (copilot/create-session client {:model "gpt-5.2"}))
-
-;; Multi-turn conversation (session maintains context)
-(copilot/send-and-wait! session {:prompt "What is the capital of France?"})
-(copilot/send-and-wait! session {:prompt "What is its population approximately?"})
-
-;; Clean up
-(copilot/destroy! session)
-(copilot/stop! client)
+(copilot/with-client [client {}]
+  ;; Launch multiple requests in parallel
+  (let [sessions (repeatedly 3 #(copilot/create-session client {}))
+        channels (map #(copilot/<send! %1 {:prompt %2})
+                      sessions
+                      ["Capital of France?" "Capital of Japan?" "Capital of Brazil?"])]
+    ;; Collect results
+    (doseq [ch channels]
+      (println (<!! ch)))))
 ```
+
+See [`examples/`](./examples/) for more patterns including streaming, custom tools, and multi-agent orchestration.
 
 ## API Reference
 
