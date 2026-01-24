@@ -1,5 +1,6 @@
 (ns permission-bash
   (:require [krukow.copilot-sdk :as copilot]
+            [krukow.copilot-sdk.helpers :as h]
             [clojure.pprint :as pprint]))
 
 ;; See examples/README.md for usage
@@ -30,11 +31,9 @@
                                                                       {:kind :denied-by-rules
                                                                        :rules [{:kind "shell"
                                                                                 :argument (:full-command-text request)}]}))}]
-      (println (-> (copilot/send-and-wait! session
-                                           {:prompt (str "Run this command with the " tool
-                                                         "tool, then reply with success(output from tool) if permitted or denied if not:\n\n" command)})
-                   (get-in [:data :content])))
-      (println (-> (copilot/send-and-wait! session
-                                           {:prompt (str "Run this command with the " tool
-                                                         " tool, then reply with success(output from tool) if permitted or denied if not:\n\n" denied-command)})
-                   (get-in [:data :content]))))))
+      (println (h/query (str "Run this command with the " tool
+                             "tool, then reply with success(output from tool) if permitted or denied if not:\n\n" command)
+                        :session session))
+      (println (h/query (str "Run this command with the " tool
+                             " tool, then reply with success(output from tool) if permitted or denied if not:\n\n" denied-command)
+                        :session session)))))

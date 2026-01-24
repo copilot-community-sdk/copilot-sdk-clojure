@@ -1,5 +1,6 @@
 (ns basic-chat
-  (:require [krukow.copilot-sdk :as copilot]))
+  (:require [krukow.copilot-sdk :as copilot]
+            [krukow.copilot-sdk.helpers :as h]))
 
 ;; See examples/README.md for usage
 
@@ -11,9 +12,7 @@
   [{:keys [q1 q2] :or {q1 (:q1 defaults) q2 (:q2 defaults)}}]
   (copilot/with-client-session [session {:model "gpt-5.2"}]
     (println "Q1:" q1)
-    (println "🤖:" (-> (copilot/send-and-wait! session {:prompt q1})
-                       (get-in [:data :content])))
+    (println "🤖:" (h/query q1 :session session))
     (println)
     (println "Q2:" q2)
-    (println "🤖:" (-> (copilot/send-and-wait! session {:prompt q2})
-                       (get-in [:data :content])))))
+    (println "🤖:" (h/query q2 :session session))))

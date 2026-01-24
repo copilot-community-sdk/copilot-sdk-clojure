@@ -1,5 +1,6 @@
 (ns tool-integration
-  (:require [krukow.copilot-sdk :as copilot]))
+  (:require [krukow.copilot-sdk :as copilot]
+            [krukow.copilot-sdk.helpers :as h]))
 
 ;; See examples/README.md for usage
 
@@ -37,7 +38,6 @@
                                          :tools [lookup-tool]}]
     (doseq [lang languages]
       (println (str "Looking up: " lang))
-      (println (-> (copilot/send-and-wait! session
-                                           {:prompt (str "What is " lang "? Use the lookup_language tool to find out.")})
-                   (get-in [:data :content])))
+      (println (h/query (str "What is " lang "? Use the lookup_language tool to find out.")
+                        :session session))
       (println))))

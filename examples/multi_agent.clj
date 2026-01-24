@@ -42,18 +42,18 @@
       (let [research-summary (->> results
                                   (map #(str "• " (:topic %) ": " (:findings %)))
                                   (clojure.string/join "\n\n"))
-            analysis (h/query-with-client client
-                                          (str "Analyze these findings:\n\n" research-summary)
-                                          :session {:system-prompt analyst-prompt})]
+            analysis (h/query (str "Analyze these findings:\n\n" research-summary)
+                              :client client
+                              :session {:system-prompt analyst-prompt})]
         (println (str "  - " (subs analysis 0 (min 200 (count analysis))) "..."))
 
         ;; Phase 3: Synthesis
         (println "\n✍️ Synthesis Phase:")
-        (let [summary (h/query-with-client client
-                                           (str "Write a 3-4 sentence executive summary:\n\n"
-                                                "RESEARCH:\n" research-summary "\n\n"
-                                                "ANALYSIS:\n" analysis)
-                                           :session {:system-prompt writer-prompt})]
+        (let [summary (h/query (str "Write a 3-4 sentence executive summary:\n\n"
+                                    "RESEARCH:\n" research-summary "\n\n"
+                                    "ANALYSIS:\n" analysis)
+                               :client client
+                               :session {:system-prompt writer-prompt})]
           (println "\n==================================================")
           (println "📋 FINAL SUMMARY:")
           (println "==================================================")
