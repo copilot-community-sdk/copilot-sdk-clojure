@@ -53,17 +53,22 @@ The simplest way to use the SDK is with the `query` helper:
 
 ### More Control
 
-For multi-turn conversations or custom configuration, use the full client/session API:
+For multi-turn conversations, pass a session instance to `query`:
 
 ```clojure
 (require '[krukow.copilot-sdk :as copilot])
 
-;; with-client-session handles lifecycle automatically
 (copilot/with-client-session [session {:model "gpt-5.2"}]
-  ;; Multi-turn conversation (session maintains context)
+  ;; Session maintains context between queries
+  (println (h/query "What is the capital of France?" :session session))
+  (println (h/query "What is its population?" :session session)))
+```
+
+Or use the full API for maximum flexibility:
+
+```clojure
+(copilot/with-client-session [session {:model "gpt-5.2"}]
   (println (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
-               (get-in [:data :content])))
-  (println (-> (copilot/send-and-wait! session {:prompt "What is its population?"})
                (get-in [:data :content]))))
 ```
 

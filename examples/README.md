@@ -92,21 +92,18 @@ clojure -A:examples -X basic-chat/run :q1 '"What is Clojure?"' :q2 '"Who created
 ### Code Walkthrough
 
 ```clojure
+(require '[krukow.copilot-sdk :as copilot])
+(require '[krukow.copilot-sdk.helpers :as h])
+
 ;; 1. Create a client and session
 (copilot/with-client-session [session {:model "gpt-5.2"}]
-  ;; 2. Send a message and wait for the complete response
-  (def response (copilot/send-and-wait! session
-                  {:prompt "What is the capital of France?"}))
-
-  ;; 3. Access the response content
-  (println (get-in response [:data :content]))
+  ;; 2. Send a message using query with the session
+  (println (h/query "What is the capital of France?" :session session))
   ;; => "The capital of France is Paris."
 
-  ;; 4. Follow-up question (conversation context preserved)
-  (def response2 (copilot/send-and-wait! session
-                   {:prompt "What is its population?"}))
+  ;; 3. Follow-up question (conversation context preserved)
+  (println (h/query "What is its population?" :session session)))
   ;; The model knows "its" refers to Paris
-  )
 ```
 
 ---
@@ -196,6 +193,9 @@ clojure -A:examples -X tool-integration/run :languages '["clojure" "haskell"]'
 ### Code Walkthrough
 
 ```clojure
+(require '[krukow.copilot-sdk :as copilot])
+(require '[krukow.copilot-sdk.helpers :as h])
+
 ;; Define a tool with handler
 (def lookup-tool
   (copilot/define-tool "lookup_language"
@@ -215,11 +215,10 @@ clojure -A:examples -X tool-integration/run :languages '["clojure" "haskell"]'
                       (str "No info for: " lang)
                       "not found"))))}))
 
-;; Create session with tools
+;; Create session with tools and use query
 (copilot/with-client-session [session {:model "gpt-5.2"
                                        :tools [lookup-tool]}]
-  (copilot/send-and-wait! session
-    {:prompt "Tell me about Clojure using the lookup tool"}))
+  (println (h/query "Tell me about Clojure using the lookup tool" :session session)))
 ```
 
 ### Tool Result Types
