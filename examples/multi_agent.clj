@@ -38,17 +38,20 @@
     (go {:topic topic
          :findings (<! (copilot/<send! session {:prompt (str "Research: " topic)}))})))
 
+(defn- format-research
+  "Format research results as a summary string."
+  [results]
+  (->> results
+       (map #(str "• " (:topic %) ": " (:findings %)))
+       (clojure.string/join "\n\n")))
+
 (defn research-phase
   "Run parallel research on topics. Returns formatted summary string."
   [client topics]
   (println "📚 Research Phase (parallel)")
   (with-timing
     (let [result-chan (async/merge (mapv #(research-topic client %) topics))
-          results (doall (repeatedly (count topics) #(<!! result-chan)))
-          format-research (fn [results]
-                            (->> results
-                                 (map #(str "• " (:topic %) ": " (:findings %)))
-                                 (clojure.string/join "\n\n")))]
+          results (doall (repeatedly (count topics) #(<!! result-chan)))]
       (doto (format-research results) println))))
 
 (def analyst-prompt "You are an analyst. Identify patterns and insights. Be concise: 2-3 sentences.")
