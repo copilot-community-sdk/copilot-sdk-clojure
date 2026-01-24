@@ -77,8 +77,8 @@
 (defn- normalize-client-opts
   "Normalize client options for comparison."
   [opts]
-  (select-keys (or opts {}) [:cli-path :cli-args :cwd :port :use-stdio? 
-                              :log-level :auto-restart? :env]))
+  (select-keys (or opts {}) [:cli-path :cli-args :cwd :port :use-stdio?
+                             :log-level :auto-restart? :env]))
 
 (defn- opts-match?
   "Check if client options match the current client."
@@ -101,11 +101,11 @@
             (copilot/start! new-client)
             (reset! client-state {:client new-client :client-opts normalized})
             new-client)
-          
+
           ;; Client exists with matching opts - reuse
           (= client-opts normalized)
           client
-          
+
           ;; Client exists with different opts - replace
           :else
           (do
@@ -156,6 +156,26 @@
   (when-let [{:keys [client client-opts]} @client-state]
     {:client-opts client-opts
      :connected? (= :connected (copilot/state client))}))
+
+(defn query-with-client
+  "Execute a one-shot query using an existing client.
+
+   Like `query` but uses the provided client instead of the shared one.
+   Useful when you need multiple queries to share a client lifecycle.
+
+   Arguments:
+     client - An existing CopilotClient
+     prompt - The prompt string to send
+
+   Keyword options:
+     :session - Session options map (model, system-prompt, tools, streaming?, etc.)
+     :timeout-ms - Timeout in milliseconds (default: 180000)
+
+   Returns the assistant's response text as a string."
+  [client prompt & {:keys [session timeout-ms] :or {timeout-ms 180000}}]
+  (copilot/with-session [sess client (build-session-config session)]
+    (-> (copilot/send-and-wait! sess {:prompt prompt} timeout-ms)
+        (get-in [:data :content]))))
 
 (defn query
   "Execute a one-shot query and return the response text.
@@ -223,10 +243,10 @@
         sess (copilot/create-session c session-config)
         events-ch (copilot/subscribe-events sess)
         done? (atom false)]
-    
+
     ;; Send the prompt
     (copilot/send! sess {:prompt prompt})
-    
+
     ;; Return lazy sequence that reads from channel
     (letfn [(event-seq []
               (lazy-seq
@@ -237,12 +257,12 @@
                      (do (reset! done? true)
                          (copilot/destroy! sess)
                          nil)
-                     
+
                      (#{:session.idle :session.error} (:type event))
                      (do (reset! done? true)
                          (copilot/destroy! sess)
                          (cons event nil))
-                     
+
                      :else
                      (cons event (event-seq)))))))]
       (event-seq))))
@@ -318,10 +338,10 @@
         sess (copilot/create-session c session-config)
         events-ch (copilot/subscribe-events sess)
         out-ch (chan buffer)]
-    
+
     ;; Send the prompt
     (copilot/send! sess {:prompt prompt})
-    
+
     ;; Pipe events to output channel, cleanup on completion
     (go-loop []
       (if-let [event (<! events-ch)]
@@ -335,5 +355,5 @@
         (do
           (copilot/destroy! sess)
           (close! out-ch))))
-    
+
     out-ch))
