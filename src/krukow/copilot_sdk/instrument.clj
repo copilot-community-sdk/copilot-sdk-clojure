@@ -137,6 +137,10 @@
   :args (s/cat :session ::specs/session)
   :ret ::specs/session-id)
 
+(s/fdef krukow.copilot-sdk.session/workspace-path
+  :args (s/cat :session ::specs/session)
+  :ret ::specs/workspace-path)
+
 (s/fdef krukow.copilot-sdk.session/events
   :args (s/cat :session ::specs/session)
   :ret any?)  ; core.async mult
@@ -163,11 +167,6 @@
   :args (s/cat :prompt string?
                :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/timeout-ms]))
   :ret (s/nilable string?))
-
-(s/fdef krukow.copilot-sdk.helpers/query-seq
-  :args (s/cat :prompt string?
-               :opts (s/keys* :opt-un [::specs/client ::specs/session]))
-  :ret seqable?)
 
 (s/fdef krukow.copilot-sdk.helpers/query-seq!
   :args (s/cat :prompt string?
@@ -214,12 +213,12 @@
                       krukow.copilot-sdk.session/get-messages
                       krukow.copilot-sdk.session/destroy!
                       krukow.copilot-sdk.session/session-id
+                      krukow.copilot-sdk.session/workspace-path
                       krukow.copilot-sdk.session/events
                       krukow.copilot-sdk.session/subscribe-events
                       krukow.copilot-sdk.session/unsubscribe-events
                       krukow.copilot-sdk.session/events->chan
                       krukow.copilot-sdk.helpers/query
-                      krukow.copilot-sdk.helpers/query-seq
                       krukow.copilot-sdk.helpers/query-seq!
                       krukow.copilot-sdk.helpers/query-chan
                       krukow.copilot-sdk.helpers/shutdown!]))
@@ -251,12 +250,12 @@
                       krukow.copilot-sdk.session/get-messages
                       krukow.copilot-sdk.session/destroy!
                       krukow.copilot-sdk.session/session-id
+                      krukow.copilot-sdk.session/workspace-path
                       krukow.copilot-sdk.session/events
                       krukow.copilot-sdk.session/subscribe-events
                       krukow.copilot-sdk.session/unsubscribe-events
                       krukow.copilot-sdk.session/events->chan
                       krukow.copilot-sdk.helpers/query
-                      krukow.copilot-sdk.helpers/query-seq
                       krukow.copilot-sdk.helpers/query-seq!
                       krukow.copilot-sdk.helpers/query-chan
                       krukow.copilot-sdk.helpers/shutdown!]))

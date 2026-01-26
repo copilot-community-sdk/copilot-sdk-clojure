@@ -118,9 +118,8 @@ Shows the simplified helpers API for one-shot queries without managing client/se
 ### What It Demonstrates
 
 - `query` - Simple synchronous query, returns just the answer string
-- `query-seq` - Returns lazy sequence of all events  
 - `query-seq!` - Returns a bounded lazy sequence (default 256 events) and guarantees session cleanup  
-- `query-chan` - Returns core.async channel of events
+- `query-chan` - Returns core.async channel of events for explicit lifecycle control
 - Automatic client management (created on first use, reused across queries)
 - Automatic cleanup via JVM shutdown hook (no manual cleanup needed)
 

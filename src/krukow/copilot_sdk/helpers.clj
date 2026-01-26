@@ -226,65 +226,6 @@
         (finally
           (copilot/destroy! sess))))))
 
-(defn query-seq
-  "Execute a query and return a lazy sequence of events.
-   
-   This allows functional processing of all session events using
-   standard sequence operations and transducers.
-   
-   Arguments:
-     prompt - The prompt string to send
-   
-   Keyword options:
-     :client - Client options map
-     :session - Session options map
-   
-   Returns a lazy sequence of event maps. The sequence ends when
-   the session becomes idle or errors.
-   
-   Examples:
-     ;; Get final response
-     (->> (query-seq \"Hello\")
-          (filter #(= :assistant.message (:type %)))
-          (map #(get-in % [:data :content]))
-          first)
-     
-     ;; Stream deltas
-      (->> (query-seq \"Tell me a story\" :session {:streaming? true})
-           (filter #(= :assistant.message_delta (:type %)))
-           (map #(get-in % [:data :delta-content]))
-           (run! print))
-    "
-  [prompt & {:keys [client session]}]
-  (let [c (ensure-client! client)
-        session-config (build-session-config session)
-        sess (copilot/create-session c session-config)
-        events-ch (copilot/subscribe-events sess)
-        done? (atom false)]
-
-    ;; Send the prompt
-    (copilot/send! sess {:prompt prompt})
-
-    ;; Return lazy sequence that reads from channel
-    (letfn [(event-seq []
-              (lazy-seq
-               (when-not @done?
-                 (let [event (async/<!! events-ch)]
-                   (cond
-                     (nil? event)
-                     (do (reset! done? true)
-                         (copilot/destroy! sess)
-                         nil)
-
-                     (#{:session.idle :session.error} (:type event))
-                     (do (reset! done? true)
-                         (copilot/destroy! sess)
-                         (cons event nil))
-
-                     :else
-                     (cons event (event-seq)))))))]
-      (event-seq))))
-
 (defn query-seq!
   "Execute a query and return a lazy sequence of events with guaranteed cleanup.
    

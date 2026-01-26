@@ -45,28 +45,20 @@ When `:session` is a CopilotSession instance, the query uses that session direct
     (h/query "What is my name?" :session session))) ;; context preserved!
 ```
 
-### `query-seq`
-
-```clojure
-(h/query-seq prompt & {:keys [client session]})
-```
-
-Execute a query and return a lazy sequence of events.
-
-```clojure
-(->> (h/query-seq "Tell me a story" :session {:streaming? true})
-     (filter #(= :assistant.message_delta (:type %)))
-     (map #(get-in % [:data :delta-content]))
-     (run! print))
-```
-
 ### `query-seq!`
 
 ```clojure
 (h/query-seq! prompt & {:keys [client session max-events]})
 ```
 
-Like `query-seq` but with guaranteed cleanup and bounded consumption (default: 256 events).
+Execute a query and return a bounded lazy sequence of events with guaranteed cleanup (default: 256 events).
+
+```clojure
+(->> (h/query-seq! "Tell me a story" :session {:streaming? true})
+     (filter #(= :assistant.message_delta (:type %)))
+     (map #(get-in % [:data :delta-content]))
+     (run! print))
+```
 
 ### `query-chan`
 
@@ -74,7 +66,8 @@ Like `query-seq` but with guaranteed cleanup and bounded consumption (default: 2
 (h/query-chan prompt & {:keys [client session buffer]})
 ```
 
-Execute a query and return a core.async channel of events.
+Execute a query and return a core.async channel of events. Use this when you need an explicit lifecycle
+or want to stop reading early without leaking session resources.
 
 ```clojure
 (let [ch (h/query-chan "Tell me a story" :session {:streaming? true})]
@@ -455,6 +448,14 @@ Destroy the session and free resources.
 ```
 
 Get the session's unique identifier.
+
+#### `workspace-path`
+
+```clojure
+(copilot/workspace-path session)
+```
+
+Get the session workspace path when provided by the CLI (may be nil).
 
 #### `client`
 

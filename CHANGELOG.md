@@ -13,9 +13,11 @@ All notable changes to this project will be documented in this file. This change
   - `:infinite-sessions` config option for `create-session`
   - Automatic context compaction when approaching context window limits
   - New event types: `:session.compaction_start`, `:session.compaction_complete`
+- Session workspace path accessors for Clojure and Java APIs
 
 ### Changed
 - Protocol version bumped from 1 to 2 (requires CLI 0.0.389+)
+- Removed `helpers/query-seq` in favor of `helpers/query-seq!` and `helpers/query-chan`
 
 ## [0.1.0] - 2026-01-18
 ### Added
