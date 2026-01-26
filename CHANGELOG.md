@@ -9,6 +9,10 @@ All notable changes to this project will be documented in this file. This change
   - `get-auth-status` - Get current authentication status
   - `list-models` - List available models with metadata
 - New event type `:tool.execution_progress` for progress updates during long-running tool executions
+- Infinite sessions support (upstream PR #76):
+  - `:infinite-sessions` config option for `create-session`
+  - Automatic context compaction when approaching context window limits
+  - New event types: `:session.compaction_start`, `:session.compaction_complete`
 
 ### Changed
 - Protocol version bumped from 1 to 2 (requires CLI 0.0.389+)

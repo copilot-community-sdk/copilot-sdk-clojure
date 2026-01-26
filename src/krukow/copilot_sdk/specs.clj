@@ -140,12 +140,18 @@
 (s/def ::large-output
   (s/keys :opt-un [::enabled ::max-size-bytes ::output-dir]))
 
+;; Infinite sessions configuration
+(s/def ::background-compaction-threshold (s/and number? #(<= 0.0 % 1.0)))
+(s/def ::buffer-exhaustion-threshold (s/and number? #(<= 0.0 % 1.0)))
+(s/def ::infinite-sessions
+  (s/keys :opt-un [::enabled ::background-compaction-threshold ::buffer-exhaustion-threshold]))
+
 (s/def ::session-config
   (s/keys :opt-un [::session-id ::model ::tools ::system-message
                    ::available-tools ::excluded-tools ::provider
                    ::on-permission-request ::streaming? ::mcp-servers
                    ::custom-agents ::config-dir ::skill-directories
-                   ::disabled-skills ::large-output]))
+                   ::disabled-skills ::large-output ::infinite-sessions]))
 
 (s/def ::resume-session-config
   (s/keys :opt-un [::tools ::provider ::streaming? ::on-permission-request

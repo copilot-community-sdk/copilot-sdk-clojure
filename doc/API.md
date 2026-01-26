@@ -214,6 +214,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:skill-directories` | vector | Additional skill directories to load |
 | `:disabled-skills` | vector | Disable specific skills by name |
 | `:large-output` | map | Tool output handling config |
+| `:infinite-sessions` | map | Infinite session config (see below) |
 
 #### `resume-session`
 
@@ -481,6 +482,8 @@ Sessions emit various events during processing:
 | `:tool.execution_partial_result` | Tool execution partial result |
 | `:tool.execution_complete` | Tool execution completed |
 | `:session.idle` | Session finished processing |
+| `:session.compaction_start` | Context compaction started (infinite sessions) |
+| `:session.compaction_complete` | Context compaction completed (infinite sessions) |
 
 Event `:type` values are keywords derived from the wire strings, e.g.
 `"assistant.message_delta"` becomes `:assistant.message_delta`.
@@ -659,6 +662,64 @@ You can see this message in `:tool.execution_complete` events:
 Note: large output handling is applied by the CLI for built-in tools (like the shell tool).
 For external tools you define in the SDK, consider handling oversized outputs yourself
 (e.g., write to a file and return a short preview).
+
+### Infinite Sessions
+
+Infinite sessions enable automatic context compaction, allowing conversations to continue
+beyond the model's context window limit. When the context approaches capacity, the CLI
+automatically compacts older messages while preserving important context.
+
+```clojure
+;; Enable with defaults (enabled by default)
+(def session (copilot/create-session client
+               {:model "gpt-5.2"}))
+
+;; Explicit configuration
+(def session (copilot/create-session client
+               {:model "gpt-5.2"
+                :infinite-sessions {:enabled true
+                                    :background-compaction-threshold 0.80
+                                    :buffer-exhaustion-threshold 0.95}}))
+
+;; Disable infinite sessions
+(def session (copilot/create-session client
+               {:model "gpt-5.2"
+                :infinite-sessions {:enabled false}}))
+```
+
+**Configuration options:**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:enabled` | boolean | `true` | Enable infinite sessions |
+| `:background-compaction-threshold` | number | `0.80` | Context utilization (0.0-1.0) at which background compaction starts |
+| `:buffer-exhaustion-threshold` | number | `0.95` | Context utilization (0.0-1.0) at which session blocks until compaction completes |
+
+**How it works:**
+
+1. When context reaches the background threshold (default 80%), compaction starts asynchronously
+2. The session continues processing while compaction runs in the background
+3. If context reaches the buffer exhaustion threshold (default 95%), the session blocks until compaction completes
+4. Compaction preserves essential context while removing older, less relevant messages
+
+**Compaction events:**
+
+Sessions emit `:session.compaction_start` and `:session.compaction_complete` events during compaction:
+
+```clojure
+(let [ch (copilot/subscribe-events session)]
+  (go-loop []
+    (when-let [event (<! ch)]
+      (case (:type event)
+        :session.compaction_start
+        (println "Compaction started...")
+
+        :session.compaction_complete
+        (println "Compaction complete")
+
+        nil)
+      (recur))))
+```
 
 ### Permission Handling
 

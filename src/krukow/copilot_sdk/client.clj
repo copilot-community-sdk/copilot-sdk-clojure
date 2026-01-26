@@ -570,6 +570,10 @@
    - :skill-directories  - Additional skill directories to load
    - :disabled-skills    - Disable specific skills by name
    - :large-output       - Tool output handling config {:enabled :max-size-bytes :output-dir}
+   - :infinite-sessions  - Infinite session config for automatic context compaction
+                           {:enabled (default true)
+                            :background-compaction-threshold (0.0-1.0, default 0.80)
+                            :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
    
    Returns a CopilotSession."
   ([client]
@@ -601,6 +605,8 @@
                             (into {} (map (fn [[k v]] [k (util/clj->wire v)])) servers))
          wire-custom-agents (when-let [agents (:custom-agents config)]
                               (mapv util/clj->wire agents))
+         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
+                                  (util/clj->wire is))
          ;; Build request params
          params (cond-> {}
                   (:session-id config) (assoc :session-id (:session-id config))
@@ -617,7 +623,8 @@
                   (:config-dir config) (assoc :config-dir (:config-dir config))
                   (:skill-directories config) (assoc :skill-directories (:skill-directories config))
                   (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
-                  (:large-output config) (assoc :large-output (:large-output config)))
+                  (:large-output config) (assoc :large-output (:large-output config))
+                  wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions))
          result (proto/send-request! connection-io "session.create" params)
          session-id (:session-id result)
          ;; Session state is stored by session/create-session in client's atom
