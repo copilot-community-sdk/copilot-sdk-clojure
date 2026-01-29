@@ -7,9 +7,9 @@
             [deps-deploy.deps-deploy :as dd])
   (:import [java.io File]))
 
-(def lib 'io.github.krukow/copilot-sdk)
+(def lib 'io.github.copilot-community-sdk/copilot-sdk-clojure)
 (def clojars-lib 'net.clojars.krukow/copilot-sdk)
-(def version "0.1.9-SNAPSHOT")
+(def version "0.2.0")
 (def class-dir "target/classes")
 (def aot-namespaces ['krukow.copilot-sdk.java-api])
 
@@ -144,12 +144,12 @@
   (let [v (or (:version opts) version)]
     (when (:version opts) (alter-var-root #'version (constantly v)))
     (aot-jar opts)
-    (let [artifact-dir (str "target/bundle/io/github/krukow/copilot-sdk/" v)
+    (let [artifact-dir (str "target/bundle/io/github/copilot-community-sdk/copilot-sdk-clojure/" v)
           pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
-          files {:jar (format "copilot-sdk-%s.jar" v)
-                 :sources (format "copilot-sdk-%s-sources.jar" v)
-                 :javadoc (format "copilot-sdk-%s-javadoc.jar" v)
-                 :pom (format "copilot-sdk-%s.pom" v)}]
+          files {:jar (format "copilot-sdk-clojure-%s.jar" v)
+                 :sources (format "copilot-sdk-clojure-%s-sources.jar" v)
+                 :javadoc (format "copilot-sdk-clojure-%s-javadoc.jar" v)
+                 :pom (format "copilot-sdk-clojure-%s.pom" v)}]
       (b/delete {:path "target/bundle"})
       (shell/sh "mkdir" "-p" artifact-dir)
       ;; Sources JAR
@@ -174,8 +174,8 @@
         (spit (str path ".md5") (str/trim (:out (shell/sh "md5" "-q" path))))
         (spit (str path ".sha1") (first (str/split (:out (shell/sh "shasum" "-a" "1" path)) #"\s+"))))
       ;; Create zip
-      (let [bundle-zip (str "target/copilot-sdk-" v "-bundle.zip")]
-        (shell/sh "sh" "-c" (str "cd target/bundle && zip -r ../copilot-sdk-" v "-bundle.zip ."))
+      (let [bundle-zip (str "target/copilot-sdk-clojure-" v "-bundle.zip")]
+        (shell/sh "sh" "-c" (str "cd target/bundle && zip -r ../copilot-sdk-clojure-" v "-bundle.zip ."))
         (println "\n✅ Bundle created:" bundle-zip)
         bundle-zip))))
 
@@ -209,10 +209,10 @@
           auth (str username ":" password)
           jar-file (format "target/%s-%s.jar" lib v)
           pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
-          remote-path (format "io/github/krukow/copilot-sdk/%s" v)]
+          remote-path (format "io/github/copilot-community-sdk/copilot-sdk-clojure/%s" v)]
       (println "\n📤 Uploading SNAPSHOT to Maven Central...")
-      (upload-with-checksums auth base-url remote-path jar-file (format "copilot-sdk-%s.jar" v))
-      (upload-with-checksums auth base-url remote-path pom-file (format "copilot-sdk-%s.pom" v))
+      (upload-with-checksums auth base-url remote-path jar-file (format "copilot-sdk-clojure-%s.jar" v))
+      (upload-with-checksums auth base-url remote-path pom-file (format "copilot-sdk-clojure-%s.pom" v))
       (println "✅ SNAPSHOT published!")
       (println "Add this repository to consume:")
       (println "  https://central.sonatype.com/repository/maven-snapshots/"))))
@@ -251,7 +251,7 @@
     (println "Updated README.md SHA to" sha)))
 
 (defn bump-version
-  "Bump the version number. 
+  "Bump the version number.
    Usage: clj -T:build bump-version              ; 0.1.4 -> 0.1.5-SNAPSHOT (default)
           clj -T:build bump-version :type :minor ; 0.1.4 -> 0.2.0-SNAPSHOT
           clj -T:build bump-version :type :major ; 0.1.4 -> 1.0.0-SNAPSHOT

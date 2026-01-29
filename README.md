@@ -23,13 +23,13 @@ Add to your `deps.edn`:
 
 ```clojure
 ;; From Clojars
-net.clojars.krukow/copilot-sdk {:mvn/version "0.1.9-SNAPSHOT"}
+net.clojars.krukow/copilot-sdk {:mvn/version "0.2.0"}
 
 ;; Or from Maven Central
-io.github.krukow/copilot-sdk {:mvn/version "0.1.9-SNAPSHOT"}
+io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.2.0"}
 
 ;; Or git dependency
-io.github.krukow/copilot-sdk {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
+io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
                               :git/sha "6220296691c1d457f8c13994025b98b120129eb5"}
 ```
 

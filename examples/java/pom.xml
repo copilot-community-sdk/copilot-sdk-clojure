@@ -16,7 +16,7 @@
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <copilot-sdk.version>0.1.9-SNAPSHOT</copilot-sdk.version>
+        <copilot-sdk.version>0.2.0</copilot-sdk.version>
         <clojure.version>1.12.4</clojure.version>
         <core.async.version>1.8.741</core.async.version>
     </properties>
@@ -43,8 +43,8 @@
         For local development (install with: clj -T:build aot-jar && clj -T:build install):
         -->
         <dependency>
-            <groupId>io.github.krukow</groupId>
-            <artifactId>copilot-sdk</artifactId>
+            <groupId>io.github.copilot-community-sdk</groupId>
+            <artifactId>copilot-sdk-clojure</artifactId>
             <version>${copilot-sdk.version}</version>
         </dependency>
 
