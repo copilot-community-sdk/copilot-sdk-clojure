@@ -26,7 +26,7 @@ public class AsyncApiExample {
 
                 // Demo 2: EventSubscription for streaming
                 System.out.println("\n=== Streaming with EventSubscription ===\n");
-                demoEventSubscription(session);
+                demoEventSubscription(client);
 
                 // Demo 3: Multiple concurrent queries
                 System.out.println("\n=== Concurrent Queries ===\n");
@@ -60,27 +60,41 @@ public class AsyncApiExample {
 
     /**
      * Demo 2: Use EventSubscription for streaming token-by-token output.
+     * Note: Requires a session created with streaming(true) to receive delta events.
      */
-    static void demoEventSubscription(ICopilotSession session) {
+    static void demoEventSubscription(ICopilotClient client) {
         System.out.print("Streaming: ");
 
-        // EventSubscription is AutoCloseable - use try-with-resources
-        try (EventSubscription events = session.subscribeEvents()) {
-            // Send prompt (returns immediately)
-            session.send("Write a haiku about programming. Just the haiku, nothing else.");
+        // Create a streaming-enabled session for this demo
+        SessionOptionsBuilder sb = new SessionOptionsBuilder();
+        sb.model("gpt-5.2");
+        sb.streaming(true);  // Required for message_delta events
+        ICopilotSession session = client.createSession((SessionOptions) sb.build());
 
-            // Process events as they arrive
-            Event event;
-            while ((event = events.take()) != null) {
-                if (event.isMessageDelta()) {
-                    // Print each token as it arrives
-                    System.out.print(event.getDeltaContent());
+        try {
+            // EventSubscription is AutoCloseable - use try-with-resources
+            try (EventSubscription events = session.subscribeEvents()) {
+                // Send prompt (returns immediately)
+                session.send("Write a haiku about programming. Just the haiku, nothing else.");
+
+                // Process events as they arrive
+                Event event;
+                StringBuffer haiku = new StringBuffer();
+                while ((event = events.take()) != null) {
+                    System.out.print(event.getType() + ": " + event.getData() + "\n");
+                    System.out.flush();
+                    if (event.isMessageDelta()) {
+                        haiku.append(event.getDeltaContent());
+                    } else
+                    if (event.isIdle() || event.isError()) {
+                        break;
+                    }
                 }
-                if (event.isIdle() || event.isError()) {
-                    break;
-                }
+                System.out.println("\n\nFinal Haiku:\n" + haiku.toString());
+                System.out.println();
             }
-            System.out.println();
+        } finally {
+            session.destroy();
         }
     }
 
