@@ -1,6 +1,6 @@
 (ns user-input
   (:require [clojure.core.async :as async :refer [chan tap go-loop <!]]
-            [krukow.copilot-sdk :as copilot]))
+            [krukow.copilot-sdk :as copilot :refer [evt]]))
 
 ;; This example demonstrates handling user input requests (ask_user).
 ;; When the agent needs clarification or input from the user, it invokes the ask_user
@@ -56,14 +56,14 @@
       ;; Event handler
       (go-loop []
         (when-let [event (<! events-ch)]
-          (case (:type event)
-            :copilot/assistant.message
+          (condp = (:type event)
+            (evt :assistant.message)
             (println "\n🤖 Agent:" (get-in event [:data :content]))
 
-            :copilot/session.idle
+            (evt :session.idle)
             (deliver done true)
 
-            :copilot/session.error
+            (evt :session.error)
             (do
               (println "❌ Error:" (get-in event [:data :message]))
               (deliver done (ex-info "Session error" {:event event})))

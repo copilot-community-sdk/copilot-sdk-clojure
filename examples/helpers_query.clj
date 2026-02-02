@@ -1,5 +1,6 @@
 (ns helpers-query
   (:require [clojure.core.async :refer [<!! go-loop <!]]
+            [krukow.copilot-sdk :as copilot :refer [evt]]
             [krukow.copilot-sdk.helpers :as h]))
 
 ;; See examples/README.md for usage
@@ -24,10 +25,10 @@
 ;; Define a multimethod for handling events by type
 (defmulti handle-event :type)
 (defmethod handle-event :default [_] nil)
-(defmethod handle-event :copilot/assistant.message_delta [{{:keys [delta-content]} :data}]
+(defmethod handle-event (evt :assistant.message_delta) [{{:keys [delta-content]} :data}]
   (print delta-content)
   (flush))
-(defmethod handle-event :copilot/assistant.message [_] (println))
+(defmethod handle-event (evt :assistant.message) [_] (println))
 
 (defn run-streaming
   [{:keys [prompt] :or {prompt "Explain the concept of immutability in 2-3 sentences."}}]

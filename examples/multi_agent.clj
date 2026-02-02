@@ -15,7 +15,7 @@
 
 (defn run
   [{:keys [topics] :or {topics (:topics defaults)}}]
-  (copilot/with-client [client {:model "gpt-5.2"}]
+  (copilot/with-client [client]
     (->> (research-phase client topics)
          (analysis-phase client)
          (synthesis-phase client))))

@@ -23,10 +23,6 @@ echo "=== multi-agent ==="
 clojure -A:examples -X multi-agent/run
 
 echo ""
-echo "=== streaming-chat ==="
-clojure -A:examples -X streaming-chat/run
-
-echo ""
 echo "=== config-skill-output ==="
 clojure -A:examples -X config-skill-output/run
 
