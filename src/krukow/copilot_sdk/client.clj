@@ -129,9 +129,15 @@
                       :github-token (when (:github-token opts) "***")
                       :use-logged-in-user? (:use-logged-in-user? opts)})))
    (when-not (s/valid? ::specs/client-options opts)
-     (throw (ex-info "Invalid client options"
-                     {:options opts
-                      :explain (s/explain-data ::specs/client-options opts)})))
+     (let [unknown (specs/unknown-keys opts specs/client-options-keys)
+           explain (s/explain-data ::specs/client-options opts)
+           msg (if (seq unknown)
+                 (format "Invalid client options: unknown keys %s. Valid keys are: %s"
+                         (pr-str unknown)
+                         (pr-str (sort specs/client-options-keys)))
+                 (format "Invalid client options: %s"
+                         (with-out-str (s/explain ::specs/client-options opts))))]
+       (throw (ex-info msg {:options opts :unknown-keys unknown :explain explain}))))
    (when-let [size (:notification-queue-size opts)]
      (when (<= size 0)
        (throw (ex-info "notification-queue-size must be > 0" {:notification-queue-size size}))))
@@ -664,9 +670,15 @@
   ([client config]
    (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
    (when-not (s/valid? ::specs/session-config config)
-     (throw (ex-info "Invalid session config"
-                     {:config config
-                      :explain (s/explain-data ::specs/session-config config)})))
+     (let [unknown (specs/unknown-keys config specs/session-config-keys)
+           explain (s/explain-data ::specs/session-config config)
+           msg (if (seq unknown)
+                 (format "Invalid session config: unknown keys %s. Valid keys are: %s"
+                         (pr-str unknown)
+                         (pr-str (sort specs/session-config-keys)))
+                 (format "Invalid session config: %s"
+                         (with-out-str (s/explain ::specs/session-config config))))]
+       (throw (ex-info msg {:config config :unknown-keys unknown :explain explain}))))
    (ensure-connected! client)
    (let [{:keys [connection-io]} @(:state client)
          _ (when-let [servers (:mcp-servers config)]

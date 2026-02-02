@@ -193,3 +193,67 @@
       (let [reader (java.io.BufferedReader. (java.io.InputStreamReader. in "UTF-8"))
             first-line (.readLine reader)]
         (is (clojure.string/starts-with? first-line "Content-Length:"))))))
+
+;; =============================================================================
+;; Config Validation Tests - Unknown Keys
+;; =============================================================================
+
+(deftest client-options-unknown-keys-test
+  (testing "unknown client option key is rejected"
+    (is (thrown-with-msg? Exception #"unknown keys.*:log-levl"
+                          (copilot/client {:log-levl :debug}))))
+
+  (testing "typo in client option key is rejected with helpful message"
+    (try
+      (copilot/client {:auto-starts? true})
+      (is false "Should have thrown")
+      (catch Exception e
+        (is (re-find #"unknown keys" (ex-message e)))
+        (is (re-find #":auto-starts\?" (ex-message e)))
+        (is (re-find #":auto-start\?" (ex-message e))))))  ; valid key shown
+
+  (testing "multiple unknown keys are reported"
+    (try
+      (copilot/client {:foo 1 :bar 2})
+      (is false "Should have thrown")
+      (catch Exception e
+        (is (re-find #":foo" (ex-message e)))
+        (is (re-find #":bar" (ex-message e))))))
+
+  (testing "valid client options are accepted"
+    (is (some? (copilot/client {:log-level :debug :auto-start? false})))))
+
+(deftest session-config-unknown-keys-test
+  (testing "unknown session config key is rejected"
+    (is (not (s/valid? ::specs/session-config {:reasoning-efforts "high"}))))
+
+  (testing "typo in session config provides helpful error"
+    (let [unknown (specs/unknown-keys {:model "gpt-5.2" :streeming? true}
+                                       specs/session-config-keys)]
+      (is (contains? unknown :streeming?))))
+
+  (testing "valid session config keys are accepted"
+    (is (s/valid? ::specs/session-config {:model "gpt-5.2"
+                                          :streaming? true
+                                          :reasoning-effort "high"})))
+
+  (testing "session config rejects unknown keys even with valid ones"
+    (is (not (s/valid? ::specs/session-config {:model "gpt-5.2"
+                                                :unknown-key "value"})))))
+
+(deftest evt-helper-test
+  (testing "evt converts unqualified to qualified keywords"
+    (is (= :copilot/session.idle (copilot/evt :session.idle)))
+    (is (= :copilot/assistant.message (copilot/evt :assistant.message)))
+    (is (= :copilot/tool.execution_complete (copilot/evt :tool.execution_complete))))
+
+  (testing "evt throws on invalid event type"
+    (is (thrown-with-msg? IllegalArgumentException #"Unknown event type"
+                          (copilot/evt :invalid.event))))
+
+  (testing "evt error message includes valid events"
+    (try
+      (copilot/evt :foo)
+      (is false "Should have thrown")
+      (catch IllegalArgumentException e
+        (is (re-find #"session.idle" (ex-message e)))))))

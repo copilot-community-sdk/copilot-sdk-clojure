@@ -1,10 +1,25 @@
 (ns krukow.copilot-sdk.specs
   "Clojure specs for Copilot SDK data structures."
-  (:require [clojure.spec.alpha :as s]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.set :as set]))
 
 ;; -----------------------------------------------------------------------------
 ;; Common specs
 ;; -----------------------------------------------------------------------------
+
+(defn- closed-keys
+  "Returns a spec that validates the keys spec and rejects unknown keys.
+   allowed-keys should be the set of allowed keyword names (unqualified)."
+  [keys-spec allowed-keys]
+  (s/and keys-spec
+         (fn [m]
+           (let [unknown (set/difference (set (keys m)) allowed-keys)]
+             (empty? unknown)))))
+
+(defn unknown-keys
+  "Returns the set of unknown keys in a map, given the allowed keys."
+  [m allowed-keys]
+  (set/difference (set (keys m)) allowed-keys))
 
 (s/def ::non-blank-string (s/and string? (complement clojure.string/blank?)))
 (s/def ::timestamp string?)
@@ -33,11 +48,19 @@
 (s/def ::github-token ::non-blank-string)
 (s/def ::use-logged-in-user? boolean?)
 
+(def client-options-keys
+  #{:cli-path :cli-args :cli-url :cwd :port
+    :use-stdio? :log-level :auto-start? :auto-restart?
+    :notification-queue-size :router-queue-size
+    :tool-timeout-ms :env :github-token :use-logged-in-user?})
+
 (s/def ::client-options
-  (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
-                   ::use-stdio? ::log-level ::auto-start? ::auto-restart?
-                   ::notification-queue-size ::router-queue-size
-                   ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?]))
+  (closed-keys
+   (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
+                    ::use-stdio? ::log-level ::auto-start? ::auto-restart?
+                    ::notification-queue-size ::router-queue-size
+                    ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?])
+   client-options-keys))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool definitions
@@ -166,18 +189,35 @@
   (s/keys :opt-un [::on-pre-tool-use ::on-post-tool-use ::on-user-prompt-submitted
                    ::on-session-start ::on-session-end ::on-error-occurred]))
 
+(def session-config-keys
+  #{:session-id :model :tools :system-message
+    :available-tools :excluded-tools :provider
+    :on-permission-request :streaming? :mcp-servers
+    :custom-agents :config-dir :skill-directories
+    :disabled-skills :large-output :infinite-sessions
+    :reasoning-effort :on-user-input-request :hooks})
+
 (s/def ::session-config
-  (s/keys :opt-un [::session-id ::model ::tools ::system-message
-                   ::available-tools ::excluded-tools ::provider
-                   ::on-permission-request ::streaming? ::mcp-servers
-                   ::custom-agents ::config-dir ::skill-directories
-                   ::disabled-skills ::large-output ::infinite-sessions
-                   ::reasoning-effort ::on-user-input-request ::hooks]))
+  (closed-keys
+   (s/keys :opt-un [::session-id ::model ::tools ::system-message
+                    ::available-tools ::excluded-tools ::provider
+                    ::on-permission-request ::streaming? ::mcp-servers
+                    ::custom-agents ::config-dir ::skill-directories
+                    ::disabled-skills ::large-output ::infinite-sessions
+                    ::reasoning-effort ::on-user-input-request ::hooks])
+   session-config-keys))
+
+(def ^:private resume-session-config-keys
+  #{:tools :provider :streaming? :on-permission-request
+    :mcp-servers :custom-agents :skill-directories
+    :disabled-skills :reasoning-effort :on-user-input-request :hooks})
 
 (s/def ::resume-session-config
-  (s/keys :opt-un [::tools ::provider ::streaming? ::on-permission-request
-                   ::mcp-servers ::custom-agents ::skill-directories
-                   ::disabled-skills ::reasoning-effort ::on-user-input-request ::hooks]))
+  (closed-keys
+   (s/keys :opt-un [::tools ::provider ::streaming? ::on-permission-request
+                    ::mcp-servers ::custom-agents ::skill-directories
+                    ::disabled-skills ::reasoning-effort ::on-user-input-request ::hooks])
+   resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
 ;; Message options
