@@ -44,7 +44,7 @@ clojure -A:examples -X tool-integration/run :languages '["clojure" "haskell"]'
 clojure -A:examples -X multi-agent/run
 clojure -A:examples -X multi-agent/run :topics '["AI safety" "machine learning"]'
 
-# Streaming responses
+# Streaming responses (with high reasoning effort)
 clojure -A:examples -X streaming-chat/run
 clojure -A:examples -X streaming-chat/run :prompt '"Explain the Fibonacci sequence."'
 
@@ -56,6 +56,10 @@ clojure -A:examples -X permission-bash/run
 
 # Session state events monitoring
 clojure -A:examples -X session-events/run
+
+# User input handling (ask_user)
+clojure -A:examples -X user-input/run
+clojure -A:examples -X user-input/run-simple
 ```
 
 Or run all examples:
@@ -418,7 +422,55 @@ clojure -A:examples -X session-events/run :prompt '"Explain recursion."'
 
 ---
 
-## Example 9: Java Integration (`JavaExample.java`)
+## Example 9: User Input Handling (`user_input.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** User input requests, ask_user tool, interactive sessions
+
+Demonstrates how to handle `ask_user` requests when the agent needs clarification or input from the user.
+
+### What It Demonstrates
+
+- Registering an `:on-user-input-request` handler
+- Responding to questions with choices or freeform input
+- Interactive decision-making workflows
+
+### Usage
+
+```bash
+# Full interactive example
+clojure -A:examples -X user-input/run
+
+# Simpler yes/no example
+clojure -A:examples -X user-input/run-simple
+```
+
+### Code Walkthrough
+
+```clojure
+(require '[krukow.copilot-sdk :as copilot])
+
+(copilot/with-client-session [session {:model "gpt-5.2"
+                                       :on-user-input-request
+                                       (fn [request invocation]
+                                         ;; request contains:
+                                         ;; - :question - the question being asked
+                                         ;; - :choices - optional list of choices
+                                         ;; - :allow-freeform - whether freeform input is allowed
+                                         (println "Agent asks:" (:question request))
+                                         (when-let [choices (:choices request)]
+                                           (doseq [c choices]
+                                             (println " -" c)))
+                                         ;; Return the user's response
+                                         ;; :answer is required, :was-freeform defaults to true
+                                         {:answer (read-line)})}]
+  (copilot/send-and-wait! session
+    {:prompt "Ask me what format I prefer for the output, then respond accordingly."}))
+```
+
+---
+
+## Example 10: Java Integration (`JavaExample.java`)
 
 **Difficulty:** Intermediate  
 **Concepts:** Java interop, AOT compilation, static API

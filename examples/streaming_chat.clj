@@ -3,6 +3,7 @@
             [krukow.copilot-sdk :as copilot]))
 
 ;; See examples/README.md for usage
+;; This example demonstrates streaming with high reasoning effort.
 
 (def defaults
   {:prompt "Solve this: I have two coins totaling 30 cents. One is not a nickel. What are the coins? Explain your reasoning clearly."})
@@ -10,7 +11,8 @@
 (defn run
   [{:keys [prompt] :or {prompt (:prompt defaults)}}]
   (copilot/with-client-session [session {:model "gpt-5.2"
-                                         :streaming? true}]
+                                         :streaming? true
+                                         :reasoning-effort "high"}]
     (let [events-ch (chan 256)
           done (promise)]
       (tap (copilot/events session) events-ch)

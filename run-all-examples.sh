@@ -37,3 +37,7 @@ clojure -A:examples -X permission-bash/run
 echo ""
 echo "=== session-events ==="
 clojure -A:examples -X session-events/run
+
+echo ""
+echo "=== user-input ==="
+clojure -A:examples -X user-input/run-simple
