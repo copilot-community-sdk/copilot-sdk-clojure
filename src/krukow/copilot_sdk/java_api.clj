@@ -76,10 +76,21 @@
            [getId [] String]
            [getTimestamp [] String]
            [isType [String] boolean]
+           ;; Assistant events
            [isMessage [] boolean]
            [isMessageDelta [] boolean]
+           [isTurnStart [] boolean]
+           [isTurnEnd [] boolean]
+           [isReasoning [] boolean]
+           [isReasoningDelta [] boolean]
+           [isUsage [] boolean]
+           ;; Session events
            [isIdle [] boolean]
-           [isError [] boolean]])
+           [isError [] boolean]
+           [isUsageInfo [] boolean]
+           ;; Tool events
+           [isToolExecutionStart [] boolean]
+           [isToolExecutionComplete [] boolean]])
 
 (defn event-init-event [type data id timestamp]
   [[] {:type type :data data :id id :timestamp timestamp}])
@@ -92,10 +103,21 @@
 (defn event-getId [this] (:id (.state this)))
 (defn event-getTimestamp [this] (:timestamp (.state this)))
 (defn event-isType [this expected] (= expected (:type (.state this))))
+;; Assistant events
 (defn event-isMessage [this] (= "copilot/assistant.message" (:type (.state this))))
 (defn event-isMessageDelta [this] (= "copilot/assistant.message_delta" (:type (.state this))))
+(defn event-isTurnStart [this] (= "copilot/assistant.turn_start" (:type (.state this))))
+(defn event-isTurnEnd [this] (= "copilot/assistant.turn_end" (:type (.state this))))
+(defn event-isReasoning [this] (= "copilot/assistant.reasoning" (:type (.state this))))
+(defn event-isReasoningDelta [this] (= "copilot/assistant.reasoning_delta" (:type (.state this))))
+(defn event-isUsage [this] (= "copilot/assistant.usage" (:type (.state this))))
+;; Session events
 (defn event-isIdle [this] (= "copilot/session.idle" (:type (.state this))))
 (defn event-isError [this] (= "copilot/session.error" (:type (.state this))))
+(defn event-isUsageInfo [this] (= "copilot/session.usage_info" (:type (.state this))))
+;; Tool events
+(defn event-isToolExecutionStart [this] (= "copilot/tool.execution_start" (:type (.state this))))
+(defn event-isToolExecutionComplete [this] (= "copilot/tool.execution_complete" (:type (.state this))))
 (defn event-toString [this]
   (let [s (.state this)]
     (str "Event{type='" (:type s) "', id='" (:id s) "', data=" (:data s) "}")))
