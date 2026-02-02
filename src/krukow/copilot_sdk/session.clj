@@ -257,6 +257,15 @@
 ;; Public API - functions that take CopilotSession handle
 ;; -----------------------------------------------------------------------------
 
+(defn config
+  "Get the session configuration that was used to create this session.
+   Returns the user-provided config. Note: This reflects what was requested,
+   not necessarily what the server is using. The session.start event contains
+   the actual selectedModel if validation is needed."
+  [session]
+  (let [{:keys [session-id client]} session]
+    (:config (session-state client session-id))))
+
 (defn send!
   "Send a message to the session.
    Returns the message ID immediately (fire-and-forget).
@@ -563,10 +572,15 @@
 
 (defn subscribe-events
   "Subscribe to session events. Returns a channel that receives events.
-   Call unsubscribe-events when done.
    
-   Note: session events are delivered via a sliding buffer (4096). If a
-   subscriber is slow, events may be dropped.
+   The channel will receive nil (close) when the session is destroyed.
+   For explicit cleanup before session destruction, call unsubscribe-events.
+   
+   Drop behavior: If this subscriber's channel buffer is full when mult tries
+   to deliver an event, that specific event is silently dropped for this
+   subscriber only. Other subscribers with available buffer space still receive
+   the event. The returned channel has a buffer of 1024 events which should be
+   sufficient for most use cases.
    
    This is a convenience wrapper around (tap (events session) ch)."
   [session]
@@ -583,8 +597,10 @@
    - :buffer - Channel buffer size (default 1024)
    - :xf     - Transducer applied to events
 
-   Note: session events use a sliding buffer (4096). If consumers are slow,
-   events may be dropped upstream."
+   Drop behavior: If this subscriber's channel buffer is full when mult tries
+   to deliver an event, that specific event is silently dropped for this
+   subscriber only. Other subscribers with available buffer space still receive
+   the event."
   ([session]
    (events->chan session {}))
   ([session {:keys [buffer xf] :or {buffer 1024}}]

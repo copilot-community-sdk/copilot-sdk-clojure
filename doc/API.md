@@ -427,7 +427,6 @@ Get the core.async `mult` for session events. Use `tap` to subscribe:
 ```
 
 Subscribe to session events with optional buffer size and transducer.
-Note: session events use a sliding buffer (4096). Slow consumers may drop events.
 
 #### `subscribe-events`
 
@@ -502,6 +501,15 @@ Get the session's unique identifier.
 ```
 
 Get the session workspace path when provided by the CLI (may be nil).
+
+#### `session-config`
+
+```clojure
+(copilot/session-config session)
+;; => {:model "gpt-5.2", :streaming? true, :reasoning-effort "high", ...}
+```
+
+Get the configuration that was used to create this session.
 
 #### `client`
 

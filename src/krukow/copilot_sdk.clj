@@ -532,10 +532,17 @@
   (session/events session))
 
 (defn subscribe-events
-  "Subscribe to session events. Returns a channel that receives events.
-   Call unsubscribe-events when done.
+  "Subscribe to session events. Returns a channel (buffer 1024) that receives events.
+   The channel receives nil (close) when the session is destroyed.
+   For explicit cleanup, call unsubscribe-events.
    
    This is a convenience wrapper around (tap (copilot/events session) ch).
+
+   Drop behavior: Events are delivered via core.async mult. If this subscriber's
+   buffer is full when mult delivers an event, that specific event is silently
+   dropped for this subscriber only. Other subscribers with available buffer space
+   still receive the event. With 1024 buffer, drops are unlikely unless the
+   subscriber stops reading entirely.
 
    Example:
    ```clojure
@@ -553,7 +560,11 @@
 
    Options:
    - :buffer - Channel buffer size (default 1024)
-   - :xf     - Transducer applied to events"
+   - :xf     - Transducer applied to events
+
+   Drop behavior: If this subscriber's buffer is full when mult delivers an event,
+   that specific event is silently dropped for this subscriber only. Other
+   subscribers with available buffer space still receive the event."
   ([session]
    (session/events->chan session))
   ([session opts]
