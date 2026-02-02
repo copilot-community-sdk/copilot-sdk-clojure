@@ -323,25 +323,78 @@
 
 (defmacro with-client-session
   "Create a client + session and ensure cleanup on exit.
+   Automatically calls destroy! on session and stop! on client.
 
-   Usage:
-   (with-client-session [s {:model \"gpt-5.2\"}]
-     ...)
+   Four forms are supported:
 
-   (with-client-session [client s {:model \"gpt-5.2\"} {:cli-path \"copilot\"}]
-     ...)"
+   1. [session session-opts] - anonymous client with default options
+      ```clojure
+      (with-client-session [session {:model \"gpt-5.2\"}]
+        (copilot/send! session {:prompt \"Hi\"}))
+      ```
+
+   2. [client-opts session session-opts] - anonymous client with custom options
+      ```clojure
+      (with-client-session [{:log-level :debug} session {:model \"gpt-5.2\"}]
+        (copilot/send! session {:prompt \"Hi\"}))
+      ```
+
+   3. [client session session-opts] - named client with default options
+      ```clojure
+      (with-client-session [client session {:model \"gpt-5.2\"}]
+        (println (copilot/client-options client))
+        (copilot/send! session {:prompt \"Hi\"}))
+      ```
+
+   4. [client client-opts session session-opts] - named client with custom options
+      ```clojure
+      (with-client-session [client {:log-level :debug} session {:model \"gpt-5.2\"}]
+        (println (copilot/client-options client))
+        (copilot/send! session {:prompt \"Hi\"}))
+      ```"
   [[a b & more] & body]
-  (if (map? b)
+  (cond
+    ;; Form 1: [session session-opts] - 2 args, second is map
+    (and (nil? more) (map? b))
     `(with-client [client#]
        (with-session [~a client# ~b]
          ~@body))
+
+    ;; Form 2: [client-opts session session-opts] - 3 args, first is map
+    (and (= 1 (count more)) (map? a))
+    (let [client-opts a
+          session-sym b
+          session-opts (first more)]
+      `(with-client [client# ~client-opts]
+         (with-session [~session-sym client# ~session-opts]
+           ~@body)))
+
+    ;; Form 3: [client session session-opts] - 3 args, first two are symbols
+    (and (= 1 (count more)) (symbol? a) (symbol? b))
     (let [client-sym a
           session-sym b
-          session-opts (first more)
-          client-opts (second more)]
-      `(with-client [~client-sym ~@(when client-opts [client-opts])]
+          session-opts (first more)]
+      `(with-client [~client-sym]
          (with-session [~session-sym ~client-sym ~session-opts]
-           ~@body)))))
+           ~@body)))
+
+    ;; Form 4: [client client-opts session session-opts] - 4 args
+    (= 2 (count more))
+    (let [client-sym a
+          client-opts b
+          session-sym (first more)
+          session-opts (second more)]
+      `(with-client [~client-sym ~client-opts]
+         (with-session [~session-sym ~client-sym ~session-opts]
+           ~@body)))
+
+    :else
+    (throw (IllegalArgumentException.
+            "Invalid with-client-session form. Expected one of:
+             [session session-opts]
+             [client-opts session session-opts]
+             [client session session-opts]
+             [client client-opts session session-opts]"))))
 
 (defn resume-session
   "Resume an existing session by ID.
