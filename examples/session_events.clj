@@ -35,12 +35,10 @@
                                           (map :type)
                                           frequencies
                                           (sort-by val >))]
-                (println (format "  %s: %d" (name evt-type) cnt)))
-              (recur))
+                (println (format "  %s: %d" (name evt-type) cnt))))
 
             (evt :session.error)
             (println "\n⚠️  Session ended with error")
-            (recur)
 
             ;; Keep looping for other events
             (recur)))))))
