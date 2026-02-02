@@ -1,5 +1,4 @@
 import krukow.copilot_sdk.*;
-import java.util.*;
 
 /**
  * Event handling example demonstrating different ways to process events.

@@ -4,7 +4,6 @@ import krukow.copilot_sdk.SessionOptionsBuilder;
 import krukow.copilot_sdk.ICopilotClient;
 import krukow.copilot_sdk.ICopilotSession;
 import krukow.copilot_sdk.Tool;
-import krukow.copilot_sdk.IToolHandler;
 import java.util.*;
 
 /**
