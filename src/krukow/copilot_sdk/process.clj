@@ -15,12 +15,15 @@
 
 (defn- build-cli-args
   "Build CLI arguments based on options."
-  [{:keys [log-level use-stdio? port cli-args]}]
+  [{:keys [log-level use-stdio? port cli-args github-token use-logged-in-user?]}]
   (cond-> (vec (or cli-args []))
     true (conj "--server")
     log-level (conj "--log-level" (name log-level))
     use-stdio? (conj "--stdio")
-    (and (not use-stdio?) port (pos? port)) (conj "--port" (str port))))
+    (and (not use-stdio?) port (pos? port)) (conj "--port" (str port))
+    ;; Auth options (PR #237)
+    github-token (conj "--auth-token-env")
+    (false? use-logged-in-user?) (conj "--no-auto-login")))
 
 (defn spawn-cli
   "Spawn the Copilot CLI process.
@@ -33,9 +36,11 @@
    - :log-level - Log level (:none :error :warning :info :debug :all)
    - :use-stdio? - Use stdio transport (default: true)
    - :port - TCP port (when not using stdio)
+   - :github-token - GitHub token for authentication (PR #237)
+   - :use-logged-in-user? - Whether to use logged-in user auth (PR #237)
    
    Returns a ManagedProcess record."
-  [{:keys [cli-path cwd env use-stdio?]
+  [{:keys [cli-path cwd env use-stdio? github-token]
     :or {cli-path "copilot"
          use-stdio? true}
     :as opts}]
@@ -48,14 +53,19 @@
       (.directory builder (File. ^String cwd)))
 
     ;; Set environment
-    (when env
-      (let [env-map (.environment builder)]
-        ;; Remove NODE_DEBUG to avoid polluting stdout
-        (.remove env-map "NODE_DEBUG")
+    (let [env-map (.environment builder)]
+      ;; Remove NODE_DEBUG to avoid polluting stdout
+      (.remove env-map "NODE_DEBUG")
+      ;; Apply user-provided environment variables
+      (when env
         (doseq [[k v] env]
           (if (some? v)
             (.put env-map k v)
-            (.remove env-map k)))))
+            (.remove env-map k))))
+      ;; Set github token in environment if provided (PR #237).
+      ;; Explicit github-token should take precedence over env.
+      (when github-token
+        (.put env-map "COPILOT_SDK_AUTH_TOKEN" github-token)))
 
     ;; Configure stdio
     (.redirectErrorStream builder false)

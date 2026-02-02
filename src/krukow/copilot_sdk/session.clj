@@ -48,7 +48,7 @@
 (defn create-session
   "Create a new session. Internal use - called by client.
    Initializes session state in client's atom and returns a CopilotSession handle."
-  [client session-id {:keys [tools on-permission-request workspace-path]}]
+  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -61,6 +61,8 @@
                   (assoc-in [:sessions session-id]
                             {:tool-handlers tool-handlers
                              :permission-handler on-permission-request
+                             :user-input-handler on-user-input-request
+                             :hooks hooks
                              :destroyed? false
                              :workspace-path workspace-path})
                  (assoc-in [:session-io session-id]
@@ -182,6 +184,73 @@
               (log/error "Permission handler error for session " session-id ": " (ex-message e))
               {:result {:kind "denied-no-approval-rule-and-could-not-request-from-user"}})))))
     :io))
+
+(defn handle-user-input-request!
+  "Handle an incoming user input request (ask_user). Returns a channel with the result.
+   PR #269 feature.
+   
+   The handler should return a map with :answer (string) and optionally :was-freeform (boolean).
+   For backwards compatibility, :response is also accepted as an alias for :answer."
+  [client session-id request]
+  (async/thread-call
+   (fn []
+     (let [handler (:user-input-handler (session-state client session-id))]
+       (if-not handler
+         {:error {:code -32001 :message "User input requested but no handler registered"}}
+         (try
+            (let [result (handler request {:session-id session-id})
+                  ;; If handler returns a channel, await it
+                  result (if (channel? result)
+                           (<!! result)
+                           result)
+                  ;; Normalize result to expected wire format
+                  ;; Accept :answer or :response, default was-freeform to true if not specified
+                  answer (or (:answer result) (:response result))
+                  was-freeform (if (contains? result :was-freeform)
+                                 (:was-freeform result)
+                                 true)]
+              (if (and (string? answer) (not (empty? answer)))
+                {:result {:answer answer :was-freeform was-freeform}}
+                (do
+                  (log/warn "Invalid user input response for session " session-id ": " result)
+                  {:error {:code -32001 :message "User input handler returned invalid answer"}})))
+           (catch Exception e
+             (log/error "User input handler error for session " session-id ": " (ex-message e))
+             {:error {:code -32001 :message (str "User input handler error: " (ex-message e))}})))))
+   :io))
+
+(defn handle-hooks-invoke!
+  "Handle an incoming hooks invocation. Returns a channel with the result.
+   PR #269 feature."
+  [client session-id hook-type input]
+  (async/thread-call
+   (fn []
+     (let [hooks (:hooks (session-state client session-id))]
+       (if-not hooks
+         {:result nil}
+         (let [;; Map hook type strings to handler keywords
+               handler-key (case hook-type
+                             "preToolUse" :on-pre-tool-use
+                             "postToolUse" :on-post-tool-use
+                             "userPromptSubmitted" :on-user-prompt-submitted
+                             "sessionStart" :on-session-start
+                             "sessionEnd" :on-session-end
+                             "errorOccurred" :on-error-occurred
+                             nil)
+               handler (when handler-key (get hooks handler-key))]
+           (if-not handler
+             {:result nil}
+             (try
+               (let [result (handler input {:session-id session-id})
+                     ;; If handler returns a channel, await it
+                     result (if (channel? result)
+                              (<!! result)
+                              result)]
+                 {:result result})
+               (catch Exception e
+                 (log/error "Hook handler error for session " session-id ", hook " hook-type ": " (ex-message e))
+                 {:result nil})))))))
+   :io))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API - functions that take CopilotSession handle

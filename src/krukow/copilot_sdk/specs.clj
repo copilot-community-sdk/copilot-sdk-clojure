@@ -29,12 +29,15 @@
 (s/def ::router-queue-size pos-int?)
 (s/def ::tool-timeout-ms pos-int?)
 (s/def ::env (s/map-of string? (s/nilable string?)))
+;; Authentication options (PR #237)
+(s/def ::github-token ::non-blank-string)
+(s/def ::use-logged-in-user? boolean?)
 
 (s/def ::client-options
   (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
                    ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                    ::notification-queue-size ::router-queue-size
-                   ::tool-timeout-ms ::env]))
+                   ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?]))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool definitions
@@ -148,17 +151,33 @@
 (s/def ::infinite-sessions
   (s/keys :opt-un [::enabled ::background-compaction-threshold ::buffer-exhaustion-threshold]))
 
+;; Reasoning effort support (PR #302)
+(s/def ::reasoning-effort #{"low" "medium" "high"})
+
+;; Hooks and user input handlers (PR #269)
+(s/def ::on-user-input-request fn?)
+(s/def ::on-pre-tool-use fn?)
+(s/def ::on-post-tool-use fn?)
+(s/def ::on-user-prompt-submitted fn?)
+(s/def ::on-session-start fn?)
+(s/def ::on-session-end fn?)
+(s/def ::on-error-occurred fn?)
+(s/def ::hooks
+  (s/keys :opt-un [::on-pre-tool-use ::on-post-tool-use ::on-user-prompt-submitted
+                   ::on-session-start ::on-session-end ::on-error-occurred]))
+
 (s/def ::session-config
   (s/keys :opt-un [::session-id ::model ::tools ::system-message
                    ::available-tools ::excluded-tools ::provider
                    ::on-permission-request ::streaming? ::mcp-servers
                    ::custom-agents ::config-dir ::skill-directories
-                   ::disabled-skills ::large-output ::infinite-sessions]))
+                   ::disabled-skills ::large-output ::infinite-sessions
+                   ::reasoning-effort ::on-user-input-request ::hooks]))
 
 (s/def ::resume-session-config
   (s/keys :opt-un [::tools ::provider ::streaming? ::on-permission-request
                    ::mcp-servers ::custom-agents ::skill-directories
-                   ::disabled-skills]))
+                   ::disabled-skills ::reasoning-effort ::on-user-input-request ::hooks]))
 
 ;; -----------------------------------------------------------------------------
 ;; Message options

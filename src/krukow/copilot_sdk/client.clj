@@ -73,7 +73,8 @@
 ;;  :router-ch nil or channel
 ;;  :stopping? false
 ;;  :restarting? false
-;;  :force-stopping? false}
+;;  :force-stopping? false
+;;  :models-cache nil|promise|vector (list-models cache)}
 
 (defn- initial-state
   "Create initial client state."
@@ -92,7 +93,8 @@
    :router-running? false
    :stopping? false
    :restarting? false
-   :force-stopping? false})
+   :force-stopping? false
+   :models-cache nil})       ; nil, promise, or vector of models (cleared on stop)
 
 (defn client
   "Create a new CopilotClient.
@@ -110,7 +112,9 @@
     - :notification-queue-size - Max queued protocol notifications (default: 4096)
     - :router-queue-size - Max queued non-session notifications (default: 4096)
     - :tool-timeout-ms - Timeout for tool calls that return a channel (default: 120000)
-    - :env           - Environment variables map"
+    - :env           - Environment variables map
+    - :github-token  - GitHub token for authentication (sets COPILOT_SDK_AUTH_TOKEN env var)
+    - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)"
   ([]
    (client {}))
   ([opts]
@@ -118,6 +122,12 @@
      (throw (ex-info "cli-url is mutually exclusive with use-stdio?" opts)))
    (when (and (:cli-url opts) (:cli-path opts))
      (throw (ex-info "cli-url is mutually exclusive with cli-path" opts)))
+   ;; Validation: github-token and use-logged-in-user? cannot be used with cli-url
+   (when (and (:cli-url opts) (or (:github-token opts) (some? (:use-logged-in-user? opts))))
+     (throw (ex-info "github-token and use-logged-in-user? cannot be used with cli-url (external server manages its own auth)"
+                     {:cli-url (:cli-url opts)
+                      :github-token (when (:github-token opts) "***")
+                      :use-logged-in-user? (:use-logged-in-user? opts)})))
    (when-not (s/valid? ::specs/client-options opts)
      (throw (ex-info "Invalid client options"
                      {:options opts
@@ -132,7 +142,11 @@
      (when (<= timeout 0)
        (throw (ex-info "tool-timeout-ms must be > 0" {:tool-timeout-ms timeout}))))
 
-   (let [merged (merge (default-options) opts)
+   (let [;; Default use-logged-in-user? to false when github-token is provided, otherwise true
+         opts-with-defaults (cond-> opts
+                              (and (:github-token opts) (nil? (:use-logged-in-user? opts)))
+                              (assoc :use-logged-in-user? false))
+         merged (merge (default-options) opts-with-defaults)
          external? (boolean (:cli-url opts))
          {:keys [host port]} (when (:cli-url opts)
                                (parse-cli-url (:cli-url opts)))
@@ -258,7 +272,7 @@
             (swap! (:state client) assoc :stopping? false)))))))
 
 (defn- setup-request-handler!
-  "Set up handler for incoming requests (tool calls, permission requests)."
+  "Set up handler for incoming requests (tool calls, permission requests, hooks, user input)."
   [client]
   (let [{:keys [connection-io]} @(:state client)]
     (proto/set-request-handler! connection-io
@@ -278,6 +292,24 @@
                                           (let [result (<! (session/handle-permission-request! client session-id permission-request))]
                                             (log/debug "Permission response for session " session-id ": " result)
                                             {:result result})))
+
+                                      ;; User input request (PR #269)
+                                      "userInput.request"
+                                      (let [{:keys [session-id question choices allow-freeform]} params]
+                                        (log/debug "User input request for session " session-id ": " question)
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-user-input-request! client session-id
+                                                                                  {:question question
+                                                                                   :choices choices
+                                                                                   :allow-freeform allow-freeform}))))
+
+                                      ;; Hooks invocation (PR #269)
+                                      "hooks.invoke"
+                                      (let [{:keys [session-id hook-type input]} params]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:result nil}
+                                          (<! (session/handle-hooks-invoke! client session-id hook-type input))))
 
                                       {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
 
@@ -425,7 +457,7 @@
                    (ex-info "Failed to kill CLI process" {} e))))
         (swap! (:state client) assoc :process nil))
 
-      (swap! (:state client) assoc :status :disconnected :actual-port nil)
+      (swap! (:state client) assoc :status :disconnected :actual-port nil :models-cache nil) ; reset list-models cache
 
       (log/info "Copilot client stopped")
       @errors)))
@@ -474,7 +506,8 @@
           :router-queue nil
           :router-thread nil
           :router-running? false
-          :force-stopping? false})
+          :force-stopping? false
+          :models-cache nil}) ; reset list-models cache
   nil)
 
 (defn- ensure-connected!
@@ -521,35 +554,80 @@
      :login (:login result)
      :status-message (:status-message result)}))
 
+(defn- parse-model-info
+  "Parse a model info map from wire format to Clojure format."
+  [m]
+  (let [base {:id (:id m)
+              :name (:name m)
+              :vendor (:vendor m)
+              :family (:family m)
+              :version (:version m)
+              :max-input-tokens (:max-input-tokens m)
+              :max-output-tokens (:max-output-tokens m)
+              :preview? (:preview m)}
+        optional (merge
+                  (select-keys m [:default-temperature
+                                  :model-picker-priority
+                                  :default-reasoning-effort])
+                  (when (contains? m :model-policy)
+                    {:model-policy (keyword (:model-policy m))})
+                  (when (contains? m :supported-reasoning-efforts)
+                    {:supported-reasoning-efforts (vec (:supported-reasoning-efforts m))})
+                  (when (contains? m :vision-limits)
+                    {:vision-limits (select-keys (:vision-limits m)
+                                                 [:supported-media-types
+                                                  :max-prompt-images
+                                                  :max-prompt-image-size])})
+                  (when (contains? (get-in m [:capabilities :supports] {}) :reasoning-effort)
+                    {:supports-reasoning-effort (get-in m [:capabilities :supports :reasoning-effort])}))]
+    (merge base optional)))
+
+(defn- fetch-models!
+  "Fetch models from the server (no caching)."
+  [client]
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "models.list" {})
+        models (:models result)]
+    (mapv parse-model-info models)))
+
 (defn list-models
   "List available models with their metadata.
+   Results are cached per client connection to prevent rate limiting under concurrency.
+   Cache is cleared on stop!/force-stop!.
    Requires authentication.
    Returns a vector of model info maps with keys:
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
    :preview? :default-temperature :model-picker-priority :model-policy
-   :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size}"
+   :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size}
+   :supports-reasoning-effort :supported-reasoning-efforts :default-reasoning-effort"
   [client]
   (ensure-connected! client)
-  (let [{:keys [connection-io]} @(:state client)
-        result (proto/send-request! connection-io "models.list" {})
-        models (:models result)]
-    (mapv (fn [m]
-            (cond-> {:id (:id m)
-                     :name (:name m)
-                     :vendor (:vendor m)
-                     :family (:family m)
-                     :version (:version m)
-                     :max-input-tokens (:max-input-tokens m)
-                     :max-output-tokens (:max-output-tokens m)
-                     :preview? (:preview m)}
-              (:default-temperature m) (assoc :default-temperature (:default-temperature m))
-              (:model-picker-priority m) (assoc :model-picker-priority (:model-picker-priority m))
-              (:model-policy m) (assoc :model-policy (keyword (:model-policy m)))
-              (:vision-limits m) (assoc :vision-limits
-                                        {:supported-media-types (get-in m [:vision-limits :supported-media-types])
-                                         :max-prompt-images (get-in m [:vision-limits :max-prompt-images])
-                                         :max-prompt-image-size (get-in m [:vision-limits :max-prompt-image-size])})))
-          models)))
+  (let [p (promise)
+        entry (swap! (:state client) update :models-cache #(or % p))
+        cached (:models-cache entry)]
+    (cond
+      ;; Already cached result (immutable, no need to copy)
+      (vector? cached)
+      cached
+
+      ;; We won the race and must fetch
+      (identical? cached p)
+      (try
+        (let [models (fetch-models! client)]
+          (deliver p models)
+          (swap! (:state client) assoc :models-cache models)
+          models)
+        (catch Exception e
+          (deliver p e)
+          (swap! (:state client) assoc :models-cache nil)
+          (throw e)))
+
+      ;; Another thread is fetching, wait on promise
+      :else
+      (let [result @cached]
+        (if (instance? Exception result)
+          (throw result)
+          result)))))
 
 (defn create-session
   "Create a new conversation session.
@@ -574,6 +652,11 @@
                            {:enabled (default true)
                             :background-compaction-threshold (0.0-1.0, default 0.80)
                             :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
+   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", or \"high\" (PR #302)
+   - :on-user-input-request - Handler for ask_user requests (PR #269)
+   - :hooks              - Lifecycle hooks map (PR #269):
+                           {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
+                            :on-session-start, :on-session-end, :on-error-occurred}
    
    Returns a CopilotSession."
   ([client]
@@ -628,7 +711,13 @@
                   (:skill-directories config) (assoc :skill-directories (:skill-directories config))
                   (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
                   (:large-output config) (assoc :large-output (:large-output config))
-                  wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions))
+                  wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
+                  ;; Reasoning effort (PR #302)
+                  (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+                  ;; User input handler (PR #269)
+                  (:on-user-input-request config) (assoc :request-user-input true)
+                  ;; Hooks (PR #269) - presence of hooks map enables hooks
+                  (:hooks config) (assoc :hooks true))
          result (proto/send-request! connection-io "session.create" params)
          session-id (:session-id result)
          workspace-path (:workspace-path result)
@@ -636,6 +725,8 @@
          session (session/create-session client session-id
                                          {:tools (:tools config)
                                           :on-permission-request (:on-permission-request config)
+                                          :on-user-input-request (:on-user-input-request config)
+                                          :hooks (:hooks config)
                                           :workspace-path workspace-path})]
       (log/info "Session created: " session-id)
       session)))
@@ -652,6 +743,9 @@
    - :custom-agents
    - :skill-directories
    - :disabled-skills
+   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", or \"high\" (PR #302)
+   - :on-user-input-request - Handler for ask_user requests (PR #269)
+   - :hooks              - Lifecycle hooks map (PR #269)
    
    Returns a CopilotSession."
   ([client session-id]
@@ -685,7 +779,13 @@
                   wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
                   wire-custom-agents (assoc :custom-agents wire-custom-agents)
                   (:skill-directories config) (assoc :skill-directories (:skill-directories config))
-                  (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config)))
+                  (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
+                  ;; Reasoning effort (PR #302)
+                  (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+                  ;; User input handler (PR #269)
+                  (:on-user-input-request config) (assoc :request-user-input true)
+                  ;; Hooks (PR #269)
+                  (:hooks config) (assoc :hooks true))
          result (proto/send-request! connection-io "session.resume" params)
          resumed-id (:session-id result)
          workspace-path (:workspace-path result)
@@ -693,6 +793,8 @@
          session (session/create-session client resumed-id
                                          {:tools (:tools config)
                                           :on-permission-request (:on-permission-request config)
+                                          :on-user-input-request (:on-user-input-request config)
+                                          :hooks (:hooks config)
                                           :workspace-path workspace-path})]
       session)))
 
