@@ -100,6 +100,24 @@
     :copilot/tool.execution_progress
     :copilot/tool.execution_complete})
 
+(defn evt
+  "Convert an unqualified event keyword to a namespace-qualified event keyword.
+   
+   Example:
+   ```clojure
+   (evt :session.info)      ;=> :copilot/session.info
+   (evt :assistant.message) ;=> :copilot/assistant.message
+   ```
+   
+   Throws IllegalArgumentException if the keyword is not a valid event type."
+  [k]
+  (let [qualified (keyword "copilot" (name k))]
+    (if (event-types qualified)
+      qualified
+      (throw (IllegalArgumentException.
+              (str "Unknown event type: " k ". Valid events: "
+                   (pr-str (sort (map #(keyword (name %)) event-types)))))))))
+
 ;; =============================================================================
 ;; Client API
 ;; =============================================================================
