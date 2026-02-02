@@ -11,6 +11,9 @@ Key features:
 - **Custom tools** — Let the LLM call back into your application
 - **Streaming** — Incremental response deltas via `:assistant.message_delta` events
 - **Multi-session support** — Run multiple independent conversations concurrently
+- **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
+- **User input handling** — Handle `ask_user` requests from the agent
+- **Authentication options** — GitHub token auth or logged-in user
 - **Java interop** — A Java-friendly API for JVM applications (requires Clojure runtime as dependency)
 
 See [`examples/`](./examples/) for working code demonstrating common patterns.
@@ -23,10 +26,10 @@ Add to your `deps.edn`:
 
 ```clojure
 ;; From Clojars
-net.clojars.krukow/copilot-sdk {:mvn/version "0.2.0"}
+net.clojars.krukow/copilot-sdk {:mvn/version "0.2.1"}
 
 ;; Or from Maven Central
-io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.2.0"}
+io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.2.1"}
 
 ;; Or git dependency
 io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
