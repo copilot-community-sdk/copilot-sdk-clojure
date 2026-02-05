@@ -240,7 +240,14 @@ Create a client and session together, ensuring both are cleaned up on exit.
 (copilot/resume-session client session-id config)
 ```
 
-Resume an existing session by ID.
+Resume an existing session by ID. The `config` map accepts the same options as `create-session` (except `:session-id`), allowing you to change model, tools, system message, and other settings on resume.
+
+```clojure
+;; Resume with a different model and reasoning effort
+(copilot/resume-session client "session-123"
+  {:model "claude-sonnet-4"
+   :reasoning-effort "high"})
+```
 
 #### `ping`
 

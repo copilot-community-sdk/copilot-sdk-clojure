@@ -763,18 +763,24 @@
 (defn resume-session
   "Resume an existing session by ID.
    
-   Config options (same as create-session except session-id/model):
-   - :tools
-   - :provider
-   - :streaming?
-   - :on-permission-request
-   - :mcp-servers
-   - :custom-agents
-   - :skill-directories
-   - :disabled-skills
-   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", or \"high\" (PR #302)
-   - :on-user-input-request - Handler for ask_user requests (PR #269)
-   - :hooks              - Lifecycle hooks map (PR #269)
+   Config options (parity with create-session, upstream PR #376):
+   - :model              - Change the model for the resumed session
+   - :tools              - Tools exposed to the CLI server
+   - :system-message     - System message configuration {:mode :content}
+   - :available-tools    - List of tool names to allow
+   - :excluded-tools     - List of tool names to disable
+   - :provider           - Custom provider configuration (BYOK)
+   - :streaming?         - Enable streaming responses
+   - :on-permission-request - Permission handler
+   - :mcp-servers        - MCP server configurations
+   - :custom-agents      - Custom agent configurations
+   - :config-dir         - Override configuration directory
+   - :skill-directories  - Directories to load skills from
+   - :disabled-skills    - Skills to disable
+   - :infinite-sessions  - Infinite session configuration
+   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", or \"high\"
+   - :on-user-input-request - Handler for ask_user requests
+   - :hooks              - Lifecycle hooks map
    
    Returns a CopilotSession."
   ([client session-id]
@@ -794,31 +800,42 @@
                                :description (:tool-description t)
                                :parameters (:tool-parameters t)})
                             (:tools config)))
+         wire-sys-msg (when-let [sm (:system-message config)]
+                        (cond
+                          (= :replace (:mode sm))
+                          {:mode "replace" :content (:content sm)}
+
+                          :else
+                          {:mode "append" :content (:content sm)}))
          wire-provider (when-let [provider (:provider config)]
                          (util/clj->wire provider))
          wire-mcp-servers (when-let [servers (:mcp-servers config)]
                             (into {} (map (fn [[k v]] [k (util/clj->wire v)])) servers))
          wire-custom-agents (when-let [agents (:custom-agents config)]
                               (mapv util/clj->wire agents))
+         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
+                                  (util/clj->wire is))
          params (cond-> {:session-id session-id}
+                  (:model config) (assoc :model (:model config))
                   wire-tools (assoc :tools wire-tools)
+                  wire-sys-msg (assoc :system-message wire-sys-msg)
+                  (:available-tools config) (assoc :available-tools (:available-tools config))
+                  (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
                   wire-provider (assoc :provider wire-provider)
                   (:on-permission-request config) (assoc :request-permission true)
                   (:streaming? config) (assoc :streaming (:streaming? config))
                   wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
                   wire-custom-agents (assoc :custom-agents wire-custom-agents)
+                  (:config-dir config) (assoc :config-dir (:config-dir config))
                   (:skill-directories config) (assoc :skill-directories (:skill-directories config))
                   (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
-                  ;; Reasoning effort (PR #302)
+                  wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
                   (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
-                  ;; User input handler (PR #269)
                   (:on-user-input-request config) (assoc :request-user-input true)
-                  ;; Hooks (PR #269)
                   (:hooks config) (assoc :hooks true))
          result (proto/send-request! connection-io "session.resume" params)
          resumed-id (:session-id result)
          workspace-path (:workspace-path result)
-         ;; Session state is stored by session/create-session in client's atom
          session (session/create-session client resumed-id
                                          {:tools (:tools config)
                                           :on-permission-request (:on-permission-request config)

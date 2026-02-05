@@ -398,10 +398,15 @@
 
 (defn resume-session
   "Resume an existing session by ID.
+   Accepts the same config options as `create-session` (except `:session-id`).
 
    Example:
    ```clojure
    (def session (copilot/resume-session client \"session-123\"))
+   ;; Resume with different model
+   (def session (copilot/resume-session client \"session-123\"
+                  {:model \"claude-sonnet-4\"
+                   :reasoning-effort \"high\"}))
    ```"
   ([client session-id]
    (client/resume-session client session-id))

@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added
+- Resume session config parity with create-session (upstream PR #376):
+  - `resume-session` now accepts `:model`, `:system-message`, `:available-tools`,
+    `:excluded-tools`, `:config-dir`, and `:infinite-sessions` options
 - New metadata APIs (upstream PR #77):
   - `get-status` - Get CLI version and protocol information
   - `get-auth-status` - Get current authentication status

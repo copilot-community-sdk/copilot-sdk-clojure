@@ -154,6 +154,8 @@ Manages connections and sessions.
 | `getState()` | String | `"disconnected"`, `"connecting"`, `"connected"`, `"error"` |
 | `getOptions()` | Map | Get the options used to create this client |
 | `createSession(opts)` | ICopilotSession | Create a new session |
+| `resumeSession(sessionId)` | ICopilotSession | Resume a session by ID |
+| `resumeSession(sessionId, opts)` | ICopilotSession | Resume a session with options |
 | `ping()` | Map | Ping server |
 | `getStatus()` | Map | CLI version and protocol info |
 | `getAuthStatus()` | Map | Authentication status |
@@ -304,6 +306,23 @@ sb.infiniteSessions(Map.of(
     "buffer-exhaustion-threshold", 0.95
 ));
 ```
+
+### Resuming Sessions
+
+Resume a previously created session by its ID. When resuming, you can optionally reconfigure settings like the model, system message, tools, and more using the same `SessionOptionsBuilder`.
+
+```java
+// Simple resume
+ICopilotSession session = client.resumeSession("session-123");
+
+// Resume with different model and reasoning effort
+SessionOptionsBuilder rb = new SessionOptionsBuilder();
+rb.model("claude-sonnet-4");
+rb.systemMessage("append", "Focus on concise answers.");
+ICopilotSession session = client.resumeSession("session-123", (SessionOptions) rb.build());
+```
+
+All `SessionOptionsBuilder` options (except `sessionId`) are supported when resuming.
 
 ## Async Patterns
 
@@ -514,6 +533,7 @@ See [`examples/java/`](./examples/java/) for complete working examples:
 | `ParallelQueriesExample` | Concurrent queries |
 | `EventHandlingExample` | Event processing patterns |
 | `InteractiveChatExample` | Interactive chat |
+| `ResumeSessionExample` | Session persistence and resume |
 
 Run examples:
 

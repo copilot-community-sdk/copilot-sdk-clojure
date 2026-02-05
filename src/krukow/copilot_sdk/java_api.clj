@@ -41,6 +41,8 @@
            [getState [] String]
            [getOptions [] java.util.Map]
            [createSession [krukow.copilot_sdk.SessionOptions] krukow.copilot_sdk.ICopilotSession]
+           [resumeSession [String] krukow.copilot_sdk.ICopilotSession]
+           [resumeSession [String krukow.copilot_sdk.SessionOptions] krukow.copilot_sdk.ICopilotSession]
            [ping [] java.util.Map]
            [getStatus [] java.util.Map]
            [getAuthStatus [] java.util.Map]
@@ -486,6 +488,9 @@
     (getState [_] (name (copilot/state clj-client)))
     (getOptions [_] (walk/stringify-keys (copilot/client-options clj-client)))
     (createSession [_ opts] (wrap-session (copilot/create-session clj-client (or (convert-session-opts opts) {}))))
+    (resumeSession [this session-id] (.resumeSession this session-id nil))
+    (resumeSession [_ session-id opts]
+      (wrap-session (copilot/resume-session clj-client session-id (or (convert-session-opts opts) {}))))
     (ping [_] (walk/stringify-keys (copilot/ping clj-client)))
     (getStatus [_] (walk/stringify-keys (copilot/get-status clj-client)))
     (getAuthStatus [_] (walk/stringify-keys (copilot/get-auth-status clj-client)))

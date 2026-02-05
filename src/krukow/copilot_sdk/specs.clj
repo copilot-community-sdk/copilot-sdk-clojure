@@ -208,15 +208,19 @@
    session-config-keys))
 
 (def ^:private resume-session-config-keys
-  #{:tools :provider :streaming? :on-permission-request
-    :mcp-servers :custom-agents :skill-directories
-    :disabled-skills :reasoning-effort :on-user-input-request :hooks})
+  #{:model :tools :system-message :available-tools :excluded-tools
+    :provider :streaming? :on-permission-request
+    :mcp-servers :custom-agents :config-dir :skill-directories
+    :disabled-skills :infinite-sessions :reasoning-effort
+    :on-user-input-request :hooks})
 
 (s/def ::resume-session-config
   (closed-keys
-   (s/keys :opt-un [::tools ::provider ::streaming? ::on-permission-request
-                    ::mcp-servers ::custom-agents ::skill-directories
-                    ::disabled-skills ::reasoning-effort ::on-user-input-request ::hooks])
+   (s/keys :opt-un [::model ::tools ::system-message ::available-tools ::excluded-tools
+                    ::provider ::streaming? ::on-permission-request
+                    ::mcp-servers ::custom-agents ::config-dir ::skill-directories
+                    ::disabled-skills ::infinite-sessions ::reasoning-effort
+                    ::on-user-input-request ::hooks])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
