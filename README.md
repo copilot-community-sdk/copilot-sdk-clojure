@@ -14,11 +14,11 @@ Key features:
 - **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
 - **User input handling** — Handle `ask_user` requests from the agent
 - **Authentication options** — GitHub token auth or logged-in user
-- **Java interop** — A Java-friendly API for JVM applications (requires Clojure runtime as dependency)
+- **Authentication options** — GitHub token auth or logged-in user
 
 See [`examples/`](./examples/) for working code demonstrating common patterns.
 
-**Java users:** See [README-java.md](./README-java.md) for the Java API documentation.
+**Java/JVM users:** See [copilot-sdk-java](https://github.com/copilot-community-sdk/copilot-sdk-java) for a native Java SDK.
 
 ## Installation
 

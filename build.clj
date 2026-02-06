@@ -9,7 +9,6 @@
 (def lib 'io.github.krukow/copilot-sdk-clojure)
 (def version "0.1.22.0")
 (def class-dir "target/classes")
-(def aot-namespaces ['krukow.copilot-sdk.java-api])
 
 (defn- get-developer-email []
   (or (System/getenv "DEVELOPER_EMAIL")
@@ -18,7 +17,7 @@
 
 (defn- pom-template [version]
   (let [email (get-developer-email)]
-    [[:description "Clojure SDK for GitHub Copilot CLI with Java interop support."]
+    [[:description "Clojure SDK for GitHub Copilot CLI."]
      [:url "https://github.com/krukow/copilot-sdk-clojure"]
      [:licenses
       [:license
@@ -46,7 +45,7 @@
          :src-dirs ["src"]
          :pom-data (pom-template version)))
 
-(defn jar "Build source-only JAR." [opts]
+(defn jar "Build JAR." [opts]
   (b/delete {:path "target"})
   (let [opts (jar-opts opts)]
     (println "\nWriting pom.xml...")
@@ -57,47 +56,10 @@
     (b/jar opts))
   opts)
 
-(defn aot-jar "Build AOT-compiled JAR for Java interop." [opts]
-  (b/delete {:path "target"})
-  (let [opts (jar-opts opts)
-        basis (:basis opts)]
-    (println "\nWriting pom.xml...")
-    (b/write-pom opts)
-    (println "Copying source...")
-    (b/copy-dir {:src-dirs ["resources" "src"] :target-dir class-dir})
-    (println "AOT compiling:" aot-namespaces)
-    (b/compile-clj {:basis basis
-                    :ns-compile aot-namespaces
-                    :class-dir class-dir
-                    :compiler-options {:direct-linking true}})
-    (println "Building JAR..." (:jar-file opts))
-    (b/jar opts))
-  opts)
-
-(defn install "Install AOT-compiled JAR to local Maven repo." [opts]
-  (aot-jar opts)
+(defn install "Install JAR to local Maven repo." [opts]
+  (jar opts)
   (b/install (jar-opts opts))
   opts)
-
-(defn compile-java-api
-  "AOT compile the Java API for REPL development.
-   After running this, start your REPL with the :dev alias,
-   then you can require krukow.copilot-sdk.java-api.
-
-   Usage: clj -T:build compile-java-api
-          clj -A:dev  # start REPL with AOT classes
-
-   The :dev alias in deps.edn already includes target/classes."
-  [_opts]
-  (let [basis (b/create-basis {})]
-    (println "AOT compiling Java API for REPL development...")
-    (b/compile-clj {:basis basis
-                    :ns-compile aot-namespaces
-                    :class-dir class-dir
-                    :compiler-options {:direct-linking true}})
-    (println "\nDone. To use in REPL:")
-    (println "  1. Start REPL with :dev alias: clj -A:dev")
-    (println "  2. (require 'krukow.copilot-sdk.java-api)")))
 
 ;;; Maven Central publishing
 
@@ -130,7 +92,7 @@
   [opts]
   (let [v (or (:version opts) version)]
     (when (:version opts) (alter-var-root #'version (constantly v)))
-    (aot-jar opts)
+    (jar opts)
     (let [artifact-dir (str "target/bundle/" (str/replace (namespace lib) "." "/") "/" (name lib) "/" v)
           pom-file (str class-dir "/META-INF/maven/" (namespace lib) "/" (name lib) "/pom.xml")
           files {:jar (format "copilot-sdk-clojure-%s.jar" v)
@@ -191,7 +153,7 @@
   [opts]
   (let [{:keys [username password]} (get-central-credentials)
         v (or (:version opts) version)]
-    (aot-jar opts)
+    (jar opts)
     (let [base-url "https://central.sonatype.com/repository/maven-snapshots"
           auth (str username ":" password)
           jar-file (format "target/%s-%s.jar" lib v)
@@ -254,20 +216,7 @@
                     (str/replace #"\{:mvn/version \"[^\"]+\"\}"
                                  (str "{:mvn/version \"" new-version "\"}")))]
     (spit "README.md" updated))
-  ;; README-java.md - only update copilot-sdk artifact versions, not dependencies
-  (let [readme-java (slurp "README-java.md")
-        ;; Match version tags that follow copilot-sdk-clojure or copilot-sdk artifact lines
-        updated (-> readme-java
-                    (str/replace #"(artifactId>copilot-sdk(?:-clojure)?</artifactId>\s*<version>)[^<]+(</version>)"
-                                 (str "$1" new-version "$2")))]
-    (spit "README-java.md" updated))
-  ;; examples/java/pom.xml
-  (let [pom (slurp "examples/java/pom.xml")
-        updated (str/replace pom
-                             #"<copilot-sdk\.version>[^<]+</copilot-sdk\.version>"
-                             (str "<copilot-sdk.version>" new-version "</copilot-sdk.version>"))]
-    (spit "examples/java/pom.xml" updated))
-  (println "Updated: build.clj, README.md, README-java.md, examples/java/pom.xml"))
+  (println "Updated: build.clj, README.md"))
 
 (defn- parse-version
   "Parse a 4-segment version string into [upstream-major upstream-minor upstream-patch clj-patch]."

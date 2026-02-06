@@ -44,8 +44,7 @@ clj -T:build bump-version :snapshot true
 
 | Command | Description |
 |---------|-------------|
-| `clj -T:build jar` | Source-only JAR |
-| `clj -T:build aot-jar` | AOT-compiled JAR (for Java) |
+| `clj -T:build jar` | Build JAR |
 | `clj -T:build install` | Install to local Maven repo |
 | `clj -T:build deploy-central` | Deploy to Maven Central |
 | `clj -T:build bundle` | Create bundle zip (manual upload) |
@@ -97,9 +96,5 @@ Publishes to `io.github.krukow/copilot-sdk-clojure`.
 ## Local Testing
 
 ```bash
-clj -T:build aot-jar
 clj -T:build install
-
-cd examples/java
-mvn compile exec:java
 ```

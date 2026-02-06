@@ -7,11 +7,14 @@ All notable changes to this project will be documented in this file. This change
 - **BREAKING**: Version scheme changed to 4-segment format `UPSTREAM.CLJ_PATCH` (e.g., `0.1.22.0`)
   to track upstream copilot-sdk releases. See PUBLISHING.md for details.
 - New build tasks: `sync-version` (align to upstream), `bump-version` (increment clj-patch)
-- `bump-version` and `sync-version` now also update `README-java.md`
 - Replaced `cheshire/cheshire` (Clojars) with `org.clojure/data.json` (Maven Central)
   for JSON processing — eliminates Clojars and Jackson transitive dependencies
 - **Deprecated** Clojars publishing (`net.clojars.krukow/copilot-sdk`). Use Maven Central
   (`io.github.krukow/copilot-sdk-clojure`) going forward.
+
+### Removed
+- Java API (`java_api.clj`), Java examples, and AOT compilation.
+  For Java/JVM usage, see [copilot-sdk-java](https://github.com/copilot-community-sdk/copilot-sdk-java).
 
 ### Added
 - Resume session config parity with create-session (upstream PR #376):

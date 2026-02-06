@@ -59,7 +59,7 @@ Examples are part of the test suite but run separately:
 ./run-all-examples.sh
 ```
 
-This runs all Clojure examples. Java examples are run via Maven (see below).
+This runs all Clojure examples.
 
 In addition, all snippets and API descriptions in documentation *.md files
 should be checked for validity.
@@ -68,9 +68,9 @@ should be checked for validity.
 
 ```bash
 # Build JAR
-clj -T:build aot-jar
+clj -T:build jar
 
-# Install to local Maven repo (needed for Java examples)
+# Install to local Maven repo
 clj -T:build install
 ```
 
@@ -80,42 +80,11 @@ This project uses 4-segment versioning: `UPSTREAM.CLJ_PATCH` (e.g., `0.1.22.0`).
 First 3 segments track the upstream copilot-sdk release, 4th is Clojure-specific.
 
 ```bash
-# Sync to new upstream release (updates build.clj, README.md, README-java.md, examples/java/pom.xml)
+# Sync to new upstream release (updates build.clj, README.md)
 clj -T:build sync-version :upstream '"0.1.23"'
 
 # Bump Clojure patch: 0.1.22.0 -> 0.1.22.1
 clj -T:build bump-version
-```
-
-## Java API
-
-We maintain a Java interface for integration in Java projects.
-
-### Key Files
-
-- `src/krukow/copilot_sdk/java_api.clj` - Java-native classes and interfaces (AOT compiled)
-- `examples/java/` - Java usage examples
-- `examples/java/pom.xml` - Maven config (version must match build.clj)
-
-### When Extending the API
-
-When adding new features or changing the public API:
-
-1. Update `java_api.clj` with corresponding Java-friendly interfaces
-2. Update Java examples to demonstrate new functionality
-3. Ensure `examples/java/pom.xml` version matches `build.clj`
-
-### Testing Java Integration
-
-```bash
-# Install JAR locally first
-clj -T:build aot-jar
-
-# Install JAR locally first
-clj -T:build install
-
-# Run Java examples
-cd examples/java && mvn compile && ./run-all-examples.sh
 ```
 
 ## Commit and Deploy Guidelines
@@ -124,14 +93,12 @@ cd examples/java && mvn compile && ./run-all-examples.sh
 
 1. Run full test suite: `COPILOT_E2E_TESTS=true bb test`
 2. Run all examples: `./run-all-examples.sh`
-3. Run Java examples: `cd examples/java && mvn compile exec:java`
-4. **Always ask for my review before committing** - do not commit autonomously
+3. **Always ask for my review before committing** - do not commit autonomously
 
 ### Deployment
 
 - **Do NOT deploy without explicit permission** - the maintainer will deploy
 - You may bump version numbers when needed (`clj -T:build bump-version`)
-- After version bump, update docs and `examples/java/pom.xml` if not automatic
 
 ## Code Quality Expectations
 
@@ -165,16 +132,7 @@ src/krukow/copilot_sdk/
 ├── helpers.clj      # Convenience functions (query, query-seq!, query-chan, etc.)
 ├── specs.clj        # clojure.spec definitions
 ├── instrument.clj   # Function specs and instrumentation
-├── java_api.clj     # Java interop classes
 └── util.clj         # Internal utilities
-
-test/krukow/copilot_sdk/
-├── *_test.clj       # Unit tests
-└── integration_test.clj  # Integration and E2E tests
-
-examples/
-├── *.clj            # Clojure examples
-└── java/            # Java examples
 ```
 
 ## Documentation
@@ -184,5 +142,4 @@ All these must be updated as appropriate when making changes:
 - `README.md` - User-facing documentation and quick start
 - `doc/API.md` - Detailed API reference - read this to understand the current API design
 - `CHANGELOG.md` - Version history and changes
-- `README-java.md` - Java-specific documentation
 - `AGENTS.md` - update this file when significant changes happen (e.g.Project Structure)
