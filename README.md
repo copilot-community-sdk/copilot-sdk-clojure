@@ -25,10 +25,7 @@ See [`examples/`](./examples/) for working code demonstrating common patterns.
 Add to your `deps.edn`:
 
 ```clojure
-;; From Clojars
-net.clojars.krukow/copilot-sdk {:mvn/version "0.1.22.0"}
-
-;; Or from Maven Central
+;; From Maven Central
 io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.1.22.0"}
 
 ;; Or git dependency
@@ -247,21 +244,9 @@ bb install
 
 API documentation is generated to `doc/api/`.
 
-### Publishing to Clojars
+### Publishing to Maven Central
 
-Set credentials:
-
-```bash
-export CLOJARS_USERNAME=your-username
-export CLOJARS_PASSWORD=your-token
-```
-
-Then publish:
-
-```bash
-bb jar
-bb deploy:clojars
-```
+See [PUBLISHING.md](./PUBLISHING.md) for details.
 
 ## Testing
 

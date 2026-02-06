@@ -510,17 +510,6 @@ Once published to Maven Central, add to your `pom.xml`:
 </dependency>
 ```
 
-You'll also need the Clojars repository:
-
-```xml
-<repositories>
-    <repository>
-        <id>clojars</id>
-        <url>https://repo.clojars.org</url>
-    </repository>
-</repositories>
-```
-
 #### Option 2: Local Build
 
 ```bash

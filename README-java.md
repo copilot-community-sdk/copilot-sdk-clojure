@@ -37,23 +37,6 @@ For the latest development version, use snapshots from the Maven Central snapsho
 </repositories>
 ```
 
-### Clojars (alternative)
-
-```xml
-<dependency>
-    <groupId>net.clojars.krukow</groupId>
-    <artifactId>copilot-sdk</artifactId>
-    <version>0.1.22.0</version>
-</dependency>
-
-<repositories>
-    <repository>
-        <id>clojars</id>
-        <url>https://repo.clojars.org</url>
-    </repository>
-</repositories>
-```
-
 ### Required Dependencies
 
 ```xml

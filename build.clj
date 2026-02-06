@@ -101,15 +101,32 @@
     (println "  1. Start REPL with :dev alias: clj -A:dev")
     (println "  2. (require 'krukow.copilot-sdk.java-api)")))
 
-(defn deploy "Deploy JAR to Clojars (net.clojars.krukow/copilot-sdk)." [opts]
-  (aot-jar opts)
-  (let [jar-file (format "target/%s-%s.jar" lib version)
-        pom-path (b/pom-path {:lib clojars-lib :class-dir class-dir})]
-    ;; Rewrite pom.xml with Clojars coordinates
-    (b/write-pom (assoc (jar-opts opts) :lib clojars-lib))
-    (dd/deploy {:installer :remote
-                :artifact (b/resolve-path jar-file)
-                :pom-file pom-path}))
+(defn deploy-clojars-deprecated
+  "One-off: deploy a deprecation release to Clojars (net.clojars.krukow/copilot-sdk).
+   Publishes as version 0.2.4 (higher than last Clojars release 0.2.3) with
+   DEPRECATED description per Clojars policy.
+   Usage: clj -T:build deploy-clojars-deprecated"
+  [opts]
+  (let [dep-version "0.2.4"]
+    (aot-jar opts)
+    (let [jar-file (format "target/%s-%s.jar" lib version)
+          deprecated-pom-data
+          (let [email (get-developer-email)]
+            [[:description "DEPRECATED: Use io.github.copilot-community-sdk/copilot-sdk-clojure from Maven Central instead."]
+             [:url "https://github.com/krukow/copilot-sdk-clojure"]
+             [:licenses [:license [:name "MIT License"] [:url "https://opensource.org/licenses/MIT"]]]
+             [:developers (into [:developer [:id "krukow"] [:name "Karl Krukow"]] (when email [[:email email]]))]
+             [:scm
+              [:url "https://github.com/krukow/copilot-sdk-clojure"]
+              [:connection "scm:git:https://github.com/krukow/copilot-sdk-clojure.git"]
+              [:developerConnection "scm:git:ssh:git@github.com:krukow/copilot-sdk-clojure.git"]
+              [:tag "deprecated"]]])
+          pom-path (b/pom-path {:lib clojars-lib :class-dir class-dir})]
+      (b/write-pom (assoc (jar-opts opts) :lib clojars-lib :version dep-version :pom-data deprecated-pom-data))
+      (dd/deploy {:installer :remote
+                  :artifact (b/resolve-path jar-file)
+                  :pom-file pom-path})
+      (println "✅ Deprecated release published to Clojars as" (str clojars-lib " " dep-version))))
   opts)
 
 ;;; Maven Central publishing

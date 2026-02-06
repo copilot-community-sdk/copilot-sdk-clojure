@@ -35,8 +35,10 @@ clj -T:build bump-version :snapshot true
 
 | Repository | Group ID | Artifact ID |
 |------------|----------|-------------|
-| Maven Central | `io.github.krukow` | `copilot-sdk` |
-| Clojars | `net.clojars.krukow` | `copilot-sdk` |
+| Maven Central | `io.github.copilot-community-sdk` | `copilot-sdk-clojure` |
+
+> **Note:** The Clojars artifact `net.clojars.krukow/copilot-sdk` is deprecated.
+> Use the Maven Central coordinates above.
 
 ## Build Commands
 
@@ -45,19 +47,8 @@ clj -T:build bump-version :snapshot true
 | `clj -T:build jar` | Source-only JAR |
 | `clj -T:build aot-jar` | AOT-compiled JAR (for Java) |
 | `clj -T:build install` | Install to local Maven repo |
-| `clj -T:build deploy` | Deploy to Clojars |
 | `clj -T:build deploy-central` | Deploy to Maven Central |
 | `clj -T:build bundle` | Create bundle zip (manual upload) |
-
-## Deploy to Clojars
-
-Requires `CLOJARS_USERNAME` and `CLOJARS_PASSWORD` environment variables.
-
-```bash
-clj -T:build deploy
-```
-
-Publishes to `net.clojars.krukow/copilot-sdk`.
 
 ## Deploy to Maven Central
 

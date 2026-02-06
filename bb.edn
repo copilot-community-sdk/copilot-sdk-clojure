@@ -37,8 +37,8 @@
              :depends [ci]
              :task (clojure "-T:build" "deploy")}
 
-  deploy:clojars {:doc "Deploy the JAR to Clojars (requires CLOJARS_USERNAME/CLOJARS_PASSWORD)."
-                  :task (clojure "-T:build" "deploy")}
+  deploy:clojars-deprecated {:doc "One-off: deploy deprecation release to Clojars."
+                             :task (clojure "-T:build" "deploy-clojars-deprecated")}
 
   install {:doc "Install the JAR locally (build via ci)."
            :task (clojure "-T:build" "install")}}}

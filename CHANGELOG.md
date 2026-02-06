@@ -8,6 +8,8 @@ All notable changes to this project will be documented in this file. This change
   to track upstream copilot-sdk releases. See PUBLISHING.md for details.
 - New build tasks: `sync-version` (align to upstream), `bump-version` (increment clj-patch)
 - `bump-version` and `sync-version` now also update `README-java.md`
+- **Deprecated** Clojars publishing (`net.clojars.krukow/copilot-sdk`). Use Maven Central
+  (`io.github.copilot-community-sdk/copilot-sdk-clojure`) going forward.
 
 ### Added
 - Resume session config parity with create-session (upstream PR #376):
