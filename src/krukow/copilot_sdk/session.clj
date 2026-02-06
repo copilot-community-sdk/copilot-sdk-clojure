@@ -9,7 +9,7 @@
   (:require [clojure.core.async :as async :refer [go go-loop <! >! >!! <!! chan close! put! alts!! mult tap untap]]
             [clojure.core.async.impl.channels :as channels]
             [clojure.spec.alpha :as s]
-            [cheshire.core :as json]
+            [clojure.data.json :as json]
             [krukow.copilot-sdk.protocol :as proto]
             [krukow.copilot-sdk.logging :as log]
             [krukow.copilot-sdk.specs :as specs]
@@ -111,7 +111,7 @@
 
     ;; Any other value - JSON encode
     :else
-    {:text-result-for-llm (json/generate-string result)
+    {:text-result-for-llm (json/write-str result)
      :result-type "success"
      :tool-telemetry {}}))
 

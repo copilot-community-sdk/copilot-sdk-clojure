@@ -4,7 +4,7 @@
             [clojure.spec.alpha :as s]
             [clojure.java.io :as io]
             [clojure.string :as str]
-            [cheshire.core :as json]
+            [clojure.data.json :as json]
             [krukow.copilot-sdk.protocol :as proto]
             [krukow.copilot-sdk.process :as proc]
             [krukow.copilot-sdk.specs :as specs]

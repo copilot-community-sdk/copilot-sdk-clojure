@@ -504,9 +504,9 @@ Once published to Maven Central, add to your `pom.xml`:
     <version>1.8.741</version>
 </dependency>
 <dependency>
-    <groupId>cheshire</groupId>
-    <artifactId>cheshire</artifactId>
-    <version>6.1.0</version>
+    <groupId>org.clojure</groupId>
+    <artifactId>data.json</artifactId>
+    <version>2.5.1</version>
 </dependency>
 ```
 

@@ -1,7 +1,7 @@
 (ns krukow.copilot-sdk.mock-server
   "Mock JSON-RPC server for integration testing.
    Simulates the Copilot CLI server behavior."
-  (:require [cheshire.core :as json]
+  (:require [clojure.data.json :as json]
             [clojure.core.async :as async :refer [go go-loop <! >! chan close! put!]])
   (:import [java.io BufferedReader BufferedWriter InputStreamReader OutputStreamWriter
             PipedInputStream PipedOutputStream]
@@ -12,7 +12,7 @@
 (defn- write-message
   "Write a JSON-RPC message with Content-Length framing."
   [^BufferedWriter writer msg]
-  (let [json-str (json/generate-string msg)
+  (let [json-str (json/write-str msg)
         content-length (count (.getBytes json-str "UTF-8"))]
     (locking writer
       (.write writer (str "Content-Length: " content-length "\r\n\r\n"))
@@ -47,7 +47,7 @@
   (when-let [headers (read-headers reader)]
     (when-let [content-length (some-> (get headers "content-length") parse-long)]
       (when-let [content (read-content reader content-length)]
-        (json/parse-string content true)))))
+        (json/read-str content :key-fn keyword)))))
 
 (defrecord MockServer
            [;; Pipes for communication

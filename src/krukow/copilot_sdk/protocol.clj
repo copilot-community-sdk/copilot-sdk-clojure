@@ -10,7 +10,7 @@
    
    This design allows clean shutdown: closing NIO channels causes
    reader to throw AsynchronousCloseException and exit gracefully."
-  (:require [cheshire.core :as json]
+  (:require [clojure.data.json :as json]
             [clojure.core.async :as async :refer [go go-loop <! >! >!! <!! chan close! put!]]
             [clojure.string :as str]
             [krukow.copilot-sdk.logging :as log]
@@ -87,12 +87,12 @@
         (throw (IOException. "Missing Content-Length header")))
       (let [content-bytes (read-bytes channel content-length)
             content (String. content-bytes StandardCharsets/UTF_8)]
-        (json/parse-string content true)))))
+        (json/read-str content :key-fn keyword)))))
 
 (defn- write-message!
   "Write a JSON-RPC message to channel with Content-Length framing."
   [^WritableByteChannel channel msg]
-  (let [json-str (json/generate-string msg)
+  (let [json-str (json/write-str msg)
         content-bytes (.getBytes json-str StandardCharsets/UTF_8)
         header (str content-length-header (alength content-bytes) "\r\n\r\n")
         header-bytes (.getBytes header StandardCharsets/UTF_8)
@@ -271,7 +271,7 @@
                                               (or (contains? (:result msg) :kind)
                                                   (and (map? (:result (:result msg)))
                                                        (contains? (:result (:result msg)) :kind))))
-                                     (log/debug "Sending permission response: " (json/generate-string msg)))
+                                     (log/debug "Sending permission response: " (json/write-str msg)))
                                    (log/debug "Writing message: " (if (:id msg) (str "id=" (:id msg)) "notification"))
                                    (write-message! write-channel msg)
                                    (.flush output-stream)

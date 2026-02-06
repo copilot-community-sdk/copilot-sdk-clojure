@@ -4,7 +4,7 @@
             [krukow.copilot-sdk.protocol :as proto]
             [krukow.copilot-sdk.specs :as specs]
             [clojure.spec.alpha :as s]
-            [cheshire.core])
+            [clojure.data.json])
   (:import [java.nio ByteBuffer]
            [java.nio.channels Channels]
            [java.nio.charset StandardCharsets]
@@ -178,7 +178,7 @@
           out pipe
           write-ch (java.nio.channels.Channels/newChannel out)]
       ;; Write message using the internal write function pattern
-      (let [json-str (cheshire.core/generate-string test-msg)
+      (let [json-str (clojure.data.json/write-str test-msg)
             content-bytes (.getBytes json-str java.nio.charset.StandardCharsets/UTF_8)
             header (str "Content-Length: " (alength content-bytes) "\r\n\r\n")
             header-bytes (.getBytes header java.nio.charset.StandardCharsets/UTF_8)
