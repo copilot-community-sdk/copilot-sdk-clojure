@@ -26,6 +26,26 @@ When porting features or investigating behavior:
 1. **Primary reference**: [nodejs implementation](https://github.com/github/copilot-sdk/tree/main/nodejs) (JavaScript/TypeScript)
 2. **Secondary reference**: [python implementation](https://github.com/github/copilot-sdk/tree/main/python) for additional clarity
 3. **Local upstream checkout**: The upstream repo is available at `../copilot-sdk` (relative to this repo).
+4. **CLI runtime**: The CLI itself is useful for understanding
+   protocol behavior, but the **SDK source of truth** is always the Node.js SDK, not the CLI protocol types.
+
+### API Compatibility Rules
+
+This SDK must maintain **strict API parity** with the official Node.js SDK (`@github/copilot-sdk`).
+
+1. **Only expose what the official SDK exposes.** The CLI protocol often defines more options than the SDK surfaces. Do NOT add config options or methods just because the CLI accepts them — only add them when the Node.js SDK's `SessionConfig`, `CopilotClient`, etc. include them.
+
+2. **When adding features**, always verify against:
+   - `copilot-sdk/nodejs/src/types.ts` — canonical type definitions (`SessionConfig`, `ResumeSessionConfig`, `MessageOptions`, `CopilotClientOptions`)
+   - `copilot-sdk/nodejs/src/client.ts` — `CopilotClient` methods and what params are sent on the wire
+   - `copilot-sdk/nodejs/src/session.ts` — `CopilotSession` methods
+
+3. **Experimental/CLI-only features** may be kept if clearly marked as experimental in docstrings and docs,
+   with a note that they are not part of the official SDK API. Example: `:large-output` is accepted by the
+   CLI protocol but not exposed in the Node.js SDK.
+
+4. **Clojure-only additions** (convenience macros, core.async wrappers, internal tuning knobs) are fine
+   as long as they don't conflict with the official API surface.
 
 ## Syncing with Upstream
 

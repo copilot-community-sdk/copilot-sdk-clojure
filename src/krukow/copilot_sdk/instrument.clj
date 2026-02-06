@@ -65,6 +65,14 @@
   :args (s/cat :client ::specs/client)
   :ret (s/nilable ::specs/session-id))
 
+(s/fdef krukow.copilot-sdk.client/get-foreground-session-id
+  :args (s/cat :client ::specs/client)
+  :ret (s/nilable ::specs/session-id))
+
+(s/fdef krukow.copilot-sdk.client/set-foreground-session-id!
+  :args (s/cat :client ::specs/client :session-id ::specs/session-id)
+  :ret nil?)
+
 (s/fdef krukow.copilot-sdk.client/get-status
   :args (s/cat :client ::specs/client)
   :ret (s/keys :req-un [::specs/version ::specs/protocol-version]))
@@ -203,6 +211,8 @@
                       krukow.copilot-sdk.client/list-sessions
                       krukow.copilot-sdk.client/delete-session!
                       krukow.copilot-sdk.client/get-last-session-id
+                      krukow.copilot-sdk.client/get-foreground-session-id
+                      krukow.copilot-sdk.client/set-foreground-session-id!
                       krukow.copilot-sdk.client/notifications
                       krukow.copilot-sdk.session/send!
                       krukow.copilot-sdk.session/send-and-wait!
@@ -240,6 +250,8 @@
                       krukow.copilot-sdk.client/list-sessions
                       krukow.copilot-sdk.client/delete-session!
                       krukow.copilot-sdk.client/get-last-session-id
+                      krukow.copilot-sdk.client/get-foreground-session-id
+                      krukow.copilot-sdk.client/set-foreground-session-id!
                       krukow.copilot-sdk.client/notifications
                       krukow.copilot-sdk.session/send!
                       krukow.copilot-sdk.session/send-and-wait!

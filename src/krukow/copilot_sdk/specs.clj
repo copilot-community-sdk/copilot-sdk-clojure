@@ -168,6 +168,9 @@
 (s/def ::large-output
   (s/keys :opt-un [::enabled ::max-size-bytes ::output-dir]))
 
+;; Working directory
+(s/def ::working-directory ::non-blank-string)
+
 ;; Infinite sessions configuration
 (s/def ::background-compaction-threshold (s/and number? #(<= 0.0 % 1.0)))
 (s/def ::buffer-exhaustion-threshold (s/and number? #(<= 0.0 % 1.0)))
@@ -189,13 +192,17 @@
   (s/keys :opt-un [::on-pre-tool-use ::on-post-tool-use ::on-user-prompt-submitted
                    ::on-session-start ::on-session-end ::on-error-occurred]))
 
+;; Disable resume flag
+(s/def ::disable-resume? boolean?)
+
 (def session-config-keys
   #{:session-id :model :tools :system-message
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
-    :reasoning-effort :on-user-input-request :hooks})
+    :reasoning-effort :on-user-input-request :hooks
+    :working-directory})
 
 (s/def ::session-config
   (closed-keys
@@ -204,7 +211,8 @@
                     ::on-permission-request ::streaming? ::mcp-servers
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
-                    ::reasoning-effort ::on-user-input-request ::hooks])
+                    ::reasoning-effort ::on-user-input-request ::hooks
+                    ::working-directory])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -212,7 +220,7 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks})
+    :on-user-input-request :hooks :working-directory :disable-resume?})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -220,7 +228,7 @@
                     ::provider ::streaming? ::on-permission-request
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks])
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume?])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------

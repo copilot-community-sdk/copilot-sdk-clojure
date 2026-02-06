@@ -669,7 +669,9 @@
    - :config-dir         - Override config directory for CLI (configDir)
    - :skill-directories  - Additional skill directories to load
    - :disabled-skills    - Disable specific skills by name
-   - :large-output       - Tool output handling config {:enabled :max-size-bytes :output-dir}
+   - :large-output       - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir}
+                           Note: CLI protocol feature, not in official SDK. outputDir may be ignored.
+   - :working-directory  - Working directory for the session (tool operations relative to this)
    - :infinite-sessions  - Infinite session config for automatic context compaction
                            {:enabled (default true)
                             :background-compaction-threshold (0.0-1.0, default 0.80)
@@ -739,6 +741,7 @@
                   (:skill-directories config) (assoc :skill-directories (:skill-directories config))
                   (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
                   (:large-output config) (assoc :large-output (:large-output config))
+                  (:working-directory config) (assoc :working-directory (:working-directory config))
                   wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
                   ;; Reasoning effort (PR #302)
                   (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
@@ -832,7 +835,9 @@
                   wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
                   (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
                   (:on-user-input-request config) (assoc :request-user-input true)
-                  (:hooks config) (assoc :hooks true))
+                  (:hooks config) (assoc :hooks true)
+                  (:working-directory config) (assoc :working-directory (:working-directory config))
+                  (:disable-resume? config) (assoc :disable-resume (:disable-resume? config)))
          result (proto/send-request! connection-io "session.resume" params)
          resumed-id (:session-id result)
          workspace-path (:workspace-path result)
@@ -884,6 +889,27 @@
   (let [{:keys [connection-io]} @(:state client)
         result (proto/send-request! connection-io "session.getLastId" {})]
     (:session-id result)))
+
+(defn get-foreground-session-id
+  "Get the foreground session ID (TUI+server mode).
+   Returns the session ID or nil if none."
+  [client]
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "session.getForeground" {})]
+    (:session-id result)))
+
+(defn set-foreground-session-id!
+  "Set the foreground session (TUI+server mode).
+   Requests the TUI to switch to displaying the specified session."
+  [client session-id]
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "session.setForeground" {:session-id session-id})]
+    (when-not (:success result)
+      (throw (ex-info (str "Failed to set foreground session: " (:error result))
+                      {:session-id session-id :error (:error result)})))
+    nil))
 
 ;; -----------------------------------------------------------------------------
 ;; Testing Utilities

@@ -227,7 +227,8 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
 | `:disabled-skills` | vector | Disable specific skills by name |
-| `:large-output` | map | Tool output handling config |
+| `:large-output` | map | (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. |
+| `:working-directory` | string | Working directory for the session (tool operations relative to this) |
 | `:infinite-sessions` | map | Infinite session config (see below) |
 | `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, or `"high"` |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
@@ -240,7 +241,11 @@ Create a client and session together, ensuring both are cleaned up on exit.
 (copilot/resume-session client session-id config)
 ```
 
-Resume an existing session by ID. The `config` map accepts the same options as `create-session` (except `:session-id`), allowing you to change model, tools, system message, and other settings on resume.
+Resume an existing session by ID. The `config` map accepts the same options as `create-session` (except `:session-id`), plus:
+
+| Option | Type | Description |
+|---|---|---|
+| `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false) |
 
 ```clojure
 ;; Resume with a different model and reasoning effort
@@ -348,6 +353,22 @@ Delete a session and its data from disk.
 ```
 
 Get the ID of the most recently updated session.
+
+#### `get-foreground-session-id`
+
+```clojure
+(copilot/get-foreground-session-id client)
+```
+
+Get the foreground session ID. Returns the session ID or nil. Only applicable in TUI+server mode.
+
+#### `set-foreground-session-id!`
+
+```clojure
+(copilot/set-foreground-session-id! client session-id)
+```
+
+Set the foreground session. Requests the TUI to switch to displaying the specified session. Only applicable in TUI+server mode.
 
 ---
 
@@ -746,7 +767,12 @@ It does not define custom agents. Custom agents are provided via `:custom-agents
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
 ```
 
-### Large Tool Output Handling
+### Large Tool Output Handling (Experimental)
+
+> **Note:** This is a CLI protocol feature not exposed in the official `@github/copilot-sdk`.
+> The `outputDir` and `maxSizeBytes` settings may be ignored by some CLI versions due to
+> a known issue where session-level config is not applied during `session.send` execution.
+> The CLI's default behavior (30KB threshold, system tmpdir) applies regardless.
 
 Configure how large tool outputs are handled before being sent back to the model:
 

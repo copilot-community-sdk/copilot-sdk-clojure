@@ -20,6 +20,11 @@ All notable changes to this project will be documented in this file. This change
 - Resume session config parity with create-session (upstream PR #376):
   - `resume-session` now accepts `:model`, `:system-message`, `:available-tools`,
     `:excluded-tools`, `:config-dir`, and `:infinite-sessions` options
+- API parity with official Node.js SDK (`@github/copilot-sdk`):
+  - `:working-directory` option for `create-session` and `resume-session`
+  - `:disable-resume?` option for `resume-session`
+  - `get-foreground-session-id` and `set-foreground-session-id!` client methods (TUI+server mode)
+  - `:large-output` marked as experimental (CLI protocol feature, not in official SDK)
 - New metadata APIs (upstream PR #77):
   - `get-status` - Get CLI version and protocol information
   - `get-auth-status` - Get current authentication status

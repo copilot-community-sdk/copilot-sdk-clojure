@@ -295,7 +295,9 @@
    - :config-dir           - Override config directory for CLI (configDir)
    - :skill-directories    - Additional skill directories to load
    - :disabled-skills      - Disable specific skills by name
-   - :large-output         - Tool output handling config {:enabled :max-size-bytes :output-dir}
+   - :large-output         - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir}
+                             Note: CLI protocol feature, not in official SDK. outputDir may be ignored.
+   - :working-directory    - Working directory for the session (tool operations relative to this)
 
    Example:
    ```clojure
@@ -398,7 +400,9 @@
 
 (defn resume-session
   "Resume an existing session by ID.
-   Accepts the same config options as `create-session` (except `:session-id`).
+   Accepts the same config options as `create-session` (except `:session-id`),
+   plus:
+   - :disable-resume?  - When true, skip emitting the session.resume event (default: false)
 
    Example:
    ```clojure
@@ -429,6 +433,18 @@
   "Get the ID of the most recently updated session."
   [client]
   (client/get-last-session-id client))
+
+(defn get-foreground-session-id
+  "Get the foreground session ID (TUI+server mode).
+   Returns the session ID or nil if none."
+  [client]
+  (client/get-foreground-session-id client))
+
+(defn set-foreground-session-id!
+  "Set the foreground session (TUI+server mode).
+   Requests the TUI to switch to displaying the specified session."
+  [client session-id]
+  (client/set-foreground-session-id! client session-id))
 
 ;; =============================================================================
 ;; Session Operations
