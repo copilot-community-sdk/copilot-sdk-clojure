@@ -487,7 +487,7 @@ Once published to Maven Central, add to your `pom.xml`:
 
 ```xml
 <dependency>
-    <groupId>io.github.copilot-community-sdk</groupId>
+    <groupId>io.github.krukow</groupId>
     <artifactId>copilot-sdk-clojure</artifactId>
     <version>0.1.0</version>
 </dependency>

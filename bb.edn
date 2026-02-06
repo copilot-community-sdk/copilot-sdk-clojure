@@ -33,12 +33,9 @@
       :depends [test:all]
       :task (clojure "-T:build" "jar")}
 
-  ci:deploy {:doc "Run the CI pipeline and deploy the JAR."
+  ci:deploy {:doc "Run the CI pipeline and deploy to Maven Central."
              :depends [ci]
-             :task (clojure "-T:build" "deploy")}
-
-  deploy:clojars-deprecated {:doc "One-off: deploy deprecation release to Clojars."
-                             :task (clojure "-T:build" "deploy-clojars-deprecated")}
+             :task (clojure "-T:build" "deploy-central")}
 
   install {:doc "Install the JAR locally (build via ci)."
            :task (clojure "-T:build" "install")}}}

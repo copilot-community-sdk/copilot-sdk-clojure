@@ -28,11 +28,6 @@
             <releases><enabled>false</enabled></releases>
             <snapshots><enabled>true</enabled></snapshots>
         </repository>
-        <!-- Clojars for Clojure libraries -->
-        <repository>
-            <id>clojars</id>
-            <url>https://repo.clojars.org</url>
-        </repository>
     </repositories>
 
     <dependencies>
@@ -42,7 +37,7 @@
         For local development (install with: clj -T:build aot-jar && clj -T:build install):
         -->
         <dependency>
-            <groupId>io.github.copilot-community-sdk</groupId>
+            <groupId>io.github.krukow</groupId>
             <artifactId>copilot-sdk-clojure</artifactId>
             <version>${copilot-sdk.version}</version>
         </dependency>
