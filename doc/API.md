@@ -230,7 +230,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:large-output` | map | (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. |
 | `:working-directory` | string | Working directory for the session (tool operations relative to this) |
 | `:infinite-sessions` | map | Infinite session config (see below) |
-| `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, or `"high"` |
+| `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, or `"xhigh"` |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
 
@@ -303,12 +303,19 @@ Requires authentication. Returns a vector of model info maps:
   :max-input-tokens 128000
   :max-output-tokens 16384
   :preview? false
-  :vision-limits {:supported-media-types ["image/png" "image/jpeg"]
-                  :max-prompt-images 10
-                  :max-prompt-image-size 20971520}
+  :model-capabilities {:model-supports {:supports-vision true
+                                        :supports-reasoning-effort false}
+                       :model-limits {:max-prompt-tokens 128000
+                                      :max-context-window-tokens 128000
+                                      :vision-capabilities
+                                      {:supported-media-types ["image/png" "image/jpeg"]
+                                       :max-prompt-images 10
+                                       :max-prompt-image-size 20971520}}}
+  :model-policy {:policy-state "enabled"
+                 :terms "..."}
+  :model-billing {:multiplier 1.0}
   ;; For models supporting reasoning:
-  :supports-reasoning-effort true
-  :supported-reasoning-efforts ["low" "medium" "high"]
+  :supported-reasoning-efforts ["low" "medium" "high" "xhigh"]
   :default-reasoning-effort "medium"}
  ...]
 ```
@@ -328,6 +335,39 @@ Get current connection state: `:disconnected` | `:connecting` | `:connected` | `
 ```
 
 Get a channel that receives non-session notifications. The channel is buffered; notifications are dropped if it fills.
+
+#### `on-lifecycle-event`
+
+```clojure
+;; Subscribe to all lifecycle events
+(def unsub (copilot/on-lifecycle-event client
+             (fn [event]
+               (println (:lifecycle-event-type event) (:session-id event)))))
+
+;; Subscribe to a specific event type
+(def unsub (copilot/on-lifecycle-event client :session.created
+             (fn [event]
+               (println "New session:" (:session-id event)))))
+
+;; Unsubscribe
+(unsub)
+```
+
+Subscribe to session lifecycle events dispatched by the CLI server. The handler receives an event map with:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:lifecycle-event-type` | keyword | One of `:session.created`, `:session.deleted`, `:session.updated`, `:session.foreground`, `:session.background` |
+| `:session-id` | string | The session ID |
+| `:metadata` | map (optional) | Contains `:start-time`, `:modified-time`, and optionally `:summary` |
+
+**Two arities:**
+- `(on-lifecycle-event client handler)` — wildcard, receives all lifecycle events
+- `(on-lifecycle-event client event-type handler)` — receives only events matching `event-type`
+
+Returns an unsubscribe function. Call it with no arguments to remove the handler.
+
+Handlers are called synchronously on the notification router's go-loop. Keep handlers fast; offload heavy work to another thread or channel.
 
 #### `list-sessions`
 
@@ -391,8 +431,29 @@ Send a message to the session. Returns immediately with the message ID.
 | Key | Type | Description |
 |-----|------|-------------|
 | `:prompt` | string | The message/prompt to send |
-| `:attachments` | vector | File attachments `[{:type :file/:directory :path :display-name}]` |
+| `:attachments` | vector | File attachments (see below) |
 | `:mode` | keyword | `:enqueue` or `:immediate` |
+
+**Attachment types:**
+
+| Type | Required Keys | Optional Keys | Description |
+|------|--------------|---------------|-------------|
+| `:file` | `:type`, `:path` | `:display-name` | File attachment |
+| `:directory` | `:type`, `:path` | `:display-name` | Directory attachment |
+| `:selection` | `:type`, `:file-path`, `:display-name` | `:selection-range`, `:text` | Code selection attachment |
+
+Selection range is a map with `:start` and `:end` positions, each containing `:line` and `:character`:
+
+```clojure
+(copilot/send! session
+  {:prompt "Explain this code"
+   :attachments [{:type :selection
+                  :file-path "/path/to/file.clj"
+                  :display-name "my-fn"
+                  :selection-range {:start {:line 10 :character 0}
+                                   :end {:line 25 :character 0}}
+                  :text "(defn my-fn [...] ...)"}]})
+```
 
 #### `send-and-wait!`
 
@@ -586,6 +647,7 @@ copilot/tool-events
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
+| `:copilot/session.shutdown` | Session shutting down |
 | `:copilot/user.message` | User message added |
 | `:copilot/assistant.turn_start` | Assistant turn started |
 | `:copilot/assistant.message` | Complete assistant response |
@@ -598,6 +660,7 @@ copilot/tool-events
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed |
+| `:copilot/skill.invoked` | Skill invocation event |
 
 ### Example: Handling Events
 
@@ -980,7 +1043,7 @@ For models that support reasoning (like o1), you can control the reasoning effor
 ;; Create session with reasoning effort
 (def session (copilot/create-session client
                {:model "o1"
-                :reasoning-effort "high"})) ; "low", "medium", or "high"
+                :reasoning-effort "high"})) ; "low", "medium", "high", or "xhigh"
 ```
 
 ### Multiple Sessions
@@ -997,11 +1060,22 @@ For models that support reasoning (like o1), you can control the reasoning effor
 ### File Attachments
 
 ```clojure
+;; File attachment
 (copilot/send! session
   {:prompt "Analyze this file"
    :attachments [{:type :file
                   :path "/path/to/file.clj"
                   :display-name "My File"}]})
+
+;; Selection attachment (code range)
+(copilot/send! session
+  {:prompt "What does this function do?"
+   :attachments [{:type :selection
+                  :file-path "/path/to/file.clj"
+                  :display-name "my-function"
+                  :selection-range {:start {:line 10 :character 0}
+                                   :end {:line 25 :character 0}}
+                  :text "(defn my-function [...] ...)"}]})
 ```
 
 ### Connecting to External Server

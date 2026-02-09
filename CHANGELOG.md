@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.1.23 sync)
+- Selection attachment type support (`:selection` with `:file-path`, `:display-name`, `:selection-range`, `:text`)
+- Session lifecycle event subscription via `on-lifecycle-event` (`:session.created`, `:session.deleted`, `:session.updated`, `:session.foreground`, `:session.background`)
+- Enhanced model info with full capabilities (`:model-capabilities`), billing (`:model-billing`), and policy (`:model-policy`) structures
+- `session.shutdown` and `skill.invoked` event types
+- `"xhigh"` reasoning effort level
+
 ### Changed
 - **BREAKING**: Version scheme changed to 4-segment format `UPSTREAM.CLJ_PATCH` (e.g., `0.1.22.0`)
   to track upstream copilot-sdk releases. See PUBLISHING.md for details.
@@ -55,7 +62,7 @@ All notable changes to this project will be documented in this file. This change
     - `:on-session-end` - Called when session ends
     - `:on-error-occurred` - Called on errors
 - Reasoning effort support (upstream PR #302):
-  - `:reasoning-effort` session config option ("low", "medium", "high")
+  - `:reasoning-effort` session config option ("low", "medium", "high", "xhigh")
   - Model info now includes `:supports-reasoning-effort`, `:supported-reasoning-efforts`, `:default-reasoning-effort`
 - Documentation:
   - `doc/getting-started.md` — Comprehensive tutorial
