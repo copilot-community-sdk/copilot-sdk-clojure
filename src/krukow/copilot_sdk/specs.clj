@@ -178,7 +178,7 @@
   (s/keys :opt-un [::enabled ::background-compaction-threshold ::buffer-exhaustion-threshold]))
 
 ;; Reasoning effort support (PR #302)
-(s/def ::reasoning-effort #{"low" "medium" "high"})
+(s/def ::reasoning-effort #{"low" "medium" "high" "xhigh"})
 
 ;; Hooks and user input handlers (PR #269)
 (s/def ::on-user-input-request fn?)
@@ -236,14 +236,36 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::prompt ::non-blank-string)
-(s/def ::attachment-type #{:file :directory})
+(s/def ::attachment-type #{:file :directory :selection})
 (s/def ::type ::attachment-type)
 (s/def ::path ::non-blank-string)
+(s/def ::file-path ::non-blank-string)
 (s/def ::display-name string?)
 
+;; Selection range (line/character positions)
+(s/def ::line nat-int?)
+(s/def ::character nat-int?)
+(s/def ::position (s/keys :req-un [::line ::character]))
+(s/def ::start ::position)
+(s/def ::end ::position)
+(s/def ::selection-range (s/keys :req-un [::start ::end]))
+(s/def ::text string?)
+
+;; File/directory attachment
+(s/def ::file-or-directory-attachment
+  (s/and (s/keys :req-un [::type ::path]
+                 :opt-un [::display-name])
+         #(#{:file :directory} (:type %))))
+
+;; Selection attachment
+(s/def ::selection-attachment
+  (s/and (s/keys :req-un [::type ::file-path ::display-name]
+                 :opt-un [::selection-range ::text])
+         #(= :selection (:type %))))
+
 (s/def ::attachment
-  (s/keys :req-un [::type ::path]
-          :opt-un [::display-name]))
+  (s/or :file-or-directory ::file-or-directory-attachment
+        :selection ::selection-attachment))
 
 (s/def ::attachments (s/coll-of ::attachment))
 (s/def ::mode #{:enqueue :immediate})
@@ -274,6 +296,20 @@
           :opt-un [::summary]))
 
 ;; -----------------------------------------------------------------------------
+;; Session lifecycle events (client-level)
+;; -----------------------------------------------------------------------------
+
+(s/def ::lifecycle-event-type
+  #{:session.created :session.deleted :session.updated
+    :session.foreground :session.background})
+
+(s/def ::lifecycle-event
+  (s/keys :req-un [::lifecycle-event-type ::session-id]
+          :opt-un [::metadata]))
+
+(s/def ::lifecycle-handler fn?)
+
+;; -----------------------------------------------------------------------------
 ;; Session Events (from generated schema)
 ;; -----------------------------------------------------------------------------
 
@@ -292,6 +328,7 @@
     :copilot/session.info :copilot/session.model_change :copilot/session.handoff
     :copilot/session.truncation :copilot/session.snapshot_rewind :copilot/session.usage_info
     :copilot/session.compaction_start :copilot/session.compaction_complete
+    :copilot/session.shutdown
     :copilot/user.message :copilot/pending_messages.modified
     :copilot/assistant.turn_start :copilot/assistant.intent :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta :copilot/assistant.message :copilot/assistant.message_delta
@@ -300,6 +337,7 @@
     :copilot/tool.user_requested :copilot/tool.execution_start :copilot/tool.execution_partial_result
     :copilot/tool.execution_progress :copilot/tool.execution_complete
     :copilot/subagent.started :copilot/subagent.completed :copilot/subagent.failed :copilot/subagent.selected
+    :copilot/skill.invoked
     :copilot/hook.start :copilot/hook.end
     :copilot/system.message})
 
@@ -338,6 +376,28 @@
 (s/def ::tool.execution_complete-data
   (s/keys :req-un [::tool-call-id ::success?]
           :opt-un [::is-user-requested? ::result ::error ::tool-telemetry ::parent-tool-call-id]))
+
+;; Session shutdown event
+(s/def ::shutdown-type #{"routine" "error"})
+(s/def ::error-reason string?)
+(s/def ::total-premium-requests nat-int?)
+(s/def ::total-api-duration-ms nat-int?)
+(s/def ::session-start-time number?)
+(s/def ::code-changes map?)
+(s/def ::model-metrics map?)
+(s/def ::current-model string?)
+
+(s/def ::session.shutdown-data
+  (s/keys :req-un [::shutdown-type ::total-premium-requests ::total-api-duration-ms
+                   ::session-start-time ::code-changes ::model-metrics]
+          :opt-un [::error-reason ::current-model]))
+
+;; Skill invoked event
+(s/def ::allowed-tools (s/coll-of string?))
+
+(s/def ::skill.invoked-data
+  (s/keys :req-un [::name ::path ::content]
+          :opt-un [::allowed-tools]))
 
 ;; Generic session event
 (s/def ::session-event
@@ -417,6 +477,40 @@
 (s/def ::login string?)
 (s/def ::status-message string?)
 
+;; Model capabilities
+(s/def ::supports-vision boolean?)
+(s/def ::supports-reasoning-effort boolean?)
+(s/def ::model-supports
+  (s/keys :opt-un [::supports-vision ::supports-reasoning-effort]))
+
+(s/def ::max-prompt-tokens int?)
+(s/def ::max-context-window-tokens int?)
+(s/def ::supported-media-types (s/coll-of string?))
+(s/def ::max-prompt-images int?)
+(s/def ::max-prompt-image-size int?)
+(s/def ::vision-capabilities
+  (s/keys :opt-un [::supported-media-types ::max-prompt-images ::max-prompt-image-size]))
+(s/def ::model-limits
+  (s/keys :opt-un [::max-prompt-tokens ::max-context-window-tokens ::vision-capabilities]))
+
+(s/def ::model-capabilities
+  (s/keys :opt-un [::model-supports ::model-limits]))
+
+;; Model policy
+(s/def ::policy-state #{"enabled" "disabled" "unconfigured"})
+(s/def ::terms string?)
+(s/def ::model-policy
+  (s/keys :opt-un [::policy-state ::terms]))
+
+;; Model billing
+(s/def ::multiplier number?)
+(s/def ::model-billing
+  (s/keys :opt-un [::multiplier]))
+
+;; Supported reasoning efforts
+(s/def ::supported-reasoning-efforts (s/coll-of string?))
+(s/def ::default-reasoning-effort string?)
+
 ;; Model info
 (s/def ::id string?)
 (s/def ::name string?)
@@ -429,7 +523,9 @@
   (s/keys :req-un [::id ::name]
           :opt-un [::vendor ::family ::version ::max-input-tokens ::max-output-tokens
                    ::preview? ::default-temperature ::model-picker-priority
-                   ::model-policy ::vision-limits]))
+                   ::model-capabilities ::model-policy ::model-billing
+                   ::supported-reasoning-efforts ::default-reasoning-effort
+                   ::vision-limits]))
 
 ;; Misc specs for instrument.clj
 (s/def ::message-id string?)

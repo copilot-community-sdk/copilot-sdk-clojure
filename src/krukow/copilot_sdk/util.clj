@@ -81,6 +81,33 @@
   (into {} (map (fn [[k v]] [k (mcp-server->wire v)])) servers))
 
 ;; -----------------------------------------------------------------------------
+;; Attachment wire conversion
+;; -----------------------------------------------------------------------------
+
+(defn attachment->wire
+  "Convert an attachment from Clojure format to wire format.
+   Handles the special mapping for selection attachments where
+   :file-path -> filePath and :selection-range -> selection."
+  [att]
+  (case (:type att)
+    :selection
+    (cond-> {:type "selection"
+             :filePath (:file-path att)
+             :displayName (:display-name att)}
+      (:selection-range att) (assoc :selection (clj->wire (:selection-range att)))
+      (:text att) (assoc :text (:text att)))
+
+    ;; :file and :directory
+    (cond-> {:type (name (:type att))
+             :path (:path att)}
+      (:display-name att) (assoc :displayName (:display-name att)))))
+
+(defn attachments->wire
+  "Convert a vector of attachments to wire format."
+  [attachments]
+  (mapv attachment->wire attachments))
+
+;; -----------------------------------------------------------------------------
 ;; Event type normalization
 ;; -----------------------------------------------------------------------------
 

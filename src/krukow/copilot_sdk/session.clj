@@ -272,7 +272,7 @@
    
    Options:
    - :prompt       - The message text (required)
-   - :attachments  - Vector of {:type :path :display-name}
+   - :attachments  - Vector of attachments (file/directory/selection)
    - :mode         - :enqueue (default) or :immediate"
   [session opts]
   (when-not (s/valid? ::specs/send-options opts)
@@ -285,11 +285,7 @@
       (throw (ex-info "Session has been destroyed" {:session-id session-id})))
     (let [conn (connection-io client)
           wire-attachments (when (:attachments opts)
-                             (mapv (fn [a]
-                                     {:type (name (:type a))
-                                      :path (:path a)
-                                      :displayName (:display-name a)})
-                                   (:attachments opts)))
+                             (util/attachments->wire (:attachments opts)))
           params (cond-> {:session-id session-id
                           :prompt (:prompt opts)}
                    wire-attachments (assoc :attachments wire-attachments)
