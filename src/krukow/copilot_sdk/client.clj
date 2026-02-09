@@ -74,7 +74,8 @@
 ;;  :stopping? false
 ;;  :restarting? false
 ;;  :force-stopping? false
-;;  :models-cache nil|promise|vector (list-models cache)}
+;;  :models-cache nil|promise|vector (list-models cache)
+;;  :lifecycle-handlers {handler-id -> {:handler fn :event-type type-or-nil}}}
 
 (defn- initial-state
   "Create initial client state."
@@ -94,7 +95,8 @@
    :stopping? false
    :restarting? false
    :force-stopping? false
-   :models-cache nil})       ; nil, promise, or vector of models (cleared on stop)
+   :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
+   :lifecycle-handlers {}})
 
 (defn client
   "Create a new CopilotClient.
@@ -219,7 +221,8 @@
     (go-loop []
       (if-let [notif (<! notif-ch)]
         (do
-          (if (= (:method notif) "session.event")
+          (case (:method notif)
+            "session.event"
             (let [{:keys [session-id event]} (:params notif)
                   normalized-event (update event :type util/event-type->keyword)
                   event-type (:type normalized-event)]
@@ -235,9 +238,26 @@
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
                 (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
                   (>! event-chan normalized-event))))
-            (do
-              (when-not (.offer router-queue notif)
-                (log/debug "Dropping notification due to full router queue"))))
+
+            "session.lifecycle"
+            (let [params (util/wire->clj (:params notif))
+                  event-type-str (:type params)
+                  event-type-kw (when event-type-str (keyword event-type-str))
+                  lifecycle-event (-> params
+                                      (dissoc :type)
+                                      (assoc :lifecycle-event-type event-type-kw))
+                  handlers (vals (:lifecycle-handlers @(:state client)))]
+              (log/debug "Lifecycle event: " event-type-kw " session=" (:session-id lifecycle-event))
+              (doseq [{:keys [handler event-type]} handlers]
+                (when (or (nil? event-type) (= event-type event-type-kw))
+                  (try
+                    (handler lifecycle-event)
+                    (catch Exception e
+                      (log/error "Lifecycle handler error: " (ex-message e)))))))
+
+            ;; default: other notifications go to the router queue
+            (when-not (.offer router-queue notif)
+              (log/debug "Dropping notification due to full router queue")))
           (recur))
         (do
           (log/debug "Notification channel closed")
@@ -248,6 +268,31 @@
    Notifications are dropped if the channel is full."
   [client]
   (:router-ch @(:state client)))
+
+(let [counter (atom 0)]
+  (defn on-lifecycle-event
+    "Subscribe to session lifecycle events.
+
+     Two arities:
+     (on-lifecycle-event client handler)
+       Subscribe to ALL lifecycle events. Handler receives the full event map
+       with keys :lifecycle-event-type, :session-id, and optionally :metadata.
+
+     (on-lifecycle-event client event-type handler)
+       Subscribe to a specific event type only.
+       event-type is a keyword like :session.created, :session.deleted, etc.
+
+     Returns an unsubscribe function (call with no args to remove the handler)."
+    ([client handler]
+     (let [id (keyword (str "lh-" (swap! counter inc)))]
+       (swap! (:state client) assoc-in [:lifecycle-handlers id]
+              {:handler handler :event-type nil})
+       (fn [] (swap! (:state client) update :lifecycle-handlers dissoc id))))
+    ([client event-type handler]
+     (let [id (keyword (str "lh-" (swap! counter inc)))]
+       (swap! (:state client) assoc-in [:lifecycle-handlers id]
+              {:handler handler :event-type event-type})
+       (fn [] (swap! (:state client) update :lifecycle-handlers dissoc id))))))
 
 (defn- mark-restarting!
   "Atomically mark the client as restarting. Returns true if this caller won."
@@ -479,7 +524,8 @@
                    (ex-info "Failed to kill CLI process" {} e))))
         (swap! (:state client) assoc :process nil))
 
-      (swap! (:state client) assoc :status :disconnected :actual-port nil :models-cache nil) ; reset list-models cache
+      (swap! (:state client) assoc :status :disconnected :actual-port nil
+             :models-cache nil :lifecycle-handlers {})  ; reset caches and handlers
 
       (log/info "Copilot client stopped")
       @errors)))
@@ -529,7 +575,8 @@
           :router-thread nil
           :router-running? false
           :force-stopping? false
-          :models-cache nil}) ; reset list-models cache
+          :models-cache nil
+          :lifecycle-handlers {}}) ; reset caches and handlers
   nil)
 
 (defn- ensure-connected!
@@ -587,12 +634,46 @@
               :max-input-tokens (:max-input-tokens m)
               :max-output-tokens (:max-output-tokens m)
               :preview? (:preview m)}
+        caps (when-let [c (:capabilities m)]
+               {:model-capabilities
+                (cond-> {}
+                  (:supports c)
+                  (assoc :model-supports
+                         (cond-> {}
+                           (contains? (:supports c) :vision)
+                           (assoc :supports-vision (:vision (:supports c)))
+                           (contains? (:supports c) :reasoning-effort)
+                           (assoc :supports-reasoning-effort (:reasoning-effort (:supports c)))))
+                  (:limits c)
+                  (assoc :model-limits
+                         (cond-> {}
+                           (:max-prompt-tokens (:limits c))
+                           (assoc :max-prompt-tokens (:max-prompt-tokens (:limits c)))
+                           (:max-context-window-tokens (:limits c))
+                           (assoc :max-context-window-tokens (:max-context-window-tokens (:limits c)))
+                           (:vision (:limits c))
+                           (assoc :vision-capabilities
+                                  (select-keys (:vision (:limits c))
+                                               [:supported-media-types :max-prompt-images :max-prompt-image-size])))))})
         optional (merge
                   (select-keys m [:default-temperature
                                   :model-picker-priority
                                   :default-reasoning-effort])
-                  (when (contains? m :model-policy)
-                    {:model-policy (keyword (:model-policy m))})
+                  (when (contains? m :policy)
+                    (let [mp (:policy m)]
+                      (cond
+                        (map? mp)
+                        {:model-policy mp}
+
+                        (or (string? mp) (keyword? mp) (symbol? mp))
+                        {:model-policy {:policy-state (name mp)}}
+
+                        :else
+                        (do
+                          (log/warn "Unexpected model policy value for model "
+                                    (or (:id m) (:name m) "<unknown>")
+                                    ": " (pr-str mp))
+                          nil))))
                   (when (contains? m :supported-reasoning-efforts)
                     {:supported-reasoning-efforts (vec (:supported-reasoning-efforts m))})
                   (when (contains? m :vision-limits)
@@ -600,8 +681,12 @@
                                                  [:supported-media-types
                                                   :max-prompt-images
                                                   :max-prompt-image-size])})
+                  ;; Legacy flat key for backward compat
                   (when (contains? (get-in m [:capabilities :supports] {}) :reasoning-effort)
-                    {:supports-reasoning-effort (get-in m [:capabilities :supports :reasoning-effort])}))]
+                    {:supports-reasoning-effort (get-in m [:capabilities :supports :reasoning-effort])})
+                  (when-let [b (:billing m)]
+                    {:model-billing b})
+                  caps)]
     (merge base optional)))
 
 (defn- fetch-models!
@@ -619,9 +704,17 @@
    Requires authentication.
    Returns a vector of model info maps with keys:
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
-   :preview? :default-temperature :model-picker-priority :model-policy
-   :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size}
-   :supports-reasoning-effort :supported-reasoning-efforts :default-reasoning-effort"
+   :preview? :default-temperature :model-picker-priority
+   :model-capabilities {:model-supports {:supports-vision :supports-reasoning-effort}
+                        :model-limits {:max-prompt-tokens :max-context-window-tokens
+                                       :vision-capabilities {:supported-media-types
+                                                             :max-prompt-images
+                                                             :max-prompt-image-size}}}
+   :model-policy {:policy-state :terms}
+   :model-billing {:multiplier}
+   :supported-reasoning-efforts :default-reasoning-effort
+   :supports-reasoning-effort (legacy flat key)
+   :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size} (legacy)"
   [client]
   (ensure-connected! client)
   (let [p (promise)
@@ -676,7 +769,7 @@
                            {:enabled (default true)
                             :background-compaction-threshold (0.0-1.0, default 0.80)
                             :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
-   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", or \"high\" (PR #302)
+   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
    - :on-user-input-request - Handler for ask_user requests (PR #269)
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
@@ -785,7 +878,7 @@
    - :skill-directories  - Directories to load skills from
    - :disabled-skills    - Skills to disable
    - :infinite-sessions  - Infinite session configuration
-   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", or \"high\"
+   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
    - :hooks              - Lifecycle hooks map
    

@@ -216,6 +216,41 @@
   [client]
   (client/notifications client))
 
+(defn on-lifecycle-event
+  "Subscribe to session lifecycle events.
+
+   Two arities:
+   (on-lifecycle-event client handler)
+     Subscribe to ALL lifecycle events. Handler receives an event map
+     with keys :lifecycle-event-type, :session-id, and optionally :metadata.
+
+   (on-lifecycle-event client event-type handler)
+     Subscribe to a specific event type only.
+     event-type is one of: :session.created :session.deleted :session.updated
+                           :session.foreground :session.background
+
+   Returns an unsubscribe function (call with no args to remove the handler).
+
+   Example:
+   ```clojure
+   ;; All events
+   (def unsub (copilot/on-lifecycle-event client
+                (fn [event]
+                  (println (:lifecycle-event-type event) (:session-id event)))))
+
+   ;; Specific event type
+   (def unsub (copilot/on-lifecycle-event client :session.created
+                (fn [event]
+                  (println \"New session:\" (:session-id event)))))
+
+   ;; Unsubscribe
+   (unsub)
+   ```"
+  ([client handler]
+   (client/on-lifecycle-event client handler))
+  ([client event-type handler]
+   (client/on-lifecycle-event client event-type handler)))
+
 (defn ping
   "Ping the server to check connectivity.
    Returns {:message :timestamp :protocol-version}"

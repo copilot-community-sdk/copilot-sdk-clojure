@@ -94,6 +94,14 @@
   :args (s/cat :client ::specs/client)
   :ret any?)  ; core.async channel
 
+(s/fdef krukow.copilot-sdk.client/on-lifecycle-event
+  :args (s/alt :wildcard (s/cat :client ::specs/client
+                                :handler ::specs/lifecycle-handler)
+               :typed    (s/cat :client ::specs/client
+                                :event-type ::specs/lifecycle-event-type
+                                :handler ::specs/lifecycle-handler))
+  :ret fn?)
+
 ;; -----------------------------------------------------------------------------
 ;; Function specs for session namespace
 ;; -----------------------------------------------------------------------------
@@ -214,6 +222,7 @@
                       krukow.copilot-sdk.client/get-foreground-session-id
                       krukow.copilot-sdk.client/set-foreground-session-id!
                       krukow.copilot-sdk.client/notifications
+                      krukow.copilot-sdk.client/on-lifecycle-event
                       krukow.copilot-sdk.session/send!
                       krukow.copilot-sdk.session/send-and-wait!
                       krukow.copilot-sdk.session/send-async
@@ -253,6 +262,7 @@
                       krukow.copilot-sdk.client/get-foreground-session-id
                       krukow.copilot-sdk.client/set-foreground-session-id!
                       krukow.copilot-sdk.client/notifications
+                      krukow.copilot-sdk.client/on-lifecycle-event
                       krukow.copilot-sdk.session/send!
                       krukow.copilot-sdk.session/send-and-wait!
                       krukow.copilot-sdk.session/send-async
