@@ -193,11 +193,15 @@
   (let [{:keys [exit out]} (shell/sh "git" "rev-parse" "HEAD")
         sha (str/trim out)
         readme (slurp "README.md")
+        match? (boolean (re-find #":git/sha \"[^\"]+\"" readme))
         updated (str/replace readme #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
     (when-not (zero? exit) (throw (ex-info "Failed to read git SHA" {})))
-    (when (= readme updated) (throw (ex-info "Pattern not found in README.md" {})))
-    (spit "README.md" updated)
-    (println "Updated README.md SHA to" sha)))
+    (when-not match? (throw (ex-info "Pattern not found in README.md" {})))
+    (if (= readme updated)
+      (println "README.md SHA already up to date:" sha)
+      (do
+        (spit "README.md" updated)
+        (println "Updated README.md SHA to" sha)))))
 
 (defn- update-version-in-files!
   "Update version string in all files that reference it."

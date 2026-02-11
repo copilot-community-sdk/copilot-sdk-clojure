@@ -29,9 +29,9 @@
   readme:sha {:doc "Update README git dependency SHA to HEAD."
               :task (clojure "-T:build" "update-readme-sha")}
 
-  ci {:doc "Run the CI pipeline of tests and build the JAR."
-      :depends [test:all]
-      :task (clojure "-T:build" "jar")}
+  ci {:doc "Run the full CI pipeline."
+      :task (shell "bash" "-lc"
+                   "COPILOT_E2E_TESTS=true bb test && ./run-all-examples.sh && bb validate-docs && bb jar")}
 
   ci:deploy {:doc "Run the CI pipeline and deploy to Maven Central."
              :depends [ci]

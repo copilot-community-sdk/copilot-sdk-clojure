@@ -93,6 +93,17 @@ Uses version from `build.clj`. Override with `:version '"X.Y.Z"'` if needed.
 
 Publishes to `io.github.copilot-community-sdk/copilot-sdk-clojure`.
 
+## GitHub Actions release workflow
+
+Trigger the **Release** workflow manually in GitHub Actions. Inputs:
+
+- `version_strategy`: `none`, `sync-upstream`, `bump-clj-patch`, or `set-version`
+- `upstream_version`: required for `sync-upstream` (format `X.Y.Z`)
+- `explicit_version`: required for `set-version` (format `X.Y.Z.N` or `X.Y.Z.N-SNAPSHOT`)
+- `snapshot`: optional for `sync-upstream`/`bump-clj-patch` to append `-SNAPSHOT`
+
+When `version_strategy` is not `none`, the workflow commits the version update (build.clj/README.md). It then updates README's git SHA and commits that change as well, pushing both commits to the branch used for the release.
+
 ## Local Testing
 
 ```bash
