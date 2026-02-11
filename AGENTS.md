@@ -111,8 +111,9 @@ clj -T:build bump-version
 
 ### Before Committing
 
-1. Run full test suite: `COPILOT_E2E_TESTS=true bb test`
-2. Run all examples: `./run-all-examples.sh`
+1. Run full CI: `bb ci:full` (requires copilot CLI + auth)
+   - This runs: E2E tests, examples, doc validation, and jar build
+2. If copilot CLI is not available, run `bb ci` (unit/integration tests, doc validation, jar)
 3. Run documentation validation: `bb validate-docs`
 4. **Always ask for my review before committing** - do not commit autonomously
 

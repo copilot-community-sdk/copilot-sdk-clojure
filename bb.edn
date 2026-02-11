@@ -29,9 +29,13 @@
   readme:sha {:doc "Update README git dependency SHA to HEAD."
               :task (clojure "-T:build" "update-readme-sha")}
 
-  ci {:doc "Run the full CI pipeline."
+  ci {:doc "Run CI pipeline: unit/integration tests, doc validation, jar build."
       :task (shell "bash" "-lc"
-                   "COPILOT_E2E_TESTS=true bb test && ./run-all-examples.sh && bb validate-docs && bb jar")}
+                   "bb test && bb validate-docs && bb jar")}
+
+  ci:full {:doc "Run full CI pipeline including E2E tests and examples (requires copilot CLI)."
+           :task (shell "bash" "-lc"
+                        "COPILOT_E2E_TESTS=true bb test && ./run-all-examples.sh && bb validate-docs && bb jar")}
 
   ci:deploy {:doc "Run the CI pipeline and deploy to Maven Central."
              :depends [ci]
