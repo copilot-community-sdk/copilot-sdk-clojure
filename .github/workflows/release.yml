@@ -60,9 +60,6 @@ jobs:
             .cpcache
           key: cljdeps-${{ hashFiles('deps.edn', 'bb.edn') }}
           restore-keys: cljdeps-
-      
-      - name: Install BSD utils
-        run: sudo apt-get update && sudo apt-get install -y libbsd-utils
 
       - name: Validate release inputs
         env:

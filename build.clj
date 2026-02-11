@@ -10,6 +10,17 @@
 (def version "0.1.23.0")
 (def class-dir "target/classes")
 
+(defn- md5-hash
+  "Compute MD5 hex digest of a file (cross-platform: macOS md5 / Linux md5sum)."
+  [path]
+  (let [mac (shell/sh "md5" "-q" path)]
+    (if (zero? (:exit mac))
+      (str/trim (:out mac))
+      (let [linux (shell/sh "md5sum" path)]
+        (if (zero? (:exit linux))
+          (first (str/split (:out linux) #"\s+"))
+          (throw (ex-info "Neither md5 nor md5sum available" {:path path})))))))
+
 (defn- get-developer-email []
   (or (System/getenv "DEVELOPER_EMAIL")
       (let [f (java.io.File. (str (System/getProperty "user.home") "/.copilot-sdk-email"))]
@@ -120,7 +131,7 @@
       (doseq [f (vals files)
               :let [path (str artifact-dir "/" f)]]
         (shell/sh "gpg" "-ab" path)
-        (spit (str path ".md5") (str/trim (:out (shell/sh "md5" "-q" path))))
+        (spit (str path ".md5") (md5-hash path))
         (spit (str path ".sha1") (first (str/split (:out (shell/sh "shasum" "-a" "1" path)) #"\s+"))))
       ;; Create zip
       (let [bundle-zip (str "target/copilot-sdk-clojure-" v "-bundle.zip")]
@@ -132,7 +143,7 @@
   "Upload a file with MD5 and SHA1 checksums."
   [auth base-url remote-path local-file remote-name]
   (let [url (format "%s/%s/%s" base-url remote-path remote-name)
-        md5 (str/trim (:out (shell/sh "md5" "-q" local-file)))
+        md5 (md5-hash local-file)
         sha1 (first (str/split (:out (shell/sh "shasum" "-a" "1" local-file)) #"\s+"))]
     ;; Upload main file
     (let [result (shell/sh "curl" "--silent" "--show-error" "--fail"
