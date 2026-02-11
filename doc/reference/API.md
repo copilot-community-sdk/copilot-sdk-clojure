@@ -640,27 +640,39 @@ copilot/tool-events
 |------------|-------------|
 | `:copilot/session.start` | Session created |
 | `:copilot/session.resume` | Session resumed |
-| `:copilot/session.idle` | Session finished processing |
 | `:copilot/session.error` | Session error occurred |
+| `:copilot/session.idle` | Session finished processing |
+| `:copilot/session.info` | Informational session update |
+| `:copilot/session.model_change` | Session model changed |
+| `:copilot/session.handoff` | Session handed off to another agent |
 | `:copilot/session.usage_info` | Token usage information |
 | `:copilot/session.truncation` | Context window truncated |
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
-| `:copilot/session.shutdown` | Session shutting down |
 | `:copilot/user.message` | User message added |
+| `:copilot/pending_messages.modified` | Pending message queue updated |
 | `:copilot/assistant.turn_start` | Assistant turn started |
-| `:copilot/assistant.message` | Complete assistant response |
-| `:copilot/assistant.message_delta` | Streaming response chunk |
+| `:copilot/assistant.intent` | Assistant intent update |
 | `:copilot/assistant.reasoning` | Model reasoning (if supported) |
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
+| `:copilot/assistant.message` | Complete assistant response |
+| `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
 | `:copilot/assistant.usage` | Token usage for this turn |
+| `:copilot/abort` | Current message aborted |
+| `:copilot/tool.user_requested` | Tool execution requested by user |
 | `:copilot/tool.execution_start` | Tool execution started |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed |
-| `:copilot/skill.invoked` | Skill invocation event |
+| `:copilot/subagent.started` | Subagent started |
+| `:copilot/subagent.completed` | Subagent completed |
+| `:copilot/subagent.failed` | Subagent failed |
+| `:copilot/subagent.selected` | Subagent selected |
+| `:copilot/hook.start` | Hook invocation started |
+| `:copilot/hook.end` | Hook invocation finished |
+| `:copilot/system.message` | System message emitted |
 
 ### Example: Handling Events
 
@@ -705,12 +717,12 @@ Enable streaming to receive assistant response chunks as they're generated:
           ;; Streaming chunk - print incrementally
           (print (get-in event [:data :delta-content]))
 
-        :assistant.reasoning_delta
+        :copilot/assistant.reasoning_delta
           ;; Streaming reasoning (model-dependent). Send to stderr.
           (binding [*out* *err*]
             (print (get-in event [:data :delta-content])))
 
-        :assistant.reasoning
+        :copilot/assistant.reasoning
           (binding [*out* *err*]
             (println "\n--- Final Reasoning ---")
             (println (get-in event [:data :content])))
@@ -728,7 +740,7 @@ Enable streaming to receive assistant response chunks as they're generated:
 
 When `:streaming? true`:
 - `:copilot/assistant.message_delta` events contain incremental text in `:delta-content`
-- `:assistant.reasoning_delta` events contain incremental reasoning in `:delta-content` (model-dependent)
+- `:copilot/assistant.reasoning_delta` events contain incremental reasoning in `:delta-content` (model-dependent)
 - Accumulate delta values to build the full response progressively
 - The final `:copilot/assistant.message` event always contains the complete content
 
