@@ -204,7 +204,13 @@ jobs:
           CENTRAL_USERNAME: ${{ secrets.CENTRAL_USERNAME }}
           CENTRAL_PASSWORD: ${{ secrets.CENTRAL_PASSWORD }}
           GNUPGHOME: ${{ runner.temp }}/gnupg
-        run: clojure -T:build deploy-central
+        run: |
+          clojure -T:build deploy-central || {
+            echo "::group::Deploy error details"
+            cat /tmp/clojure-*.edn 2>/dev/null || true
+            echo "::endgroup::"
+            exit 1
+          }
 
       - name: Identify release artifacts
         id: artifacts

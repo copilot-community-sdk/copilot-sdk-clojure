@@ -10,27 +10,29 @@
 (def version "0.1.23.0")
 (def class-dir "target/classes")
 
+(defn- try-sh
+  "Run shell/sh, returning result map or nil if the binary is not found."
+  [& args]
+  (try (apply shell/sh args)
+       (catch java.io.IOException _ nil)))
+
 (defn- md5-hash
   "Compute MD5 hex digest of a file (cross-platform: macOS md5 / Linux md5sum)."
   [path]
-  (let [mac (shell/sh "md5" "-q" path)]
-    (if (zero? (:exit mac))
-      (str/trim (:out mac))
-      (let [linux (shell/sh "md5sum" path)]
-        (if (zero? (:exit linux))
-          (first (str/split (:out linux) #"\s+"))
-          (throw (ex-info "Neither md5 nor md5sum available" {:path path})))))))
+  (if-let [{:keys [exit out]} (try-sh "md5" "-q" path)]
+    (when (zero? exit) (str/trim out))
+    (if-let [{:keys [exit out]} (try-sh "md5sum" path)]
+      (when (zero? exit) (first (str/split out #"\s+")))
+      (throw (ex-info "Neither md5 nor md5sum available" {:path path})))))
 
 (defn- sha1-hash
   "Compute SHA1 hex digest of a file (cross-platform: macOS shasum / Linux sha1sum)."
   [path]
-  (let [mac (shell/sh "shasum" "-a" "1" path)]
-    (if (zero? (:exit mac))
-      (first (str/split (:out mac) #"\s+"))
-      (let [linux (shell/sh "sha1sum" path)]
-        (if (zero? (:exit linux))
-          (first (str/split (:out linux) #"\s+"))
-          (throw (ex-info "Neither shasum nor sha1sum available" {:path path})))))))
+  (if-let [{:keys [exit out]} (try-sh "shasum" "-a" "1" path)]
+    (when (zero? exit) (first (str/split out #"\s+")))
+    (if-let [{:keys [exit out]} (try-sh "sha1sum" path)]
+      (when (zero? exit) (first (str/split out #"\s+")))
+      (throw (ex-info "Neither shasum nor sha1sum available" {:path path})))))
 
 (defn- get-developer-email []
   (or (System/getenv "DEVELOPER_EMAIL")
