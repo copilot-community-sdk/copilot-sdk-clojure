@@ -113,7 +113,8 @@ clj -T:build bump-version
 
 1. Run full test suite: `COPILOT_E2E_TESTS=true bb test`
 2. Run all examples: `./run-all-examples.sh`
-3. **Always ask for my review before committing** - do not commit autonomously
+3. Run documentation validation: `bb validate-docs`
+4. **Always ask for my review before committing** - do not commit autonomously
 
 ### Deployment
 
