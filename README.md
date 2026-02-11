@@ -29,7 +29,7 @@ Add to your `deps.edn`:
 io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.1.24.0-SNAPSHOT"}
 
 ;; Or git dependency
-io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/krukow/copilot-sdk-clojure.git"
+io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure.git"
                               :git/sha "85fe80def8132ed0cd2d386ef1ceb103f47913d8"}
 ```
 
