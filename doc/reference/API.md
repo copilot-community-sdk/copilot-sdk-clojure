@@ -772,6 +772,7 @@ copilot/tool-events
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
+| `:copilot/session.shutdown` | Session shutdown |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
 | `:copilot/assistant.turn_start` | Assistant turn started |
@@ -794,6 +795,7 @@ copilot/tool-events
 | `:copilot/subagent.selected` | Subagent selected |
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
+| `:copilot/skill.invoked` | Skill invocation |
 | `:copilot/system.message` | System message emitted |
 
 ### Example: Handling Events
