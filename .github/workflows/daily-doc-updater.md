@@ -13,7 +13,7 @@ permissions:
   pull-requests: read
 
 tracker-id: daily-doc-updater
-engine: claude
+engine: copilot
 strict: true
 
 network:
@@ -46,7 +46,7 @@ timeout-minutes: 45
 source: github/gh-aw/.github/workflows/daily-doc-updater.md@94662b1dee8ce96c876ba9f33b3ab8be32de82a4
 ---
 
-{{#runtime-import? .github/shared-instructions.md}}
+{{#runtime-import? AGENTS.md}}
 
 # Daily Documentation Updater
 
@@ -103,7 +103,7 @@ Pay special attention to:
 
 ### 4. Identify Documentation Gaps
 
-Review the documentation in the `docs/src/content/docs/` directory:
+Review the documentation in the `doc` directory:
 
 - Check if new features are already documented
 - Identify which documentation files need updates
@@ -113,18 +113,24 @@ Review the documentation in the `docs/src/content/docs/` directory:
 Use bash commands to explore documentation structure:
 
 ```bash
-find docs/src/content/docs -name '*.md' -o -name '*.mdx'
+find doc -name '*.md' -o -name '*.mdx'
+```
+Use bash commands to explore examples structure:
+
+```bash
+find examples -name '*.md' -o -name '*.mdx'
 ```
 
 ### 5. Update Documentation
 
 For each missing or incomplete feature documentation:
 
-1. **Determine the correct file** based on the feature type:
-   - CLI commands → `docs/src/content/docs/setup/cli.md`
-   - Workflow reference → `docs/src/content/docs/reference/`
-   - How-to guides → `docs/src/content/docs/guides/`
-   - Samples → `docs/src/content/docs/samples/`
+1. **Determine the correct file** based on the feature type ():
+   - Index → `doc/index.md`
+   - API → `doc/reference/API.md`
+   - AUTH → `doc/auth`
+   - Getting started guides → `doc/getting-started.md`
+   - Examples → `examples`
 
 2. **Follow documentation guidelines** from `.github/instructions/documentation.instructions.md`
 
