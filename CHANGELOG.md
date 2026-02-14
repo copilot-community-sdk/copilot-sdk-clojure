@@ -20,6 +20,7 @@ All notable changes to this project will be documented in this file. This change
 ### Added (CI/CD)
 - GitHub Actions CI workflow: runs `bb ci` (unit/integration tests, doc validation, jar build) on PRs and `main` pushes
 - GitHub Actions Release workflow: manual dispatch with version management inputs (`sync-upstream`, `bump-clj-patch`, `set-version`), GPG signing, Maven Central deploy, and [SLSA build provenance attestation](https://github.com/copilot-community-sdk/copilot-sdk-clojure/attestations)
+- Daily Documentation Updater agentic workflow: scans for merged PRs/commits daily, auto-generates documentation update PRs (#1)
 - `bb ci` task: runs tests, doc validation, and jar build (no copilot CLI required)
 - `bb ci:full` task: full pipeline including E2E tests and examples (requires copilot CLI)
 - Cross-platform `build.clj`: `md5-hash` and `sha1-hash` helpers with macOS/Linux fallback

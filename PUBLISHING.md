@@ -93,7 +93,30 @@ Uses version from `build.clj`. Override with `:version '"X.Y.Z"'` if needed.
 
 Publishes to `io.github.copilot-community-sdk/copilot-sdk-clojure`.
 
-## GitHub Actions release workflow
+## GitHub Actions Workflows
+
+This project uses three automated workflows:
+
+### CI Workflow
+
+The **CI** workflow runs automatically on pull requests and pushes to `main`:
+
+- Runs `bb ci` (unit/integration tests, doc validation, jar build)
+- Validates all code and documentation changes
+- Does not require Copilot CLI authentication
+
+### Daily Documentation Updater
+
+The **Daily Documentation Updater** agentic workflow runs daily at 6am UTC:
+
+- Scans for merged pull requests and commits from the last 24 hours
+- Identifies new features or changes requiring documentation updates
+- Automatically creates PRs with documentation updates if gaps are found
+- Auto-merges approved documentation PRs
+
+This workflow helps keep SDK documentation synchronized with code changes.
+
+### Release Workflow
 
 Trigger the **Release** workflow manually in GitHub Actions. Inputs:
 
