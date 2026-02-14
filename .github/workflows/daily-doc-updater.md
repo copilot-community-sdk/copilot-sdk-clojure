@@ -41,13 +41,17 @@ tools:
     - "find docs -name '*.md' -exec cat {} +"
     - "grep -r '*' docs"
     - "git *"
+    - "bb validate-docs"
+    - "bb ci"
+    - "bb test"
+    - ./run-all-examples.sh"
 
 timeout-minutes: 45
 
 source: github/gh-aw/.github/workflows/daily-doc-updater.md@94662b1dee8ce96c876ba9f33b3ab8be32de82a4
 ---
 
-{{#runtime-import? AGENTS.md}}
+{{#runtime-import? copilot-instructions.md}}
 
 # Daily Documentation Updater
 
