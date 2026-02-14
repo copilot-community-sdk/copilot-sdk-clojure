@@ -768,6 +768,7 @@ copilot/tool-events
 | `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
 | `:copilot/session.title_changed` | Session title updated |
 | `:copilot/session.warning` | Session warning (e.g., quota limits) |
+| `:copilot/session.shutdown` | Session shutdown initiated |
 | `:copilot/session.truncation` | Context window truncated |
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
@@ -792,6 +793,7 @@ copilot/tool-events
 | `:copilot/subagent.completed` | Subagent completed |
 | `:copilot/subagent.failed` | Subagent failed |
 | `:copilot/subagent.selected` | Subagent selected |
+| `:copilot/skill.invoked` | Skill invocation started |
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
