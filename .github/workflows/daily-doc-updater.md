@@ -40,13 +40,14 @@ tools:
     - "find docs -maxdepth 1 -ls"
     - "find docs -name '*.md' -exec cat {} +"
     - "grep -r '*' docs"
-    - "git *"
+    - "git:*"
     - "bb validate-docs"
     - "bb ci"
     - "bb test"
     - ./run-all-examples.sh"
-    - "cat *"
-    - "jq *"
+    - "cat:*"
+    - "jq:*"
+    - "clojure:*"
 
 timeout-minutes: 45
 
