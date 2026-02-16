@@ -251,10 +251,17 @@
 (s/def ::selection-range (s/keys :req-un [::start ::end]))
 (s/def ::text string?)
 
+;; Line range for file/directory attachments (simple start/end line numbers)
+(s/def ::line-range (s/and map?
+                           #(contains? % :start)
+                           #(contains? % :end)
+                           #(nat-int? (:start %))
+                           #(nat-int? (:end %))))
+
 ;; File/directory attachment
 (s/def ::file-or-directory-attachment
   (s/and (s/keys :req-un [::type ::path]
-                 :opt-un [::display-name])
+                 :opt-un [::display-name ::line-range])
          #(#{:file :directory} (:type %))))
 
 ;; Selection attachment
@@ -368,9 +375,11 @@
 
 (s/def ::session.idle-data map?)
 
+(s/def ::agent-mode #{:interactive :plan :autopilot :shell})
+
 (s/def ::user.message-data
   (s/keys :req-un [::content]
-          :opt-un [::transformed-content ::attachments ::source]))
+          :opt-un [::transformed-content ::attachments ::source ::agent-mode]))
 
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]

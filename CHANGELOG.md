@@ -11,6 +11,8 @@ All notable changes to this project will be documented in this file. This change
 - `get-current-model` — get the current model for a session (session-scoped) (upstream PR #464)
 - `switch-model!` — switch the model for a session (session-scoped) (upstream PR #464)
 - New event types: `session.context_changed`, `session.title_changed`, `session.warning` (upstream PRs #396, #427)
+- `line-range` optional field on file/directory attachment specs (upstream session-events schema update)
+- `agent-mode` optional field on `user.message` event data — one of `:interactive`, `:plan`, `:autopilot`, `:shell` (upstream session-events schema update)
 
 ### Changed
 - **BREAKING**: Namespace prefix renamed from `krukow.copilot-sdk` to `github.copilot-sdk`.
