@@ -95,7 +95,7 @@ Publishes to `io.github.copilot-community-sdk/copilot-sdk-clojure`.
 
 ## GitHub Actions release workflow
 
-Trigger the **Release** workflow manually in GitHub Actions. Inputs:
+Trigger the **Release** workflow manually in GitHub Actions (restricted to the repository maintainer). Inputs:
 
 | Input | Type | Description |
 |-------|------|-------------|
@@ -104,14 +104,28 @@ Trigger the **Release** workflow manually in GitHub Actions. Inputs:
 | `explicit_version` | string | Required for `set-version`; full version (e.g., `0.1.23.1` or `0.1.23.1-SNAPSHOT`) |
 | `snapshot` | boolean | Append `-SNAPSHOT` for `sync-upstream`/`bump-clj-patch` |
 
-When `version_strategy` is not `none`, the workflow bumps the version in `build.clj`/`README.md`, updates the README git SHA, then opens a PR to `main` with auto-merge enabled. Once CI passes and the PR merges, the workflow deploys to Maven Central, creates a release tag (`vX.Y.Z.N`), and attests the artifacts.
+When `version_strategy` is not `none`, the workflow:
 
-**Prerequisites**: Enable **Allow auto-merge** in repository settings (Settings → General → Pull Requests).
+1. Bumps the version in `build.clj` and `README.md`
+2. Updates the README git SHA
+3. Opens a PR to `main` with auto-merge enabled
+4. Waits for CI to pass and the PR to merge
+5. Deploys to Maven Central
+6. Tags the release (`vX.Y.Z.N`)
+7. Creates a [GitHub release](https://github.com/copilot-community-sdk/copilot-sdk-clojure/releases) with auto-generated notes and attached JAR/bundle artifacts
+
+SNAPSHOT versions are marked as pre-release.
+
+### Prerequisites
+
+- Enable **Allow auto-merge** in repository settings (Settings → General → Pull Requests)
+- Required status check `ci` must be configured in branch protection rules
 
 ### Required secrets
 
 | Secret | Description |
 |--------|-------------|
+| `RELEASE_TOKEN` | Fine-grained PAT with `contents: write` and `pull-requests: write` scopes — used to create the release PR (so CI triggers) and the GitHub release |
 | `CENTRAL_USERNAME` | Sonatype Central Portal token username |
 | `CENTRAL_PASSWORD` | Sonatype Central Portal token password |
 | `GPG_PRIVATE_KEY` | (Optional) ASCII-armored GPG private key for artifact signing |
