@@ -47,12 +47,35 @@ tools:
     - "jq:*"
     - "clojure:*"
 
+steps:
+  - uses: actions/setup-java@v5
+    with:
+      distribution: 'temurin' # See 'Supported distributions' for available options
+      java-version: '21'
+
+  - name: Set up Clojure
+    uses: DeLaGuardo/setup-clojure@13.5.2
+    with:
+      cli: latest
+      bb: 1.12.214
+
+  - name: Cache Clojure deps
+    uses: actions/cache@v5
+    with:
+      path: |
+        ~/.m2/repository
+        ~/.gitlibs
+        ~/.deps.clj
+        .cpcache
+      key: cljdeps-${{ hashFiles('deps.edn', 'bb.edn') }}
+      restore-keys: cljdeps-
+
 timeout-minutes: 45
 
 source: github/gh-aw/.github/workflows/daily-doc-updater.md@94662b1dee8ce96c876ba9f33b3ab8be32de82a4
 ---
 
-{{#runtime-import? ../copilot-instructions.md}}
+{{#runtime-import? .github/copilot-instructions.md}}
 
 # Daily Documentation Updater
 
