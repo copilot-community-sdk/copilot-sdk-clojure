@@ -98,6 +98,61 @@
         (finally
           (swap! (:state *test-client*) assoc :stopping? false))))))
 
+;; -----------------------------------------------------------------------------
+;; Stderr Capture Tests (upstream PR #492)
+;; -----------------------------------------------------------------------------
+
+(deftest test-stderr-capture-and-forwarding
+  (testing "start-stderr-forwarder! captures stderr lines"
+    (let [stderr-content "error line 1\nerror line 2\nwarning: something\n"
+          stderr-stream (java.io.ByteArrayInputStream.
+                         (.getBytes stderr-content "UTF-8"))
+          exit-ch (chan 1)
+          fake-mp (github.copilot-sdk.process/map->ManagedProcess
+                   {:process nil :stdin nil :stdout nil
+                    :stderr stderr-stream :exit-chan exit-ch})
+          start-forwarder (var client/start-stderr-forwarder!)
+          get-stderr (var client/get-stderr-output)
+          client (sdk/client {:auto-start? false})]
+      (start-forwarder client fake-mp)
+      ;; Give the go-loop time to drain stderr
+      (Thread/sleep 200)
+      (let [output (get-stderr client)]
+        (is (some? output) "stderr output should be captured")
+        (is (clojure.string/includes? output "error line 1"))
+        (is (clojure.string/includes? output "error line 2"))
+        (is (clojure.string/includes? output "warning: something")))
+      ;; Verify buffer atom contains individual lines
+      (let [buf @(:stderr-buffer @(:state client))]
+        (is (= 3 (count buf)))
+        (is (= "error line 1" (first buf))))))
+
+  (testing "get-stderr-output returns nil when no stderr captured"
+    (let [client (sdk/client {:auto-start? false})
+          get-stderr (var client/get-stderr-output)]
+      (is (nil? (get-stderr client))))))
+
+(deftest test-early-process-exit-detected-during-startup
+  (testing "verify-protocol-version! detects early process exit with stderr"
+    (let [exit-ch (chan 1)
+          ;; Inject a fake process and pre-populated stderr buffer
+          _ (swap! (:state *test-client*) assoc
+                   :process {:exit-chan exit-ch}
+                   :stderr-buffer (atom ["fatal: config file not found"
+                                         "copilot: exiting"]))
+          ;; Signal process exit before the ping can complete
+          _ (>!! exit-ch {:exit-code 1})
+          _ (close! exit-ch)
+          verify-version (var client/verify-protocol-version!)]
+      (try
+        (verify-version *test-client*)
+        (is false "Should have thrown on early process exit")
+        (catch clojure.lang.ExceptionInfo e
+          (is (clojure.string/includes? (ex-message e) "CLI server exited with code 1"))
+          (is (clojure.string/includes? (ex-message e) "fatal: config file not found"))
+          (is (= 1 (:exit-code (ex-data e))))
+          (is (some? (:stderr (ex-data e)))))))))
+
 (deftest test-ping
   (testing "Ping returns protocol version"
     (let [result (sdk/ping *test-client*)]
@@ -307,9 +362,13 @@
           session-id (sdk/session-id session)
           client (:client session)
           send-calls (atom 0)]
-      (with-redefs [session/send! (fn [_ _]
-                                    (swap! send-calls inc)
-                                    "msg")]
+      ;; <send-async* uses proto/send-request directly
+      (with-redefs [protocol/send-request (fn [_ _ _]
+                                            (swap! send-calls inc)
+                                            (let [ch (async/chan 1)]
+                                              (async/put! ch {:result {:message-id "msg"}})
+                                              (async/close! ch)
+                                              ch))]
         (let [ch1 (session/send-async session {:prompt "A"})
               ch2-f (future (session/send-async session {:prompt "B"}))]
           (Thread/sleep 50)
@@ -319,6 +378,7 @@
                                     :data {:content "first"}})
           (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
           (is (not= ::timeout (deref ch2-f 1000 ::timeout)))
+          (Thread/sleep 50)
           (is (= 2 @send-calls))
           (session/dispatch-event! client session-id
                                    {:type :copilot/assistant.message
@@ -335,8 +395,14 @@
           session-id (sdk/session-id session)
           client (:client session)]
       ;; Bypass actual send to control event flow
-      (with-redefs [session/send! (fn [_ _] "msg-id")]
+      (with-redefs [protocol/send-request (fn [_ _ _]
+                                            (let [ch (async/chan 1)]
+                                              (async/put! ch {:result {:message-id "msg-id"}})
+                                              (async/close! ch)
+                                              ch))]
         (let [result-ch (sdk/<send! session {:prompt "Test agentic flow"})]
+          ;; Let the go block acquire lock, send RPC, and tap event-mult
+          (Thread/sleep 50)
           ;; Simulate agentic flow: multiple assistant messages with tool calls between
           ;; First assistant.message (often empty in agentic flows)
           (session/dispatch-event! client session-id
@@ -424,6 +490,7 @@
 
 (deftest test-dispatch-event-drops-when-full
   (testing "dispatch-event! drops events when buffer is full"
+    (log/info "Warnings expected in this test: event buffer full triggers drop warning.")
     (let [session-id "session-test"
           small-ch (chan 1)
           client {:state (atom {:sessions {session-id {:destroyed? false}}
@@ -554,14 +621,17 @@
       (is (= "sse" (get-in resume-params [:mcpServers :srv-2 :type])))
       (is (= "https://mcp.resume.test" (get-in resume-params [:mcpServers :srv-2 :url])))
       (is (= ["*"] (get-in resume-params [:mcpServers :srv-2 :tools])))
-      (is (= "agent-2" (get-in resume-params [:customAgents 0 :agentName]))))))
-
+      (is (= "agent-2" (get-in resume-params [:customAgents 0 :agentName])))
+      ;; envValueMode is always sent as "direct" (upstream PR #484)
+      (is (= "direct" (:envValueMode create-params)))
+      (is (= "direct" (:envValueMode resume-params))))))
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
 ;; -----------------------------------------------------------------------------
 
 (deftest test-send-async-untaps-on-send-failure
-  (testing "send-async cleans up tap when send! throws"
+  (testing "send-async cleans up tap when RPC fails"
+    (log/info "Warnings expected in this test: async send RPC error is deliberate.")
     (let [session (sdk/create-session *test-client* {})
           taps (atom 0)
           untaps (atom 0)
@@ -573,9 +643,15 @@
                       (untap* [_ _] (swap! untaps inc) nil)
                       (untap-all* [_] nil))]
       (swap! (:state *test-client*) assoc-in [:session-io (sdk/session-id session) :event-mult] fake-mult)
-      (with-redefs [github.copilot-sdk.session/send! (fn [_ _]
-                                                       (throw (ex-info "forced failure" {})))]
-        (is (thrown? Exception (sdk/send-async session {:prompt "should-fail"}))))
+      ;; <send-async* uses proto/send-request — return an error response
+      (with-redefs [protocol/send-request (fn [_ _ _]
+                                            (let [ch (async/chan 1)]
+                                              (async/put! ch {:error {:code -1 :message "forced failure"}})
+                                              (async/close! ch)
+                                              ch))]
+        (let [events-ch (sdk/send-async session {:prompt "should-fail"})]
+          ;; Channel should close without events (error path)
+          (is (nil? (<!! events-ch)))))
       (is (= 1 @taps))
       (is (pos? @untaps)))))
 
@@ -702,3 +778,31 @@
         (is (= "evt-42" (get-in event [:data :up-to-event-id])))
         (is (= 5 (get-in event [:data :events-removed]))))
       (sdk/unsubscribe-events session events-ch))))
+
+;; -----------------------------------------------------------------------------
+;; Async Session Lifecycle Tests
+;; -----------------------------------------------------------------------------
+
+(deftest test-<create-session
+  (testing "<create-session creates session asynchronously"
+    (let [result-ch (sdk/<create-session *test-client* {:model "gpt-4.1"})
+          [session _] (alts!! [result-ch (timeout 5000)])]
+      (is (some? session) "<create-session should deliver a session")
+      (is (string? (sdk/session-id session)))
+      (sdk/destroy! session))))
+
+(deftest test-<create-session-parallel
+  (testing "Multiple <create-session calls run concurrently in go blocks"
+    (let [ch1 (sdk/<create-session *test-client* {:model "gpt-4.1"})
+          ch2 (sdk/<create-session *test-client* {:model "gpt-4.1"})
+          ch3 (sdk/<create-session *test-client* {:model "gpt-4.1"})
+          [s1 _] (alts!! [ch1 (timeout 5000)])
+          [s2 _] (alts!! [ch2 (timeout 5000)])
+          [s3 _] (alts!! [ch3 (timeout 5000)])]
+      (is (some? s1))
+      (is (some? s2))
+      (is (some? s3))
+      (is (= 3 (count (set [(sdk/session-id s1) (sdk/session-id s2) (sdk/session-id s3)]))))
+      (sdk/destroy! s1)
+      (sdk/destroy! s2)
+      (sdk/destroy! s3))))
