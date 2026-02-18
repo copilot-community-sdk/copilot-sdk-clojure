@@ -96,7 +96,8 @@
    :restarting? false
    :force-stopping? false
    :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
-   :lifecycle-handlers {}})
+   :lifecycle-handlers {}
+   :stderr-buffer nil})      ; atom of recent stderr lines (for error context)
 
 (defn client
   "Create a new CopilotClient.
@@ -338,6 +339,36 @@
           (when stopping?
             (swap! (:state client) assoc :stopping? false)))))))
 
+(def ^:private stderr-buffer-max-lines
+  "Maximum number of stderr lines to retain for error context."
+  100)
+
+(defn- start-stderr-forwarder!
+  "Start reading stderr from the CLI process, forwarding lines to logging
+   and capturing recent output for error context. Returns the stderr buffer atom."
+  [client mp]
+  (let [stderr-buf (atom [])
+        stderr-ch (proc/stderr-reader mp)]
+    (swap! (:state client) assoc :stderr-buffer stderr-buf)
+    (go-loop []
+      (when-let [{:keys [line]} (<! stderr-ch)]
+        (log/debug "[cli-stderr]" line)
+        (swap! stderr-buf (fn [buf]
+                            (let [buf (conj buf line)]
+                              (if (> (count buf) stderr-buffer-max-lines)
+                                (subvec buf (- (count buf) stderr-buffer-max-lines))
+                                buf))))
+        (recur)))
+    stderr-buf))
+
+(defn- get-stderr-output
+  "Get captured stderr output as a single string, or nil if empty."
+  [client]
+  (when-let [buf (:stderr-buffer @(:state client))]
+    (let [lines @buf]
+      (when (seq lines)
+        (str/join "\n" lines)))))
+
 (defn- setup-request-handler!
   "Set up handler for incoming requests (tool calls, permission requests, hooks, user input)."
   [client]
@@ -401,10 +432,65 @@
       (swap! (:state client) assoc :socket socket :connection-io conn))))
 
 (defn- verify-protocol-version!
-  "Verify the server's protocol version matches ours."
+  "Verify the server's protocol version matches ours.
+   Races the ping against process exit to detect early CLI failures."
   [client]
-  (let [{:keys [connection-io]} @(:state client)
-        result (proto/send-request! connection-io "ping" {})
+  (let [{:keys [connection-io process]} @(:state client)
+        ping-ch (proto/send-request connection-io "ping" {})
+        exit-ch (:exit-chan process)
+        timeout-ch (async/timeout 60000)
+        ;; Race: wait for ping result or process exit (whichever comes first)
+        result (if exit-ch
+                 (let [exit-poll (async/poll! exit-ch)]
+                   (if exit-poll
+                     ;; Process already exited before we even sent the ping
+                     (let [stderr (get-stderr-output client)]
+                       (throw (ex-info
+                               (cond-> (str "CLI server exited with code " (:exit-code exit-poll))
+                                 stderr (str "\nstderr: " stderr))
+                               {:exit-code (:exit-code exit-poll) :stderr stderr})))
+                     ;; Process still running — race ping against exit and timeout
+                     (let [[v ch] (async/alts!! [ping-ch exit-ch timeout-ch])]
+                       (cond
+                         ;; Timeout
+                         (identical? ch timeout-ch)
+                         (let [stderr (get-stderr-output client)]
+                           (throw (ex-info
+                                   (cond-> "Ping request timed out"
+                                     stderr (str "\nstderr: " stderr))
+                                   {:method "ping" :timeout-ms 60000 :stderr stderr})))
+
+                         ;; Ping completed
+                         (identical? ch ping-ch)
+                         (cond
+                           (nil? v)
+                           (throw (ex-info "Ping channel closed unexpectedly" {:method "ping"}))
+
+                           (:error v)
+                           (throw (ex-info (get-in v [:error :message] "RPC error")
+                                           {:error (:error v) :method "ping"}))
+
+                           :else (:result v))
+
+                         ;; Process exited first
+                         :else
+                         (let [stderr (get-stderr-output client)]
+                           (throw (ex-info
+                                   (cond-> (str "CLI server exited with code " (:exit-code v))
+                                     stderr (str "\nstderr: " stderr))
+                                   {:exit-code (:exit-code v) :stderr stderr})))))))
+                 ;; No process (external server) — just wait for ping with timeout
+                 (let [[v ch] (async/alts!! [ping-ch timeout-ch])]
+                   (cond
+                     (identical? ch timeout-ch)
+                     (throw (ex-info "Ping request timed out"
+                                     {:method "ping" :timeout-ms 60000}))
+                     (nil? v)
+                     (throw (ex-info "Ping channel closed" {:method "ping"}))
+                     (:error v)
+                     (throw (ex-info (get-in v [:error :message] "RPC error")
+                                     {:error (:error v) :method "ping"}))
+                     :else (:result v))))
         server-version (:protocol-version result)]
     (when (nil? server-version)
       (throw (ex-info
@@ -419,7 +505,11 @@
 
 (defn start!
   "Start the CLI server and establish connection.
-   Blocks until connected or throws on error."
+   Blocks until connected or throws on error.
+
+   Thread safety: do not call start! and stop! concurrently from different
+   threads. The :stopping? and :restarting? flags guard against concurrent
+   auto-restart, but explicit concurrent calls are unsupported."
   [client]
   (when-not (= :connected (:status @(:state client)))
     (log/info "Starting Copilot client...")
@@ -436,6 +526,7 @@
         (let [opts (:options client)
               mp (proc/spawn-cli opts)]
           (swap! (:state client) assoc :process mp)
+          (start-stderr-forwarder! client mp)
           (watch-process-exit! client mp)
 
           ;; For TCP mode, wait for port announcement
@@ -465,13 +556,20 @@
       nil
 
       (catch Exception e
-        (log/error "Failed to start client: " (ex-message e))
-        (swap! (:state client) assoc :status :error)
-        (throw e)))))
+        (let [stderr (get-stderr-output client)
+              msg (cond-> (str "Failed to start client: " (ex-message e))
+                    stderr (str "\nstderr: " stderr))]
+          (log/error msg)
+          (swap! (:state client) assoc :status :error)
+          (throw e))))))
 
 (defn stop!
   "Stop the CLI server and close all sessions.
-   Returns a vector of any errors encountered during cleanup."
+   Returns a vector of any errors encountered during cleanup.
+
+   Thread safety: do not call start! and stop! concurrently from different
+   threads. Auto-restart is suppressed via the :stopping? flag, but explicit
+   concurrent calls are unsupported."
   [client]
   (log/info "Stopping Copilot client...")
   (swap! (:state client) assoc :stopping? true)
@@ -525,7 +623,8 @@
         (swap! (:state client) assoc :process nil))
 
       (swap! (:state client) assoc :status :disconnected :actual-port nil
-             :models-cache nil :lifecycle-handlers {})  ; reset caches and handlers
+             :models-cache nil :lifecycle-handlers {}
+             :stderr-buffer nil)  ; reset caches, handlers, and stderr
 
       (log/info "Copilot client stopped")
       @errors)))
@@ -576,7 +675,8 @@
           :router-running? false
           :force-stopping? false
           :models-cache nil
-          :lifecycle-handlers {}}) ; reset caches and handlers
+          :lifecycle-handlers {}
+          :stderr-buffer nil}) ; reset caches, handlers, and stderr
   nil)
 
 (defn- ensure-connected!
@@ -787,6 +887,131 @@
                           (:reset-date v) (assoc :reset-date (:reset-date v)))))
                {} snapshots)))
 
+(defn- validate-session-config!
+  "Validate session config, throwing on invalid input."
+  [config]
+  (when-not (s/valid? ::specs/session-config config)
+    (let [unknown (specs/unknown-keys config specs/session-config-keys)
+          explain (s/explain-data ::specs/session-config config)
+          msg (if (seq unknown)
+                (format "Invalid session config: unknown keys %s. Valid keys are: %s"
+                        (pr-str unknown)
+                        (pr-str (sort specs/session-config-keys)))
+                (format "Invalid session config: %s"
+                        (with-out-str (s/explain ::specs/session-config config))))]
+      (throw (ex-info msg {:config config :unknown-keys unknown :explain explain}))))
+  (when (and (:provider config) (not (:model config)))
+    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
+                    {:config config}))))
+
+(defn- build-create-session-params
+  "Build wire params for session.create from config."
+  [config]
+  (when-let [servers (:mcp-servers config)]
+    (ensure-valid-mcp-servers! servers))
+  (let [wire-tools (when (:tools config)
+                     (mapv (fn [t]
+                             {:name (:tool-name t)
+                              :description (:tool-description t)
+                              :parameters (:tool-parameters t)})
+                           (:tools config)))
+        wire-sys-msg (when-let [sm (:system-message config)]
+                       (cond
+                         (= :replace (:mode sm))
+                         {:mode "replace" :content (:content sm)}
+                         :else
+                         {:mode "append" :content (:content sm)}))
+        wire-provider (when-let [provider (:provider config)]
+                        (util/clj->wire provider))
+        wire-mcp-servers (when-let [servers (:mcp-servers config)]
+                           (util/mcp-servers->wire servers))
+        wire-custom-agents (when-let [agents (:custom-agents config)]
+                             (mapv util/clj->wire agents))
+        wire-infinite-sessions (when-let [is (:infinite-sessions config)]
+                                 (util/clj->wire is))]
+    (cond-> {}
+      (:session-id config) (assoc :session-id (:session-id config))
+      (:model config) (assoc :model (:model config))
+      wire-tools (assoc :tools wire-tools)
+      wire-sys-msg (assoc :system-message wire-sys-msg)
+      (:available-tools config) (assoc :available-tools (:available-tools config))
+      (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
+      wire-provider (assoc :provider wire-provider)
+      true (assoc :request-permission (boolean (:on-permission-request config)))
+      (:streaming? config) (assoc :streaming (:streaming? config))
+      wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
+      wire-custom-agents (assoc :custom-agents wire-custom-agents)
+      (:config-dir config) (assoc :config-dir (:config-dir config))
+      (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+      (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
+      (:large-output config) (assoc :large-output (:large-output config))
+      (:working-directory config) (assoc :working-directory (:working-directory config))
+      wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
+      (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      true (assoc :request-user-input (boolean (:on-user-input-request config)))
+      true (assoc :hooks (boolean (:hooks config)))
+      true (assoc :env-value-mode "direct"))))
+
+(defn- build-resume-session-params
+  "Build wire params for session.resume from session-id and config."
+  [session-id config]
+  (when-let [servers (:mcp-servers config)]
+    (ensure-valid-mcp-servers! servers))
+  (let [wire-tools (when (:tools config)
+                     (mapv (fn [t]
+                             {:name (:tool-name t)
+                              :description (:tool-description t)
+                              :parameters (:tool-parameters t)})
+                           (:tools config)))
+        wire-sys-msg (when-let [sm (:system-message config)]
+                       (cond
+                         (= :replace (:mode sm))
+                         {:mode "replace" :content (:content sm)}
+                         :else
+                         {:mode "append" :content (:content sm)}))
+        wire-provider (when-let [provider (:provider config)]
+                        (util/clj->wire provider))
+        wire-mcp-servers (when-let [servers (:mcp-servers config)]
+                           (util/mcp-servers->wire servers))
+        wire-custom-agents (when-let [agents (:custom-agents config)]
+                             (mapv util/clj->wire agents))
+        wire-infinite-sessions (when-let [is (:infinite-sessions config)]
+                                 (util/clj->wire is))]
+    (cond-> {:session-id session-id}
+      (:model config) (assoc :model (:model config))
+      wire-tools (assoc :tools wire-tools)
+      wire-sys-msg (assoc :system-message wire-sys-msg)
+      (:available-tools config) (assoc :available-tools (:available-tools config))
+      (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
+      wire-provider (assoc :provider wire-provider)
+      true (assoc :request-permission (boolean (:on-permission-request config)))
+      (:streaming? config) (assoc :streaming (:streaming? config))
+      wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
+      wire-custom-agents (assoc :custom-agents wire-custom-agents)
+      (:config-dir config) (assoc :config-dir (:config-dir config))
+      (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+      (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
+      wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
+      (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      true (assoc :request-user-input (boolean (:on-user-input-request config)))
+      true (assoc :hooks (boolean (:hooks config)))
+      (:working-directory config) (assoc :working-directory (:working-directory config))
+      (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
+      true (assoc :env-value-mode "direct"))))
+
+(defn- finalize-session
+  "Create a CopilotSession from an RPC result and config."
+  [client result config]
+  (let [session-id (:session-id result)
+        workspace-path (:workspace-path result)]
+    (session/create-session client session-id
+                            {:tools (:tools config)
+                             :on-permission-request (:on-permission-request config)
+                             :on-user-input-request (:on-user-input-request config)
+                             :hooks (:hooks config)
+                             :workspace-path workspace-path
+                             :config config})))
+
 (defn create-session
   "Create a new conversation session.
    
@@ -823,85 +1048,14 @@
    (create-session client {}))
   ([client config]
    (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
-   (when-not (s/valid? ::specs/session-config config)
-     (let [unknown (specs/unknown-keys config specs/session-config-keys)
-           explain (s/explain-data ::specs/session-config config)
-           msg (if (seq unknown)
-                 (format "Invalid session config: unknown keys %s. Valid keys are: %s"
-                         (pr-str unknown)
-                         (pr-str (sort specs/session-config-keys)))
-                 (format "Invalid session config: %s"
-                         (with-out-str (s/explain ::specs/session-config config))))]
-       (throw (ex-info msg {:config config :unknown-keys unknown :explain explain}))))
-   ;; BYOK validation: model is required when provider is specified
-   (when (and (:provider config) (not (:model config)))
-     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                     {:config config})))
+   (validate-session-config! config)
    (ensure-connected! client)
    (let [{:keys [connection-io]} @(:state client)
-         _ (when-let [servers (:mcp-servers config)]
-             (ensure-valid-mcp-servers! servers))
-         ;; Convert tools to wire format
-         wire-tools (when (:tools config)
-                      (mapv (fn [t]
-                              {:name (:tool-name t)
-                               :description (:tool-description t)
-                               :parameters (:tool-parameters t)})
-                            (:tools config)))
-         ;; Convert system message
-         wire-sys-msg (when-let [sm (:system-message config)]
-                        (cond
-                          (= :replace (:mode sm))
-                          {:mode "replace" :content (:content sm)}
-
-                          :else
-                          {:mode "append" :content (:content sm)}))
-         wire-provider (when-let [provider (:provider config)]
-                         (util/clj->wire provider))
-         wire-mcp-servers (when-let [servers (:mcp-servers config)]
-                            (util/mcp-servers->wire servers))
-         wire-custom-agents (when-let [agents (:custom-agents config)]
-                              (mapv util/clj->wire agents))
-         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
-                                  (util/clj->wire is))
-         ;; Build request params
-         params (cond-> {}
-                  (:session-id config) (assoc :session-id (:session-id config))
-                  (:model config) (assoc :model (:model config))
-                  wire-tools (assoc :tools wire-tools)
-                  wire-sys-msg (assoc :system-message wire-sys-msg)
-                  (:available-tools config) (assoc :available-tools (:available-tools config))
-                  (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
-                  wire-provider (assoc :provider wire-provider)
-                  (:on-permission-request config) (assoc :request-permission true)
-                  (:streaming? config) (assoc :streaming (:streaming? config))
-                  wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
-                  wire-custom-agents (assoc :custom-agents wire-custom-agents)
-                  (:config-dir config) (assoc :config-dir (:config-dir config))
-                  (:skill-directories config) (assoc :skill-directories (:skill-directories config))
-                  (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
-                  (:large-output config) (assoc :large-output (:large-output config))
-                  (:working-directory config) (assoc :working-directory (:working-directory config))
-                  wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
-                  ;; Reasoning effort (PR #302)
-                  (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
-                  ;; User input handler (PR #269)
-                  (:on-user-input-request config) (assoc :request-user-input true)
-                  ;; Hooks (PR #269) - presence of hooks map enables hooks
-                  (:hooks config) (assoc :hooks true))
+         params (build-create-session-params config)
          result (proto/send-request! connection-io "session.create" params)
-         session-id (:session-id result)
-         workspace-path (:workspace-path result)
-         ;; Session state is stored by session/create-session in client's atom
-         session (session/create-session client session-id
-                                         {:tools (:tools config)
-                                          :on-permission-request (:on-permission-request config)
-                                          :on-user-input-request (:on-user-input-request config)
-                                          :hooks (:hooks config)
-                                          :workspace-path workspace-path
-                                          :config config})]
-      (log/info "Session created: " session-id)
-      session)))
+         session (finalize-session client result config)]
+     (log/info "Session created: " (:session-id result))
+     session)))
 
 (defn resume-session
   "Resume an existing session by ID.
@@ -933,66 +1087,93 @@
      (throw (ex-info "Invalid resume session config"
                      {:config config
                       :explain (s/explain-data ::specs/resume-session-config config)})))
-   ;; BYOK validation: model is required when provider is specified
    (when (and (:provider config) (not (:model config)))
      (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                      {:config config})))
    (ensure-connected! client)
    (let [{:keys [connection-io]} @(:state client)
-         _ (when-let [servers (:mcp-servers config)]
-             (ensure-valid-mcp-servers! servers))
-         wire-tools (when (:tools config)
-                      (mapv (fn [t]
-                              {:name (:tool-name t)
-                               :description (:tool-description t)
-                               :parameters (:tool-parameters t)})
-                            (:tools config)))
-         wire-sys-msg (when-let [sm (:system-message config)]
-                        (cond
-                          (= :replace (:mode sm))
-                          {:mode "replace" :content (:content sm)}
-
-                          :else
-                          {:mode "append" :content (:content sm)}))
-         wire-provider (when-let [provider (:provider config)]
-                         (util/clj->wire provider))
-         wire-mcp-servers (when-let [servers (:mcp-servers config)]
-                            (util/mcp-servers->wire servers))
-         wire-custom-agents (when-let [agents (:custom-agents config)]
-                              (mapv util/clj->wire agents))
-         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
-                                  (util/clj->wire is))
-         params (cond-> {:session-id session-id}
-                  (:model config) (assoc :model (:model config))
-                  wire-tools (assoc :tools wire-tools)
-                  wire-sys-msg (assoc :system-message wire-sys-msg)
-                  (:available-tools config) (assoc :available-tools (:available-tools config))
-                  (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
-                  wire-provider (assoc :provider wire-provider)
-                  (:on-permission-request config) (assoc :request-permission true)
-                  (:streaming? config) (assoc :streaming (:streaming? config))
-                  wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
-                  wire-custom-agents (assoc :custom-agents wire-custom-agents)
-                  (:config-dir config) (assoc :config-dir (:config-dir config))
-                  (:skill-directories config) (assoc :skill-directories (:skill-directories config))
-                  (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
-                  wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
-                  (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
-                  (:on-user-input-request config) (assoc :request-user-input true)
-                  (:hooks config) (assoc :hooks true)
-                  (:working-directory config) (assoc :working-directory (:working-directory config))
-                  (:disable-resume? config) (assoc :disable-resume (:disable-resume? config)))
+         params (build-resume-session-params session-id config)
          result (proto/send-request! connection-io "session.resume" params)
-         resumed-id (:session-id result)
-         workspace-path (:workspace-path result)
-         session (session/create-session client resumed-id
-                                         {:tools (:tools config)
-                                          :on-permission-request (:on-permission-request config)
-                                          :on-user-input-request (:on-user-input-request config)
-                                          :hooks (:hooks config)
-                                          :workspace-path workspace-path
-                                          :config config})]
-      session)))
+         session (finalize-session client result config)]
+     session)))
+
+(defn <create-session
+  "Async version of create-session. Returns a channel that delivers a CopilotSession.
+
+   Same config options as create-session. Validation is performed synchronously
+   (throws immediately on invalid config). The RPC call parks instead of blocking,
+   making this safe to use inside go blocks.
+
+   On RPC error, delivers an ExceptionInfo to the channel (not nil).
+   Callers should check the result with (instance? Throwable result).
+
+   Usage:
+     (go
+       (let [result (<! (<create-session client {:model \"gpt-5.2\"}))]
+         (if (instance? Throwable result)
+           (println \"Error:\" (ex-message result))
+           ;; use result as session
+           )))"
+  ([client]
+   (<create-session client {}))
+  ([client config]
+   (log/debug "Creating session (async) with config: " (select-keys config [:model :session-id]))
+   (validate-session-config! config)
+   (ensure-connected! client)
+   (let [{:keys [connection-io]} @(:state client)
+         params (build-create-session-params config)
+         rpc-ch (proto/send-request connection-io "session.create" params)]
+     (go
+       (when-let [response (<! rpc-ch)]
+         (if-let [err (:error response)]
+           (do (log/error "<create-session RPC error: " err)
+               (ex-info (str "Failed to create session: " (:message err))
+                        {:error err}))
+           (let [result (:result response)
+                 session (finalize-session client result config)]
+             (log/info "Session created (async): " (:session-id result))
+             session)))))))
+
+(defn <resume-session
+  "Async version of resume-session. Returns a channel that delivers a CopilotSession.
+
+   Same config options as resume-session. Validation is performed synchronously
+   (throws immediately on invalid config). The RPC call parks instead of blocking,
+   making this safe to use inside go blocks.
+
+   On RPC error, delivers an ExceptionInfo to the channel (not nil).
+   Callers should check the result with (instance? Throwable result).
+
+   Usage:
+     (go
+       (let [result (<! (<resume-session client session-id {:model \"gpt-5.2\"}))]
+         (if (instance? Throwable result)
+           (println \"Error:\" (ex-message result))
+           ;; use result as session
+           )))"
+  ([client session-id]
+   (<resume-session client session-id {}))
+  ([client session-id config]
+   (when-not (s/valid? ::specs/resume-session-config config)
+     (throw (ex-info "Invalid resume session config"
+                     {:config config
+                      :explain (s/explain-data ::specs/resume-session-config config)})))
+   (when (and (:provider config) (not (:model config)))
+     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
+                     {:config config})))
+   (ensure-connected! client)
+   (let [{:keys [connection-io]} @(:state client)
+         params (build-resume-session-params session-id config)
+         rpc-ch (proto/send-request connection-io "session.resume" params)]
+     (go
+       (when-let [response (<! rpc-ch)]
+         (if-let [err (:error response)]
+           (do (log/error "<resume-session RPC error: " err)
+               (ex-info (str "Failed to resume session: " (:message err))
+                        {:error err :session-id session-id}))
+           (let [result (:result response)
+                 session (finalize-session client result config)]
+             session)))))))
 
 (defn list-sessions
   "List all available sessions.

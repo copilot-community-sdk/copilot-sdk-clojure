@@ -384,6 +384,26 @@
   ([client config]
    (client/create-session client config)))
 
+(defn <create-session
+  "Async version of create-session. Returns a channel that delivers a CopilotSession.
+
+   Validation is synchronous (throws immediately on invalid config).
+   The RPC call parks instead of blocking, making this safe inside go blocks.
+   On RPC error, delivers an ExceptionInfo (check with `(instance? Throwable result)`).
+
+   Example:
+   ```clojure
+   (go
+     (let [result (<! (copilot/<create-session client {:model \"gpt-5.2\"}))]
+       (when-not (instance? Throwable result)
+         (let [answer (<! (copilot/<send! result {:prompt \"Hello\"}))]
+           (println answer)))))
+   ```"
+  ([client]
+   (client/<create-session client))
+  ([client config]
+   (client/<create-session client config)))
+
 (defmacro with-session
   "Create a session and ensure destroy! on exit.
 
@@ -492,6 +512,26 @@
    (client/resume-session client session-id))
   ([client session-id config]
    (client/resume-session client session-id config)))
+
+(defn <resume-session
+  "Async version of resume-session. Returns a channel that delivers a CopilotSession.
+
+   Validation is synchronous (throws immediately on invalid config).
+   The RPC call parks instead of blocking, making this safe inside go blocks.
+   On RPC error, delivers an ExceptionInfo (check with `(instance? Throwable result)`).
+
+   Example:
+   ```clojure
+   (go
+     (let [result (<! (copilot/<resume-session client \"session-123\"))]
+       (when-not (instance? Throwable result)
+         ;; use resumed session
+         )))
+   ```"
+  ([client session-id]
+   (client/<resume-session client session-id))
+  ([client session-id config]
+   (client/<resume-session client session-id config)))
 
 (defn list-sessions
   "List all available sessions.
@@ -700,6 +740,8 @@
   "Get the current model for this session.
    Returns the model ID string, or nil if none set.
 
+   NOTE: Not yet implemented in CLI as of 0.0.412. Will throw until supported.
+
    Example:
    ```clojure
    (println \"Current model:\" (copilot/get-current-model session))
@@ -710,6 +752,8 @@
 (defn switch-model!
   "Switch the model for this session.
    Returns the new model ID string, or nil.
+
+   NOTE: Not yet implemented in CLI as of 0.0.412. Will throw until supported.
 
    Example:
    ```clojure

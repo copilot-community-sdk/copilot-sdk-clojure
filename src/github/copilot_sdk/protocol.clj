@@ -127,20 +127,22 @@
 ;; -----------------------------------------------------------------------------
 
 (defn- handle-response!
-  "Handle an incoming response message. Delivers to pending promise."
+  "Handle an incoming response message. Delivers to pending channel."
   [state-atom msg]
   (let [id (:id msg)
         pending-requests (:pending-requests (conn-state state-atom))]
     (log/debug "Received response for id=" id)
-    (when-let [{:keys [promise]} (get pending-requests id)]
+    (when-let [{:keys [ch]} (get pending-requests id)]
       (update-conn! state-atom update :pending-requests dissoc id)
       (if-let [error (:error msg)]
         (do
           (log/debug "Response error: " error)
-          (deliver promise {:error error}))
+          (put! ch {:error error})
+          (close! ch))
         (do
           (log/debug "Response success for id=" id)
-          (deliver promise {:result (:result msg)}))))))
+          (put! ch {:result (:result msg)})
+          (close! ch))))))
 
 (defn- handle-request!
   "Handle an incoming request message (e.g., tool.call). Sends response via outgoing-ch."
@@ -185,7 +187,7 @@
   (let [{:keys [state-atom incoming-ch outgoing-ch]} conn
         normalized (normalize-incoming msg)]
     (cond
-      ;; Response (has id, no method) - deliver to pending promise
+      ;; Response (has id, no method) - deliver to pending channel
       (and (:id normalized) (not (:method normalized)))
       (handle-response! state-atom normalized)
 
@@ -226,9 +228,10 @@
                  (log/debug "Read loop: EOF from remote")
                  (update-conn! state-atom assoc :running? false)
                  ;; Signal error to pending requests
-                 (doseq [[_ {:keys [promise]}] (:pending-requests (conn-state state-atom))]
-                   (deliver promise {:error {:code -32000
-                                             :message "Connection closed by remote"}}))
+                 (doseq [[_ {:keys [ch]}] (:pending-requests (conn-state state-atom))]
+                   (put! ch {:error {:code -32000
+                                     :message "Connection closed by remote"}})
+                   (close! ch))
                  (update-conn! state-atom assoc :pending-requests {})))))
          (catch AsynchronousCloseException _
            (log/debug "Read loop: channel closed asynchronously"))
@@ -241,9 +244,10 @@
              (when (:running? (conn-state state-atom))
                (log/error "Read loop IO exception: " (ex-message e))
                ;; Signal error to pending requests
-               (doseq [[id {:keys [promise]}] (:pending-requests (conn-state state-atom))]
-                 (deliver promise {:error {:code -32000
-                                           :message (str "Connection error: " (ex-message e))}}))
+               (doseq [[_ {:keys [ch]}] (:pending-requests (conn-state state-atom))]
+                 (put! ch {:error {:code -32000
+                                   :message (str "Connection error: " (ex-message e))}})
+                 (close! ch))
                (update-conn! state-atom assoc :pending-requests {}))))
          (catch Exception e
            (when (:running? (conn-state state-atom))
@@ -402,28 +406,29 @@
     (log/debug "JSON-RPC connection closed")))
 
 (defn send-request
-  "Send a JSON-RPC request and return a promise for the response."
+  "Send a JSON-RPC request and return a channel for the response.
+   The channel delivers a single {:result ...} or {:error ...} map, then closes."
   [conn method params]
   (let [state-atom (:state-atom conn)
         id (str (java.util.UUID/randomUUID))
-        p (promise)
+        ch (chan 1)
         wire-params (when params (util/clj->wire params))
         msg {:jsonrpc "2.0"
              :id id
              :method method
              :params wire-params}]
     (log/debug "Sending request: method=" method " id=" id)
-    (swap! state-atom assoc-in [:connection :pending-requests id] {:promise p :method method})
+    (swap! state-atom assoc-in [:connection :pending-requests id] {:ch ch :method method})
     (put! (:outgoing-ch conn) msg)
-    p))
+    ch))
 
-(defn- remove-pending-by-promise!
-  "Remove a pending request entry by promise identity."
-  [state-atom p]
+(defn- remove-pending-by-chan!
+  "Remove a pending request entry by channel identity."
+  [state-atom target-ch]
   (update-conn! state-atom update :pending-requests
                 (fn [pending]
-                  (reduce-kv (fn [m id {:keys [promise] :as entry}]
-                               (if (identical? promise p)
+                  (reduce-kv (fn [m id {:keys [ch] :as entry}]
+                               (if (identical? ch target-ch)
                                  m
                                  (assoc m id entry)))
                              {}
@@ -436,13 +441,18 @@
    (send-request! conn method params 60000))
   ([conn method params timeout-ms]
    (let [state-atom (:state-atom conn)
-         p (send-request conn method params)
-         result (deref p timeout-ms ::timeout)]
+         response-ch (send-request conn method params)
+         timeout-ch (async/timeout timeout-ms)
+         [result port] (async/alts!! [response-ch timeout-ch])]
      (cond
-       (= result ::timeout)
+       (= port timeout-ch)
        (do
-         (remove-pending-by-promise! state-atom p)
+         (remove-pending-by-chan! state-atom response-ch)
+         (close! response-ch)
          (throw (ex-info "Request timeout" {:method method :timeout-ms timeout-ms})))
+
+       (nil? result)
+       (throw (ex-info "Response channel closed" {:method method}))
 
        (:error result)
        (throw (ex-info (get-in result [:error :message] "RPC error")
