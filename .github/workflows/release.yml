@@ -241,6 +241,8 @@ jobs:
         run: |
           export GNUPGHOME="$RUNNER_TEMP/gnupg"
           printf '%s' "$GPG_PRIVATE_KEY" | gpg --batch --import --no-tty --quiet
+          echo "allow-loopback-pinentry" >> "$GNUPGHOME/gpg-agent.conf"
+          gpgconf --kill gpg-agent || true
 
       # --- Deploy ---
 
