@@ -389,13 +389,15 @@
 
    Validation is synchronous (throws immediately on invalid config).
    The RPC call parks instead of blocking, making this safe inside go blocks.
+   On RPC error, delivers an ExceptionInfo (check with `(instance? Throwable result)`).
 
    Example:
    ```clojure
    (go
-     (let [session (<! (copilot/<create-session client {:model \"gpt-5.2\"}))]
-       (let [answer (<! (copilot/<send! session {:prompt \"Hello\"}))]
-         (println answer))))
+     (let [result (<! (copilot/<create-session client {:model \"gpt-5.2\"}))]
+       (when-not (instance? Throwable result)
+         (let [answer (<! (copilot/<send! result {:prompt \"Hello\"}))]
+           (println answer)))))
    ```"
   ([client]
    (client/<create-session client))
@@ -516,13 +518,15 @@
 
    Validation is synchronous (throws immediately on invalid config).
    The RPC call parks instead of blocking, making this safe inside go blocks.
+   On RPC error, delivers an ExceptionInfo (check with `(instance? Throwable result)`).
 
    Example:
    ```clojure
    (go
-     (let [session (<! (copilot/<resume-session client \"session-123\"))]
-       ;; use resumed session
-       ))
+     (let [result (<! (copilot/<resume-session client \"session-123\"))]
+       (when-not (instance? Throwable result)
+         ;; use resumed session
+         )))
    ```"
   ([client session-id]
    (client/<resume-session client session-id))

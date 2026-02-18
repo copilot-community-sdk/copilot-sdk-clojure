@@ -263,15 +263,17 @@ Resume an existing session by ID. The `config` map accepts the same options as `
 
 Async version of `create-session`. Returns a channel that delivers a `CopilotSession`.
 
-Validation is synchronous (throws immediately on invalid config). The RPC call parks instead of blocking, making this safe inside `go` blocks.
+Validation is synchronous (throws immediately on invalid config). The RPC call parks instead of blocking, making this safe inside `go` blocks. On RPC error, delivers an `ExceptionInfo` to the channel instead of a session — check with `(instance? Throwable result)`.
 
 ```clojure
 (require '[clojure.core.async :refer [go <!]])
 
 (go
-  (let [session (<! (copilot/<create-session client {:model "gpt-5.2"}))]
-    (let [answer (<! (copilot/<send! session {:prompt "Hello"}))]
-      (println answer))))
+  (let [result (<! (copilot/<create-session client {:model "gpt-5.2"}))]
+    (if (instance? Throwable result)
+      (println "Error:" (ex-message result))
+      (let [answer (<! (copilot/<send! result {:prompt "Hello"}))]
+        (println answer)))))
 ```
 
 #### `<resume-session`
@@ -283,7 +285,7 @@ Validation is synchronous (throws immediately on invalid config). The RPC call p
 
 Async version of `resume-session`. Returns a channel that delivers a `CopilotSession`.
 
-Same config options as `resume-session`. Safe for use inside `go` blocks.
+Same config options as `resume-session`. Safe for use inside `go` blocks. On RPC error, delivers an `ExceptionInfo` to the channel — check with `(instance? Throwable result)`.
 
 ```clojure
 (go

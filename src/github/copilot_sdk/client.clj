@@ -1104,11 +1104,16 @@
    (throws immediately on invalid config). The RPC call parks instead of blocking,
    making this safe to use inside go blocks.
 
+   On RPC error, delivers an ExceptionInfo to the channel (not nil).
+   Callers should check the result with (instance? Throwable result).
+
    Usage:
      (go
-       (let [session (<! (<create-session client {:model \"gpt-5.2\"}))]
-         ;; use session...
-         ))"
+       (let [result (<! (<create-session client {:model \"gpt-5.2\"}))]
+         (if (instance? Throwable result)
+           (println \"Error:\" (ex-message result))
+           ;; use result as session
+           )))"
   ([client]
    (<create-session client {}))
   ([client config]
@@ -1122,7 +1127,8 @@
        (when-let [response (<! rpc-ch)]
          (if-let [err (:error response)]
            (do (log/error "<create-session RPC error: " err)
-               nil)
+               (ex-info (str "Failed to create session: " (:message err))
+                        {:error err}))
            (let [result (:result response)
                  session (finalize-session client result config)]
              (log/info "Session created (async): " (:session-id result))
@@ -1135,11 +1141,16 @@
    (throws immediately on invalid config). The RPC call parks instead of blocking,
    making this safe to use inside go blocks.
 
+   On RPC error, delivers an ExceptionInfo to the channel (not nil).
+   Callers should check the result with (instance? Throwable result).
+
    Usage:
      (go
-       (let [session (<! (<resume-session client session-id {:model \"gpt-5.2\"}))]
-         ;; use session...
-         ))"
+       (let [result (<! (<resume-session client session-id {:model \"gpt-5.2\"}))]
+         (if (instance? Throwable result)
+           (println \"Error:\" (ex-message result))
+           ;; use result as session
+           )))"
   ([client session-id]
    (<resume-session client session-id {}))
   ([client session-id config]
@@ -1158,7 +1169,8 @@
        (when-let [response (<! rpc-ch)]
          (if-let [err (:error response)]
            (do (log/error "<resume-session RPC error: " err)
-               nil)
+               (ex-info (str "Failed to resume session: " (:message err))
+                        {:error err :session-id session-id}))
            (let [result (:result response)
                  session (finalize-session client result config)]
              session)))))))

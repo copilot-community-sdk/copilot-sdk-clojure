@@ -456,76 +456,78 @@
    Acquires lock, sends message, and processes events — all via parking channel ops.
    Returns events-ch immediately; events flow once the go block completes setup."
   [session opts timeout-ms]
-  (let [{:keys [session-id client]} session
-        out-ch (chan 1024)
-        event-ch (chan 1024)
-        {:keys [event-mult send-lock]} (session-io client session-id)
-        released? (atom false)
-        release-lock! (fn []
-                        (when (compare-and-set! released? false true)
-                          (put! send-lock :token)))
-        deadline-ch (when timeout-ms (async/timeout timeout-ms))
-        timeout-event {:type :copilot/session.error
-                       :data {:message (str "Timeout after " timeout-ms "ms waiting for session.idle")
-                              :timeout-ms timeout-ms}}
-        emit! (fn [event]
-                (when-not (async/offer! out-ch event)
-                  (log/debug "Dropping event for session " session-id " due to full async buffer")))
-        cleanup! (fn []
-                   (untap event-mult event-ch)
-                   (close! event-ch)
-                   (close! out-ch)
-                   (release-lock!))]
-    (go
-      (when (<! send-lock) ;; park for lock (nil = channel closed)
-        (try
-          (tap event-mult event-ch)
-          ;; Send message via channel-based RPC (no blocking)
-          (let [conn (connection-io client)
-                wire-attachments (when (:attachments opts)
-                                   (util/attachments->wire (:attachments opts)))
-                params (cond-> {:session-id session-id
-                                :prompt (:prompt opts)}
-                         wire-attachments (assoc :attachments wire-attachments)
-                         (:mode opts) (assoc :mode (name (:mode opts))))
-                response-ch (proto/send-request conn "session.send" params)
-                [result port] (if deadline-ch
-                                (async/alts! [response-ch deadline-ch])
-                                [(<! response-ch) response-ch])]
-            (cond
-              ;; Timeout during send
-              (and deadline-ch (= port deadline-ch))
-              (do (emit! timeout-event) (cleanup!))
+  (let [{:keys [session-id client]} session]
+    (when (:destroyed? (session-state client session-id))
+      (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+    (let [out-ch (chan 1024)
+          event-ch (chan 1024)
+          {:keys [event-mult send-lock]} (session-io client session-id)
+          released? (atom false)
+          release-lock! (fn []
+                          (when (compare-and-set! released? false true)
+                            (put! send-lock :token)))
+          deadline-ch (when timeout-ms (async/timeout timeout-ms))
+          timeout-event {:type :copilot/session.error
+                         :data {:message (str "Timeout after " timeout-ms "ms waiting for session.idle")
+                                :timeout-ms timeout-ms}}
+          emit! (fn [event]
+                  (when-not (async/offer! out-ch event)
+                    (log/debug "Dropping event for session " session-id " due to full async buffer")))
+          cleanup! (fn []
+                     (untap event-mult event-ch)
+                     (close! event-ch)
+                     (close! out-ch)
+                     (release-lock!))]
+      (go
+        (when (<! send-lock) ;; park for lock (nil = channel closed)
+          (try
+            (tap event-mult event-ch)
+            ;; Send message via channel-based RPC (no blocking)
+            (let [conn (connection-io client)
+                  wire-attachments (when (:attachments opts)
+                                     (util/attachments->wire (:attachments opts)))
+                  params (cond-> {:session-id session-id
+                                  :prompt (:prompt opts)}
+                           wire-attachments (assoc :attachments wire-attachments)
+                           (:mode opts) (assoc :mode (name (:mode opts))))
+                  response-ch (proto/send-request conn "session.send" params)
+                  [result port] (if deadline-ch
+                                  (async/alts! [response-ch deadline-ch])
+                                  [(<! response-ch) response-ch])]
+              (cond
+                ;; Timeout during send
+                (and deadline-ch (= port deadline-ch))
+                (do (emit! timeout-event) (cleanup!))
 
-              ;; RPC error or channel closed
-              (or (nil? result) (:error result))
-              (do
-                (when (:error result)
-                  (log/error "Async send RPC error: " (get-in result [:error :message])))
-                (cleanup!))
+                ;; RPC error or channel closed
+                (or (nil? result) (:error result))
+                (do
+                  (when (:error result)
+                    (log/error "Async send RPC error: " (get-in result [:error :message])))
+                  (cleanup!))
 
-              ;; Success — process events
-              :else
-              (loop []
-                (let [[event ch] (if deadline-ch
-                                   (async/alts! [event-ch deadline-ch])
-                                   [(<! event-ch) event-ch])]
-                  (cond
-                    (and deadline-ch (= ch deadline-ch))
-                    (do (emit! timeout-event) (cleanup!))
+                ;; Success — process events
+                :else
+                (loop []
+                  (let [[event ch] (if deadline-ch
+                                     (async/alts! [event-ch deadline-ch])
+                                     [(<! event-ch) event-ch])]
+                    (cond
+                      (and deadline-ch (= ch deadline-ch))
+                      (do (emit! timeout-event) (cleanup!))
 
-                    (nil? event)
-                    (do (untap event-mult event-ch) (close! out-ch) (release-lock!))
+                      (nil? event)
+                      (do (untap event-mult event-ch) (close! out-ch) (release-lock!))
 
-                    (#{:copilot/session.idle :copilot/session.error} (:type event))
-                    (do (emit! event) (cleanup!))
+                      (#{:copilot/session.idle :copilot/session.error} (:type event))
+                      (do (emit! event) (cleanup!))
 
-                    :else
-                    (do (emit! event) (recur)))))))
-          (catch Exception e
-            (log/error "<send-async* error for session " session-id ": " (ex-message e))
-            (cleanup!)))))
-    out-ch))
+                      :else
+                      (do (emit! event) (recur)))))))
+            (catch Exception e
+              (log/error "<send-async* error for session " session-id ": " (ex-message e))
+              (cleanup!)))))
+      out-ch)))
 
 (defn send-async
   "Send a message and return a channel that receives events until session.idle.
