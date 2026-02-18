@@ -17,15 +17,15 @@
 (deftest test-read-loop-stops-on-eof
   (testing "EOF stops read loop and fails pending requests"
     (let [state-atom (atom {:connection (protocol/initial-connection-state)})
-          pending-promise (promise)
-          _ (swap! state-atom assoc-in [:connection :pending-requests 1] {:promise pending-promise})
+          pending-ch (async/chan 1)
+          _ (swap! state-atom assoc-in [:connection :pending-requests 1] {:ch pending-ch})
           in (ByteArrayInputStream. (byte-array 0))
           out (ByteArrayOutputStream.)
           conn (protocol/connect in out state-atom)]
       (try
         (is (true? (wait-for #(false? (get-in @state-atom [:connection :running?])) 200)))
-        (let [result (deref pending-promise 200 ::timeout)]
-          (is (not= ::timeout result))
+        (let [result (<!! pending-ch)]
+          (is (some? result))
           (is (= -32000 (get-in result [:error :code]))))
         (finally
           (protocol/disconnect conn))))))
