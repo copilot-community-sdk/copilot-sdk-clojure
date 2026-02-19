@@ -2,6 +2,8 @@
 
 The Copilot SDK can integrate with **MCP servers** (Model Context Protocol) to extend the assistant's capabilities with external tools. MCP servers run as separate processes and expose tools (functions) that Copilot can invoke during conversations.
 
+> **Important:** MCP tools often require permissions (file access, shell commands, etc.). The SDK uses a **deny-by-default** permission model. To allow MCP tool execution, either use `:on-permission-request copilot/approve-all` for blanket approval, or provide a custom permission handler. See the [Permission Handling](#permission-handling) section below.
+
 ## What is MCP?
 
 [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) is an open standard for connecting AI assistants to external tools and data sources. MCP servers can:
@@ -31,6 +33,7 @@ The SDK supports two types of MCP servers:
 
 (copilot/with-client-session [session
                               {:model "gpt-5.2"
+                               :on-permission-request copilot/approve-all
                                :mcp-servers
                                {"my-local-server"
                                 {:mcp-command "node"
@@ -46,6 +49,7 @@ The SDK supports two types of MCP servers:
 ```clojure
 (copilot/with-client-session [session
                               {:model "gpt-5.2"
+                               :on-permission-request copilot/approve-all
                                :mcp-servers
                                {"github"
                                 {:mcp-server-type :http
@@ -62,6 +66,7 @@ You can combine multiple MCP servers in a single session:
 ```clojure
 (copilot/with-client-session [session
                               {:model "gpt-5.2"
+                               :on-permission-request copilot/approve-all
                                :mcp-servers
                                {"filesystem"
                                 {:mcp-command "npx"
@@ -86,6 +91,7 @@ Here's a complete working example using the official [`@modelcontextprotocol/ser
 
 (copilot/with-client-session [session
                               {:model "gpt-5.2"
+                               :on-permission-request copilot/approve-all
                                :mcp-servers
                                {"filesystem"
                                 {:mcp-command "npx"
@@ -156,6 +162,7 @@ MCP server tools work alongside custom tools defined with `define-tool`:
 
 (copilot/with-client-session [session
                               {:model "gpt-5.2"
+                               :on-permission-request copilot/approve-all
                                :tools [my-tool]
                                :mcp-servers
                                {"filesystem"
@@ -165,6 +172,51 @@ MCP server tools work alongside custom tools defined with `define-tool`:
   ;; Both MCP tools and custom tools are available
   )
 ```
+
+## Permission Handling
+
+MCP tools often require permissions to access files, execute shell commands, or perform network requests. The SDK uses a **deny-by-default** permission model — all permission requests are denied unless you provide an `:on-permission-request` handler.
+
+### Approve All Permissions
+
+For development or trusted MCP servers, use `copilot/approve-all` to approve all permission requests:
+
+```clojure
+(copilot/with-client-session [session
+                              {:model "gpt-5.2"
+                               :on-permission-request copilot/approve-all
+                               :mcp-servers
+                               {"filesystem"
+                                {:mcp-command "npx"
+                                 :mcp-args ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]
+                                 :mcp-tools ["*"]}}}]
+  (println (h/query "List the files in /tmp" :session session)))
+```
+
+### Custom Permission Handler
+
+For fine-grained control, provide a custom handler that approves or denies specific operations:
+
+```clojure
+(defn my-permission-handler [request _ctx]
+  (if (= (:capability request) "bash")
+    {:kind :denied-by-rules
+     :rules [{:kind "bash"}]}
+    {:kind :approved}))
+
+(copilot/with-client-session [session
+                              {:model "gpt-5.2"
+                               :on-permission-request my-permission-handler
+                               :mcp-servers
+                               {"filesystem"
+                                {:mcp-command "npx"
+                                 :mcp-args ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]
+                                 :mcp-tools ["*"]}}}]
+  ;; File operations approved, shell commands denied
+  )
+```
+
+See the [API Reference](../reference/API.md#permission-handling) for complete permission handler documentation.
 
 ## Troubleshooting
 

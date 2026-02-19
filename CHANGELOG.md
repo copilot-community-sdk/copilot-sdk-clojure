@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file. This change
 
 ### Changed
 - MCP local server example now passes `:on-permission-request copilot/approve-all` (required for MCP tool execution under deny-by-default)
+- MCP documentation now includes permission handling guidance and all code examples updated to show `:on-permission-request copilot/approve-all` for MCP server usage
 
 ### Fixed
 - Permission denial result `:kind` now consistently uses keywords (not strings) in default handler responses, matching specs and `approve-all` behavior
