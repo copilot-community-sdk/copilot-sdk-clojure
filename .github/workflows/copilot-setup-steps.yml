@@ -39,6 +39,12 @@ jobs:
             .cpcache
           key: cljdeps-${{ hashFiles('deps.edn', 'bb.edn') }}
           restore-keys: cljdeps-
+      - name: Symlink tools to standard PATH
+        run: |
+          sudo ln -sf $(which bb) /usr/local/bin/bb
+          sudo ln -sf $(which clj) /usr/local/bin/clj
+          sudo ln -sf $(which clojure) /usr/local/bin/clojure
+          sudo ln -sf $(which java) /usr/local/bin/java
       - name: Install gh-aw extension
         uses: github/gh-aw/actions/setup-cli@v0.46.0
         with:
