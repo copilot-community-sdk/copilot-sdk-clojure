@@ -40,6 +40,7 @@ tools:
   - "head:*"
   - "tail:*"
   - "wc:*"
+  - "jq:*"
   cache-memory: true
   edit: null
   github:
