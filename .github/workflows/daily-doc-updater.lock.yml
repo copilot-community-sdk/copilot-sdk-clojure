@@ -280,7 +280,7 @@ jobs:
         uses: DeLaGuardo/setup-clojure@27f91575da4b554a890f789faf65b6e433162b88 # 13.5.2
         with:
           bb: 1.12.214
-          cli: latest
+          cli: 1.12.4.1582
       - name: Cache Clojure deps
         uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5
         with:
@@ -298,7 +298,7 @@ jobs:
           sudo ln -sf $(which clojure) /usr/local/bin/clojure
           sudo ln -sf $(which java) /usr/local/bin/java
       - name: Pre-download Clojure deps and ensure global access
-        run: "# Download deps if cache missed\nclojure -P\n# Ensure deps directories are readable by any user\nchmod -R a+rX ~/.m2/repository ~/.deps.clj 2>/dev/null || true\n"
+        run: "# Download deps and tools jar (version pinned to match bb's built-in deps.clj)\nclojure -P\n# Ensure deps directories are readable by any user\nchmod -R a+rX ~/.m2/repository ~/.deps.clj 2>/dev/null || true\n"
       - name: Install gh-aw extension
         uses: github/gh-aw/actions/setup-cli@f88ec26c65cc20ebb8ceabe809c9153385945bfe # v0.46.0
         with:

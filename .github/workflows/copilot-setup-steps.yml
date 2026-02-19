@@ -27,7 +27,7 @@ jobs:
       - name: Set up Clojure
         uses: DeLaGuardo/setup-clojure@13.5.2
         with:
-          cli: latest
+          cli: 1.12.4.1582
           bb: 1.12.214
       - name: Cache Clojure deps
         uses: actions/cache@v5
@@ -47,7 +47,7 @@ jobs:
           sudo ln -sf $(which java) /usr/local/bin/java
       - name: Pre-download Clojure deps and ensure global access
         run: |
-          # Download deps if cache missed
+          # Download deps and tools jar (version pinned to match bb's built-in deps.clj)
           clojure -P
           # Ensure deps directories are readable by any user
           chmod -R a+rX ~/.m2/repository ~/.deps.clj 2>/dev/null || true
