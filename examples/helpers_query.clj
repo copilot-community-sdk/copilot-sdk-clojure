@@ -9,7 +9,7 @@
   {:prompt "What is the capital of Japan? Answer in one sentence."})
 
 (def session-config
-  {:model "gpt-5.2"})
+  {:model "claude-haiku-4.5"})
 
 (defn run
   [{:keys [prompt] :or {prompt (:prompt defaults)}}]

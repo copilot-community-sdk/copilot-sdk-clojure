@@ -23,7 +23,7 @@
   [{:keys [allowed-dir] :or {allowed-dir (:allowed-dir defaults)}}]
   (println (str "MCP Filesystem Server — allowed directory: " allowed-dir))
   (println)
-  (let [session-config {:model "gpt-5.2"
+  (let [session-config {:model "claude-haiku-4.5"
                         :on-permission-request copilot/approve-all
                         :mcp-servers
                         {"filesystem"
@@ -54,7 +54,7 @@
            :handler (fn [{:keys [text]} _]
                       (copilot/result-success
                        (str "Summary: " (subs text 0 (min 100 (count text))) "...")))})
-        session-config {:model "gpt-5.2"
+        session-config {:model "claude-haiku-4.5"
                         :tools [summary-tool]
                         :on-permission-request copilot/approve-all
                         :mcp-servers

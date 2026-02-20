@@ -62,7 +62,7 @@ For multi-turn conversations, pass a session instance to `query`:
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:model "claude-haiku-4.5"}]
   ;; Session maintains context between queries
   (println (h/query "What is the capital of France?" :session session))
   (println (h/query "What is its population?" :session session)))
@@ -71,7 +71,7 @@ For multi-turn conversations, pass a session instance to `query`:
 Or use the full API for maximum flexibility:
 
 ```clojure
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:model "claude-haiku-4.5"}]
   (println (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
                (get-in [:data :content]))))
 ```
@@ -226,7 +226,7 @@ await client.stop();
                 (str "Hello, " name "!"))}))
 
 (def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "claude-haiku-4.5"
                 :tools [greet-tool]}))
 
 (let [ch (chan 100)]

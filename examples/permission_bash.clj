@@ -22,7 +22,7 @@
   (let [{:keys [tool command]} (shell-config)
         denied-command (str command " && echo 'denied'")
         allowed-commands #{command}]
-    (copilot/with-client-session [session {:model "gpt-5.2"
+    (copilot/with-client-session [session {:model "claude-haiku-4.5"
                                            :available-tools [tool]
                                            :on-permission-request (fn [request _ctx]
                                                                     (pprint/pprint request)

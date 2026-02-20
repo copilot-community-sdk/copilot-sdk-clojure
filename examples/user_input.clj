@@ -43,7 +43,7 @@
   (println "=== User Input Example ===")
   (println "This example shows how to handle ask_user requests from the agent.\n")
 
-  (copilot/with-client-session [session {:model "gpt-5.2"
+  (copilot/with-client-session [session {:model "claude-haiku-4.5"
                                          :on-user-input-request
                                          (fn [request _invocation]
                                            ;; request has :question, :choices, :allow-freeform
@@ -96,7 +96,7 @@
   (println "      The agent may or may not choose to use ask_user.\n")
 
   (let [input-requested? (atom false)]
-    (copilot/with-client-session [session {:model "gpt-5.2"
+    (copilot/with-client-session [session {:model "claude-haiku-4.5"
                                            :on-user-input-request
                                            (fn [{:keys [question choices]} _]
                                              (reset! input-requested? true)

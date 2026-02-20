@@ -34,7 +34,7 @@
 
 (defn run
   [{:keys [languages] :or {languages (:languages defaults)}}]
-  (copilot/with-client-session [session {:model "gpt-5.2"
+  (copilot/with-client-session [session {:model "claude-haiku-4.5"
                                          :tools [lookup-tool]}]
     (doseq [lang languages]
       (println (str "Looking up: " lang))

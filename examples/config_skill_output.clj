@@ -31,7 +31,7 @@
     (.mkdirs (java.io.File. output-dir))
     (write-demo-skill! skill-dir)
     (println (str "[debug] output-dir: " output-dir))
-    (copilot/with-client-session [session {:model "gpt-5.2"
+    (copilot/with-client-session [session {:model "claude-haiku-4.5"
                                            :config-dir config-dir
                                            :skill-directories [skill-dir]
                                            :disabled-skills ["demo-skill"]
