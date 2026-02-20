@@ -87,7 +87,8 @@ Key conventions (from `doc/style.md`):
 Run documentation validation at the start of every run, even if you later determine there are no documentation changes to make.
 
 ```bash
-bb validate-docs
+printf '{}\n' > /tmp/gh-aw/agent/bb-docs.edn
+bb --config /tmp/gh-aw/agent/bb-docs.edn script/validate_docs.clj
 ```
 
 If this command fails, include the exact failure output in your final report and stop further documentation edits.
@@ -183,7 +184,8 @@ For each missing or incomplete feature documentation:
 After making changes, run the documentation validator:
 
 ```bash
-bb validate-docs
+printf '{}\n' > /tmp/gh-aw/agent/bb-docs.edn
+bb --config /tmp/gh-aw/agent/bb-docs.edn script/validate_docs.clj
 ```
 
 This checks for broken internal links, unparseable Clojure code blocks, missing required files, and structural issues. Fix any issues found before proceeding.
@@ -200,7 +202,7 @@ If you made any documentation changes:
    - List of features documented
    - Summary of changes made
    - Links to relevant merged PRs that triggered the updates
-   - Validation results from `bb validate-docs`
+   - Validation results from `bb --config /tmp/gh-aw/agent/bb-docs.edn script/validate_docs.clj`
 
 **PR Title Format**: `[docs] Update documentation for features from [date]`
 
@@ -222,7 +224,7 @@ This PR updates the documentation based on features merged in the last 24 hours.
 
 ### Validation
 
-- `bb validate-docs` passed
+- `bb --config /tmp/gh-aw/agent/bb-docs.edn script/validate_docs.clj` passed
 
 ### Merged PRs Referenced
 
@@ -245,7 +247,7 @@ This PR updates the documentation based on features merged in the last 24 hours.
 - **Be Accurate**: Ensure documentation accurately reflects the code changes
 - **Follow Style**: Strictly adhere to `doc/style.md` and documentation instructions
 - **Be Selective**: Only document features that affect users (skip internal refactoring unless significant)
-- **Validate**: Always run `bb validate-docs` before creating a PR
+- **Validate**: Always run `bb --config /tmp/gh-aw/agent/bb-docs.edn script/validate_docs.clj` before creating a PR
 - **Clojure-idiomatic**: Use proper Clojure terminology and conventions in all documentation
 - **Link References**: Include links to relevant PRs and issues where appropriate
 
