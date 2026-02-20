@@ -47,6 +47,8 @@ tools:
   - "grep:*"
   - "git:*"
   - "bb:*"
+  - "python:*"
+  - "python3:*"
   - "which:*"
   - "head:*"
   - "tail:*"
