@@ -70,6 +70,15 @@ bb test
 COPILOT_E2E_TESTS=true bb test
 ```
 
+**Copilot Coding Agent**: When running as a Copilot Coding Agent, `COPILOT_GITHUB_TOKEN` is set
+by `copilot-setup-steps.yml`. Use it to authenticate E2E tests and examples:
+
+```bash
+export COPILOT_GITHUB_TOKEN="${COPILOT_GITHUB_TOKEN:-$GITHUB_TOKEN}"
+COPILOT_E2E_TESTS=true bb test
+./run-all-examples.sh
+```
+
 ### Instrumented Testing
 
 All public API functions have `clojure.spec` fdefs defined in `instrument.clj`.
