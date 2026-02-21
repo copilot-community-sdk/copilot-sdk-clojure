@@ -73,6 +73,12 @@ jobs:
           # /root/ paths, so bb finds them regardless of $HOME.
           # Ensure deps directories are readable by any user
           chmod -R a+rX ~/.m2/repository ~/.deps.clj 2>/dev/null || true
+      - name: Export Copilot token for SDK E2E tests
+        run: |
+          # Make the GitHub token available as COPILOT_GITHUB_TOKEN so the
+          # Copilot SDK E2E tests and examples can authenticate with the
+          # same token the Copilot Coding Agent uses.
+          echo "COPILOT_GITHUB_TOKEN=${COPILOT_GITHUB_TOKEN:-$GITHUB_TOKEN}" >> "$GITHUB_ENV"
       - name: Install gh-aw extension
         uses: github/gh-aw/actions/setup-cli@v0.48.1
         with:
