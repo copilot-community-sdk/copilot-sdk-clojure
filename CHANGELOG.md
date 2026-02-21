@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Changed
-- Non-streaming examples now use `claude-haiku-4.5` instead of `gpt-5.2` for faster response times
+- Recommended default model for non-streaming examples is `claude-haiku-4.5` instead of `gpt-5.2` for faster response times
 
 ## [0.1.26.0-SNAPSHOT] - 2026-02-20
 ### Added (upstream PR #510 sync)
