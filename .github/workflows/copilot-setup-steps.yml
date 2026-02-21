@@ -74,6 +74,6 @@ jobs:
           # Ensure deps directories are readable by any user
           chmod -R a+rX ~/.m2/repository ~/.deps.clj 2>/dev/null || true
       - name: Install gh-aw extension
-        uses: github/gh-aw/actions/setup-cli@v0.46.0
+        uses: github/gh-aw/actions/setup-cli@v0.48.1
         with:
-          version: v0.46.0
+          version: v0.48.1
