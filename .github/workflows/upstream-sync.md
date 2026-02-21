@@ -160,9 +160,9 @@ For each change to port:
 
 ### Phase 5: Verify Correctness
 
-1. **Set up the Copilot CLI for E2E tests**. The agentic workflow environment provides a `GITHUB_TOKEN`. Export it as `COPILOT_GITHUB_TOKEN` so the SDK can authenticate, and locate the Copilot CLI binary:
+1. **Set up the Copilot CLI for E2E tests**. The agentic workflow environment provides a `GITHUB_TOKEN`. Export it as `COPILOT_GITHUB_TOKEN` if that variable is not already set, and locate the Copilot CLI binary:
    ```bash
-   export COPILOT_GITHUB_TOKEN="$GITHUB_TOKEN"
+   export COPILOT_GITHUB_TOKEN="${COPILOT_GITHUB_TOKEN:-$GITHUB_TOKEN}"
    export COPILOT_CLI_PATH=$(which copilot 2>/dev/null || which copilot-cli 2>/dev/null || echo "copilot")
    ```
 
