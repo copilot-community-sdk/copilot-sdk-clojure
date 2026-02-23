@@ -10,6 +10,7 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
 | Azure OpenAI / Azure AI Foundry | `:azure` | Azure-hosted models |
 | Anthropic | `:anthropic` | Claude models |
 | Ollama | `:openai` | Local models via OpenAI-compatible API |
+| Microsoft Foundry Local | `:openai` | Run AI models locally on your device via OpenAI-compatible API |
 | Other OpenAI-compatible | `:openai` | vLLM, LiteLLM, etc. |
 
 ## Quick Start: Azure AI Foundry
@@ -47,6 +48,37 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
                                :provider {:provider-type :openai
                                           :base-url "http://localhost:11434/v1"}}]
   (println (h/query "Hello!" :session session)))
+```
+
+## Quick Start: Microsoft Foundry Local
+
+[Microsoft Foundry Local](https://foundrylocal.ai) lets you run AI models locally on your own device with an OpenAI-compatible API. No API key is needed.
+
+> **Note:** Foundry Local starts on a **dynamic port** — the port is not fixed. Use `foundry service status` to confirm the port the service is currently listening on, then use that port in your `:base-url`.
+
+```clojure
+;; No API key needed for local Foundry Local
+;; Replace <PORT> with the port from: foundry service status
+(copilot/with-client-session [session
+                              {:model "phi-4-mini"
+                               :provider {:provider-type :openai
+                                          :base-url "http://localhost:<PORT>/v1"}}]
+  (println (h/query "Hello!" :session session)))
+```
+
+To get started with Foundry Local:
+
+```bash
+# Windows: Install Foundry Local CLI (requires winget)
+winget install Microsoft.FoundryLocal
+
+# macOS / Linux: see https://foundrylocal.ai for installation instructions
+
+# Run a model (starts the local server automatically)
+foundry model run phi-4-mini
+
+# Check the port the service is running on
+foundry service status
 ```
 
 ## Quick Start: Anthropic
@@ -185,6 +217,21 @@ However, if your Azure AI Foundry deployment provides an OpenAI-compatible endpo
 ;; ✅ Correct: OpenAI-compatible Azure AI Foundry endpoint
 {:provider {:provider-type :openai
             :base-url "https://your-resource.openai.azure.com/openai/v1/"}}
+```
+
+### Connection Refused (Foundry Local)
+
+Foundry Local uses a dynamic port that may change between restarts. Confirm the active port:
+
+```bash
+# Check the service status and port
+foundry service status
+```
+
+Update your `:base-url` to match the port shown in the output. If the service is not running, start a model to launch it:
+
+```bash
+foundry model run phi-4-mini
 ```
 
 ### Connection Refused (Ollama)
