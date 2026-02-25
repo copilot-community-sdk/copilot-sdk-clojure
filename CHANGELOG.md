@@ -3,7 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-### Added (documentation)
+### Added (v0.1.27 sync)
+- `list-agents` — list available custom agents for a session (`session/list-agents`) (upstream PR #544).
+- `current-agent` — get the currently selected custom agent (`session/current-agent`) (upstream PR #544).
+- `select-agent!` — select a custom agent by name (`session/select-agent!`) (upstream PR #544).
+- `deselect-agent!` — deselect the current agent, reverting to default Copilot agent (`session/deselect-agent!`) (upstream PR #544).
+- `compact!` — manually compact session history to free up context window space (`session/compact!`) (upstream PR #544).
+- `:copilot/session.task_complete` event type — emitted when a task is complete (upstream PR #544).
+- `:custom-tool` permission kind — permission requests now include SDK-registered custom tools (upstream PR #555).
+
+### Changed (v0.1.27 sync)
+- **BREAKING**: `:on-permission-request` is now required in `create-session` and `resume-session` configs. Omitting the handler now throws an explicit error: `"An :on-permission-request handler is required when creating a session"` (upstream PR #554).
+- Removed 0-arity overloads of `create-session`, `<create-session`, `resume-session`, and `<resume-session` — the config map argument is now required (upstream PR #554).
+
 - Microsoft Foundry Local BYOK provider guide in `doc/auth/byok.md`: quick start example, installation instructions, and connection troubleshooting (upstream PR #461).
 
 ### Added (upstream PR #329 sync)

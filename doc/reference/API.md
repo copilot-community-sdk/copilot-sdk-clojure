@@ -223,7 +223,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options` |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools` |
 | `:custom-agents` | vector | Custom agent configs |
-| `:on-permission-request` | fn | Permission handler function. Without a handler, all permissions are denied (deny-by-default). Use `copilot/approve-all` to approve everything. |
+| `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything, or provide a custom function. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
@@ -766,6 +766,51 @@ Switch the model for this session mid-conversation. Returns the new model ID str
 ;; After: claude-sonnet-4.5
 ```
 
+#### `list-agents`
+
+```clojure
+(session/list-agents session)
+;; => {:agents [{:name "my-agent" :display-name "My Agent" :description "..."}]}
+```
+
+List available custom agents for this session. Returns a map with `:agents` — a vector of agent maps.
+
+#### `current-agent`
+
+```clojure
+(session/current-agent session)
+;; => {:agent {:name "my-agent" :display-name "My Agent"}}
+```
+
+Get the currently selected custom agent. Returns a map with `:agent` (or nil if no agent selected).
+
+#### `select-agent!`
+
+```clojure
+(session/select-agent! session "my-agent")
+;; => {:agent {:name "my-agent" :display-name "My Agent"}}
+```
+
+Select a custom agent by name. Returns a map with `:agent`.
+
+#### `deselect-agent!`
+
+```clojure
+(session/deselect-agent! session)
+;; => {}
+```
+
+Deselect the current custom agent, reverting to the default Copilot agent.
+
+#### `compact!`
+
+```clojure
+(session/compact! session)
+;; => {:success? true :tokens-removed 1200 :messages-removed 5}
+```
+
+Manually compact session history to free up context window space. Returns a map with `:success?`, `:tokens-removed`, and `:messages-removed`.
+
 #### `destroy!`
 
 ```clojure
@@ -853,6 +898,7 @@ copilot/tool-events
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
+| `:copilot/session.task_complete` | Task complete signal emitted by the session |
 | `:copilot/skill.invoked` | Skill invocation triggered |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |

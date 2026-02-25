@@ -73,7 +73,7 @@
 (deftest ^:e2e test-e2e-create-session
   (when-e2e
    (testing "Create session with real CLI"
-     (let [session (sdk/create-session *e2e-client* {})]
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
        (is (some? session))
        (is (string? (sdk/session-id session)))
         ;; Clean up
@@ -82,7 +82,7 @@
 (deftest ^:e2e test-e2e-simple-conversation
   (when-e2e
    (testing "Simple conversation with real CLI"
-     (let [session (sdk/create-session *e2e-client* {})
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
            result (sdk/send-and-wait! session
                                       {:prompt "What is 2 + 2? Reply with just the number."}
                                       30000)] ; 30 second timeout
@@ -95,7 +95,7 @@
 (deftest ^:e2e test-e2e-list-sessions
   (when-e2e
    (testing "List sessions with real CLI"
-     (let [session (sdk/create-session *e2e-client* {})
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
             ;; Send a message to ensure session is persisted
            _ (sdk/send-and-wait! session {:prompt "test"})
            sessions (sdk/list-sessions *e2e-client*)]
@@ -108,7 +108,7 @@
 (deftest ^:e2e test-e2e-session-abort
   (when-e2e
    (testing "Abort session operation"
-     (let [session (sdk/create-session *e2e-client* {})]
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
         ;; Send a message without waiting
        (sdk/send! session {:prompt "Write a very long essay about quantum physics."})
         ;; Abort should not throw
@@ -131,7 +131,7 @@
                    :handler (fn [args _invocation]
                               (reset! tool-called? true)
                               (str "The result is: " (+ (:a args) (:b args))))})
-           session (sdk/create-session *e2e-client* {:tools [tool]})]
+           session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all :tools [tool]})]
         ;; Ask a question that should trigger the calculator tool
        (let [result (sdk/send-and-wait! session
                                         {:prompt "Use the test_calculator tool to add 5 and 3"}
@@ -144,7 +144,7 @@
 (deftest ^:e2e test-e2e-send-async
   (when-e2e
    (testing "Async send with event channel"
-     (let [session (sdk/create-session *e2e-client* {})
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
            event-ch (sdk/send-async session {:prompt "Say 'hello' and nothing else."})
            events (atom [])]
         ;; Collect events with timeout
@@ -165,7 +165,7 @@
 (deftest ^:e2e test-e2e-streaming-deltas
   (when-e2e
    (testing "Streaming deltas when enabled"
-     (let [session (sdk/create-session *e2e-client* {:streaming? true})
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all :streaming? true})
            events-ch (sdk/subscribe-events session)
            deltas (atom [])
            _ (sdk/send! session {:prompt "Count from 1 to 5."})
@@ -187,7 +187,8 @@
   (when-e2e
    (testing "System message append mode"
      (let [session (sdk/create-session *e2e-client*
-                                       {:system-message {:mode :append
+                                       {:on-permission-request sdk/approve-all
+                                        :system-message {:mode :append
                                                          :content "Always end your response with the word BANANA."}})]
        (let [result (sdk/send-and-wait! session {:prompt "Say hello"} 30000)]
           ;; The model should follow the instruction
@@ -199,7 +200,8 @@
   (when-e2e
    (testing "System message replace mode"
      (let [session (sdk/create-session *e2e-client*
-                                       {:system-message {:mode :replace
+                                       {:on-permission-request sdk/approve-all
+                                        :system-message {:mode :replace
                                                          :content "You are a helpful assistant named TestBot. Always introduce yourself."}})]
        (let [result (sdk/send-and-wait! session {:prompt "Who are you?"} 30000)]
          (is (some? result))
@@ -210,11 +212,11 @@
 (deftest ^:e2e test-e2e-resume-session
   (when-e2e
    (testing "Resume existing session"
-     (let [session1 (sdk/create-session *e2e-client* {})
+     (let [session1 (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
            session-id (sdk/session-id session1)
            _ (sdk/send-and-wait! session1 {:prompt "Remember the word: APPLE"} 30000)
             ;; Resume the session
-           session2 (sdk/resume-session *e2e-client* session-id {})]
+           session2 (sdk/resume-session *e2e-client* session-id {:on-permission-request sdk/approve-all})]
        (is (= session-id (sdk/session-id session2)))
         ;; Should have conversation context
        (let [result (sdk/send-and-wait! session2
@@ -228,8 +230,8 @@
 (deftest ^:e2e test-e2e-multiple-sessions
   (when-e2e
    (testing "Multiple concurrent sessions"
-     (let [session1 (sdk/create-session *e2e-client* {})
-           session2 (sdk/create-session *e2e-client* {})]
+     (let [session1 (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
+           session2 (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
         ;; Should have unique IDs
        (is (not= (sdk/session-id session1) (sdk/session-id session2)))
         ;; Both should work
@@ -243,7 +245,7 @@
 (deftest ^:e2e test-e2e-send-returns-immediately
   (when-e2e
    (testing "send! returns immediately before completion"
-     (let [session (sdk/create-session *e2e-client* {})
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
            events (atom [])
            events-ch (sdk/subscribe-events session)]
         ;; Start collecting events in background
@@ -262,7 +264,7 @@
 (deftest ^:e2e test-e2e-send-and-wait-timeout
   (when-e2e
    (testing "sendAndWait throws on timeout"
-     (let [session (sdk/create-session *e2e-client* {})]
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
         ;; Use a very short timeout that should fail
         ;; Suppress logs since the expected ERROR message is noisy
        (with-quiet-logs

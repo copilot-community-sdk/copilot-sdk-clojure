@@ -48,24 +48,24 @@
 
 (s/fdef github.copilot-sdk.client/create-session
   :args (s/cat :client ::specs/client
-               :config (s/? ::specs/session-config))
+               :config ::specs/session-config)
   :ret ::specs/session)
 
 (s/fdef github.copilot-sdk.client/resume-session
   :args (s/cat :client ::specs/client
                :session-id ::specs/session-id
-               :config (s/? ::specs/resume-session-config))
+               :config ::specs/resume-session-config)
   :ret ::specs/session)
 
 (s/fdef github.copilot-sdk.client/<create-session
   :args (s/cat :client ::specs/client
-               :config (s/? ::specs/session-config))
+               :config ::specs/session-config)
   :ret ::specs/events-ch)
 
 (s/fdef github.copilot-sdk.client/<resume-session
   :args (s/cat :client ::specs/client
                :session-id ::specs/session-id
-               :config (s/? ::specs/resume-session-config))
+               :config ::specs/resume-session-config)
   :ret ::specs/events-ch)
 
 (s/fdef github.copilot-sdk.client/list-sessions
@@ -210,6 +210,27 @@
                :model-id string?)
   :ret ::specs/model-id)
 
+(s/fdef github.copilot-sdk.session/list-agents
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/current-agent
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/select-agent!
+  :args (s/cat :session ::specs/session
+               :agent-name string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/deselect-agent!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/compact!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
 ;; -----------------------------------------------------------------------------
 ;; Function specs for helpers namespace
 ;; -----------------------------------------------------------------------------
@@ -275,6 +296,11 @@
                       github.copilot-sdk.session/workspace-path
                       github.copilot-sdk.session/get-current-model
                       github.copilot-sdk.session/switch-model!
+                      github.copilot-sdk.session/list-agents
+                      github.copilot-sdk.session/current-agent
+                      github.copilot-sdk.session/select-agent!
+                      github.copilot-sdk.session/deselect-agent!
+                      github.copilot-sdk.session/compact!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events
@@ -322,6 +348,11 @@
                       github.copilot-sdk.session/workspace-path
                       github.copilot-sdk.session/get-current-model
                       github.copilot-sdk.session/switch-model!
+                      github.copilot-sdk.session/list-agents
+                      github.copilot-sdk.session/current-agent
+                      github.copilot-sdk.session/select-agent!
+                      github.copilot-sdk.session/deselect-agent!
+                      github.copilot-sdk.session/compact!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events

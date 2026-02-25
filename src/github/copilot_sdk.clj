@@ -10,7 +10,8 @@
    (copilot/start! client)
 
    ;; Create a session
-   (def session (copilot/create-session client {:model \"gpt-5.2\"}))
+   (def session (copilot/create-session client {:on-permission-request copilot/approve-all
+                                                :model \"gpt-5.2\"}))
 
    ;; Send a message and wait for response
    (def response (copilot/send-and-wait! session {:prompt \"What is 2+2?\"}))
@@ -42,6 +43,7 @@
     :copilot/session.usage_info
     :copilot/session.compaction_start
     :copilot/session.compaction_complete
+    :copilot/session.task_complete
     :copilot/session.shutdown
     :copilot/session.context_changed
     :copilot/session.title_changed
@@ -85,6 +87,7 @@
     :copilot/session.usage_info
     :copilot/session.compaction_start
     :copilot/session.compaction_complete
+    :copilot/session.task_complete
     :copilot/session.shutdown
     :copilot/session.context_changed
     :copilot/session.title_changed

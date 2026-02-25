@@ -723,3 +723,58 @@
                                     {:sessionId session-id
                                      :modelId model-id})]
     (:model-id result)))
+
+;; -----------------------------------------------------------------------------
+;; Agent selection API (upstream PR #544)
+;; -----------------------------------------------------------------------------
+
+(defn list-agents
+  "List available custom agents for this session.
+   Returns a map with :agents — a vector of agent maps, each with :name, :display-name, :description."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)
+        result (proto/send-request! conn "session.agent.list" {:sessionId session-id})]
+    result))
+
+(defn current-agent
+  "Get the currently selected custom agent for this session.
+   Returns a map with :agent — the selected agent map (or nil if no agent is selected)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)
+        result (proto/send-request! conn "session.agent.getCurrent" {:sessionId session-id})]
+    result))
+
+(defn select-agent!
+  "Select a custom agent for this session by name.
+   agent-name — the name of the custom agent to select.
+   Returns a map with :agent — the selected agent."
+  [session agent-name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)
+        result (proto/send-request! conn "session.agent.select"
+                                    {:sessionId session-id :name agent-name})]
+    result))
+
+(defn deselect-agent!
+  "Deselect the current custom agent, reverting to the default Copilot agent.
+   Returns an empty map."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)
+        result (proto/send-request! conn "session.agent.deselect" {:sessionId session-id})]
+    result))
+
+;; -----------------------------------------------------------------------------
+;; Session compaction API (upstream PR #544)
+;; -----------------------------------------------------------------------------
+
+(defn compact!
+  "Manually compact session history to free up context window space.
+   Returns a map with :success?, :tokens-removed, :messages-removed."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)
+        result (proto/send-request! conn "session.compaction.compact" {:sessionId session-id})]
+    result))
