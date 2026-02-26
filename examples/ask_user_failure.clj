@@ -16,7 +16,8 @@
   (let [cancelled-requests (atom [])]
     (copilot/with-client [client]
       (copilot/with-session [session client
-                             {:model "claude-haiku-4.5"
+                             {:on-permission-request copilot/approve-all
+                              :model "claude-haiku-4.5"
                               :on-user-input-request
                               (fn [request _invocation]
                                 (swap! cancelled-requests conj request)

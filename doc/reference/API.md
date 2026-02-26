@@ -29,10 +29,10 @@ When `:session` is a CopilotSession instance, the query uses that session direct
 ;; => "4"
 
 ;; With session options
-(h/query "Explain monads" :session {:model "claude-sonnet-4.5"})
+(h/query "Explain monads" :session {:on-permission-request copilot/approve-all :model "claude-sonnet-4.5"})
 
 ;; With system prompt
-(h/query "Hello" :session {:system-prompt "Be concise."})
+(h/query "Hello" :session {:on-permission-request copilot/approve-all :system-prompt "Be concise."})
 
 ;; With explicit client
 (copilot/with-client [client {}]
@@ -40,7 +40,7 @@ When `:session` is a CopilotSession instance, the query uses that session direct
 
 ;; With explicit session (multi-turn conversation)
 (copilot/with-client [client {}]
-  (copilot/with-session [session client {}]
+  (copilot/with-session [session client {:on-permission-request copilot/approve-all}]
     (h/query "My name is Alice." :session session)
     (h/query "What is my name?" :session session))) ;; context preserved!
 ```
@@ -54,7 +54,7 @@ When `:session` is a CopilotSession instance, the query uses that session direct
 Execute a query and return a bounded lazy sequence of events with guaranteed cleanup (default: 256 events).
 
 ```clojure
-(->> (h/query-seq! "Tell me a story" :session {:streaming? true})
+(->> (h/query-seq! "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})
      (filter #(= :copilot/assistant.message_delta (:type %)))
      (map #(get-in % [:data :delta-content]))
      (run! print))
@@ -70,7 +70,7 @@ Execute a query and return a core.async channel of events. Use this when you nee
 or want to stop reading early without leaking session resources.
 
 ```clojure
-(let [ch (h/query-chan "Tell me a story" :session {:streaming? true})]
+(let [ch (h/query-chan "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})]
   (go-loop []
     (when-let [event (<! ch)]
       (when (= :copilot/assistant.message_delta (:type event))
@@ -176,7 +176,8 @@ Create a new conversation session.
 #### `with-session`
 
 ```clojure
-(copilot/with-session [session client {:model "gpt-5.2"}]
+(copilot/with-session [session client {:model "gpt-5.2"
+                                       :on-permission-request copilot/approve-all}]
   ;; use session
   )
 ```
@@ -187,22 +188,26 @@ Create a session and ensure `destroy!` runs on exit.
 
 ```clojure
 ;; Form 1: [session session-opts] - anonymous client with default options
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:model "gpt-5.2"
+                                       :on-permission-request copilot/approve-all}]
   ;; use session
   )
 
 ;; Form 2: [client-opts session session-opts] - anonymous client with custom options
-(copilot/with-client-session [{:log-level :debug} session {:model "gpt-5.2"}]
+(copilot/with-client-session [{:log-level :debug} session {:model "gpt-5.2"
+                                                           :on-permission-request copilot/approve-all}]
   ;; use session
   )
 
 ;; Form 3: [client session session-opts] - named client with default options
-(copilot/with-client-session [client session {:model "gpt-5.2"}]
+(copilot/with-client-session [client session {:model "gpt-5.2"
+                                              :on-permission-request copilot/approve-all}]
   ;; use client and session
   )
 
 ;; Form 4: [client client-opts session session-opts] - named client with custom options
-(copilot/with-client-session [client {:log-level :debug} session {:model "gpt-5.2"}]
+(copilot/with-client-session [client {:log-level :debug} session {:model "gpt-5.2"
+                                                                  :on-permission-request copilot/approve-all}]
   ;; use client and session
   )
 ```
@@ -223,7 +228,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options` |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools` |
 | `:custom-agents` | vector | Custom agent configs |
-| `:on-permission-request` | fn | Permission handler function. Without a handler, all permissions are denied (deny-by-default). Use `copilot/approve-all` to approve everything. |
+| `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
@@ -239,7 +244,6 @@ Create a client and session together, ensuring both are cleaned up on exit.
 #### `resume-session`
 
 ```clojure
-(copilot/resume-session client session-id)
 (copilot/resume-session client session-id config)
 ```
 
@@ -253,7 +257,8 @@ Resume an existing session by ID. The `config` map accepts the same options as `
 ;; Resume with a different model and reasoning effort
 (copilot/resume-session client "session-123"
   {:model "claude-sonnet-4"
-   :reasoning-effort "high"})
+   :reasoning-effort "high"
+   :on-permission-request copilot/approve-all})
 ```
 
 #### `<create-session`
@@ -270,7 +275,8 @@ Validation is synchronous (throws immediately on invalid config). The RPC call p
 (require '[clojure.core.async :refer [go <!]])
 
 (go
-  (let [result (<! (copilot/<create-session client {:model "gpt-5.2"}))]
+  (let [result (<! (copilot/<create-session client {:model "gpt-5.2"
+                                                    :on-permission-request copilot/approve-all}))]
     (if (instance? Throwable result)
       (println "Error:" (ex-message result))
       (let [answer (<! (copilot/<send! result {:prompt "Hello"}))]
@@ -280,7 +286,6 @@ Validation is synchronous (throws immediately on invalid config). The RPC call p
 #### `<resume-session`
 
 ```clojure
-(copilot/<resume-session client session-id)
 (copilot/<resume-session client session-id config)
 ```
 
@@ -290,7 +295,8 @@ Same config options as `resume-session`. Safe for use inside `go` blocks. On RPC
 
 ```clojure
 (go
-  (let [session (<! (copilot/<resume-session client "session-123"))]
+  (let [session (<! (copilot/<resume-session client "session-123"
+                                                     {:on-permission-request copilot/approve-all}))]
     ;; use resumed session
     ))
 ```
@@ -653,7 +659,8 @@ Combined with `<create-session`, enables fully non-blocking pipelines:
 
 ```clojure
 (go
-  (let [session (<! (copilot/<create-session client {:model "gpt-5.2"}))
+  (let [session (<! (copilot/<create-session client {:model "gpt-5.2"
+                                                     :on-permission-request copilot/approve-all}))
         answer  (<! (copilot/<send! session {:prompt "Explain monads"}))]
     (println answer)))
 ```
@@ -757,7 +764,8 @@ Switch the model for this session mid-conversation. Returns the new model ID str
 > **Note:** Not yet implemented in the CLI as of version 0.0.412. Calling this throws until CLI support is added.
 
 ```clojure
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:model "gpt-5.2"
+                                       :on-permission-request copilot/approve-all}]
   (println "Before:" (copilot/get-current-model session))
   (copilot/switch-model! session "claude-sonnet-4.5")
   (println "After:" (copilot/get-current-model session)))
@@ -881,7 +889,8 @@ copilot/tool-events
 ### Example: Handling Events
 
 ```clojure
-(copilot/with-client-session [session {:streaming? true}]
+(copilot/with-client-session [session {:streaming? true
+                                       :on-permission-request copilot/approve-all}]
   (let [ch (chan 256)]
     (tap (copilot/events session) ch)
     (go-loop []
@@ -910,7 +919,8 @@ Enable streaming to receive assistant response chunks as they're generated:
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.2"
-                :streaming? true}))
+                :streaming? true
+                :on-permission-request copilot/approve-all}))
 
 (let [ch (chan 100)]
   (tap (copilot/events session) ch)
@@ -984,7 +994,8 @@ Let the CLI call back into your process when the model needs capabilities you pr
 
 (def session (copilot/create-session client
                {:model "gpt-5.2"
-                :tools [lookup-tool]}))
+                :tools [lookup-tool]
+                :on-permission-request copilot/approve-all}))
 ```
 
 When Copilot invokes `lookup_issue`, the SDK automatically runs your handler and responds to the CLI.
@@ -1013,6 +1024,7 @@ Control the system prompt:
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :system-message
                   {:content "
 <workflow_rules>
@@ -1029,6 +1041,7 @@ For full control (removes all guardrails), use `:mode :replace`:
 ```clojure
 (copilot/create-session client
   {:model "gpt-5.2"
+   :on-permission-request copilot/approve-all
    :system-message {:mode :replace
                     :content "You are a helpful assistant."}})
 ```
@@ -1041,6 +1054,7 @@ It does not define custom agents. Custom agents are provided via `:custom-agents
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :config-dir "/tmp/copilot-config"
                 :skill-directories ["/path/to/skills" "/opt/team-skills"]
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
@@ -1058,6 +1072,7 @@ Configure how large tool outputs are handled before being sent back to the model
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :large-output {:enabled true
                                :max-size-bytes 65536
                                :output-dir "/tmp/copilot-tool-output"}}))
@@ -1090,11 +1105,13 @@ automatically compacts older messages while preserving important context.
 ```clojure
 ;; Enable with defaults (enabled by default)
 (def session (copilot/create-session client
-               {:model "gpt-5.2"}))
+               {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all}))
 
 ;; Explicit configuration
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :infinite-sessions {:enabled true
                                     :background-compaction-threshold 0.80
                                     :buffer-exhaustion-threshold 0.95}}))
@@ -1102,6 +1119,7 @@ automatically compacts older messages while preserving important context.
 ;; Disable infinite sessions
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :infinite-sessions {:enabled false}}))
 ```
 
@@ -1142,8 +1160,8 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
 ### Permission Handling
 
 The SDK uses a **deny-by-default** permission model. All permission requests
-(file writes, shell commands, URL fetches, etc.) are denied unless your
-session config provides an `:on-permission-request` handler.
+(file writes, shell commands, URL fetches, custom tool execution, etc.) are denied unless your
+session config provides an `:on-permission-request` handler (required).
 
 Use `approve-all` to opt into approving everything:
 
@@ -1200,6 +1218,7 @@ handler is called. Return a response map with the user's input:
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :on-user-input-request
                 (fn [request invocation]
                   ;; request contains {:question "..." :choices [...] :allow-freeform true/false}
@@ -1228,6 +1247,7 @@ Lifecycle hooks allow custom logic at various points during the session:
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.2"
+                :on-permission-request copilot/approve-all
                 :hooks
                 {:on-pre-tool-use
                  (fn [input invocation]
@@ -1286,14 +1306,17 @@ For models that support reasoning (like o1), you can control the reasoning effor
 ;; Create session with reasoning effort
 (def session (copilot/create-session client
                {:model "o1"
-                :reasoning-effort "high"})) ; "low", "medium", "high", or "xhigh"
+                :reasoning-effort "high"
+                :on-permission-request copilot/approve-all})) ; "low", "medium", "high", or "xhigh"
 ```
 
 ### Multiple Sessions
 
 ```clojure
-(def session1 (copilot/create-session client {:model "gpt-5.2"}))
-(def session2 (copilot/create-session client {:model "claude-sonnet-4.5"}))
+(def session1 (copilot/create-session client {:model "gpt-5.2"
+                                              :on-permission-request copilot/approve-all}))
+(def session2 (copilot/create-session client {:model "claude-sonnet-4.5"
+                                              :on-permission-request copilot/approve-all}))
 
 ;; Both sessions are independent
 (copilot/send-and-wait! session1 {:prompt "Hello from session 1"})
@@ -1342,7 +1365,8 @@ For models that support reasoning (like o1), you can control the reasoning effor
 
 ```clojure
 (try
-  (let [session (copilot/create-session client)]
+  (let [session (copilot/create-session client
+                                       {:on-permission-request copilot/approve-all})]
     (copilot/send! session {:prompt "Hello"}))
   (catch Exception e
     (println "Error:" (ex-message e))))

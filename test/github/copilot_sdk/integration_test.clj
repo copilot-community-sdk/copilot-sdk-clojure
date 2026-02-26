@@ -192,21 +192,22 @@
 (deftest test-create-session
   (testing "Create new session"
     (let [session (sdk/create-session *test-client*
-                                      {:model "gpt-5.2"})]
+                                      {:on-permission-request sdk/approve-all
+                                       :model "gpt-5.2"})]
       (is (some? session))
       (is (string? (sdk/session-id session)))
       (is (clojure.string/starts-with? (sdk/session-id session) "session-")))))
 
 (deftest test-list-sessions
   (testing "List sessions includes created sessions"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           sessions (sdk/list-sessions *test-client*)]
       (is (seq sessions))
       (is (some #(= (sdk/session-id session) (:session-id %)) sessions)))))
 
 (deftest test-list-sessions-with-context
   (testing "List sessions returns context when present"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           sid (sdk/session-id session)]
       (mock/set-session-context! *mock-server* sid
                                  {:cwd "/home/user/project"
@@ -222,8 +223,8 @@
 
 (deftest test-list-sessions-with-filter
   (testing "List sessions filter narrows results"
-    (let [s1 (sdk/create-session *test-client* {})
-          s2 (sdk/create-session *test-client* {})]
+    (let [s1 (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          s2 (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
       (mock/set-session-context! *mock-server* (sdk/session-id s1)
                                  {:cwd "/project-a" :repository "org/repo-a"})
       (mock/set-session-context! *mock-server* (sdk/session-id s2)
@@ -253,19 +254,19 @@
 
 (deftest test-get-current-model
   (testing "Get current model for session"
-    (let [session (sdk/create-session *test-client* {:model "gpt-5.2"})]
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})]
       (is (= "gpt-5.2" (sdk/get-current-model session))))))
 
 (deftest test-switch-model
   (testing "Switch model for session"
-    (let [session (sdk/create-session *test-client* {:model "gpt-5.2"})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
           new-model (sdk/switch-model! session "claude-sonnet-4.5")]
       (is (= "claude-sonnet-4.5" new-model))
       (is (= "claude-sonnet-4.5" (sdk/get-current-model session))))))
 
 (deftest test-delete-session
   (testing "Delete session removes it from list"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           _ (sdk/delete-session! *test-client* session-id)
           sessions (sdk/list-sessions *test-client*)]
@@ -273,7 +274,7 @@
 
 (deftest test-destroy-session
   (testing "Destroy session via session object"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)]
       (sdk/destroy! session)
       (let [sessions (sdk/list-sessions *test-client*)]
@@ -285,13 +286,13 @@
 
 (deftest test-send-message
   (testing "Send message returns message ID"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           msg-id (sdk/send! session {:prompt "Hello world"})]
       (is (string? msg-id)))))
 
 (deftest test-send-and-wait
   (testing "Send and wait receives events and returns assistant message"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           result (sdk/send-and-wait! session {:prompt "Test message"})]
       ;; Returns the last assistant message event (map)
       (is (map? result))
@@ -300,7 +301,7 @@
 
 (deftest test-send-and-wait-serializes
   (testing "send-and-wait serializes concurrent calls"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           client (:client session)
           send-calls (atom 0)]
@@ -326,7 +327,7 @@
 
 (deftest test-send-async
   (testing "Send async returns channel with events"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           event-ch (sdk/send-async session {:prompt "Async test"})
           events (atom [])]
       ;; Collect events
@@ -342,7 +343,7 @@
 
 (deftest test-send-async-with-id
   (testing "send-async-with-id returns message-id and matching events"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           {:keys [message-id events-ch]} (sdk/send-async-with-id session {:prompt "Async with id"})]
       (is (string? message-id))
       (let [matched (loop [count 0]
@@ -358,7 +359,7 @@
 
 (deftest test-send-async-serializes
   (testing "send-async serializes concurrent calls"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           client (:client session)
           send-calls (atom 0)]
@@ -391,7 +392,7 @@
 
 (deftest test-<send!-returns-last-assistant-message
   (testing "<send! returns the last assistant.message content, not the first"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           client (:client session)]
       ;; Bypass actual send to control event flow
@@ -444,13 +445,13 @@
 
 (deftest test-abort-session
   (testing "Abort session operation"
-    (let [session (sdk/create-session *test-client* {})]
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
       ;; Should not throw
       (is (nil? (sdk/abort! session))))))
 
 (deftest test-get-messages
   (testing "Get messages from session"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/send-and-wait! session {:prompt "Test"})
           messages (sdk/get-messages session)]
       ;; Mock server returns empty events vector
@@ -462,7 +463,7 @@
 
 (deftest test-event-subscription
   (testing "Can subscribe to session event stream"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           events-ch (sdk/subscribe-events session)]
       ;; Send a message to trigger events
       (sdk/send! session {:prompt "Event test"})
@@ -538,7 +539,8 @@
 (deftest test-tool-registration
   (testing "Register tool handler"
     (let [session (sdk/create-session *test-client*
-                                      {:tools [(sdk/define-tool "test_tool"
+                                      {:on-permission-request sdk/approve-all
+                                       :tools [(sdk/define-tool "test_tool"
                                                  {:description "A test tool"
                                                   :parameters {:type "object"
                                                                :properties {"value" {:type "string"}}}
@@ -549,7 +551,7 @@
   (testing "tool.call handler returns a nested result wrapper"
     (let [tool (sdk/define-tool "echo"
                  {:handler (fn [args _] args)})
-          session (sdk/create-session *test-client* {:tools [tool]})
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
           handler (get-in @(:state *test-client*) [:connection :request-handler])
           response (<!! (handler "tool.call" {:session-id (sdk/session-id session)
                                               :tool-call-id "tc-1"
@@ -570,7 +572,7 @@
                  {:handler (fn [_ _]
                              (reset! thread-name (.getName (Thread/currentThread)))
                              "ok")})
-          session (sdk/create-session *test-client* {:tools [tool]})
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
           handler (get-in @(:state *test-client*) [:connection :request-handler])]
       (<!! (handler "tool.call" {:session-id (sdk/session-id session)
                                  :tool-call-id "tc-2"
@@ -587,7 +589,8 @@
                                                     (when (#{"session.create" "session.resume"} method)
                                                       (swap! seen assoc method params))))
           _ (sdk/create-session *test-client*
-                                {:model "gpt-5.2"
+                                {:on-permission-request sdk/approve-all
+                                 :model "gpt-5.2"
                                  :provider {:base-url "https://example.test"
                                             :api-key "key"}
                                  :mcp-servers {"srv-1" {:mcp-server-type :http
@@ -599,7 +602,8 @@
                                                   :agent-display-name "Agent One"}]})
           session-id (sdk/get-last-session-id *test-client*)
           _ (sdk/resume-session *test-client* session-id
-                                {:model "gpt-5.2"
+                                {:on-permission-request sdk/approve-all
+                                 :model "gpt-5.2"
                                  :provider {:base-url "https://resume.test"}
                                  :mcp-servers {"srv-2" {:mcp-server-type :sse
                                                         :mcp-url "https://mcp.resume.test"
@@ -632,17 +636,17 @@
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.create"} method)
                                                       (swap! seen assoc method params))))
-          _ (sdk/create-session *test-client* {:client-name "my-app"})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :client-name "my-app"})
           create-params (get @seen "session.create")]
       (is (= "my-app" (:clientName create-params)))))
 
   (testing "clientName is forwarded in session.resume when set (upstream PR #510)"
     (let [seen (atom {})
-          session-id (sdk/session-id (sdk/create-session *test-client* {}))
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.resume"} method)
                                                       (swap! seen assoc method params))))
-          _ (sdk/resume-session *test-client* session-id {:client-name "my-app"})
+          _ (sdk/resume-session *test-client* session-id {:on-permission-request sdk/approve-all :client-name "my-app"})
           resume-params (get @seen "session.resume")]
       (is (= "my-app" (:clientName resume-params)))))
 
@@ -651,7 +655,7 @@
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.create"} method)
                                                       (swap! seen assoc method params))))
-          _ (sdk/create-session *test-client* {:model "gpt-5.2"})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
           create-params (get @seen "session.create")]
       (is (not (contains? create-params :clientName))))))
 
@@ -660,18 +664,17 @@
 ;; -----------------------------------------------------------------------------
 
 (deftest test-request-permission-always-true-on-wire
-  (testing "requestPermission is always true on create, even without handler"
+  (testing "requestPermission is always true on create with handler"
     (let [seen (atom {})
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.create" "session.resume"} method)
                                                       (swap! seen assoc method params))))
-          ;; Create without on-permission-request
-          _ (sdk/create-session *test-client* {:model "gpt-5.2"})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
           create-params (get @seen "session.create")]
       (is (true? (:requestPermission create-params))
-          "requestPermission must be true even when no handler is configured")))
+          "requestPermission must be true when handler is configured")))
 
-  (testing "requestPermission is true on create with handler"
+  (testing "requestPermission is true on create with explicit handler"
     (let [seen (atom {})
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.create"} method)
@@ -682,16 +685,16 @@
           create-params (get @seen "session.create")]
       (is (true? (:requestPermission create-params)))))
 
-  (testing "requestPermission is true on resume without handler"
+  (testing "requestPermission is true on resume with handler"
     (let [seen (atom {})
-          session-id (sdk/session-id (sdk/create-session *test-client* {}))
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.resume"} method)
                                                       (swap! seen assoc method params))))
-          _ (sdk/resume-session *test-client* session-id {})
+          _ (sdk/resume-session *test-client* session-id {:on-permission-request sdk/approve-all})
           resume-params (get @seen "session.resume")]
       (is (true? (:requestPermission resume-params))
-          "requestPermission must be true on resume even without handler"))))
+          "requestPermission must be true on resume with handler"))))
 
 (deftest test-approve-all-returns-approved
   (testing "approve-all returns {:kind :approved}"
@@ -700,14 +703,35 @@
                                   {:session-id "session-1"})]
       (is (= {:kind :approved} result))))
 
-  (testing "approve-all works for any permission kind"
-    (doseq [kind [:shell :write :mcp :read :url]]
+   (testing "approve-all works for any permission kind"
+    (doseq [kind [:shell :write :mcp :read :url :custom-tool]]
       (is (= {:kind :approved}
              (sdk/approve-all {:permission-kind kind} {:session-id "s1"}))))))
 
-(deftest test-permission-denied-without-handler
-  (testing "Permission requests are denied when no handler is configured"
-    (let [session (sdk/create-session *test-client* {})
+(deftest test-permission-handler-required
+  (testing "create-session throws without :on-permission-request"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"on-permission-request handler is required"
+                          (sdk/create-session *test-client* {}))))
+
+  (testing "create-session throws with nil handler"
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"on-permission-request handler is required"
+                          (sdk/create-session *test-client* {:on-permission-request nil}))))
+
+  (testing "resume-session throws without :on-permission-request"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"on-permission-request handler is required"
+                            (sdk/resume-session *test-client* session-id {}))))))
+
+(deftest test-permission-denied-with-deny-handler
+  (testing "Permission requests are denied when handler denies"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:kind :denied-no-approval-rule-and-could-not-request-from-user})})
           session-id (sdk/session-id session)
           handler (get-in @(:state *test-client*) [:connection :request-handler])
           response (<!! (handler "permission.request"
@@ -761,7 +785,7 @@
 (deftest test-send-async-untaps-on-send-failure
   (testing "send-async cleans up tap when RPC fails"
     (log/info "Warnings expected in this test: async send RPC error is deliberate.")
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           taps (atom 0)
           untaps (atom 0)
           fake-mult (reify
@@ -786,7 +810,7 @@
 
 (deftest test-get-last-session-id
   (testing "Get last session ID"
-    (let [_ (sdk/create-session *test-client* {})
+    (let [_ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           last-id (sdk/get-last-session-id *test-client*)]
       (is (string? last-id)))))
 
@@ -796,8 +820,8 @@
 
 (deftest test-multiple-sessions
   (testing "Can manage multiple concurrent sessions"
-    (let [session1 (sdk/create-session *test-client* {:model "model-1"})
-          session2 (sdk/create-session *test-client* {:model "model-2"})
+    (let [session1 (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "model-1"})
+          session2 (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "model-2"})
           id1 (sdk/session-id session1)
           id2 (sdk/session-id session2)]
       (is (not= id1 id2))
@@ -813,7 +837,7 @@
 (deftest test-resume-nonexistent-session
   (testing "Resume nonexistent session throws error"
     (is (thrown-with-msg? Exception #"Session not found"
-                          (sdk/resume-session *test-client* "nonexistent-session-id" {})))))
+                          (sdk/resume-session *test-client* "nonexistent-session-id" {:on-permission-request sdk/approve-all})))))
 
 (deftest test-tool-handler-errors
   (testing "Tool handler that throws returns failure result"
@@ -824,7 +848,8 @@
                         :handler (fn [_ _]
                                    (throw (ex-info "Tool error" {:cause "test"})))})
           session (sdk/create-session *test-client*
-                                      {:tools [error-tool]})]
+                                      {:on-permission-request sdk/approve-all
+                                       :tools [error-tool]})]
       ;; Session should still be usable after tool error
       (is (some? session)))))
 
@@ -835,7 +860,8 @@
 (deftest test-session-with-append-system-message
   (testing "Create session with appended system message"
     (let [session (sdk/create-session *test-client*
-                                      {:system-message {:mode :append
+                                      {:on-permission-request sdk/approve-all
+                                       :system-message {:mode :append
                                                         :content "Always end with 'DONE'"}})]
       (is (some? session))
       (is (string? (sdk/session-id session))))))
@@ -843,7 +869,8 @@
 (deftest test-session-with-replace-system-message
   (testing "Create session with replaced system message"
     (let [session (sdk/create-session *test-client*
-                                      {:system-message {:mode :replace
+                                      {:on-permission-request sdk/approve-all
+                                       :system-message {:mode :replace
                                                         :content "You are a test assistant."}})]
       (is (some? session))
       (is (string? (sdk/session-id session))))))
@@ -855,7 +882,8 @@
 (deftest test-session-with-streaming
   (testing "Create session with streaming enabled"
     (let [session (sdk/create-session *test-client*
-                                      {:streaming? true})]
+                                      {:on-permission-request sdk/approve-all
+                                       :streaming? true})]
       (is (some? session))
       ;; Should still work normally
       (let [result (sdk/send-and-wait! session {:prompt "Test"})]
@@ -867,10 +895,10 @@
 
 (deftest test-resume-session
   (testing "Resume existing session"
-    (let [session1 (sdk/create-session *test-client* {})
+    (let [session1 (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session1)
           _ (sdk/send-and-wait! session1 {:prompt "First message"})
-          session2 (sdk/resume-session *test-client* session-id {})]
+          session2 (sdk/resume-session *test-client* session-id {:on-permission-request sdk/approve-all})]
       (is (= session-id (sdk/session-id session2)))
       ;; Should be able to continue conversation
       (let [result (sdk/send-and-wait! session2 {:prompt "Follow up"})]
@@ -882,7 +910,7 @@
 
 (deftest test-session-snapshot-rewind-event
   (testing "session.snapshot_rewind event is received and parsed correctly"
-    (let [session (sdk/create-session *test-client* {})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)
           rewind-events (atom [])]
@@ -914,7 +942,7 @@
 
 (deftest test-<create-session
   (testing "<create-session creates session asynchronously"
-    (let [result-ch (sdk/<create-session *test-client* {:model "gpt-4.1"})
+    (let [result-ch (sdk/<create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-4.1"})
           [session _] (alts!! [result-ch (timeout 5000)])]
       (is (some? session) "<create-session should deliver a session")
       (is (not (instance? Throwable session)) "<create-session should not return an error")
@@ -923,9 +951,9 @@
 
 (deftest test-<create-session-parallel
   (testing "Multiple <create-session calls run concurrently in go blocks"
-    (let [ch1 (sdk/<create-session *test-client* {:model "gpt-4.1"})
-          ch2 (sdk/<create-session *test-client* {:model "gpt-4.1"})
-          ch3 (sdk/<create-session *test-client* {:model "gpt-4.1"})
+    (let [ch1 (sdk/<create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-4.1"})
+          ch2 (sdk/<create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-4.1"})
+          ch3 (sdk/<create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-4.1"})
           [s1 _] (alts!! [ch1 (timeout 5000)])
           [s2 _] (alts!! [ch2 (timeout 5000)])
           [s3 _] (alts!! [ch3 (timeout 5000)])]

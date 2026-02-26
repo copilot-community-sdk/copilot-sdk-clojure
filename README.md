@@ -49,10 +49,10 @@ The simplest way to use the SDK is with the `query` helper:
 ;; => "4"
 
 ;; With model selection
-(h/query "Explain monads in one sentence" :session {:model "claude-sonnet-4.5"})
+(h/query "Explain monads in one sentence" :session {:on-permission-request copilot/approve-all :model "claude-sonnet-4.5"})
 
 ;; With a system prompt
-(h/query "What is Clojure?" :session {:system-prompt "You are a helpful assistant. Be concise."})
+(h/query "What is Clojure?" :session {:on-permission-request copilot/approve-all :system-prompt "You are a helpful assistant. Be concise."})
 ```
 
 ### More Control
@@ -62,7 +62,8 @@ For multi-turn conversations, pass a session instance to `query`:
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "claude-haiku-4.5"}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "claude-haiku-4.5"}]
   ;; Session maintains context between queries
   (println (h/query "What is the capital of France?" :session session))
   (println (h/query "What is its population?" :session session)))
@@ -71,7 +72,8 @@ For multi-turn conversations, pass a session instance to `query`:
 Or use the full API for maximum flexibility:
 
 ```clojure
-(copilot/with-client-session [session {:model "claude-haiku-4.5"}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "claude-haiku-4.5"}]
   (println (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
                (get-in [:data :content]))))
 ```
@@ -86,7 +88,7 @@ Use `<send!` with core.async for non-blocking operations:
 
 (copilot/with-client [client {}]
   ;; Launch multiple requests in parallel
-  (let [sessions (repeatedly 3 #(copilot/create-session client {}))
+  (let [sessions (repeatedly 3 #(copilot/create-session client {:on-permission-request copilot/approve-all}))
         channels (map #(copilot/<send! %1 {:prompt %2})
                       sessions
                       ["Capital of France?" "Capital of Japan?" "Capital of Brazil?"])]
@@ -226,7 +228,8 @@ await client.stop();
                 (str "Hello, " name "!"))}))
 
 (def session (copilot/create-session client
-               {:model "claude-haiku-4.5"
+               {:on-permission-request copilot/approve-all
+                :model "claude-haiku-4.5"
                 :tools [greet-tool]}))
 
 (let [ch (chan 100)]

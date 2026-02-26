@@ -61,7 +61,8 @@ For more control, use the explicit client/session API:
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.2"}]
   (let [response (copilot/send-and-wait! session {:prompt "What is 2 + 2?"})]
     (println (get-in response [:data :content]))))
 ```
@@ -91,7 +92,7 @@ Right now, you wait for the complete response before seeing anything. Let's make
 (defmethod handle-event :copilot/session.idle [_]
   (println))
 
-(run! handle-event (h/query-seq! "Tell me a short joke" :session {:streaming? true}))
+(run! handle-event (h/query-seq! "Tell me a short joke" :session {:on-permission-request copilot/approve-all :streaming? true}))
 ```
 
 ### Using core.async Channels
@@ -100,7 +101,8 @@ Right now, you wait for the complete response before seeing anything. Let's make
 (require '[clojure.core.async :refer [chan tap go-loop <!]])
 (require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "gpt-5.2" :streaming? true}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.2" :streaming? true}]
   (let [ch (chan 256)
         done (promise)]
     (tap (copilot/events session) ch)
@@ -133,7 +135,8 @@ Use `<create-session` and `<send!` for fully non-blocking operations inside `go`
 (copilot/with-client [client]
   (let [result-ch
         (go
-          (let [session (<! (copilot/<create-session client {:model "gpt-5.2"}))]
+          (let [session (<! (copilot/<create-session client {:on-permission-request copilot/approve-all
+                                                            :model "gpt-5.2"}))]
             (when (instance? Throwable session)
               (throw session))
             (let [answer (<! (copilot/<send! session {:prompt "Capital of France?"}))]
@@ -178,7 +181,8 @@ Now for the powerful part. Let's give Copilot the ability to call your code by d
                   (copilot/result-success
                    (str city ": " temp "°F and " condition))))}))
 
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.2"
                                        :tools [get-weather]}]
   (println (h/query "What's the weather like in Seattle and Tokyo?"
                     :session session)))
@@ -206,7 +210,8 @@ Let's put it all together into an interactive assistant:
                   (copilot/result-success
                    (str city ": " temp "°F and " condition))))}))
 
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.2"
                                        :streaming? true
                                        :tools [get-weather]}]
   (println "🌤️  Weather Assistant (type 'exit' to quit)")
@@ -260,8 +265,8 @@ you provide an `:on-permission-request` handler.
 Use `approve-all` to permit everything:
 
 ```clojure
-(copilot/with-client-session [session {:model "gpt-5.2"
-                                       :on-permission-request copilot/approve-all}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.2"}]
   ...)
 ```
 
@@ -272,7 +277,8 @@ Or write a custom handler for fine-grained control. See [Permission Handling](./
 Pass `:client-name` to identify your application in API requests (included in the User-Agent header):
 
 ```clojure
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.2"
                                        :client-name "my-weather-app"}]
   ...)
 ```

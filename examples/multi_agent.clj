@@ -37,7 +37,8 @@
   (go
     (let [session (<! (copilot/<create-session
                        client
-                       {:system-message {:mode :append :content researcher-prompt}
+                       {:on-permission-request copilot/approve-all
+                        :system-message {:mode :append :content researcher-prompt}
                         :model "gpt-5.2"}))]
       (if (instance? Throwable session)
         {:topic topic :findings (str "Error: " (ex-message session))}
@@ -69,7 +70,8 @@
   (with-timing
     (doto (h/query (str "Analyze these findings:\n\n" research-summary)
                    :client client
-                   :session {:system-prompt analyst-prompt :model "gpt-5.2"})
+                   :session {:on-permission-request copilot/approve-all
+                             :system-prompt analyst-prompt :model "gpt-5.2"})
       (->> (println "Analysis:\n")))))
 
 (def synthesis-prompt "You are a writer. Create clear, engaging prose.")
@@ -80,5 +82,6 @@
   (with-timing
     (doto (h/query (str "Write a 3-4 sentence executive summary. ANALYSIS: " analysis)
                    :client client
-                   :session {:system-prompt synthesis-prompt :model "gpt-5.2"})
+                   :session {:on-permission-request copilot/approve-all
+                             :system-prompt synthesis-prompt :model "gpt-5.2"})
       println)))

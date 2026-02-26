@@ -9,7 +9,8 @@
   {:prompt "What is the capital of Japan? Answer in one sentence."})
 
 (def session-config
-  {:model "claude-haiku-4.5"})
+  {:on-permission-request copilot/approve-all
+   :model "claude-haiku-4.5"})
 
 (defn run
   [{:keys [prompt] :or {prompt (:prompt defaults)}}]
@@ -37,13 +38,15 @@
   [{:keys [prompt] :or {prompt "Explain the concept of immutability in 2-3 sentences."}}]
   (println "Query:" prompt)
   (println)
-  (run! handle-event (h/query-seq! prompt :session {:model "gpt-5.2" :streaming? true})))
+  (run! handle-event (h/query-seq! prompt :session {:on-permission-request copilot/approve-all
+                                                     :model "gpt-5.2" :streaming? true})))
 
 (defn run-async
   [{:keys [prompt] :or {prompt "Tell me a short joke."}}]
   (println "Query:" prompt)
   (println)
-  (let [ch (h/query-chan prompt :session {:model "gpt-5.2" :streaming? true})]
+  (let [ch (h/query-chan prompt :session {:on-permission-request copilot/approve-all
+                                          :model "gpt-5.2" :streaming? true})]
     (<!! (go-loop []
            (when-let [event (<! ch)]
              (handle-event event)
