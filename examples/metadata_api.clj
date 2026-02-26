@@ -53,7 +53,8 @@
 
     ;; 4. Model switching within a session
     (println "\n4. Dynamic Model Switching:")
-    (copilot/with-session [session client {:model "claude-haiku-4.5"}]
+    (copilot/with-session [session client {:on-permission-request copilot/approve-all
+                                          :model "claude-haiku-4.5"}]
       ;; Query with claude-haiku-4.5
       (println "   Query: 'What is 2+2? Answer briefly.'")
       (println (str "   Response: " (h/query "What is 2+2? Answer briefly." :session session)))

@@ -48,24 +48,24 @@
 
 (s/fdef github.copilot-sdk.client/create-session
   :args (s/cat :client ::specs/client
-               :config (s/? ::specs/session-config))
+               :config ::specs/session-config)
   :ret ::specs/session)
 
 (s/fdef github.copilot-sdk.client/resume-session
   :args (s/cat :client ::specs/client
                :session-id ::specs/session-id
-               :config (s/? ::specs/resume-session-config))
+               :config ::specs/resume-session-config)
   :ret ::specs/session)
 
 (s/fdef github.copilot-sdk.client/<create-session
   :args (s/cat :client ::specs/client
-               :config (s/? ::specs/session-config))
+               :config ::specs/session-config)
   :ret ::specs/events-ch)
 
 (s/fdef github.copilot-sdk.client/<resume-session
   :args (s/cat :client ::specs/client
                :session-id ::specs/session-id
-               :config (s/? ::specs/resume-session-config))
+               :config ::specs/resume-session-config)
   :ret ::specs/events-ch)
 
 (s/fdef github.copilot-sdk.client/list-sessions

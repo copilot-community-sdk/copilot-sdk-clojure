@@ -85,6 +85,6 @@
     (println (str "  Base URL: " (get-in config [:provider :base-url])))
     (println)
     (copilot/with-client [client {}]
-      (copilot/with-session [session client config]
+      (copilot/with-session [session client (assoc config :on-permission-request copilot/approve-all)]
         (println "Q: What is 2+2?")
         (println "🤖:" (h/query "What is 2+2? Answer in one sentence." :session session))))))

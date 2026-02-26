@@ -10,7 +10,8 @@
 
 (defn run
   [{:keys [q1 q2] :or {q1 (:q1 defaults) q2 (:q2 defaults)}}]
-  (copilot/with-client-session [session {:model "claude-haiku-4.5"}]
+  (copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                        :model "claude-haiku-4.5"}]
     (println "Q1:" q1)
     (println "🤖:" (h/query q1 :session session))
     (println)

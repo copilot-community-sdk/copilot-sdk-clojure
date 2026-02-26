@@ -15,7 +15,8 @@
    ;; => \"4\"
    
    ;; With options
-   (h/query \"Explain monads\" :session {:model \"claude-sonnet-4.5\"})
+   (h/query \"Explain monads\" :session {:on-permission-request copilot/approve-all
+                                        :model \"claude-sonnet-4.5\"})
    ```
    
    ## Client Management
@@ -118,10 +119,11 @@
 (defn- build-session-config
   "Build session config from options map."
   [session-opts]
-  (let [{:keys [model system-prompt tools allowed-tools excluded-tools
+  (let [{:keys [on-permission-request model system-prompt tools allowed-tools excluded-tools
                 streaming? mcp-servers custom-agents config-dir
                 skill-directories disabled-skills]} session-opts]
     (cond-> {}
+      on-permission-request (assoc :on-permission-request on-permission-request)
       model (assoc :model model)
       system-prompt (assoc :system-message {:mode :append :content system-prompt})
       tools (assoc :tools tools)
@@ -188,17 +190,19 @@
 
    Examples:
      ;; Simple query (shared client, fresh session)
-     (query \"What is 2+2?\")
+     (query \"What is 2+2?\" :session {:on-permission-request copilot/approve-all})
 
      ;; With session options
-     (query \"Explain monads\" :session {:model \"claude-sonnet-4.5\"})
+     (query \"Explain monads\" :session {:on-permission-request copilot/approve-all
+                                        :model \"claude-sonnet-4.5\"})
 
      ;; With explicit client
      (copilot/with-client [c {}]
-       (query \"Hello\" :client c))
+       (query \"Hello\" :client c :session {:on-permission-request copilot/approve-all}))
 
      ;; With explicit session (multi-turn)
-     (copilot/with-session [s client {:model \"gpt-5.2\"}]
+     (copilot/with-session [s client {:on-permission-request copilot/approve-all
+                                      :model \"gpt-5.2\"}]
        (query \"What is 2+2?\" :session s)
        (query \"And 3+3?\" :session s))  ;; context preserved
    "
@@ -284,7 +288,8 @@
    the session becomes idle or errors.
    
    Examples:
-     (let [ch (query-chan \"Tell me a story\" :session {:streaming? true})]
+     (let [ch (query-chan \"Tell me a story\" :session {:on-permission-request copilot/approve-all
+                                                       :streaming? true})]
        (go-loop []
          (when-let [event (<! ch)]
            (when (= :copilot/assistant.message_delta (:type event))

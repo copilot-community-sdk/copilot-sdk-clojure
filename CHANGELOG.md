@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (upstream PR #554 sync)
+- **BREAKING**: `:on-permission-request` is now **required** when calling `create-session`, `resume-session`, `<create-session`, and `<resume-session`. Calls without a handler throw `ExceptionInfo` with a descriptive message. This matches upstream Node.js SDK where `onPermissionRequest` is required in `SessionConfig` and `ResumeSessionConfig` (upstream PR #554).
+- `create-session` and `<create-session` no longer accept a 0-arity (no config) form — a config map with `:on-permission-request` must always be provided.
+- `resume-session` and `<resume-session` no longer accept a 2-arity (no config) form — a config map with `:on-permission-request` must always be provided.
+- All examples, tests, and documentation updated to always pass `:on-permission-request`.
+
+### Added (upstream PR #555 sync)
+- `:custom-tool` permission kind — `::permission-kind` spec now includes `:custom-tool`, matching the upstream `PermissionRequest.kind` union type. Permission handlers will receive `{:permission-kind :custom-tool ...}` for SDK-registered custom tool invocations (upstream PR #555).
+
+### Added (upstream PR #544 sync)
+- `:copilot/session.task_complete` event type added to `::event-type` spec (from upstream generated session event types).
+
 ### Added (documentation)
 - Microsoft Foundry Local BYOK provider guide in `doc/auth/byok.md`: quick start example, installation instructions, and connection troubleshooting (upstream PR #461).
 

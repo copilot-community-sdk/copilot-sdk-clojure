@@ -16,7 +16,8 @@
          reasoning-effort "high"}}]
   (copilot/with-client-session
       [client {:log-level :debug}
-       session {:model model
+       session {:on-permission-request copilot/approve-all
+                :model model
                 :streaming? true
                 :reasoning-effort reasoning-effort}]
     (let [events-ch (copilot/subscribe-events session)

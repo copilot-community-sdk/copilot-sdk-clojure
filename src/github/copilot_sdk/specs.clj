@@ -208,9 +208,10 @@
 
 (s/def ::session-config
   (closed-keys
-   (s/keys :opt-un [::session-id ::client-name ::model ::tools ::system-message
+   (s/keys :req-un [::on-permission-request]
+           :opt-un [::session-id ::client-name ::model ::tools ::system-message
                     ::available-tools ::excluded-tools ::provider
-                    ::on-permission-request ::streaming? ::mcp-servers
+                    ::streaming? ::mcp-servers
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::hooks
@@ -226,8 +227,9 @@
 
 (s/def ::resume-session-config
   (closed-keys
-   (s/keys :opt-un [::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
-                    ::provider ::streaming? ::on-permission-request
+   (s/keys :req-un [::on-permission-request]
+           :opt-un [::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+                    ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::hooks ::working-directory ::disable-resume?])
@@ -352,7 +354,7 @@
     :copilot/session.info :copilot/session.model_change :copilot/session.handoff
     :copilot/session.truncation :copilot/session.snapshot_rewind :copilot/session.usage_info
     :copilot/session.compaction_start :copilot/session.compaction_complete
-    :copilot/session.shutdown
+    :copilot/session.shutdown :copilot/session.task_complete
     :copilot/session.title_changed :copilot/session.warning :copilot/session.context_changed
     :copilot/user.message :copilot/pending_messages.modified
     :copilot/assistant.turn_start :copilot/assistant.intent :copilot/assistant.reasoning
@@ -470,7 +472,7 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url})
+(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool})
 
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]

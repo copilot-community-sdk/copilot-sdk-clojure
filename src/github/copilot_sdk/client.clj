@@ -910,6 +910,11 @@
 (defn- validate-session-config!
   "Validate session config, throwing on invalid input."
   [config]
+  (when-not (:on-permission-request config)
+    (throw (ex-info (str "An :on-permission-request handler is required when creating a session. "
+                         "For example, to allow all permissions, use "
+                         "{:on-permission-request copilot/approve-all}.")
+                    {:config config})))
   (when-not (s/valid? ::specs/session-config config)
     (let [unknown (specs/unknown-keys config specs/session-config-keys)
           explain (s/explain-data ::specs/session-config config)
@@ -1037,7 +1042,8 @@
 (defn create-session
   "Create a new conversation session.
    
-   Config options:
+   Config options (`:on-permission-request` is **required**):
+   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
    - :session-id         - Custom session ID
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.2\")
@@ -1046,7 +1052,6 @@
    - :available-tools    - List of allowed tool names
    - :excluded-tools     - List of excluded tool names
    - :provider           - Custom provider config (BYOK)
-   - :on-permission-request - Permission handler function
    - :streaming?         - Enable streaming
    - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
@@ -1067,23 +1072,22 @@
                             :on-session-start, :on-session-end, :on-error-occurred}
    
    Returns a CopilotSession."
-  ([client]
-   (create-session client {}))
-  ([client config]
-   (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
-   (validate-session-config! config)
-   (ensure-connected! client)
-   (let [{:keys [connection-io]} @(:state client)
-         params (build-create-session-params config)
-         result (proto/send-request! connection-io "session.create" params)
-         session (finalize-session client result config)]
-     (log/info "Session created: " (:session-id result))
-     session)))
+  [client config]
+  (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
+  (validate-session-config! config)
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        params (build-create-session-params config)
+        result (proto/send-request! connection-io "session.create" params)
+        session (finalize-session client result config)]
+    (log/info "Session created: " (:session-id result))
+    session))
 
 (defn resume-session
   "Resume an existing session by ID.
    
-   Config options (parity with create-session, upstream PR #376):
+   Config options (`:on-permission-request` is **required**):
+   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Change the model for the resumed session
    - :tools              - Tools exposed to the CLI server
@@ -1092,7 +1096,6 @@
    - :excluded-tools     - List of tool names to disable
    - :provider           - Custom provider configuration (BYOK)
    - :streaming?         - Enable streaming responses
-   - :on-permission-request - Permission handler
    - :mcp-servers        - MCP server configurations
    - :custom-agents      - Custom agent configurations
    - :config-dir         - Override configuration directory
@@ -1104,100 +1107,107 @@
    - :hooks              - Lifecycle hooks map
    
    Returns a CopilotSession."
-  ([client session-id]
-   (resume-session client session-id {}))
-  ([client session-id config]
-   (when-not (s/valid? ::specs/resume-session-config config)
-     (throw (ex-info "Invalid resume session config"
-                     {:config config
-                      :explain (s/explain-data ::specs/resume-session-config config)})))
-   (when (and (:provider config) (not (:model config)))
-     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                     {:config config})))
-   (ensure-connected! client)
-   (let [{:keys [connection-io]} @(:state client)
-         params (build-resume-session-params session-id config)
-         result (proto/send-request! connection-io "session.resume" params)
-         session (finalize-session client result config)]
-     session)))
+  [client session-id config]
+  (when-not (:on-permission-request config)
+    (throw (ex-info (str "An :on-permission-request handler is required when resuming a session. "
+                         "For example, to allow all permissions, use "
+                         "{:on-permission-request copilot/approve-all}.")
+                    {:config config})))
+  (when-not (s/valid? ::specs/resume-session-config config)
+    (throw (ex-info "Invalid resume session config"
+                    {:config config
+                     :explain (s/explain-data ::specs/resume-session-config config)})))
+  (when (and (:provider config) (not (:model config)))
+    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
+                    {:config config})))
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        params (build-resume-session-params session-id config)
+        result (proto/send-request! connection-io "session.resume" params)
+        session (finalize-session client result config)]
+    session))
 
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
 
-   Same config options as create-session. Validation is performed synchronously
-   (throws immediately on invalid config). The RPC call parks instead of blocking,
-   making this safe to use inside go blocks.
+   Same config options as create-session (`:on-permission-request` is **required**).
+   Validation is performed synchronously (throws immediately on invalid config).
+   The RPC call parks instead of blocking, making this safe to use inside go blocks.
 
    On RPC error, delivers an ExceptionInfo to the channel (not nil).
    Callers should check the result with (instance? Throwable result).
 
    Usage:
      (go
-       (let [result (<! (<create-session client {:model \"gpt-5.2\"}))]
+       (let [result (<! (<create-session client {:on-permission-request copilot/approve-all
+                                                 :model \"gpt-5.2\"}))]
          (if (instance? Throwable result)
            (println \"Error:\" (ex-message result))
            ;; use result as session
            )))"
-  ([client]
-   (<create-session client {}))
-  ([client config]
-   (log/debug "Creating session (async) with config: " (select-keys config [:model :session-id]))
-   (validate-session-config! config)
-   (ensure-connected! client)
-   (let [{:keys [connection-io]} @(:state client)
-         params (build-create-session-params config)
-         rpc-ch (proto/send-request connection-io "session.create" params)]
-     (go
-       (when-let [response (<! rpc-ch)]
-         (if-let [err (:error response)]
-           (do (log/error "<create-session RPC error: " err)
-               (ex-info (str "Failed to create session: " (:message err))
-                        {:error err}))
-           (let [result (:result response)
-                 session (finalize-session client result config)]
-             (log/info "Session created (async): " (:session-id result))
-             session)))))))
+  [client config]
+  (log/debug "Creating session (async) with config: " (select-keys config [:model :session-id]))
+  (validate-session-config! config)
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        params (build-create-session-params config)
+        rpc-ch (proto/send-request connection-io "session.create" params)]
+    (go
+      (when-let [response (<! rpc-ch)]
+        (if-let [err (:error response)]
+          (do (log/error "<create-session RPC error: " err)
+              (ex-info (str "Failed to create session: " (:message err))
+                       {:error err}))
+          (let [result (:result response)
+                session (finalize-session client result config)]
+            (log/info "Session created (async): " (:session-id result))
+            session))))))
 
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
-   Same config options as resume-session. Validation is performed synchronously
-   (throws immediately on invalid config). The RPC call parks instead of blocking,
-   making this safe to use inside go blocks.
+   Same config options as resume-session (`:on-permission-request` is **required**).
+   Validation is performed synchronously (throws immediately on invalid config).
+   The RPC call parks instead of blocking, making this safe to use inside go blocks.
 
    On RPC error, delivers an ExceptionInfo to the channel (not nil).
    Callers should check the result with (instance? Throwable result).
 
    Usage:
      (go
-       (let [result (<! (<resume-session client session-id {:model \"gpt-5.2\"}))]
+       (let [result (<! (<resume-session client session-id
+                                         {:on-permission-request copilot/approve-all
+                                          :model \"gpt-5.2\"}))]
          (if (instance? Throwable result)
            (println \"Error:\" (ex-message result))
            ;; use result as session
            )))"
-  ([client session-id]
-   (<resume-session client session-id {}))
-  ([client session-id config]
-   (when-not (s/valid? ::specs/resume-session-config config)
-     (throw (ex-info "Invalid resume session config"
-                     {:config config
-                      :explain (s/explain-data ::specs/resume-session-config config)})))
-   (when (and (:provider config) (not (:model config)))
-     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                     {:config config})))
-   (ensure-connected! client)
-   (let [{:keys [connection-io]} @(:state client)
-         params (build-resume-session-params session-id config)
-         rpc-ch (proto/send-request connection-io "session.resume" params)]
-     (go
-       (when-let [response (<! rpc-ch)]
-         (if-let [err (:error response)]
-           (do (log/error "<resume-session RPC error: " err)
-               (ex-info (str "Failed to resume session: " (:message err))
-                        {:error err :session-id session-id}))
-           (let [result (:result response)
-                 session (finalize-session client result config)]
-             session)))))))
+  [client session-id config]
+  (when-not (:on-permission-request config)
+    (throw (ex-info (str "An :on-permission-request handler is required when resuming a session. "
+                         "For example, to allow all permissions, use "
+                         "{:on-permission-request copilot/approve-all}.")
+                    {:config config})))
+  (when-not (s/valid? ::specs/resume-session-config config)
+    (throw (ex-info "Invalid resume session config"
+                    {:config config
+                     :explain (s/explain-data ::specs/resume-session-config config)})))
+  (when (and (:provider config) (not (:model config)))
+    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
+                    {:config config})))
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        params (build-resume-session-params session-id config)
+        rpc-ch (proto/send-request connection-io "session.resume" params)]
+    (go
+      (when-let [response (<! rpc-ch)]
+        (if-let [err (:error response)]
+          (do (log/error "<resume-session RPC error: " err)
+              (ex-info (str "Failed to resume session: " (:message err))
+                       {:error err :session-id session-id}))
+          (let [result (:result response)
+                session (finalize-session client result config)]
+            session))))))
 
 (defn list-sessions
   "List all available sessions.

@@ -10,7 +10,8 @@
    (copilot/start! client)
 
    ;; Create a session
-   (def session (copilot/create-session client {:model \"gpt-5.2\"}))
+   (def session (copilot/create-session client {:on-permission-request copilot/approve-all
+                                                :model \"gpt-5.2\"}))
 
    ;; Send a message and wait for response
    (def response (copilot/send-and-wait! session {:prompt \"What is 2+2?\"}))
@@ -350,7 +351,8 @@
 (defn create-session
   "Create a new conversation session.
 
-   Config options:
+   Config options (`:on-permission-request` is **required**):
+   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
    - :session-id           - Custom session ID
    - :model                - Model to use (e.g., \"gpt-5.2\", \"claude-sonnet-4.5\")
    - :tools                - Vector of tool definitions (use define-tool)
@@ -358,13 +360,6 @@
    - :available-tools      - List of allowed tool names
    - :excluded-tools       - List of excluded tool names
    - :provider             - Custom provider config (BYOK)
-   - :on-permission-request - Permission handler function
-     Must return a map compatible with the permission result payload.
-     The SDK wraps this into the JSON-RPC response as {:result <your-map>}:
-     {:kind :approved}
-     {:kind :denied-by-rules :rules [{:kind \"shell\" :argument \"echo hi\"}]}
-     {:kind :denied-no-approval-rule-and-could-not-request-from-user}
-     {:kind :denied-interactively-by-user :feedback \"optional\"}
    - :streaming?           - Enable streaming deltas
    - :mcp-servers          - MCP server configs map (keyed by server ID)
    - :custom-agents        - Custom agent configs
@@ -377,12 +372,11 @@
 
    Example:
    ```clojure
-   (def session (copilot/create-session client {:model \"gpt-5.2\"}))
+   (def session (copilot/create-session client {:on-permission-request copilot/approve-all
+                                                :model \"gpt-5.2\"}))
    ```"
-  ([client]
-   (client/create-session client))
-  ([client config]
-   (client/create-session client config)))
+  [client config]
+  (client/create-session client config))
 
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
@@ -394,26 +388,24 @@
    Example:
    ```clojure
    (go
-     (let [result (<! (copilot/<create-session client {:model \"gpt-5.2\"}))]
+     (let [result (<! (copilot/<create-session client {:on-permission-request copilot/approve-all
+                                                       :model \"gpt-5.2\"}))]
        (when-not (instance? Throwable result)
          (let [answer (<! (copilot/<send! result {:prompt \"Hello\"}))]
            (println answer)))))
    ```"
-  ([client]
-   (client/<create-session client))
-  ([client config]
-   (client/<create-session client config)))
+  [client config]
+  (client/<create-session client config))
 
 (defmacro with-session
   "Create a session and ensure destroy! on exit.
 
    Usage:
-   (with-session [s client {:model \"gpt-5.2\"}]
+   (with-session [s client {:on-permission-request copilot/approve-all
+                            :model \"gpt-5.2\"}]
      ...)"
-  [[session-sym client & [config]] & body]
-  `(let [~session-sym ~(if config
-                         `(create-session ~client ~config)
-                         `(create-session ~client))]
+  [[session-sym client config] & body]
+  `(let [~session-sym (create-session ~client ~config)]
      (try
        ~@body
        (finally
@@ -427,26 +419,30 @@
 
    1. [session session-opts] - anonymous client with default options
       ```clojure
-      (with-client-session [session {:model \"gpt-5.2\"}]
+      (with-client-session [session {:on-permission-request copilot/approve-all
+                                     :model \"gpt-5.2\"}]
         (copilot/send! session {:prompt \"Hi\"}))
       ```
 
    2. [client-opts session session-opts] - anonymous client with custom options
       ```clojure
-      (with-client-session [{:log-level :debug} session {:model \"gpt-5.2\"}]
+      (with-client-session [{:log-level :debug} session {:on-permission-request copilot/approve-all
+                                                          :model \"gpt-5.2\"}]
         (copilot/send! session {:prompt \"Hi\"}))
       ```
 
    3. [client session session-opts] - named client with default options
       ```clojure
-      (with-client-session [client session {:model \"gpt-5.2\"}]
+      (with-client-session [client session {:on-permission-request copilot/approve-all
+                                            :model \"gpt-5.2\"}]
         (println (copilot/client-options client))
         (copilot/send! session {:prompt \"Hi\"}))
       ```
 
    4. [client client-opts session session-opts] - named client with custom options
       ```clojure
-      (with-client-session [client {:log-level :debug} session {:model \"gpt-5.2\"}]
+      (with-client-session [client {:log-level :debug} session {:on-permission-request copilot/approve-all
+                                                                 :model \"gpt-5.2\"}]
         (println (copilot/client-options client))
         (copilot/send! session {:prompt \"Hi\"}))
       ```"
@@ -500,18 +496,20 @@
    plus:
    - :disable-resume?  - When true, skip emitting the session.resume event (default: false)
 
+   `:on-permission-request` is **required**.
+
    Example:
    ```clojure
-   (def session (copilot/resume-session client \"session-123\"))
+   (def session (copilot/resume-session client \"session-123\"
+                  {:on-permission-request copilot/approve-all}))
    ;; Resume with different model
    (def session (copilot/resume-session client \"session-123\"
-                  {:model \"claude-sonnet-4\"
+                  {:on-permission-request copilot/approve-all
+                   :model \"claude-sonnet-4\"
                    :reasoning-effort \"high\"}))
    ```"
-  ([client session-id]
-   (client/resume-session client session-id))
-  ([client session-id config]
-   (client/resume-session client session-id config)))
+  [client session-id config]
+  (client/resume-session client session-id config))
 
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
@@ -523,15 +521,14 @@
    Example:
    ```clojure
    (go
-     (let [result (<! (copilot/<resume-session client \"session-123\"))]
+     (let [result (<! (copilot/<resume-session client \"session-123\"
+                                               {:on-permission-request copilot/approve-all}))]
        (when-not (instance? Throwable result)
          ;; use resumed session
          )))
    ```"
-  ([client session-id]
-   (client/<resume-session client session-id))
-  ([client session-id config]
-   (client/<resume-session client session-id config)))
+  [client session-id config]
+  (client/<resume-session client session-id config))
 
 (defn list-sessions
   "List all available sessions.

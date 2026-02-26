@@ -113,7 +113,8 @@ clojure -A:examples -X basic-chat/run :q1 '"What is Clojure?"' :q2 '"Who created
 (require '[github.copilot-sdk.helpers :as h])
 
 ;; 1. Create a client and session
-(copilot/with-client-session [session {:model "claude-haiku-4.5"}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "claude-haiku-4.5"}]
   ;; 2. Send a message using query with the session
   (println (h/query "What is the capital of France?" :session session))
   ;; => "The capital of France is Paris."
@@ -166,11 +167,13 @@ clojure -A:examples -X helpers-query/run-multi :questions '["What is Rust?" "Wha
 (require '[github.copilot-sdk.helpers :as h])
 
 ;; Simplest possible query - just get the answer
-(h/query "What is 2+2?" :session {:model "claude-haiku-4.5"})
+(h/query "What is 2+2?" :session {:on-permission-request copilot/approve-all
+                                   :model "claude-haiku-4.5"})
 ;; => "4"
 
 ;; With options
-(h/query "What is Clojure?" :session {:model "claude-haiku-4.5"})
+(h/query "What is Clojure?" :session {:on-permission-request copilot/approve-all
+                                       :model "claude-haiku-4.5"})
 
 ;; Streaming with multimethod event handling
 (defmulti handle-event :type)
@@ -180,7 +183,8 @@ clojure -A:examples -X helpers-query/run-multi :questions '["What is Rust?" "Wha
   (flush))
 (defmethod handle-event :copilot/assistant.message [_] (println))
 
-(run! handle-event (h/query-seq! "Tell me a joke" :session {:model "gpt-5.2" :streaming? true}))
+(run! handle-event (h/query-seq! "Tell me a joke" :session {:on-permission-request copilot/approve-all
+                                                              :model "gpt-5.2" :streaming? true}))
 ```
 
 ---
@@ -232,7 +236,8 @@ clojure -A:examples -X tool-integration/run :languages '["clojure" "haskell"]'
                       "not found"))))}))
 
 ;; Create session with tools and use query
-(copilot/with-client-session [session {:model "claude-haiku-4.5"
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "claude-haiku-4.5"
                                        :tools [lookup-tool]}]
   (println (h/query "Tell me about Clojure using the lookup tool" :session session)))
 ```
@@ -369,9 +374,9 @@ clojure -A:examples -X metadata-api/run
 **Difficulty:** Intermediate  
 **Concepts:** permission requests, bash tool, approval callback, deny-by-default
 
-The SDK uses a **deny-by-default** permission model — all permission requests are
-denied unless an `:on-permission-request` handler is provided. Use `copilot/approve-all`
-for blanket approval, or provide a custom handler for fine-grained control.
+The SDK **requires** an `:on-permission-request` handler in every session config.
+Use `copilot/approve-all` for blanket approval, or provide a custom handler for
+fine-grained control.
 
 Shows how to:
 - handle `permission.request` via `:on-permission-request`
@@ -434,7 +439,8 @@ clojure -A:examples -X session-events/run :prompt '"Explain recursion."'
     :copilot/session.truncation :copilot/session.snapshot_rewind
     :copilot/session.compaction_start :copilot/session.compaction_complete})
 
-(copilot/with-client-session [session {:streaming? true}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :streaming? true}]
   (let [events-ch (chan 256)
         done (promise)]
     (tap (copilot/events session) events-ch)
@@ -481,7 +487,8 @@ clojure -A:examples -X user-input/run-simple
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "claude-haiku-4.5"
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "claude-haiku-4.5"
                                        :on-user-input-request
                                        (fn [request invocation]
                                          ;; request contains:
@@ -608,7 +615,8 @@ await client.start();
 **Clojure:**
 ```clojure
 (require '[github.copilot-sdk.helpers :as h])
-(h/query "What is 2+2?" :session {:model "claude-haiku-4.5"})
+(h/query "What is 2+2?" :session {:on-permission-request copilot/approve-all
+                                   :model "claude-haiku-4.5"})
 ;; => "4"
 ```
 
@@ -630,7 +638,8 @@ session.on((event) => {
 (defmethod handle-event :copilot/assistant.message [{{:keys [content]} :data}]
   (println content))
 
-(run! handle-event (h/query-seq! "Hello" :session {:model "gpt-5.2" :streaming? true}))
+(run! handle-event (h/query-seq! "Hello" :session {:on-permission-request copilot/approve-all
+                                                    :model "gpt-5.2" :streaming? true}))
 ```
 
 ### Tool Definition
