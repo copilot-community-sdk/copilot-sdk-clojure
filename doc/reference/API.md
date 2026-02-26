@@ -885,6 +885,7 @@ copilot/tool-events
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
+| `:copilot/session.task_complete` | Task completed by the session agent |
 
 ### Example: Handling Events
 
@@ -1169,6 +1170,17 @@ Use `approve-all` to opt into approving everything:
 (def session (copilot/create-session client
                {:on-permission-request copilot/approve-all}))
 ```
+
+The `:permission-kind` field in permission requests identifies the type of action requiring approval:
+
+| Permission Kind | Description |
+|----------------|-------------|
+| `:shell` | Shell command execution |
+| `:write` | File system write operation |
+| `:mcp` | MCP tool invocation |
+| `:read` | File system read operation |
+| `:url` | URL fetch / HTTP request |
+| `:custom-tool` | SDK-registered custom tool invocation |
 
 For fine-grained control, provide your own handler. When the CLI needs
 approval, it sends a JSON-RPC `permission.request` to the SDK. Your
