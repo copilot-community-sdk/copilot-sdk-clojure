@@ -41,3 +41,23 @@ clojure -A:examples -X session-events/run
 echo ""
 echo "=== user-input ==="
 clojure -A:examples -X user-input/run-simple
+
+echo ""
+echo "=== file-attachments ==="
+clojure -A:examples -X file-attachments/run
+
+echo ""
+echo "=== session-resume ==="
+clojure -A:examples -X session-resume/run
+
+echo ""
+echo "=== infinite-sessions ==="
+clojure -A:examples -X infinite-sessions/run
+
+echo ""
+echo "=== lifecycle-hooks ==="
+clojure -A:examples -X lifecycle-hooks/run
+
+echo ""
+echo "=== reasoning-effort ==="
+clojure -A:examples -X reasoning-effort/run

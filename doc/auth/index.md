@@ -134,5 +134,6 @@ To prevent the SDK from automatically using stored credentials or `gh` CLI auth:
 ## Next Steps
 
 - [BYOK Documentation](./byok.md) — Use your own API keys
+- [Azure Managed Identity](./azure-managed-identity.md) — Azure BYOK without static API keys
 - [Getting Started Guide](../getting-started.md) — Build your first Copilot-powered app
 - [MCP Servers](../mcp/overview.md) — Connect to external tools

@@ -67,6 +67,21 @@ clojure -A:examples -X byok-provider/run :provider-name '"ollama"'
 # MCP local server (requires npx/Node.js)
 clojure -A:examples -X mcp-local-server/run
 clojure -A:examples -X mcp-local-server/run-with-custom-tools
+
+# File attachments
+clojure -A:examples -X file-attachments/run
+
+# Session resume
+clojure -A:examples -X session-resume/run
+
+# Infinite sessions (context compaction)
+clojure -A:examples -X infinite-sessions/run
+
+# Lifecycle hooks
+clojure -A:examples -X lifecycle-hooks/run
+
+# Reasoning effort
+clojure -A:examples -X reasoning-effort/run
 ```
 
 Or run all examples:
@@ -74,7 +89,7 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs the core examples (1–9) that need only the Copilot CLI.
+> **Note:** `run-all-examples.sh` runs the core examples (1–14) that need only the Copilot CLI.
 > Example 10 (BYOK) and Example 11 (MCP) require external dependencies (API keys, Node.js) and must be run manually.
 
 With a custom CLI path:
@@ -581,6 +596,137 @@ clojure -A:examples -X mcp-local-server/run-with-custom-tools
 ```
 
 See [doc/mcp/overview.md](../doc/mcp/overview.md) for full MCP documentation.
+
+---
+
+## Example 12: File Attachments (`file_attachments.clj`)
+
+**Difficulty:** Beginner  
+**Concepts:** File attachments, message options
+
+Attach files to a prompt so the model can analyze their contents.
+
+### What It Demonstrates
+
+- Sending `:attachments` in message options with `send-and-wait!`
+- File attachment type: `{:type :file :path "/absolute/path"}`
+- Resolving relative paths to absolute with `java.io.File`
+
+### Usage
+
+```bash
+# Attach and analyze deps.edn (default)
+clojure -A:examples -X file-attachments/run
+
+# Attach a different file
+clojure -A:examples -X file-attachments/run :file-path '"README.md"'
+```
+
+---
+
+## Example 13: Session Resume (`session_resume.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** Session persistence, session resume, multi-session lifecycle
+
+Resume a previous session by ID to continue a conversation with preserved context.
+
+### What It Demonstrates
+
+- Creating a session and sending a message to store context
+- Retrieving the session ID from the session map
+- Resuming a session with `copilot/resume-session`
+- Verifying context is preserved across resume
+- Manual session lifecycle with `with-client`, `create-session`, `destroy!`
+
+### Usage
+
+```bash
+# Default: remembers "PINEAPPLE"
+clojure -A:examples -X session-resume/run
+
+# Custom secret word
+clojure -A:examples -X session-resume/run :secret-word '"MANGO"'
+```
+
+---
+
+## Example 14: Infinite Sessions (`infinite_sessions.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** Infinite sessions, context compaction, long conversations
+
+Enable infinite sessions so the SDK automatically compacts older messages when the context window fills up.
+
+### What It Demonstrates
+
+- Configuring `:infinite-sessions` with compaction thresholds
+- `:background-compaction-threshold` — when background compaction starts (80%)
+- `:buffer-exhaustion-threshold` — when urgent compaction triggers (95%)
+- Sending multiple prompts in a long-running session
+
+### Usage
+
+```bash
+clojure -A:examples -X infinite-sessions/run
+
+# Custom prompts
+clojure -A:examples -X infinite-sessions/run :prompts '["What is Clojure?" "Who created it?" "When?"]'
+```
+
+---
+
+## Example 15: Lifecycle Hooks (`lifecycle_hooks.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** Hooks, callbacks, tool use monitoring
+
+Register callbacks for session lifecycle events: start/end, tool use, prompts, and errors.
+
+### What It Demonstrates
+
+- Configuring `:hooks` in session config with all 6 hook types
+- `:on-session-start` — fires when session begins
+- `:on-session-end` — fires when session ends
+- `:on-pre-tool-use` — fires before a tool runs (return `{:approved true}` to allow)
+- `:on-post-tool-use` — fires after a tool completes
+- `:on-user-prompt-submitted` — fires when user sends a prompt
+- `:on-error-occurred` — fires on errors
+- Collecting and summarizing hook events
+
+### Usage
+
+```bash
+clojure -A:examples -X lifecycle-hooks/run
+
+# Custom prompt
+clojure -A:examples -X lifecycle-hooks/run :prompt '"List all .md files using glob"'
+```
+
+---
+
+## Example 16: Reasoning Effort (`reasoning_effort.clj`)
+
+**Difficulty:** Beginner  
+**Concepts:** Reasoning effort, model configuration
+
+Control how much reasoning the model applies with the `:reasoning-effort` option.
+
+### What It Demonstrates
+
+- Setting `:reasoning-effort` in session config
+- Valid values: `"low"`, `"medium"`, `"high"`, `"xhigh"`
+- Lower effort produces faster, more concise responses
+
+### Usage
+
+```bash
+# Default: low reasoning effort
+clojure -A:examples -X reasoning-effort/run
+
+# Higher reasoning effort
+clojure -A:examples -X reasoning-effort/run :effort '"high"'
+```
 
 ---
 
