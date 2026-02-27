@@ -449,15 +449,14 @@
   (s/keys :req-un [::previous-mode ::new-mode]))
 
 ;; Session plan changed event
-(s/def ::plan-operation #{"create" "update" "delete"})
+(s/def ::operation #{"create" "update" "delete"})
 (s/def ::session.plan_changed-data
-  (s/keys :req-un [::plan-operation]))
+  (s/keys :req-un [::operation]))
 
 ;; Session workspace file changed event
-(s/def ::workspace-file-path string?)
-(s/def ::workspace-file-operation #{"create" "update"})
+;; ::path already defined above; ::operation reused (superset covers both events)
 (s/def ::session.workspace_file_changed-data
-  (s/keys :req-un [::workspace-file-path ::workspace-file-operation]))
+  (s/keys :req-un [::path ::operation]))
 
 ;; Session task complete event
 (s/def ::session.task_complete-data
