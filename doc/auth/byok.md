@@ -167,13 +167,14 @@ Some providers require bearer token authentication instead of API keys:
 
 ### Identity Limitations
 
-BYOK authentication is **key-based only**. The following are NOT supported:
+BYOK authentication uses **static credentials that you supply** (API keys or bearer tokens); it does not natively perform Entra ID, OIDC, or managed identity flows. However, you can use `DefaultAzureCredential` to obtain a short-lived bearer token and pass it via `:bearer-token`. See the [Azure Managed Identity workaround](./azure-managed-identity.md) for details.
+
+The following identity flows are NOT natively supported (you must handle them yourself and pass the resulting credential to BYOK):
 
 - ❌ Microsoft Entra ID (Azure AD) managed identities or service principals
 - ❌ Third-party identity providers (OIDC, SAML, etc.)
-- ❌ Azure Managed Identity
 
-You must use an API key or bearer token that you manage yourself.
+You must provide and manage the API key or bearer token that BYOK uses.
 
 ### Feature Limitations
 

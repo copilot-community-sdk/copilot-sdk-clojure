@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (documentation)
+- Azure Managed Identity BYOK guide (`doc/auth/azure-managed-identity.md`): shows how to use `DefaultAzureCredential` with short-lived bearer tokens for Azure AI Foundry, with Clojure examples for basic usage and token refresh (upstream PR #498).
+- Updated BYOK limitations to link to the Managed Identity workaround instead of listing it as fully unsupported.
+- Added Azure Managed Identity guide to `doc/auth/index.md` and `doc/index.md`.
+
+### Added (upstream PR #512 sync)
+- `examples/file_attachments.clj` — Demonstrates sending file attachments with prompts using `:attachments` in message options.
+- `examples/session_resume.clj` — Demonstrates session resume: create session, send secret word, resume by ID, verify context preserved.
+- `examples/infinite_sessions.clj` — Demonstrates infinite sessions with context compaction thresholds for long conversations.
+- `examples/lifecycle_hooks.clj` — Demonstrates all 6 lifecycle hooks: session start/end, pre/post tool use, user prompt submitted, error occurred.
+- `examples/reasoning_effort.clj` — Demonstrates the `:reasoning-effort` session config option.
+
 ## [0.1.28.0] - 2026-02-27
 ### Changed (upstream PR #554 sync)
 - **BREAKING**: `:on-permission-request` is now **required** when calling `create-session`, `resume-session`, `<create-session`, and `<resume-session`. Calls without a handler throw `ExceptionInfo` with a descriptive message. This matches upstream Node.js SDK where `onPermissionRequest` is required in `SessionConfig` and `ResumeSessionConfig` (upstream PR #554).
