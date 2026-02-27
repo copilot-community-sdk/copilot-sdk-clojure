@@ -47,6 +47,10 @@
     :copilot/session.context_changed
     :copilot/session.title_changed
     :copilot/session.warning
+    :copilot/session.mode_changed
+    :copilot/session.plan_changed
+    :copilot/session.workspace_file_changed
+    :copilot/session.task_complete
     :copilot/user.message
     :copilot/pending_messages.modified
     :copilot/assistant.turn_start
@@ -55,6 +59,7 @@
     :copilot/assistant.reasoning_delta
     :copilot/assistant.message
     :copilot/assistant.message_delta
+    :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end
     :copilot/assistant.usage
     :copilot/abort
@@ -89,7 +94,11 @@
     :copilot/session.shutdown
     :copilot/session.context_changed
     :copilot/session.title_changed
-    :copilot/session.warning})
+    :copilot/session.warning
+    :copilot/session.mode_changed
+    :copilot/session.plan_changed
+    :copilot/session.workspace_file_changed
+    :copilot/session.task_complete})
 
 (def assistant-events
   "Assistant response events."
@@ -99,6 +108,7 @@
     :copilot/assistant.reasoning_delta
     :copilot/assistant.message
     :copilot/assistant.message_delta
+    :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end
     :copilot/assistant.usage})
 

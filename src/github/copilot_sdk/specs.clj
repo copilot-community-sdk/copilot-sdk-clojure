@@ -356,10 +356,11 @@
     :copilot/session.compaction_start :copilot/session.compaction_complete
     :copilot/session.shutdown :copilot/session.task_complete
     :copilot/session.title_changed :copilot/session.warning :copilot/session.context_changed
+    :copilot/session.mode_changed :copilot/session.plan_changed :copilot/session.workspace_file_changed
     :copilot/user.message :copilot/pending_messages.modified
     :copilot/assistant.turn_start :copilot/assistant.intent :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta :copilot/assistant.message :copilot/assistant.message_delta
-    :copilot/assistant.turn_end :copilot/assistant.usage
+    :copilot/assistant.streaming_delta :copilot/assistant.turn_end :copilot/assistant.usage
     :copilot/abort
     :copilot/tool.user_requested :copilot/tool.execution_start :copilot/tool.execution_partial_result
     :copilot/tool.execution_progress :copilot/tool.execution_complete
@@ -389,9 +390,14 @@
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id]))
 
+(s/def ::total-response-size-bytes nat-int?)
+
 (s/def ::assistant.message_delta-data
   (s/keys :req-un [::message-id ::delta-content]
-          :opt-un [::total-response-size-bytes ::parent-tool-call-id]))
+          :opt-un [::parent-tool-call-id]))
+
+(s/def ::assistant.streaming_delta-data
+  (s/keys :req-un [::total-response-size-bytes]))
 
 (s/def ::tool.execution_start-data
   (s/keys :req-un [::tool-call-id ::tool-name]
@@ -435,6 +441,27 @@
 (s/def ::session.context_changed-data
   (s/keys :req-un [::cwd]
           :opt-un [::git-root ::repository ::branch]))
+
+;; Session mode changed event
+(s/def ::previous-mode string?)
+(s/def ::new-mode string?)
+(s/def ::session.mode_changed-data
+  (s/keys :req-un [::previous-mode ::new-mode]))
+
+;; Session plan changed event
+(s/def ::plan-operation #{"create" "update" "delete"})
+(s/def ::session.plan_changed-data
+  (s/keys :req-un [::plan-operation]))
+
+;; Session workspace file changed event
+(s/def ::workspace-file-path string?)
+(s/def ::workspace-file-operation #{"create" "update"})
+(s/def ::session.workspace_file_changed-data
+  (s/keys :req-un [::workspace-file-path ::workspace-file-operation]))
+
+;; Session task complete event
+(s/def ::session.task_complete-data
+  (s/keys :opt-un [::summary]))
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))

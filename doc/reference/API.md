@@ -861,6 +861,10 @@ copilot/tool-events
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
+| `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
+| `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:plan-operation "create"\|"update"\|"delete"}` |
+| `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:workspace-file-path "...", :workspace-file-operation "create"\|"update"}` |
+| `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..."}` (optional) |
 | `:copilot/skill.invoked` | Skill invocation triggered |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
@@ -870,6 +874,7 @@ copilot/tool-events
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
 | `:copilot/assistant.message` | Complete assistant response |
 | `:copilot/assistant.message_delta` | Streaming response chunk |
+| `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
 | `:copilot/assistant.usage` | Token usage for this turn |
 | `:copilot/abort` | Current message aborted |
@@ -885,7 +890,6 @@ copilot/tool-events
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
-| `:copilot/session.task_complete` | Task completed by the session agent |
 
 ### Example: Handling Events
 
