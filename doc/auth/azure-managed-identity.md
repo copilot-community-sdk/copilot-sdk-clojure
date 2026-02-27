@@ -42,7 +42,6 @@ Add the Azure Identity SDK to your `deps.edn`:
   (let [credential (.build (DefaultAzureCredentialBuilder.))
         context    (doto (TokenRequestContext.)
                      (.addScopes (into-array String [cognitive-services-scope])))]
-    (.getToken (.getToken credential context))
     (.getToken credential context)))
 
 (def foundry-url (System/getenv "AZURE_AI_FOUNDRY_RESOURCE_URL"))

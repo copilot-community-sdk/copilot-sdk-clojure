@@ -35,5 +35,4 @@
                          :available-tools []})]
           (println "Asking:" prompt)
           (let [result (copilot/send-and-wait! resumed {:prompt prompt})]
-            (println "🤖:" (get-in result [:data :content])))
-          (copilot/destroy! resumed))))))
+            (println "🤖:" (get-in result [:data :content]))))))))

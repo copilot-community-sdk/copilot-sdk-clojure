@@ -89,8 +89,8 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs the core examples (1–14) that need only the Copilot CLI.
-> Example 10 (BYOK) and Example 11 (MCP) require external dependencies (API keys, Node.js) and must be run manually.
+> **Note:** `run-all-examples.sh` runs 14 examples that need only the Copilot CLI (examples 1–9 and 12–16).
+> Examples 10 (BYOK) and 11 (MCP) require external dependencies (API keys, Node.js) and must be run manually.
 
 With a custom CLI path:
 ```bash
