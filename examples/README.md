@@ -637,7 +637,7 @@ Resume a previous session by ID to continue a conversation with preserved contex
 - Retrieving the session ID from the session map
 - Resuming a session with `copilot/resume-session`
 - Verifying context is preserved across resume
-- Manual session lifecycle with `with-client`, `create-session`, `destroy!`
+- Manual session lifecycle with `with-client` (ensures `stop!`/session cleanup), `create-session`, `resume-session`
 
 ### Usage
 

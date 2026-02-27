@@ -1,8 +1,7 @@
 (ns session-resume
   "Demonstrates session resume: create a session, teach it a secret word,
    then resume the session by ID and verify the model remembers it."
-  (:require [github.copilot-sdk :as copilot]
-            [github.copilot-sdk.helpers :as h]))
+  (:require [github.copilot-sdk :as copilot]))
 
 ;; See examples/README.md for usage
 

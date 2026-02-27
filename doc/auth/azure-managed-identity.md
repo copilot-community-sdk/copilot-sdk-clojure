@@ -21,7 +21,7 @@ Add the Azure Identity SDK to your `deps.edn`:
 ```clojure
 ;; deps.edn
 {:deps {com.azure/azure-identity {:mvn/version "1.15.4"}
-        io.github.niclasgustafsson/copilot-sdk-clojure {:mvn/version "RELEASE"}}}
+        io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "LATEST"}}}
 ```
 
 ### Basic Usage
