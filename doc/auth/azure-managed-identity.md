@@ -37,12 +37,14 @@ Add the Azure Identity SDK to your `deps.edn`:
 (def cognitive-services-scope "https://cognitiveservices.azure.com/.default")
 
 (defn get-azure-token
-  "Obtain a short-lived bearer token from Entra ID."
+  "Obtain a short-lived bearer token string from Entra ID."
   []
   (let [credential (.build (DefaultAzureCredentialBuilder.))
         context    (doto (TokenRequestContext.)
                      (.addScopes (into-array String [cognitive-services-scope])))]
-    (.getToken credential context)))
+    (-> (.getToken credential context)
+        (.block)
+        (.getToken))))
 
 (def foundry-url (System/getenv "AZURE_AI_FOUNDRY_RESOURCE_URL"))
 
@@ -50,7 +52,7 @@ Add the Azure Identity SDK to your `deps.edn`:
                               {:model "gpt-4.1"
                                :provider {:provider-type :openai
                                           :base-url (str foundry-url "/openai/v1/")
-                                          :bearer-token (.getToken (get-azure-token))
+                                          :bearer-token (get-azure-token)
                                           :wire-api :responses}}]
   (println (h/query "Hello from Managed Identity!" :session session)))
 ```
@@ -75,10 +77,12 @@ Bearer tokens expire (typically after ~1 hour). For servers or long-running agen
 (defn fresh-provider-config
   "Build a provider config with a freshly obtained bearer token."
   [foundry-url]
-  (let [token (.getToken credential context)]
+  (let [token (-> (.getToken credential context)
+                  (.block)
+                  (.getToken))]
     {:provider-type :openai
      :base-url (str foundry-url "/openai/v1/")
-     :bearer-token (.getToken token)
+     :bearer-token token
      :wire-api :responses}))
 
 (def foundry-url (System/getenv "AZURE_AI_FOUNDRY_RESOURCE_URL"))

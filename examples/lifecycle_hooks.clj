@@ -28,13 +28,13 @@
 
                         :on-pre-tool-use
                         (fn [data _ctx]
-                          (println "🔧 Hook: pre-tool-use —" (:toolName data))
+                          (println "🔧 Hook: pre-tool-use —" (:tool-name data))
                           (record! :on-pre-tool-use data)
                           {:approved true})
 
                         :on-post-tool-use
                         (fn [data _ctx]
-                          (println "✅ Hook: post-tool-use —" (:toolName data))
+                          (println "✅ Hook: post-tool-use —" (:tool-name data))
                           (record! :on-post-tool-use data))
 
                         :on-user-prompt-submitted
