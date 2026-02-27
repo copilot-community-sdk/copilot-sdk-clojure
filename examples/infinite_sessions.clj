@@ -20,7 +20,8 @@
       [session {:on-permission-request copilot/approve-all
                 :model "claude-haiku-4.5"
                 :available-tools []
-                :system-prompt "Answer concisely in one sentence."
+                :system-message {:mode "replace"
+                                :content "Answer concisely in one sentence."}
                 :infinite-sessions {:enabled true
                                     :background-compaction-threshold 0.80
                                     :buffer-exhaustion-threshold 0.95}}]
