@@ -454,9 +454,10 @@
   (s/keys :req-un [::operation]))
 
 ;; Session workspace file changed event
-;; ::path already defined above; ::operation reused (superset covers both events)
+;; ::path already defined above; ::operation reused but constrained to create/update
 (s/def ::session.workspace_file_changed-data
-  (s/keys :req-un [::path ::operation]))
+  (s/and (s/keys :req-un [::path ::operation])
+         #(contains? #{"create" "update"} (:operation %))))
 
 ;; Session task complete event
 (s/def ::session.task_complete-data

@@ -862,8 +862,8 @@ copilot/tool-events
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
 | `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
-| `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"\|"update"\|"delete"}` |
-| `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"\|"update"}` |
+| `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
+| `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"/"update"}` |
 | `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..."}` (optional) |
 | `:copilot/skill.invoked` | Skill invocation triggered |
 | `:copilot/user.message` | User message added |
