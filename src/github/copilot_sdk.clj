@@ -72,6 +72,7 @@
     :copilot/subagent.completed
     :copilot/subagent.failed
     :copilot/subagent.selected
+    :copilot/subagent.deselected
     :copilot/skill.invoked
     :copilot/hook.start
     :copilot/hook.end

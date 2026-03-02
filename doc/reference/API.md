@@ -887,6 +887,7 @@ copilot/tool-events
 | `:copilot/subagent.completed` | Subagent completed |
 | `:copilot/subagent.failed` | Subagent failed |
 | `:copilot/subagent.selected` | Subagent selected |
+| `:copilot/subagent.deselected` | Subagent deselected |
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
