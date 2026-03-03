@@ -594,6 +594,7 @@ Send a message to the session. Returns immediately with the message ID.
 | `:file` | `:type`, `:path` | `:display-name`, `:line-range` | File attachment |
 | `:directory` | `:type`, `:path` | `:display-name`, `:line-range` | Directory attachment |
 | `:selection` | `:type`, `:file-path`, `:display-name` | `:selection-range`, `:text` | Code selection attachment |
+| `:github-reference` | `:type`, `:number`, `:title`, `:reference-type`, `:state`, `:url` | — | GitHub issue, PR, or discussion reference |
 
 `:line-range` is a map with `:start` and `:end` line numbers (zero-based) to restrict the attachment to a range of lines:
 

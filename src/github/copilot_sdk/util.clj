@@ -97,6 +97,14 @@
       (:selection-range att) (assoc :selection (clj->wire (:selection-range att)))
       (:text att) (assoc :text (:text att)))
 
+    :github-reference
+    {:type "github_reference"
+     :number (:number att)
+     :title (:title att)
+     :referenceType (name (:reference-type att))
+     :state (:state att)
+     :url (:url att)}
+
     ;; :file and :directory
     (cond-> {:type (name (:type att))
              :path (:path att)}

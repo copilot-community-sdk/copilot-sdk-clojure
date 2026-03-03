@@ -275,9 +275,12 @@
          #(= :selection (:type %))))
 
 ;; GitHub reference attachment (issue, PR, or discussion)
+;; Note: ::state is already defined as (instance? Atom) for the client record,
+;; so we cannot use s/keys here — manual predicates validate the :state field instead.
 (s/def ::number nat-int?)
 (s/def ::reference-type #{"issue" "pr" "discussion"})
 (s/def ::url string?)
+(s/def ::attachment-state string?)
 (s/def ::github-reference-attachment
   (s/and map?
          #(= :github-reference (:type %))
@@ -665,4 +668,5 @@
 ;; Session model operations (session.model.getCurrent / switchTo)
 ;; -----------------------------------------------------------------------------
 
+(s/def ::model string?)
 (s/def ::model-id (s/nilable string?))
