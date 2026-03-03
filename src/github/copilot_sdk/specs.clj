@@ -240,7 +240,7 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::prompt ::non-blank-string)
-(s/def ::attachment-type #{:file :directory :selection})
+(s/def ::attachment-type #{:file :directory :selection :github-reference})
 (s/def ::type ::attachment-type)
 (s/def ::path ::non-blank-string)
 (s/def ::file-path ::non-blank-string)
@@ -274,9 +274,26 @@
                  :opt-un [::selection-range ::text])
          #(= :selection (:type %))))
 
+;; GitHub reference attachment (issue, PR, or discussion)
+;; Note: ::state is already defined as (instance? Atom) for the client record,
+;; so we cannot use s/keys here — manual predicates validate the :state field instead.
+(s/def ::number nat-int?)
+(s/def ::reference-type #{"issue" "pr" "discussion"})
+(s/def ::url string?)
+(s/def ::attachment-state string?)
+(s/def ::github-reference-attachment
+  (s/and map?
+         #(= :github-reference (:type %))
+         #(nat-int? (:number %))
+         #(string? (:title %))
+         #(contains? #{"issue" "pr" "discussion"} (:reference-type %))
+         #(string? (:state %))
+         #(string? (:url %))))
+
 (s/def ::attachment
   (s/or :file-or-directory ::file-or-directory-attachment
-        :selection ::selection-attachment))
+        :selection ::selection-attachment
+        :github-reference ::github-reference-attachment))
 
 (s/def ::attachments (s/coll-of ::attachment))
 (s/def ::mode #{:enqueue :immediate})
@@ -365,6 +382,7 @@
     :copilot/tool.user_requested :copilot/tool.execution_start :copilot/tool.execution_partial_result
     :copilot/tool.execution_progress :copilot/tool.execution_complete
     :copilot/subagent.started :copilot/subagent.completed :copilot/subagent.failed :copilot/subagent.selected
+    :copilot/subagent.deselected
     :copilot/skill.invoked
     :copilot/hook.start :copilot/hook.end
     :copilot/system.message})
@@ -381,20 +399,26 @@
 (s/def ::session.idle-data map?)
 
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
+(s/def ::interaction-id string?)
 
 (s/def ::user.message-data
   (s/keys :req-un [::content]
-          :opt-un [::transformed-content ::attachments ::source ::agent-mode]))
+          :opt-un [::transformed-content ::attachments ::source ::agent-mode ::interaction-id]))
 
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id]))
 
 (s/def ::total-response-size-bytes nat-int?)
+(s/def ::turn-id ::non-blank-string)
+
+(s/def ::assistant.turn_start-data
+  (s/keys :req-un [::turn-id]
+          :opt-un [::interaction-id]))
 
 (s/def ::assistant.message_delta-data
   (s/keys :req-un [::message-id ::delta-content]
-          :opt-un [::parent-tool-call-id]))
+          :opt-un [::parent-tool-call-id ::interaction-id]))
 
 (s/def ::assistant.streaming_delta-data
   (s/keys :req-un [::total-response-size-bytes]))
@@ -410,7 +434,8 @@
 
 (s/def ::tool.execution_complete-data
   (s/keys :req-un [::tool-call-id ::success?]
-          :opt-un [::is-user-requested? ::result ::error ::tool-telemetry ::parent-tool-call-id]))
+          :opt-un [::is-user-requested? ::result ::error ::tool-telemetry ::parent-tool-call-id
+                   ::model ::interaction-id]))
 
 ;; Session shutdown event
 (s/def ::shutdown-type #{"routine" "error"})
@@ -465,10 +490,12 @@
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))
+(s/def ::plugin-name string?)
+(s/def ::plugin-version string?)
 
 (s/def ::skill.invoked-data
   (s/keys :req-un [::name ::path ::content]
-          :opt-un [::allowed-tools]))
+          :opt-un [::allowed-tools ::plugin-name ::plugin-version]))
 
 ;; Generic session event
 (s/def ::session-event
@@ -641,4 +668,5 @@
 ;; Session model operations (session.model.getCurrent / switchTo)
 ;; -----------------------------------------------------------------------------
 
+(s/def ::model string?)
 (s/def ::model-id (s/nilable string?))
