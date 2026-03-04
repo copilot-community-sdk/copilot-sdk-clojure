@@ -161,14 +161,17 @@
       (is (not (contains? tool :overrides-built-in-tool))))))
 
 (deftest set-model-alias-test
-  (testing "set-model! delegates to the same underlying function as switch-model!"
-    (is (fn? copilot/set-model!))
-    (is (fn? copilot/switch-model!))
-    ;; At the session level, set-model! is defined as (def set-model! switch-model!)
-    ;; so they share the same function object
-    (let [session-set @(resolve 'github.copilot-sdk.session/set-model!)
-          session-switch @(resolve 'github.copilot-sdk.session/switch-model!)]
-      (is (identical? session-set session-switch)))))
+  (testing "set-model! delegates to switch-model!"
+    (let [called-args (atom nil)
+          sentinel ::switch-model-called]
+      (with-redefs [github.copilot-sdk.session/switch-model!
+                    (fn [& args]
+                      (reset! called-args args)
+                      sentinel)]
+        (let [result (copilot/set-model! :fake-session "gpt-4.1")]
+          (is (some? @called-args) "switch-model! should have been called")
+          (is (= [:fake-session "gpt-4.1"] (vec @called-args)))
+          (is (= sentinel result)))))))
 
 ;; =============================================================================
 ;; Result Helper Tests

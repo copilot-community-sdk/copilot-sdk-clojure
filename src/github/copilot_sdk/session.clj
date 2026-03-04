@@ -719,7 +719,8 @@
                                      :modelId model-id})]
     (:model-id result)))
 
-(def set-model!
+(defn set-model!
   "Alias for switch-model!. Matches the upstream SDK's setModel() API.
    See switch-model! for details."
-  switch-model!)
+  [session model-id]
+  (switch-model! session model-id))
