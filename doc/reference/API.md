@@ -751,8 +751,6 @@ Get all events/messages from this session.
 
 Get the current model for this session. Returns the model ID string, or nil if none set.
 
-> **Note:** Not yet implemented in the CLI as of version 0.0.412. Calling this throws until CLI support is added.
-
 #### `switch-model!`
 
 ```clojure
@@ -762,7 +760,14 @@ Get the current model for this session. Returns the model ID string, or nil if n
 
 Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
 
-> **Note:** Not yet implemented in the CLI as of version 0.0.412. Calling this throws until CLI support is added.
+#### `set-model!`
+
+```clojure
+(copilot/set-model! session "claude-sonnet-4.5")
+;; => "claude-sonnet-4.5"
+```
+
+Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
 
 ```clojure
 (copilot/with-client-session [session {:model "gpt-5.2"
@@ -1006,6 +1011,23 @@ Let the CLI call back into your process when the model needs capabilities you pr
 ```
 
 When Copilot invokes `lookup_issue`, the SDK automatically runs your handler and responds to the CLI.
+
+**Overriding built-in tools:**
+
+Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `edit_file`). Without this flag, defining a tool whose name clashes with a built-in tool causes an error.
+
+```clojure
+(def custom-grep
+  (copilot/define-tool "grep"
+    {:description "Custom grep with project-specific filtering"
+     :overrides-built-in-tool true
+     :parameters {:type "object"
+                  :properties {:pattern {:type "string"
+                                         :description "Search pattern"}}
+                  :required ["pattern"]}
+     :handler (fn [{:keys [pattern]} _invocation]
+                (copilot/result-success (my-custom-grep pattern)))}))
+```
 
 **Handler return values:**
 

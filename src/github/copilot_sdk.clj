@@ -748,8 +748,6 @@
   "Get the current model for this session.
    Returns the model ID string, or nil if none set.
 
-   NOTE: Not yet implemented in CLI as of 0.0.412. Will throw until supported.
-
    Example:
    ```clojure
    (println \"Current model:\" (copilot/get-current-model session))
@@ -759,9 +757,8 @@
 
 (defn switch-model!
   "Switch the model for this session.
+   The new model takes effect for the next message. Conversation history is preserved.
    Returns the new model ID string, or nil.
-
-   NOTE: Not yet implemented in CLI as of 0.0.412. Will throw until supported.
 
    Example:
    ```clojure
@@ -769,6 +766,17 @@
    ```"
   [session model-id]
   (session/switch-model! session model-id))
+
+(defn set-model!
+  "Alias for switch-model!. Matches the upstream SDK's setModel() API.
+   The new model takes effect for the next message. Conversation history is preserved.
+
+   Example:
+   ```clojure
+   (copilot/set-model! session \"gpt-4.1\")
+   ```"
+  [session model-id]
+  (session/set-model! session model-id))
 
 (defn session-config
   "Get the configuration that was passed to create this session.
@@ -798,9 +806,10 @@
    Arguments:
    - name        - Tool name (string)
    - opts map:
-     - :description - Tool description
-     - :parameters  - JSON schema for parameters
-     - :handler     - Function (fn [args invocation] -> result)
+     - :description             - Tool description
+     - :parameters              - JSON schema for parameters
+     - :handler                 - Function (fn [args invocation] -> result)
+     - :overrides-built-in-tool - When true, overrides a built-in tool of the same name
 
    The handler receives:
    - args       - The parsed arguments from the LLM
@@ -820,6 +829,19 @@
                    (str \"Weather in \" (:location args) \": Sunny\"))}))
 
    (def session (copilot/create-session client {:tools [weather-tool]}))
+   ```
+
+   Override a built-in tool:
+   ```clojure
+   (def custom-grep
+     (copilot/define-tool \"grep\"
+       {:description \"Custom grep implementation\"
+        :overrides-built-in-tool true
+        :parameters {:type \"object\"
+                     :properties {:query {:type \"string\"}}
+                     :required [\"query\"]}
+        :handler (fn [args _]
+                   (str \"Custom grep: \" (:query args)))}))
    ```"
   [name opts]
   (tools/define-tool name opts))

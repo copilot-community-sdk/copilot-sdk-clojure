@@ -217,6 +217,7 @@ Shows how to let the LLM call back into your application when it needs capabilit
 - JSON Schema parameters for type-safe tool inputs
 - Handler functions that execute when tools are invoked
 - Different result types: `result-success`, `result-failure`
+- Overriding built-in tools with `:overrides-built-in-tool`
 
 ### Usage
 
@@ -272,6 +273,31 @@ clojure -A:examples -X tool-integration/run :languages '["clojure" "haskell"]'
 ;; Rejected - tool invocation was invalid
 (copilot/result-rejected "Invalid parameters")
 ```
+
+### Overriding Built-In Tools
+
+You can override built-in tools (like `grep` or `edit_file`) with custom implementations
+by setting `:overrides-built-in-tool true`:
+
+```clojure
+(def custom-grep
+  (copilot/define-tool "grep"
+    {:description "Project-aware grep that only searches source files"
+     :overrides-built-in-tool true
+     :parameters {:type "object"
+                  :properties {:query {:type "string"
+                                       :description "Search pattern"}}
+                  :required ["query"]}
+     :handler (fn [{:keys [query]} _]
+                (copilot/result-success (str "Custom grep for: " query)))}))
+
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :tools [custom-grep]}]
+  (println (h/query "Search for 'defn' in the project" :session session)))
+```
+
+Without `:overrides-built-in-tool true`, defining a tool whose name clashes
+with a built-in tool causes an error.
 
 ---
 

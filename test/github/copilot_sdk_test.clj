@@ -142,6 +142,34 @@
           result ((:tool-handler tool) {:name "World"} {})]
       (is (= "Hello World" result)))))
 
+(deftest define-tool-with-override-test
+  (testing "define a tool with overrides-built-in-tool"
+    (let [tool (copilot/define-tool "grep"
+                 {:description "Custom grep"
+                  :overrides-built-in-tool true
+                  :parameters {:type "object"
+                               :properties {:query {:type "string"}}}
+                  :handler (fn [args _] (str "Custom grep: " (:query args)))})]
+      (is (= "grep" (:tool-name tool)))
+      (is (= true (:overrides-built-in-tool tool)))
+      (is (= "Custom grep" (:tool-description tool)))))
+
+  (testing "define a tool without overrides-built-in-tool omits the key"
+    (let [tool (copilot/define-tool "my_tool"
+                 {:description "A tool"
+                  :handler (fn [_ _] "ok")})]
+      (is (not (contains? tool :overrides-built-in-tool))))))
+
+(deftest set-model-alias-test
+  (testing "set-model! delegates to the same underlying function as switch-model!"
+    (is (fn? copilot/set-model!))
+    (is (fn? copilot/switch-model!))
+    ;; At the session level, set-model! is defined as (def set-model! switch-model!)
+    ;; so they share the same function object
+    (let [session-set @(resolve 'github.copilot-sdk.session/set-model!)
+          session-switch @(resolve 'github.copilot-sdk.session/switch-model!)]
+      (is (identical? session-set session-switch)))))
+
 ;; =============================================================================
 ;; Result Helper Tests
 ;; =============================================================================

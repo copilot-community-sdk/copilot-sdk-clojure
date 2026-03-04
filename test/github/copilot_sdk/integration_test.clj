@@ -659,6 +659,40 @@
           create-params (get @seen "session.create")]
       (is (not (contains? create-params :clientName))))))
 
+(deftest test-override-built-in-tool-on-wire
+  (testing "overridesBuiltInTool is sent on the wire when true"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          tool (sdk/define-tool "grep"
+                 {:description "Custom grep"
+                  :overrides-built-in-tool true
+                  :parameters {:type "object"
+                               :properties {:query {:type "string"}}}
+                  :handler (fn [args _] (str "Custom grep: " (:query args)))})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
+          create-params (get @seen "session.create")
+          wire-tool (first (:tools create-params))]
+      (is (some? wire-tool) "tool should be present in wire payload")
+      (is (= true (:overridesBuiltInTool wire-tool))
+          "overridesBuiltInTool must be true on wire")))
+
+  (testing "overridesBuiltInTool is absent on the wire when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          tool (sdk/define-tool "my_tool"
+                 {:description "A tool"
+                  :handler (fn [_ _] "ok")})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
+          create-params (get @seen "session.create")
+          wire-tool (first (:tools create-params))]
+      (is (some? wire-tool) "tool should be present in wire payload")
+      (is (not (contains? wire-tool :overridesBuiltInTool))
+          "overridesBuiltInTool should be absent when not set"))))
+
 ;; -----------------------------------------------------------------------------
 ;; Permission Tests (upstream PR #509: deny-by-default)
 ;; -----------------------------------------------------------------------------

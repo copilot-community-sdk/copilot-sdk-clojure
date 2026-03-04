@@ -936,9 +936,11 @@
     (ensure-valid-mcp-servers! servers))
   (let [wire-tools (when (:tools config)
                      (mapv (fn [t]
-                             {:name (:tool-name t)
-                              :description (:tool-description t)
-                              :parameters (:tool-parameters t)})
+                             (cond-> {:name (:tool-name t)
+                                      :description (:tool-description t)
+                                      :parameters (:tool-parameters t)}
+                               (some? (:overrides-built-in-tool t))
+                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))))
                            (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (cond
@@ -985,9 +987,11 @@
     (ensure-valid-mcp-servers! servers))
   (let [wire-tools (when (:tools config)
                      (mapv (fn [t]
-                             {:name (:tool-name t)
-                              :description (:tool-description t)
-                              :parameters (:tool-parameters t)})
+                             (cond-> {:name (:tool-name t)
+                                      :description (:tool-description t)
+                                      :parameters (:tool-parameters t)}
+                               (some? (:overrides-built-in-tool t))
+                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))))
                            (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (cond
