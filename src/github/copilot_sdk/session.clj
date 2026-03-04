@@ -699,10 +699,7 @@
 
 (defn get-current-model
   "Get the current model for this session.
-   Returns the model ID string, or nil if none set.
-
-   NOTE: Defined in the CLI RPC schema but not yet implemented as of CLI 0.0.412.
-   Calling this will throw 'Unhandled method' until the CLI adds support."
+   Returns the model ID string, or nil if none set."
   [session]
   (let [{:keys [session-id client]} session
         conn (connection-io client)
@@ -712,10 +709,8 @@
 
 (defn switch-model!
   "Switch the model for this session.
-   Returns the new model ID string, or nil.
-
-   NOTE: Defined in the CLI RPC schema but not yet implemented as of CLI 0.0.412.
-   Calling this will throw 'Unhandled method' until the CLI adds support."
+   The new model takes effect for the next message. Conversation history is preserved.
+   Returns the new model ID string, or nil."
   [session model-id]
   (let [{:keys [session-id client]} session
         conn (connection-io client)
@@ -723,3 +718,9 @@
                                     {:sessionId session-id
                                      :modelId model-id})]
     (:model-id result)))
+
+(defn set-model!
+  "Alias for switch-model!. Matches the upstream SDK's setModel() API.
+   See switch-model! for details."
+  [session model-id]
+  (switch-model! session model-id))

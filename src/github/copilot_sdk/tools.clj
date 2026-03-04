@@ -8,9 +8,11 @@
    Arguments:
    - name        - Tool name (string)
    - opts map:
-     - :description - Tool description
-     - :parameters  - JSON schema for parameters (or nil)
-     - :handler     - Function (fn [args invocation] -> result)
+     - :description             - Tool description
+     - :parameters              - JSON schema for parameters (or nil)
+     - :handler                 - Function (fn [args invocation] -> result)
+     - :overrides-built-in-tool - When true, explicitly overrides a built-in tool of the same name.
+                                  Without this flag, name clashes with built-in tools cause an error.
    
    The handler receives:
    - args       - The parsed arguments from the LLM (no key conversion)
@@ -32,25 +34,29 @@
       :handler (fn [args _]
                  (str \"Weather in \" (:location args) \": Sunny, 72°F\"))})
    ```"
-  [name {:keys [description parameters handler]}]
-  {:tool-name name
-   :tool-description description
-   :tool-parameters parameters
-   :tool-handler handler})
+  [name {:keys [description parameters handler overrides-built-in-tool]}]
+  (cond-> {:tool-name name
+           :tool-description description
+           :tool-parameters parameters
+           :tool-handler handler}
+    (some? overrides-built-in-tool)
+    (assoc :overrides-built-in-tool overrides-built-in-tool)))
 
 (defn define-tool-from-spec
   "Define a tool using a clojure.spec for parameter validation.
-   
-   The spec is converted to a basic JSON schema.
-   Note: This provides limited schema conversion. For complex schemas,
-   use define-tool with an explicit JSON schema.
+    
+   Parameters are validated against the spec at invocation time.
+   Note: the spec is NOT auto-converted to JSON schema, so this tool
+   has no parameter schema advertised to the model. For tools that need
+   a parameter schema, use define-tool with an explicit JSON schema.
    
    Arguments:
    - name        - Tool name (string)
    - opts map:
-     - :description - Tool description
-     - :spec        - A clojure.spec for the arguments
-     - :handler     - Function (fn [args invocation] -> result)
+     - :description             - Tool description
+     - :spec                    - A clojure.spec for the arguments
+     - :handler                 - Function (fn [args invocation] -> result)
+     - :overrides-built-in-tool - When true, overrides a built-in tool of the same name
    
    Example:
    ```clojure
@@ -66,18 +72,20 @@
                    {:text-result-for-llm (str \"Invalid args: \" (s/explain-str ::get-weather-args args))
                     :result-type \"failure\"}))})
    ```"
-  [name {:keys [description spec handler]}]
+  [name {:keys [description spec handler overrides-built-in-tool]}]
   ;; For now, we don't auto-convert spec to JSON schema
   ;; The handler should validate using the spec
-  {:tool-name name
-   :tool-description description
-   :tool-parameters nil  ; User should provide JSON schema if needed
-   :tool-handler (fn [args invocation]
-                   (if (and spec (not (s/valid? spec args)))
-                     {:text-result-for-llm (str "Invalid arguments: " (s/explain-str spec args))
-                      :result-type "failure"
-                      :error "spec validation failed"}
-                     (handler args invocation)))})
+  (cond-> {:tool-name name
+           :tool-description description
+           :tool-parameters nil  ; User should provide JSON schema if needed
+           :tool-handler (fn [args invocation]
+                           (if (and spec (not (s/valid? spec args)))
+                             {:text-result-for-llm (str "Invalid arguments: " (s/explain-str spec args))
+                              :result-type "failure"
+                              :error "spec validation failed"}
+                             (handler args invocation)))}
+    (some? overrides-built-in-tool)
+    (assoc :overrides-built-in-tool overrides-built-in-tool)))
 
 (defn result-success
   "Create a successful tool result."
