@@ -240,7 +240,9 @@
                              #"\(def version \"[^\"]+\"\)"
                              (str "(def version \"" new-version "\")"))]
     (when (= build-clj updated)
-      (throw (ex-info "Failed to update version in build.clj" {})))
+      (if (str/includes? build-clj (str "(def version \"" new-version "\")"))
+        (println "build.clj already at version" new-version)
+        (throw (ex-info "Failed to update version in build.clj" {}))))
     (spit "build.clj" updated))
   ;; README.md
   (let [readme (slurp "README.md")
