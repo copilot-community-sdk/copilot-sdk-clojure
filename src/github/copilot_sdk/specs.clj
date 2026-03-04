@@ -71,7 +71,7 @@
 (s/def ::json-schema map?)
 (s/def ::tool-parameters (s/nilable ::json-schema))
 (s/def ::tool-handler fn?)
-(s/def ::overrides-built-in-tool (s/nilable boolean?))
+(s/def ::overrides-built-in-tool boolean?)
 
 (s/def ::tool
   (s/keys :req-un [::tool-name ::tool-handler]

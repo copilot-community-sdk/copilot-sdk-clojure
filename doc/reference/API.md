@@ -773,7 +773,7 @@ Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
 (copilot/with-client-session [session {:model "gpt-5.2"
                                        :on-permission-request copilot/approve-all}]
   (println "Before:" (copilot/get-current-model session))
-  (copilot/switch-model! session "claude-sonnet-4.5")
+  (copilot/set-model! session "claude-sonnet-4.5")
   (println "After:" (copilot/get-current-model session)))
 ;; prints:
 ;; Before: gpt-5.2

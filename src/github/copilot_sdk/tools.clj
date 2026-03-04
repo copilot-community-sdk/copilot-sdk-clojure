@@ -44,10 +44,11 @@
 
 (defn define-tool-from-spec
   "Define a tool using a clojure.spec for parameter validation.
-   
-   The spec is converted to a basic JSON schema.
-   Note: This provides limited schema conversion. For complex schemas,
-   use define-tool with an explicit JSON schema.
+    
+   Parameters are validated against the spec at invocation time.
+   Note: the spec is NOT auto-converted to JSON schema, so this tool
+   has no parameter schema advertised to the model. For tools that need
+   a parameter schema, use define-tool with an explicit JSON schema.
    
    Arguments:
    - name        - Tool name (string)
