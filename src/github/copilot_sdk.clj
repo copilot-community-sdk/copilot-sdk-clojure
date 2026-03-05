@@ -76,7 +76,13 @@
     :copilot/skill.invoked
     :copilot/hook.start
     :copilot/hook.end
-    :copilot/system.message})
+    :copilot/system.message
+    :copilot/permission.requested
+    :copilot/permission.completed
+    :copilot/user_input.requested
+    :copilot/user_input.completed
+    :copilot/elicitation.requested
+    :copilot/elicitation.completed})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -120,6 +126,15 @@
     :copilot/tool.execution_partial_result
     :copilot/tool.execution_progress
     :copilot/tool.execution_complete})
+
+(def interaction-events
+  "Permission, user input, and elicitation events."
+  #{:copilot/permission.requested
+    :copilot/permission.completed
+    :copilot/user_input.requested
+    :copilot/user_input.completed
+    :copilot/elicitation.requested
+    :copilot/elicitation.completed})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.

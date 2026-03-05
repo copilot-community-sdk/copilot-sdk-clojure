@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.1.31 sync)
+
+- Six new session event types from `@github/copilot` 0.0.421 schema update (upstream PR #684):
+  - `:copilot/permission.requested` — emitted when a permission request is initiated in the session stream
+  - `:copilot/permission.completed` — emitted when a pending permission request completes
+  - `:copilot/user_input.requested` — emitted when the agent requests user input (question with optional choices)
+  - `:copilot/user_input.completed` — emitted when a user input request completes
+  - `:copilot/elicitation.requested` — emitted when the agent requests structured form input from the user
+  - `:copilot/elicitation.completed` — emitted when an elicitation request completes
+- `interaction-events` var in `github.copilot-sdk` grouping all permission, user-input, and elicitation events.
+- Data specs for the new event types: `::permission.requested-data`, `::permission.completed-data`, `::user_input.requested-data`, `::user_input.completed-data`, `::elicitation.requested-data`, `::elicitation.completed-data`.
+- `:memory` permission kind added to `::permission-kind` spec — the `permission.requested` event includes a `memory` kind for memory-write permission requests (with `subject`, `fact`, and `citations` fields).
+
 ## [0.1.30.0] - 2026-03-04
 ### Added (v0.1.30 sync)
 

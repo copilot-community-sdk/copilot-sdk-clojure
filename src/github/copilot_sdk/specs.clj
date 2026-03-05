@@ -386,7 +386,10 @@
     :copilot/subagent.deselected
     :copilot/skill.invoked
     :copilot/hook.start :copilot/hook.end
-    :copilot/system.message})
+    :copilot/system.message
+    :copilot/permission.requested :copilot/permission.completed
+    :copilot/user_input.requested :copilot/user_input.completed
+    :copilot/elicitation.requested :copilot/elicitation.completed})
 
 ;; Session events
 (s/def ::session.start-data
@@ -527,7 +530,7 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool})
+(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory})
 
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]
@@ -542,6 +545,40 @@
 (s/def ::permission-result
   (s/keys :req-un [::permission-result-kind]
           :opt-un [::rules]))
+
+;; -----------------------------------------------------------------------------
+;; Interaction event data specs (permission.requested/completed, user_input.*, elicitation.*)
+;; -----------------------------------------------------------------------------
+
+(s/def ::request-id ::non-blank-string)
+(s/def ::subject string?)
+(s/def ::fact string?)
+(s/def ::citations string?)
+(s/def ::question string?)
+(s/def ::choices (s/coll-of string?))
+(s/def ::allow-freeform boolean?)
+(s/def ::elicitation-mode #{"form"})
+(s/def ::requested-schema map?)
+
+(s/def ::permission.requested-data
+  (s/keys :req-un [::request-id ::permission-request]))
+
+(s/def ::permission.completed-data
+  (s/keys :req-un [::request-id]))
+
+(s/def ::user_input.requested-data
+  (s/keys :req-un [::request-id ::question]
+          :opt-un [::choices ::allow-freeform]))
+
+(s/def ::user_input.completed-data
+  (s/keys :req-un [::request-id]))
+
+(s/def ::elicitation.requested-data
+  (s/keys :req-un [::request-id ::message ::requested-schema]
+          :opt-un [::elicitation-mode]))
+
+(s/def ::elicitation.completed-data
+  (s/keys :req-un [::request-id]))
 
 ;; -----------------------------------------------------------------------------
 ;; Client record spec
