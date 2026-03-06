@@ -780,11 +780,21 @@ Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
 ;; After: claude-sonnet-4.5
 ```
 
+#### `disconnect!`
+
+```clojure
+(copilot/disconnect! session)
+```
+
+Disconnect the session and free resources. Session data on disk is preserved for later resumption via `resume-session`. Use `delete-session!` to permanently remove session data from disk.
+
 #### `destroy!`
 
 ```clojure
 (copilot/destroy! session)
 ```
+
+**Deprecated**: Use `disconnect!` instead.
 
 Destroy the session and free resources.
 

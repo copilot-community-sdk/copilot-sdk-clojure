@@ -169,6 +169,12 @@
   :args (s/cat :session ::specs/session)
   :ret (s/coll-of map?))
 
+(s/fdef github.copilot-sdk.session/disconnect!
+  :args (s/alt :handle (s/cat :session ::specs/session)
+               :explicit (s/cat :client ::specs/client
+                                :session-id ::specs/session-id))
+  :ret nil?)
+
 (s/fdef github.copilot-sdk.session/destroy!
   :args (s/alt :handle (s/cat :session ::specs/session)
                :explicit (s/cat :client ::specs/client
@@ -275,6 +281,7 @@
                       github.copilot-sdk.session/<send!
                       github.copilot-sdk.session/abort!
                       github.copilot-sdk.session/get-messages
+                      github.copilot-sdk.session/disconnect!
                       github.copilot-sdk.session/destroy!
                       github.copilot-sdk.session/session-id
                       github.copilot-sdk.session/workspace-path
@@ -323,6 +330,7 @@
                       github.copilot-sdk.session/<send!
                       github.copilot-sdk.session/abort!
                       github.copilot-sdk.session/get-messages
+                      github.copilot-sdk.session/disconnect!
                       github.copilot-sdk.session/destroy!
                       github.copilot-sdk.session/session-id
                       github.copilot-sdk.session/workspace-path

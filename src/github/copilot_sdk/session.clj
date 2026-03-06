@@ -598,13 +598,17 @@
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
       (mapv #(update % :type util/event-type->keyword) (:events result)))))
 
-(defn destroy!
-  "Destroy the session and free resources.
-   Can be called with either a CopilotSession handle or (client, session-id)."
+(defn disconnect!
+  "Disconnect the session and free resources.
+   Session data on disk is preserved for later resumption via resume-session.
+   Can be called with either a CopilotSession handle or (client, session-id).
+
+   This is the preferred way to close a session. Use delete-session! in
+   client to permanently remove session data from disk."
   ([session]
-   (destroy! (:client session) (:session-id session)))
+   (disconnect! (:client session) (:session-id session)))
   ([client session-id]
-   (log/debug "Destroying session: " session-id)
+   (log/debug "Disconnecting session: " session-id)
    (when-not (:destroyed? (session-state client session-id))
      (let [conn (connection-io client)]
        ;; Try to notify server, but don't block forever if connection is broken
@@ -621,8 +625,19 @@
        ;; Close the event source channel - this propagates to all tapped channels
        (when-let [{:keys [event-chan]} (session-io client session-id)]
          (close! event-chan))
-       (log/debug "Session destroyed: " session-id)
+       (log/debug "Session disconnected: " session-id)
        nil))))
+
+(defn destroy!
+  "Destroy the session and free resources.
+   Can be called with either a CopilotSession handle or (client, session-id).
+
+   Deprecated: Use disconnect! instead. This function will be removed in a
+   future release. disconnect! is the preferred method for closing sessions."
+  ([session]
+   (disconnect! session))
+  ([client session-id]
+   (disconnect! client session-id)))
 
 (defn events
   "Get the event mult for this session. Use tap to subscribe:

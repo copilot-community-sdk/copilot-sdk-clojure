@@ -409,7 +409,7 @@
   (client/<create-session client config))
 
 (defmacro with-session
-  "Create a session and ensure destroy! on exit.
+  "Create a session and ensure disconnect! on exit.
 
    Usage:
    (with-session [s client {:on-permission-request copilot/approve-all
@@ -420,11 +420,11 @@
      (try
        ~@body
        (finally
-         (destroy! ~session-sym)))))
+         (disconnect! ~session-sym)))))
 
 (defmacro with-client-session
   "Create a client + session and ensure cleanup on exit.
-   Automatically calls destroy! on session and stop! on client.
+   Automatically calls disconnect! on session and stop! on client.
 
    Four forms are supported:
 
@@ -666,10 +666,22 @@
   [session]
   (session/get-messages session))
 
-(defn destroy!
-  "Destroy the session and free resources."
+(defn disconnect!
+  "Disconnect the session and free resources.
+   Session data on disk is preserved for later resumption via resume-session.
+
+   This is the preferred way to close a session. Use delete-session! to
+   permanently remove session data from disk."
   [session]
-  (session/destroy! session))
+  (session/disconnect! session))
+
+(defn destroy!
+  "Destroy the session and free resources.
+
+   Deprecated: Use disconnect! instead. This function will be removed in a
+   future release."
+  [session]
+  (session/disconnect! session))
 
 (defn events
   "Get the event mult for this session. Use tap/untap to subscribe:

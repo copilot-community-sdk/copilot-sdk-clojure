@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.1.30 sync)
+- `disconnect!` function as the preferred way to close a session. Same semantics as `destroy!` — sends `session.destroy` RPC and releases in-memory resources while preserving disk state for resumption (upstream PR #599).
+
+### Changed (v0.1.30 sync)
+- `destroy!` is now deprecated and delegates to `disconnect!`. Matches upstream Node.js SDK where `destroy()` was deprecated in favor of `disconnect()` (upstream PR #599).
+- `with-session` and `with-client-session` macros now call `disconnect!` instead of `destroy!` in their cleanup forms.
+- `stop!` in client now internally calls `session/disconnect!` instead of `session/destroy!`.
+
 ## [0.1.30.0] - 2026-03-04
 ### Added (v0.1.30 sync)
 
