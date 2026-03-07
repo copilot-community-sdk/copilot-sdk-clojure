@@ -7,6 +7,7 @@ All notable changes to this project will be documented in this file. This change
 - `disconnect!` and `<disconnect!` functions as the preferred API for closing sessions, matching upstream SDK's `disconnect()` (upstream PR #599). `destroy!` is deprecated but still works as an alias.
 - 6 new broadcast event types from CLI protocol 0.0.421 (upstream PR #684): `:copilot/permission.requested`, `:copilot/permission.completed`, `:copilot/user_input.requested`, `:copilot/user_input.completed`, `:copilot/elicitation.requested`, `:copilot/elicitation.completed`
 - New `interaction-events` category set for permission, user input, and elicitation flow events
+- `:memory` permission kind added to `::permission-kind` spec (upstream PR #684)
 - Custom agents & sub-agent orchestration guide (`doc/guides/custom-agents.md`)
 
 ### Changed

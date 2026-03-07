@@ -531,7 +531,7 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool})
+(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory})
 
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]

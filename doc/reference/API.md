@@ -1238,6 +1238,7 @@ The `:permission-kind` field in permission requests identifies the type of actio
 | `:read` | File system read operation |
 | `:url` | URL fetch / HTTP request |
 | `:custom-tool` | SDK-registered custom tool invocation |
+| `:memory` | Memory storage operation (subject, fact, citations) |
 
 For fine-grained control, provide your own handler. When the CLI needs
 approval, it sends a JSON-RPC `permission.request` to the SDK. Your
