@@ -188,7 +188,7 @@
       ;; v3: preserve raw arguments in external_tool.requested broadcast events
       (and (= "session.event" method)
            (= "external_tool.requested" (get-in params [:event :type]))
-           (map? (get-in params [:event :data :arguments])))
+           (contains? (get-in params [:event :data]) :arguments))
       (assoc-in converted [:params :event :data :arguments]
                 (get-in params [:event :data :arguments]))
 
