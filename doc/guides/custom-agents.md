@@ -53,7 +53,8 @@ Pass `:custom-agents` when creating a session. Each agent requires at minimum `:
 The helpers API also accepts `:custom-agents` via session options:
 
 ```clojure
-(require '[github.copilot-sdk.helpers :as h])
+(require '[github.copilot-sdk.helpers :as h]
+         '[github.copilot-sdk.client :as copilot])
 
 (h/query "Refactor the auth module"
   :session {:on-permission-request copilot/approve-all
@@ -124,7 +125,7 @@ When a sub-agent runs, the parent session emits lifecycle events. Subscribe with
          '[github.copilot-sdk.session :as session]
          '[clojure.core.async :as async :refer [go-loop <!]])
 
-(def event-ch (copilot/subscribe-events session))
+(def event-ch (session/subscribe-events session))
 
 (go-loop []
   (when-let [event (<! event-ch)]
@@ -165,7 +166,7 @@ Sub-agent events include `tool-call-id` fields that let you reconstruct the exec
 ```clojure
 (def agent-tree (atom {}))
 
-(def tracker-ch (copilot/subscribe-events session))
+(def tracker-ch (session/subscribe-events session))
 
 (go-loop []
   (when-let [event (<! tracker-ch)]
@@ -281,11 +282,15 @@ The runtime uses `:agent-description` to match user intent. Vague descriptions l
 Sub-agents can fail. Listen for `:copilot/subagent.failed` events and handle them in your application:
 
 ```clojure
-(session/on-event session
-  (fn [event]
-    (when (= :copilot/subagent.failed (:type event))
-      (let [{:keys [agent-name error]} (:data event)]
-        (println (str "Agent " agent-name " failed: " error))))))
+;; requires [clojure.core.async :as async]
+
+(let [events (session/subscribe-events session)]
+  (async/go-loop []
+    (when-let [event (async/<! events)]
+      (when (= :copilot/subagent.failed (:type event))
+        (let [{:keys [agent-name error]} (:data event)]
+          (println (str "Agent " agent-name " failed: " error))))
+      (recur))))
 ```
 
 ### Multi-agent orchestration with core.async

@@ -858,7 +858,8 @@ copilot/tool-events
 copilot/interaction-events
 ;; => #{:copilot/permission.requested :copilot/permission.completed
 ;;      :copilot/user_input.requested :copilot/user_input.completed
-;;      :copilot/elicitation.requested :copilot/elicitation.completed}
+;;      :copilot/elicitation.requested :copilot/elicitation.completed
+;;      :copilot/external_tool.requested}
 ```
 
 ### Event Reference
@@ -917,6 +918,7 @@ copilot/interaction-events
 | `:copilot/user_input.completed` | User input received |
 | `:copilot/elicitation.requested` | Elicitation request initiated |
 | `:copilot/elicitation.completed` | Elicitation request resolved |
+| `:copilot/external_tool.requested` | External tool call requested (v3) |
 
 ### Example: Handling Events
 
