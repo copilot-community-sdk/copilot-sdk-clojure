@@ -18,7 +18,7 @@
    (println (get-in response [:data :content]))
 
    ;; Clean up
-   (copilot/destroy! session)
+   (copilot/disconnect! session)
    (copilot/stop! client)
    ```"
   (:require [github.copilot-sdk.client :as client]
@@ -76,7 +76,14 @@
     :copilot/skill.invoked
     :copilot/hook.start
     :copilot/hook.end
-    :copilot/system.message})
+    :copilot/system.message
+    :copilot/permission.requested
+    :copilot/permission.completed
+    :copilot/user_input.requested
+    :copilot/user_input.completed
+    :copilot/elicitation.requested
+    :copilot/elicitation.completed
+    :copilot/external_tool.requested})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -120,6 +127,13 @@
     :copilot/tool.execution_partial_result
     :copilot/tool.execution_progress
     :copilot/tool.execution_complete})
+
+(def interaction-events
+  "Events related to permission, user input, and elicitation flows."
+  #{:copilot/permission.requested :copilot/permission.completed
+    :copilot/user_input.requested :copilot/user_input.completed
+    :copilot/elicitation.requested :copilot/elicitation.completed
+    :copilot/external_tool.requested})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.
@@ -409,7 +423,7 @@
   (client/<create-session client config))
 
 (defmacro with-session
-  "Create a session and ensure destroy! on exit.
+  "Create a session and ensure disconnect! on exit.
 
    Usage:
    (with-session [s client {:on-permission-request copilot/approve-all
@@ -420,11 +434,11 @@
      (try
        ~@body
        (finally
-         (destroy! ~session-sym)))))
+         (disconnect! ~session-sym)))))
 
 (defmacro with-client-session
   "Create a client + session and ensure cleanup on exit.
-   Automatically calls destroy! on session and stop! on client.
+   Automatically calls disconnect! on session and stop! on client.
 
    Four forms are supported:
 
@@ -666,8 +680,18 @@
   [session]
   (session/get-messages session))
 
+(defn disconnect!
+  "Disconnects the session and releases in-memory resources (event handlers,
+   tool handlers, permission handler). Session data on disk is preserved for
+   later resumption via `resume-session`. To permanently remove all session
+   data, use `delete-session!` instead."
+  [session]
+  (session/disconnect! session))
+
 (defn destroy!
-  "Destroy the session and free resources."
+  "Deprecated: Use disconnect! instead. This function will be removed in a future release.
+   Disconnects the session and releases in-memory resources.
+   Session data on disk is preserved for later resumption."
   [session]
   (session/destroy! session))
 
@@ -692,7 +716,7 @@
 
 (defn subscribe-events
   "Subscribe to session events. Returns a channel (buffer 1024) that receives events.
-   The channel receives nil (close) when the session is destroyed.
+   The channel receives nil (close) when the session is disconnected.
    For explicit cleanup, call unsubscribe-events.
    
    This is a convenience wrapper around (tap (copilot/events session) ch).

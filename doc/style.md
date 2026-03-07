@@ -50,7 +50,7 @@ Short paragraphs (1–3 sentences). Use code blocks liberally.
 - Use `h` as the alias for `github.copilot-sdk.helpers`
 - Use `session` as the alias for `github.copilot-sdk.session`
 - Prefer `def` over `let` in top-level examples for clarity
-- Include cleanup (`stop!`, `destroy!`) in lifecycle examples
+- Include cleanup (`stop!`, `disconnect!`) in lifecycle examples
 
 ### What to Avoid
 

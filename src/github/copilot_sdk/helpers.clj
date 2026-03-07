@@ -228,12 +228,12 @@
         (let [response (copilot/send-and-wait! sess {:prompt prompt} timeout-ms)]
           (get-in response [:data :content]))
         (finally
-          (copilot/destroy! sess))))))
+          (copilot/disconnect! sess))))))
 
 (defn query-seq!
   "Execute a query and return a lazy sequence of events with guaranteed cleanup.
    
-   This variant limits consumption and ensures the session is destroyed even if
+   This variant limits consumption and ensures the session is disconnected even if
    the consumer stops early.
    
    Keyword options:
@@ -252,7 +252,7 @@
     (letfn [(finish! []
               (when-not @done?
                 (reset! done? true)
-                (copilot/destroy! sess)))
+                (copilot/disconnect! sess)))
             (event-seq [remaining]
               (lazy-seq
                (when (pos? remaining)
@@ -313,11 +313,11 @@
           (>! out-ch event)
           (if (#{:copilot/session.idle :copilot/session.error} (:type event))
             (do
-              (copilot/destroy! sess)
+              (copilot/disconnect! sess)
               (close! out-ch))
             (recur)))
         (do
-          (copilot/destroy! sess)
+          (copilot/disconnect! sess)
           (close! out-ch))))
 
     out-ch))

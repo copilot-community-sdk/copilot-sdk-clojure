@@ -386,7 +386,12 @@
     :copilot/subagent.deselected
     :copilot/skill.invoked
     :copilot/hook.start :copilot/hook.end
-    :copilot/system.message})
+    :copilot/system.message
+    ;; Interaction broadcast events (permission, user input, elicitation, tool flows)
+    :copilot/permission.requested :copilot/permission.completed
+    :copilot/user_input.requested :copilot/user_input.completed
+    :copilot/elicitation.requested :copilot/elicitation.completed
+    :copilot/external_tool.requested})
 
 ;; Session events
 (s/def ::session.start-data
@@ -527,7 +532,7 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool})
+(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory})
 
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]

@@ -19,7 +19,7 @@ Follow the conventions in [`doc/style.md`](../../doc/style.md):
 - Show `require` forms so readers know which namespace to import
 - Use `;; =>` comments for return values
 - Use `;; prints:` comments for output
-- Include cleanup (`stop!`, `destroy!`) in lifecycle examples
+- Include cleanup (`stop!`, `disconnect!`) in lifecycle examples
 
 ### Conventions
 

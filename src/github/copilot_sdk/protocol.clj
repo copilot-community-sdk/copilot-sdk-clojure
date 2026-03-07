@@ -172,13 +172,27 @@
                                    :message (str "Internal error: " (ex-message e))}}))))))
 
 (defn- normalize-incoming
-  "Convert wire-format keys to Clojure keys, preserving tool.call arguments."
+  "Convert wire-format keys to Clojure keys, preserving tool.call arguments.
+   For v2 tool.call RPC and v3 external_tool.requested broadcast events,
+   tool arguments are kept in their original wire format so user-defined
+   tool handlers receive the keys the server sent."
   [msg]
   (let [method (:method msg)
         params (:params msg)
         converted (util/wire->clj msg)]
-    (if (and (= "tool.call" method) (map? params) (contains? params :arguments))
+    (cond
+      ;; v2: preserve raw arguments for tool.call RPC
+      (and (= "tool.call" method) (map? params) (contains? params :arguments))
       (assoc-in converted [:params :arguments] (:arguments params))
+
+      ;; v3: preserve raw arguments in external_tool.requested broadcast events
+      (and (= "session.event" method)
+           (= "external_tool.requested" (get-in params [:event :type]))
+           (contains? (get-in params [:event :data]) :arguments))
+      (assoc-in converted [:params :event :data :arguments]
+                (get-in params [:event :data :arguments]))
+
+      :else
       converted)))
 
 (defn- dispatch-message!

@@ -896,7 +896,7 @@ Ensure your prompt explicitly mentions the tool or its capability:
 
 Clean up sessions when done:
 ```clojure
-(copilot/destroy! session)
+(copilot/disconnect! session)
 ```
 
 And periodically list/delete orphaned sessions:
