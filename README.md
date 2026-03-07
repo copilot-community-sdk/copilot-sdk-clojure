@@ -206,7 +206,7 @@ session.on((event) => {
 });
 
 await session.sendAndWait({ prompt: "Greet Alice" });
-await session.destroy();
+await session.disconnect();
 await client.stop();
 ```
 
@@ -241,7 +241,7 @@ await client.stop();
       (recur))))
 
 (copilot/send-and-wait! session {:prompt "Greet Alice"})
-(copilot/destroy! session)
+(copilot/disconnect! session)
 (copilot/stop! client)
 ```
 

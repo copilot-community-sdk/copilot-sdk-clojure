@@ -605,13 +605,13 @@
         (close! router-ch))
       (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
 
-      ;; 1. Destroy all sessions
+      ;; 1. Disconnect all sessions
       (doseq [[session-id _] sessions]
         (try
-          (session/destroy! client session-id)
+          (session/disconnect! client session-id)
           (catch Exception e
             (swap! errors conj
-                   (ex-info (str "Failed to destroy session " session-id)
+                   (ex-info (str "Failed to disconnect session " session-id)
                             {:session-id session-id} e)))))
       (swap! (:state client) assoc :sessions {} :session-io {})
 
@@ -1247,7 +1247,10 @@
            sessions))))
 
 (defn delete-session!
-  "Delete a session and its data from disk."
+  "Permanently deletes a session and all its data from disk, including
+   conversation history, planning state, and artifacts. Unlike `disconnect!`,
+   which only releases in-memory resources and preserves session data for
+   later resumption, this method is irreversible."
   [client session-id]
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)

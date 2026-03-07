@@ -182,7 +182,7 @@ Create a new conversation session.
   )
 ```
 
-Create a session and ensure `destroy!` runs on exit.
+Create a session and ensure `disconnect!` runs on exit.
 
 #### `with-client-session`
 
@@ -537,7 +537,7 @@ Returns a vector of session metadata maps with `:start-time` and `:modified-time
 (copilot/delete-session! client session-id)
 ```
 
-Delete a session and its data from disk.
+Delete a session and its data from disk. Unlike `disconnect!` (which gracefully closes an active session), `delete-session!` removes persisted session data by ID.
 
 #### `get-last-session-id`
 
@@ -780,13 +780,30 @@ Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
 ;; After: claude-sonnet-4.5
 ```
 
-#### `destroy!`
+#### `disconnect!`
+
+```clojure
+(copilot/disconnect! session)
+```
+
+Disconnect the session and free resources. This is the preferred way to close a session.
+
+#### `<disconnect!`
+
+```clojure
+(copilot/<disconnect! session)
+;; => core.async channel that delivers true on completion
+```
+
+Async variant of `disconnect!`. Returns a core.async channel.
+
+#### `destroy!` *(deprecated)*
 
 ```clojure
 (copilot/destroy! session)
 ```
 
-Destroy the session and free resources.
+**Deprecated.** Use `disconnect!` instead. `destroy!` delegates to `disconnect!` and will be removed in a future release.
 
 #### `session-id`
 
@@ -845,6 +862,12 @@ copilot/assistant-events
 ;; Tool execution events
 copilot/tool-events
 ;; => #{:copilot/tool.execution_start :copilot/tool.execution_complete ...}
+
+;; Interaction flow events (permission, user input, elicitation)
+copilot/interaction-events
+;; => #{:copilot/permission.requested :copilot/permission.completed
+;;      :copilot/user_input.requested :copilot/user_input.completed
+;;      :copilot/elicitation.requested :copilot/elicitation.completed}
 ```
 
 ### Event Reference
@@ -897,6 +920,12 @@ copilot/tool-events
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
+| `:copilot/permission.requested` | Permission request initiated |
+| `:copilot/permission.completed` | Permission request resolved |
+| `:copilot/user_input.requested` | User input requested from agent |
+| `:copilot/user_input.completed` | User input received |
+| `:copilot/elicitation.requested` | Elicitation request initiated |
+| `:copilot/elicitation.completed` | Elicitation request resolved |
 
 ### Example: Handling Events
 

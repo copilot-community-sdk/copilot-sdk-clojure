@@ -283,7 +283,7 @@
   (let [{:keys [session-id client]} session]
     (log/debug "send! called for session " session-id " with prompt: " (subs (str (:prompt opts)) 0 (min 50 (count (str (:prompt opts))))) "...")
     (when (:destroyed? (session-state client session-id))
-      (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)
           wire-attachments (when (:attachments opts)
                              (util/attachments->wire (:attachments opts)))
@@ -311,7 +311,7 @@
    (let [{:keys [session-id client]} session]
      (log/debug "send-and-wait! called for session " session-id)
      (when (:destroyed? (session-state client session-id))
-       (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
      (let [event-ch (chan 1024)
            last-assistant-msg (atom nil)
@@ -380,7 +380,7 @@
   ([session opts timeout-ms]
    (let [{:keys [session-id client]} session]
      (when (:destroyed? (session-state client session-id))
-       (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
      (let [out-ch (chan 1024)
            event-ch (chan 1024)
@@ -458,7 +458,7 @@
   [session opts timeout-ms]
   (let [{:keys [session-id client]} session]
     (when (:destroyed? (session-state client session-id))
-      (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [out-ch (chan 1024)
           event-ch (chan 1024)
           {:keys [event-mult send-lock]} (session-io client session-id)
@@ -583,7 +583,7 @@
   [session]
   (let [{:keys [session-id client]} session]
     (when (:destroyed? (session-state client session-id))
-      (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)]
       (proto/send-request! conn "session.abort" {:session-id session-id})
       nil)))
@@ -593,18 +593,22 @@
   [session]
   (let [{:keys [session-id client]} session]
     (when (:destroyed? (session-state client session-id))
-      (throw (ex-info "Session has been destroyed" {:session-id session-id})))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
       (mapv #(update % :type util/event-type->keyword) (:events result)))))
 
-(defn destroy!
-  "Destroy the session and free resources.
+(defn disconnect!
+  "Disconnects the session and releases in-memory resources (event handlers,
+   tool handlers, permission handler). Session data on disk (conversation
+   history, planning state, artifacts) is preserved for later resumption
+   via `resume-session`. To permanently remove all session data, use
+   `delete-session!` instead.
    Can be called with either a CopilotSession handle or (client, session-id)."
   ([session]
-   (destroy! (:client session) (:session-id session)))
+   (disconnect! (:client session) (:session-id session)))
   ([client session-id]
-   (log/debug "Destroying session: " session-id)
+   (log/debug "Disconnecting session: " session-id)
    (when-not (:destroyed? (session-state client session-id))
      (let [conn (connection-io client)]
        ;; Try to notify server, but don't block forever if connection is broken
@@ -621,8 +625,17 @@
        ;; Close the event source channel - this propagates to all tapped channels
        (when-let [{:keys [event-chan]} (session-io client session-id)]
          (close! event-chan))
-       (log/debug "Session destroyed: " session-id)
+       (log/debug "Session disconnected: " session-id)
        nil))))
+
+(defn destroy!
+  "Deprecated: Use disconnect! instead. This function will be removed in a future release.
+   Disconnects the session and releases in-memory resources.
+   Session data on disk is preserved for later resumption."
+  ([session]
+   (disconnect! session))
+  ([client session-id]
+   (disconnect! client session-id)))
 
 (defn events
   "Get the event mult for this session. Use tap to subscribe:
@@ -642,8 +655,8 @@
 (defn subscribe-events
   "Subscribe to session events. Returns a channel that receives events.
    
-   The channel will receive nil (close) when the session is destroyed.
-   For explicit cleanup before session destruction, call unsubscribe-events.
+   The channel will receive nil (close) when the session is disconnected.
+   For explicit cleanup before session disconnection, call unsubscribe-events.
    
    Drop behavior: If this subscriber's channel buffer is full when mult tries
    to deliver an event, that specific event is silently dropped for this

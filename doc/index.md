@@ -14,6 +14,7 @@ Clojure SDK for programmatic control of the GitHub Copilot CLI via JSON-RPC.
 - [Azure Managed Identity](auth/azure-managed-identity.md) — Azure BYOK with Managed Identity (no API keys)
 - [MCP Servers](mcp/overview.md) — Model Context Protocol server integration
 - [MCP Debugging](mcp/debugging.md) — Troubleshooting MCP connections
+- [Custom Agents](guides/custom-agents.md) — Define specialized agents with scoped tools for sub-agent orchestration
 
 ## Reference
 

@@ -386,7 +386,11 @@
     :copilot/subagent.deselected
     :copilot/skill.invoked
     :copilot/hook.start :copilot/hook.end
-    :copilot/system.message})
+    :copilot/system.message
+    ;; Interaction broadcast events (permission, user input, elicitation flows)
+    :copilot/permission.requested :copilot/permission.completed
+    :copilot/user_input.requested :copilot/user_input.completed
+    :copilot/elicitation.requested :copilot/elicitation.completed})
 
 ;; Session events
 (s/def ::session.start-data
