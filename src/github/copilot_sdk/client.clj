@@ -14,7 +14,8 @@
   (:import [java.net Socket]
            [java.util.concurrent LinkedBlockingQueue]))
 
-(def ^:private sdk-protocol-version 2)
+(def ^:private sdk-protocol-version-max 3)
+(def ^:private sdk-protocol-version-min 2)
 
 (defn- parse-cli-url
   "Parse CLI URL into {:host :port}."
@@ -97,7 +98,8 @@
    :force-stopping? false
    :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
    :lifecycle-handlers {}
-   :stderr-buffer nil})      ; atom of recent stderr lines (for error context)
+   :stderr-buffer nil         ; atom of recent stderr lines (for error context)
+   :negotiated-protocol-version 0})
 
 (defn client
   "Create a new CopilotClient.
@@ -184,6 +186,94 @@
 (declare stop!)
 (declare start!)
 (declare maybe-reconnect!)
+(declare negotiated-protocol-version)
+
+;; ---------------------------------------------------------------------------
+;; Protocol v3 broadcast event handlers
+;; ---------------------------------------------------------------------------
+
+(defn- handle-v3-tool-requested!
+  "Handle v3 external_tool.requested broadcast event.
+   Calls the session's tool handler and responds via the
+   session.tools.handlePendingToolCall RPC method."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)
+        tool-name (:tool-name data)
+        tool-call-id (:tool-call-id data)
+        arguments (:arguments data)]
+    (when (and request-id tool-name)
+      (go
+        (try
+          (let [tool-response (<! (session/handle-tool-call!
+                                   client session-id tool-call-id tool-name arguments))
+                result (:result tool-response)
+                conn (:connection-io @(:state client))]
+            (when conn
+              (<! (proto/send-request conn "session.tools.handlePendingToolCall"
+                                     {:session-id session-id
+                                      :request-id request-id
+                                      :result result}))))
+          (catch Exception e
+            (log/debug "v3 tool call error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (proto/send-request conn "session.tools.handlePendingToolCall"
+                                     {:session-id session-id
+                                      :request-id request-id
+                                      :result {:text-result-for-llm
+                                               "Invoking this tool produced an error."
+                                               :result-type "failure"
+                                               :error (ex-message e)
+                                               :tool-telemetry {}}})))
+              (catch Exception _ nil))))))))
+
+(defn- handle-v3-permission-requested!
+  "Handle v3 permission.requested broadcast event.
+   Calls the session's permission handler and responds via the
+   session.permissions.handlePendingPermissionRequest RPC method."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)
+        permission-request (:permission-request data)]
+    (when (and request-id permission-request)
+      (go
+        (try
+          (let [perm-response (<! (session/handle-permission-request!
+                                   client session-id permission-request))
+                result (:result perm-response)
+                conn (:connection-io @(:state client))]
+            (when conn
+              (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
+                                     {:session-id session-id
+                                      :request-id request-id
+                                      :result result}))))
+          (catch Exception e
+            (log/debug "v3 permission request error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
+                                     {:session-id session-id
+                                      :request-id request-id
+                                      :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))
+              (catch Exception _ nil))))))))
+
+(defn- handle-v3-broadcast-event!
+  "Protocol v3: intercept broadcast events for external tools and permissions.
+   In v3, tool.call and permission.request server→client RPC methods are replaced
+   by broadcast events that the SDK handles and responds to via new RPC methods."
+  [client session-id event]
+  (let [event-type (:type event)]
+    (case event-type
+      :copilot/external_tool.requested
+      (handle-v3-tool-requested! client session-id event)
+
+      :copilot/permission.requested
+      (handle-v3-permission-requested! client session-id event)
+
+      nil)))
 
 (defn- start-notification-router!
   "Route notifications to appropriate sessions."
@@ -238,7 +328,10 @@
                               ": requested " requested-model ", server selected " selected-model))))
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
                 (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-                  (>! event-chan normalized-event))))
+                  (>! event-chan normalized-event)))
+              ;; Protocol v3: handle broadcast events for tools and permissions
+              (when (>= (negotiated-protocol-version client) 3)
+                (handle-v3-broadcast-event! client session-id normalized-event)))
 
             "session.lifecycle"
             (let [params (util/wire->clj (:params notif))
@@ -494,14 +587,24 @@
         server-version (:protocol-version result)]
     (when (nil? server-version)
       (throw (ex-info
-              (str "SDK protocol version mismatch: SDK expects version "
-                   sdk-protocol-version ", but server does not report a protocol version.")
-              {:expected sdk-protocol-version :actual nil})))
-    (when (not= server-version sdk-protocol-version)
+              (str "SDK protocol version mismatch: SDK supports versions "
+                   sdk-protocol-version-min "-" sdk-protocol-version-max
+                   ", but server does not report a protocol version.")
+              {:min sdk-protocol-version-min :max sdk-protocol-version-max :actual nil})))
+    (when (or (< server-version sdk-protocol-version-min)
+              (> server-version sdk-protocol-version-max))
       (throw (ex-info
-              (str "SDK protocol version mismatch: SDK expects version "
-                   sdk-protocol-version ", but server reports version " server-version)
-              {:expected sdk-protocol-version :actual server-version})))))
+              (str "SDK protocol version mismatch: SDK supports versions "
+                   sdk-protocol-version-min "-" sdk-protocol-version-max
+                   ", but server reports version " server-version)
+              {:min sdk-protocol-version-min :max sdk-protocol-version-max :actual server-version})))
+    ;; Store the negotiated version for conditional v2/v3 behavior
+    (swap! (:state client) assoc :negotiated-protocol-version server-version)))
+
+(defn- negotiated-protocol-version
+  "Get the negotiated protocol version from client state."
+  [client]
+  (:negotiated-protocol-version @(:state client) 0))
 
 ;; ---------------------------------------------------------------------------
 ;; Permission helpers

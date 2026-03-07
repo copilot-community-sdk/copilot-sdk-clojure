@@ -82,7 +82,8 @@
     :copilot/user_input.requested
     :copilot/user_input.completed
     :copilot/elicitation.requested
-    :copilot/elicitation.completed})
+    :copilot/elicitation.completed
+    :copilot/external_tool.requested})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -131,7 +132,8 @@
   "Events related to permission, user input, and elicitation flows."
   #{:copilot/permission.requested :copilot/permission.completed
     :copilot/user_input.requested :copilot/user_input.completed
-    :copilot/elicitation.requested :copilot/elicitation.completed})
+    :copilot/elicitation.requested :copilot/elicitation.completed
+    :copilot/external_tool.requested})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.

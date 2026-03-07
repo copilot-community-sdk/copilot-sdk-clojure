@@ -8,11 +8,13 @@ All notable changes to this project will be documented in this file. This change
 - 6 new broadcast event types from CLI protocol 0.0.421 (upstream PR #684): `:copilot/permission.requested`, `:copilot/permission.completed`, `:copilot/user_input.requested`, `:copilot/user_input.completed`, `:copilot/elicitation.requested`, `:copilot/elicitation.completed`
 - New `interaction-events` category set for permission, user input, and elicitation flow events
 - `:memory` permission kind added to `::permission-kind` spec (upstream PR #684)
+- Protocol v3 support with backwards compatibility (supports v2 and v3). The SDK negotiates the protocol version with the CLI server at startup using a supported range `[2, 3]`. Version 3 replaces `tool.call` and `permission.request` RPC callbacks with broadcast events (`external_tool.requested`, `permission.requested`) and new RPC response methods (`session.tools.handlePendingToolCall`, `session.permissions.handlePendingPermissionRequest`).
 - Custom agents & sub-agent orchestration guide (`doc/guides/custom-agents.md`)
 
 ### Changed
 - `stop!` now uses `disconnect!` internally instead of `destroy!`
 - `delete-session!` docstring clarified to contrast with `disconnect!`
+- Version negotiation now sends `supportedVersions: {min: 2, max: 3}` instead of `version: 2` during client initialization
 
 ### Deprecated
 - `destroy!` — use `disconnect!` instead. `destroy!` delegates to `disconnect!` and will be removed in a future release.
