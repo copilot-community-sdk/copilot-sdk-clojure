@@ -3,6 +3,18 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.0.421 sync)
+
+- 6 new event types from upstream `@github/copilot` 0.0.421 schema update (upstream PR #684):
+  - `:copilot/permission.requested` — ephemeral event emitted when the CLI requests a permission. Data: `{:request-id "...", :permission-request {...}}`.
+  - `:copilot/permission.completed` — ephemeral event emitted when a permission request is resolved. Data: `{:request-id "..."}`.
+  - `:copilot/user_input.requested` — ephemeral event emitted when the CLI requests user input. Data: `{:request-id "...", :question "...", :choices [...], :allow-freeform? true/false}`.
+  - `:copilot/user_input.completed` — ephemeral event emitted when a user input request is resolved. Data: `{:request-id "..."}`.
+  - `:copilot/elicitation.requested` — ephemeral event emitted when the CLI requests structured user input. Data: `{:request-id "...", :message "...", :elicitation-mode :form, :requested-schema {...}}`.
+  - `:copilot/elicitation.completed` — ephemeral event emitted when an elicitation request is resolved. Data: `{:request-id "..."}`.
+- Three new category sets: `permission-events`, `user-input-events`, `elicitation-events`.
+- `:memory` permission kind added to `::permission-kind` spec — permission handlers may now receive `{:permission-kind :memory ...}` for memory write requests (upstream PR #684).
+
 ## [0.1.30.0] - 2026-03-04
 ### Added (v0.1.30 sync)
 
