@@ -617,11 +617,14 @@
          (catch Exception _
            ;; Ignore errors - we're cleaning up anyway
            nil))
-       ;; Atomically update state
+       ;; Atomically update state — clear handlers and closures to aid GC
        (update-session! client session-id assoc
                         :destroyed? true
                         :tool-handlers {}
-                        :permission-handler nil)
+                        :permission-handler nil
+                        :user-input-handler nil
+                        :hooks {}
+                        :config nil)
        ;; Close the event source channel - this propagates to all tapped channels
        (when-let [{:keys [event-chan]} (session-io client session-id)]
          (close! event-chan))

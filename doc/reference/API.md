@@ -788,15 +788,6 @@ Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
 
 Disconnect the session and free resources. This is the preferred way to close a session.
 
-#### `<disconnect!`
-
-```clojure
-(copilot/<disconnect! session)
-;; => core.async channel that delivers true on completion
-```
-
-Async variant of `disconnect!`. Returns a core.async channel.
-
 #### `destroy!` *(deprecated)*
 
 ```clojure

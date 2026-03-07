@@ -105,51 +105,54 @@ All custom agents are available for automatic selection by default. Set `:agent-
 
 ## Sub-Agent Lifecycle Events
 
-When a sub-agent runs, the parent session emits lifecycle events. Subscribe with `on-event` to build UIs that visualize agent activity.
+When a sub-agent runs, the parent session emits lifecycle events. Subscribe with `subscribe-events` to build UIs that visualize agent activity.
 
 ### Event Types
 
 | Event | Emitted when | Data |
 |-------|-------------|------|
-| `:copilot/subagent.selected` | Runtime selects an agent for the task | `agentName`, `agentDisplayName`, `tools` |
-| `:copilot/subagent.started` | Sub-agent begins execution | `toolCallId`, `agentName`, `agentDisplayName`, `agentDescription` |
-| `:copilot/subagent.completed` | Sub-agent finishes successfully | `toolCallId`, `agentName`, `agentDisplayName` |
-| `:copilot/subagent.failed` | Sub-agent encounters an error | `toolCallId`, `agentName`, `agentDisplayName`, `error` |
+| `:copilot/subagent.selected` | Runtime selects an agent for the task | `:agent-name`, `:agent-display-name`, `:tools` |
+| `:copilot/subagent.started` | Sub-agent begins execution | `:tool-call-id`, `:agent-name`, `:agent-display-name`, `:agent-description` |
+| `:copilot/subagent.completed` | Sub-agent finishes successfully | `:tool-call-id`, `:agent-name`, `:agent-display-name` |
+| `:copilot/subagent.failed` | Sub-agent encounters an error | `:tool-call-id`, `:agent-name`, `:agent-display-name`, `:error` |
 | `:copilot/subagent.deselected` | Runtime switches away from the sub-agent | — |
 
 ### Subscribing to Events
 
 ```clojure
 (require '[github.copilot-sdk.client :as copilot]
-         '[github.copilot-sdk.session :as session])
+         '[github.copilot-sdk.session :as session]
+         '[clojure.core.async :as async :refer [go-loop <!]])
 
-(def unsubscribe
-  (session/on-event session
-    (fn [event]
-      (case (:type event)
-        :copilot/subagent.started
-        (let [{:keys [agent-display-name agent-description tool-call-id]} (:data event)]
-          (println (str "▶ Sub-agent started: " agent-display-name))
-          (println (str "  Description: " agent-description))
-          (println (str "  Tool call ID: " tool-call-id)))
+(def event-ch (copilot/subscribe-events session))
 
-        :copilot/subagent.completed
-        (println (str "✅ Sub-agent completed: " (get-in event [:data :agent-display-name])))
+(go-loop []
+  (when-let [event (<! event-ch)]
+    (case (:type event)
+      :copilot/subagent.started
+      (let [{:keys [agent-display-name agent-description tool-call-id]} (:data event)]
+        (println (str "▶ Sub-agent started: " agent-display-name))
+        (println (str "  Description: " agent-description))
+        (println (str "  Tool call ID: " tool-call-id)))
 
-        :copilot/subagent.failed
-        (let [{:keys [agent-display-name error]} (:data event)]
-          (println (str "❌ Sub-agent failed: " agent-display-name))
-          (println (str "  Error: " error)))
+      :copilot/subagent.completed
+      (println (str "✅ Sub-agent completed: " (get-in event [:data :agent-display-name])))
 
-        :copilot/subagent.selected
-        (let [{:keys [agent-display-name tools]} (:data event)]
-          (println (str "🎯 Agent selected: " agent-display-name))
-          (println (str "  Tools: " (or tools "all"))))
+      :copilot/subagent.failed
+      (let [{:keys [agent-display-name error]} (:data event)]
+        (println (str "❌ Sub-agent failed: " agent-display-name))
+        (println (str "  Error: " error)))
 
-        :copilot/subagent.deselected
-        (println "↩ Agent deselected, returning to parent")
+      :copilot/subagent.selected
+      (let [{:keys [agent-display-name tools]} (:data event)]
+        (println (str "🎯 Agent selected: " agent-display-name))
+        (println (str "  Tools: " (or tools "all"))))
 
-        nil))))
+      :copilot/subagent.deselected
+      (println "↩ Agent deselected, returning to parent")
+
+      nil)
+    (recur)))
 
 (session/send-and-wait! session
   {:prompt "Research how authentication works in this codebase"})
@@ -162,8 +165,10 @@ Sub-agent events include `tool-call-id` fields that let you reconstruct the exec
 ```clojure
 (def agent-tree (atom {}))
 
-(session/on-event session
-  (fn [event]
+(def tracker-ch (copilot/subscribe-events session))
+
+(go-loop []
+  (when-let [event (<! tracker-ch)]
     (case (:type event)
       :copilot/subagent.started
       (let [{:keys [tool-call-id agent-name agent-display-name]} (:data event)]
@@ -186,7 +191,8 @@ Sub-agent events include `tool-call-id` fields that let you reconstruct the exec
                 :error error
                 :completed-at (System/currentTimeMillis)}))
 
-      nil)))
+      nil)
+    (recur)))
 ```
 
 ## Scoping Tools per Agent
