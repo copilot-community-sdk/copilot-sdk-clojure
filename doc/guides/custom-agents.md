@@ -48,6 +48,12 @@ Pass `:custom-agents` when creating a session. Each agent requires at minimum `:
        :agent-description "Makes targeted code changes"
        :agent-tools ["view" "edit" "bash"]
        :agent-prompt "You are a code editor. Make minimal, surgical changes to files as requested."}]}))
+
+;; ... use session ...
+
+;; Cleanup
+(copilot/disconnect! session)
+(copilot/stop! client)
 ```
 
 The helpers API also accepts `:custom-agents` via session options:

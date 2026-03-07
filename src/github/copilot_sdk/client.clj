@@ -328,10 +328,10 @@
                               ": requested " requested-model ", server selected " selected-model))))
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
                 (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-                  (>! event-chan normalized-event)))
-              ;; Protocol v3: handle broadcast events for tools and permissions
-              (when (>= (negotiated-protocol-version client) 3)
-                (handle-v3-broadcast-event! client session-id normalized-event)))
+                  (>! event-chan normalized-event))
+                ;; Protocol v3: handle broadcast events for tools and permissions
+                (when (>= (negotiated-protocol-version client) 3)
+                  (handle-v3-broadcast-event! client session-id normalized-event))))
 
             "session.lifecycle"
             (let [params (util/wire->clj (:params notif))
