@@ -14,7 +14,7 @@ All notable changes to this project will be documented in this file. This change
 ### Changed
 - `stop!` now uses `disconnect!` internally instead of `destroy!`
 - `delete-session!` docstring clarified to contrast with `disconnect!`
-- Version negotiation now sends `supportedVersions: {min: 2, max: 3}` instead of `version: 2` during client initialization
+- Version negotiation now validates the CLI-reported protocol version is within the supported range `[2, 3]` instead of requiring exact match on version 2
 
 ### Deprecated
 - `destroy!` — use `disconnect!` instead. `destroy!` delegates to `disconnect!` and will be removed in a future release.

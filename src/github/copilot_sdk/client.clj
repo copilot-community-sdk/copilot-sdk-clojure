@@ -219,14 +219,14 @@
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
-                  (proto/send-request conn "session.tools.handlePendingToolCall"
-                                     {:session-id session-id
-                                      :request-id request-id
-                                      :result {:text-result-for-llm
-                                               "Invoking this tool produced an error."
-                                               :result-type "failure"
-                                               :error (ex-message e)
-                                               :tool-telemetry {}}})))
+                  (<! (proto/send-request conn "session.tools.handlePendingToolCall"
+                                         {:session-id session-id
+                                          :request-id request-id
+                                          :result {:text-result-for-llm
+                                                   "Invoking this tool produced an error."
+                                                   :result-type "failure"
+                                                   :error (ex-message e)
+                                                   :tool-telemetry {}}}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-permission-requested!
@@ -254,10 +254,10 @@
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
-                  (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
-                                     {:session-id session-id
-                                      :request-id request-id
-                                      :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))
+                  (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
+                                         {:session-id session-id
+                                          :request-id request-id
+                                          :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-broadcast-event!
