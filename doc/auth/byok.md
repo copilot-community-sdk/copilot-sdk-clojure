@@ -183,6 +183,36 @@ You must provide and manage the API key or bearer token that BYOK uses.
 - **Usage tracking** — Tracked by your provider, not GitHub Copilot
 - **Premium requests** — Do not count against Copilot premium request quotas
 
+## Custom Model Listing
+
+When using BYOK, the CLI server may not know which models your provider supports. Use `:on-list-models` in your client options to supply a custom model list:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def my-models
+  [{:id "my-gpt-4o"
+    :name "My GPT-4o"
+    :vendor "openai"
+    :family "gpt-4o"
+    :version ""
+    :max-input-tokens 128000
+    :max-output-tokens 16384
+    :preview? false
+    :default-temperature 1
+    :model-picker-priority 1
+    :model-capabilities {:model-supports {} :model-limits {}}}])
+
+(def client
+  (copilot/client {:on-list-models (fn [] my-models)}))
+
+;; list-models now returns my-models (no CLI connection required)
+(copilot/list-models client)
+;; => [{:id "my-gpt-4o" ...}]
+```
+
+The handler is a zero-arg function returning a seq of model info maps in the same format that `list-models` returns. Results are cached after the first call.
+
 ## Troubleshooting
 
 ### "Model not specified" Error

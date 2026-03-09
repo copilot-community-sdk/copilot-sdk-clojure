@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.1.32 sync)
+- `:agent` parameter to `create-session` and `resume-session` config for pre-selecting a custom agent when the session starts. Must match the `:name` of one of the agents in `:custom-agents`. (upstream PR #722)
+- `:on-list-models` client option: a zero-arg function returning a seq of model info maps. When provided, `list-models` calls this handler instead of querying the CLI server. Useful in BYOK mode to return models from your custom provider. Connection is not required when this handler is set. (upstream PR #730)
+
 ## [0.1.30.1] - 2026-03-07
 ### Added
 - `disconnect!` function as the preferred API for closing sessions, matching upstream SDK's `disconnect()` (upstream PR #599). `destroy!` is deprecated but still works as an alias.

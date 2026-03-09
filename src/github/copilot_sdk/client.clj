@@ -119,7 +119,10 @@
     - :tool-timeout-ms - Timeout for tool calls that return a channel (default: 120000)
     - :env           - Environment variables map
     - :github-token  - GitHub token for authentication (sets COPILOT_SDK_AUTH_TOKEN env var)
-    - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)"
+    - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)
+    - :on-list-models - Custom handler fn (no args) returning a seq of model info maps.
+                        When provided, list-models calls this instead of querying the CLI.
+                        Useful in BYOK mode to return models from your custom provider."
   ([]
    (client {}))
   ([opts]
@@ -924,7 +927,8 @@
   "List available models with their metadata.
    Results are cached per client connection to prevent rate limiting under concurrency.
    Cache is cleared on stop!/force-stop!.
-   Requires authentication.
+   When :on-list-models was provided in the client options, calls that handler
+   instead of querying the CLI server (connection not required in that case).
    Returns a vector of model info maps with keys:
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
    :preview? :default-temperature :model-picker-priority
@@ -939,33 +943,37 @@
    :supports-reasoning-effort (legacy flat key)
    :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size} (legacy)"
   [client]
-  (ensure-connected! client)
-  (let [p (promise)
-        entry (swap! (:state client) update :models-cache #(or % p))
-        cached (:models-cache entry)]
-    (cond
-      ;; Already cached result (immutable, no need to copy)
-      (vector? cached)
-      cached
+  (let [on-list-models (get-in @(:state client) [:options :on-list-models])]
+    (when-not on-list-models
+      (ensure-connected! client))
+    (let [p (promise)
+          entry (swap! (:state client) update :models-cache #(or % p))
+          cached (:models-cache entry)]
+      (cond
+        ;; Already cached result (immutable, no need to copy)
+        (vector? cached)
+        cached
 
-      ;; We won the race and must fetch
-      (identical? cached p)
-      (try
-        (let [models (fetch-models! client)]
-          (deliver p models)
-          (swap! (:state client) assoc :models-cache models)
-          models)
-        (catch Exception e
-          (deliver p e)
-          (swap! (:state client) assoc :models-cache nil)
-          (throw e)))
+        ;; We won the race and must fetch
+        (identical? cached p)
+        (try
+          (let [models (if on-list-models
+                         (vec (on-list-models))
+                         (fetch-models! client))]
+            (deliver p models)
+            (swap! (:state client) assoc :models-cache models)
+            models)
+          (catch Exception e
+            (deliver p e)
+            (swap! (:state client) assoc :models-cache nil)
+            (throw e)))
 
-      ;; Another thread is fetching, wait on promise
-      :else
-      (let [result @cached]
-        (if (instance? Exception result)
-          (throw result)
-          result)))))
+        ;; Another thread is fetching, wait on promise
+        :else
+        (let [result @cached]
+          (if (instance? Exception result)
+            (throw result)
+            result))))))
 
 (defn list-tools
   "List available tools with their metadata.
@@ -1079,6 +1087,7 @@
       (:working-directory config) (assoc :working-directory (:working-directory config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       true (assoc :env-value-mode "direct"))))
@@ -1127,6 +1136,7 @@
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
@@ -1177,6 +1187,8 @@
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}
+   - :agent              - Name of the custom agent to activate when the session starts.
+                           Must match the :name of one of the agents in :custom-agents.
    
    Returns a CopilotSession."
   [client config]
@@ -1212,6 +1224,8 @@
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
    - :hooks              - Lifecycle hooks map
+   - :agent              - Name of the custom agent to activate for the resumed session.
+                           Must match the :name of one of the agents in :custom-agents.
    
    Returns a CopilotSession."
   [client session-id config]

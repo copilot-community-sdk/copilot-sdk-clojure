@@ -240,6 +240,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, or `"xhigh"` |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
+| `:agent` | string | Name of the custom agent to activate when the session starts. Must match the `:name` of one of the agents in `:custom-agents`. |
 
 #### `resume-session`
 
@@ -340,7 +341,12 @@ Get current authentication status. Returns:
 ```
 
 List available models with their metadata. Results are cached per client connection.
-Requires authentication. Returns a vector of model info maps:
+Requires authentication (unless `:on-list-models` was provided in client options).
+
+When `:on-list-models` is set in client options, calls that handler instead of querying the CLI
+server — no connection required. Useful in BYOK mode to return models from your custom provider.
+
+Returns a vector of model info maps:
 ```clojure
 [{:id "gpt-5.2"
   :name "GPT-5.2"

@@ -48,18 +48,23 @@
 (s/def ::github-token ::non-blank-string)
 (s/def ::use-logged-in-user? boolean?)
 
+;; Custom model listing handler (upstream PR #730)
+(s/def ::on-list-models fn?)
+
 (def client-options-keys
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
-    :tool-timeout-ms :env :github-token :use-logged-in-user?})
+    :tool-timeout-ms :env :github-token :use-logged-in-user?
+    :on-list-models})
 
 (s/def ::client-options
   (closed-keys
    (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
                     ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                     ::notification-queue-size ::router-queue-size
-                    ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?])
+                    ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
+                    ::on-list-models])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -198,6 +203,9 @@
 
 (s/def ::client-name ::non-blank-string)
 
+;; Pre-selected custom agent name (upstream PR #722)
+(s/def ::agent ::non-blank-string)
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :system-message
     :available-tools :excluded-tools :provider
@@ -205,7 +213,7 @@
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :hooks
-    :working-directory})
+    :working-directory :agent})
 
 (s/def ::session-config
   (closed-keys
@@ -216,7 +224,7 @@
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::hooks
-                    ::working-directory])
+                    ::working-directory ::agent])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -224,7 +232,7 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume?})
+    :on-user-input-request :hooks :working-directory :disable-resume? :agent})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -233,7 +241,8 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume?])
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume?
+                    ::agent])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
