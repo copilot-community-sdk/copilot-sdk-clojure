@@ -119,6 +119,8 @@ Explicitly shutdown the shared client. Safe to call multiple times.
 | `:env` | map | nil | Environment variables |
 | `:github-token` | string | nil | GitHub token for authentication. Sets `COPILOT_SDK_AUTH_TOKEN` env var and passes `--auth-token-env` flag |
 | `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
+| `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
+| `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 
 ### Methods
 
@@ -240,6 +242,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, or `"xhigh"` |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
+| `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 
 #### `resume-session`
 
@@ -340,7 +343,9 @@ Get current authentication status. Returns:
 ```
 
 List available models with their metadata. Results are cached per client connection.
-Requires authentication. Returns a vector of model info maps:
+When `:on-list-models` handler is provided in client options, calls the handler
+instead of the RPC method (no connection required).
+Requires authentication (unless `:on-list-models` is provided). Returns a vector of model info maps:
 ```clojure
 [{:id "gpt-5.2"
   :name "GPT-5.2"
@@ -779,6 +784,23 @@ Alias for `switch-model!`, matching the upstream SDK's `setModel()` API.
 ;; Before: gpt-5.2
 ;; After: claude-sonnet-4.5
 ```
+
+#### `log!`
+
+```clojure
+(copilot/log! session "Processing started")
+(copilot/log! session "Something went wrong" {:level "error"})
+(copilot/log! session "Temporary note" {:ephemeral? true})
+```
+
+Log a message to the session timeline. Returns the event ID string.
+
+**Options (optional map):**
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:level` | string | `"info"` | Log severity: `"info"`, `"warning"`, or `"error"` |
+| `:ephemeral?` | boolean | `false` | When `true`, the message is transient and not persisted to disk |
 
 #### `disconnect!`
 

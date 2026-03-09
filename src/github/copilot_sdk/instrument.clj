@@ -221,6 +221,12 @@
                :model-id string?)
   :ret ::specs/model-id)
 
+(s/fdef github.copilot-sdk.session/log!
+  :args (s/cat :session ::specs/session
+               :message string?
+               :opts (s/? (s/nilable ::specs/log-options)))
+  :ret (s/nilable ::specs/event-id))
+
 ;; -----------------------------------------------------------------------------
 ;; Function specs for helpers namespace
 ;; -----------------------------------------------------------------------------
@@ -288,6 +294,7 @@
                       github.copilot-sdk.session/get-current-model
                       github.copilot-sdk.session/switch-model!
                       github.copilot-sdk.session/set-model!
+                      github.copilot-sdk.session/log!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events
@@ -337,6 +344,7 @@
                       github.copilot-sdk.session/get-current-model
                       github.copilot-sdk.session/switch-model!
                       github.copilot-sdk.session/set-model!
+                      github.copilot-sdk.session/log!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events

@@ -119,7 +119,9 @@
     - :tool-timeout-ms - Timeout for tool calls that return a channel (default: 120000)
     - :env           - Environment variables map
     - :github-token  - GitHub token for authentication (sets COPILOT_SDK_AUTH_TOKEN env var)
-    - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)"
+    - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)
+    - :is-child-process? - When true, SDK is a child of an existing Copilot CLI process and uses stdio to communicate with it (no process spawning)
+    - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!"
   ([]
    (client {}))
   ([opts]
@@ -133,6 +135,12 @@
                      {:cli-url (:cli-url opts)
                       :github-token (when (:github-token opts) "***")
                       :use-logged-in-user? (:use-logged-in-user? opts)})))
+   ;; Validation: is-child-process? is mutually exclusive with cli-url
+   (when (and (:is-child-process? opts) (:cli-url opts))
+     (throw (ex-info "is-child-process? is mutually exclusive with cli-url" opts)))
+   ;; Validation: is-child-process? requires stdio transport
+   (when (and (:is-child-process? opts) (= false (:use-stdio? opts)))
+     (throw (ex-info "is-child-process? requires use-stdio? to be true (or unset)" opts)))
    (when-not (s/valid? ::specs/client-options opts)
      (let [unknown (specs/unknown-keys opts specs/client-options-keys)
            explain (s/explain-data ::specs/client-options opts)
@@ -158,18 +166,23 @@
                               (and (:github-token opts) (nil? (:use-logged-in-user? opts)))
                               (assoc :use-logged-in-user? false))
          merged (merge (default-options) opts-with-defaults)
-         external? (boolean (:cli-url opts))
-         {:keys [host port]} (when (:cli-url opts)
+         child-process? (:is-child-process? opts)
+         cli-url? (boolean (:cli-url opts))
+         external? (or cli-url? child-process?)
+         {:keys [host port]} (when cli-url?
                                (parse-cli-url (:cli-url opts)))
          final-opts (cond-> merged
-                      external? (-> (assoc :use-stdio? false)
-                                    (assoc :host host)
-                                    (assoc :port port)
-                                    (assoc :external-server? true)))]
-     {:options final-opts
-      :external-server? external?
-      :actual-host (or host "localhost")
-      :state (atom (assoc (initial-state port) :options final-opts))})))
+                      cli-url? (-> (assoc :use-stdio? false)
+                                   (assoc :host host)
+                                   (assoc :port port)
+                                   (assoc :external-server? true))
+                      child-process? (assoc :external-server? true))]
+      (cond-> {:options final-opts
+               :external-server? external?
+               :actual-host (or host "localhost")
+               :state (atom (assoc (initial-state port) :options final-opts))}
+        (:on-list-models opts)
+        (assoc :on-list-models (:on-list-models opts))))))
 
 (defn state
   "Get the current connection state."
@@ -513,6 +526,13 @@
     (let [conn (proto/connect (:stdout process) (:stdin process) (:state client))]
       (swap! (:state client) assoc :connection-io conn))))
 
+(defn- connect-parent-stdio!
+  "Connect via own stdio to a parent Copilot CLI process (child process mode)."
+  [client]
+  (swap! (:state client) assoc :connection (proto/initial-connection-state))
+  (let [conn (proto/connect System/in System/out (:state client))]
+    (swap! (:state client) assoc :connection-io conn)))
+
 (defn- connect-tcp!
   "Connect via TCP to the CLI server."
   [client]
@@ -658,11 +678,22 @@
               (swap! (:state client) assoc :actual-port port)))))
 
       ;; Connect to server
-      (if (or (:external-server? client)
-              (not (:use-stdio? (:options client))))
+      (cond
+        ;; Child process mode: use own stdin/stdout to talk to parent
+        (:is-child-process? (:options client))
+        (do
+          (log/debug "Connecting via parent stdio (child process mode)")
+          (connect-parent-stdio! client))
+
+        ;; External server (cli-url) or TCP mode
+        (or (:external-server? client)
+            (not (:use-stdio? (:options client))))
         (do
           (log/debug "Connecting via TCP")
           (connect-tcp! client))
+
+        ;; Normal stdio to spawned process
+        :else
         (do
           (log/debug "Connecting via stdio")
           (connect-stdio! client)))
@@ -924,7 +955,9 @@
   "List available models with their metadata.
    Results are cached per client connection to prevent rate limiting under concurrency.
    Cache is cleared on stop!/force-stop!.
-   Requires authentication.
+   When :on-list-models handler is provided in client options, calls the handler
+   instead of the RPC method. The handler does not require a CLI connection.
+   Requires authentication (unless :on-list-models handler is provided).
    Returns a vector of model info maps with keys:
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
    :preview? :default-temperature :model-picker-priority
@@ -939,33 +972,36 @@
    :supports-reasoning-effort (legacy flat key)
    :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size} (legacy)"
   [client]
-  (ensure-connected! client)
-  (let [p (promise)
-        entry (swap! (:state client) update :models-cache #(or % p))
-        cached (:models-cache entry)]
-    (cond
-      ;; Already cached result (immutable, no need to copy)
-      (vector? cached)
-      cached
+  (let [handler (:on-list-models client)]
+    (when-not handler (ensure-connected! client))
+    (let [p (promise)
+          entry (swap! (:state client) update :models-cache #(or % p))
+          cached (:models-cache entry)]
+      (cond
+        ;; Already cached result (immutable, no need to copy)
+        (vector? cached)
+        cached
 
-      ;; We won the race and must fetch
-      (identical? cached p)
-      (try
-        (let [models (fetch-models! client)]
-          (deliver p models)
-          (swap! (:state client) assoc :models-cache models)
-          models)
-        (catch Exception e
-          (deliver p e)
-          (swap! (:state client) assoc :models-cache nil)
-          (throw e)))
+        ;; We won the race and must fetch
+        (identical? cached p)
+        (try
+          (let [models (if handler
+                         (vec (handler))
+                         (fetch-models! client))]
+            (deliver p models)
+            (swap! (:state client) assoc :models-cache models)
+            models)
+          (catch Exception e
+            (deliver p e)
+            (swap! (:state client) assoc :models-cache nil)
+            (throw e)))
 
-      ;; Another thread is fetching, wait on promise
-      :else
-      (let [result @cached]
-        (if (instance? Exception result)
-          (throw result)
-          result)))))
+        ;; Another thread is fetching, wait on promise
+        :else
+        (let [result @cached]
+          (if (instance? Exception result)
+            (throw result)
+            result))))))
 
 (defn list-tools
   "List available tools with their metadata.
@@ -1079,6 +1115,7 @@
       (:working-directory config) (assoc :working-directory (:working-directory config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       true (assoc :env-value-mode "direct"))))
@@ -1127,6 +1164,7 @@
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))

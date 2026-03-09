@@ -20,10 +20,13 @@
     (is (s/valid? ::specs/client-options {}))
     (is (s/valid? ::specs/client-options {:cli-path "copilot"}))
     (is (s/valid? ::specs/client-options {:log-level :debug}))
-    (is (s/valid? ::specs/client-options {:use-stdio? true :port 8080})))
+    (is (s/valid? ::specs/client-options {:use-stdio? true :port 8080}))
+    (is (s/valid? ::specs/client-options {:is-child-process? true}))
+    (is (s/valid? ::specs/client-options {:is-child-process? false})))
 
   (testing "invalid client options"
-    (is (not (s/valid? ::specs/client-options {:log-level :invalid})))))
+    (is (not (s/valid? ::specs/client-options {:log-level :invalid})))
+    (is (not (s/valid? ::specs/client-options {:is-child-process? "yes"})))))
 
 (deftest send-options-spec-test
   (testing "valid send options"
@@ -65,7 +68,29 @@
 
   (testing "cli-url mutual exclusion with cli-path"
     (is (thrown? Exception
-                 (copilot/client {:cli-url "localhost:8080" :cli-path "/path/to/cli"})))))
+                 (copilot/client {:cli-url "localhost:8080" :cli-path "/path/to/cli"}))))
+
+  (testing "is-child-process? mutual exclusion with cli-url"
+    (is (thrown-with-msg? Exception #"is-child-process\? is mutually exclusive with cli-url"
+                          (copilot/client {:is-child-process? true :cli-url "localhost:8080"}))))
+
+  (testing "is-child-process? requires use-stdio? true"
+    (is (thrown-with-msg? Exception #"is-child-process\? requires use-stdio\?"
+                          (copilot/client {:is-child-process? true :use-stdio? false}))))
+
+  (testing "is-child-process? marks client as external server"
+    (let [c (copilot/client {:is-child-process? true :auto-start? false})]
+      (is (true? (:external-server? c)))
+      (is (true? (:external-server? (:options c))))
+      (is (true? (:use-stdio? (:options c))))))
+
+  (testing "is-child-process? with default use-stdio? is accepted"
+    (let [c (copilot/client {:is-child-process? true :auto-start? false})]
+      (is (some? c))))
+
+  (testing "is-child-process? with explicit use-stdio? true is accepted"
+    (let [c (copilot/client {:is-child-process? true :use-stdio? true :auto-start? false})]
+      (is (some? c)))))
 
 ;; =============================================================================
 ;; URL Parsing Tests (matching JS SDK client.test.ts)

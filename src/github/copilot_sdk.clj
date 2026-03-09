@@ -802,6 +802,22 @@
   [session model-id]
   (session/set-model! session model-id))
 
+(defn log!
+  "Log a message to the session timeline.
+   Options (optional map):
+   - :level      - \"info\", \"warning\", or \"error\" (default: \"info\")
+   - :ephemeral? - when true, message is not persisted to disk (default: false)
+   Returns the event ID string.
+
+   Example:
+   ```clojure
+   (copilot/log! session \"Processing started\")
+   (copilot/log! session \"Something went wrong\" {:level \"error\"})
+   (copilot/log! session \"Temporary note\" {:ephemeral? true})
+   ```"
+  ([session message] (session/log! session message))
+  ([session message opts] (session/log! session message opts)))
+
 (defn session-config
   "Get the configuration that was passed to create this session.
    

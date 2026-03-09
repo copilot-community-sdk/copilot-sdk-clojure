@@ -269,6 +269,12 @@
         {:modelId model-id})
       (throw (ex-info "Session not found" {:code -32001 :session-id session-id})))))
 
+(defn- handle-session-log [server params]
+  (let [session-id (:sessionId params)]
+    (if (get @(:sessions server) session-id)
+      {:eventId (str (java.util.UUID/randomUUID))}
+      (throw (ex-info "Session not found" {:code -32001 :session-id session-id})))))
+
 (defn- handle-request [server msg]
   (let [method (:method msg)
         params (:params msg)
@@ -293,6 +299,7 @@
                  "account.getQuota" (handle-account-get-quota server params)
                  "session.model.getCurrent" (handle-session-model-get-current server params)
                  "session.model.switchTo" (handle-session-model-switch-to server params)
+                 "session.log" (handle-session-log server params)
                  (throw (ex-info "Method not found" {:code -32601 :method method})))]
     {:jsonrpc "2.0"
      :id (:id msg)

@@ -47,19 +47,25 @@
 ;; Authentication options (PR #237)
 (s/def ::github-token ::non-blank-string)
 (s/def ::use-logged-in-user? boolean?)
+;; Child process mode (upstream PR #737)
+(s/def ::is-child-process? boolean?)
+;; Custom model listing handler (upstream PR #730)
+(s/def ::on-list-models fn?)
 
 (def client-options-keys
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
-    :tool-timeout-ms :env :github-token :use-logged-in-user?})
+    :tool-timeout-ms :env :github-token :use-logged-in-user?
+    :is-child-process? :on-list-models})
 
 (s/def ::client-options
   (closed-keys
    (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
                     ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                     ::notification-queue-size ::router-queue-size
-                    ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?])
+                    ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
+                    ::is-child-process? ::on-list-models])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -133,6 +139,9 @@
 
 (s/def ::custom-agents (s/coll-of ::custom-agent))
 
+;; Agent selection (upstream PR #722)
+(s/def ::agent ::non-blank-string)
+
 ;; -----------------------------------------------------------------------------
 ;; Provider configuration (BYOK)
 ;; -----------------------------------------------------------------------------
@@ -205,7 +214,7 @@
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :hooks
-    :working-directory})
+    :working-directory :agent})
 
 (s/def ::session-config
   (closed-keys
@@ -216,7 +225,7 @@
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::hooks
-                    ::working-directory])
+                    ::working-directory ::agent])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -224,7 +233,7 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume?})
+    :on-user-input-request :hooks :working-directory :disable-resume? :agent})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -233,7 +242,7 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume?])
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -361,6 +370,11 @@
 (s/def ::event-timestamp ::timestamp)
 (s/def ::parent-id (s/nilable ::non-blank-string))
 (s/def ::ephemeral? boolean?)
+
+;; Session log specs (upstream PR #737)
+(s/def ::level #{"info" "warning" "error"})
+(s/def ::log-options (s/keys :opt-un [::level ::ephemeral?]))
+
 
 (s/def ::base-event
   (s/keys :req-un [::event-id ::event-timestamp ::parent-id]
@@ -559,7 +573,7 @@
 
 (s/def ::client
   (s/keys :req-un [::options ::state]
-          :opt-un [::external-server? ::actual-host]))
+          :opt-un [::external-server? ::actual-host ::on-list-models]))
 
 ;; -----------------------------------------------------------------------------
 ;; Session record spec

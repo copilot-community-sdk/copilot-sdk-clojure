@@ -185,6 +185,25 @@
         (is (number? (:max-input-tokens model)))
         (is (number? (:max-output-tokens model)))))))
 
+(deftest test-list-models-with-on-list-models-handler
+  (let [call-count (atom 0)
+        fake-models [{:id "test-model" :name "Test Model" :vendor "test"
+                      :family "test" :version "1" :max-input-tokens 4096
+                      :max-output-tokens 1024 :preview? false}]
+        handler (fn []
+                  (swap! call-count inc)
+                  fake-models)
+        c (sdk/client {:auto-start? false :on-list-models handler})]
+    (testing "returns handler result without requiring start!"
+      (let [models (sdk/list-models c)]
+        (is (vector? models))
+        (is (= 1 (count models)))
+        (is (= "test-model" (:id (first models))))))
+    (testing "caches result (handler called only once)"
+      (let [_m1 (sdk/list-models c)
+            _m2 (sdk/list-models c)]
+        (is (= 1 @call-count))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Session Lifecycle Tests
 ;; -----------------------------------------------------------------------------
@@ -263,6 +282,34 @@
           new-model (sdk/switch-model! session "claude-sonnet-4.5")]
       (is (= "claude-sonnet-4.5" new-model))
       (is (= "claude-sonnet-4.5" (sdk/get-current-model session))))))
+
+(deftest test-log-message-only
+  (testing "Log with message only returns event-id"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          event-id (sdk/log! session "Processing started")]
+      (is (string? event-id))
+      (is (seq event-id)))))
+
+(deftest test-log-with-options
+  (testing "Log with level and ephemeral options returns event-id"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          event-id (sdk/log! session "Something went wrong" {:level "error" :ephemeral? true})]
+      (is (string? event-id))
+      (is (seq event-id)))))
+
+(deftest test-log-verifies-rpc-params
+  (testing "Log sends correct RPC params"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (when (= method "session.log")
+                  (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/log! session "test message" {:level "warning" :ephemeral? true})]
+      (is (= (:message @captured-params) "test message"))
+      (is (= (:level @captured-params) "warning"))
+      (is (= (:ephemeral @captured-params) true))
+      (is (string? (:sessionId @captured-params))))))
 
 (deftest test-delete-session
   (testing "Delete session removes it from list"
@@ -658,6 +705,35 @@
           _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
           create-params (get @seen "session.create")]
       (is (not (contains? create-params :clientName))))))
+
+(deftest test-agent-forwarded-on-wire
+  (testing "agent is forwarded in session.create when set (upstream PR #722)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :agent "my-agent"})
+          create-params (get @seen "session.create")]
+      (is (= "my-agent" (:agent create-params)))))
+
+  (testing "agent is forwarded in session.resume when set (upstream PR #722)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id {:on-permission-request sdk/approve-all :agent "my-agent"})
+          resume-params (get @seen "session.resume")]
+      (is (= "my-agent" (:agent resume-params)))))
+
+  (testing "agent is omitted from wire when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :agent))))))
 
 (deftest test-override-built-in-tool-on-wire
   (testing "overridesBuiltInTool is sent on the wire when true"
