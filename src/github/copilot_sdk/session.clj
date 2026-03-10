@@ -740,3 +740,19 @@
    See switch-model! for details."
   [session model-id]
   (switch-model! session model-id))
+
+(defn log!
+  "Log a message to the session timeline.
+   Options (optional map):
+   - :level      - \"info\", \"warning\", or \"error\" (default: \"info\")
+   - :ephemeral? - when true, message is not persisted to disk (default: false)
+   Returns the event ID string."
+  ([session message] (log! session message nil))
+  ([session message opts]
+   (let [{:keys [session-id client]} session
+         conn (connection-io client)
+         params (cond-> {:sessionId session-id :message message}
+                  (:level opts) (assoc :level (:level opts))
+                  (:ephemeral? opts) (assoc :ephemeral (:ephemeral? opts)))
+         result (proto/send-request! conn "session.log" params)]
+     (:event-id result))))
