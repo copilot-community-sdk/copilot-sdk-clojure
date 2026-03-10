@@ -225,7 +225,7 @@
   :args (s/cat :session ::specs/session
                :message string?
                :opts (s/? (s/nilable ::specs/log-options)))
-  :ret (s/nilable ::specs/event-id))
+  :ret ::specs/event-id)
 
 ;; -----------------------------------------------------------------------------
 ;; Function specs for helpers namespace

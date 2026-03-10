@@ -137,10 +137,12 @@
                       :use-logged-in-user? (:use-logged-in-user? opts)})))
    ;; Validation: is-child-process? is mutually exclusive with cli-url
    (when (and (:is-child-process? opts) (:cli-url opts))
-     (throw (ex-info "is-child-process? is mutually exclusive with cli-url" opts)))
+     (throw (ex-info "is-child-process? is mutually exclusive with cli-url"
+                     {:is-child-process? true :cli-url (:cli-url opts)})))
    ;; Validation: is-child-process? requires stdio transport
    (when (and (:is-child-process? opts) (= false (:use-stdio? opts)))
-     (throw (ex-info "is-child-process? requires use-stdio? to be true (or unset)" opts)))
+     (throw (ex-info "is-child-process? requires use-stdio? to be true (or unset)"
+                     {:is-child-process? true :use-stdio? false})))
    (when-not (s/valid? ::specs/client-options opts)
      (let [unknown (specs/unknown-keys opts specs/client-options-keys)
            explain (s/explain-data ::specs/client-options opts)
@@ -534,11 +536,12 @@
     (close [] nil)))
 
 (defn- non-closing-output-stream
-  "Wrap an OutputStream so that .close is a no-op.
-   Prevents proto/disconnect from closing System/out."
+  "Wrap an OutputStream so that .close flushes but does not close.
+   Prevents proto/disconnect from closing System/out while ensuring
+   buffered bytes are sent."
   ^java.io.OutputStream [^java.io.OutputStream out]
   (proxy [java.io.FilterOutputStream] [out]
-    (close [] nil)))
+    (close [] (.flush ^java.io.OutputStream out))))
 
 (defn- connect-parent-stdio!
   "Connect via own stdio to a parent Copilot CLI process (child process mode).
