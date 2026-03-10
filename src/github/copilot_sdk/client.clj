@@ -526,11 +526,29 @@
     (let [conn (proto/connect (:stdout process) (:stdin process) (:state client))]
       (swap! (:state client) assoc :connection-io conn))))
 
+(defn- non-closing-input-stream
+  "Wrap an InputStream so that .close is a no-op.
+   Prevents proto/disconnect from closing System/in."
+  ^java.io.InputStream [^java.io.InputStream in]
+  (proxy [java.io.FilterInputStream] [in]
+    (close [] nil)))
+
+(defn- non-closing-output-stream
+  "Wrap an OutputStream so that .close is a no-op.
+   Prevents proto/disconnect from closing System/out."
+  ^java.io.OutputStream [^java.io.OutputStream out]
+  (proxy [java.io.FilterOutputStream] [out]
+    (close [] nil)))
+
 (defn- connect-parent-stdio!
-  "Connect via own stdio to a parent Copilot CLI process (child process mode)."
+  "Connect via own stdio to a parent Copilot CLI process (child process mode).
+   Wraps System/in and System/out in non-closing wrappers so that
+   proto/disconnect does not close the JVM's global stdio streams."
   [client]
   (swap! (:state client) assoc :connection (proto/initial-connection-state))
-  (let [conn (proto/connect System/in System/out (:state client))]
+  (let [in  (non-closing-input-stream System/in)
+        out (non-closing-output-stream System/out)
+        conn (proto/connect in out (:state client))]
     (swap! (:state client) assoc :connection-io conn)))
 
 (defn- connect-tcp!
