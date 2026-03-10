@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.1.32 sync)
+- `:on-event` optional handler in `create-session` and `resume-session` configs — zero-arg function registered on the session before the `session.create`/`session.resume` RPC is issued. Guarantees that early events emitted by the CLI during session creation (e.g. `session.start`) are delivered to the handler without being dropped. Equivalent to calling `subscribe-events` immediately after creation but executes earlier in the lifecycle (upstream PR #664).
+
+### Changed (v0.1.32 sync)
+- Session registration now occurs **before** the `session.create`/`session.resume` RPC call so events emitted during the RPC (e.g. `session.start`) are routed correctly and not dropped. Session ID is generated client-side (UUID) when not provided via `:session-id`. On RPC failure, registered session state is cleaned up automatically (upstream PR #664).
+
 ## [0.1.32.0] - 2026-03-10
 ### Added (v0.1.32 sync)
 - `:agent` optional string parameter in `create-session` and `resume-session` configs — pre-selects a custom agent by name when the session starts. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation (upstream PR #722).

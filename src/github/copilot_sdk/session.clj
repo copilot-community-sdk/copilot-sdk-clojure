@@ -47,8 +47,10 @@
 
 (defn create-session
   "Create a new session. Internal use - called by client.
-   Initializes session state in client's atom and returns a CopilotSession handle."
-  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path config]}]
+   Initializes session state in client's atom and returns a CopilotSession handle.
+   If :on-event is provided, starts a background go-loop that calls the handler
+   for each event dispatched to this session (registered before session.create RPC)."
+  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path config on-event]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -70,9 +72,39 @@
                            {:event-chan event-chan
                             :event-mult event-mult
                             :send-lock send-lock}))))
+    ;; If on-event handler provided, start a go-loop to call it for each event.
+    ;; Registered before session.create RPC so early events (e.g. session.start) are not dropped.
+    (when on-event
+      (let [tap-ch (chan (async/sliding-buffer 1024))]
+        (tap event-mult tap-ch)
+        (go-loop []
+          (when-let [event (<! tap-ch)]
+            (try
+              (on-event event)
+              (catch Exception e
+                (log/warn "on-event handler error for session " session-id ": " (ex-message e))))
+            (recur)))))
     (log/debug "Session created: " session-id)
     ;; Return lightweight handle
     (->CopilotSession session-id workspace-path client)))
+
+(defn update-workspace-path!
+  "Update the workspace-path in session state after a successful session.create/session.resume RPC.
+   Returns a new CopilotSession record with the updated workspace-path."
+  [client session-id workspace-path]
+  (update-session! client session-id assoc :workspace-path workspace-path)
+  (->CopilotSession session-id workspace-path client))
+
+(defn cleanup-failed-session!
+  "Clean up session state after a failed session.create/session.resume RPC.
+   Closes the event channel (which stops any on-event go-loop) and removes session state."
+  [client session-id]
+  (when-let [{:keys [event-chan]} (session-io client session-id)]
+    (close! event-chan))
+  (swap! (:state client)
+         (fn [s] (-> s
+                     (update :sessions dissoc session-id)
+                     (update :session-io dissoc session-id)))))
 
 (defn dispatch-event!
   "Dispatch an event to all subscribers via the mult. Called by client notification router.

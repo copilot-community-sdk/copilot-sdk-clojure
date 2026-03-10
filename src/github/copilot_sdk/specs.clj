@@ -207,6 +207,9 @@
 
 (s/def ::client-name ::non-blank-string)
 
+;; Early event handler registered before session.create/session.resume RPC (upstream PR #664)
+(s/def ::on-event fn?)
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :system-message
     :available-tools :excluded-tools :provider
@@ -214,7 +217,7 @@
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :hooks
-    :working-directory :agent})
+    :working-directory :agent :on-event})
 
 (s/def ::session-config
   (closed-keys
@@ -225,7 +228,7 @@
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::hooks
-                    ::working-directory ::agent])
+                    ::working-directory ::agent ::on-event])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -233,7 +236,7 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume? :agent})
+    :on-user-input-request :hooks :working-directory :disable-resume? :agent :on-event})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -242,7 +245,7 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent])
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent ::on-event])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------

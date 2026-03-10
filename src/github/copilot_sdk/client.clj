@@ -1192,18 +1192,19 @@
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
       true (assoc :env-value-mode "direct"))))
 
-(defn- finalize-session
-  "Create a CopilotSession from an RPC result and config."
-  [client result config]
-  (let [session-id (:session-id result)
-        workspace-path (:workspace-path result)]
-    (session/create-session client session-id
-                            {:tools (:tools config)
-                             :on-permission-request (:on-permission-request config)
-                             :on-user-input-request (:on-user-input-request config)
-                             :hooks (:hooks config)
-                             :workspace-path workspace-path
-                             :config config})))
+(defn- register-and-create-session!
+  "Register session state before RPC and return a handler map for post-RPC finalization.
+   The session is registered in client state so events dispatched during session.create/
+   session.resume RPC (e.g. session.start) are not dropped."
+  [client session-id config]
+  (session/create-session client session-id
+                          {:tools (:tools config)
+                           :on-permission-request (:on-permission-request config)
+                           :on-user-input-request (:on-user-input-request config)
+                           :hooks (:hooks config)
+                           :on-event (:on-event config)
+                           :workspace-path nil
+                           :config config}))
 
 (defn create-session
   "Create a new conversation session.
@@ -1236,6 +1237,10 @@
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}
+   - :on-event           - Optional event handler registered before session.create RPC so early
+                           events (e.g. session.start) are not dropped (upstream PR #664).
+                           Equivalent to calling (subscribe-events session) + processing the channel,
+                           but guaranteed to receive events emitted during session creation.
    
    Returns a CopilotSession."
   [client config]
@@ -1243,11 +1248,22 @@
   (validate-session-config! config)
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-create-session-params config)
-        result (proto/send-request! connection-io "session.create" params)
-        session (finalize-session client result config)]
-    (log/info "Session created: " (:session-id result))
-    session))
+        ;; Generate UUID client-side so session can be registered before RPC (upstream PR #664)
+        session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
+        ;; Register session state BEFORE the RPC so events dispatched during session.create
+        ;; (e.g. session.start) are not dropped
+        _ (register-and-create-session! client session-id config)
+        params (assoc (build-create-session-params config) :session-id session-id)]
+    (try
+      (let [result (proto/send-request! connection-io "session.create" params)
+            workspace-path (:workspace-path result)
+            session (session/update-workspace-path! client session-id workspace-path)]
+        (log/info "Session created: " session-id)
+        session)
+      (catch Exception e
+        ;; Clean up session state if RPC failed
+        (session/cleanup-failed-session! client session-id)
+        (throw e)))))
 
 (defn resume-session
   "Resume an existing session by ID.
@@ -1271,6 +1287,7 @@
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
    - :hooks              - Lifecycle hooks map
+   - :on-event           - Optional event handler registered before session.resume RPC (upstream PR #664)
    
    Returns a CopilotSession."
   [client session-id config]
@@ -1288,10 +1305,16 @@
                     {:config config})))
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-resume-session-params session-id config)
-        result (proto/send-request! connection-io "session.resume" params)
-        session (finalize-session client result config)]
-    session))
+        ;; Register session state BEFORE the RPC (upstream PR #664)
+        _ (register-and-create-session! client session-id config)
+        params (build-resume-session-params session-id config)]
+    (try
+      (let [result (proto/send-request! connection-io "session.resume" params)
+            workspace-path (:workspace-path result)]
+        (session/update-workspace-path! client session-id workspace-path))
+      (catch Exception e
+        (session/cleanup-failed-session! client session-id)
+        (throw e)))))
 
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
@@ -1316,17 +1339,22 @@
   (validate-session-config! config)
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-create-session-params config)
+        session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
+        ;; Register session state BEFORE the RPC (upstream PR #664)
+        _ (register-and-create-session! client session-id config)
+        params (assoc (build-create-session-params config) :session-id session-id)
         rpc-ch (proto/send-request connection-io "session.create" params)]
     (go
       (when-let [response (<! rpc-ch)]
         (if-let [err (:error response)]
-          (do (log/error "<create-session RPC error: " err)
+          (do (session/cleanup-failed-session! client session-id)
+              (log/error "<create-session RPC error: " err)
               (ex-info (str "Failed to create session: " (:message err))
                        {:error err}))
           (let [result (:result response)
-                session (finalize-session client result config)]
-            (log/info "Session created (async): " (:session-id result))
+                workspace-path (:workspace-path result)
+                session (session/update-workspace-path! client session-id workspace-path)]
+            (log/info "Session created (async): " session-id)
             session))))))
 
 (defn <resume-session
@@ -1363,17 +1391,20 @@
                     {:config config})))
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
+        ;; Register session state BEFORE the RPC (upstream PR #664)
+        _ (register-and-create-session! client session-id config)
         params (build-resume-session-params session-id config)
         rpc-ch (proto/send-request connection-io "session.resume" params)]
     (go
       (when-let [response (<! rpc-ch)]
         (if-let [err (:error response)]
-          (do (log/error "<resume-session RPC error: " err)
+          (do (session/cleanup-failed-session! client session-id)
+              (log/error "<resume-session RPC error: " err)
               (ex-info (str "Failed to resume session: " (:message err))
                        {:error err :session-id session-id}))
           (let [result (:result response)
-                session (finalize-session client result config)]
-            session))))))
+                workspace-path (:workspace-path result)]
+            (session/update-workspace-path! client session-id workspace-path)))))))
 
 (defn list-sessions
   "List all available sessions.

@@ -243,6 +243,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
+| `:on-event` | fn | Optional event handler registered before `session.create` RPC. Called for every session event, including `session.start` which is emitted during session creation. Guarantees no early events are dropped (upstream PR #664). |
 
 #### `resume-session`
 
