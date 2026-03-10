@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+## [0.1.32.0] - 2026-03-10
 ### Added (v0.1.32 sync)
 - `:agent` optional string parameter in `create-session` and `resume-session` configs — pre-selects a custom agent by name when the session starts. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation (upstream PR #722).
 - `:on-list-models` optional handler in client options — zero-arg function returning model info maps. Bypasses the `models.list` RPC call and does not require `start!`. Results use the same promise-based cache (upstream PR #730).
@@ -289,7 +290,8 @@ All notable changes to this project will be documented in this file. This change
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.1...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.32.0...HEAD
+[0.1.32.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.1...v0.1.32.0
 [0.1.30.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.0...v0.1.30.1
 [0.1.30.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.29.0...v0.1.30.0
 [0.1.29.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.28.0...v0.1.29.0

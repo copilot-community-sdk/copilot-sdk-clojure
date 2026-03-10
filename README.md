@@ -30,7 +30,7 @@ io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.1.32.0"}
 
 ;; Or git dependency
 io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure.git"
-                              :git/sha "ea38e4ce9b554ce55cce9b20738d0899bc0b8508"}
+                              :git/sha "c448d8e0fa4286fe978db47e082f97db4a08c8fb"}
 ```
 
 > **Note:** The Clojars artifact `net.clojars.krukow/copilot-sdk` is deprecated.
