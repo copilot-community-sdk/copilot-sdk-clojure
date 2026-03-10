@@ -95,7 +95,40 @@ Publishes to `io.github.copilot-community-sdk/copilot-sdk-clojure`.
 
 ## GitHub Actions release workflow
 
-Trigger the **Release** workflow manually in GitHub Actions (restricted to the repository maintainer). Inputs:
+Trigger the **Release** workflow manually in GitHub Actions (restricted to the repository maintainer).
+
+### Using `script/release.sh` (recommended)
+
+The `script/release.sh` wrapper dispatches the workflow via `gh` CLI with a friendlier interface:
+
+```bash
+# Release the current version in build.clj (version_strategy=none)
+script/release.sh
+
+# Sync to an upstream release (version_strategy=sync-upstream)
+script/release.sh --sync-upstream 0.1.33
+
+# Bump the Clojure patch segment (version_strategy=bump-clj-patch)
+script/release.sh --bump
+
+# Set an explicit version (version_strategy=set-version)
+script/release.sh --set-version 0.1.33.1
+
+# Append -SNAPSHOT suffix
+script/release.sh --snapshot --sync-upstream 0.1.33
+script/release.sh --snapshot --bump
+
+# Preview the gh command without dispatching
+script/release.sh --dry-run
+```
+
+Run `script/release.sh --help` for full usage.
+
+### Using the GitHub UI
+
+Go to **Actions → Release → Run workflow** and fill in the inputs below.
+
+### Workflow inputs
 
 | Input | Type | Description |
 |-------|------|-------------|
