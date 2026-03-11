@@ -66,9 +66,10 @@
     (is (thrown? Exception
                  (copilot/client {:cli-url "localhost:8080" :use-stdio? true}))))
 
-  (testing "cli-url mutual exclusion with cli-path"
-    (is (thrown? Exception
-                 (copilot/client {:cli-url "localhost:8080" :cli-path "/path/to/cli"}))))
+  (testing "cli-url with cli-path: cli-path is silently ignored"
+    (let [c (copilot/client {:cli-url "localhost:8080" :cli-path "/path/to/cli" :auto-start? false})]
+      (is (some? c))
+      (is (true? (:external-server? c)))))
 
   (testing "is-child-process? mutual exclusion with cli-url"
     (is (thrown-with-msg? Exception #"is-child-process\? is mutually exclusive with cli-url"

@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (v0.1.32 sync)
+- `:cli-path` is now silently ignored when `:cli-url` is provided, instead of throwing an error. Providing both is no longer an error — the remote CLI URL takes precedence and the local path is unused (upstream PR #787).
+
 ## [0.1.32.0] - 2026-03-10
 ### Added (v0.1.32 sync)
 - `:agent` optional string parameter in `create-session` and `resume-session` configs — pre-selects a custom agent by name when the session starts. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation (upstream PR #722).

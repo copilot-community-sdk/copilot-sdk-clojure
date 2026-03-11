@@ -104,7 +104,7 @@ Explicitly shutdown the shared client. Safe to call multiple times.
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `:cli-path` | string | `"copilot"` | Path to CLI executable |
+| `:cli-path` | string | `"copilot"` | Path to CLI executable. Ignored when `:cli-url` is provided |
 | `:cli-args` | vector | `[]` | Extra arguments prepended before SDK-managed flags |
 | `:cli-url` | string | nil | URL of existing CLI server (e.g., `"localhost:8080"`). When provided, no CLI process is spawned |
 | `:port` | number | `0` | Server port (0 = random) |

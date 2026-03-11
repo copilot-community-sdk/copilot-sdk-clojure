@@ -105,7 +105,7 @@
   "Create a new CopilotClient.
    
    Options:
-   - :cli-path      - Path to CLI executable (default: \"copilot\")
+   - :cli-path      - Path to CLI executable (default: \"copilot\"). Ignored when :cli-url is provided
    - :cli-args      - Extra arguments for CLI
    - :cli-url       - URL of existing server (e.g., \"localhost:8080\")
    - :cwd           - Working directory for CLI process
@@ -127,8 +127,6 @@
   ([opts]
    (when (and (:cli-url opts) (= true (:use-stdio? opts)))
      (throw (ex-info "cli-url is mutually exclusive with use-stdio?" opts)))
-   (when (and (:cli-url opts) (:cli-path opts))
-     (throw (ex-info "cli-url is mutually exclusive with cli-path" opts)))
    ;; Validation: github-token and use-logged-in-user? cannot be used with cli-url
    (when (and (:cli-url opts) (or (:github-token opts) (some? (:use-logged-in-user? opts))))
      (throw (ex-info "github-token and use-logged-in-user? cannot be used with cli-url (external server manages its own auth)"
