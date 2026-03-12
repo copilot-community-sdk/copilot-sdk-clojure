@@ -47,7 +47,9 @@
 (defn create-session
   "Create a new session. Internal use - called by client.
    Initializes session state in client's atom and returns a CopilotSession handle.
-   If :on-event is provided, taps a subscriber that invokes the handler for each event."
+   If :on-event is provided, taps a subscriber that forwards events to the handler
+   on a dedicated thread. Uses a sliding buffer, so events may be dropped under
+   extreme backpressure if the handler cannot keep up with the event rate."
   [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path on-event config]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
