@@ -5,7 +5,7 @@ Clojure SDK for programmatic control of the GitHub Copilot CLI via JSON-RPC.
 ## Getting Started
 
 - [Getting Started](getting-started.md) — Step-by-step tutorial building a weather assistant
-- [Examples](../examples/README.md) — 11 working examples with walkthroughs
+- [Examples](../examples/README.md) — 17 working examples with walkthroughs
 
 ## Guides
 

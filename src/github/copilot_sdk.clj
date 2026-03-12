@@ -77,6 +77,7 @@
     :copilot/hook.start
     :copilot/hook.end
     :copilot/system.message
+    :copilot/system.notification
     :copilot/permission.requested
     :copilot/permission.completed
     :copilot/user_input.requested
@@ -554,6 +555,33 @@
    ```"
   [client session-id config]
   (client/<resume-session client session-id config))
+
+(defn join-session
+  "Join the current foreground session from an extension running as a child process.
+
+   Reads the SESSION_ID environment variable and connects to the parent CLI process
+   via stdio. Intended for extensions spawned by the Copilot CLI.
+
+   Config is the same as `resume-session` (`:on-permission-request` is **required**).
+   The `:disable-resume?` option defaults to true.
+
+   Returns a map with `:client` and `:session` keys. The caller is responsible for
+   stopping the client when done.
+
+   Throws if SESSION_ID is not set in the environment.
+
+   Example:
+   ```clojure
+   (require '[github.copilot-sdk :as copilot])
+
+   (let [{:keys [client session]} (copilot/join-session
+                                    {:on-permission-request copilot/approve-all
+                                     :tools [my-tool]})]
+     ;; use session...
+     (copilot/stop! client))
+   ```"
+  [config]
+  (client/join-session config))
 
 (defn list-sessions
   "List all available sessions.

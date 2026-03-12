@@ -205,6 +205,9 @@
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
 
+;; Event handler (1-arity fn receiving event map)
+(s/def ::on-event fn?)
+
 (s/def ::client-name ::non-blank-string)
 
 (def session-config-keys
@@ -214,7 +217,7 @@
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :hooks
-    :working-directory :agent})
+    :working-directory :agent :on-event})
 
 (s/def ::session-config
   (closed-keys
@@ -225,7 +228,7 @@
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::hooks
-                    ::working-directory ::agent])
+                    ::working-directory ::agent ::on-event])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -233,7 +236,7 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume? :agent})
+    :on-user-input-request :hooks :working-directory :disable-resume? :agent :on-event})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -242,7 +245,8 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent])
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-event])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -401,6 +405,7 @@
     :copilot/skill.invoked
     :copilot/hook.start :copilot/hook.end
     :copilot/system.message
+    :copilot/system.notification
     ;; Interaction broadcast events (permission, user input, elicitation, tool flows)
     :copilot/permission.requested :copilot/permission.completed
     :copilot/user_input.requested :copilot/user_input.completed

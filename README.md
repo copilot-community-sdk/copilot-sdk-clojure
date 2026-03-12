@@ -13,7 +13,8 @@ Key features:
 - **Multi-session support** — Run multiple independent conversations concurrently
 - **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
 - **User input handling** — Handle `ask_user` requests from the agent
-- **Authentication options** — GitHub token auth or logged-in user
+- **Event callbacks** — Register `:on-event` handlers to receive all session events
+- **Child process mode** — Join existing sessions via `join-session` for extensions
 - **Authentication options** — GitHub token auth or logged-in user
 
 See [`examples/`](./examples/) for working code demonstrating common patterns.
@@ -133,19 +134,32 @@ See the [`examples/`](./examples/) directory for complete working examples:
 | Example | Difficulty | Description |
 |---------|------------|-------------|
 | [`basic_chat.clj`](./examples/basic_chat.clj) | Beginner | Simple Q&A conversation with multi-turn context |
+| [`helpers_query.clj`](./examples/helpers_query.clj) | Beginner | Stateless query API with blocking and streaming modes |
+| [`reasoning_effort.clj`](./examples/reasoning_effort.clj) | Beginner | Control reasoning effort level |
 | [`tool_integration.clj`](./examples/tool_integration.clj) | Intermediate | Custom tools that the LLM can invoke |
-| [`multi_agent.clj`](./examples/multi_agent.clj) | Advanced | Multi-agent orchestration with core.async |
 | [`config_skill_output.clj`](./examples/config_skill_output.clj) | Intermediate | Config dir, skills, and large output settings |
-| [`permission_bash.clj`](./examples/permission_bash.clj) | Intermediate | Permission handling with bash |
+| [`permission_bash.clj`](./examples/permission_bash.clj) | Intermediate | Permission handling with bash tool |
+| [`session_events.clj`](./examples/session_events.clj) | Intermediate | Monitor session state events and their flow |
+| [`session_resume.clj`](./examples/session_resume.clj) | Intermediate | Save and resume sessions by ID |
+| [`file_attachments.clj`](./examples/file_attachments.clj) | Intermediate | Send file attachments for analysis |
+| [`infinite_sessions.clj`](./examples/infinite_sessions.clj) | Intermediate | Infinite sessions with context compaction |
+| [`lifecycle_hooks.clj`](./examples/lifecycle_hooks.clj) | Intermediate | Lifecycle hooks for tool use, prompts, errors |
+| [`user_input.clj`](./examples/user_input.clj) | Intermediate | Handle ask_user requests from the agent |
+| [`metadata_api.clj`](./examples/metadata_api.clj) | Intermediate | List sessions, tools, and quota |
+| [`multi_agent.clj`](./examples/multi_agent.clj) | Advanced | Multi-agent orchestration with core.async |
+| [`ask_user_failure.clj`](./examples/ask_user_failure.clj) | Advanced | User cancellation (Esc) with event tracing |
+| [`mcp_local_server.clj`](./examples/mcp_local_server.clj) | Advanced | Model Context Protocol server integration |
+| [`byok_provider.clj`](./examples/byok_provider.clj) | Advanced | Bring Your Own Key provider configuration |
 
 Run examples:
 
 ```bash
 clojure -A:examples -M -m basic-chat
+clojure -A:examples -M -m helpers-query
 clojure -A:examples -M -m tool-integration
+clojure -A:examples -M -m session-events
 clojure -A:examples -M -m multi-agent
-clojure -A:examples -M -m config-skill-output
-clojure -A:examples -M -m permission-bash
+clojure -A:examples -M -m byok-provider
 ```
 
 See [`examples/README.md`](./examples/README.md) for detailed walkthroughs and explanations.

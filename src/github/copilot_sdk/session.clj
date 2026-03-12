@@ -38,7 +38,6 @@
 
 (defrecord CopilotSession
            [session-id
-            workspace-path
             client])     ; reference to owning client
 
 ;; -----------------------------------------------------------------------------
@@ -47,8 +46,9 @@
 
 (defn create-session
   "Create a new session. Internal use - called by client.
-   Initializes session state in client's atom and returns a CopilotSession handle."
-  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path config]}]
+   Initializes session state in client's atom and returns a CopilotSession handle.
+   If :on-event is provided, taps a subscriber that invokes the handler for each event."
+  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path on-event config]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -70,9 +70,42 @@
                            {:event-chan event-chan
                             :event-mult event-mult
                             :send-lock send-lock}))))
+    ;; If an on-event handler is provided, tap and forward events to it.
+    ;; Uses async/thread to avoid blocking core.async dispatch threads,
+    ;; since user handlers may perform blocking I/O.
+    (when on-event
+      (let [handler-ch (chan (async/sliding-buffer 1024))]
+        (tap event-mult handler-ch)
+        (async/thread
+          (loop []
+            (if-let [event (<!! handler-ch)]
+              (do
+                (try
+                  (on-event event)
+                  (catch Throwable t
+                    (log/warn "on-event handler threw: " (ex-message t))))
+                (recur))
+              ;; Channel closed — session torn down
+              nil)))))
     (log/debug "Session created: " session-id)
     ;; Return lightweight handle
-    (->CopilotSession session-id workspace-path client)))
+    (->CopilotSession session-id client)))
+
+(defn set-workspace-path!
+  "Update the workspace path in session state. Called after RPC response."
+  [client session-id workspace-path]
+  (when workspace-path
+    (swap! (:state client) assoc-in [:sessions session-id :workspace-path] workspace-path)))
+
+(defn remove-session!
+  "Remove a session from client state. Called on RPC failure during pre-registration."
+  [client session-id]
+  (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
+    (close! event-chan))
+  (swap! (:state client) (fn [s]
+                           (-> s
+                               (update :sessions dissoc session-id)
+                               (update :session-io dissoc session-id)))))
 
 (defn dispatch-event!
   "Dispatch an event to all subscribers via the mult. Called by client notification router.
@@ -711,7 +744,8 @@
 (defn workspace-path
   "Get the session workspace path when provided by the CLI."
   [session]
-  (:workspace-path session))
+  (let [{:keys [session-id client]} session]
+    (:workspace-path (session-state client session-id))))
 
 (defn get-current-model
   "Get the current model for this session.
