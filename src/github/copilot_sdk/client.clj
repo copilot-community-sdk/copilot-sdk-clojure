@@ -1192,18 +1192,18 @@
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
       true (assoc :env-value-mode "direct"))))
 
-(defn- finalize-session
-  "Create a CopilotSession from an RPC result and config."
-  [client result config]
-  (let [session-id (:session-id result)
-        workspace-path (:workspace-path result)]
-    (session/create-session client session-id
-                            {:tools (:tools config)
-                             :on-permission-request (:on-permission-request config)
-                             :on-user-input-request (:on-user-input-request config)
-                             :hooks (:hooks config)
-                             :workspace-path workspace-path
-                             :config config})))
+(defn- pre-register-session
+  "Create and register a session in client state before the RPC call.
+   This ensures early events (e.g. session.start) are not dropped.
+   Returns the CopilotSession handle."
+  [client session-id config]
+  (session/create-session client session-id
+                          {:tools (:tools config)
+                           :on-permission-request (:on-permission-request config)
+                           :on-user-input-request (:on-user-input-request config)
+                           :hooks (:hooks config)
+                           :on-event (:on-event config)
+                           :config config}))
 
 (defn create-session
   "Create a new conversation session.
@@ -1236,6 +1236,8 @@
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}
+   - :on-event           - Event handler (1-arg fn) registered before the RPC call.
+                           Guarantees early events like session.start are not missed.
    
    Returns a CopilotSession."
   [client config]
@@ -1243,11 +1245,18 @@
   (validate-session-config! config)
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-create-session-params config)
-        result (proto/send-request! connection-io "session.create" params)
-        session (finalize-session client result config)]
-    (log/info "Session created: " (:session-id result))
-    session))
+        session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
+        params (assoc (build-create-session-params config) :session-id session-id)
+        ;; Pre-register session before RPC so early events are captured
+        session (pre-register-session client session-id config)]
+    (try
+      (let [result (proto/send-request! connection-io "session.create" params)]
+        (session/set-workspace-path! client session-id (:workspace-path result))
+        (log/info "Session created: " session-id)
+        session)
+      (catch Throwable t
+        (session/remove-session! client session-id)
+        (throw t)))))
 
 (defn resume-session
   "Resume an existing session by ID.
@@ -1271,6 +1280,8 @@
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
    - :hooks              - Lifecycle hooks map
+   - :on-event           - Event handler (1-arg fn) registered before the RPC call.
+                           Guarantees early events like session.start are not missed.
    
    Returns a CopilotSession."
   [client session-id config]
@@ -1289,9 +1300,15 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         params (build-resume-session-params session-id config)
-        result (proto/send-request! connection-io "session.resume" params)
-        session (finalize-session client result config)]
-    session))
+        ;; Pre-register session before RPC so early events are captured
+        session (pre-register-session client session-id config)]
+    (try
+      (let [result (proto/send-request! connection-io "session.resume" params)]
+        (session/set-workspace-path! client session-id (:workspace-path result))
+        session)
+      (catch Throwable t
+        (session/remove-session! client session-id)
+        (throw t)))))
 
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
@@ -1316,19 +1333,26 @@
   (validate-session-config! config)
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-create-session-params config)
+        session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
+        params (assoc (build-create-session-params config) :session-id session-id)
+        ;; Pre-register session before RPC so early events are captured
+        session (pre-register-session client session-id config)
         rpc-ch (proto/send-request connection-io "session.create" params)]
     (go
-      (when-let [response (<! rpc-ch)]
-        (if-let [err (:error response)]
-          (do (log/error "<create-session RPC error: " err)
-              (ex-info (str "Failed to create session: " (:message err))
-                       {:error err}))
-          (let [result (:result response)
-                session (finalize-session client result config)]
-            (log/info "Session created (async): " (:session-id result))
-            session))))))
-
+      (let [response (<! rpc-ch)]
+        (if (nil? response)
+          ;; Channel closed without response — clean up pre-registered session
+          (do (session/remove-session! client session-id)
+              (ex-info "Session creation failed: RPC channel closed" {:session-id session-id}))
+          (if-let [err (:error response)]
+            (do (log/error "<create-session RPC error: " err)
+                (session/remove-session! client session-id)
+                (ex-info (str "Failed to create session: " (:message err))
+                         {:error err}))
+            (let [result (:result response)]
+              (session/set-workspace-path! client session-id (:workspace-path result))
+              (log/info "Session created (async): " session-id)
+              session)))))))
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
@@ -1364,16 +1388,53 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         params (build-resume-session-params session-id config)
+        ;; Pre-register session before RPC so early events are captured
+        session (pre-register-session client session-id config)
         rpc-ch (proto/send-request connection-io "session.resume" params)]
     (go
-      (when-let [response (<! rpc-ch)]
-        (if-let [err (:error response)]
-          (do (log/error "<resume-session RPC error: " err)
-              (ex-info (str "Failed to resume session: " (:message err))
-                       {:error err :session-id session-id}))
-          (let [result (:result response)
-                session (finalize-session client result config)]
-            session))))))
+      (let [response (<! rpc-ch)]
+        (if (nil? response)
+          ;; Channel closed without response — clean up pre-registered session
+          (do (session/remove-session! client session-id)
+              (ex-info "Session resume failed: RPC channel closed"
+                       {:session-id session-id}))
+          (if-let [err (:error response)]
+            (do (log/error "<resume-session RPC error: " err)
+                (session/remove-session! client session-id)
+                (ex-info (str "Failed to resume session: " (:message err))
+                         {:error err :session-id session-id}))
+            (let [result (:result response)]
+              (session/set-workspace-path! client session-id (:workspace-path result))
+              session)))))))
+(defn join-session
+  "Join the current foreground session from an extension running as a child process.
+
+   Reads the SESSION_ID environment variable and connects to the parent CLI process
+   via stdio. This is intended for extensions spawned by the Copilot CLI.
+
+   Config is the same as resume-session (`:on-permission-request` is **required**).
+   The `:disable-resume?` option defaults to true.
+
+   Returns a map with :client and :session keys. The caller is responsible for
+   stopping the client when done.
+
+   Throws if SESSION_ID is not set in the environment."
+  [config]
+  (let [session-id (System/getenv "SESSION_ID")]
+    (when-not session-id
+      (throw (ex-info (str "join-session is intended for extensions running as child processes "
+                           "of the Copilot CLI. SESSION_ID environment variable is not set.")
+                      {})))
+    (let [c (client {:is-child-process? true})
+          merged-config (cond-> config
+                          (not (contains? config :disable-resume?))
+                          (assoc :disable-resume? true))]
+      (try
+        (let [sess (resume-session c session-id merged-config)]
+          {:client c :session sess})
+        (catch Throwable t
+          (try (stop! c) (catch Throwable _))
+          (throw t))))))
 
 (defn list-sessions
   "List all available sessions.

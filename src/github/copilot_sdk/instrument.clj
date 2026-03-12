@@ -68,6 +68,10 @@
                :config ::specs/resume-session-config)
   :ret ::specs/events-ch)
 
+(s/fdef github.copilot-sdk.client/join-session
+  :args (s/cat :config ::specs/resume-session-config)
+  :ret (s/keys :req-un [::specs/client ::specs/session]))
+
 (s/fdef github.copilot-sdk.client/list-sessions
   :args (s/cat :client ::specs/client
                :filter (s/? (s/nilable ::specs/session-list-filter)))
@@ -273,6 +277,7 @@
                       github.copilot-sdk.client/<create-session
                       github.copilot-sdk.client/resume-session
                       github.copilot-sdk.client/<resume-session
+                      github.copilot-sdk.client/join-session
                       github.copilot-sdk.client/list-sessions
                       github.copilot-sdk.client/delete-session!
                       github.copilot-sdk.client/get-last-session-id
@@ -323,6 +328,7 @@
                       github.copilot-sdk.client/<create-session
                       github.copilot-sdk.client/resume-session
                       github.copilot-sdk.client/<resume-session
+                      github.copilot-sdk.client/join-session
                       github.copilot-sdk.client/list-sessions
                       github.copilot-sdk.client/delete-session!
                       github.copilot-sdk.client/get-last-session-id

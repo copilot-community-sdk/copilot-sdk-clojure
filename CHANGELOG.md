@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Added (upstream sync)
+- Session pre-registration: sessions are now created and registered in client state **before** the RPC call, preventing early events (e.g. `session.start`) from being dropped. Session IDs are generated client-side via `java.util.UUID/randomUUID` when not explicitly provided. On RPC failure, sessions are automatically cleaned up (upstream PR #664).
+- `:on-event` optional handler in `create-session` and `resume-session` configs — a 1-arity function receiving event maps, registered before the RPC call so no events are missed. Equivalent to calling `subscribe-events` immediately after creation, but executes earlier in the lifecycle (upstream PR #664).
+- `join-session` function — convenience for extensions running as child processes of the Copilot CLI. Reads `SESSION_ID` from environment, creates a child-process client, and resumes the session with `:disable-resume? true`. Returns `{:client ... :session ...}` (upstream PR #737).
+- `:copilot/system.notification` event type — structured notification events with `:kind` discriminator (`agent_completed`, `shell_completed`, `shell_detached_completed`) (upstream PR #737).
+
+### Changed
+- `CopilotSession` record no longer includes `workspace-path` as a field. Use `(workspace-path session)` accessor which reads from mutable session state. This enables the pre-registration flow where workspace-path is set after the RPC response.
 
 ## [0.1.32.0] - 2026-03-10
 ### Added (v0.1.32 sync)

@@ -291,6 +291,7 @@ Pass `:client-name` to identify your application in API requests (included in th
 | **Session** | A conversation with context, model, and tools |
 | **Tools** | Functions that Copilot can call in your code |
 | **Events** | Streaming updates via core.async channels |
+| **On-Event** | Optional callback receiving all session events, registered before RPC |
 | **Helpers** | High-level stateless API with automatic lifecycle management |
 
 ### Comparison with JavaScript SDK

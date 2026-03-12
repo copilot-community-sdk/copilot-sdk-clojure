@@ -86,6 +86,15 @@ or want to stop reading early without leaking session resources.
 
 Explicitly shutdown the shared client. Safe to call multiple times.
 
+### `client-info`
+
+```clojure
+(h/client-info)
+;; => {:client-opts {:log-level :info, ...} :connected? true}
+```
+
+Get information about the current shared client state. Returns `nil` if no shared client exists, otherwise a map with `:client-opts` and `:connected?` keys.
+
 ---
 
 ## CopilotClient
@@ -243,6 +252,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
+| `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
 
 #### `resume-session`
 
@@ -302,6 +312,26 @@ Same config options as `resume-session`. Safe for use inside `go` blocks. On RPC
                                                      {:on-permission-request copilot/approve-all}))]
     ;; use resumed session
     ))
+```
+
+#### `join-session`
+
+```clojure
+(copilot/join-session config)
+```
+
+Join the current foreground session from an extension running as a child process of the Copilot CLI. Reads the `SESSION_ID` environment variable, creates a child-process client, and resumes the session with `:disable-resume?` defaulting to `true`.
+
+Returns a map with `:client` and `:session` keys. The caller is responsible for stopping the client when done.
+
+Throws if `SESSION_ID` is not set in the environment.
+
+```clojure
+(let [{:keys [client session]} (copilot/join-session
+                                 {:on-permission-request copilot/approve-all
+                                  :tools [my-tool]})]
+  ;; use session...
+  (copilot/stop! client))
 ```
 
 #### `ping`
@@ -884,6 +914,15 @@ copilot/interaction-events
 ;;      :copilot/external_tool.requested}
 ```
 
+### `evt` — Event Keyword Helper
+
+```clojure
+(copilot/evt :session.info)      ;; => :copilot/session.info
+(copilot/evt :assistant.message) ;; => :copilot/assistant.message
+```
+
+Convert an unqualified event keyword to a namespace-qualified `:copilot/` keyword. Throws `IllegalArgumentException` if the keyword is not a valid event type.
+
 ### Event Reference
 
 | Event Type | Description |
@@ -934,6 +973,7 @@ copilot/interaction-events
 | `:copilot/hook.start` | Hook invocation started |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
+| `:copilot/system.notification` | System notification with structured `:kind` discriminator (e.g. `agent_completed`, `shell_completed`, `shell_detached_completed`) |
 | `:copilot/permission.requested` | Permission request initiated |
 | `:copilot/permission.completed` | Permission request resolved |
 | `:copilot/user_input.requested` | User input requested from agent |

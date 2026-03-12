@@ -60,6 +60,9 @@ clojure -A:examples -X session-events/run
 clojure -A:examples -X user-input/run
 clojure -A:examples -X user-input/run-simple
 
+# Ask user cancellation (simulates Esc)
+clojure -A:examples -X ask-user-failure/run
+
 # BYOK provider (requires API key, see example docs)
 OPENAI_API_KEY=sk-... clojure -A:examples -X byok-provider/run
 clojure -A:examples -X byok-provider/run :provider-name '"ollama"'
@@ -752,6 +755,59 @@ clojure -A:examples -X reasoning-effort/run
 
 # Higher reasoning effort
 clojure -A:examples -X reasoning-effort/run :effort '"high"'
+```
+
+---
+
+## Example 17: Ask User Failure (`ask_user_failure.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** User input cancellation, ask_user tool, error handling, event tracing
+
+Demonstrates what happens when a user cancels an `ask_user` request (simulating pressing Esc). This is a 1:1 port of the upstream `basic-example.ts`.
+
+### What It Demonstrates
+
+- Handling user cancellation by throwing from `:on-user-input-request`
+- Event tracing: subscribing to all events via `tap` on the session events mult
+- Graceful degradation when the user skips a question
+- Full event stream logging for debugging
+
+### Usage
+
+```bash
+clojure -A:examples -X ask-user-failure/run
+```
+
+### Code Walkthrough
+
+```clojure
+(require '[clojure.core.async :refer [chan tap go-loop <!]])
+(require '[github.copilot-sdk :as copilot])
+
+;; Track cancelled requests
+(let [cancelled-requests (atom [])]
+  (copilot/with-client [client]
+    (copilot/with-session [session client
+                           {:on-permission-request copilot/approve-all
+                            :model "claude-haiku-4.5"
+                            :on-user-input-request
+                            (fn [request _invocation]
+                              (swap! cancelled-requests conj request)
+                              ;; Throwing simulates Esc — the SDK sends a failure
+                              ;; result back to the ask_user tool automatically.
+                              (throw (RuntimeException. "User skipped question")))}]
+      ;; Subscribe to all events for tracing
+      (let [events-ch (chan 256)]
+        (tap (copilot/events session) events-ch)
+        (go-loop []
+          (when-let [event (<! events-ch)]
+            (println event)
+            (recur)))
+
+        (let [result (copilot/send-and-wait! session
+                       {:prompt "Use the ask_user tool to ask me to pick between 'Red' and 'Blue'."})]
+          (println "Response:" (get-in result [:data :content])))))))
 ```
 
 ---

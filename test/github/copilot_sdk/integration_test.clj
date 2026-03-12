@@ -215,7 +215,27 @@
                                        :model "gpt-5.2"})]
       (is (some? session))
       (is (string? (sdk/session-id session)))
-      (is (clojure.string/starts-with? (sdk/session-id session) "session-")))))
+      ;; Session ID is now generated client-side as a UUID
+      (is (re-matches #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                      (sdk/session-id session)))))
+  (testing "Create session with custom session-id"
+    (let [custom-id "my-custom-session-id"
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :session-id custom-id})]
+      (is (= custom-id (sdk/session-id session)))))
+  (testing "Create session with :on-event captures session.start"
+    (let [events (atom [])
+          got-start (promise)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-event (fn [evt]
+                                                   (swap! events conj evt)
+                                                   (when (= :copilot/session.start (:type evt))
+                                                     (deliver got-start true)))})]
+      (is (deref got-start 2000 false)
+          "on-event handler should receive session.start event within timeout")
+      (is (some #(= :copilot/session.start (:type %)) @events)))))
 
 (deftest test-list-sessions
   (testing "List sessions includes created sessions"
