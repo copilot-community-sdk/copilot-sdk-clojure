@@ -255,7 +255,7 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::prompt ::non-blank-string)
-(s/def ::attachment-type #{:file :directory :selection :github-reference})
+(s/def ::attachment-type #{:file :directory :selection :github-reference :blob})
 (s/def ::type ::attachment-type)
 (s/def ::path ::non-blank-string)
 (s/def ::file-path ::non-blank-string)
@@ -305,10 +305,19 @@
          #(string? (:state %))
          #(string? (:url %))))
 
+;; Blob attachment (base64-encoded inline data, received in user.message events)
+(s/def ::mime-type string?)
+(s/def ::blob-attachment
+  (s/and map?
+         #(= :blob (:type %))
+         #(string? (:data %))
+         #(string? (:mime-type %))))
+
 (s/def ::attachment
   (s/or :file-or-directory ::file-or-directory-attachment
         :selection ::selection-attachment
-        :github-reference ::github-reference-attachment))
+        :github-reference ::github-reference-attachment
+        :blob ::blob-attachment))
 
 (s/def ::attachments (s/coll-of ::attachment))
 (s/def ::mode #{:enqueue :immediate})
@@ -414,9 +423,21 @@
     :copilot/external_tool.requested})
 
 ;; Session events
+(s/def ::already-in-use? boolean?)
+(s/def ::host-type string?)
+(s/def ::head-commit string?)
+(s/def ::base-commit string?)
+
 (s/def ::session.start-data
   (s/keys :req-un [::session-id]
-          :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model]))
+          :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model
+                   ::reasoning-effort ::already-in-use? ::host-type ::head-commit ::base-commit]))
+
+(s/def ::event-count nat-int?)
+(s/def ::session.resume-data
+  (s/keys :req-un [::event-count]
+          :opt-un [::selected-model ::reasoning-effort ::already-in-use?
+                   ::host-type ::head-commit ::base-commit]))
 
 (s/def ::session.error-data
   (s/keys :req-un [::error-type ::message]
@@ -492,6 +513,14 @@
 (s/def ::session.context_changed-data
   (s/keys :req-un [::cwd]
           :opt-un [::git-root ::repository ::branch]))
+
+;; Session model change event
+(s/def ::previous-model (s/nilable string?))
+(s/def ::new-model string?)
+(s/def ::previous-reasoning-effort string?)
+(s/def ::session.model_change-data
+  (s/keys :req-un [::new-model]
+          :opt-un [::previous-model ::previous-reasoning-effort ::reasoning-effort]))
 
 ;; Session mode changed event
 (s/def ::previous-mode string?)
