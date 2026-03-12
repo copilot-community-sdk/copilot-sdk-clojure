@@ -2,6 +2,8 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [0.1.32.0] - 2026-03-12
 ### Added (upstream sync)
 - Session pre-registration: sessions are now created and registered in client state **before** the RPC call, preventing early events (e.g. `session.start`) from being dropped. Session IDs are generated client-side via `java.util.UUID/randomUUID` when not explicitly provided. On RPC failure, sessions are automatically cleaned up (upstream PR #664).
 - `:on-event` optional handler in `create-session` and `resume-session` configs — a 1-arity function receiving event maps, registered before the RPC call so no events are missed. Equivalent to calling `subscribe-events` immediately after creation, but executes earlier in the lifecycle (upstream PR #664).
@@ -299,6 +301,7 @@ All notable changes to this project will be documented in this file. This change
 - cheshire/cheshire 5.13.0
 
 [Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.32.0...HEAD
+[0.1.32.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.32.0...v0.1.32.0
 [0.1.32.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.1...v0.1.32.0
 [0.1.30.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.0...v0.1.30.1
 [0.1.30.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.29.0...v0.1.30.0
