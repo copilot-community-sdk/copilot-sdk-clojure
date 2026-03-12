@@ -226,13 +226,16 @@
       (is (= custom-id (sdk/session-id session)))))
   (testing "Create session with :on-event captures session.start"
     (let [events (atom [])
+          got-start (promise)
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
-                                       :on-event (fn [evt] (swap! events conj evt))})]
-      ;; Give the on-event handler time to receive the session.start event
-      (Thread/sleep 200)
-      (is (some #(= :copilot/session.start (:type %)) @events)
-          "on-event handler should receive session.start event"))))
+                                       :on-event (fn [evt]
+                                                   (swap! events conj evt)
+                                                   (when (= :copilot/session.start (:type evt))
+                                                     (deliver got-start true)))})]
+      (is (deref got-start 2000 false)
+          "on-event handler should receive session.start event within timeout")
+      (is (some #(= :copilot/session.start (:type %)) @events)))))
 
 (deftest test-list-sessions
   (testing "List sessions includes created sessions"

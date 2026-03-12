@@ -73,6 +73,8 @@
     ;; If an on-event handler is provided, tap and forward events to it.
     ;; Uses async/thread to avoid blocking core.async dispatch threads,
     ;; since user handlers may perform blocking I/O.
+    ;; The handler channel uses a sliding buffer — if the handler cannot keep up
+    ;; with the event rate, oldest unprocessed events are silently dropped.
     (when on-event
       (let [handler-ch (chan (async/sliding-buffer 1024))]
         (tap event-mult handler-ch)
@@ -83,7 +85,9 @@
                 (try
                   (on-event event)
                   (catch Throwable t
-                    (log/warn "on-event handler threw: " (ex-message t))))
+                    (log/warn t "on-event handler threw"
+                              {:session-id session-id
+                               :event-type (:type event)})))
                 (recur))
               ;; Channel closed — session torn down
               nil)))))

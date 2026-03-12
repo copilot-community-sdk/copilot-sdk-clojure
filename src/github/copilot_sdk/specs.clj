@@ -205,7 +205,8 @@
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
 
-;; Event handler (1-arity fn receiving event map)
+;; Event handler — 1-arity fn receiving event map. Uses fn? for consistency
+;; with ::on-permission-request and ::on-user-input-request specs.
 (s/def ::on-event fn?)
 
 (s/def ::client-name ::non-blank-string)
