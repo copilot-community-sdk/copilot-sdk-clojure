@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file. This change
 ### Added
 - `:no-result` permission outcome — extensions can attach to sessions without actively answering permission requests by returning `{:kind :no-result}` from their `:on-permission-request` handler. On v3 protocol, the `handlePendingPermissionRequest` RPC is skipped; on v2, an error is propagated to the CLI (upstream PR #802).
 
+### Added (v0.1.33 sync)
+- New event data fields from upstream codegen update (upstream PR #796):
+  - `session.start` event: `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit` optional fields now in spec
+  - `session.resume` event: new `::session.resume-data` spec with `:event-count`, `:selected-model`, `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit`
+  - `session.model_change` event: new `::session.model_change-data` spec with `:new-model`, `:previous-model`, `:reasoning-effort`, `:previous-reasoning-effort`
+  - `user.message` event: new `:blob` attachment type with `:data` (base64), `:mime-type`, optional `:display-name`
+
 ## [0.1.32.0] - 2026-03-12
 ### Added (upstream sync)
 - Session pre-registration: sessions are now created and registered in client state **before** the RPC call, preventing early events (e.g. `session.start`) from being dropped. Session IDs are generated client-side via `java.util.UUID/randomUUID` when not explicitly provided. On RPC failure, sessions are automatically cleaned up (upstream PR #664).
