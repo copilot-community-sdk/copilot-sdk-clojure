@@ -78,10 +78,11 @@
 (s/def ::tool-parameters (s/nilable ::json-schema))
 (s/def ::tool-handler fn?)
 (s/def ::overrides-built-in-tool boolean?)
+(s/def ::skip-permission? boolean?)
 
 (s/def ::tool
   (s/keys :req-un [::tool-name ::tool-handler]
-          :opt-un [::tool-description ::tool-parameters ::overrides-built-in-tool]))
+          :opt-un [::tool-description ::tool-parameters ::overrides-built-in-tool ::skip-permission?]))
 
 (s/def ::tools (s/coll-of ::tool))
 
@@ -243,6 +244,19 @@
   (closed-keys
    (s/keys :req-un [::on-permission-request]
            :opt-un [::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+                    ::provider ::streaming?
+                    ::mcp-servers ::custom-agents ::config-dir ::skill-directories
+                    ::disabled-skills ::infinite-sessions ::reasoning-effort
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-event])
+   resume-session-config-keys))
+
+;; join-session config: same as resume-session-config but :on-permission-request is optional.
+;; When omitted, join-session defaults to a handler that returns {:kind :no-result}.
+(s/def ::join-session-config
+  (closed-keys
+   (s/keys :opt-un [::on-permission-request
+                    ::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort

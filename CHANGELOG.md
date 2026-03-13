@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Added (v0.1.32 sync)
+- `:skip-permission?` option on tool definitions — when `true`, the tool executes without triggering a permission prompt. Sent as `skipPermission: true` in the wire protocol (upstream PR #808).
+
+### Changed (v0.1.32 sync)
+- `join-session` now makes `:on-permission-request` **optional**. When omitted, a default handler returns `{:kind :no-result}`, leaving any pending permission request unanswered. This matches the upstream `JoinSessionConfig` where `onPermissionRequest` is optional (upstream PR #802).
+- `:auto-restart?` client option is **deprecated** and has no effect. The auto-restart behavior has been removed across all official SDKs. The option is retained for backward compatibility but will be removed in a future release (upstream PR #803).
+
 ### Added
 - `:no-result` permission outcome — extensions can attach to sessions without actively answering permission requests by returning `{:kind :no-result}` from their `:on-permission-request` handler. On v3 protocol, the `handlePendingPermissionRequest` RPC is skipped; on v2, an error is propagated to the CLI (upstream PR #802).
 
