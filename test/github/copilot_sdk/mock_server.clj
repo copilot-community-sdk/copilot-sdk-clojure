@@ -300,6 +300,7 @@
                  "session.model.getCurrent" (handle-session-model-get-current server params)
                  "session.model.switchTo" (handle-session-model-switch-to server params)
                  "session.log" (handle-session-log server params)
+                 "session.permissions.handlePendingPermissionRequest" {:ok true}
                  (throw (ex-info "Method not found" {:code -32601 :method method})))]
     {:jsonrpc "2.0"
      :id (:id msg)
