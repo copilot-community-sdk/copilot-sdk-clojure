@@ -562,7 +562,8 @@
   #{:approved
     :denied-by-rules
     :denied-no-approval-rule-and-could-not-request-from-user
-    :denied-interactively-by-user})
+    :denied-interactively-by-user
+    :no-result})
 
 (s/def ::permission-result
   (s/keys :req-un [::permission-result-kind]

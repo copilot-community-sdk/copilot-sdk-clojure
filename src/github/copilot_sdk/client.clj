@@ -247,7 +247,9 @@
 (defn- handle-v3-permission-requested!
   "Handle v3 permission.requested broadcast event.
    Calls the session's permission handler and responds via the
-   session.permissions.handlePendingPermissionRequest RPC method."
+   session.permissions.handlePendingPermissionRequest RPC method.
+   When the handler returns :no-result, the RPC call is skipped
+   so the extension does not answer this permission request."
   [client session-id event]
   (let [data (:data event)
         request-id (:request-id data)
@@ -257,13 +259,15 @@
         (try
           (let [perm-response (<! (session/handle-permission-request!
                                    client session-id permission-request))
-                result (:result perm-response)
-                conn (:connection-io @(:state client))]
-            (when conn
-              (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
-                                     {:session-id session-id
-                                      :request-id request-id
-                                      :result result}))))
+                result (:result perm-response)]
+            ;; :no-result — extension declines to answer; skip the RPC call
+            (when-not (= :no-result result)
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
+                                         {:session-id session-id
+                                          :request-id request-id
+                                          :result result}))))))
           (catch Exception e
             (log/debug "v3 permission request error for " request-id ": " (ex-message e))
             (try
@@ -495,9 +499,16 @@
                                       (let [{:keys [session-id permission-request]} params]
                                         (if-not (get-in @(:state client) [:sessions session-id])
                                           {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}
-                                          (let [result (<! (session/handle-permission-request! client session-id permission-request))]
-                                            (log/debug "Permission response for session " session-id ": " result)
-                                            {:result result})))
+                                          (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
+                                                result (:result perm-response)]
+                                            (if (= :no-result result)
+                                              ;; no-result must propagate as an error on v2 protocol
+                                              ;; so the CLI knows no answer was given (matches upstream -32603)
+                                              {:error {:code -32603
+                                                       :message "Permission handler returned no-result on protocol v2"}}
+                                              (do
+                                                (log/debug "Permission response for session " session-id ": " result)
+                                                {:result perm-response})))))
 
                                       ;; User input request (PR #269)
                                       "userInput.request"

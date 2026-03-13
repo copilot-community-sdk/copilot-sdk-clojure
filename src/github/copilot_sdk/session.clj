@@ -196,7 +196,13 @@
    :mixed))
 
 (defn handle-permission-request!
-  "Handle an incoming permission request. Returns a channel with the result."
+  "Handle an incoming permission request. Returns a channel with the result.
+   When the handler returns `{:kind :no-result}`, the result is
+   `{:result :no-result}` — callers must check for this sentinel:
+   - **v3 (broadcast path):** skip the `handlePendingPermissionRequest` RPC
+     entirely so the extension does not answer this permission request.
+   - **v2 (request-handler path):** propagate as a JSON-RPC internal error
+     (code -32603) so the CLI knows the request was not handled."
   [client session-id request]
   (async/thread-call
    (fn []
@@ -210,8 +216,17 @@
                           (<!! result)
                           result)]
              (cond
+               ;; no-result: extension doesn't answer this permission request
+               (and (map? result) (= :no-result (:kind result)))
+               {:result :no-result}
+
                (and (map? result) (contains? result :kind))
                {:result result}
+
+               ;; Wrapped form: {:result {:kind ...}}
+               (and (map? result) (contains? result :result)
+                    (map? (:result result)) (= :no-result (:kind (:result result))))
+               {:result :no-result}
 
                (and (map? result) (contains? result :result)
                     (map? (:result result)) (contains? (:result result) :kind))
