@@ -908,6 +908,36 @@
       (is (= :approved (get-in approved [:result :result :kind])))
       (is (= :denied-by-rules (get-in denied [:result :result :kind]))))))
 
+(deftest test-permission-no-result-v2
+  (testing "no-result permission handler returns error on v2 protocol"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:kind :no-result})})
+          session-id (sdk/session-id session)
+          handler (get-in @(:state *test-client*) [:connection :request-handler])
+          response (<!! (handler "permission.request"
+                                 {:session-id session-id
+                                  :permission-request {:permission-kind "shell"
+                                                       :full-command-text "echo test"}}))]
+      ;; v2: no-result should propagate as a JSON-RPC internal error
+      (is (= -32603 (get-in response [:error :code]))
+          "no-result on v2 should produce a -32603 internal error")))
+
+  (testing "wrapped no-result permission handler returns error on v2 protocol"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:result {:kind :no-result}})})
+          session-id (sdk/session-id session)
+          handler (get-in @(:state *test-client*) [:connection :request-handler])
+          response (<!! (handler "permission.request"
+                                 {:session-id session-id
+                                  :permission-request {:permission-kind "shell"
+                                                       :full-command-text "echo test"}}))]
+      (is (= -32603 (get-in response [:error :code]))
+          "wrapped no-result on v2 should also produce a -32603 error"))))
+
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
 ;; -----------------------------------------------------------------------------
