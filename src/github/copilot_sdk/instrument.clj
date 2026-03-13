@@ -69,7 +69,7 @@
   :ret ::specs/events-ch)
 
 (s/fdef github.copilot-sdk.client/join-session
-  :args (s/cat :config ::specs/resume-session-config)
+  :args (s/cat :config ::specs/join-session-config)
   :ret (s/keys :req-un [::specs/client ::specs/session]))
 
 (s/fdef github.copilot-sdk.client/list-sessions
