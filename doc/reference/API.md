@@ -120,7 +120,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:use-stdio?` | boolean | `true` | Use stdio transport instead of TCP |
 | `:log-level` | keyword | `:info` | One of `:none` `:error` `:warning` `:info` `:debug` `:all` |
 | `:auto-start?` | boolean | `true` | Auto-start server on first operation |
-| `:auto-restart?` | boolean | `true` | Auto-restart on crash |
+| `:auto-restart?` | boolean | `true` | **Deprecated** — has no effect; auto-restart behavior has been removed from all official SDKs. Retained for backward compatibility only. |
 | `:notification-queue-size` | number | `4096` | Max queued protocol notifications |
 | `:router-queue-size` | number | `4096` | Max queued non-session notifications |
 | `:tool-timeout-ms` | number | `120000` | Timeout for tool handlers returning channels |
@@ -130,6 +130,8 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
+| `:telemetry` | map | nil | OpenTelemetry config. Keys: `:otlp-endpoint` (string), `:file-path` (string), `:exporter-type` (string), `:source-name` (string), `:capture-content?` (boolean). Configures OTel env vars on the spawned CLI process. |
+| `:on-get-trace-context` | fn | nil | Zero-arg fn returning a W3C Trace Context map `{:traceparent "..." :tracestate "..."}`. Enables distributed tracing — trace context is injected into `session.create`, `session.resume`, and `session.send` RPCs. |
 
 ### Methods
 
@@ -239,7 +241,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options` |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools` |
 | `:custom-agents` | vector | Custom agent configs |
-| `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
+| `:on-permission-request` | fn | Permission handler function. Use `copilot/approve-all` to approve everything. When omitted, a default handler returns `{:kind :no-result}` (permission request is left unanswered). |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
@@ -326,10 +328,18 @@ Returns a map with `:client` and `:session` keys. The caller is responsible for 
 
 Throws if `SESSION_ID` is not set in the environment.
 
+`:on-permission-request` is optional — when omitted, a default handler returns `{:kind :no-result}`, leaving any pending permission request unanswered (which is appropriate for read-only or observing extensions).
+
 ```clojure
+;; With permission handler
 (let [{:keys [client session]} (copilot/join-session
                                  {:on-permission-request copilot/approve-all
                                   :tools [my-tool]})]
+  ;; use session...
+  (copilot/stop! client))
+
+;; Without permission handler (read-only extension)
+(let [{:keys [client session]} (copilot/join-session {:tools [my-tool]})]
   ;; use session...
   (copilot/stop! client))
 ```
@@ -630,6 +640,7 @@ Send a message to the session. Returns immediately with the message ID.
 | `:directory` | `:type`, `:path` | `:display-name`, `:line-range` | Directory attachment |
 | `:selection` | `:type`, `:file-path`, `:display-name` | `:selection-range`, `:text` | Code selection attachment |
 | `:github-reference` | `:type`, `:number`, `:title`, `:reference-type`, `:state`, `:url` | — | GitHub issue, PR, or discussion reference |
+| `:blob` | `:type`, `:data`, `:mime-type` | `:display-name` | Raw binary attachment. `:data` is a base64-encoded string. |
 
 `:line-range` is a map with `:start` and `:end` line numbers (zero-based) to restrict the attachment to a range of lines:
 
@@ -791,14 +802,20 @@ Get the current model for this session. Returns the model ID string, or nil if n
 ```clojure
 (copilot/switch-model! session "claude-sonnet-4.5")
 ;; => "claude-sonnet-4.5"
+(copilot/switch-model! session "claude-sonnet-4.5" {:reasoning-effort "high"})
+;; => "claude-sonnet-4.5"
 ```
 
 Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
+
+Optional second argument is an opts map with `:reasoning-effort` — one of `"low"`, `"medium"`, `"high"`, or `"xhigh"`.
 
 #### `set-model!`
 
 ```clojure
 (copilot/set-model! session "claude-sonnet-4.5")
+;; => "claude-sonnet-4.5"
+(copilot/set-model! session "claude-sonnet-4.5" {:reasoning-effort "high"})
 ;; => "claude-sonnet-4.5"
 ```
 
@@ -927,12 +944,12 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 
 | Event Type | Description |
 |------------|-------------|
-| `:copilot/session.start` | Session created |
-| `:copilot/session.resume` | Session resumed |
+| `:copilot/session.start` | Session created; data includes optional `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit` |
+| `:copilot/session.resume` | Session resumed; data includes `:event-count`, `:selected-model`, and optional `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit` |
 | `:copilot/session.error` | Session error occurred |
 | `:copilot/session.idle` | Session finished processing |
 | `:copilot/session.info` | Informational session update |
-| `:copilot/session.model_change` | Session model changed |
+| `:copilot/session.model_change` | Session model changed; data: `{:new-model "..." :previous-model "..." :reasoning-effort "..." :previous-reasoning-effort "..."}` |
 | `:copilot/session.handoff` | Session handed off to another agent |
 | `:copilot/session.usage_info` | Token usage information |
 | `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
@@ -1111,6 +1128,22 @@ Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `
                   :required ["pattern"]}
      :handler (fn [{:keys [pattern]} _invocation]
                 (copilot/result-success (my-custom-grep pattern)))}))
+```
+
+**Skipping permission prompts:**
+
+Set `:skip-permission? true` to execute a tool without triggering a permission prompt. Use this for tools that are inherently safe and should not require user approval:
+
+```clojure
+(def safe-lookup
+  (copilot/define-tool "lookup_status"
+    {:description "Look up current status (read-only, safe)"
+     :skip-permission? true
+     :parameters {:type "object"
+                  :properties {:id {:type "string"}}
+                  :required ["id"]}
+     :handler (fn [{:keys [id]} _invocation]
+                (copilot/result-success (fetch-status id)))}))
 ```
 
 **Handler return values:**
