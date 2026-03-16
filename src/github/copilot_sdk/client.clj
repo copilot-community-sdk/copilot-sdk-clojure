@@ -19,13 +19,16 @@
 
 (defn- get-trace-context
   "Call the user-provided trace context provider. Returns {} when no provider
-   is configured or returns a non-map value."
+   is configured or returns a non-map value. Only :traceparent and :tracestate
+   keys are retained to prevent accidental override of RPC params."
   [provider]
   (if-not provider
     {}
     (try
       (let [ctx (provider)]
-        (if (map? ctx) ctx {}))
+        (if (map? ctx)
+          (select-keys ctx [:traceparent :tracestate])
+          {}))
       (catch Throwable _
         {}))))
 

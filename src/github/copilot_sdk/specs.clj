@@ -282,9 +282,6 @@
 
 (s/def ::prompt ::non-blank-string)
 (s/def ::attachment-type #{:file :directory :selection :github-reference})
-
-;; Inbound attachment types include :blob (received in events but not sent by SDK)
-(s/def ::inbound-attachment-type #{:file :directory :selection :github-reference :blob})
 (s/def ::type ::attachment-type)
 (s/def ::path ::non-blank-string)
 (s/def ::file-path ::non-blank-string)
@@ -335,12 +332,15 @@
          #(string? (:url %))))
 
 ;; Blob attachment (base64-encoded inline data, received in user.message events)
-(s/def ::data string?)
+;; Note: blob uses manual predicates for :data/:mime-type to avoid conflicting with
+;; ::data used as event data (map?) in ::session-event.
 (s/def ::mime-type string?)
 (s/def ::blob-attachment
-  (s/and (s/keys :req-un [::type ::data ::mime-type]
-                 :opt-un [::display-name])
-         #(= :blob (:type %))))
+  (s/and map?
+         #(= :blob (:type %))
+         #(string? (:data %))
+         #(string? (:mime-type %))
+         #(or (nil? (:display-name %)) (string? (:display-name %)))))
 
 (s/def ::attachment
   (s/or :file-or-directory ::file-or-directory-attachment
@@ -355,6 +355,7 @@
         :blob ::blob-attachment))
 
 (s/def ::attachments (s/coll-of ::attachment))
+(s/def ::inbound-attachments (s/coll-of ::inbound-attachment))
 (s/def ::mode #{:enqueue :immediate})
 
 (s/def ::send-options
@@ -483,9 +484,12 @@
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 (s/def ::interaction-id string?)
 
+;; user.message event data — attachments can include blobs (inbound-only types)
 (s/def ::user.message-data
-  (s/keys :req-un [::content]
-          :opt-un [::transformed-content ::attachments ::source ::agent-mode ::interaction-id]))
+  (s/and (s/keys :req-un [::content]
+                 :opt-un [::transformed-content ::source ::agent-mode ::interaction-id])
+         #(or (not (contains? % :attachments))
+              (s/valid? ::inbound-attachments (:attachments %)))))
 
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
