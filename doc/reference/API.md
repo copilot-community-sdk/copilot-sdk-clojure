@@ -1318,6 +1318,9 @@ fields like `:full-command-text`, `:commands`, and `:possible-paths`.
 
 ;; Deny after user interaction (optional feedback)
 {:kind :denied-interactively-by-user :feedback "Not allowed"}
+
+;; Extension declines to answer (another handler may respond)
+{:kind :no-result}
 ```
 
 #### `approve-all`

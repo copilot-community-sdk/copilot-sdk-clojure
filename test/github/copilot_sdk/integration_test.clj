@@ -908,6 +908,99 @@
       (is (= :approved (get-in approved [:result :result :kind])))
       (is (= :denied-by-rules (get-in denied [:result :result :kind]))))))
 
+(deftest test-permission-no-result-v2
+  (testing "no-result permission handler returns error on v2 protocol"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:kind :no-result})})
+          session-id (sdk/session-id session)
+          handler (get-in @(:state *test-client*) [:connection :request-handler])
+          response (<!! (handler "permission.request"
+                                 {:session-id session-id
+                                  :permission-request {:permission-kind "shell"
+                                                       :full-command-text "echo test"}}))]
+      ;; v2: no-result should propagate as a JSON-RPC internal error
+      (is (= -32603 (get-in response [:error :code]))
+          "no-result on v2 should produce a -32603 internal error")))
+
+  (testing "wrapped no-result permission handler returns error on v2 protocol"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:result {:kind :no-result}})})
+          session-id (sdk/session-id session)
+          handler (get-in @(:state *test-client*) [:connection :request-handler])
+          response (<!! (handler "permission.request"
+                                 {:session-id session-id
+                                  :permission-request {:permission-kind "shell"
+                                                       :full-command-text "echo test"}}))]
+      (is (= -32603 (get-in response [:error :code]))
+          "wrapped no-result on v2 should also produce a -32603 error"))))
+
+(deftest test-permission-no-result-v3
+  (testing "v3 no-result skips handlePendingPermissionRequest RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:kind :no-result})})
+          session-id (sdk/session-id session)]
+      ;; Force protocol v3 so the broadcast path is active
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      ;; Reset captured requests after session creation
+      (reset! requests [])
+      ;; Inject a v3 permission.requested broadcast event
+      (mock/send-session-event! *mock-server* session-id
+                                "permission.requested"
+                                {:requestId "perm-req-1"
+                                 :permissionRequest {:permissionKind "shell"
+                                                     :fullCommandText "echo test"}})
+      ;; Allow async handler to process
+      (Thread/sleep 500)
+      ;; The handler returned no-result — no handlePendingPermissionRequest RPC
+      (is (empty? (filter #(= "session.permissions.handlePendingPermissionRequest"
+                               (:method %))
+                          @requests))
+          "no-result should skip the handlePendingPermissionRequest RPC"))))
+
+(deftest test-permission-approved-v3
+  (testing "v3 approved handler sends handlePendingPermissionRequest RPC"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.permissions.handlePendingPermissionRequest" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      ;; Force protocol v3
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      ;; Reset captured requests after session creation
+      (reset! requests [])
+      ;; Inject a v3 permission.requested broadcast event
+      (mock/send-session-event! *mock-server* session-id
+                                "permission.requested"
+                                {:requestId "perm-req-2"
+                                 :permissionRequest {:permissionKind "shell"
+                                                     :fullCommandText "echo test"}})
+      ;; Wait for the RPC to arrive (up to 5 seconds)
+      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      ;; The handler approved — should send handlePendingPermissionRequest RPC
+      (let [perm-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                   (:method %))
+                              @requests)]
+        (is (= 1 (count perm-rpcs))
+            "approved result should send handlePendingPermissionRequest RPC")
+        (when (seq perm-rpcs)
+          (is (= "perm-req-2" (:requestId (:params (first perm-rpcs))))
+              "RPC should include the correct request-id"))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
 ;; -----------------------------------------------------------------------------
