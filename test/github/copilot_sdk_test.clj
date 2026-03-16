@@ -195,7 +195,10 @@
                       sentinel)]
         (let [result (copilot/set-model! :fake-session "gpt-4.1")]
           (is (some? @called-args) "switch-model! should have been called")
-          (is (= [:fake-session "gpt-4.1"] (vec @called-args)))
+          (is (= 3 (count @called-args)) "switch-model! receives 3 args (session, model-id, nil opts)")
+          (is (= :fake-session (first @called-args)))
+          (is (= "gpt-4.1" (second @called-args)))
+          (is (nil? (nth @called-args 2)) "opts should be nil when not provided")
           (is (= sentinel result)))))))
 
 ;; =============================================================================

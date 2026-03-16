@@ -162,7 +162,7 @@
 
 (defn handle-tool-call!
   "Handle an incoming tool call request. Returns a channel with the result wrapper."
-  [client session-id tool-call-id tool-name arguments]
+  [client session-id tool-call-id tool-name arguments & {:keys [traceparent tracestate]}]
   (async/thread-call
    (fn []
      (let [handler (get-in (session-state client session-id) [:tool-handlers tool-name])
@@ -173,10 +173,12 @@
                    :error (str "tool '" tool-name "' not supported")
                    :tool-telemetry {}}}
          (try
-           (let [invocation {:session-id session-id
-                             :tool-call-id tool-call-id
-                             :tool-name tool-name
-                             :arguments arguments}
+           (let [invocation (cond-> {:session-id session-id
+                                     :tool-call-id tool-call-id
+                                     :tool-name tool-name
+                                     :arguments arguments}
+                              traceparent (assoc :traceparent traceparent)
+                              tracestate (assoc :tracestate tracestate))
                  result (handler arguments invocation)
                  result (if (channel? result)
                           (let [timeout-ch (async/timeout timeout-ms)
@@ -341,8 +343,14 @@
     (let [conn (connection-io client)
           wire-attachments (when (:attachments opts)
                              (util/attachments->wire (:attachments opts)))
+          trace-ctx (when-let [provider (:on-get-trace-context client)]
+                      (try (let [ctx (provider)]
+                             (when (map? ctx)
+                               (select-keys ctx [:traceparent :tracestate])))
+                           (catch Throwable _ nil)))
           params (cond-> {:session-id session-id
                           :prompt (:prompt opts)}
+                   trace-ctx (merge trace-ctx)
                    wire-attachments (assoc :attachments wire-attachments)
                    (:mode opts) (assoc :mode (name (:mode opts))))
           result (proto/send-request! conn "session.send" params)
@@ -541,8 +549,14 @@
             (let [conn (connection-io client)
                   wire-attachments (when (:attachments opts)
                                      (util/attachments->wire (:attachments opts)))
+                  trace-ctx (when-let [provider (:on-get-trace-context client)]
+                              (try (let [ctx (provider)]
+                                     (when (map? ctx)
+                                       (select-keys ctx [:traceparent :tracestate])))
+                                   (catch Throwable _ nil)))
                   params (cond-> {:session-id session-id
                                   :prompt (:prompt opts)}
+                           trace-ctx (merge trace-ctx)
                            wire-attachments (assoc :attachments wire-attachments)
                            (:mode opts) (assoc :mode (name (:mode opts))))
                   response-ch (proto/send-request conn "session.send" params)
@@ -781,20 +795,26 @@
 (defn switch-model!
   "Switch the model for this session.
    The new model takes effect for the next message. Conversation history is preserved.
+
+   Optional opts map:
+   - :reasoning-effort - Reasoning effort level for the new model (\"low\", \"medium\", \"high\", \"xhigh\")
+
    Returns the new model ID string, or nil."
-  [session model-id]
-  (let [{:keys [session-id client]} session
-        conn (connection-io client)
-        result (proto/send-request! conn "session.model.switchTo"
-                                    {:sessionId session-id
-                                     :modelId model-id})]
-    (:model-id result)))
+  ([session model-id] (switch-model! session model-id nil))
+  ([session model-id opts]
+   (let [{:keys [session-id client]} session
+         conn (connection-io client)
+         params (cond-> {:sessionId session-id
+                         :modelId model-id}
+                  (:reasoning-effort opts) (assoc :reasoningEffort (:reasoning-effort opts)))
+         result (proto/send-request! conn "session.model.switchTo" params)]
+     (:model-id result))))
 
 (defn set-model!
   "Alias for switch-model!. Matches the upstream SDK's setModel() API.
    See switch-model! for details."
-  [session model-id]
-  (switch-model! session model-id))
+  ([session model-id] (switch-model! session model-id nil))
+  ([session model-id opts] (switch-model! session model-id opts)))
 
 (defn log!
   "Log a message to the session timeline.

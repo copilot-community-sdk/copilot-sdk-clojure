@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file. This change
 ### Added
 - `:no-result` permission outcome — extensions can attach to sessions without actively answering permission requests by returning `{:kind :no-result}` from their `:on-permission-request` handler. On v3 protocol, the `handlePendingPermissionRequest` RPC is skipped; on v2, an error is propagated to the CLI (upstream PR #802).
 
+### Added (v0.1.33 sync)
+- `:skip-permission?` option on tool definitions — when `true`, the tool executes without triggering a permission prompt. Sent as `skipPermission: true` in the wire protocol (upstream PR #808).
+- OpenTelemetry support: new `:telemetry` client option (map with `:otlp-endpoint`, `:file-path`, `:exporter-type`, `:source-name`, `:capture-content?`) configures OTel environment variables on the spawned CLI process. New `:on-get-trace-context` client option (0-arity fn returning `{:traceparent ... :tracestate ...}`) enables W3C Trace Context propagation into `session.create`, `session.resume`, and `session.send` RPCs (upstream PR #785).
+- Tool invocations now receive `:traceparent` and `:tracestate` fields in the invocation context map when the CLI provides them (upstream PR #785).
+- Optional `:reasoning-effort` parameter in `switch-model!` and `set-model!` — pass `{:reasoning-effort "high"}` as a third argument to set reasoning effort when switching models (upstream PR #712).
+- New event data fields from upstream codegen update (upstream PR #796):
+  - `session.start` event: `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit` optional fields
+  - `session.resume` event: new `::session.resume-data` spec with `:event-count`, `:selected-model`, `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit`
+  - `session.model_change` event: new `::session.model_change-data` spec with `:new-model`, `:previous-model`, `:reasoning-effort`, `:previous-reasoning-effort`
+  - `user.message` event: new `:blob` attachment type with `:data` (base64), `:mime-type`, optional `:display-name`
+
+### Changed (v0.1.33 sync)
+- `join-session` now makes `:on-permission-request` **optional**. When omitted, a default handler returns `{:kind :no-result}`, leaving any pending permission request unanswered. This matches the upstream `JoinSessionConfig` where `onPermissionRequest` is optional (upstream PR #802).
+- `:auto-restart?` client option is **deprecated** and has no effect. The auto-restart/reconnect behavior has been removed across all official SDKs. The option is retained for backward compatibility but will be removed in a future release (upstream PR #803).
+
 ## [0.1.32.0] - 2026-03-12
 ### Added (upstream sync)
 - Session pre-registration: sessions are now created and registered in client state **before** the RPC call, preventing early events (e.g. `session.start`) from being dropped. Session IDs are generated client-side via `java.util.UUID/randomUUID` when not explicitly provided. On RPC failure, sessions are automatically cleaned up (upstream PR #664).

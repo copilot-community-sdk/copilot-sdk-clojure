@@ -170,8 +170,10 @@
    - :use-stdio?    - Use stdio transport (default: true)
    - :log-level     - :none :error :warning :info :debug :all
    - :auto-start?   - Auto-start on first use (default: true)
-   - :auto-restart? - Auto-restart on crash (default: true)
+   - :auto-restart? - **DEPRECATED**: This option has no effect and will be removed in a future release.
    - :env           - Environment variables map
+   - :telemetry     - OpenTelemetry config map with :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
+   - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...}
 
    Example:
    ```clojure
@@ -810,14 +812,18 @@
 (defn switch-model!
   "Switch the model for this session.
    The new model takes effect for the next message. Conversation history is preserved.
+   Optional opts map with `:reasoning-effort` (\"low\", \"medium\", \"high\", \"xhigh\").
    Returns the new model ID string, or nil.
 
    Example:
    ```clojure
    (copilot/switch-model! session \"claude-sonnet-4.5\")
+   (copilot/switch-model! session \"claude-sonnet-4.5\" {:reasoning-effort \"high\"})
    ```"
-  [session model-id]
-  (session/switch-model! session model-id))
+  ([session model-id]
+   (session/switch-model! session model-id))
+  ([session model-id opts]
+   (session/switch-model! session model-id opts)))
 
 (defn set-model!
   "Alias for switch-model!. Matches the upstream SDK's setModel() API.
@@ -826,9 +832,12 @@
    Example:
    ```clojure
    (copilot/set-model! session \"gpt-4.1\")
+   (copilot/set-model! session \"gpt-4.1\" {:reasoning-effort \"high\"})
    ```"
-  [session model-id]
-  (session/set-model! session model-id))
+  ([session model-id]
+   (session/set-model! session model-id))
+  ([session model-id opts]
+   (session/set-model! session model-id opts)))
 
 (defn log!
   "Log a message to the session timeline.
