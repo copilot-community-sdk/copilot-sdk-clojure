@@ -52,12 +52,24 @@
 ;; Custom model listing handler (upstream PR #730)
 (s/def ::on-list-models fn?)
 
+;; OpenTelemetry configuration (upstream PR #785)
+(s/def ::otlp-endpoint string?)
+(s/def ::exporter-type string?)
+(s/def ::source-name string?)
+(s/def ::capture-content? boolean?)
+
+(s/def ::telemetry
+  (s/keys :opt-un [::otlp-endpoint ::file-path ::exporter-type ::source-name ::capture-content?]))
+
+;; Trace context provider: 0-arity fn returning {:traceparent ... :tracestate ...}
+(s/def ::on-get-trace-context fn?)
+
 (def client-options-keys
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
-    :is-child-process? :on-list-models})
+    :is-child-process? :on-list-models :telemetry :on-get-trace-context})
 
 (s/def ::client-options
   (closed-keys
@@ -65,7 +77,7 @@
                     ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                     ::notification-queue-size ::router-queue-size
                     ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
-                    ::is-child-process? ::on-list-models])
+                    ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -78,10 +90,11 @@
 (s/def ::tool-parameters (s/nilable ::json-schema))
 (s/def ::tool-handler fn?)
 (s/def ::overrides-built-in-tool boolean?)
+(s/def ::skip-permission? boolean?)
 
 (s/def ::tool
   (s/keys :req-un [::tool-name ::tool-handler]
-          :opt-un [::tool-description ::tool-parameters ::overrides-built-in-tool]))
+          :opt-un [::tool-description ::tool-parameters ::overrides-built-in-tool ::skip-permission?]))
 
 (s/def ::tools (s/coll-of ::tool))
 
@@ -250,12 +263,25 @@
                     ::on-event])
    resume-session-config-keys))
 
+;; join-session config: same as resume-session-config but :on-permission-request is optional.
+;; When omitted, join-session defaults to a handler that returns {:kind :no-result}.
+(s/def ::join-session-config
+  (closed-keys
+   (s/keys :opt-un [::on-permission-request
+                    ::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+                    ::provider ::streaming?
+                    ::mcp-servers ::custom-agents ::config-dir ::skill-directories
+                    ::disabled-skills ::infinite-sessions ::reasoning-effort
+                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-event])
+   resume-session-config-keys))
+
 ;; -----------------------------------------------------------------------------
 ;; Message options
 ;; -----------------------------------------------------------------------------
 
 (s/def ::prompt ::non-blank-string)
-(s/def ::attachment-type #{:file :directory :selection :github-reference})
+(s/def ::attachment-type #{:file :directory :selection :github-reference :blob})
 (s/def ::type ::attachment-type)
 (s/def ::path ::non-blank-string)
 (s/def ::file-path ::non-blank-string)
@@ -305,10 +331,19 @@
          #(string? (:state %))
          #(string? (:url %))))
 
+;; Blob attachment (base64-encoded inline data, received in user.message events)
+(s/def ::mime-type string?)
+(s/def ::blob-attachment
+  (s/and map?
+         #(= :blob (:type %))
+         #(string? (:data %))
+         #(string? (:mime-type %))))
+
 (s/def ::attachment
   (s/or :file-or-directory ::file-or-directory-attachment
         :selection ::selection-attachment
-        :github-reference ::github-reference-attachment))
+        :github-reference ::github-reference-attachment
+        :blob ::blob-attachment))
 
 (s/def ::attachments (s/coll-of ::attachment))
 (s/def ::mode #{:enqueue :immediate})
@@ -414,9 +449,21 @@
     :copilot/external_tool.requested})
 
 ;; Session events
+(s/def ::already-in-use? boolean?)
+(s/def ::host-type string?)
+(s/def ::head-commit string?)
+(s/def ::base-commit string?)
+
 (s/def ::session.start-data
   (s/keys :req-un [::session-id]
-          :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model]))
+          :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model
+                   ::reasoning-effort ::already-in-use? ::host-type ::head-commit ::base-commit]))
+
+(s/def ::event-count nat-int?)
+(s/def ::session.resume-data
+  (s/keys :req-un [::event-count]
+          :opt-un [::selected-model ::reasoning-effort ::already-in-use?
+                   ::host-type ::head-commit ::base-commit]))
 
 (s/def ::session.error-data
   (s/keys :req-un [::error-type ::message]
@@ -493,6 +540,14 @@
   (s/keys :req-un [::cwd]
           :opt-un [::git-root ::repository ::branch]))
 
+;; Session model change event (upstream PR #796)
+(s/def ::previous-model (s/nilable string?))
+(s/def ::new-model string?)
+(s/def ::previous-reasoning-effort string?)
+(s/def ::session.model_change-data
+  (s/keys :req-un [::new-model]
+          :opt-un [::previous-model ::previous-reasoning-effort ::reasoning-effort]))
+
 ;; Session mode changed event
 (s/def ::previous-mode string?)
 (s/def ::new-mode string?)
@@ -562,7 +617,8 @@
   #{:approved
     :denied-by-rules
     :denied-no-approval-rule-and-could-not-request-from-user
-    :denied-interactively-by-user})
+    :denied-interactively-by-user
+    :no-result})
 
 (s/def ::permission-result
   (s/keys :req-un [::permission-result-kind]

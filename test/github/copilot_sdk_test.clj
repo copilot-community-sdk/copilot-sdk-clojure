@@ -195,7 +195,8 @@
                       sentinel)]
         (let [result (copilot/set-model! :fake-session "gpt-4.1")]
           (is (some? @called-args) "switch-model! should have been called")
-          (is (= [:fake-session "gpt-4.1"] (vec @called-args)))
+          (is (= :fake-session (first @called-args)))
+          (is (= "gpt-4.1" (second @called-args)))
           (is (= sentinel result)))))))
 
 ;; =============================================================================

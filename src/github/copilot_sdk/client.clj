@@ -17,6 +17,17 @@
 (def ^:private sdk-protocol-version-max 3)
 (def ^:private sdk-protocol-version-min 2)
 
+(defn- get-trace-context
+  "Call the user-provided trace context provider. Returns {} when no provider is configured."
+  [provider]
+  (if-not provider
+    {}
+    (try
+      (let [ctx (provider)]
+        (if (nil? ctx) {} ctx))
+      (catch Throwable _
+        {}))))
+
 (defn- parse-cli-url
   "Parse CLI URL into {:host :port}."
   [url]
@@ -47,7 +58,7 @@
    :use-stdio? true
    :log-level :info
    :auto-start? true
-   :auto-restart? true
+   :auto-restart? false
    :notification-queue-size 4096
    :router-queue-size 4096
    :tool-timeout-ms 120000
@@ -94,7 +105,6 @@
    :router-thread nil
    :router-running? false
    :stopping? false
-   :restarting? false
    :force-stopping? false
    :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
    :lifecycle-handlers {}
@@ -113,7 +123,7 @@
     - :use-stdio?    - Use stdio transport (default: true)
     - :log-level     - :none :error :warning :info :debug :all
     - :auto-start?   - Auto-start on first use (default: true)
-    - :auto-restart? - Auto-restart on crash (default: true)
+    - :auto-restart? - **DEPRECATED**: This option has no effect and will be removed in a future release.
     - :notification-queue-size - Max queued protocol notifications (default: 4096)
     - :router-queue-size - Max queued non-session notifications (default: 4096)
     - :tool-timeout-ms - Timeout for tool calls that return a channel (default: 120000)
@@ -121,7 +131,9 @@
     - :github-token  - GitHub token for authentication (sets COPILOT_SDK_AUTH_TOKEN env var)
     - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)
     - :is-child-process? - When true, SDK is a child of an existing Copilot CLI process and uses stdio to communicate with it (no process spawning)
-    - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!"
+    - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
+    - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
+    - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation"
   ([]
    (client {}))
   ([opts]
@@ -184,7 +196,9 @@
                :actual-host (or host "localhost")
                :state (atom (assoc (initial-state port) :options final-opts))}
         (:on-list-models opts)
-        (assoc :on-list-models (:on-list-models opts))))))
+        (assoc :on-list-models (:on-list-models opts))
+        (:on-get-trace-context opts)
+        (assoc :on-get-trace-context (:on-get-trace-context opts))))))
 
 (defn state
   "Get the current connection state."
@@ -216,12 +230,15 @@
         request-id (:request-id data)
         tool-name (:tool-name data)
         tool-call-id (:tool-call-id data)
-        arguments (:arguments data)]
+        arguments (:arguments data)
+        traceparent (:traceparent data)
+        tracestate (:tracestate data)]
     (when (and request-id tool-name)
       (go
         (try
           (let [tool-response (<! (session/handle-tool-call!
-                                   client session-id tool-call-id tool-name arguments))
+                                   client session-id tool-call-id tool-name arguments
+                                   :traceparent traceparent :tracestate tracestate))
                 result (:result tool-response)
                 conn (:connection-io @(:state client))]
             (when conn
@@ -403,35 +420,10 @@
               {:handler handler :event-type event-type})
        (fn [] (swap! (:state client) update :lifecycle-handlers dissoc id))))))
 
-(defn- mark-restarting!
-  "Atomically mark the client as restarting. Returns true if this caller won."
-  [client]
-  (let [state-atom (:state client)]
-    (loop []
-      (let [state @state-atom]
-        (if (or (:stopping? state) (:restarting? state))
-          false
-          (if (compare-and-set! state-atom state (assoc state :restarting? true))
-            true
-            (recur)))))))
-
 (defn- maybe-reconnect!
-  "Attempt a stop/start cycle when auto-restart is enabled."
-  [client reason]
-  (let [state @(:state client)]
-    (when (and (:auto-restart? (:options client))
-               (= :connected (:status state))
-               (not (:stopping? state)))
-      (when (mark-restarting! client)
-        (log/warn "Auto-restart triggered:" reason)
-        (async/thread
-          (try
-            (stop! client)
-            (start! client)
-            (catch Exception e
-              (log/error "Auto-restart failed: " (ex-message e)))
-            (finally
-              (swap! (:state client) assoc :restarting? false))))))))
+  "No-op: auto-restart is deprecated and has no effect (upstream PR #803)."
+  [_client _reason]
+  nil)
 
 (defn- watch-process-exit!
   "Trigger auto-restart when the managed CLI process exits."
@@ -672,8 +664,8 @@
    Blocks until connected or throws on error.
 
    Thread safety: do not call start! and stop! concurrently from different
-   threads. The :stopping? and :restarting? flags guard against concurrent
-   auto-restart, but explicit concurrent calls are unsupported."
+   threads. The :stopping? flag guards against concurrent calls, but explicit
+   concurrent calls are unsupported."
   [client]
   (when-not (= :connected (:status @(:state client)))
     (log/info "Starting Copilot client...")
@@ -1100,7 +1092,9 @@
                                       :description (:tool-description t)
                                       :parameters (:tool-parameters t)}
                                (some? (:overrides-built-in-tool t))
-                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))))
+                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))
+                               (some? (:skip-permission? t))
+                               (assoc :skipPermission (:skip-permission? t))))
                            (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (cond
@@ -1152,7 +1146,9 @@
                                       :description (:tool-description t)
                                       :parameters (:tool-parameters t)}
                                (some? (:overrides-built-in-tool t))
-                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))))
+                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))
+                               (some? (:skip-permission? t))
+                               (assoc :skipPermission (:skip-permission? t))))
                            (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (cond
@@ -1246,7 +1242,8 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
-        params (assoc (build-create-session-params config) :session-id session-id)
+        trace-ctx (get-trace-context (:on-get-trace-context client))
+        params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)]
     (try
@@ -1299,7 +1296,8 @@
                     {:config config})))
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-resume-session-params session-id config)
+        trace-ctx (get-trace-context (:on-get-trace-context client))
+        params (merge trace-ctx (build-resume-session-params session-id config))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)]
     (try
@@ -1334,7 +1332,8 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
-        params (assoc (build-create-session-params config) :session-id session-id)
+        trace-ctx (get-trace-context (:on-get-trace-context client))
+        params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
         rpc-ch (proto/send-request connection-io "session.create" params)]
@@ -1387,7 +1386,8 @@
                     {:config config})))
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
-        params (build-resume-session-params session-id config)
+        trace-ctx (get-trace-context (:on-get-trace-context client))
+        params (merge trace-ctx (build-resume-session-params session-id config))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
         rpc-ch (proto/send-request connection-io "session.resume" params)]
@@ -1412,7 +1412,10 @@
    Reads the SESSION_ID environment variable and connects to the parent CLI process
    via stdio. This is intended for extensions spawned by the Copilot CLI.
 
-   Config is the same as resume-session (`:on-permission-request` is **required**).
+   Config is the same as resume-session. `:on-permission-request` is **optional**;
+   when omitted, a default handler is used that returns `:no-result`, leaving any
+   pending permission request unanswered (appropriate for most extensions that use
+   `:skip-permission?` on their tools or do not require permission handling).
    The `:disable-resume?` option defaults to true.
 
    Returns a map with :client and :session keys. The caller is responsible for
@@ -1427,6 +1430,8 @@
                       {})))
     (let [c (client {:is-child-process? true})
           merged-config (cond-> config
+                          (not (contains? config :on-permission-request))
+                          (assoc :on-permission-request (constantly {:kind :no-result}))
                           (not (contains? config :disable-resume?))
                           (assoc :disable-resume? true))]
       (try

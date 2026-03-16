@@ -43,11 +43,11 @@
     (is (= :connected (sdk/state *test-client*)))
     (is (some? (:connection @(:state *test-client*))))))
 
-(deftest test-auto-restart-on-connection-close
-  (testing "auto-restart triggers on connection close"
+(deftest test-auto-restart-deprecated-connection-close
+  (testing "auto-restart no longer triggers on connection close (deprecated)"
     (let [starts (atom 0)
           stops (atom 0)]
-      (log/info "Warnings expected in this test: connection close triggers auto-restart.")
+      (log/info "Warnings expected in this test: connection close no longer triggers auto-restart.")
       (with-redefs [client/stop! (fn [c]
                                    (swap! stops inc)
                                    (swap! (:state c) assoc :status :disconnected)
@@ -58,16 +58,16 @@
                                     nil)]
         (mock/stop-mock-server! *mock-server*)
         (Thread/sleep 200)
-        (is (= 1 @stops))
-        (is (= 1 @starts))))))
+        (is (zero? @stops) "auto-restart is deprecated; stop! should not be called")
+        (is (zero? @starts) "auto-restart is deprecated; start! should not be called")))))
 
-(deftest test-auto-restart-on-process-exit
-  (testing "auto-restart triggers on process exit"
+(deftest test-auto-restart-deprecated-process-exit
+  (testing "auto-restart no longer triggers on process exit (deprecated)"
     (let [starts (atom 0)
           stops (atom 0)
           exit-ch (chan 1)
           watch-exit (var client/watch-process-exit!)]
-      (log/info "Warnings expected in this test: simulated process exit triggers auto-restart.")
+      (log/info "Warnings expected in this test: simulated process exit no longer triggers auto-restart.")
       (with-redefs [client/stop! (fn [c]
                                    (swap! stops inc)
                                    (swap! (:state c) assoc :status :disconnected)
@@ -80,8 +80,8 @@
         (>!! exit-ch {:exit-code 123})
         (close! exit-ch)
         (Thread/sleep 200)
-        (is (= 1 @stops))
-        (is (= 1 @starts))))))
+        (is (zero? @stops) "auto-restart is deprecated; stop! should not be called")
+        (is (zero? @starts) "auto-restart is deprecated; start! should not be called")))))
 
 (deftest test-auto-restart-suppressed-when-stopping
   (testing "auto-restart is suppressed while stopping"

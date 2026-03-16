@@ -69,7 +69,7 @@
   :ret ::specs/events-ch)
 
 (s/fdef github.copilot-sdk.client/join-session
-  :args (s/cat :config ::specs/resume-session-config)
+  :args (s/cat :config ::specs/join-session-config)
   :ret (s/keys :req-un [::specs/client ::specs/session]))
 
 (s/fdef github.copilot-sdk.client/list-sessions
@@ -217,13 +217,15 @@
 
 (s/fdef github.copilot-sdk.session/switch-model!
   :args (s/cat :session ::specs/session
-               :model-id string?)
-  :ret ::specs/model-id)
+               :model-id string?
+               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort]))))
+  :ret (s/nilable ::specs/model-id))
 
 (s/fdef github.copilot-sdk.session/set-model!
   :args (s/cat :session ::specs/session
-               :model-id string?)
-  :ret ::specs/model-id)
+               :model-id string?
+               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort]))))
+  :ret (s/nilable ::specs/model-id))
 
 (s/fdef github.copilot-sdk.session/log!
   :args (s/cat :session ::specs/session

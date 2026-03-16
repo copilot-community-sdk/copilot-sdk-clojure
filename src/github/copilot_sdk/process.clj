@@ -66,7 +66,22 @@
       ;; Set github token in environment if provided (PR #237).
       ;; Explicit github-token should take precedence over env.
       (when github-token
-        (.put env-map "COPILOT_SDK_AUTH_TOKEN" github-token)))
+        (.put env-map "COPILOT_SDK_AUTH_TOKEN" github-token))
+
+      ;; Set OpenTelemetry environment variables if telemetry is configured (upstream PR #785)
+      (when-let [telemetry (:telemetry opts)]
+        (.put env-map "COPILOT_OTEL_ENABLED" "true")
+        (when-let [v (:otlp-endpoint telemetry)]
+          (.put env-map "OTEL_EXPORTER_OTLP_ENDPOINT" v))
+        (when-let [v (:file-path telemetry)]
+          (.put env-map "COPILOT_OTEL_FILE_EXPORTER_PATH" v))
+        (when-let [v (:exporter-type telemetry)]
+          (.put env-map "COPILOT_OTEL_EXPORTER_TYPE" v))
+        (when-let [v (:source-name telemetry)]
+          (.put env-map "COPILOT_OTEL_SOURCE_NAME" v))
+        (when (some? (:capture-content? telemetry))
+          (.put env-map "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
+                (str (:capture-content? telemetry))))))
 
     ;; Configure stdio — use explicit PIPE redirects for all three streams.
     ;; On Windows, the JVM's ProcessImpl sets CREATE_NO_WINDOW when none of the
