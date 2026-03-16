@@ -18,13 +18,14 @@
 (def ^:private sdk-protocol-version-min 2)
 
 (defn- get-trace-context
-  "Call the user-provided trace context provider. Returns {} when no provider is configured."
+  "Call the user-provided trace context provider. Returns {} when no provider
+   is configured or returns a non-map value."
   [provider]
   (if-not provider
     {}
     (try
       (let [ctx (provider)]
-        (if (nil? ctx) {} ctx))
+        (if (map? ctx) ctx {}))
       (catch Throwable _
         {}))))
 
@@ -1424,7 +1425,7 @@
    via stdio. This is intended for extensions spawned by the Copilot CLI.
 
    Config is the same as resume-session. `:on-permission-request` is **optional**;
-   when omitted, a default handler is used that returns `:no-result`, leaving any
+   when omitted, a default handler is used that returns `{:kind :no-result}`, leaving any
    pending permission request unanswered (appropriate for most extensions that use
    `:skip-permission?` on their tools or do not require permission handling).
    The `:disable-resume?` option defaults to true.

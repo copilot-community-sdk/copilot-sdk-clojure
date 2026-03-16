@@ -345,7 +345,7 @@
                              (util/attachments->wire (:attachments opts)))
           trace-ctx (when-let [provider (:on-get-trace-context client)]
                       (try (let [ctx (provider)]
-                             (when ctx ctx))
+                             (when (map? ctx) ctx))
                            (catch Throwable _ nil)))
           params (cond-> {:session-id session-id
                           :prompt (:prompt opts)}
@@ -550,7 +550,7 @@
                                      (util/attachments->wire (:attachments opts)))
                   trace-ctx (when-let [provider (:on-get-trace-context client)]
                               (try (let [ctx (provider)]
-                                     (when ctx ctx))
+                                     (when (map? ctx) ctx))
                                    (catch Throwable _ nil)))
                   params (cond-> {:session-id session-id
                                   :prompt (:prompt opts)}

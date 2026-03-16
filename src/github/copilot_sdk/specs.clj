@@ -281,7 +281,10 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::prompt ::non-blank-string)
-(s/def ::attachment-type #{:file :directory :selection :github-reference :blob})
+(s/def ::attachment-type #{:file :directory :selection :github-reference})
+
+;; Inbound attachment types include :blob (received in events but not sent by SDK)
+(s/def ::inbound-attachment-type #{:file :directory :selection :github-reference :blob})
 (s/def ::type ::attachment-type)
 (s/def ::path ::non-blank-string)
 (s/def ::file-path ::non-blank-string)
@@ -332,14 +335,20 @@
          #(string? (:url %))))
 
 ;; Blob attachment (base64-encoded inline data, received in user.message events)
+(s/def ::data string?)
 (s/def ::mime-type string?)
 (s/def ::blob-attachment
-  (s/and map?
-         #(= :blob (:type %))
-         #(string? (:data %))
-         #(string? (:mime-type %))))
+  (s/and (s/keys :req-un [::type ::data ::mime-type]
+                 :opt-un [::display-name])
+         #(= :blob (:type %))))
 
 (s/def ::attachment
+  (s/or :file-or-directory ::file-or-directory-attachment
+        :selection ::selection-attachment
+        :github-reference ::github-reference-attachment))
+
+;; Inbound attachment (includes blob, used in event data)
+(s/def ::inbound-attachment
   (s/or :file-or-directory ::file-or-directory-attachment
         :selection ::selection-attachment
         :github-reference ::github-reference-attachment
