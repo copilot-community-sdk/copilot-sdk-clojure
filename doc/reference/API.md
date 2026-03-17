@@ -120,7 +120,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:use-stdio?` | boolean | `true` | Use stdio transport instead of TCP |
 | `:log-level` | keyword | `:info` | One of `:none` `:error` `:warning` `:info` `:debug` `:all` |
 | `:auto-start?` | boolean | `true` | Auto-start server on first operation |
-| `:auto-restart?` | boolean | `true` | Auto-restart on crash |
+| `:auto-restart?` | boolean | `true` | **DEPRECATED**: No-op. Auto-restart behavior has been removed across all official SDKs. This option is retained for backward compatibility only and will be removed in a future release |
 | `:notification-queue-size` | number | `4096` | Max queued protocol notifications |
 | `:router-queue-size` | number | `4096` | Max queued non-session notifications |
 | `:tool-timeout-ms` | number | `120000` | Timeout for tool handlers returning channels |
@@ -130,6 +130,8 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
+| `:telemetry` | map | nil | OpenTelemetry configuration. Sets environment variables on the spawned CLI process. Optional keys: `:otlp-endpoint` (string), `:file-path` (string), `:exporter-type` (string), `:source-name` (string), `:capture-content?` (boolean) |
+| `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}` for W3C Trace Context propagation. Called before each `session.create`, `session.resume`, and `session.send` RPC |
 
 ### Methods
 
@@ -239,7 +241,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options` |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools` |
 | `:custom-agents` | vector | Custom agent configs |
-| `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
+| `:on-permission-request` | fn | default handler | Permission handler function. Use `copilot/approve-all` to approve everything. When omitted, defaults to a handler that returns `{:kind :no-result}` (appropriate for extensions that use `:skip-permission?` on tools). **Required** for `create-session` and `resume-session`. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
@@ -326,7 +328,16 @@ Returns a map with `:client` and `:session` keys. The caller is responsible for 
 
 Throws if `SESSION_ID` is not set in the environment.
 
+`:on-permission-request` is **optional** in `join-session`. When omitted, a default handler returns `{:kind :no-result}`, leaving any pending permission request unanswered. Provide it explicitly if your extension handles permissions:
+
 ```clojure
+;; Without permission handling (default no-result handler)
+(let [{:keys [client session]} (copilot/join-session
+                                 {:tools [my-tool]})]
+  ;; use session...
+  (copilot/stop! client))
+
+;; With explicit permission handler
 (let [{:keys [client session]} (copilot/join-session
                                  {:on-permission-request copilot/approve-all
                                   :tools [my-tool]})]
@@ -791,14 +802,28 @@ Get the current model for this session. Returns the model ID string, or nil if n
 ```clojure
 (copilot/switch-model! session "claude-sonnet-4.5")
 ;; => "claude-sonnet-4.5"
+
+;; With optional reasoning effort
+(copilot/switch-model! session "claude-sonnet-4.5" {:reasoning-effort "high"})
+;; => "claude-sonnet-4.5"
 ```
 
 Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
+
+**Options (optional map):**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:reasoning-effort` | string | Reasoning effort for the new model: `"low"`, `"medium"`, `"high"`, `"xhigh"` |
 
 #### `set-model!`
 
 ```clojure
 (copilot/set-model! session "claude-sonnet-4.5")
+;; => "claude-sonnet-4.5"
+
+;; With optional reasoning effort
+(copilot/set-model! session "claude-sonnet-4.5" {:reasoning-effort "high"})
 ;; => "claude-sonnet-4.5"
 ```
 
@@ -927,12 +952,12 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 
 | Event Type | Description |
 |------------|-------------|
-| `:copilot/session.start` | Session created |
-| `:copilot/session.resume` | Session resumed |
+| `:copilot/session.start` | Session created. Data includes optional fields: `:selected-model`, `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit` |
+| `:copilot/session.resume` | Session resumed. Data includes `:event-count` (required) and optional fields: `:selected-model`, `:reasoning-effort`, `:already-in-use?`, `:host-type`, `:head-commit`, `:base-commit` |
 | `:copilot/session.error` | Session error occurred |
 | `:copilot/session.idle` | Session finished processing |
 | `:copilot/session.info` | Informational session update |
-| `:copilot/session.model_change` | Session model changed |
+| `:copilot/session.model_change` | Session model changed. Data: `{:new-model "...", :previous-model "...", :reasoning-effort "...", :previous-reasoning-effort "..."}` (`:reasoning-effort` fields optional) |
 | `:copilot/session.handoff` | Session handed off to another agent |
 | `:copilot/session.usage_info` | Token usage information |
 | `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
@@ -948,7 +973,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"/"update"}` |
 | `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..."}` (optional) |
 | `:copilot/skill.invoked` | Skill invocation triggered |
-| `:copilot/user.message` | User message added |
+| `:copilot/user.message` | User message added. Attachments in event data may include a `:blob` type with `:data` (base64 string), `:mime-type` (string), and optional `:display-name` |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
 | `:copilot/assistant.turn_start` | Assistant turn started |
 | `:copilot/assistant.intent` | Assistant intent update |
@@ -1113,6 +1138,22 @@ Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `
                 (copilot/result-success (my-custom-grep pattern)))}))
 ```
 
+**Skipping permission prompts:**
+
+Set `:skip-permission? true` on a tool definition to execute the tool without triggering a permission prompt:
+
+```clojure
+(def silent-tool
+  (copilot/define-tool "read_config"
+    {:description "Read project configuration"
+     :skip-permission? true
+     :parameters {:type "object"
+                  :properties {:key {:type "string"}}
+                  :required ["key"]}
+     :handler (fn [{:keys [key]} _invocation]
+                (copilot/result-success (get-config key)))}))
+```
+
 **Handler return values:**
 
 | Return Type | Description |
@@ -1208,6 +1249,40 @@ You can see this message in `:tool.execution_complete` events:
 Note: large output handling is applied by the CLI for built-in tools (like the shell tool).
 For external tools you define in the SDK, consider handling oversized outputs yourself
 (e.g., write to a file and return a short preview).
+
+### OpenTelemetry
+
+Configure distributed tracing by providing `:telemetry` in client options:
+
+```clojure
+(def client (copilot/client
+  {:telemetry {:otlp-endpoint "http://localhost:4318"
+               :exporter-type "otlp"
+               :source-name "my-app"
+               :capture-content? true}}))
+```
+
+**Telemetry options:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:otlp-endpoint` | string | OTLP exporter endpoint URL |
+| `:file-path` | string | File path for file-based exporter |
+| `:exporter-type` | string | Exporter type (e.g., `"otlp"`, `"file"`) |
+| `:source-name` | string | Source name for traces |
+| `:capture-content?` | boolean | Whether to capture message content in traces |
+
+To propagate W3C Trace Context into sessions, provide `:on-get-trace-context`:
+
+```clojure
+(def client (copilot/client
+  {:telemetry {:otlp-endpoint "http://localhost:4318"}
+   :on-get-trace-context (fn []
+                           {:traceparent "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+                            :tracestate ""})}))
+```
+
+The function is called before each `session.create`, `session.resume`, and `session.send` RPC. Return `nil` or a non-map value to skip trace context injection. Tool invocations will include `:traceparent` and `:tracestate` in the invocation context map when the CLI provides them.
 
 ### Infinite Sessions
 
