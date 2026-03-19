@@ -1275,7 +1275,9 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
 
 The SDK uses a **deny-by-default** permission model. All permission requests
 (file writes, shell commands, URL fetches, custom tool execution, etc.) are denied unless your
-session config provides an `:on-permission-request` handler (required).
+session config provides an `:on-permission-request` handler (required for
+`create-session` and `resume-session`; optional for `join-session` which
+defaults to `{:kind :no-result}`).
 
 Use `approve-all` to opt into approving everything:
 
