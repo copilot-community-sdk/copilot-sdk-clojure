@@ -11,7 +11,7 @@
 
    ;; Create a session
    (def session (copilot/create-session client {:on-permission-request copilot/approve-all
-                                                :model \"gpt-5.2\"}))
+                                                :model \"gpt-5.4\"}))
 
    ;; Send a message and wait for response
    (def response (copilot/send-and-wait! session {:prompt \"What is 2+2?\"}))
@@ -382,7 +382,7 @@
    Config options (`:on-permission-request` is **required**):
    - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
    - :session-id           - Custom session ID
-   - :model                - Model to use (e.g., \"gpt-5.2\", \"claude-sonnet-4.5\")
+   - :model                - Model to use (e.g., \"gpt-5.4\", \"claude-sonnet-4.5\")
    - :tools                - Vector of tool definitions (use define-tool)
    - :system-message       - {:mode :append/:replace :content \"...\"}
    - :available-tools      - List of allowed tool names
@@ -401,7 +401,7 @@
    Example:
    ```clojure
    (def session (copilot/create-session client {:on-permission-request copilot/approve-all
-                                                :model \"gpt-5.2\"}))
+                                                :model \"gpt-5.4\"}))
    ```"
   [client config]
   (client/create-session client config))
@@ -417,7 +417,7 @@
    ```clojure
    (go
      (let [result (<! (copilot/<create-session client {:on-permission-request copilot/approve-all
-                                                       :model \"gpt-5.2\"}))]
+                                                       :model \"gpt-5.4\"}))]
        (when-not (instance? Throwable result)
          (let [answer (<! (copilot/<send! result {:prompt \"Hello\"}))]
            (println answer)))))
@@ -430,7 +430,7 @@
 
    Usage:
    (with-session [s client {:on-permission-request copilot/approve-all
-                            :model \"gpt-5.2\"}]
+                            :model \"gpt-5.4\"}]
      ...)"
   [[session-sym client config] & body]
   `(let [~session-sym (create-session ~client ~config)]
@@ -448,21 +448,21 @@
    1. [session session-opts] - anonymous client with default options
       ```clojure
       (with-client-session [session {:on-permission-request copilot/approve-all
-                                     :model \"gpt-5.2\"}]
+                                     :model \"gpt-5.4\"}]
         (copilot/send! session {:prompt \"Hi\"}))
       ```
 
    2. [client-opts session session-opts] - anonymous client with custom options
       ```clojure
       (with-client-session [{:log-level :debug} session {:on-permission-request copilot/approve-all
-                                                          :model \"gpt-5.2\"}]
+                                                          :model \"gpt-5.4\"}]
         (copilot/send! session {:prompt \"Hi\"}))
       ```
 
    3. [client session session-opts] - named client with default options
       ```clojure
       (with-client-session [client session {:on-permission-request copilot/approve-all
-                                            :model \"gpt-5.2\"}]
+                                            :model \"gpt-5.4\"}]
         (println (copilot/client-options client))
         (copilot/send! session {:prompt \"Hi\"}))
       ```
@@ -470,7 +470,7 @@
    4. [client client-opts session session-opts] - named client with custom options
       ```clojure
       (with-client-session [client {:log-level :debug} session {:on-permission-request copilot/approve-all
-                                                                 :model \"gpt-5.2\"}]
+                                                                 :model \"gpt-5.4\"}]
         (println (copilot/client-options client))
         (copilot/send! session {:prompt \"Hi\"}))
       ```"
@@ -868,7 +868,7 @@
    Example:
    ```clojure
    (copilot/session-config session)
-   ;=> {:model \"gpt-5.2\", :streaming? true, ...}
+   ;=> {:model \"gpt-5.4\", :streaming? true, ...}
    ```"
   [session]
   (session/config session))

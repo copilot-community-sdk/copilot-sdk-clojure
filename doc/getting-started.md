@@ -62,7 +62,7 @@ For more control, use the explicit client/session API:
 (require '[github.copilot-sdk :as copilot])
 
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.2"}]
+                                       :model "gpt-5.4"}]
   (let [response (copilot/send-and-wait! session {:prompt "What is 2 + 2?"})]
     (println (get-in response [:data :content]))))
 ```
@@ -102,7 +102,7 @@ Right now, you wait for the complete response before seeing anything. Let's make
 (require '[github.copilot-sdk :as copilot])
 
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.2" :streaming? true}]
+                                       :model "gpt-5.4" :streaming? true}]
   (let [ch (chan 256)
         done (promise)]
     (tap (copilot/events session) ch)
@@ -136,7 +136,7 @@ Use `<create-session` and `<send!` for fully non-blocking operations inside `go`
   (let [result-ch
         (go
           (let [session (<! (copilot/<create-session client {:on-permission-request copilot/approve-all
-                                                            :model "gpt-5.2"}))]
+                                                            :model "gpt-5.4"}))]
             (when (instance? Throwable session)
               (throw session))
             (let [answer (<! (copilot/<send! session {:prompt "Capital of France?"}))]
@@ -182,7 +182,7 @@ Now for the powerful part. Let's give Copilot the ability to call your code by d
                    (str city ": " temp "°F and " condition))))}))
 
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.2"
+                                       :model "gpt-5.4"
                                        :tools [get-weather]}]
   (println (h/query "What's the weather like in Seattle and Tokyo?"
                     :session session)))
@@ -211,7 +211,7 @@ Let's put it all together into an interactive assistant:
                    (str city ": " temp "°F and " condition))))}))
 
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.2"
+                                       :model "gpt-5.4"
                                        :streaming? true
                                        :tools [get-weather]}]
   (println "🌤️  Weather Assistant (type 'exit' to quit)")
@@ -239,7 +239,7 @@ Discover which models are available and their billing multipliers:
   (doseq [m (copilot/list-models client)]
     (println (:id m) (str "x" (get-in m [:model-billing :multiplier])))))
 ;; prints:
-;; gpt-5.2 x1.0
+;; gpt-5.4 x1.0
 ;; claude-sonnet-4.5 x1.0
 ;; o1 x2.0
 ;; ...
@@ -266,7 +266,7 @@ Use `approve-all` to permit everything:
 
 ```clojure
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.2"}]
+                                       :model "gpt-5.4"}]
   ...)
 ```
 
@@ -278,7 +278,7 @@ Pass `:client-name` to identify your application in API requests (included in th
 
 ```clojure
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-5.2"
+                                       :model "gpt-5.4"
                                        :client-name "my-weather-app"}]
   ...)
 ```

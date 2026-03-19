@@ -1223,7 +1223,7 @@
    - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
    - :session-id         - Custom session ID
    - :client-name        - Client name to identify the application (included in User-Agent header)
-   - :model              - Model to use (e.g., \"gpt-5.2\")
+   - :model              - Model to use (e.g., \"gpt-5.4\")
    - :tools              - Vector of tool definitions
    - :system-message     - System message config
    - :available-tools    - List of allowed tool names
@@ -1336,7 +1336,7 @@
    Usage:
      (go
        (let [result (<! (<create-session client {:on-permission-request copilot/approve-all
-                                                 :model \"gpt-5.2\"}))]
+                                                 :model \"gpt-5.4\"}))]
          (if (instance? Throwable result)
            (println \"Error:\" (ex-message result))
            ;; use result as session
@@ -1381,7 +1381,7 @@
      (go
        (let [result (<! (<resume-session client session-id
                                          {:on-permission-request copilot/approve-all
-                                          :model \"gpt-5.2\"}))]
+                                          :model \"gpt-5.4\"}))]
          (if (instance? Throwable result)
            (println \"Error:\" (ex-message result))
            ;; use result as session

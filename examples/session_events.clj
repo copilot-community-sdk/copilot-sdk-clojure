@@ -12,7 +12,7 @@
   "Run a conversation while monitoring all session state events."
   [{:keys [prompt model reasoning-effort]
     :or {prompt "Think hard - How many \"r\"s in strawberry?"
-         model "gpt-5.2"
+         model "gpt-5.4"
          reasoning-effort "high"}}]
   (copilot/with-client-session
       [client {:log-level :debug}

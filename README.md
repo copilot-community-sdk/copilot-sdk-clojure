@@ -111,7 +111,7 @@ Discover available models and their billing multipliers:
   (doseq [m (copilot/list-models client)]
     (println (:id m) (str "x" (get-in m [:model-billing :multiplier])))))
 ;; prints:
-;; gpt-5.2 x1.0
+;; gpt-5.4 x1.0
 ;; claude-sonnet-4.5 x1.0
 ;; o1 x2.0
 ;; ...
@@ -164,6 +164,43 @@ clojure -A:examples -M -m byok-provider
 
 See [`examples/README.md`](./examples/README.md) for detailed walkthroughs and explanations.
 
+## Permission Handling
+
+The SDK uses a **deny-by-default** permission model. All tool executions (file
+writes, shell commands, URL fetches, MCP tools, etc.) are denied unless your
+session config provides an `:on-permission-request` handler (**required** for
+`create-session` and `resume-session`; optional for `join-session` which
+defaults to `{:kind :no-result}`).
+
+Use `approve-all` to permit everything:
+
+```clojure
+(copilot/create-session client {:on-permission-request copilot/approve-all})
+```
+
+For fine-grained control, provide a custom handler:
+
+```clojure
+(copilot/create-session client
+  {:on-permission-request
+   (fn [request _ctx]
+     (case (keyword (:permission-kind request))
+       :shell {:kind :approved}
+       :read  {:kind :approved}
+       ;; deny everything else
+       {:kind :denied-by-rules
+        :rules [{:kind (name (:permission-kind request))
+                 :argument "not permitted"}]}))})
+```
+
+Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,
+`:custom-tool`, `:memory` (arrive as strings from the wire; use `keyword`
+to match).
+
+See [Permission Handling](./doc/reference/API.md#permission-handling) in the
+API Reference and [`permission_bash.clj`](./examples/permission_bash.clj)
+for a complete example.
+
 ## Architecture
 
 The SDK communicates with the Copilot CLI server via JSON-RPC:
@@ -203,7 +240,7 @@ const client = new CopilotClient();
 await client.start();
 
 const session = await client.createSession({
-  model: "gpt-5.2",
+  model: "gpt-5.4",
   tools: [
     defineTool("greet", {
       description: "Greet someone",

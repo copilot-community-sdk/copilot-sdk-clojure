@@ -105,6 +105,12 @@
      :state (:state att)
      :url (:url att)}
 
+    :blob
+    (cond-> {:type "blob"
+             :data (:data att)
+             :mimeType (:mime-type att)}
+      (:display-name att) (assoc :displayName (:display-name att)))
+
     ;; :file and :directory
     (cond-> {:type (name (:type att))
              :path (:path att)}

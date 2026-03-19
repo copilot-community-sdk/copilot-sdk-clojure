@@ -20,7 +20,8 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
 (require '[github.copilot-sdk.helpers :as h])
 
 (copilot/with-client-session [session
-                              {:model "gpt-5.2-codex"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.3-codex"
                                :provider {:provider-type :openai
                                           :base-url "https://your-resource.openai.azure.com/openai/v1/"
                                           :wire-api :responses
@@ -32,7 +33,8 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
 
 ```clojure
 (copilot/with-client-session [session
-                              {:model "gpt-5.2"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :provider {:provider-type :openai
                                           :base-url "https://api.openai.com/v1"
                                           :api-key (System/getenv "OPENAI_API_KEY")}}]
@@ -44,7 +46,8 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
 ```clojure
 ;; No API key needed for local Ollama
 (copilot/with-client-session [session
-                              {:model "llama3"
+                              {:on-permission-request copilot/approve-all
+                               :model "llama3"
                                :provider {:provider-type :openai
                                           :base-url "http://localhost:11434/v1"}}]
   (println (h/query "Hello!" :session session)))
@@ -60,7 +63,8 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
 ;; No API key needed for local Foundry Local
 ;; Replace <PORT> with the port from: foundry service status
 (copilot/with-client-session [session
-                              {:model "phi-4-mini"
+                              {:on-permission-request copilot/approve-all
+                               :model "phi-4-mini"
                                :provider {:provider-type :openai
                                           :base-url "http://localhost:<PORT>/v1"}}]
   (println (h/query "Hello!" :session session)))
@@ -85,7 +89,8 @@ foundry service status
 
 ```clojure
 (copilot/with-client-session [session
-                              {:model "claude-sonnet-4"
+                              {:on-permission-request copilot/approve-all
+                               :model "claude-sonnet-4"
                                :provider {:provider-type :anthropic
                                           :base-url "https://api.anthropic.com"
                                           :api-key (System/getenv "ANTHROPIC_API_KEY")}}]
@@ -133,7 +138,7 @@ The `:wire-api` setting determines which OpenAI API format to use:
 Use `:azure` type for endpoints at `*.openai.azure.com`:
 
 ```clojure
-{:model "gpt-5.2"
+{:model "gpt-5.4"
  :provider {:provider-type :azure
             :base-url "https://my-resource.openai.azure.com"
             :api-key (System/getenv "AZURE_OPENAI_KEY")
@@ -145,7 +150,7 @@ Use `:azure` type for endpoints at `*.openai.azure.com`:
 For Azure AI Foundry deployments with `/openai/v1/` endpoints, use `:openai`:
 
 ```clojure
-{:model "gpt-5.2-codex"
+{:model "gpt-5.3-codex"
  :provider {:provider-type :openai
             :base-url "https://your-resource.openai.azure.com/openai/v1/"
             :api-key (System/getenv "FOUNDRY_API_KEY")
@@ -224,7 +229,7 @@ When using BYOK, the `:model` parameter is **required**:
 {:provider {:provider-type :openai :base-url "..."}}
 
 ;; ✅ Correct: Model specified
-{:model "gpt-5.2"
+{:model "gpt-5.4"
  :provider {:provider-type :openai :base-url "..."}}
 ```
 

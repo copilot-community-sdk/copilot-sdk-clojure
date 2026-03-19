@@ -1,17 +1,17 @@
 (ns session-resume
-  "Demonstrates session resume: create a session, teach it a secret word,
+  "Demonstrates session resume: create a session, teach it a code word,
    then resume the session by ID and verify the model remembers it."
   (:require [github.copilot-sdk :as copilot]))
 
 ;; See examples/README.md for usage
 
 (def defaults
-  {:secret-word "PINEAPPLE"
-   :prompt "What was the secret word I told you? Reply with just the word."})
+  {:code-word "PINEAPPLE"
+   :prompt "What was the code word I told you? Reply with just the word."})
 
 (defn run
-  [{:keys [secret-word prompt]
-    :or {secret-word (:secret-word defaults) prompt (:prompt defaults)}}]
+  [{:keys [code-word prompt]
+    :or {code-word (:code-word defaults) prompt (:prompt defaults)}}]
   (copilot/with-client [client {}]
     (println "Creating session...")
     (let [session (copilot/create-session
@@ -19,11 +19,11 @@
                     {:on-permission-request copilot/approve-all
                      :model "claude-haiku-4.5"
                      :available-tools []})]
-      (println "Sending secret word:" secret-word)
+      (println "Sending code word:" code-word)
       (let [result (copilot/send-and-wait!
                      session
-                     {:prompt (str "Remember this secret word: " secret-word
-                                   ". Confirm you have memorized it.")})]
+                     {:prompt (str "Remember this code word: " code-word
+                                   ". Just confirm by repeating it back.")})]
         (println "🤖:" (get-in result [:data :content])))
 
       (let [session-id (:session-id session)]

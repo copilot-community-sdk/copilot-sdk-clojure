@@ -212,7 +212,7 @@
   (testing "Create new session"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
-                                       :model "gpt-5.2"})]
+                                       :model "gpt-5.4"})]
       (is (some? session))
       (is (string? (sdk/session-id session)))
       ;; Session ID is now generated client-side as a UUID
@@ -293,12 +293,12 @@
 
 (deftest test-get-current-model
   (testing "Get current model for session"
-    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})]
-      (is (= "gpt-5.2" (sdk/get-current-model session))))))
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.4"})]
+      (is (= "gpt-5.4" (sdk/get-current-model session))))))
 
 (deftest test-switch-model
   (testing "Switch model for session"
-    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.4"})
           new-model (sdk/switch-model! session "claude-sonnet-4.5")]
       (is (= "claude-sonnet-4.5" new-model))
       (is (= "claude-sonnet-4.5" (sdk/get-current-model session))))))
@@ -657,7 +657,7 @@
                                                       (swap! seen assoc method params))))
           _ (sdk/create-session *test-client*
                                 {:on-permission-request sdk/approve-all
-                                 :model "gpt-5.2"
+                                 :model "gpt-5.4"
                                  :provider {:base-url "https://example.test"
                                             :api-key "key"}
                                  :mcp-servers {"srv-1" {:mcp-server-type :http
@@ -670,7 +670,7 @@
           session-id (sdk/get-last-session-id *test-client*)
           _ (sdk/resume-session *test-client* session-id
                                 {:on-permission-request sdk/approve-all
-                                 :model "gpt-5.2"
+                                 :model "gpt-5.4"
                                  :provider {:base-url "https://resume.test"}
                                  :mcp-servers {"srv-2" {:mcp-server-type :sse
                                                         :mcp-url "https://mcp.resume.test"
@@ -722,7 +722,7 @@
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.create"} method)
                                                       (swap! seen assoc method params))))
-          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.4"})
           create-params (get @seen "session.create")]
       (is (not (contains? create-params :clientName))))))
 
@@ -799,7 +799,7 @@
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.create" "session.resume"} method)
                                                       (swap! seen assoc method params))))
-          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.2"})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :model "gpt-5.4"})
           create-params (get @seen "session.create")]
       (is (true? (:requestPermission create-params))
           "requestPermission must be true when handler is configured")))
@@ -810,7 +810,7 @@
                                                     (when (#{"session.create"} method)
                                                       (swap! seen assoc method params))))
           _ (sdk/create-session *test-client*
-                                {:model "gpt-5.2"
+                                {:model "gpt-5.4"
                                  :on-permission-request sdk/approve-all})
           create-params (get @seen "session.create")]
       (is (true? (:requestPermission create-params)))))

@@ -125,7 +125,18 @@ If examples changed, also update `examples/README.md`:
 - Update walkthroughs for changed examples
 - Add entries for new examples
 
-### 5. Quality Gate
+### 5. Regenerate Codox HTML
+
+After updating source docstrings or markdown docs, regenerate the Codox API HTML:
+
+```bash
+bb docs          # or: clojure -X:codox
+```
+
+This regenerates `doc/api/*.html` from source docstrings. Always run this after
+changing docstrings in `src/` so the HTML stays in sync with the source.
+
+### 6. Quality Gate
 
 After all updates, run validation:
 
@@ -141,6 +152,7 @@ Also verify:
 - [ ] Cross-references use relative paths
 - [ ] No filler language
 - [ ] `doc/index.md` links are up to date
+- [ ] `doc/api/` HTML is regenerated if source docstrings changed
 
 ## Common Tasks
 

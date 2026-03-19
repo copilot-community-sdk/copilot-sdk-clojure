@@ -345,9 +345,11 @@
 (s/def ::attachment
   (s/or :file-or-directory ::file-or-directory-attachment
         :selection ::selection-attachment
-        :github-reference ::github-reference-attachment))
+        :github-reference ::github-reference-attachment
+        :blob ::blob-attachment))
 
-;; Inbound attachment (includes blob, used in event data)
+;; Inbound attachment (identical to ::attachment, kept as a semantic alias
+;; for event data contexts where attachments are received rather than sent)
 (s/def ::inbound-attachment
   (s/or :file-or-directory ::file-or-directory-attachment
         :selection ::selection-attachment
