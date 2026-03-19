@@ -111,7 +111,7 @@ Discover available models and their billing multipliers:
   (doseq [m (copilot/list-models client)]
     (println (:id m) (str "x" (get-in m [:model-billing :multiplier])))))
 ;; prints:
-;; gpt-5.2 x1.0
+;; gpt-5.4 x1.0
 ;; claude-sonnet-4.5 x1.0
 ;; o1 x2.0
 ;; ...
@@ -235,7 +235,7 @@ const client = new CopilotClient();
 await client.start();
 
 const session = await client.createSession({
-  model: "gpt-5.2",
+  model: "gpt-5.4",
   tools: [
     defineTool("greet", {
       description: "Greet someone",

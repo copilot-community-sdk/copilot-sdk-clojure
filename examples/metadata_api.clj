@@ -63,7 +63,7 @@
       (try
         (let [current (copilot/get-current-model session)]
           (println (str "\n   Current model: " current))
-          (copilot/switch-model! session "gpt-5.2")
+          (copilot/switch-model! session "gpt-5.4")
           (println (str "   Switched to: " (copilot/get-current-model session)))
           (println "   Query: 'What was my previous question?'")
           (println (str "   Response: " (h/query "What was my previous question?" :session session))))

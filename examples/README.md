@@ -202,7 +202,7 @@ clojure -A:examples -X helpers-query/run-multi :questions '["What is Rust?" "Wha
 (defmethod handle-event :copilot/assistant.message [_] (println))
 
 (run! handle-event (h/query-seq! "Tell me a joke" :session {:on-permission-request copilot/approve-all
-                                                              :model "gpt-5.2" :streaming? true}))
+                                                              :model "gpt-5.4" :streaming? true}))
 ```
 
 ---
@@ -674,8 +674,8 @@ Resume a previous session by ID to continue a conversation with preserved contex
 # Default: remembers "PINEAPPLE"
 clojure -A:examples -X session-resume/run
 
-# Custom secret word
-clojure -A:examples -X session-resume/run :secret-word '"MANGO"'
+# Custom code word
+clojure -A:examples -X session-resume/run :code-word '"MANGO"'
 ```
 
 ---
@@ -867,7 +867,7 @@ session.on((event) => {
   (println content))
 
 (run! handle-event (h/query-seq! "Hello" :session {:on-permission-request copilot/approve-all
-                                                    :model "gpt-5.2" :streaming? true}))
+                                                    :model "gpt-5.4" :streaming? true}))
 ```
 
 ### Tool Definition

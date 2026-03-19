@@ -9,7 +9,7 @@
 (copilot/start! client)
 
 ;; Create a session
-(def session (copilot/create-session client {:model "gpt-5.2"}))
+(def session (copilot/create-session client {:model "gpt-5.4"}))
 
 ;; Send a message and wait for response
 (def response (copilot/send-and-wait! session {:prompt "What is 2+2?"}))
@@ -39,9 +39,9 @@
 ;=&gt; {:log-level :info, :use-stdio? true, ...}
 </code></pre>
 </div></div></div><div class="public anchor" id="var-create-session"><h3>create-session</h3><div class="usage"><code>(create-session client)</code><code>(create-session client config)</code></div><div class="doc"><div class="markdown"><p>Create a new conversation session.</p>
-<p>Config options: - :session-id           - Custom session ID - :model                - Model to use (e.g., “gpt-5.2”, “claude-sonnet-4.5”) - :tools                - Vector of tool definitions (use define-tool) - :system-message       - {:mode :append/:replace :content “…”} - :available-tools      - List of allowed tool names - :excluded-tools       - List of excluded tool names - :provider             - Custom provider config (BYOK) - :on-permission-request - Permission handler function Must return a map compatible with the permission result payload. The SDK wraps this into the JSON-RPC response as {:result <your-map>}: {:kind :approved} {:kind :denied-by-rules :rules <a href="{:kind &quot;shell&quot; :argument &quot;echo hi&quot;}">{:kind “shell” :argument “echo hi”}</a>} {:kind :denied-no-approval-rule-and-could-not-request-from-user} {:kind :denied-interactively-by-user :feedback “optional”} - :streaming?           - Enable streaming deltas - :mcp-servers          - MCP server configs map (keyed by server ID) - :custom-agents        - Custom agent configs - :config-dir           - Override config directory for CLI (configDir) - :skill-directories    - Additional skill directories to load - :disabled-skills      - Disable specific skills by name - :large-output         - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir} Note: CLI protocol feature, not in official SDK. outputDir may be ignored. - :working-directory    - Working directory for the session (tool operations relative to this)</your-map></p>
+<p>Config options: - :session-id           - Custom session ID - :model                - Model to use (e.g., “gpt-5.4”, “claude-sonnet-4.5”) - :tools                - Vector of tool definitions (use define-tool) - :system-message       - {:mode :append/:replace :content “…”} - :available-tools      - List of allowed tool names - :excluded-tools       - List of excluded tool names - :provider             - Custom provider config (BYOK) - :on-permission-request - Permission handler function Must return a map compatible with the permission result payload. The SDK wraps this into the JSON-RPC response as {:result <your-map>}: {:kind :approved} {:kind :denied-by-rules :rules <a href="{:kind &quot;shell&quot; :argument &quot;echo hi&quot;}">{:kind “shell” :argument “echo hi”}</a>} {:kind :denied-no-approval-rule-and-could-not-request-from-user} {:kind :denied-interactively-by-user :feedback “optional”} - :streaming?           - Enable streaming deltas - :mcp-servers          - MCP server configs map (keyed by server ID) - :custom-agents        - Custom agent configs - :config-dir           - Override config directory for CLI (configDir) - :skill-directories    - Additional skill directories to load - :disabled-skills      - Disable specific skills by name - :large-output         - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir} Note: CLI protocol feature, not in official SDK. outputDir may be ignored. - :working-directory    - Working directory for the session (tool operations relative to this)</your-map></p>
 <p>Example:</p>
-<pre><code class="language-clojure">(def session (copilot/create-session client {:model "gpt-5.2"}))
+<pre><code class="language-clojure">(def session (copilot/create-session client {:model "gpt-5.4"}))
 </code></pre>
 </div></div></div><div class="public anchor" id="var-define-tool"><h3>define-tool</h3><div class="usage"><code>(define-tool name opts)</code></div><div class="doc"><div class="markdown"><p>Define a tool with a handler function.</p>
 <p>Arguments: - name        - Tool name (string) - opts map: - :description - Tool description - :parameters  - JSON schema for parameters - :handler     - Function (fn <a href="args invocation">args invocation</a> -&gt; result)</p>
@@ -159,7 +159,7 @@
 <p>The session.start event contains the actual selected model if validation is needed.</p>
 <p>Example:</p>
 <pre><code class="language-clojure">(copilot/session-config session)
-;=&gt; {:model "gpt-5.2", :streaming? true, ...}
+;=&gt; {:model "gpt-5.4", :streaming? true, ...}
 </code></pre>
 </div></div></div><div class="public anchor" id="var-session-events"><h3>session-events</h3><div class="usage"></div><div class="doc"><div class="markdown"><p>Session lifecycle and state management events.</p>
 </div></div></div><div class="public anchor" id="var-session-id"><h3>session-id</h3><div class="usage"><code>(session-id session)</code></div><div class="doc"><div class="markdown"><p>Get the session ID.</p>
@@ -194,30 +194,30 @@
 <ol>
 <li><a href="session session-opts">session session-opts</a> - anonymous client with default options</li>
 </ol>
-<pre><code class="language-clojure">(with-client-session [session {:model "gpt-5.2"}]
+<pre><code class="language-clojure">(with-client-session [session {:model "gpt-5.4"}]
   (copilot/send! session {:prompt "Hi"}))
 </code></pre>
 <ol>
 <li><a href="client-opts session session-opts">client-opts session session-opts</a> - anonymous client with custom options</li>
 </ol>
-<pre><code class="language-clojure">(with-client-session [{:log-level :debug} session {:model "gpt-5.2"}]
+<pre><code class="language-clojure">(with-client-session [{:log-level :debug} session {:model "gpt-5.4"}]
   (copilot/send! session {:prompt "Hi"}))
 </code></pre>
 <ol>
 <li><a href="client session session-opts">client session session-opts</a> - named client with default options</li>
 </ol>
-<pre><code class="language-clojure">(with-client-session [client session {:model "gpt-5.2"}]
+<pre><code class="language-clojure">(with-client-session [client session {:model "gpt-5.4"}]
   (println (copilot/client-options client))
   (copilot/send! session {:prompt "Hi"}))
 </code></pre>
 <ol>
 <li><a href="client client-opts session session-opts">client client-opts session session-opts</a> - named client with custom options</li>
 </ol>
-<pre><code class="language-clojure">(with-client-session [client {:log-level :debug} session {:model "gpt-5.2"}]
+<pre><code class="language-clojure">(with-client-session [client {:log-level :debug} session {:model "gpt-5.4"}]
   (println (copilot/client-options client))
   (copilot/send! session {:prompt "Hi"}))
 </code></pre>
 </div></div></div><div class="public anchor" id="var-with-session"><h3>with-session</h3><h4 class="type">macro</h4><div class="usage"><code>(with-session [session-sym client &amp; [config]] &amp; body)</code></div><div class="doc"><div class="markdown"><p>Create a session and ensure destroy! on exit.</p>
-<p>Usage: (with-session <a href="s client {:model &quot;gpt-5.2&quot;}">s client {:model “gpt-5.2”}</a> …)</p>
+<p>Usage: (with-session <a href="s client {:model &quot;gpt-5.4&quot;}">s client {:model “gpt-5.4”}</a> …)</p>
 </div></div></div><div class="public anchor" id="var-workspace-path"><h3>workspace-path</h3><div class="usage"><code>(workspace-path session)</code></div><div class="doc"><div class="markdown"><p>Get the session workspace path when provided by the CLI.</p>
 </div></div></div></div></body></html>

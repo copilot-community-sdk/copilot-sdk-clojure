@@ -24,7 +24,7 @@
   (let [api-key (System/getenv "OPENAI_API_KEY")]
     (when-not api-key
       (throw (ex-info "Set OPENAI_API_KEY environment variable" {})))
-    {:model "gpt-5.2"
+    {:model "gpt-5.4"
      :provider {:provider-type :openai
                 :base-url "https://api.openai.com/v1"
                 :api-key api-key}}))
@@ -37,7 +37,7 @@
                      "https://your-resource.openai.azure.com")]
     (when-not api-key
       (throw (ex-info "Set AZURE_OPENAI_KEY environment variable" {})))
-    {:model "gpt-5.2"
+    {:model "gpt-5.4"
      :provider {:provider-type :azure
                 :base-url base-url
                 :api-key api-key

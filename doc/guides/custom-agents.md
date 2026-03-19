@@ -35,7 +35,7 @@ Pass `:custom-agents` when creating a session. Each agent requires at minimum `:
 
 (def session
   (copilot/create-session client
-    {:model "gpt-5.2"
+    {:model "gpt-5.4"
      :on-permission-request copilot/approve-all
      :custom-agents
      [{:agent-name "researcher"
@@ -64,7 +64,7 @@ The helpers API also accepts `:custom-agents` via session options:
 
 (h/query "Refactor the auth module"
   :session {:on-permission-request copilot/approve-all
-            :model "gpt-5.2"
+            :model "gpt-5.4"
             :custom-agents
             [{:agent-name "researcher"
               :agent-prompt "You explore and analyze code. Never suggest modifications directly."
@@ -209,7 +209,7 @@ Use `:agent-tools` to restrict which tools an agent can access. This enforces th
 ```clojure
 (def session
   (copilot/create-session client
-    {:model "gpt-5.2"
+    {:model "gpt-5.4"
      :on-permission-request copilot/approve-all
      :custom-agents
      [{:agent-name "reader"
@@ -235,7 +235,7 @@ Each custom agent can have its own MCP (Model Context Protocol) servers, giving 
 ```clojure
 (def session
   (copilot/create-session client
-    {:model "gpt-5.2"
+    {:model "gpt-5.4"
      :on-permission-request copilot/approve-all
      :custom-agents
      [{:agent-name "db-analyst"
@@ -258,7 +258,7 @@ A common pattern is to define a read-only researcher agent and a write-capable e
 ```clojure
 (def session
   (copilot/create-session client
-    {:model "gpt-5.2"
+    {:model "gpt-5.4"
      :on-permission-request copilot/approve-all
      :custom-agents
      [{:agent-name "researcher"

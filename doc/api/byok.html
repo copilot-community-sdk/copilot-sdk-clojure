@@ -20,7 +20,7 @@
 (require '[github.copilot-sdk.helpers :as h])
 
 (copilot/with-client-session [session
-                              {:model "gpt-5.2-codex"
+                              {:model "gpt-5.3-codex"
                                :provider {:provider-type :openai
                                           :base-url "https://your-resource.openai.azure.com/openai/v1/"
                                           :wire-api :responses
@@ -29,7 +29,7 @@
 </code></pre>
 <h2><a href="#quick-start-openai-direct" id="quick-start-openai-direct"></a>Quick Start: OpenAI Direct</h2>
 <pre><code class="language-clojure">(copilot/with-client-session [session
-                              {:model "gpt-5.2"
+                              {:model "gpt-5.4"
                                :provider {:provider-type :openai
                                           :base-url "https://api.openai.com/v1"
                                           :api-key (System/getenv "OPENAI_API_KEY")}}]
@@ -88,7 +88,7 @@
 <h2><a href="#example-configurations" id="example-configurations"></a>Example Configurations</h2>
 <h3><a href="#azure-openai-native-azure-endpoint" id="azure-openai-native-azure-endpoint"></a>Azure OpenAI (Native Azure Endpoint)</h3>
 <p>Use <code>:azure</code> type for endpoints at <code>*.openai.azure.com</code>:</p>
-<pre><code class="language-clojure">{:model "gpt-5.2"
+<pre><code class="language-clojure">{:model "gpt-5.4"
  :provider {:provider-type :azure
             :base-url "https://my-resource.openai.azure.com"
             :api-key (System/getenv "AZURE_OPENAI_KEY")
@@ -96,7 +96,7 @@
 </code></pre>
 <h3><a href="#azure-ai-foundry-openai-compatible-endpoint" id="azure-ai-foundry-openai-compatible-endpoint"></a>Azure AI Foundry (OpenAI-Compatible Endpoint)</h3>
 <p>For Azure AI Foundry deployments with <code>/openai/v1/</code> endpoints, use <code>:openai</code>:</p>
-<pre><code class="language-clojure">{:model "gpt-5.2-codex"
+<pre><code class="language-clojure">{:model "gpt-5.3-codex"
  :provider {:provider-type :openai
             :base-url "https://your-resource.openai.azure.com/openai/v1/"
             :api-key (System/getenv "FOUNDRY_API_KEY")
@@ -132,7 +132,7 @@
 {:provider {:provider-type :openai :base-url "..."}}
 
 ;; ✅ Correct: Model specified
-{:model "gpt-5.2"
+{:model "gpt-5.4"
  :provider {:provider-type :openai :base-url "..."}}
 </code></pre>
 <h3><a href="#azure-endpoint-type-confusion" id="azure-endpoint-type-confusion"></a>Azure Endpoint Type Confusion</h3>

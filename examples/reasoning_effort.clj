@@ -15,7 +15,7 @@
   [{:keys [prompt effort] :or {prompt (:prompt defaults) effort (:effort defaults)}}]
   (println "Reasoning effort:" effort)
   (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                         :model "gpt-5.2"
+                                         :model "gpt-5.4"
                                          :reasoning-effort effort
                                          :available-tools []}]
     (println "Q:" prompt)

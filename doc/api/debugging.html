@@ -16,7 +16,7 @@
 <p>Use the client’s <code>:log-level :debug</code> to see MCP communication:</p>
 <pre><code class="language-clojure">(copilot/with-client-session [{:log-level :debug}
                               session
-                              {:model "gpt-5.2"
+                              {:model "gpt-5.4"
                                :mcp-servers {"my-server" {:mcp-command "/path/to/server"
                                                           :mcp-args []
                                                           :mcp-tools ["*"]}}}]
@@ -169,7 +169,7 @@ tee -a "$LOG" | "$1" "${@:2}" 2&gt;&gt; "$LOG" | tee -a "$LOG"
 <p>Subscribe to tool execution events to observe MCP tool calls:</p>
 <pre><code class="language-clojure">(require '[clojure.core.async :refer [chan tap go-loop &lt;!]])
 
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:model "gpt-5.4"
                                        :mcp-servers {"my-server" {:mcp-command "server"
                                                                    :mcp-args []
                                                                    :mcp-tools ["*"]}}}]

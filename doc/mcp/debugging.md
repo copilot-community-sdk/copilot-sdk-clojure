@@ -21,7 +21,7 @@ Use the client's `:log-level :debug` to see MCP communication:
 ```clojure
 (copilot/with-client-session [{:log-level :debug}
                               session
-                              {:model "gpt-5.2"
+                              {:model "gpt-5.4"
                                :mcp-servers {"my-server" {:mcp-command "/path/to/server"
                                                           :mcp-args []
                                                           :mcp-tools ["*"]}}}]
@@ -212,7 +212,7 @@ Subscribe to tool execution events to observe MCP tool calls:
 ```clojure
 (require '[clojure.core.async :refer [chan tap go-loop <!]])
 
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:model "gpt-5.4"
                                        :mcp-servers {"my-server" {:mcp-command "server"
                                                                    :mcp-args []
                                                                    :mcp-tools ["*"]}}}]

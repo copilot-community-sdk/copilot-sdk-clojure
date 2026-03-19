@@ -114,29 +114,29 @@
 </code></pre>
 <p>Create a new conversation session.</p>
 <h4><a href="#with-session" id="with-session"></a><code>with-session</code></h4>
-<pre><code class="language-clojure">(copilot/with-session [session client {:model "gpt-5.2"}]
+<pre><code class="language-clojure">(copilot/with-session [session client {:model "gpt-5.4"}]
   ;; use session
   )
 </code></pre>
 <p>Create a session and ensure <code>destroy!</code> runs on exit.</p>
 <h4><a href="#with-client-session" id="with-client-session"></a><code>with-client-session</code></h4>
 <pre><code class="language-clojure">;; Form 1: [session session-opts] - anonymous client with default options
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:model "gpt-5.4"}]
   ;; use session
   )
 
 ;; Form 2: [client-opts session session-opts] - anonymous client with custom options
-(copilot/with-client-session [{:log-level :debug} session {:model "gpt-5.2"}]
+(copilot/with-client-session [{:log-level :debug} session {:model "gpt-5.4"}]
   ;; use session
   )
 
 ;; Form 3: [client session session-opts] - named client with default options
-(copilot/with-client-session [client session {:model "gpt-5.2"}]
+(copilot/with-client-session [client session {:model "gpt-5.4"}]
   ;; use client and session
   )
 
 ;; Form 4: [client client-opts session session-opts] - named client with custom options
-(copilot/with-client-session [client {:log-level :debug} session {:model "gpt-5.2"}]
+(copilot/with-client-session [client {:log-level :debug} session {:model "gpt-5.4"}]
   ;; use client and session
   )
 </code></pre>
@@ -148,7 +148,7 @@
 </thead>
 <tbody>
 <tr><td> <code>:session-id</code> </td><td> string </td><td> Custom session ID (optional) </td></tr>
-<tr><td> <code>:model</code> </td><td> string </td><td> Model to use (<code>"gpt-5.2"</code>, <code>"claude-sonnet-4.5"</code>, etc.) </td></tr>
+<tr><td> <code>:model</code> </td><td> string </td><td> Model to use (<code>"gpt-5.4"</code>, <code>"claude-sonnet-4.5"</code>, etc.) </td></tr>
 <tr><td> <code>:tools</code> </td><td> vector </td><td> Custom tools exposed to the CLI </td></tr>
 <tr><td> <code>:system-message</code> </td><td> map </td><td> System message customization (see below) </td></tr>
 <tr><td> <code>:available-tools</code> </td><td> vector </td><td> List of allowed tool names </td></tr>
@@ -210,11 +210,11 @@
 <pre><code class="language-clojure">(copilot/list-models client)
 </code></pre>
 <p>List available models with their metadata. Results are cached per client connection. Requires authentication. Returns a vector of model info maps:</p>
-<pre><code class="language-clojure">[{:id "gpt-5.2"
+<pre><code class="language-clojure">[{:id "gpt-5.4"
   :name "GPT-5.2"
   :vendor "openai"
-  :family "gpt-5.2"
-  :version "gpt-5.2"
+  :family "gpt-5.4"
+  :version "gpt-5.4"
   :max-input-tokens 128000
   :max-output-tokens 16384
   :preview? false
@@ -397,7 +397,7 @@
 <p>Get the session workspace path when provided by the CLI (may be nil).</p>
 <h4><a href="#session-config" id="session-config"></a><code>session-config</code></h4>
 <pre><code class="language-clojure">(copilot/session-config session)
-;; =&gt; {:model "gpt-5.2", :streaming? true, :reasoning-effort "high", ...}
+;; =&gt; {:model "gpt-5.4", :streaming? true, :reasoning-effort "high", ...}
 </code></pre>
 <p>Get the configuration that was used to create this session.</p>
 <h4><a href="#client" id="client"></a><code>client</code></h4>
@@ -491,7 +491,7 @@ copilot/tool-events
 <h2><a href="#streaming" id="streaming"></a>Streaming</h2>
 <p>Enable streaming to receive assistant response chunks as they’re generated:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :streaming? true}))
 
 (let [ch (chan 100)]
@@ -551,7 +551,7 @@ copilot/tool-events
                   (copilot/result-success issue)))}))
 
 (def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :tools [lookup-tool]}))
 </code></pre>
 <p>When Copilot invokes <code>lookup_issue</code>, the SDK automatically runs your handler and responds to the CLI.</p>
@@ -575,7 +575,7 @@ copilot/tool-events
 <h3><a href="#system-message-customization" id="system-message-customization"></a>System Message Customization</h3>
 <p>Control the system prompt:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :system-message
                   {:content "
 &lt;workflow_rules&gt;
@@ -587,14 +587,14 @@ copilot/tool-events
 <p>The SDK auto-injects environment context, tool instructions, and security guardrails. Your <code>:content</code> is appended after SDK-managed sections.</p>
 <p>For full control (removes all guardrails), use <code>:mode :replace</code>:</p>
 <pre><code class="language-clojure">(copilot/create-session client
-  {:model "gpt-5.2"
+  {:model "gpt-5.4"
    :system-message {:mode :replace
                     :content "You are a helpful assistant."}})
 </code></pre>
 <h3><a href="#config-directory-and-skills" id="config-directory-and-skills"></a>Config Directory and Skills</h3>
 <p><code>config-dir</code> overrides where the CLI reads its config and state (e.g., <code>~/.copilot</code>). It does not define custom agents. Custom agents are provided via <code>:custom-agents</code>.</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :config-dir "/tmp/copilot-config"
                 :skill-directories ["/path/to/skills" "/opt/team-skills"]
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
@@ -605,7 +605,7 @@ copilot/tool-events
 </blockquote>
 <p>Configure how large tool outputs are handled before being sent back to the model:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :large-output {:enabled true
                                :max-size-bytes 65536
                                :output-dir "/tmp/copilot-tool-output"}}))
@@ -624,18 +624,18 @@ copilot/tool-events
 <p>Infinite sessions enable automatic context compaction, allowing conversations to continue beyond the model’s context window limit. When the context approaches capacity, the CLI automatically compacts older messages while preserving important context.</p>
 <pre><code class="language-clojure">;; Enable with defaults (enabled by default)
 (def session (copilot/create-session client
-               {:model "gpt-5.2"}))
+               {:model "gpt-5.4"}))
 
 ;; Explicit configuration
 (def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :infinite-sessions {:enabled true
                                     :background-compaction-threshold 0.80
                                     :buffer-exhaustion-threshold 0.95}}))
 
 ;; Disable infinite sessions
 (def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :infinite-sessions {:enabled false}}))
 </code></pre>
 <p><strong>Configuration options:</strong></p>
@@ -690,7 +690,7 @@ copilot/tool-events
 <h3><a href="#user-input-handling" id="user-input-handling"></a>User Input Handling</h3>
 <p>When the agent needs input from the user (via <code>ask_user</code> tool), the <code>:on-user-input-request</code> handler is called. Return a response map with the user’s input:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :on-user-input-request
                 (fn [request invocation]
                   ;; request contains {:question "..." :choices [...] :allow-freeform true/false}
@@ -707,7 +707,7 @@ copilot/tool-events
 <h3><a href="#session-hooks" id="session-hooks"></a>Session Hooks</h3>
 <p>Lifecycle hooks allow custom logic at various points during the session:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
-               {:model "gpt-5.2"
+               {:model "gpt-5.4"
                 :hooks
                 {:on-pre-tool-use
                  (fn [input invocation]
@@ -762,7 +762,7 @@ copilot/tool-events
                 :reasoning-effort "high"})) ; "low", "medium", "high", or "xhigh"
 </code></pre>
 <h3><a href="#multiple-sessions" id="multiple-sessions"></a>Multiple Sessions</h3>
-<pre><code class="language-clojure">(def session1 (copilot/create-session client {:model "gpt-5.2"}))
+<pre><code class="language-clojure">(def session1 (copilot/create-session client {:model "gpt-5.4"}))
 (def session2 (copilot/create-session client {:model "claude-sonnet-4.5"}))
 
 ;; Both sessions are independent

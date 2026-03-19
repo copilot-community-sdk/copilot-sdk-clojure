@@ -40,7 +40,7 @@ Q: How about Tokyo?
 <p>For more control, use the explicit client/session API:</p>
 <pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "gpt-5.2"}]
+(copilot/with-client-session [session {:model "gpt-5.4"}]
   (let [response (copilot/send-and-wait! session {:prompt "What is 2 + 2?"})]
     (println (get-in response [:data :content]))))
 </code></pre>
@@ -67,7 +67,7 @@ Q: How about Tokyo?
 <pre><code class="language-clojure">(require '[clojure.core.async :refer [chan tap go-loop &lt;!]])
 (require '[github.copilot-sdk :as copilot])
 
-(copilot/with-client-session [session {:model "gpt-5.2" :streaming? true}]
+(copilot/with-client-session [session {:model "gpt-5.4" :streaming? true}]
   (let [ch (chan 256)
         done (promise)]
     (tap (copilot/events session) ch)
@@ -121,7 +121,7 @@ Q: How about Tokyo?
                   (copilot/result-success
                    (str city ": " temp "°F and " condition))))}))
 
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:model "gpt-5.4"
                                        :tools [get-weather]}]
   (println (h/query "What's the weather like in Seattle and Tokyo?"
                     :session session)))
@@ -144,7 +144,7 @@ Q: How about Tokyo?
                   (copilot/result-success
                    (str city ": " temp "°F and " condition))))}))
 
-(copilot/with-client-session [session {:model "gpt-5.2"
+(copilot/with-client-session [session {:model "gpt-5.4"
                                        :streaming? true
                                        :tools [get-weather]}]
   (println "🌤️  Weather Assistant (type 'exit' to quit)")

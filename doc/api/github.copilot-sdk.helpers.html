@@ -26,7 +26,7 @@
 <p>Examples: ;; Simple query (shared client, fresh session) (query “What is 2+2?”)</p>
 <p>;; With session options (query “Explain monads” :session {:model “claude-sonnet-4.5”})</p>
 <p>;; With explicit client (copilot/with-client <a href="c {}">c {}</a> (query “Hello” :client c))</p>
-<p>;; With explicit session (multi-turn) (copilot/with-session <a href="s client {:model &quot;gpt-5.2&quot;}">s client {:model “gpt-5.2”}</a> (query “What is 2+2?” :session s) (query “And 3+3?” :session s))  ;; context preserved</p>
+<p>;; With explicit session (multi-turn) (copilot/with-session <a href="s client {:model &quot;gpt-5.4&quot;}">s client {:model “gpt-5.4”}</a> (query “What is 2+2?” :session s) (query “And 3+3?” :session s))  ;; context preserved</p>
 </div></div></div><div class="public anchor" id="var-query-chan"><h3>query-chan</h3><div class="usage"><code>(query-chan prompt &amp; {:keys [client session buffer], :or {buffer 256}})</code></div><div class="doc"><div class="markdown"><p>Execute a query and return a core.async channel of events.</p>
 <p>This allows asynchronous processing of session events using core.async primitives.</p>
 <p>Arguments: prompt - The prompt string to send</p>
