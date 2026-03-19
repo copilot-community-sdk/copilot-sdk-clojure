@@ -164,6 +164,38 @@ clojure -A:examples -M -m byok-provider
 
 See [`examples/README.md`](./examples/README.md) for detailed walkthroughs and explanations.
 
+## Permission Handling
+
+The SDK uses a **deny-by-default** permission model. All tool executions (file
+writes, shell commands, URL fetches, MCP tools, etc.) are denied unless your
+session config provides an `:on-permission-request` handler (**required**).
+
+Use `approve-all` to permit everything:
+
+```clojure
+(copilot/create-session client {:on-permission-request copilot/approve-all})
+```
+
+For fine-grained control, provide a custom handler:
+
+```clojure
+(copilot/create-session client
+  {:on-permission-request
+   (fn [request _ctx]
+     (case (:kind request)
+       :shell {:kind :approved}
+       :write {:kind :denied-by-rules
+               :rules [{:kind "write" :argument (:path request)}]}
+       {:kind :approved}))})
+```
+
+Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,
+`:custom-tool`, `:memory`.
+
+See [Permission Handling](./doc/reference/API.md#permission-handling) in the
+API Reference and [`permission_bash.clj`](./examples/permission_bash.clj)
+for a complete example.
+
 ## Architecture
 
 The SDK communicates with the Copilot CLI server via JSON-RPC:

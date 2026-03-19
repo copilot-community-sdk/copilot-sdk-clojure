@@ -4,6 +4,7 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 ### Added
 - `:no-result` permission outcome — extensions can attach to sessions without actively answering permission requests by returning `{:kind :no-result}` from their `:on-permission-request` handler. On v3 protocol, the `handlePendingPermissionRequest` RPC is skipped; on v2, an error is propagated to the CLI (upstream PR #802).
+- `:blob` attachment type for outbound messages — send inline base64-encoded data (e.g. images) via `{:type :blob :data "..." :mime-type "image/png"}` in `:attachments`. Previously blob attachments were only supported in inbound events (upstream PR #731).
 
 ### Added (v0.1.33 sync)
 - `:skip-permission?` option on tool definitions — when `true`, the tool executes without triggering a permission prompt. Sent as `skipPermission: true` in the wire protocol (upstream PR #808).
@@ -19,6 +20,9 @@ All notable changes to this project will be documented in this file. This change
 ### Changed (v0.1.33 sync)
 - `join-session` now makes `:on-permission-request` **optional**. When omitted, a default handler returns `{:kind :no-result}`, leaving any pending permission request unanswered. This matches the upstream `JoinSessionConfig` where `onPermissionRequest` is optional (upstream PR #802).
 - `:auto-restart?` client option is **deprecated** and has no effect. The auto-restart/reconnect behavior has been removed across all official SDKs. The option is retained for backward compatibility but will be removed in a future release (upstream PR #803).
+
+### Added (documentation)
+- "Permission Handling" section in README.md — covers deny-by-default model, `approve-all`, custom handlers, and links to API reference (upstream PR #879).
 
 ## [0.1.32.0] - 2026-03-12
 ### Added (upstream sync)

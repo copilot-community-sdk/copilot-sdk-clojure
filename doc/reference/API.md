@@ -630,6 +630,7 @@ Send a message to the session. Returns immediately with the message ID.
 | `:directory` | `:type`, `:path` | `:display-name`, `:line-range` | Directory attachment |
 | `:selection` | `:type`, `:file-path`, `:display-name` | `:selection-range`, `:text` | Code selection attachment |
 | `:github-reference` | `:type`, `:number`, `:title`, `:reference-type`, `:state`, `:url` | — | GitHub issue, PR, or discussion reference |
+| `:blob` | `:type`, `:data`, `:mime-type` | `:display-name` | Inline base64-encoded data (e.g. images) |
 
 `:line-range` is a map with `:start` and `:end` line numbers (zero-based) to restrict the attachment to a range of lines:
 
@@ -1477,6 +1478,20 @@ For models that support reasoning (like o1), you can control the reasoning effor
                   :selection-range {:start {:line 10 :character 0}
                                    :end {:line 25 :character 0}}
                   :text "(defn my-function [...] ...)"}]})
+```
+
+### Blob Attachments
+
+Send inline base64-encoded data (e.g. images) without writing to disk:
+
+```clojure
+;; Blob attachment (inline base64 data)
+(copilot/send! session
+  {:prompt "Describe this image"
+   :attachments [{:type :blob
+                  :data "iVBORw0KGgoAAAANSUhEUg..."
+                  :mime-type "image/png"
+                  :display-name "screenshot.png"}]})
 ```
 
 ### Connecting to External Server

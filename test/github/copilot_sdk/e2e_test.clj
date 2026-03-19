@@ -274,6 +274,20 @@
                                                    10)))) ; 10ms timeout
        (sdk/destroy! session)))))
 
+(deftest ^:e2e test-e2e-blob-attachment
+  (when-e2e
+   (testing "send with blob attachment does not throw"
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
+       (let [response (sdk/send-and-wait!
+                        session
+                        {:prompt "Describe this image"
+                         :attachments [{:type :blob
+                                        :data "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                                        :mime-type "image/png"
+                                        :display-name "test-pixel.png"}]})]
+         (is (some? response) "should receive a response"))
+       (sdk/destroy! session)))))
+
 ;; -----------------------------------------------------------------------------
 ;; Run Info
 ;; -----------------------------------------------------------------------------

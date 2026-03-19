@@ -367,3 +367,44 @@
       (is (= "npx" (get-in wire ["fs" :command])))
       (is (= "https://api.test" (get-in wire ["api" :url])))
       (is (= ["read" "write"] (get-in wire ["api" :tools]))))))
+
+(deftest blob-attachment-wire-format-test
+  (testing "blob attachment with display-name"
+    (let [wire (util/attachment->wire {:type :blob
+                                       :data "iVBORw0KGgoAAAANSUhEUg=="
+                                       :mime-type "image/png"
+                                       :display-name "test-pixel.png"})]
+      (is (= "blob" (:type wire)))
+      (is (= "iVBORw0KGgoAAAANSUhEUg==" (:data wire)))
+      (is (= "image/png" (:mimeType wire)))
+      (is (= "test-pixel.png" (:displayName wire)))))
+
+  (testing "blob attachment without display-name"
+    (let [wire (util/attachment->wire {:type :blob
+                                       :data "AAAA"
+                                       :mime-type "application/octet-stream"})]
+      (is (= "blob" (:type wire)))
+      (is (= "AAAA" (:data wire)))
+      (is (= "application/octet-stream" (:mimeType wire)))
+      (is (not (contains? wire :displayName)))))
+
+  (testing "blob attachment spec valid in send-options"
+    (is (s/valid? ::specs/send-options
+                  {:prompt "Describe this image"
+                   :attachments [{:type :blob
+                                  :data "iVBORw0KGgoAAAANSUhEUg=="
+                                  :mime-type "image/png"}]})))
+  (testing "blob attachment spec valid with display-name"
+    (is (s/valid? ::specs/send-options
+                  {:prompt "What's in this image?"
+                   :attachments [{:type :blob
+                                  :data "iVBORw0KGgoAAAANSUhEUg=="
+                                  :mime-type "image/png"
+                                  :display-name "photo.png"}]})))
+  (testing "blob attachment mixed with file attachment"
+    (is (s/valid? ::specs/send-options
+                  {:prompt "Compare these"
+                   :attachments [{:type :file :path "/tmp/code.clj"}
+                                 {:type :blob
+                                  :data "AAAA"
+                                  :mime-type "image/png"}]}))))
