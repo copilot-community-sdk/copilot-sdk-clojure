@@ -378,7 +378,7 @@ instead of the RPC method (no connection required).
 Requires authentication (unless `:on-list-models` is provided). Returns a vector of model info maps:
 ```clojure
 [{:id "gpt-5.4"
-  :name "GPT-5.2"
+  :name "GPT-5.4"
   :vendor "openai"
   :family "gpt-5.4"
   :version "gpt-5.4"

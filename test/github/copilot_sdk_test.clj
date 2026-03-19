@@ -289,19 +289,19 @@
                                                 :reasoning-efforts "high"}))))
 
   (testing "typo in session config provides helpful error"
-    (let [unknown (specs/unknown-keys {:model "gpt-5.2" :streeming? true}
+    (let [unknown (specs/unknown-keys {:model "gpt-5.4" :streeming? true}
                                        specs/session-config-keys)]
       (is (contains? unknown :streeming?))))
 
   (testing "valid session config keys are accepted"
     (is (s/valid? ::specs/session-config {:on-permission-request identity
-                                           :model "gpt-5.2"
+                                           :model "gpt-5.4"
                                            :streaming? true
                                            :reasoning-effort "high"})))
 
   (testing "session config rejects unknown keys even with valid ones"
     (is (not (s/valid? ::specs/session-config {:on-permission-request identity
-                                                :model "gpt-5.2"
+                                                :model "gpt-5.4"
                                                 :unknown-key "value"})))))
 
 (deftest evt-helper-test

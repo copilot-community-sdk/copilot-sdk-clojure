@@ -105,11 +105,11 @@
    :statusMessage "Authenticated as test-user"})
 
 (defn- handle-models-list [server params]
-  {:models [{:id "gpt-5.2"
-             :name "GPT-5.2"
+  {:models [{:id "gpt-5.4"
+             :name "GPT-5.4"
              :vendor "openai"
-             :family "gpt-5.2"
-             :version "gpt-5.2"
+             :family "gpt-5.4"
+             :version "gpt-5.4"
              :max_input_tokens 128000
              :max_output_tokens 16384
              :preview false}

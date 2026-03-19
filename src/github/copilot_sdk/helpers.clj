@@ -202,7 +202,7 @@
 
      ;; With explicit session (multi-turn)
      (copilot/with-session [s client {:on-permission-request copilot/approve-all
-                                      :model \"gpt-5.2\"}]
+                                      :model \"gpt-5.4\"}]
        (query \"What is 2+2?\" :session s)
        (query \"And 3+3?\" :session s))  ;; context preserved
    "
