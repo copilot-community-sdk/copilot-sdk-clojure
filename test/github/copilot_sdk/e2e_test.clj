@@ -284,7 +284,8 @@
                          :attachments [{:type :blob
                                         :data "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
                                         :mime-type "image/png"
-                                        :display-name "test-pixel.png"}]})]
+                                        :display-name "test-pixel.png"}]}
+                        30000)]
          (is (some? response) "should receive a response"))
        (sdk/destroy! session)))))
 

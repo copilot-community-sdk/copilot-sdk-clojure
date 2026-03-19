@@ -168,7 +168,9 @@ See [`examples/README.md`](./examples/README.md) for detailed walkthroughs and e
 
 The SDK uses a **deny-by-default** permission model. All tool executions (file
 writes, shell commands, URL fetches, MCP tools, etc.) are denied unless your
-session config provides an `:on-permission-request` handler (**required**).
+session config provides an `:on-permission-request` handler (**required** for
+`create-session` and `resume-session`; optional for `join-session` which
+defaults to `{:kind :no-result}`).
 
 Use `approve-all` to permit everything:
 
@@ -182,7 +184,7 @@ For fine-grained control, provide a custom handler:
 (copilot/create-session client
   {:on-permission-request
    (fn [request _ctx]
-     (case (:kind request)
+     (case (:permission-kind request)
        :shell {:kind :approved}
        :write {:kind :denied-by-rules
                :rules [{:kind "write" :argument (:path request)}]}
