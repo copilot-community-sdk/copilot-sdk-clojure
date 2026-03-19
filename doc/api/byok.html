@@ -21,7 +21,8 @@
 (require '[github.copilot-sdk.helpers :as h])
 
 (copilot/with-client-session [session
-                              {:model "gpt-5.3-codex"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.3-codex"
                                :provider {:provider-type :openai
                                           :base-url "https://your-resource.openai.azure.com/openai/v1/"
                                           :wire-api :responses
@@ -30,7 +31,8 @@
 </code></pre>
 <h2><a href="#quick-start-openai-direct" id="quick-start-openai-direct"></a>Quick Start: OpenAI Direct</h2>
 <pre><code class="language-clojure">(copilot/with-client-session [session
-                              {:model "gpt-5.4"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :provider {:provider-type :openai
                                           :base-url "https://api.openai.com/v1"
                                           :api-key (System/getenv "OPENAI_API_KEY")}}]
@@ -39,7 +41,8 @@
 <h2><a href="#quick-start-ollama-local" id="quick-start-ollama-local"></a>Quick Start: Ollama (Local)</h2>
 <pre><code class="language-clojure">;; No API key needed for local Ollama
 (copilot/with-client-session [session
-                              {:model "llama3"
+                              {:on-permission-request copilot/approve-all
+                               :model "llama3"
                                :provider {:provider-type :openai
                                           :base-url "http://localhost:11434/v1"}}]
   (println (h/query "Hello!" :session session)))
@@ -52,7 +55,8 @@
 <pre><code class="language-clojure">;; No API key needed for local Foundry Local
 ;; Replace &lt;PORT&gt; with the port from: foundry service status
 (copilot/with-client-session [session
-                              {:model "phi-4-mini"
+                              {:on-permission-request copilot/approve-all
+                               :model "phi-4-mini"
                                :provider {:provider-type :openai
                                           :base-url "http://localhost:&lt;PORT&gt;/v1"}}]
   (println (h/query "Hello!" :session session)))
@@ -71,7 +75,8 @@ foundry service status
 </code></pre>
 <h2><a href="#quick-start-anthropic" id="quick-start-anthropic"></a>Quick Start: Anthropic</h2>
 <pre><code class="language-clojure">(copilot/with-client-session [session
-                              {:model "claude-sonnet-4"
+                              {:on-permission-request copilot/approve-all
+                               :model "claude-sonnet-4"
                                :provider {:provider-type :anthropic
                                           :base-url "https://api.anthropic.com"
                                           :api-key (System/getenv "ANTHROPIC_API_KEY")}}]

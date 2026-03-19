@@ -28,7 +28,8 @@
 (require '[github.copilot-sdk.helpers :as h])
 
 (copilot/with-client-session [session
-                              {:model "gpt-5.4"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :mcp-servers
                                {"my-local-server"
                                 {:mcp-command "node"
@@ -40,7 +41,8 @@
 </code></pre>
 <h3><a href="#remote-mcp-server-http" id="remote-mcp-server-http"></a>Remote MCP Server (HTTP)</h3>
 <pre><code class="language-clojure">(copilot/with-client-session [session
-                              {:model "gpt-5.4"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :mcp-servers
                                {"github"
                                 {:mcp-server-type :http
@@ -52,7 +54,8 @@
 <h3><a href="#multiple-mcp-servers" id="multiple-mcp-servers"></a>Multiple MCP Servers</h3>
 <p>You can combine multiple MCP servers in a single session:</p>
 <pre><code class="language-clojure">(copilot/with-client-session [session
-                              {:model "gpt-5.4"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :mcp-servers
                                {"filesystem"
                                 {:mcp-command "npx"
@@ -72,7 +75,8 @@
 (require '[github.copilot-sdk.helpers :as h])
 
 (copilot/with-client-session [session
-                              {:model "gpt-5.4"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :mcp-servers
                                {"filesystem"
                                 {:mcp-command "npx"
@@ -137,7 +141,8 @@
      :handler (fn [args _] (copilot/result-success (str "Processed: " (:input args))))}))
 
 (copilot/with-client-session [session
-                              {:model "gpt-5.4"
+                              {:on-permission-request copilot/approve-all
+                               :model "gpt-5.4"
                                :tools [my-tool]
                                :mcp-servers
                                {"filesystem"
