@@ -184,7 +184,7 @@ For fine-grained control, provide a custom handler:
 (copilot/create-session client
   {:on-permission-request
    (fn [request _ctx]
-     (case (:permission-kind request)
+     (case (keyword (:permission-kind request))
        :shell {:kind :approved}
        :write {:kind :denied-by-rules
                :rules [{:kind "write" :argument (:path request)}]}
@@ -192,7 +192,8 @@ For fine-grained control, provide a custom handler:
 ```
 
 Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,
-`:custom-tool`, `:memory`.
+`:custom-tool`, `:memory` (arrive as strings from the wire; use `keyword`
+to match).
 
 See [Permission Handling](./doc/reference/API.md#permission-handling) in the
 API Reference and [`permission_bash.clj`](./examples/permission_bash.clj)
