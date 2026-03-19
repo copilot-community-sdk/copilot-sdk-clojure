@@ -186,9 +186,11 @@ For fine-grained control, provide a custom handler:
    (fn [request _ctx]
      (case (keyword (:permission-kind request))
        :shell {:kind :approved}
-       :write {:kind :denied-by-rules
-               :rules [{:kind "write" :argument (:path request)}]}
-       {:kind :approved}))})
+       :read  {:kind :approved}
+       ;; deny everything else
+       {:kind :denied-by-rules
+        :rules [{:kind (name (:permission-kind request))
+                 :argument "not permitted"}]}))})
 ```
 
 Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,

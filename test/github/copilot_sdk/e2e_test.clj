@@ -287,7 +287,7 @@
                                         :display-name "test-pixel.png"}]}
                         30000)]
          (is (some? response) "should receive a response"))
-       (sdk/destroy! session)))))
+       (sdk/disconnect! session)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Run Info
