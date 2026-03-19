@@ -2,6 +2,8 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [0.1.33.0-SNAPSHOT] - 2026-03-19
 ### Added
 - `:no-result` permission outcome — extensions can attach to sessions without actively answering permission requests by returning `{:kind :no-result}` from their `:on-permission-request` handler. On v3 protocol, the `handlePendingPermissionRequest` RPC is skipped; on v2, an error is propagated to the CLI (upstream PR #802).
 - `:blob` attachment type for outbound messages — send inline base64-encoded data (e.g. images) via `{:type :blob :data "..." :mime-type "image/png"}` in `:attachments`. Previously blob attachments were only supported in inbound events (upstream PR #731).
@@ -321,7 +323,8 @@ All notable changes to this project will be documented in this file. This change
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.32.0...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.33.0-SNAPSHOT...HEAD
+[0.1.33.0-SNAPSHOT]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.32.0...v0.1.33.0-SNAPSHOT
 [0.1.32.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.32.0...v0.1.32.0
 [0.1.32.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.1...v0.1.32.0
 [0.1.30.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.30.0...v0.1.30.1
