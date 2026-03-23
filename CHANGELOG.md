@@ -2,6 +2,8 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Added (v0.2.0 sync)
+- **`:host` field on `session.handoff` events** — `session.handoff` event data now includes an optional `:host` field with the GitHub host URL for the source session (e.g., `"https://github.com"` or `"https://tenant.ghe.com"`). New `::session.handoff-data` spec documents the shape: `{:remote-session-id "..." :host "..."}` (both optional) (upstream PR #900).
 
 ## [0.2.0.0] - 2026-03-23
 ### Added (v0.2.0 sync)

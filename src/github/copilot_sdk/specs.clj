@@ -540,6 +540,11 @@
 
 (s/def ::session.idle-data map?)
 
+(s/def ::remote-session-id string?)
+
+(s/def ::session.handoff-data
+  (s/keys :opt-un [::remote-session-id ::host]))
+
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 (s/def ::interaction-id string?)
 
