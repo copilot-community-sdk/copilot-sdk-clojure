@@ -14,6 +14,7 @@ Key features:
 - **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
 - **User input handling** — Handle `ask_user` requests from the agent
 - **Event callbacks** — Register `:on-event` handlers to receive all session events
+- **System message customization** — Override or extend the system prompt with full `:replace` or fine-grained `:customize` mode (section-level control over identity, tone, safety, and more)
 - **Child process mode** — Join existing sessions via `join-session` for extensions
 - **Authentication options** — GitHub token auth or logged-in user
 
