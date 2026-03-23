@@ -102,14 +102,54 @@
 ;; System message configuration
 ;; -----------------------------------------------------------------------------
 
-(s/def ::system-message-mode #{:append :replace})
+(s/def ::system-message-mode #{:append :replace :customize})
 (s/def ::system-message-content string?)
 
-;; System message uses :mode and :content keys directly
+;; System prompt sections for customize mode (upstream PR #816)
+(def system-prompt-sections
+  "Known system prompt section identifiers for the customize mode.
+   Each section corresponds to a distinct part of the system prompt."
+  {:identity            {:description "Agent identity preamble and mode statement"}
+   :tone                {:description "Response style, conciseness rules, output formatting preferences"}
+   :tool-efficiency     {:description "Tool usage patterns, parallel calling, batching guidelines"}
+   :environment-context {:description "CWD, OS, git root, directory listing, available tools"}
+   :code-change-rules   {:description "Coding rules, linting/testing, ecosystem tools, style"}
+   :guidelines          {:description "Tips, behavioral best practices, behavioral guidelines"}
+   :safety              {:description "Environment limitations, prohibited actions, security policies"}
+   :tool-instructions   {:description "Per-tool usage instructions"}
+   :custom-instructions {:description "Repository and organization custom instructions"}
+   :last-instructions   {:description "End-of-prompt instructions: parallel tool calling, persistence, task completion"}})
+
+(s/def ::system-prompt-section (set (keys system-prompt-sections)))
+
+;; Section override: action can be a keyword for static overrides, or a fn for transforms
+(s/def ::section-action
+  (s/or :static #{:replace :remove :append :prepend}
+        :transform fn?))
+
+(s/def ::section-override
+  (s/and map?
+         #(contains? % :action)
+         #(s/valid? ::section-action (:action %))
+         #(if-let [c (:content %)] (string? c) true)))
+
+;; Customize config: mode :customize with optional sections map and content
+;; Sections map allows any keyword key — unknown sections gracefully fall back
+;; to appending content to additional instructions (upstream behavior).
+(s/def ::sections (s/map-of keyword? ::section-override))
+
+;; System message: supports :append (default), :replace, and :customize modes
 (s/def ::system-message
   (s/and map?
-         #(if-let [m (:mode %)] (#{:append :replace} m) true)
-         #(if-let [c (:content %)] (string? c) true)))
+         #(if-let [m (:mode %)] (#{:append :replace :customize} m) true)
+         #(if-let [c (:content %)] (string? c) true)
+         ;; :replace mode requires :content
+         #(if (= :replace (:mode %)) (string? (:content %)) true)
+         #(if (= :customize (:mode %))
+            (if-let [s (:sections %)]
+              (s/valid? ::sections s)
+              true)
+            true)))
 
 ;; -----------------------------------------------------------------------------
 ;; MCP Server configuration
@@ -458,7 +498,18 @@
     :copilot/permission.requested :copilot/permission.completed
     :copilot/user_input.requested :copilot/user_input.completed
     :copilot/elicitation.requested :copilot/elicitation.completed
-    :copilot/external_tool.requested})
+    :copilot/external_tool.requested :copilot/external_tool.completed
+    ;; MCP OAuth events
+    :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+    ;; Command events
+    :copilot/command.queued :copilot/command.execute :copilot/command.completed
+    :copilot/commands.changed
+    ;; Plan mode events
+    :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+    ;; Session status events
+    :copilot/session.tools_updated :copilot/session.background_tasks_changed
+    :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
+    :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)

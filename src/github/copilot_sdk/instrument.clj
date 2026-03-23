@@ -233,6 +233,76 @@
                :opts (s/? (s/nilable ::specs/log-options)))
   :ret ::specs/event-id)
 
+;; -- Experimental RPC method specs -------------------------------------------
+
+(s/fdef github.copilot-sdk.session/skills-list
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/skills-enable!
+  :args (s/cat :session ::specs/session :skill-name string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/skills-disable!
+  :args (s/cat :session ::specs/session :skill-name string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/skills-reload!
+  :args (s/cat :session ::specs/session)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/mcp-list
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/mcp-enable!
+  :args (s/cat :session ::specs/session :server-name string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/mcp-disable!
+  :args (s/cat :session ::specs/session :server-name string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/mcp-reload!
+  :args (s/cat :session ::specs/session)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/extensions-list
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/extensions-enable!
+  :args (s/cat :session ::specs/session :extension-id string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/extensions-disable!
+  :args (s/cat :session ::specs/session :extension-id string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/extensions-reload!
+  :args (s/cat :session ::specs/session)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/plugins-list
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/compaction-compact!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/shell-exec!
+  :args (s/cat :session ::specs/session :command string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/shell-kill!
+  :args (s/cat :session ::specs/session :process-id string?)
+  :ret any?)
+
+(s/fdef github.copilot-sdk.session/ui-elicitation!
+  :args (s/cat :session ::specs/session :params map?)
+  :ret map?)
+
 ;; -----------------------------------------------------------------------------
 ;; Function specs for helpers namespace
 ;; -----------------------------------------------------------------------------
@@ -302,6 +372,23 @@
                       github.copilot-sdk.session/switch-model!
                       github.copilot-sdk.session/set-model!
                       github.copilot-sdk.session/log!
+                      github.copilot-sdk.session/skills-list
+                      github.copilot-sdk.session/skills-enable!
+                      github.copilot-sdk.session/skills-disable!
+                      github.copilot-sdk.session/skills-reload!
+                      github.copilot-sdk.session/mcp-list
+                      github.copilot-sdk.session/mcp-enable!
+                      github.copilot-sdk.session/mcp-disable!
+                      github.copilot-sdk.session/mcp-reload!
+                      github.copilot-sdk.session/extensions-list
+                      github.copilot-sdk.session/extensions-enable!
+                      github.copilot-sdk.session/extensions-disable!
+                      github.copilot-sdk.session/extensions-reload!
+                      github.copilot-sdk.session/plugins-list
+                      github.copilot-sdk.session/compaction-compact!
+                      github.copilot-sdk.session/shell-exec!
+                      github.copilot-sdk.session/shell-kill!
+                      github.copilot-sdk.session/ui-elicitation!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events
@@ -353,6 +440,23 @@
                       github.copilot-sdk.session/switch-model!
                       github.copilot-sdk.session/set-model!
                       github.copilot-sdk.session/log!
+                      github.copilot-sdk.session/skills-list
+                      github.copilot-sdk.session/skills-enable!
+                      github.copilot-sdk.session/skills-disable!
+                      github.copilot-sdk.session/skills-reload!
+                      github.copilot-sdk.session/mcp-list
+                      github.copilot-sdk.session/mcp-enable!
+                      github.copilot-sdk.session/mcp-disable!
+                      github.copilot-sdk.session/mcp-reload!
+                      github.copilot-sdk.session/extensions-list
+                      github.copilot-sdk.session/extensions-enable!
+                      github.copilot-sdk.session/extensions-disable!
+                      github.copilot-sdk.session/extensions-reload!
+                      github.copilot-sdk.session/plugins-list
+                      github.copilot-sdk.session/compaction-compact!
+                      github.copilot-sdk.session/shell-exec!
+                      github.copilot-sdk.session/shell-kill!
+                      github.copilot-sdk.session/ui-elicitation!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events

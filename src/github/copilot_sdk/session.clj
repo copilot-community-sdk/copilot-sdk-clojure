@@ -103,6 +103,44 @@
   (when workspace-path
     (swap! (:state client) assoc-in [:sessions session-id :workspace-path] workspace-path)))
 
+(defn register-transform-callbacks!
+  "Store system message transform callbacks on a session.
+   Callbacks is a map of wire section ID strings to 1-arity functions
+   that receive current content and return transformed content."
+  [client session-id callbacks]
+  (when callbacks
+    (swap! (:state client) assoc-in [:sessions session-id :transform-callbacks] callbacks)))
+
+(defn handle-system-message-transform
+  "Handle a systemMessage.transform RPC request from the CLI runtime.
+   Dispatches each section to its registered transform callback.
+   On callback error, returns the original content (graceful fallback).
+   
+   Uses string keys in the response to preserve the original wire-format
+   section IDs (e.g. \"tool_efficiency\", not \"tool-efficiency\")."
+  [client session-id sections]
+  (let [callbacks (get-in @(:state client) [:sessions session-id :transform-callbacks])]
+    {:sections
+     (reduce-kv
+      (fn [acc section-id {:keys [content]}]
+        (let [;; Convert incoming kebab-case keyword back to wire string ID
+              ;; e.g. :tool-efficiency -> "tool_efficiency"
+              wire-id (util/section-kw->wire-id section-id)
+              callback (get callbacks wire-id)]
+          ;; Use wire string as response key to preserve original format
+          (assoc acc wire-id
+                 {:content
+                  (if callback
+                    (try
+                      (callback content)
+                      (catch Throwable t
+                        (log/warn t "systemMessage.transform callback failed"
+                                  {:session-id session-id :section wire-id})
+                        content))
+                    content)})))
+      {}
+      sections)}))
+
 (defn remove-session!
   "Remove a session from client state. Called on RPC failure during pre-registration."
   [client session-id]
@@ -831,3 +869,166 @@
                   (:ephemeral? opts) (assoc :ephemeral (:ephemeral? opts)))
          result (proto/send-request! conn "session.log" params)]
      (:event-id result))))
+
+;; =============================================================================
+;; Low-level RPC methods (session.rpc.*)
+;;
+;; These are thin wrappers around the CLI's JSON-RPC methods. They are emerging
+;; APIs that don't yet have friendly high-level wrappers in the upstream SDK.
+;; Some are marked experimental and may change.
+;; =============================================================================
+
+;; -- Skills ------------------------------------------------------------------
+
+(defn ^:experimental skills-list
+  "List all skills available to the session.
+   Returns a map with :skills (vector of skill info maps)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.skills.list" {:sessionId session-id}))))
+
+(defn ^:experimental skills-enable!
+  "Enable a skill by name."
+  [session skill-name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.skills.enable"
+                         {:sessionId session-id :name skill-name})))
+
+(defn ^:experimental skills-disable!
+  "Disable a skill by name."
+  [session skill-name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.skills.disable"
+                         {:sessionId session-id :name skill-name})))
+
+(defn ^:experimental skills-reload!
+  "Reload all skills."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.skills.reload" {:sessionId session-id})))
+
+;; -- MCP Servers -------------------------------------------------------------
+
+(defn ^:experimental mcp-list
+  "List all MCP servers configured for the session.
+   Returns a map with :servers (vector of server info maps)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.mcp.list" {:sessionId session-id}))))
+
+(defn ^:experimental mcp-enable!
+  "Enable an MCP server by name."
+  [session server-name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.mcp.enable"
+                         {:sessionId session-id :serverName server-name})))
+
+(defn ^:experimental mcp-disable!
+  "Disable an MCP server by name."
+  [session server-name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.mcp.disable"
+                         {:sessionId session-id :serverName server-name})))
+
+(defn ^:experimental mcp-reload!
+  "Reload all MCP servers."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.mcp.reload" {:sessionId session-id})))
+
+;; -- Extensions --------------------------------------------------------------
+
+(defn ^:experimental extensions-list
+  "List all extensions for the session.
+   Returns a map with :extensions (vector of extension info maps)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.extensions.list" {:sessionId session-id}))))
+
+(defn ^:experimental extensions-enable!
+  "Enable an extension by its source-qualified ID."
+  [session extension-id]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.extensions.enable"
+                         {:sessionId session-id :id extension-id})))
+
+(defn ^:experimental extensions-disable!
+  "Disable an extension by its source-qualified ID."
+  [session extension-id]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.extensions.disable"
+                         {:sessionId session-id :id extension-id})))
+
+(defn ^:experimental extensions-reload!
+  "Reload all extensions."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.extensions.reload" {:sessionId session-id})))
+
+;; -- Plugins -----------------------------------------------------------------
+
+(defn ^:experimental plugins-list
+  "List all plugins for the session.
+   Returns a map with :plugins (vector of plugin info maps)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.plugins.list" {:sessionId session-id}))))
+
+;; -- Compaction --------------------------------------------------------------
+
+(defn ^:experimental compaction-compact!
+  "Trigger manual compaction of the session context."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.compaction.compact" {:sessionId session-id}))))
+
+;; -- Shell -------------------------------------------------------------------
+
+(defn ^:experimental shell-exec!
+  "Execute a shell command in the session.
+   Returns the execution result."
+  [session command]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.shell.exec"
+                          {:sessionId session-id :command command}))))
+
+(defn ^:experimental shell-kill!
+  "Kill a running shell process by process ID."
+  [session process-id]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.shell.kill"
+                         {:sessionId session-id :processId process-id})))
+
+;; -- UI Elicitation ----------------------------------------------------------
+
+(defn ^:experimental ui-elicitation!
+  "Request structured user input via an elicitation prompt.
+   params is a map with elicitation configuration (schema, message, etc.)."
+  [session params]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.ui.elicitation"
+                          (assoc (util/clj->wire params) :sessionId session-id)))))

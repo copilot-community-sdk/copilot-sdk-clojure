@@ -524,6 +524,14 @@
                                           {:result nil}
                                           (<! (session/handle-hooks-invoke! client session-id hook-type input))))
 
+                                      ;; System message transform (PR #816)
+                                      "systemMessage.transform"
+                                      (let [{:keys [session-id sections]} params]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          {:result (session/handle-system-message-transform
+                                                    client session-id sections)}))
+
                                       {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
 
 (defn- connect-stdio!
@@ -1096,6 +1104,57 @@
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config config}))))
 
+;; Section keyword → wire string mapping for system message customize mode.
+;; Delegates to shared mapping in util.clj.
+
+(defn- extract-transform-callbacks
+  "Extract transform callbacks from a customize-mode system message config.
+   Returns {:wire-payload <system-message for wire> :transform-callbacks <map or nil>}.
+   
+   For customize mode, function-valued :action entries are extracted into a
+   callbacks map (keyed by wire section ID) and replaced with {:action \"transform\"}
+   in the wire payload. Static actions are converted to wire format directly."
+  [system-message]
+  (if (or (not system-message)
+          (not= :customize (:mode system-message)))
+    {:wire-payload system-message :transform-callbacks nil}
+    (let [sections (:sections system-message)
+          callbacks (atom {})
+          wire-sections
+          (when (seq sections)
+            (reduce-kv
+             (fn [acc section-kw override]
+               (let [wire-id (util/section-kw->wire-id section-kw)
+                     action (:action override)]
+                 (if (fn? action)
+                   (do (swap! callbacks assoc wire-id action)
+                       (assoc acc wire-id {:action "transform"}))
+                   (assoc acc wire-id
+                          (cond-> {:action (name action)}
+                            (:content override)
+                            (assoc :content (:content override)))))))
+             {}
+             sections))
+          cbs @callbacks]
+      {:wire-payload (cond-> {:mode "customize"}
+                       (seq wire-sections) (assoc :sections wire-sections)
+                       (:content system-message)
+                       (assoc :content (:content system-message)))
+       :transform-callbacks (when (seq cbs) cbs)})))
+
+(defn- system-message->wire
+  "Convert a system-message config to wire format.
+   For :append and :replace modes, returns a simple map.
+   For :customize mode, returns only the static wire payload
+   (transform callbacks are extracted separately)."
+  [sm]
+  (case (:mode sm)
+    :replace {:mode "replace" :content (:content sm)}
+    :customize (let [{:keys [wire-payload]} (extract-transform-callbacks sm)]
+                 wire-payload)
+    ;; default: append mode
+    {:mode "append" :content (:content sm)}))
+
 (defn- build-create-session-params
   "Build wire params for session.create from config."
   [config]
@@ -1112,11 +1171,7 @@
                                (assoc :skipPermission (:skip-permission? t))))
                            (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
-                       (cond
-                         (= :replace (:mode sm))
-                         {:mode "replace" :content (:content sm)}
-                         :else
-                         {:mode "append" :content (:content sm)}))
+                       (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
                         (util/clj->wire provider))
         wire-mcp-servers (when-let [servers (:mcp-servers config)]
@@ -1166,11 +1221,7 @@
                                (assoc :skipPermission (:skip-permission? t))))
                            (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
-                       (cond
-                         (= :replace (:mode sm))
-                         {:mode "replace" :content (:content sm)}
-                         :else
-                         {:mode "append" :content (:content sm)}))
+                       (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
                         (util/clj->wire provider))
         wire-mcp-servers (when-let [servers (:mcp-servers config)]
@@ -1258,9 +1309,12 @@
   (let [{:keys [connection-io]} @(:state client)
         session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
         trace-ctx (get-trace-context (:on-get-trace-context client))
+        {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)]
+    ;; Register transform callbacks on session before RPC
+    (session/register-transform-callbacks! client session-id transform-callbacks)
     (try
       (let [result (proto/send-request! connection-io "session.create" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
@@ -1312,9 +1366,12 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
+        {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         params (merge trace-ctx (build-resume-session-params session-id config))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)]
+    ;; Register transform callbacks on session before RPC
+    (session/register-transform-callbacks! client session-id transform-callbacks)
     (try
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
@@ -1348,9 +1405,11 @@
   (let [{:keys [connection-io]} @(:state client)
         session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
         trace-ctx (get-trace-context (:on-get-trace-context client))
+        {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
+        _ (session/register-transform-callbacks! client session-id transform-callbacks)
         rpc-ch (proto/send-request connection-io "session.create" params)]
     (go
       (let [response (<! rpc-ch)]
@@ -1402,9 +1461,11 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
+        {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         params (merge trace-ctx (build-resume-session-params session-id config))
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
+        _ (session/register-transform-callbacks! client session-id transform-callbacks)
         rpc-ch (proto/send-request connection-io "session.resume" params)]
     (go
       (let [response (<! rpc-ch)]

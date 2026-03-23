@@ -884,6 +884,61 @@ Get the client that owns this session.
 
 ---
 
+### Experimental RPC Methods
+
+> **Note:** These are experimental APIs wrapping emerging CLI RPC methods. They may change in future releases.
+
+```clojure
+(require '[github.copilot-sdk.session :as session])
+
+;; List available skills
+(session/skills-list my-session)
+;; => {:skills [{:name "update-docs" :source-location "project" ...} ...]}
+
+;; Enable/disable MCP servers
+(session/mcp-enable! my-session "my-server")
+(session/mcp-disable! my-session "my-server")
+```
+
+**Skills**
+
+| Function | Description |
+|----------|-------------|
+| `session/skills-list` | List available skills. Returns map with `:skills`. |
+| `session/skills-enable!` | Enable a skill by name. |
+| `session/skills-disable!` | Disable a skill by name. |
+| `session/skills-reload!` | Reload all skills. |
+
+**MCP Servers**
+
+| Function | Description |
+|----------|-------------|
+| `session/mcp-list` | List configured MCP servers. |
+| `session/mcp-enable!` | Enable an MCP server by name. |
+| `session/mcp-disable!` | Disable an MCP server by name. |
+| `session/mcp-reload!` | Reload all MCP servers. |
+
+**Extensions**
+
+| Function | Description |
+|----------|-------------|
+| `session/extensions-list` | List extensions. |
+| `session/extensions-enable!` | Enable an extension by ID. |
+| `session/extensions-disable!` | Disable an extension by ID. |
+| `session/extensions-reload!` | Reload all extensions. |
+
+**Other**
+
+| Function | Description |
+|----------|-------------|
+| `session/plugins-list` | List plugins. |
+| `session/compaction-compact!` | Trigger manual context compaction. |
+| `session/shell-exec!` | Execute a shell command. |
+| `session/shell-kill!` | Kill a running shell process. |
+| `session/ui-elicitation!` | Request structured user input. |
+
+---
+
 ## Event Types
 
 Sessions emit various events during processing. All event types are namespaced keywords prefixed with `copilot/`.
@@ -912,7 +967,15 @@ copilot/interaction-events
 ;; => #{:copilot/permission.requested :copilot/permission.completed
 ;;      :copilot/user_input.requested :copilot/user_input.completed
 ;;      :copilot/elicitation.requested :copilot/elicitation.completed
-;;      :copilot/external_tool.requested}
+;;      :copilot/external_tool.requested :copilot/external_tool.completed
+;;      :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+;;      :copilot/command.queued :copilot/command.execute
+;;      :copilot/command.completed :copilot/commands.changed
+;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+;;      :copilot/session.tools_updated :copilot/session.background_tasks_changed
+;;      :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
+;;      :copilot/session.mcp_server_status_changed
+;;      :copilot/session.extensions_loaded}
 ```
 
 ### `evt` — Event Keyword Helper
@@ -982,6 +1045,21 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/elicitation.requested` | Elicitation request initiated |
 | `:copilot/elicitation.completed` | Elicitation request resolved |
 | `:copilot/external_tool.requested` | External tool call requested (v3) |
+| `:copilot/external_tool.completed` | External tool call completed (v3) |
+| `:copilot/mcp.oauth_required` | MCP server requires OAuth authentication |
+| `:copilot/mcp.oauth_completed` | MCP OAuth authentication completed |
+| `:copilot/command.queued` | Command queued for execution |
+| `:copilot/command.execute` | Command execution started |
+| `:copilot/command.completed` | Command execution completed |
+| `:copilot/commands.changed` | Available commands list changed |
+| `:copilot/exit_plan_mode.requested` | Exit from plan mode requested |
+| `:copilot/exit_plan_mode.completed` | Exit from plan mode completed |
+| `:copilot/session.tools_updated` | Session tools list updated (e.g., after model change) |
+| `:copilot/session.background_tasks_changed` | Background tasks status changed |
+| `:copilot/session.skills_loaded` | Skills loaded for the session |
+| `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session |
+| `:copilot/session.mcp_server_status_changed` | MCP server status changed |
+| `:copilot/session.extensions_loaded` | Extensions loaded for the session |
 
 ### Example: Handling Events
 
@@ -1159,6 +1237,64 @@ For full control (removes all guardrails), use `:mode :replace`:
    :system-message {:mode :replace
                     :content "You are a helpful assistant."}})
 ```
+
+#### Customize Mode
+
+The `:customize` mode enables section-level overrides of the system prompt. Ten sections are configurable:
+
+| Section | Description |
+|---------|-------------|
+| `:identity` | Agent identity preamble and mode statement |
+| `:tone` | Response style, conciseness rules, output formatting |
+| `:tool-efficiency` | Tool usage patterns, parallel calling, batching |
+| `:environment-context` | CWD, OS, git root, directory listing, available tools |
+| `:code-change-rules` | Coding rules, linting/testing, ecosystem tools, style |
+| `:guidelines` | Tips, behavioral best practices |
+| `:safety` | Environment limitations, prohibited actions, security |
+| `:tool-instructions` | Per-tool usage instructions |
+| `:custom-instructions` | Repository and organization custom instructions |
+| `:last-instructions` | End-of-prompt instructions |
+
+Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`) and transform callbacks (1-arity functions).
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :system-message
+     {:mode :customize
+      :sections {:identity {:action :replace
+                            :content "You are Acme Assistant."}
+                 :tone {:action :append
+                        :content "\nAlways respond in bullet points."}
+                 :code-change-rules {:action :remove}}
+      :content "Additional instructions here."}}))
+```
+
+Transform callbacks receive the current section content and return the replacement:
+
+```clojure
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :system-message
+     {:mode :customize
+      :sections {:identity {:action (fn [current]
+                                     (clojure.string/replace current
+                                       "GitHub Copilot" "Acme Assistant"))}}}}))
+```
+
+Inspect available sections with the `system-prompt-sections` constant:
+
+```clojure
+copilot/system-prompt-sections
+;; => {:identity {:description "Agent identity preamble and mode statement"}
+;;     :tone {:description "Response style, conciseness rules, ..."} ...}
+```
+
+Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.
 
 ### Config Directory and Skills
 
