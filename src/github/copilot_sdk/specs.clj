@@ -131,7 +131,13 @@
   (s/and map?
          #(contains? % :action)
          #(s/valid? ::section-action (:action %))
-         #(if-let [c (:content %)] (string? c) true)))
+         ;; If :content is present, it must be a string
+         #(if-let [c (:content %)] (string? c) true)
+         ;; For static content-bearing actions, :content is required
+         #(if (and (keyword? (:action %))
+                   (#{:replace :append :prepend} (:action %)))
+            (string? (:content %))
+            true)))
 
 ;; Customize config: mode :customize with optional sections map and content
 ;; Sections map allows any keyword key — unknown sections gracefully fall back

@@ -971,11 +971,7 @@ copilot/interaction-events
 ;;      :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
 ;;      :copilot/command.queued :copilot/command.execute
 ;;      :copilot/command.completed :copilot/commands.changed
-;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
-;;      :copilot/session.tools_updated :copilot/session.background_tasks_changed
-;;      :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
-;;      :copilot/session.mcp_server_status_changed
-;;      :copilot/session.extensions_loaded}
+;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
 ### `evt` — Event Keyword Helper
