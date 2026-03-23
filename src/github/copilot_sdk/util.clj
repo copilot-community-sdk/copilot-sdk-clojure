@@ -44,6 +44,46 @@
   [m]
   (->wire-keys m))
 
+;; -----------------------------------------------------------------------------
+;; System prompt section key mapping
+;; Wire uses snake_case identifiers (e.g., "tool_efficiency");
+;; Clojure SDK uses kebab-case keywords (e.g., :tool-efficiency).
+;; camel-snake-kebab converts snake_case to kebab-case and vice versa,
+;; but ->camelCase would produce "toolEfficiency" which is wrong.
+;; We need explicit mappings for correct round-tripping.
+;; -----------------------------------------------------------------------------
+
+(def section-key->wire
+  "Map from Clojure keyword to wire string for system prompt sections."
+  {:identity            "identity"
+   :tone                "tone"
+   :tool-efficiency     "tool_efficiency"
+   :environment-context "environment_context"
+   :code-change-rules   "code_change_rules"
+   :guidelines          "guidelines"
+   :safety              "safety"
+   :tool-instructions   "tool_instructions"
+   :custom-instructions "custom_instructions"
+   :last-instructions   "last_instructions"})
+
+(def wire->section-key
+  "Map from wire string to Clojure keyword for system prompt sections."
+  (into {} (map (fn [[k v]] [v k])) section-key->wire))
+
+(defn section-kw->wire-id
+  "Convert a section keyword to its wire string ID.
+   Known sections use the explicit mapping; unknown sections
+   fall back to (name kw) for extensibility."
+  [kw]
+  (get section-key->wire kw (name kw)))
+
+(defn wire-id->section-kw
+  "Convert a wire string section ID to its Clojure keyword.
+   Known sections use the explicit mapping; unknown sections
+   fall back to (keyword id) for extensibility."
+  [id]
+  (get wire->section-key id (keyword id)))
+
 ;; MCP server config keys use an :mcp- prefix in Clojure for clarity
 ;; (e.g., :mcp-command, :mcp-args, :mcp-tools) but the upstream wire
 ;; protocol expects bare names (command, args, tools, url, headers, type, timeout).

@@ -3,6 +3,24 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.2.0 sync)
+- **System message customize mode** — new `:customize` mode for `:system-message` enables section-level overrides of the Copilot system prompt. Ten configurable sections: `:identity`, `:tone`, `:tool-efficiency`, `:environment-context`, `:code-change-rules`, `:guidelines`, `:safety`, `:tool-instructions`, `:custom-instructions`, `:last-instructions`. Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`) and transform callbacks (1-arity functions receiving current content, returning modified text). New `system-prompt-sections` constant exported from main namespace (upstream PR #816).
+- **New experimental RPC methods** — thin wrapper functions in `session` namespace for emerging CLI APIs (upstream PR #900):
+  - Skills: `skills-list`, `skills-enable!`, `skills-disable!`, `skills-reload!`
+  - MCP servers: `mcp-list`, `mcp-enable!`, `mcp-disable!`, `mcp-reload!`
+  - Extensions: `extensions-list`, `extensions-enable!`, `extensions-disable!`, `extensions-reload!`
+  - Plugins: `plugins-list`
+  - Compaction: `compaction-compact!`
+  - Shell: `shell-exec!`, `shell-kill!`
+  - UI: `ui-elicitation!`
+- **15 new event types** added to the event type enum: `command.completed`, `command.execute`, `command.queued`, `commands.changed`, `exit_plan_mode.requested`, `exit_plan_mode.completed`, `external_tool.completed`, `mcp.oauth_required`, `mcp.oauth_completed`, `session.tools_updated`, `session.background_tasks_changed`, `session.skills_loaded`, `session.mcp_servers_loaded`, `session.mcp_server_status_changed`, `session.extensions_loaded`.
+- Experimental API annotations (`^:experimental` metadata) on all new RPC method wrappers.
+- Function specs (`s/fdef`) and instrumentation for all new RPC methods.
+
+### Changed (v0.2.0 sync)
+- **Version bump** to `0.2.0.0-SNAPSHOT` tracking upstream copilot-sdk v0.2.0.
+- Updated `interaction-events` set to include new event types (commands, MCP OAuth, exit plan mode).
+
 ## [0.1.33.0-SNAPSHOT] - 2026-03-19
 ### Added
 - `:no-result` permission outcome — extensions can attach to sessions without actively answering permission requests by returning `{:kind :no-result}` from their `:on-permission-request` handler. On v3 protocol, the `handlePendingPermissionRequest` RPC is skipped; on v2, an error is propagated to the CLI (upstream PR #802).

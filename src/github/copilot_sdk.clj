@@ -23,7 +23,18 @@
    ```"
   (:require [github.copilot-sdk.client :as client]
             [github.copilot-sdk.session :as session]
+            [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.tools :as tools]))
+
+;; =============================================================================
+;; System Prompt Sections (customize mode)
+;; =============================================================================
+
+(def system-prompt-sections
+  "Known system prompt section identifiers for the customize mode.
+   Each key is a section keyword, and each value is a map with a :description.
+   Use these identifiers in the :sections map of a :customize mode system message."
+  specs/system-prompt-sections)
 
 ;; =============================================================================
 ;; Event Types
@@ -84,7 +95,22 @@
     :copilot/user_input.completed
     :copilot/elicitation.requested
     :copilot/elicitation.completed
-    :copilot/external_tool.requested})
+    :copilot/external_tool.requested
+    :copilot/external_tool.completed
+    :copilot/mcp.oauth_required
+    :copilot/mcp.oauth_completed
+    :copilot/command.queued
+    :copilot/command.execute
+    :copilot/command.completed
+    :copilot/commands.changed
+    :copilot/exit_plan_mode.requested
+    :copilot/exit_plan_mode.completed
+    :copilot/session.tools_updated
+    :copilot/session.background_tasks_changed
+    :copilot/session.skills_loaded
+    :copilot/session.mcp_servers_loaded
+    :copilot/session.mcp_server_status_changed
+    :copilot/session.extensions_loaded})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -107,7 +133,13 @@
     :copilot/session.mode_changed
     :copilot/session.plan_changed
     :copilot/session.workspace_file_changed
-    :copilot/session.task_complete})
+    :copilot/session.task_complete
+    :copilot/session.tools_updated
+    :copilot/session.background_tasks_changed
+    :copilot/session.skills_loaded
+    :copilot/session.mcp_servers_loaded
+    :copilot/session.mcp_server_status_changed
+    :copilot/session.extensions_loaded})
 
 (def assistant-events
   "Assistant response events."
@@ -130,11 +162,15 @@
     :copilot/tool.execution_complete})
 
 (def interaction-events
-  "Events related to permission, user input, and elicitation flows."
+  "Events related to permission, user input, elicitation, and external tool flows."
   #{:copilot/permission.requested :copilot/permission.completed
     :copilot/user_input.requested :copilot/user_input.completed
     :copilot/elicitation.requested :copilot/elicitation.completed
-    :copilot/external_tool.requested})
+    :copilot/external_tool.requested :copilot/external_tool.completed
+    :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+    :copilot/command.queued :copilot/command.execute :copilot/command.completed
+    :copilot/commands.changed
+    :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.
