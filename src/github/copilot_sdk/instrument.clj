@@ -303,6 +303,26 @@
   :args (s/cat :session ::specs/session :params map?)
   :ret map?)
 
+(s/fdef github.copilot-sdk.session/capabilities
+  :args (s/cat :session ::specs/session)
+  :ret ::specs/session-capabilities)
+
+(s/fdef github.copilot-sdk.session/ui-confirm!
+  :args (s/cat :session ::specs/session :message string?)
+  :ret boolean?)
+
+(s/fdef github.copilot-sdk.session/ui-select!
+  :args (s/cat :session ::specs/session
+               :message string?
+               :options (s/coll-of string?))
+  :ret (s/nilable string?))
+
+(s/fdef github.copilot-sdk.session/ui-input!
+  :args (s/cat :session ::specs/session
+               :message string?
+               :opts (s/? (s/nilable ::specs/input-options)))
+  :ret (s/nilable string?))
+
 ;; -----------------------------------------------------------------------------
 ;; Function specs for helpers namespace
 ;; -----------------------------------------------------------------------------
@@ -389,6 +409,10 @@
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/ui-elicitation!
+                      github.copilot-sdk.session/capabilities
+                      github.copilot-sdk.session/ui-confirm!
+                      github.copilot-sdk.session/ui-select!
+                      github.copilot-sdk.session/ui-input!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events
@@ -457,6 +481,10 @@
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/ui-elicitation!
+                      github.copilot-sdk.session/capabilities
+                      github.copilot-sdk.session/ui-confirm!
+                      github.copilot-sdk.session/ui-select!
+                      github.copilot-sdk.session/ui-input!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events

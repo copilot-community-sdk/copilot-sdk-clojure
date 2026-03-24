@@ -270,8 +270,38 @@
 
 (s/def ::client-name ::non-blank-string)
 
+;; -----------------------------------------------------------------------------
+;; Command definitions (upstream PR #906)
+;; -----------------------------------------------------------------------------
+
+(s/def ::command-name ::non-blank-string)
+(s/def ::command-description string?)
+(s/def ::command-handler fn?)
+
+(s/def ::command-definition
+  (s/keys :req-un [::command-name ::command-handler]
+          :opt-un [::command-description]))
+
+(s/def ::commands (s/coll-of ::command-definition))
+
+;; -----------------------------------------------------------------------------
+;; Session capabilities (upstream PR #906)
+;; -----------------------------------------------------------------------------
+
+(s/def ::elicitation boolean?)
+(s/def ::ui (s/keys :opt-un [::elicitation]))
+(s/def ::session-capabilities (s/keys :opt-un [::ui]))
+
+;; Input options for ui-input! convenience method
+(s/def ::min-length nat-int?)
+(s/def ::max-length nat-int?)
+(s/def ::format #{"email" "uri" "date" "date-time"})
+(s/def ::default string?)
+(s/def ::input-options
+  (s/keys :opt-un [::title ::description ::min-length ::max-length ::format ::default]))
+
 (def session-config-keys
-  #{:session-id :client-name :model :tools :system-message
+  #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
     :custom-agents :config-dir :skill-directories
@@ -282,7 +312,7 @@
 (s/def ::session-config
   (closed-keys
    (s/keys :req-un [::on-permission-request]
-           :opt-un [::session-id ::client-name ::model ::tools ::system-message
+           :opt-un [::session-id ::client-name ::model ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::config-dir ::skill-directories
@@ -292,7 +322,7 @@
    session-config-keys))
 
 (def ^:private resume-session-config-keys
-  #{:client-name :model :tools :system-message :available-tools :excluded-tools
+  #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
@@ -301,7 +331,8 @@
 (s/def ::resume-session-config
   (closed-keys
    (s/keys :req-un [::on-permission-request]
-           :opt-un [::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+           :opt-un [::client-name ::model ::tools ::commands ::system-message
+                    ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
@@ -314,7 +345,8 @@
 (s/def ::join-session-config
   (closed-keys
    (s/keys :opt-un [::on-permission-request
-                    ::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+                    ::client-name ::model ::tools ::commands ::system-message
+                    ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort

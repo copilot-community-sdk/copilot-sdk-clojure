@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.2.0 sync)
+- **Slash command support** — register custom slash commands with sessions via the new `:commands` option in `create-session` and `resume-session`. Commands are described as `{:command-name "name" :command-handler (fn [ctx] ...) :command-description "desc"}`. The handler receives a context map with `:session-id`, `:command-name`, `:command`, and `:args`. When the CLI has a TUI, registered commands appear as `/name` for users to invoke. The `command.execute` broadcast event is handled automatically and responds via `session.commands.handlePendingCommand` RPC (upstream PR #906).
+- **Session capabilities** — `session/capabilities` getter returns host capabilities reported when the session was created or resumed (e.g. `{:ui {:elicitation true}}`). Use this to check feature support before calling capability-gated APIs (upstream PR #906).
+- **UI convenience methods** — three new experimental functions in the `session` namespace for interactive dialogs (upstream PR #906):
+  - `ui-confirm!` — shows a confirmation dialog, returns `true` or `false`
+  - `ui-select!` — shows a selection dialog with string options, returns selected value or `nil`
+  - `ui-input!` — shows a text input dialog with optional constraints, returns entered text or `nil`
+- New specs: `::command-definition`, `::commands`, `::session-capabilities`, `::input-options`, and related component specs.
+
 ## [0.2.0.0] - 2026-03-23
 ### Added (v0.2.0 sync)
 - **System message customize mode** — new `:customize` mode for `:system-message` enables section-level overrides of the Copilot system prompt. Ten configurable sections: `:identity`, `:tone`, `:tool-efficiency`, `:environment-context`, `:code-change-rules`, `:guidelines`, `:safety`, `:tool-instructions`, `:custom-instructions`, `:last-instructions`. Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`) and transform callbacks (1-arity functions receiving current content, returning modified text). New `system-prompt-sections` constant exported from main namespace (upstream PR #816).

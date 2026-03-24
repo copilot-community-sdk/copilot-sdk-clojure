@@ -300,8 +300,39 @@
                                           :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}))))
               (catch Exception _ nil))))))))
 
+(defn- handle-v3-command-execute!
+  "Handle v3 command.execute broadcast event.
+   Calls the session's registered command handler and responds via the
+   session.commands.handlePendingCommand RPC method."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)
+        command-name (:command-name data)
+        command (:command data)
+        args (or (:args data) "")]
+    (when (and request-id command-name)
+      (go
+        (try
+          (let [cmd-response (<! (session/handle-command!
+                                  client session-id command-name command args))
+                conn (:connection-io @(:state client))]
+            (when conn
+              (<! (proto/send-request conn "session.commands.handlePendingCommand"
+                                     (cond-> {:session-id session-id :request-id request-id}
+                                       (:error cmd-response) (assoc :error (:error cmd-response)))))))
+          (catch Exception e
+            (log/debug "v3 command execute error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.commands.handlePendingCommand"
+                                         {:session-id session-id
+                                          :request-id request-id
+                                          :error (ex-message e)}))))
+              (catch Exception _ nil))))))))
+
 (defn- handle-v3-broadcast-event!
-  "Protocol v3: intercept broadcast events for external tools and permissions.
+  "Protocol v3: intercept broadcast events for external tools, permissions, and commands.
    In v3, tool.call and permission.request server→client RPC methods are replaced
    by broadcast events that the SDK handles and responds to via new RPC methods."
   [client session-id event]
@@ -312,6 +343,9 @@
 
       :copilot/permission.requested
       (handle-v3-permission-requested! client session-id event)
+
+      :copilot/command.execute
+      (handle-v3-command-execute! client session-id event)
 
       nil)))
 
@@ -1170,6 +1204,11 @@
                                (some? (:skip-permission? t))
                                (assoc :skipPermission (:skip-permission? t))))
                            (:tools config)))
+        wire-commands (when (:commands config)
+                        (mapv (fn [c] (cond-> {:name (:command-name c)}
+                                        (:command-description c)
+                                        (assoc :description (:command-description c))))
+                              (:commands config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
@@ -1185,6 +1224,7 @@
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
       wire-tools (assoc :tools wire-tools)
+      wire-commands (assoc :commands wire-commands)
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
@@ -1220,6 +1260,11 @@
                                (some? (:skip-permission? t))
                                (assoc :skipPermission (:skip-permission? t))))
                            (:tools config)))
+        wire-commands (when (:commands config)
+                        (mapv (fn [c] (cond-> {:name (:command-name c)}
+                                        (:command-description c)
+                                        (assoc :description (:command-description c))))
+                              (:commands config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
@@ -1234,6 +1279,7 @@
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
       wire-tools (assoc :tools wire-tools)
+      wire-commands (assoc :commands wire-commands)
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
@@ -1261,6 +1307,7 @@
   [client session-id config]
   (session/create-session client session-id
                           {:tools (:tools config)
+                           :commands (:commands config)
                            :on-permission-request (:on-permission-request config)
                            :on-user-input-request (:on-user-input-request config)
                            :hooks (:hooks config)
@@ -1300,6 +1347,9 @@
                             :on-session-start, :on-session-end, :on-error-occurred}
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
+   - :commands           - Slash commands to register with the session. Vector of maps:
+                           {:command-name \"name\" :command-handler (fn [ctx] ...) :command-description \"desc\"}
+                           The handler receives a context map: {:session-id :command-name :command :args}
    
    Returns a CopilotSession."
   [client config]
@@ -1318,6 +1368,7 @@
     (try
       (let [result (proto/send-request! connection-io "session.create" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
+        (session/set-capabilities! client session-id (:capabilities result))
         (log/info "Session created: " session-id)
         session)
       (catch Throwable t
@@ -1348,6 +1399,7 @@
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
+   - :commands           - Slash commands to register with the session. See create-session for details.
    
    Returns a CopilotSession."
   [client session-id config]
@@ -1375,6 +1427,7 @@
     (try
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
+        (session/set-capabilities! client session-id (:capabilities result))
         session)
       (catch Throwable t
         (session/remove-session! client session-id)
@@ -1424,6 +1477,7 @@
                          {:error err}))
             (let [result (:result response)]
               (session/set-workspace-path! client session-id (:workspace-path result))
+              (session/set-capabilities! client session-id (:capabilities result))
               (log/info "Session created (async): " session-id)
               session)))))))
 (defn <resume-session
@@ -1481,6 +1535,7 @@
                          {:error err :session-id session-id}))
             (let [result (:result response)]
               (session/set-workspace-path! client session-id (:workspace-path result))
+              (session/set-capabilities! client session-id (:capabilities result))
               session)))))))
 (defn join-session
   "Join the current foreground session from an extension running as a child process.
