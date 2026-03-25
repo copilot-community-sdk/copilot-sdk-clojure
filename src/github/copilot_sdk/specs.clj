@@ -515,7 +515,8 @@
     ;; Session status events
     :copilot/session.tools_updated :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
-    :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded})
+    :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded
+    :copilot/session.custom_agents_updated})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)

@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Changed (v0.2.0 sync)
+- **`COPILOT_CLI_PATH` env var support** — when `:cli-path` is not explicitly provided to `client`, the
+  SDK now checks the `COPILOT_CLI_PATH` environment variable (from the user-supplied `:env` map first,
+  then the process environment). This aligns with the Node.js SDK behavior. Explicit `:cli-path` takes
+  precedence; falls back to `"copilot"` from PATH when the env var is not set (upstream PR #925).
+- **New `session.custom_agents_updated` event type** — added to `::event-type` spec. Emitted when custom
+  agents are loaded or reloaded; data includes `agents`, `warnings`, and `errors` fields (upstream PR #916).
+- **Extended sub-agent event data** — `subagent.completed` and `subagent.failed` events now carry optional
+  fields `model`, `total-tool-calls`, `total-tokens`, and `duration-ms`. `skill.completed` events now
+  carry an optional `description` field. These are passed through as-is in event data maps (upstream PR #916).
 
 ## [0.2.0.0] - 2026-03-23
 ### Added (v0.2.0 sync)

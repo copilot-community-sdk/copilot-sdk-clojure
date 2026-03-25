@@ -119,7 +119,7 @@
   "Create a new CopilotClient.
    
    Options:
-   - :cli-path      - Path to CLI executable (default: \"copilot\")
+   - :cli-path      - Path to CLI executable (default: COPILOT_CLI_PATH env var, or \"copilot\" from PATH)
    - :cli-args      - Extra arguments for CLI
    - :cli-url       - URL of existing server (e.g., \"localhost:8080\")
    - :cwd           - Working directory for CLI process
@@ -183,6 +183,13 @@
          opts-with-defaults (cond-> opts
                               (and (:github-token opts) (nil? (:use-logged-in-user? opts)))
                               (assoc :use-logged-in-user? false))
+         ;; Resolve COPILOT_CLI_PATH: check user :env map first, then system env.
+         ;; Applied only when :cli-path is not explicitly set and :cli-url is not set.
+         env-cli-path (when (and (nil? (:cli-path opts)) (nil? (:cli-url opts)))
+                        (or (get (:env opts) "COPILOT_CLI_PATH")
+                            (System/getenv "COPILOT_CLI_PATH")))
+         opts-with-defaults (cond-> opts-with-defaults
+                              env-cli-path (assoc :cli-path env-cli-path))
          merged (merge (default-options) opts-with-defaults)
          child-process? (:is-child-process? opts)
          cli-url? (boolean (:cli-url opts))
