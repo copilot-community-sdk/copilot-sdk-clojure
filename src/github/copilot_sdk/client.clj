@@ -322,7 +322,7 @@
         command-name (:command-name data)
         command (:command data)
         args (:args data)]
-    (when request-id
+    (when (and request-id command-name)
       (go
         (try
           (let [cmd-response (<! (session/handle-command-execute!
@@ -334,17 +334,20 @@
               (when conn
                 (if (:error cmd-response)
                   (<! (proto/send-request conn "session.commands.handlePendingCommand"
-                                         {:request-id request-id
+                                         {:session-id session-id
+                                          :request-id request-id
                                           :error (:error cmd-response)}))
                   (<! (proto/send-request conn "session.commands.handlePendingCommand"
-                                         {:request-id request-id}))))))
+                                         {:session-id session-id
+                                          :request-id request-id}))))))
           (catch Exception e
             (log/debug "v3 command execute error for " request-id ": " (ex-message e))
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.commands.handlePendingCommand"
-                                         {:request-id request-id
+                                         {:session-id session-id
+                                          :request-id request-id
                                           :error (ex-message e)}))))
               (catch Exception _ nil))))))))
 
