@@ -113,7 +113,7 @@ Get information about the current shared client state. Returns `nil` if no share
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `:cli-path` | string | `"copilot"` | Path to CLI executable |
+| `:cli-path` | string | `"copilot"` | Path to CLI executable. Falls back to `COPILOT_CLI_PATH` env var when not set |
 | `:cli-args` | vector | `[]` | Extra arguments prepended before SDK-managed flags |
 | `:cli-url` | string | nil | URL of existing CLI server (e.g., `"localhost:8080"`). When provided, no CLI process is spawned |
 | `:port` | number | `0` | Server port (0 = random) |
@@ -238,6 +238,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:excluded-tools` | vector | List of excluded tool names |
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options` |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools` |
+| `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
 | `:custom-agents` | vector | Custom agent configs |
 | `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
@@ -935,7 +936,105 @@ Get the client that owns this session.
 | `session/compaction-compact!` | Trigger manual context compaction. |
 | `session/shell-exec!` | Execute a shell command. |
 | `session/shell-kill!` | Kill a running shell process. |
-| `session/ui-elicitation!` | Request structured user input. |
+
+---
+
+## UI Elicitation
+
+Request structured user input via interactive dialogs. Check host support before calling.
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+```
+
+### `capabilities`
+
+```clojure
+(copilot/capabilities session)
+;; => {:ui {:elicitation true}}
+```
+
+Get the host capabilities map reported when the session was created or resumed.
+
+### `elicitation-supported?`
+
+```clojure
+(copilot/elicitation-supported? session)
+;; => true
+```
+
+Return `true` if the CLI host supports interactive elicitation dialogs.
+
+### `confirm!`
+
+```clojure
+(copilot/confirm! session message)
+```
+
+Show a confirmation dialog. Returns `true` if the user confirms, `false` if they decline or cancel. Throws if elicitation is not supported.
+
+```clojure
+(when (copilot/elicitation-supported? session)
+  (when (copilot/confirm! session "Deploy to production?")
+    (println "Deploying...")))
+```
+
+### `select!`
+
+```clojure
+(copilot/select! session message options)
+```
+
+Show a selection dialog with the given options. Returns the selected value as a string, or `nil` if the user declines or cancels. Throws if elicitation is not supported.
+
+```clojure
+(when-let [env (copilot/select! session "Choose environment" ["staging" "production"])]
+  (println "Selected:" env))
+```
+
+### `input!`
+
+```clojure
+(copilot/input! session message & {:as opts})
+```
+
+Show a text input dialog. Returns the entered text as a string, or `nil` if the user declines or cancels. Throws if elicitation is not supported.
+
+**Options:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:title` | string | Title for the input field |
+| `:description` | string | Description text |
+| `:min-length` | integer | Minimum input length |
+| `:max-length` | integer | Maximum input length |
+| `:format` | string | Input format (`"email"`, `"uri"`, `"date"`, `"date-time"`) |
+| `:default` | string | Default value |
+
+```clojure
+(when-let [name (copilot/input! session "Enter your name"
+                  :min-length 1
+                  :max-length 100)]
+  (println "Hello," name))
+```
+
+### `ui-elicitation!`
+
+```clojure
+(copilot/ui-elicitation! session params)
+```
+
+Raw elicitation request for custom JSON schemas. `params` is a map with `:message` and `:requested-schema` keys. Returns a map with `:action` (`:accept`, `:decline`, or `:cancel`) and `:content`. Throws if elicitation is not supported.
+
+```clojure
+(copilot/ui-elicitation! session
+  {:message "Configure deployment"
+   :requested-schema {:type "object"
+                      :properties {"env" {:type "string" :enum ["staging" "production"]}
+                                   "replicas" {:type "number" :default 3}}
+                      :required ["env"]}})
+;; => {:action :accept, :content {:env "staging", :replicas 3}}
+```
 
 ---
 
@@ -1056,6 +1155,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session |
 | `:copilot/session.mcp_server_status_changed` | MCP server status changed |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |
+| `:copilot/session.custom_agents_updated` | Custom agents list updated |
 
 ### Example: Handling Events
 
@@ -1204,6 +1304,46 @@ Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `
 (copilot/result-denied "Permission denied")
 (copilot/result-rejected "Invalid parameters")
 ```
+
+### Commands
+
+Register slash commands that users can invoke in the TUI. Define each command as a map with `:name`, `:description`, and `:command-handler`, then pass them via `:commands` in session config.
+
+```clojure
+(def my-commands
+  [{:name "deploy"
+    :description "Deploy the current project"
+    :command-handler (fn [{:keys [session-id command-name args]}]
+                       (println "Deploying with args:" args))}
+   {:name "status"
+    :description "Show project status"
+    :command-handler (fn [{:keys [session-id command-name args]}]
+                       (println "All systems operational"))}])
+
+(def session (copilot/create-session client
+               {:model "gpt-5.4"
+                :commands my-commands
+                :on-permission-request copilot/approve-all}))
+```
+
+**Command definition keys:**
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:name` | string | yes | Command name (without leading slash) |
+| `:description` | string | no | Description shown in TUI command list |
+| `:command-handler` | fn | yes | Handler function |
+
+The handler receives a context map:
+
+| Key | Description |
+|-----|-------------|
+| `:session-id` | The session ID |
+| `:command` | Full command string |
+| `:command-name` | Matched command name |
+| `:args` | Arguments after the command name |
+
+The handler may return `nil` or a core.async channel (awaited automatically).
 
 ### System Message Customization
 

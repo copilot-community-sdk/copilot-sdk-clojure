@@ -300,8 +300,29 @@
   :ret any?)
 
 (s/fdef github.copilot-sdk.session/ui-elicitation!
-  :args (s/cat :session ::specs/session :params map?)
+  :args (s/cat :session ::specs/session :params ::specs/elicitation-params)
   :ret map?)
+
+(s/fdef github.copilot-sdk.session/capabilities
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/elicitation-supported?
+  :args (s/cat :session ::specs/session)
+  :ret boolean?)
+
+(s/fdef github.copilot-sdk.session/confirm!
+  :args (s/cat :session ::specs/session :message string?)
+  :ret boolean?)
+
+(s/fdef github.copilot-sdk.session/select!
+  :args (s/cat :session ::specs/session :message string? :options (s/coll-of string?))
+  :ret (s/nilable string?))
+
+(s/fdef github.copilot-sdk.session/input!
+  :args (s/cat :session ::specs/session :message string?
+               :opts (s/? (s/nilable ::specs/input-options)))
+  :ret (s/nilable string?))
 
 ;; -----------------------------------------------------------------------------
 ;; Function specs for helpers namespace
@@ -389,6 +410,11 @@
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/ui-elicitation!
+                      github.copilot-sdk.session/capabilities
+                      github.copilot-sdk.session/elicitation-supported?
+                      github.copilot-sdk.session/confirm!
+                      github.copilot-sdk.session/select!
+                      github.copilot-sdk.session/input!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events
@@ -457,6 +483,11 @@
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/ui-elicitation!
+                      github.copilot-sdk.session/capabilities
+                      github.copilot-sdk.session/elicitation-supported?
+                      github.copilot-sdk.session/confirm!
+                      github.copilot-sdk.session/select!
+                      github.copilot-sdk.session/input!
                       github.copilot-sdk.session/events
                       github.copilot-sdk.session/subscribe-events
                       github.copilot-sdk.session/unsubscribe-events

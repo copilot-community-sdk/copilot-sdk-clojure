@@ -268,10 +268,43 @@
 ;; with ::on-permission-request and ::on-user-input-request specs.
 (s/def ::on-event fn?)
 
+;; Command definitions — slash commands registered with a session
+(s/def ::command-name ::non-blank-string)
+(s/def ::command-handler fn?)
+(s/def ::command-definition
+  (s/keys :req-un [::name ::command-handler]
+          :opt-un [::description]))
+(s/def ::commands (s/coll-of ::command-definition))
+
+;; Session capabilities — reported by the CLI host
+(s/def ::elicitation boolean?)
+(s/def ::ui-capabilities (s/keys :opt-un [::elicitation]))
+(s/def ::session-capabilities (s/keys :opt-un [::ui-capabilities]))
+
+;; Elicitation types
+(s/def ::elicitation-action #{:accept :decline :cancel})
+(s/def ::elicitation-field-value (s/or :string string? :number number? :boolean boolean?
+                                       :strings (s/coll-of string?)))
+(s/def ::elicitation-content (s/map-of string? ::elicitation-field-value))
+(s/def ::elicitation-result
+  (s/keys :req-un [::elicitation-action]
+          :opt-un [::elicitation-content]))
+(s/def ::requested-schema map?)
+(s/def ::elicitation-params
+  (s/keys :req-un [::message ::requested-schema]))
+
+;; Input options for the input! convenience method
+(s/def ::title string?)
+(s/def ::min-length nat-int?)
+(s/def ::max-length nat-int?)
+(s/def ::format #{"email" "uri" "date" "date-time"})
+(s/def ::input-options
+  (s/keys :opt-un [::title ::description ::min-length ::max-length ::format ::default]))
+
 (s/def ::client-name ::non-blank-string)
 
 (def session-config-keys
-  #{:session-id :client-name :model :tools :system-message
+  #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
     :custom-agents :config-dir :skill-directories
@@ -282,7 +315,7 @@
 (s/def ::session-config
   (closed-keys
    (s/keys :req-un [::on-permission-request]
-           :opt-un [::session-id ::client-name ::model ::tools ::system-message
+           :opt-un [::session-id ::client-name ::model ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::config-dir ::skill-directories
@@ -292,7 +325,7 @@
    session-config-keys))
 
 (def ^:private resume-session-config-keys
-  #{:client-name :model :tools :system-message :available-tools :excluded-tools
+  #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
@@ -301,7 +334,7 @@
 (s/def ::resume-session-config
   (closed-keys
    (s/keys :req-un [::on-permission-request]
-           :opt-un [::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+           :opt-un [::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
@@ -314,7 +347,7 @@
 (s/def ::join-session-config
   (closed-keys
    (s/keys :opt-un [::on-permission-request
-                    ::client-name ::model ::tools ::system-message ::available-tools ::excluded-tools
+                    ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
@@ -515,7 +548,8 @@
     ;; Session status events
     :copilot/session.tools_updated :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
-    :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded})
+    :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded
+    :copilot/session.custom_agents_updated})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)

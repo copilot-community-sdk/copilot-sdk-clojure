@@ -184,6 +184,14 @@
                               (and (:github-token opts) (nil? (:use-logged-in-user? opts)))
                               (assoc :use-logged-in-user? false))
          merged (merge (default-options) opts-with-defaults)
+         ;; COPILOT_CLI_PATH env var fallback: when no explicit :cli-path or :cli-url,
+         ;; check effective env for COPILOT_CLI_PATH before using default "copilot"
+         effective-env (or (:env opts) (into {} (System/getenv)))
+         merged (if (and (not (:cli-path opts))
+                         (not (:cli-url opts))
+                         (get effective-env "COPILOT_CLI_PATH"))
+                  (assoc merged :cli-path (get effective-env "COPILOT_CLI_PATH"))
+                  merged)
          child-process? (:is-child-process? opts)
          cli-url? (boolean (:cli-url opts))
          external? (or cli-url? child-process?)
@@ -300,8 +308,44 @@
                                           :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}))))
               (catch Exception _ nil))))))))
 
+(defn- handle-v3-command-execute!
+  "Handle v3 command.execute broadcast event.
+   Calls the session's command handler and responds via the
+   session.commands.handlePendingCommand RPC method."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)
+        command-name (:command-name data)
+        command (:command data)
+        args (:args data)]
+    (when request-id
+      (go
+        (try
+          (let [cmd-response (<! (session/handle-command-execute!
+                                  client session-id
+                                  {:command-name command-name
+                                   :command command
+                                   :args args}))]
+            (let [conn (:connection-io @(:state client))]
+              (when conn
+                (if (:error cmd-response)
+                  (<! (proto/send-request conn "session.commands.handlePendingCommand"
+                                         {:request-id request-id
+                                          :error (:error cmd-response)}))
+                  (<! (proto/send-request conn "session.commands.handlePendingCommand"
+                                         {:request-id request-id}))))))
+          (catch Exception e
+            (log/debug "v3 command execute error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.commands.handlePendingCommand"
+                                         {:request-id request-id
+                                          :error (ex-message e)}))))
+              (catch Exception _ nil))))))))
+
 (defn- handle-v3-broadcast-event!
-  "Protocol v3: intercept broadcast events for external tools and permissions.
+  "Protocol v3: intercept broadcast events for external tools, permissions, and commands.
    In v3, tool.call and permission.request server→client RPC methods are replaced
    by broadcast events that the SDK handles and responds to via new RPC methods."
   [client session-id event]
@@ -312,6 +356,9 @@
 
       :copilot/permission.requested
       (handle-v3-permission-requested! client session-id event)
+
+      :copilot/command.execute
+      (handle-v3-command-execute! client session-id event)
 
       nil)))
 
@@ -1179,12 +1226,17 @@
         wire-custom-agents (when-let [agents (:custom-agents config)]
                              (mapv util/clj->wire agents))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
-                                 (util/clj->wire is))]
+                                 (util/clj->wire is))
+        wire-commands (when-let [cmds (:commands config)]
+                        (mapv (fn [c] {:name (:name c)
+                                       :description (:description c)})
+                              cmds))]
     (cond-> {}
       (:session-id config) (assoc :session-id (:session-id config))
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
       wire-tools (assoc :tools wire-tools)
+      wire-commands (assoc :commands wire-commands)
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
@@ -1229,11 +1281,16 @@
         wire-custom-agents (when-let [agents (:custom-agents config)]
                              (mapv util/clj->wire agents))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
-                                 (util/clj->wire is))]
+                                 (util/clj->wire is))
+        wire-commands (when-let [cmds (:commands config)]
+                        (mapv (fn [c] {:name (:name c)
+                                       :description (:description c)})
+                              cmds))]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
       wire-tools (assoc :tools wire-tools)
+      wire-commands (assoc :commands wire-commands)
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
@@ -1261,6 +1318,7 @@
   [client session-id config]
   (session/create-session client session-id
                           {:tools (:tools config)
+                           :commands (:commands config)
                            :on-permission-request (:on-permission-request config)
                            :on-user-input-request (:on-user-input-request config)
                            :hooks (:hooks config)
@@ -1276,6 +1334,7 @@
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.4\")
    - :tools              - Vector of tool definitions
+   - :commands           - Vector of command definitions (slash commands for TUI)
    - :system-message     - System message config
    - :available-tools    - List of allowed tool names
    - :excluded-tools     - List of excluded tool names
@@ -1318,6 +1377,7 @@
     (try
       (let [result (proto/send-request! connection-io "session.create" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
+        (session/set-capabilities! client session-id (:capabilities result))
         (log/info "Session created: " session-id)
         session)
       (catch Throwable t
@@ -1375,6 +1435,7 @@
     (try
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
+        (session/set-capabilities! client session-id (:capabilities result))
         session)
       (catch Throwable t
         (session/remove-session! client session-id)
@@ -1424,6 +1485,7 @@
                          {:error err}))
             (let [result (:result response)]
               (session/set-workspace-path! client session-id (:workspace-path result))
+              (session/set-capabilities! client session-id (:capabilities result))
               (log/info "Session created (async): " session-id)
               session)))))))
 (defn <resume-session
@@ -1481,6 +1543,7 @@
                          {:error err :session-id session-id}))
             (let [result (:result response)]
               (session/set-workspace-path! client session-id (:workspace-path result))
+              (session/set-capabilities! client session-id (:capabilities result))
               session)))))))
 (defn join-session
   "Join the current foreground session from an extension running as a child process.

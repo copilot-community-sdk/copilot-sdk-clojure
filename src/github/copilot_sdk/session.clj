@@ -50,23 +50,26 @@
    If :on-event is provided, taps a subscriber that forwards events to the handler
    on a dedicated thread. Uses a sliding buffer, so events may be dropped under
    extreme backpressure if the handler cannot keep up with the event rate."
-  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path on-event config]}]
+  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path on-event config commands]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
         send-lock (doto (chan 1) (>!! :token))
-        tool-handlers (into {} (map (fn [t] [(:tool-name t) (:tool-handler t)]) tools))]
+        tool-handlers (into {} (map (fn [t] [(:tool-name t) (:tool-handler t)]) tools))
+        command-handlers (into {} (map (fn [c] [(:name c) (:command-handler c)]) commands))]
     ;; Store session state and IO in client's atom
     (swap! (:state client)
            (fn [state]
              (-> state
                   (assoc-in [:sessions session-id]
                             {:tool-handlers tool-handlers
+                             :command-handlers command-handlers
                              :permission-handler on-permission-request
                              :user-input-handler on-user-input-request
                              :hooks hooks
                              :destroyed? false
                              :workspace-path workspace-path
+                             :capabilities {}
                              :config config})
                  (assoc-in [:session-io session-id]
                            {:event-chan event-chan
@@ -102,6 +105,18 @@
   [client session-id workspace-path]
   (when workspace-path
     (swap! (:state client) assoc-in [:sessions session-id :workspace-path] workspace-path)))
+
+(defn set-capabilities!
+  "Store host capabilities in session state. Called after session.create/session.resume RPC."
+  [client session-id capabilities]
+  (swap! (:state client) assoc-in [:sessions session-id :capabilities] (or capabilities {})))
+
+(defn register-commands!
+  "Store command handlers in session state.
+   commands is a seq of maps with :name and :command-handler keys."
+  [client session-id commands]
+  (let [handlers (into {} (map (fn [c] [(:name c) (:command-handler c)]) commands))]
+    (swap! (:state client) assoc-in [:sessions session-id :command-handlers] handlers)))
 
 (defn register-transform-callbacks!
   "Store system message transform callbacks on a session.
@@ -346,6 +361,28 @@
                (catch Exception e
                  (log/error "Hook handler error for session " session-id ", hook " hook-type ": " (ex-message e))
                  {:result nil})))))))
+   :io))
+
+(defn handle-command-execute!
+  "Handle an incoming command.execute event. Returns a channel with the result.
+   Looks up the command handler by name and calls it with a context map.
+   Returns {:result nil} on success or {:error message} on failure."
+  [client session-id {:keys [command-name command args]}]
+  (async/thread-call
+   (fn []
+     (let [handler (get-in (session-state client session-id) [:command-handlers command-name])]
+       (if-not handler
+         {:error (str "Unknown command: " command-name)}
+         (try
+           (let [result (handler {:session-id session-id
+                                  :command command
+                                  :command-name command-name
+                                  :args args})
+                 ;; If handler returns a channel, await it
+                 _ (when (channel? result) (<!! result))]
+             {:result nil})
+           (catch Exception e
+             {:error (ex-message e)})))))
    :io))
 
 ;; -----------------------------------------------------------------------------
@@ -1023,12 +1060,84 @@
 
 ;; -- UI Elicitation ----------------------------------------------------------
 
-(defn ^:experimental ui-elicitation!
+(defn capabilities
+  "Get the host capabilities reported when the session was created or resumed.
+   Returns a map, e.g. `{:ui {:elicitation true}}`."
+  [session]
+  (let [{:keys [session-id client]} session]
+    (:capabilities (session-state client session-id))))
+
+(defn elicitation-supported?
+  "Check if the CLI host supports interactive elicitation dialogs."
+  [session]
+  (boolean (get-in (capabilities session) [:ui :elicitation])))
+
+(defn- assert-elicitation! [session]
+  (when-not (elicitation-supported? session)
+    (throw (ex-info "Elicitation is not supported by the host. Check (elicitation-supported? session) before calling UI methods."
+                    {:session-id (:session-id session)
+                     :capabilities (capabilities session)}))))
+
+(defn ui-elicitation!
   "Request structured user input via an elicitation prompt.
-   params is a map with elicitation configuration (schema, message, etc.)."
+   params is a map with :message and :requested-schema keys.
+   Throws if the host does not support elicitation."
   [session params]
+  (assert-elicitation! session)
   (let [{:keys [session-id client]} session
         conn (connection-io client)]
     (util/wire->clj
      (proto/send-request! conn "session.ui.elicitation"
                           (assoc (util/clj->wire params) :sessionId session-id)))))
+
+(defn confirm!
+  "Show a confirmation dialog and return the user's boolean answer.
+   Returns false if the user declines or cancels.
+   Throws if the host does not support elicitation."
+  [session message]
+  (let [result (ui-elicitation! session
+                 {:message message
+                  :requested-schema
+                  {:type "object"
+                   :properties {"confirmed" {:type "boolean" :default true}}
+                   :required ["confirmed"]}})]
+    (and (= "accept" (:action result))
+         (true? (get-in result [:content :confirmed])))))
+
+(defn select!
+  "Show a selection dialog with the given options.
+   Returns the selected value as a string, or nil if the user declines/cancels.
+   Throws if the host does not support elicitation."
+  [session message options]
+  (let [result (ui-elicitation! session
+                 {:message message
+                  :requested-schema
+                  {:type "object"
+                   :properties {"selection" {:type "string" :enum (vec options)}}
+                   :required ["selection"]}})]
+    (when (and (= "accept" (:action result))
+              (some? (get-in result [:content :selection])))
+      (get-in result [:content :selection]))))
+
+(defn input!
+  "Show a text input dialog. Returns the entered text, or nil if the user
+   declines/cancels. opts is an optional map with :title, :description,
+   :min-length, :max-length, :format, and :default keys.
+   Throws if the host does not support elicitation."
+  [session message & {:as opts}]
+  (let [field (cond-> {:type "string"}
+                (:title opts) (assoc :title (:title opts))
+                (:description opts) (assoc :description (:description opts))
+                (some? (:min-length opts)) (assoc :minLength (:min-length opts))
+                (some? (:max-length opts)) (assoc :maxLength (:max-length opts))
+                (:format opts) (assoc :format (:format opts))
+                (some? (:default opts)) (assoc :default (:default opts)))
+        result (ui-elicitation! session
+                 {:message message
+                  :requested-schema
+                  {:type "object"
+                   :properties {"value" field}
+                   :required ["value"]}})]
+    (when (and (= "accept" (:action result))
+              (some? (get-in result [:content :value])))
+      (get-in result [:content :value]))))

@@ -1190,3 +1190,173 @@
       (sdk/destroy! s1)
       (sdk/destroy! s2)
       (sdk/destroy! s3))))
+
+;; -----------------------------------------------------------------------------
+;; Command Tests
+;; -----------------------------------------------------------------------------
+
+(deftest test-commands-on-wire
+  (testing "commands are sent on wire as name+description only"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :commands [{:name "deploy"
+                                             :description "Deploy the app"
+                                             :command-handler (fn [_ctx] nil)}
+                                            {:name "rollback"
+                                             :command-handler (fn [_ctx] nil)}]})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :commands [{:name "status"
+                                             :description "Check status"
+                                             :command-handler (fn [_ctx] nil)}]})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      ;; Commands are sent with name and description only (no handler)
+      (is (= [{:name "deploy" :description "Deploy the app"}
+              {:name "rollback" :description nil}]
+             (:commands create-params)))
+      (is (= [{:name "status" :description "Check status"}]
+             (:commands resume-params))))))
+
+(deftest test-command-execute-v3
+  (testing "v3 command.execute event routes to handler and sends RPC response"
+    (let [requests (atom [])
+          handler-called (atom nil)
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.commands.handlePendingCommand" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :commands [{:name "deploy"
+                                                   :command-handler (fn [ctx]
+                                                                      (reset! handler-called ctx))}]})
+          session-id (sdk/session-id session)]
+      ;; Force protocol v3
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      ;; Inject command.execute event
+      (mock/send-session-event! *mock-server* session-id
+                                "command.execute"
+                                {:requestId "cmd-req-1"
+                                 :command "/deploy production"
+                                 :commandName "deploy"
+                                 :args "production"})
+      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      ;; Handler was called with context
+      (is (some? @handler-called))
+      (is (= session-id (:session-id @handler-called)))
+      (is (= "/deploy production" (:command @handler-called)))
+      (is (= "deploy" (:command-name @handler-called)))
+      (is (= "production" (:args @handler-called)))
+      ;; handlePendingCommand RPC was sent
+      (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
+        (is (= 1 (count cmd-rpcs)))
+        (when (seq cmd-rpcs)
+          (is (= "cmd-req-1" (:requestId (:params (first cmd-rpcs)))))
+          (is (nil? (:error (:params (first cmd-rpcs))))))))))
+
+(deftest test-command-execute-unknown-command
+  (testing "unknown command sends error via RPC"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.commands.handlePendingCommand" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :commands [{:name "deploy"
+                                                   :command-handler (fn [_] nil)}]})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-session-event! *mock-server* session-id
+                                "command.execute"
+                                {:requestId "cmd-req-2"
+                                 :command "/unknown"
+                                 :commandName "unknown"
+                                 :args ""})
+      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
+        (is (= 1 (count cmd-rpcs)))
+        (when (seq cmd-rpcs)
+          (is (string? (:error (:params (first cmd-rpcs)))))
+          (is (re-find #"Unknown command" (:error (:params (first cmd-rpcs))))))))))
+
+(deftest test-command-handler-error
+  (testing "command handler exception sends error via RPC"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.commands.handlePendingCommand" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :commands [{:name "fail"
+                                                   :command-handler (fn [_]
+                                                                      (throw (Exception. "deploy failed")))}]})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-session-event! *mock-server* session-id
+                                "command.execute"
+                                {:requestId "cmd-req-3"
+                                 :command "/fail"
+                                 :commandName "fail"
+                                 :args ""})
+      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
+        (is (= 1 (count cmd-rpcs)))
+        (when (seq cmd-rpcs)
+          (is (= "deploy failed" (:error (:params (first cmd-rpcs))))))))))
+
+;; -----------------------------------------------------------------------------
+;; Capabilities and Elicitation Tests
+;; -----------------------------------------------------------------------------
+
+(deftest test-session-capabilities
+  (testing "capabilities default to empty map when not in response"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})]
+      (is (= {} (sdk/capabilities session)))
+      (is (false? (sdk/elicitation-supported? session))))))
+
+(deftest test-session-capabilities-from-response
+  (testing "capabilities stored from session.create response"
+    (let [_ (mock/set-request-hook! *mock-server*
+              (fn [method _params]
+                (when (= "session.create" method)
+                  {:capabilities {:ui {:elicitation true}}})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})]
+      (is (= {:ui {:elicitation true}} (sdk/capabilities session)))
+      (is (true? (sdk/elicitation-supported? session))))))
+
+(deftest test-elicitation-throws-when-unsupported
+  (testing "elicitation convenience methods throw when not supported"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not supported"
+            (sdk/confirm! session "test")))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not supported"
+            (sdk/select! session "test" ["a" "b"])))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not supported"
+            (sdk/input! session "test"))))))
+
+(deftest test-session-without-commands
+  (testing "session without commands has empty command handlers"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})]
+      (is (= {} (get-in @(:state *test-client*)
+                        [:sessions (sdk/session-id session) :command-handlers]))))))
