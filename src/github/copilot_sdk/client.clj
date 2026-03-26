@@ -186,7 +186,11 @@
          merged (merge (default-options) opts-with-defaults)
          ;; COPILOT_CLI_PATH env var fallback: when no explicit :cli-path or :cli-url,
          ;; check effective env for COPILOT_CLI_PATH before using default "copilot"
-         effective-env (or (:env opts) (into {} (System/getenv)))
+         ;; Merge system env with user overrides so COPILOT_CLI_PATH is visible
+         ;; even when :env provides additional overrides
+         effective-env (if (:env opts)
+                         (merge (into {} (System/getenv)) (:env opts))
+                         (into {} (System/getenv)))
          merged (if (and (not (:cli-path opts))
                          (not (:cli-url opts))
                          (get effective-env "COPILOT_CLI_PATH"))

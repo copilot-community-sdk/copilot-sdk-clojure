@@ -1,7 +1,8 @@
 (ns github.copilot-sdk.specs
   "Clojure specs for Copilot SDK data structures."
   (:require [clojure.spec.alpha :as s]
-            [clojure.set :as set]))
+            [clojure.set :as set]
+            [clojure.string :as str]))
 
 ;; -----------------------------------------------------------------------------
 ;; Common specs
@@ -272,8 +273,9 @@
 (s/def ::command-name ::non-blank-string)
 (s/def ::command-handler fn?)
 (s/def ::command-definition
-  (s/keys :req-un [::name ::command-handler]
-          :opt-un [::description]))
+  (s/and (s/keys :req-un [::name ::command-handler]
+                 :opt-un [::description])
+         #(not (str/blank? (:name %)))))
 (s/def ::commands (s/coll-of ::command-definition))
 
 ;; Session capabilities — reported by the CLI host
@@ -281,14 +283,16 @@
 (s/def ::ui-capabilities (s/keys :opt-un [::elicitation]))
 (s/def ::session-capabilities (s/keys :opt-un [::ui-capabilities]))
 
-;; Elicitation types
-(s/def ::elicitation-action #{:accept :decline :cancel})
+;; Elicitation types — action values are strings on the wire
+(s/def ::elicitation-action #{"accept" "decline" "cancel"})
 (s/def ::elicitation-field-value (s/or :string string? :number number? :boolean boolean?
                                        :strings (s/coll-of string?)))
-(s/def ::elicitation-content (s/map-of string? ::elicitation-field-value))
+(s/def ::elicitation-content (s/map-of keyword? ::elicitation-field-value))
+(s/def ::action ::elicitation-action)
+(s/def ::content (s/nilable ::elicitation-content))
 (s/def ::elicitation-result
-  (s/keys :req-un [::elicitation-action]
-          :opt-un [::elicitation-content]))
+  (s/keys :req-un [::action]
+          :opt-un [::content]))
 (s/def ::requested-schema map?)
 (s/def ::elicitation-params
   (s/keys :req-un [::message ::requested-schema]))

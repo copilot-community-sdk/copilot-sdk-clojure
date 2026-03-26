@@ -1024,7 +1024,7 @@ Show a text input dialog. Returns the entered text as a string, or `nil` if the 
 (copilot/ui-elicitation! session params)
 ```
 
-Raw elicitation request for custom JSON schemas. `params` is a map with `:message` and `:requested-schema` keys. Returns a map with `:action` (`:accept`, `:decline`, or `:cancel`) and `:content`. Throws if elicitation is not supported.
+Raw elicitation request for custom JSON schemas. `params` is a map with `:message` and `:requested-schema` keys. Returns a map with `:action` (`"accept"`, `"decline"`, or `"cancel"`) and `:content`. Throws if elicitation is not supported.
 
 ```clojure
 (copilot/ui-elicitation! session
@@ -1033,7 +1033,7 @@ Raw elicitation request for custom JSON schemas. `params` is a map with `:messag
                       :properties {"env" {:type "string" :enum ["staging" "production"]}
                                    "replicas" {:type "number" :default 3}}
                       :required ["env"]}})
-;; => {:action :accept, :content {:env "staging", :replicas 3}}
+;; => {:action "accept", :content {:env "staging", :replicas 3}}
 ```
 
 ---

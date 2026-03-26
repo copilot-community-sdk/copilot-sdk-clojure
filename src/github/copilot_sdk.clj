@@ -912,8 +912,10 @@
    (when-let [name (copilot/input! session \"Enter your name\")]
      (println \"Hello,\" name))
    ```"
-  [session message & {:as opts}]
-  (session/input! session message opts))
+  ([session message]
+   (session/input! session message))
+  ([session message opts]
+   (session/input! session message opts)))
 
 (defn get-current-model
   "Get the current model for this session.

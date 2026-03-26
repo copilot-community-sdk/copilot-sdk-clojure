@@ -1249,7 +1249,7 @@
                                  :command "/deploy production"
                                  :commandName "deploy"
                                  :args "production"})
-      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       ;; Handler was called with context
       (is (some? @handler-called))
       (is (= session-id (:session-id @handler-called)))
@@ -1285,7 +1285,7 @@
                                  :command "/unknown"
                                  :commandName "unknown"
                                  :args ""})
-      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
         (is (= 1 (count cmd-rpcs)))
         (when (seq cmd-rpcs)
@@ -1315,7 +1315,7 @@
                                  :command "/fail"
                                  :commandName "fail"
                                  :args ""})
-      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
         (is (= 1 (count cmd-rpcs)))
         (when (seq cmd-rpcs)

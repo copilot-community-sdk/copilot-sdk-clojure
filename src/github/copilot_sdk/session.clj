@@ -1124,20 +1124,21 @@
    declines/cancels. opts is an optional map with :title, :description,
    :min-length, :max-length, :format, and :default keys.
    Throws if the host does not support elicitation."
-  [session message & {:as opts}]
-  (let [field (cond-> {:type "string"}
-                (:title opts) (assoc :title (:title opts))
-                (:description opts) (assoc :description (:description opts))
-                (some? (:min-length opts)) (assoc :minLength (:min-length opts))
-                (some? (:max-length opts)) (assoc :maxLength (:max-length opts))
-                (:format opts) (assoc :format (:format opts))
-                (some? (:default opts)) (assoc :default (:default opts)))
-        result (ui-elicitation! session
-                 {:message message
-                  :requested-schema
-                  {:type "object"
-                   :properties {"value" field}
-                   :required ["value"]}})]
-    (when (and (= "accept" (:action result))
-              (some? (get-in result [:content :value])))
-      (get-in result [:content :value]))))
+  ([session message] (input! session message nil))
+  ([session message opts]
+   (let [field (cond-> {:type "string"}
+                 (:title opts) (assoc :title (:title opts))
+                 (:description opts) (assoc :description (:description opts))
+                 (some? (:min-length opts)) (assoc :minLength (:min-length opts))
+                 (some? (:max-length opts)) (assoc :maxLength (:max-length opts))
+                 (:format opts) (assoc :format (:format opts))
+                 (some? (:default opts)) (assoc :default (:default opts)))
+         result (ui-elicitation! session
+                  {:message message
+                   :requested-schema
+                   {:type "object"
+                    :properties {"value" field}
+                    :required ["value"]}})]
+     (when (and (= "accept" (:action result))
+               (some? (get-in result [:content :value])))
+       (get-in result [:content :value])))))
