@@ -1337,7 +1337,7 @@
     (let [_ (mock/set-request-hook! *mock-server*
               (fn [method _params]
                 (when (= "session.create" method)
-                  {:capabilities {:ui {:elicitation true}}})))
+                  {::mock/merge-response {:capabilities {:ui {:elicitation true}}}})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})]
       (is (= {:ui {:elicitation true}} (sdk/capabilities session)))

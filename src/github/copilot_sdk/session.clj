@@ -111,13 +111,6 @@
   [client session-id capabilities]
   (swap! (:state client) assoc-in [:sessions session-id :capabilities] (or capabilities {})))
 
-(defn register-commands!
-  "Store command handlers in session state.
-   commands is a seq of maps with :name and :command-handler keys."
-  [client session-id commands]
-  (let [handlers (into {} (map (fn [c] [(:name c) (:command-handler c)]) commands))]
-    (swap! (:state client) assoc-in [:sessions session-id :command-handlers] handlers)))
-
 (defn register-transform-callbacks!
   "Store system message transform callbacks on a session.
    Callbacks is a map of wire section ID strings to 1-arity functions

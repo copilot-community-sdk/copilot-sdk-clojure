@@ -303,8 +303,11 @@
                  "session.permissions.handlePendingPermissionRequest" {:ok true}
                  "session.commands.handlePendingCommand" {:ok true}
                  (throw (ex-info "Method not found" {:code -32601 :method method})))
-        ;; Merge hook-provided data into result (allows tests to customize responses)
-        result (if (map? hook-result) (merge result hook-result) result)]
+        ;; Merge hook-provided data into result only when hook returns ::merge-response
+        ;; This prevents accidental response mutation from spy hooks (e.g. swap! return values)
+        result (if-let [extra (and (map? hook-result) (::merge-response hook-result))]
+                 (merge result extra)
+                 result)]
     {:jsonrpc "2.0"
      :id (:id msg)
      :result result}))
