@@ -9,6 +9,8 @@ A fully-featured Clojure port of the official [GitHub Copilot SDK](https://githu
 Key features:
 - **Blocking and async APIs** — `send-and-wait!` for simple use cases, `send!` + event channels for reactive patterns
 - **Custom tools** — Let the LLM call back into your application
+- **Slash commands** — Register custom commands via `:commands` in session config; handlers are invoked when users run them in the TUI
+- **UI elicitation** — Show confirmation, selection, and text-input dialogs to the user via `confirm!`, `select!`, `input!`
 - **Streaming** — Incremental response deltas via `:assistant.message_delta` events
 - **Multi-session support** — Run multiple independent conversations concurrently
 - **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
