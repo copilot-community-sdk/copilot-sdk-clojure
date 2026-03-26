@@ -294,6 +294,7 @@
   (s/keys :req-un [::action]
           :opt-un [::content]))
 (s/def ::requested-schema map?)
+(s/def ::message ::non-blank-string)
 (s/def ::elicitation-params
   (s/keys :req-un [::message ::requested-schema]))
 
@@ -302,6 +303,7 @@
 (s/def ::min-length nat-int?)
 (s/def ::max-length nat-int?)
 (s/def ::format #{"email" "uri" "date" "date-time"})
+(s/def ::default string?)
 (s/def ::input-options
   (s/keys :opt-un [::title ::description ::min-length ::max-length ::format ::default]))
 
