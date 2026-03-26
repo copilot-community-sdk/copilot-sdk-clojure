@@ -110,7 +110,8 @@
     :copilot/session.skills_loaded
     :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
-    :copilot/session.extensions_loaded})
+    :copilot/session.extensions_loaded
+    :copilot/session.custom_agents_updated})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -139,7 +140,8 @@
     :copilot/session.skills_loaded
     :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
-    :copilot/session.extensions_loaded})
+    :copilot/session.extensions_loaded
+    :copilot/session.custom_agents_updated})
 
 (def assistant-events
   "Assistant response events."
@@ -833,6 +835,87 @@
   "Get the session workspace path when provided by the CLI."
   [session]
   (session/workspace-path session))
+
+(defn capabilities
+  "Get the host capabilities reported when the session was created or resumed.
+   Returns a map, e.g. `{:ui {:elicitation true}}`.
+
+   Example:
+   ```clojure
+   (copilot/capabilities session)
+   ;; => {:ui {:elicitation true}}
+   ```"
+  [session]
+  (session/capabilities session))
+
+(defn elicitation-supported?
+  "Check if the CLI host supports interactive elicitation dialogs.
+
+   Example:
+   ```clojure
+   (when (copilot/elicitation-supported? session)
+     (copilot/confirm! session \"Deploy to production?\"))
+   ```"
+  [session]
+  (session/elicitation-supported? session))
+
+(defn ui-elicitation!
+  "Request structured user input via an elicitation prompt.
+   params is a map with :message and :requested-schema keys.
+   Throws if the host does not support elicitation.
+
+   Example:
+   ```clojure
+   (copilot/ui-elicitation! session
+     {:message \"Configure deployment\"
+      :requested-schema {:type \"object\"
+                         :properties {\"env\" {:type \"string\" :enum [\"staging\" \"production\"]}}
+                         :required [\"env\"]}})
+   ```"
+  [session params]
+  (session/ui-elicitation! session params))
+
+(defn confirm!
+  "Show a confirmation dialog and return the user's boolean answer.
+   Returns false if the user declines or cancels.
+   Throws if the host does not support elicitation.
+
+   Example:
+   ```clojure
+   (when (copilot/confirm! session \"Deploy to production?\")
+     (println \"Deploying...\"))
+   ```"
+  [session message]
+  (session/confirm! session message))
+
+(defn select!
+  "Show a selection dialog with the given options.
+   Returns the selected value as a string, or nil if the user declines/cancels.
+   Throws if the host does not support elicitation.
+
+   Example:
+   ```clojure
+   (when-let [env (copilot/select! session \"Choose environment\" [\"staging\" \"production\"])]
+     (println \"Selected:\" env))
+   ```"
+  [session message options]
+  (session/select! session message options))
+
+(defn input!
+  "Show a text input dialog. Returns the entered text, or nil if the user
+   declines/cancels. opts is an optional map with :title, :description,
+   :min-length, :max-length, :format, and :default keys.
+   Throws if the host does not support elicitation.
+
+   Example:
+   ```clojure
+   (when-let [name (copilot/input! session \"Enter your name\")]
+     (println \"Hello,\" name))
+   ```"
+  ([session message]
+   (session/input! session message))
+  ([session message opts]
+   (session/input! session message opts)))
 
 (defn get-current-model
   "Get the current model for this session.

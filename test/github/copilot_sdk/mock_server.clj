@@ -278,9 +278,10 @@
 (defn- handle-request [server msg]
   (let [method (:method msg)
         params (:params msg)
-        ;; Call hook if set
-        _ (when-let [hook @(:on-request server)]
-            (hook method params))
+        ;; Call hook if set — hooks can optionally return a map with ::merge-response
+        ;; whose value will be merged into the handler result (see merge logic below).
+        hook-result (when-let [hook @(:on-request server)]
+                      (hook method params))
         result (case method
                  "ping" (handle-ping server params)
                  "status.get" (handle-status-get server params)
@@ -301,7 +302,16 @@
                  "session.model.switchTo" (handle-session-model-switch-to server params)
                  "session.log" (handle-session-log server params)
                  "session.permissions.handlePendingPermissionRequest" {:ok true}
-                 (throw (ex-info "Method not found" {:code -32601 :method method})))]
+                 "session.commands.handlePendingCommand" {:ok true}
+                 (throw (ex-info "Method not found" {:code -32601 :method method})))
+        ;; Merge hook-provided data into result only when hook returns ::merge-response
+        ;; This prevents accidental response mutation from spy hooks (e.g. swap! return values)
+        result (let [extra (when (map? hook-result) (::merge-response hook-result))]
+                 (cond
+                   (nil? extra) result
+                   (map? extra) (merge result extra)
+                   :else (throw (ex-info "::merge-response value must be a map"
+                                         {:code -32603 :method method :extra-value extra}))))]
     {:jsonrpc "2.0"
      :id (:id msg)
      :result result}))
