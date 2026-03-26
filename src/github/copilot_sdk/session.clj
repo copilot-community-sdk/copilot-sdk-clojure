@@ -367,12 +367,19 @@
        (if-not handler
          {:error (str "Unknown command: " command-name)}
          (try
-           (let [result (handler {:session-id session-id
+           (let [timeout-ms (or (:tool-timeout-ms (:options client)) 120000)
+                 result (handler {:session-id session-id
                                   :command command
                                   :command-name command-name
                                   :args args})
-                 ;; If handler returns a channel, await it
-                 _ (when (channel? result) (<!! result))]
+                 ;; If handler returns a channel, await with timeout
+                 _ (when (channel? result)
+                     (let [timeout-ch (async/timeout timeout-ms)
+                           [_ ch] (alts!! [result timeout-ch])]
+                       (when (= ch timeout-ch)
+                         (throw (ex-info "Command handler timeout"
+                                         {:timeout-ms timeout-ms
+                                          :command-name command-name})))))]
              {:result nil})
            (catch Exception e
              {:error (ex-message e)})))))
