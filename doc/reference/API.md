@@ -1013,8 +1013,8 @@ Show a text input dialog. Returns the entered text as a string, or `nil` if the 
 
 ```clojure
 (when-let [name (copilot/input! session "Enter your name"
-                  :min-length 1
-                  :max-length 100)]
+                  {:min-length 1
+                   :max-length 100})]
   (println "Hello," name))
 ```
 

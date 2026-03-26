@@ -280,8 +280,8 @@
 
 ;; Session capabilities — reported by the CLI host
 (s/def ::elicitation boolean?)
-(s/def ::ui-capabilities (s/keys :opt-un [::elicitation]))
-(s/def ::session-capabilities (s/keys :opt-un [::ui-capabilities]))
+(s/def ::ui (s/keys :opt-un [::elicitation]))
+(s/def ::session-capabilities (s/keys :opt-un [::ui]))
 
 ;; Elicitation types — action values are strings on the wire
 (s/def ::elicitation-action #{"accept" "decline" "cancel"})

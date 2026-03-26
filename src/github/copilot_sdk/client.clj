@@ -1232,8 +1232,10 @@
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
                                  (util/clj->wire is))
         wire-commands (when-let [cmds (:commands config)]
-                        (mapv (fn [c] {:name (:name c)
-                                       :description (:description c)})
+                        (mapv (fn [c]
+                                (cond-> {:name (:name c)}
+                                  (some? (:description c))
+                                  (assoc :description (:description c))))
                               cmds))]
     (cond-> {}
       (:session-id config) (assoc :session-id (:session-id config))
@@ -1287,8 +1289,10 @@
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
                                  (util/clj->wire is))
         wire-commands (when-let [cmds (:commands config)]
-                        (mapv (fn [c] {:name (:name c)
-                                       :description (:description c)})
+                        (mapv (fn [c]
+                                (cond-> {:name (:name c)}
+                                  (some? (:description c))
+                                  (assoc :description (:description c))))
                               cmds))]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))

@@ -1218,7 +1218,7 @@
           resume-params (get @seen "session.resume")]
       ;; Commands are sent with name and description only (no handler)
       (is (= [{:name "deploy" :description "Deploy the app"}
-              {:name "rollback" :description nil}]
+              {:name "rollback"}]
              (:commands create-params)))
       (is (= [{:name "status" :description "Check status"}]
              (:commands resume-params))))))
