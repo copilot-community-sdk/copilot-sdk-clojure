@@ -995,7 +995,8 @@ Show a selection dialog with the given options. Returns the selected value as a 
 ### `input!`
 
 ```clojure
-(copilot/input! session message & {:as opts})
+(copilot/input! session message)
+(copilot/input! session message opts)
 ```
 
 Show a text input dialog. Returns the entered text as a string, or `nil` if the user declines or cancels. Throws if elicitation is not supported.
