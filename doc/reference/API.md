@@ -1093,7 +1093,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.idle` | Session finished processing |
 | `:copilot/session.info` | Informational session update |
 | `:copilot/session.model_change` | Session model changed |
-| `:copilot/session.handoff` | Session handed off to another agent |
+| `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
 | `:copilot/session.usage_info` | Token usage information |
 | `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
 | `:copilot/session.title_changed` | Session title updated |

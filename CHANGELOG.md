@@ -8,6 +8,7 @@ All notable changes to this project will be documented in this file. This change
 - **UI Elicitation convenience API** — new public functions `confirm!`, `select!`, `input!` wrap the existing `ui-elicitation!` with typed schemas. `capabilities` accessor returns host capabilities from session create/resume response. `elicitation-supported?` predicate checks if the host supports elicitation dialogs. All convenience methods throw with a clear error when elicitation is unsupported (upstream PR #906).
 - **`COPILOT_CLI_PATH` env var fallback** — client constructor now checks `COPILOT_CLI_PATH` environment variable before defaulting to `"copilot"` when no explicit `:cli-path` or `:cli-url` is provided (upstream PR #906).
 - **New event type** `session.custom_agents_updated` added to event type enum.
+- **`:host` field on `session.handoff` events** — event data now includes optional `:host` field with the GitHub host URL. New `::session.handoff-data` spec documents the shape (upstream PR #900).
 - New specs: `::command-definition`, `::commands`, `::session-capabilities`, `::elicitation-params`, `::elicitation-result`, `::input-options`.
 - Function specs and instrumentation for `capabilities`, `elicitation-supported?`, `confirm!`, `select!`, `input!`.
 - Integration tests for command wire format, command.execute routing, unknown command errors, handler errors, capabilities storage, and elicitation guards.
