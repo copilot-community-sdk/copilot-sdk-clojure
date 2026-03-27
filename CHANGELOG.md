@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.2.1 sync)
+- **`get-session-metadata`** — new function on `CopilotClient` for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if the session does not exist. Sends `session.getMetadata` JSON-RPC call, reusing the existing `::session-metadata` type (upstream PR #899).
+
 ## [0.2.1.1-SNAPSHOT] - 2026-03-26
 ### Added (v0.2.1 sync)
 - **Commands support** — register slash commands per-session via `:commands` option in session config. Each command definition has `:name`, optional `:description`, and a `:command-handler` function. Commands are sent on the wire (name + description) and executed via `command.execute` broadcast events with `session.commands.handlePendingCommand` RPC callback (upstream PR #906).
