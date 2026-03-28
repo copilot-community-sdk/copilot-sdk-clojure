@@ -559,6 +559,7 @@
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
+(s/def ::steerable? boolean?)
 (s/def ::host-type string?)
 (s/def ::head-commit string?)
 (s/def ::base-commit string?)
@@ -566,7 +567,7 @@
 (s/def ::session.start-data
   (s/keys :req-un [::session-id]
           :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model
-                   ::reasoning-effort ::already-in-use? ::host-type ::head-commit ::base-commit]))
+                   ::reasoning-effort ::already-in-use? ::steerable? ::host-type ::head-commit ::base-commit]))
 
 (s/def ::event-count nat-int?)
 (s/def ::session.resume-data

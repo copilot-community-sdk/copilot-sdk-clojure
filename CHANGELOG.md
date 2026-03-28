@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.2.1 sync)
+- **`steerable` field on `session.start` events** — `session.start` event data now includes optional `:steerable?` boolean field indicating whether the session supports remote steering via Mission Control. New `::steerable?` spec added (upstream PR #927).
+
+### Changed (v0.2.1 sync)
+- **`session.idle` is now ephemeral** — the runtime no longer persists `session.idle` events in session history. `get-messages` will no longer return `session.idle` events. Live event listeners (used by `send-and-wait!` and `send!`) are unaffected and still receive it (upstream PR #927).
+
 ## [0.2.1.1-SNAPSHOT] - 2026-03-26
 ### Added (v0.2.1 sync)
 - **Commands support** — register slash commands per-session via `:commands` option in session config. Each command definition has `:name`, optional `:description`, and a `:command-handler` function. Commands are sent on the wire (name + description) and executed via `command.execute` broadcast events with `session.commands.handlePendingCommand` RPC callback (upstream PR #906).
