@@ -77,6 +77,11 @@
                :filter (s/? (s/nilable ::specs/session-list-filter)))
   :ret (s/coll-of ::specs/session-metadata))
 
+(s/fdef github.copilot-sdk.client/get-session-metadata
+  :args (s/cat :client ::specs/client
+               :session-id ::specs/session-id)
+  :ret (s/nilable ::specs/session-metadata))
+
 (s/fdef github.copilot-sdk.client/delete-session!
   :args (s/cat :client ::specs/client
                :session-id ::specs/session-id)
@@ -372,6 +377,7 @@
                       github.copilot-sdk.client/<resume-session
                       github.copilot-sdk.client/join-session
                       github.copilot-sdk.client/list-sessions
+                      github.copilot-sdk.client/get-session-metadata
                       github.copilot-sdk.client/delete-session!
                       github.copilot-sdk.client/get-last-session-id
                       github.copilot-sdk.client/get-foreground-session-id
@@ -445,6 +451,7 @@
                       github.copilot-sdk.client/<resume-session
                       github.copilot-sdk.client/join-session
                       github.copilot-sdk.client/list-sessions
+                      github.copilot-sdk.client/get-session-metadata
                       github.copilot-sdk.client/delete-session!
                       github.copilot-sdk.client/get-last-session-id
                       github.copilot-sdk.client/get-foreground-session-id

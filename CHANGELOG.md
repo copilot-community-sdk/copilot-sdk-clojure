@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file. This change
 
 ### Added (v0.2.1 sync)
 - **`steerable` field on `session.start` events** — `session.start` event data now includes optional `:steerable?` boolean field indicating whether the session supports remote steering via Mission Control. New `::steerable?` spec added (upstream PR #927).
+- **`get-session-metadata`** — new function on client for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if not found. Sends `session.getMetadata` JSON-RPC call. Shared `wire->session-metadata` helper extracted from `list-sessions` to eliminate duplication (upstream PR #899).
 
 ### Changed (v0.2.1 sync)
 - **`session.idle` is now ephemeral** — the runtime no longer persists `session.idle` events in session history. `get-messages` will no longer return `session.idle` events. Live event listeners (used by `send-and-wait!` and `send!`) are unaffected and still receive it (upstream PR #927).

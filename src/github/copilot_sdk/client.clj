@@ -1591,6 +1591,23 @@
           (try (stop! c) (catch Throwable _))
           (throw t))))))
 
+(defn- wire->session-metadata
+  "Convert a wire-format session map to the Clojure session-metadata shape."
+  [s]
+  (let [ctx (:context s)
+        cwd (:cwd ctx)
+        base (cond-> {:session-id (:session-id s)
+                      :start-time (java.time.Instant/parse (:start-time s))
+                      :modified-time (java.time.Instant/parse (:modified-time s))
+                      :remote? (:is-remote s)}
+               (:summary s) (assoc :summary (:summary s)))]
+    (cond-> base
+      (and ctx (seq cwd))
+      (assoc :context (cond-> {:cwd cwd}
+                        (:git-root ctx) (assoc :git-root (:git-root ctx))
+                        (:repository ctx) (assoc :repository (:repository ctx))
+                        (:branch ctx) (assoc :branch (:branch ctx)))))))
+
 (defn list-sessions
   "List all available sessions.
    Returns a vector of session metadata maps.
@@ -1611,18 +1628,28 @@
                                      (cond-> {}
                                        wire-filter (assoc :filter wire-filter)))
          sessions (:sessions result)]
-     (mapv (fn [s]
-             (let [ctx (:context s)]
-               (cond-> {:session-id (:session-id s)
-                        :start-time (java.time.Instant/parse (:start-time s))
-                        :modified-time (java.time.Instant/parse (:modified-time s))
-                        :summary (:summary s)
-                        :remote? (:is-remote s)}
-                 ctx (assoc :context (cond-> {:cwd (:cwd ctx)}
-                                      (:git-root ctx) (assoc :git-root (:git-root ctx))
-                                      (:repository ctx) (assoc :repository (:repository ctx))
-                                      (:branch ctx) (assoc :branch (:branch ctx)))))))
-           sessions))))
+     (mapv wire->session-metadata sessions))))
+
+(defn get-session-metadata
+  "Gets metadata for a specific session by ID.
+
+   Provides an efficient O(1) lookup of a single session's metadata instead
+   of listing all sessions and filtering client-side.
+
+   Returns the session metadata map if found, or nil if not found.
+
+   The returned map has keys:
+   - :session-id — the session ID string
+   - :start-time — java.time.Instant when the session was created
+   - :modified-time — java.time.Instant of last modification
+   - :remote? — boolean, true if the session is remote
+   - :summary — optional summary string
+   - :context — optional map with :cwd and optional :git-root, :repository, :branch"
+  [client session-id]
+  (ensure-connected! client)
+  (let [{:keys [connection-io]} @(:state client)
+        result (proto/send-request! connection-io "session.getMetadata" {:session-id session-id})]
+    (some-> (:session result) wire->session-metadata)))
 
 (defn delete-session!
   "Permanently deletes a session and all its data from disk, including
