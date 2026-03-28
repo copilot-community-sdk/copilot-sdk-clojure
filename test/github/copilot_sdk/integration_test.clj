@@ -272,6 +272,36 @@
         (is (= 1 (count filtered)))
         (is (= (sdk/session-id s1) (:session-id (first filtered))))))))
 
+(deftest test-get-session-metadata
+  (testing "Get metadata for an existing session"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          sid (sdk/session-id session)
+          metadata (sdk/get-session-metadata *test-client* sid)]
+      (is (some? metadata))
+      (is (= sid (:session-id metadata)))
+      (is (instance? java.time.Instant (:start-time metadata)))
+      (is (instance? java.time.Instant (:modified-time metadata)))
+      (is (= false (:remote? metadata))))))
+
+(deftest test-get-session-metadata-with-context
+  (testing "Get session metadata includes context when present"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          sid (sdk/session-id session)]
+      (mock/set-session-context! *mock-server* sid
+                                 {:cwd "/home/user/project"
+                                  :gitRoot "/home/user/project"
+                                  :repository "owner/repo"
+                                  :branch "main"})
+      (let [metadata (sdk/get-session-metadata *test-client* sid)]
+        (is (some? metadata))
+        (is (= "/home/user/project" (get-in metadata [:context :cwd])))
+        (is (= "owner/repo" (get-in metadata [:context :repository])))
+        (is (= "main" (get-in metadata [:context :branch])))))))
+
+(deftest test-get-session-metadata-not-found
+  (testing "Get metadata for non-existent session returns nil"
+    (is (nil? (sdk/get-session-metadata *test-client* "non-existent-session-id")))))
+
 (deftest test-list-tools
   (testing "List tools returns tool info"
     (let [tools (sdk/list-tools *test-client*)]

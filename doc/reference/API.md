@@ -567,6 +567,35 @@ Returns a vector of session metadata maps with `:start-time` and `:modified-time
 ;;     ...]
 ```
 
+#### `get-session-metadata`
+
+```clojure
+(copilot/get-session-metadata client session-id)
+```
+
+Get metadata for a specific session by ID. Returns the session metadata map if found, or `nil` if the session does not exist. Provides an efficient O(1) lookup instead of calling `list-sessions` and filtering client-side.
+
+The returned map has the same shape as entries returned by `list-sessions`:
+- `:session-id` — session ID string
+- `:start-time` — `java.time.Instant` when the session was created
+- `:modified-time` — `java.time.Instant` of last modification
+- `:remote?` — boolean, true if the session is remote
+- `:summary` — optional summary string
+- `:context` — optional map with `:cwd` and optional `:git-root`, `:repository`, `:branch`
+
+```clojure
+(def metadata (copilot/get-session-metadata client "session-abc123"))
+;; => {:session-id "session-abc123"
+;;     :start-time #inst "2025-01-15T10:00:00Z"
+;;     :modified-time #inst "2025-01-15T10:05:00Z"
+;;     :remote? false
+;;     :summary "Refactoring auth module"
+;;     :context {:cwd "/home/user/project"}}
+
+(copilot/get-session-metadata client "non-existent-id")
+;; => nil
+```
+
 #### `delete-session!`
 
 ```clojure

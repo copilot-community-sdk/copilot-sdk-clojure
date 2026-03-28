@@ -220,6 +220,17 @@
     (swap! (:sessions server) dissoc session-id)
     {:success true}))
 
+(defn- handle-session-get-metadata [server params]
+  (let [session-id (:sessionId params)
+        session-state (get @(:sessions server) session-id)]
+    (if session-state
+      {:session (cond-> {:sessionId session-id
+                         :startTime (.toString (:created-at session-state))
+                         :modifiedTime (.toString (java.time.Instant/now))
+                         :isRemote false}
+                  (:context session-state) (assoc :context (:context session-state)))}
+      {:session nil})))
+
 (defn- handle-session-get-last-id [server params]
   (let [sessions @(:sessions server)]
     (if (empty? sessions)
@@ -294,6 +305,7 @@
                  "session.abort" (handle-session-abort server params)
                  "session.getMessages" (handle-session-get-messages server params)
                  "session.list" (handle-session-list server params)
+                 "session.getMetadata" (handle-session-get-metadata server params)
                  "session.delete" (handle-session-delete server params)
                  "session.getLastId" (handle-session-get-last-id server params)
                  "tools.list" (handle-tools-list server params)

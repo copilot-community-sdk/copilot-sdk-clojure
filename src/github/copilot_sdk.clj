@@ -644,6 +644,23 @@
   ([client filter-opts]
    (client/list-sessions client filter-opts)))
 
+(defn get-session-metadata
+  "Gets metadata for a specific session by ID.
+
+   Returns the session metadata map if found, or nil if not found.
+   Provides an efficient O(1) lookup instead of listing all sessions.
+
+   Example:
+   ```clojure
+   (copilot/get-session-metadata client \"session-abc123\")
+   ;; => {:session-id \"session-abc123\" :start-time #inst \"...\" ...}
+
+   (copilot/get-session-metadata client \"non-existent-id\")
+   ;; => nil
+   ```"
+  [client session-id]
+  (client/get-session-metadata client session-id))
+
 (defn delete-session!
   "Delete a session and its data from disk."
   [client session-id]
