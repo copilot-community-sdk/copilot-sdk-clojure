@@ -1116,7 +1116,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 
 | Event Type | Description |
 |------------|-------------|
-| `:copilot/session.start` | Session created |
+| `:copilot/session.start` | Session created; data includes optional `:steerable?` boolean (true if the session supports remote steering via Mission Control) |
 | `:copilot/session.resume` | Session resumed |
 | `:copilot/session.error` | Session error occurred |
 | `:copilot/session.idle` | Session finished processing |
