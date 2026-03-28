@@ -586,8 +586,8 @@ The returned map has the same shape as entries returned by `list-sessions`:
 ```clojure
 (def metadata (copilot/get-session-metadata client "session-abc123"))
 ;; => {:session-id "session-abc123"
-;;     :start-time #inst "2025-01-15T10:00:00Z"
-;;     :modified-time #inst "2025-01-15T10:05:00Z"
+;;     :start-time #object[java.time.Instant 0x... "2025-01-15T10:00:00Z"]
+;;     :modified-time #object[java.time.Instant 0x... "2025-01-15T10:05:00Z"]
 ;;     :remote? false
 ;;     :summary "Refactoring auth module"
 ;;     :context {:cwd "/home/user/project"}}

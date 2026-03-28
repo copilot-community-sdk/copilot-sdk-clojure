@@ -653,7 +653,7 @@
    Example:
    ```clojure
    (copilot/get-session-metadata client \"session-abc123\")
-   ;; => {:session-id \"session-abc123\" :start-time #inst \"...\" ...}
+   ;; => {:session-id \"session-abc123\" :start-time #object[java.time.Instant ...] ...}
 
    (copilot/get-session-metadata client \"non-existent-id\")
    ;; => nil

@@ -1594,16 +1594,19 @@
 (defn- wire->session-metadata
   "Convert a wire-format session map to the Clojure session-metadata shape."
   [s]
-  (let [ctx (:context s)]
-    (cond-> {:session-id (:session-id s)
-             :start-time (java.time.Instant/parse (:start-time s))
-             :modified-time (java.time.Instant/parse (:modified-time s))
-             :summary (:summary s)
-             :remote? (:is-remote s)}
-      ctx (assoc :context (cond-> {:cwd (:cwd ctx)}
-                            (:git-root ctx) (assoc :git-root (:git-root ctx))
-                            (:repository ctx) (assoc :repository (:repository ctx))
-                            (:branch ctx) (assoc :branch (:branch ctx)))))))
+  (let [ctx (:context s)
+        cwd (:cwd ctx)
+        base (cond-> {:session-id (:session-id s)
+                      :start-time (java.time.Instant/parse (:start-time s))
+                      :modified-time (java.time.Instant/parse (:modified-time s))
+                      :remote? (:is-remote s)}
+               (:summary s) (assoc :summary (:summary s)))]
+    (cond-> base
+      (and ctx (seq cwd))
+      (assoc :context (cond-> {:cwd cwd}
+                        (:git-root ctx) (assoc :git-root (:git-root ctx))
+                        (:repository ctx) (assoc :repository (:repository ctx))
+                        (:branch ctx) (assoc :branch (:branch ctx)))))))
 
 (defn list-sessions
   "List all available sessions.
