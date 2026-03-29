@@ -806,7 +806,7 @@ Abort the currently processing message.
 (copilot/get-messages session)
 ```
 
-Get all events/messages from this session.
+Get all events/messages from this session. Returns a vector of event maps. Note: `:copilot/session.idle` events are ephemeral and are not included in the returned history.
 
 #### `get-current-model`
 
@@ -1116,10 +1116,10 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 
 | Event Type | Description |
 |------------|-------------|
-| `:copilot/session.start` | Session created |
+| `:copilot/session.start` | Session created; data includes `:session-id`, `:selected-model`, `:start-time`, optional `:steerable?` (boolean — whether session supports remote steering via Mission Control), and other version/model fields |
 | `:copilot/session.resume` | Session resumed |
 | `:copilot/session.error` | Session error occurred |
-| `:copilot/session.idle` | Session finished processing |
+| `:copilot/session.idle` | Session finished processing (ephemeral — received by live event listeners but not persisted in session history; `get-messages` will not return this event) |
 | `:copilot/session.info` | Informational session update |
 | `:copilot/session.model_change` | Session model changed |
 | `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
