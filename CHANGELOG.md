@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (v0.2.1 sync)
+- **`onElicitationRequest` handler** — new `:on-elicitation-request` option in session config (both `create-session` and `resume-session`). When provided, the session registers as an elicitation provider: the `requestElicitation` capability is advertised on the wire, and incoming `elicitation.requested` broadcast events are dispatched to the handler. The handler receives a request map `{:message :requested-schema :mode :elicitation-source :url}` and an invocation map `{:session-id}`, and must return a result map `{:action "accept"|"decline"|"cancel" :content {..}}`. On handler failure, a cancel response is automatically sent to avoid hanging requests (upstream PR #908).
+- **`capabilities.changed` event handling** — sessions now automatically merge incoming `capabilities.changed` broadcast events into their stored capabilities, so `(capabilities session)` reflects the latest state as providers join/leave (upstream PR #908).
+- **New event types**: `capabilities.changed`, `sampling.requested`, `sampling.completed`, `session.remote_steerable_changed` added to the event type enum (upstream PR #908).
 - **`steerable` field on `session.start` events** — `session.start` event data now includes optional `:steerable?` boolean field indicating whether the session supports remote steering via Mission Control. New `::steerable?` spec added (upstream PR #927).
 - **`get-session-metadata`** — new function on client for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if not found. Sends `session.getMetadata` JSON-RPC call. Shared `wire->session-metadata` helper extracted from `list-sessions` to eliminate duplication (upstream PR #899).
 

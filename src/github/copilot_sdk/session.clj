@@ -50,7 +50,7 @@
    If :on-event is provided, taps a subscriber that forwards events to the handler
    on a dedicated thread. Uses a sliding buffer, so events may be dropped under
    extreme backpressure if the handler cannot keep up with the event rate."
-  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path on-event config commands]}]
+  [client session-id {:keys [tools on-permission-request on-user-input-request on-elicitation-request hooks workspace-path on-event config commands]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -66,6 +66,7 @@
                              :command-handlers command-handlers
                              :permission-handler on-permission-request
                              :user-input-handler on-user-input-request
+                             :elicitation-handler on-elicitation-request
                              :hooks hooks
                              :destroyed? false
                              :workspace-path workspace-path
@@ -321,6 +322,30 @@
            (catch Exception e
              (log/error "User input handler error for session " session-id ": " (ex-message e))
              {:error {:code -32001 :message (str "User input handler error: " (ex-message e))}})))))
+   :io))
+
+(defn handle-elicitation-request!
+  "Handle an incoming elicitation.requested broadcast event. Returns a channel with the result.
+   PR #908 feature (onElicitationRequest handler).
+   
+   The handler receives the request map (with :message, :requested-schema, :mode, :elicitation-source,
+   :url) and should return an elicitation result map with :action (\"accept\", \"decline\", or \"cancel\")
+   and optionally :content (map of form values when action is \"accept\")."
+  [client session-id request]
+  (async/thread-call
+   (fn []
+     (let [handler (:elicitation-handler (session-state client session-id))]
+       (if-not handler
+         {:error {:code -32001 :message "Elicitation requested but no handler registered"}}
+         (try
+           (let [result (handler request {:session-id session-id})
+                 result (if (channel? result)
+                          (<!! result)
+                          result)]
+             {:result result})
+           (catch Exception e
+             (log/error "Elicitation handler error for session " session-id ": " (ex-message e))
+             {:error {:code -32001 :message (str "Elicitation handler error: " (ex-message e))}}))))))
    :io))
 
 (defn handle-hooks-invoke!

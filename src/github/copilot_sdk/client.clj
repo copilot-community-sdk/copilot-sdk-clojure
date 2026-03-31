@@ -351,7 +351,53 @@
                                           :error (ex-message e)}))))
               (catch Exception _ nil))))))))
 
-(defn- handle-v3-broadcast-event!
+(defn- handle-v3-elicitation-requested!
+  "Handle v3 elicitation.requested broadcast event.
+   Calls the session's elicitation handler and responds via the
+   session.ui.handlePendingElicitation RPC method.
+   On handler failure, sends a cancel response so the request doesn't hang."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)
+        request (select-keys data [:message :requested-schema :mode :elicitation-source :url])]
+    (when request-id
+      (go
+        (try
+          (let [elicit-response (<! (session/handle-elicitation-request!
+                                     client session-id request))
+                result (:result elicit-response)]
+            (if result
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.ui.handlePendingElicitation"
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result result}))))
+              ;; Handler returned error — cancel so request doesn't hang
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.ui.handlePendingElicitation"
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result {:action "cancel"}}))))))
+          (catch Exception e
+            (log/debug "v3 elicitation request error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.ui.handlePendingElicitation"
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result {:action "cancel"}}))))
+              (catch Exception _ nil))))))))
+
+(defn- handle-v3-capabilities-changed!
+  "Handle capabilities.changed event by merging new capabilities into session state."
+  [client session-id event]
+  (let [data (:data event)]
+    (swap! (:state client) update-in [:sessions session-id :capabilities] merge data)))
+
+
   "Protocol v3: intercept broadcast events for external tools, permissions, and commands.
    In v3, tool.call and permission.request server→client RPC methods are replaced
    by broadcast events that the SDK handles and responds to via new RPC methods."
@@ -366,6 +412,12 @@
 
       :copilot/command.execute
       (handle-v3-command-execute! client session-id event)
+
+      :copilot/elicitation.requested
+      (handle-v3-elicitation-requested! client session-id event)
+
+      :copilot/capabilities.changed
+      (handle-v3-capabilities-changed! client session-id event)
 
       nil)))
 
@@ -1263,6 +1315,7 @@
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
+      true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       true (assoc :env-value-mode "direct"))))
 
@@ -1317,6 +1370,7 @@
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
+      true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
@@ -1332,6 +1386,7 @@
                            :commands (:commands config)
                            :on-permission-request (:on-permission-request config)
                            :on-user-input-request (:on-user-input-request config)
+                           :on-elicitation-request (:on-elicitation-request config)
                            :hooks (:hooks config)
                            :on-event (:on-event config)
                            :config config}))
@@ -1365,6 +1420,10 @@
                             :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
    - :on-user-input-request - Handler for ask_user requests (PR #269)
+   - :on-elicitation-request - Handler for elicitation requests (PR #908).
+                            Enables the session as an elicitation provider.
+                            Receives {:message :requested-schema :mode :elicitation-source :url} and
+                            {:session-id}. Returns {:action \"accept\"|\"decline\"|\"cancel\" :content {..}}
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}
@@ -1416,6 +1475,7 @@
    - :infinite-sessions  - Infinite session configuration
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
+   - :on-elicitation-request - Handler for elicitation requests (PR #908)
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.

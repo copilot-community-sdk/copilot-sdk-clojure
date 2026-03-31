@@ -252,6 +252,8 @@
 
 ;; Hooks and user input handlers (PR #269)
 (s/def ::on-user-input-request fn?)
+;; Elicitation request handler (PR #908)
+(s/def ::on-elicitation-request fn?)
 (s/def ::on-pre-tool-use fn?)
 (s/def ::on-post-tool-use fn?)
 (s/def ::on-user-prompt-submitted fn?)
@@ -315,7 +317,7 @@
     :on-permission-request :streaming? :mcp-servers
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
-    :reasoning-effort :on-user-input-request :hooks
+    :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
     :working-directory :agent :on-event})
 
 (s/def ::session-config
@@ -326,7 +328,7 @@
                     ::streaming? ::mcp-servers
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
-                    ::reasoning-effort ::on-user-input-request ::hooks
+                    ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
                     ::working-directory ::agent ::on-event])
    session-config-keys))
 
@@ -335,7 +337,7 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume? :agent :on-event})
+    :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -344,7 +346,7 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event])
    resume-session-config-keys))
 
@@ -357,7 +359,7 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event])
    resume-session-config-keys))
 
@@ -555,7 +557,11 @@
     :copilot/session.tools_updated :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded
-    :copilot/session.custom_agents_updated})
+    :copilot/session.custom_agents_updated
+     ;; Capability and sampling events (PR #908)
+     :copilot/capabilities.changed
+     :copilot/sampling.requested :copilot/sampling.completed
+     :copilot/session.remote_steerable_changed})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
