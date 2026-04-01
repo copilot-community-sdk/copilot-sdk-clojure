@@ -70,6 +70,7 @@
                              :destroyed? false
                              :workspace-path workspace-path
                              :capabilities {}
+                             :session-fs-handler nil
                              :config config})
                  (assoc-in [:session-io session-id]
                            {:event-chan event-chan
@@ -110,6 +111,11 @@
   "Store host capabilities in session state. Called after session.create/session.resume RPC."
   [client session-id capabilities]
   (swap! (:state client) assoc-in [:sessions session-id :capabilities] (or capabilities {})))
+
+(defn set-session-fs-handler!
+  "Store the sessionFs handler in session state. Called by client during session create/resume."
+  [client session-id handler]
+  (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] handler))
 
 (defn register-transform-callbacks!
   "Store system message transform callbacks on a session.

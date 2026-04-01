@@ -5,6 +5,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.data.json :as json]
+            [camel-snake-kebab.core :as csk]
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.specs :as specs]
@@ -137,7 +138,11 @@
     - :is-child-process? - When true, SDK is a child of an existing Copilot CLI process and uses stdio to communicate with it (no process spawning)
     - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
     - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
-    - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation"
+    - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
+    - :session-fs    - Custom session filesystem provider config map (upstream PR #917):
+                       {:initial-cwd \"...\" :session-state-path \"...\" :conventions \"windows\"|\"posix\"}
+                       When provided, registers the client as the session filesystem provider on connect.
+                       Each session config must include :create-session-fs-handler when this option is set."
   ([]
    (client {}))
   ([opts]
@@ -531,6 +536,32 @@
       (when (seq lines)
         (str/join "\n" lines)))))
 
+(defn- handle-session-fs-request!
+  "Handle a sessionFs.* RPC request from the server.
+   Dispatches to the appropriate function in the session's :session-fs-handler map.
+   The handler map keys are kebab-case keywords matching the camelCase operation name,
+   e.g. :read-file for sessionFs.readFile.
+   Handler functions receive the normalized (kebab-case) params map and may return a
+   value directly or a channel. Returns a channel delivering {:result ...} or {:error ...}."
+  [client method params]
+  (go
+    (let [{:keys [session-id]} params
+          handler (get-in @(:state client) [:sessions session-id :session-fs-handler])]
+      (if-not handler
+        {:error {:code -32001 :message (str "No sessionFs handler registered for session: " session-id)}}
+        (let [op (subs method (count "sessionFs."))
+              op-kw (csk/->kebab-case-keyword op)
+              f (get handler op-kw)]
+          (if-not f
+            {:error {:code -32601 :message (str "SessionFs handler does not implement: " op)}}
+            (try
+              (let [result-or-ch (f params)
+                    result (if (instance? clojure.core.async.impl.channels.ManyToManyChannel result-or-ch)
+                             (<! result-or-ch)
+                             result-or-ch)]
+                {:result result})
+              (catch Exception e
+                {:error {:code -32603 :message (ex-message e)}}))))))))
 (defn- setup-request-handler!
   "Set up handler for incoming requests (tool calls, permission requests, hooks, user input)."
   [client]
@@ -538,55 +569,57 @@
     (proto/set-request-handler! connection-io
                                 (fn [method params]
                                   (go
-                                    (case method
-                                      "tool.call"
-                                      (let [{:keys [session-id tool-call-id tool-name arguments]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          {:result (<! (session/handle-tool-call! client session-id tool-call-id tool-name arguments))}))
+                                    (if (str/starts-with? method "sessionFs.")
+                                      (<! (handle-session-fs-request! client method params))
+                                      (case method
+                                        "tool.call"
+                                        (let [{:keys [session-id tool-call-id tool-name arguments]} params]
+                                          (if-not (get-in @(:state client) [:sessions session-id])
+                                            {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                            {:result (<! (session/handle-tool-call! client session-id tool-call-id tool-name arguments))}))
 
-                                      "permission.request"
-                                      (let [{:keys [session-id permission-request]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}
-                                          (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
-                                                result (:result perm-response)]
-                                            (if (= :no-result result)
-                                              ;; no-result must propagate as an error on v2 protocol
-                                              ;; so the CLI knows no answer was given (matches upstream -32603)
-                                              {:error {:code -32603
-                                                       :message "Permission handler returned no-result on protocol v2"}}
-                                              (do
-                                                (log/debug "Permission response for session " session-id ": " result)
-                                                {:result perm-response})))))
+                                        "permission.request"
+                                        (let [{:keys [session-id permission-request]} params]
+                                          (if-not (get-in @(:state client) [:sessions session-id])
+                                            {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}
+                                            (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
+                                                  result (:result perm-response)]
+                                              (if (= :no-result result)
+                                                ;; no-result must propagate as an error on v2 protocol
+                                                ;; so the CLI knows no answer was given (matches upstream -32603)
+                                                {:error {:code -32603
+                                                         :message "Permission handler returned no-result on protocol v2"}}
+                                                (do
+                                                  (log/debug "Permission response for session " session-id ": " result)
+                                                  {:result perm-response})))))
 
-                                      ;; User input request (PR #269)
-                                      "userInput.request"
-                                      (let [{:keys [session-id question choices allow-freeform]} params]
-                                        (log/debug "User input request for session " session-id ": " question)
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-user-input-request! client session-id
-                                                                                  {:question question
-                                                                                   :choices choices
-                                                                                   :allow-freeform allow-freeform}))))
+                                        ;; User input request (PR #269)
+                                        "userInput.request"
+                                        (let [{:keys [session-id question choices allow-freeform]} params]
+                                          (log/debug "User input request for session " session-id ": " question)
+                                          (if-not (get-in @(:state client) [:sessions session-id])
+                                            {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                            (<! (session/handle-user-input-request! client session-id
+                                                                                    {:question question
+                                                                                     :choices choices
+                                                                                     :allow-freeform allow-freeform}))))
 
-                                      ;; Hooks invocation (PR #269)
-                                      "hooks.invoke"
-                                      (let [{:keys [session-id hook-type input]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:result nil}
-                                          (<! (session/handle-hooks-invoke! client session-id hook-type input))))
+                                        ;; Hooks invocation (PR #269)
+                                        "hooks.invoke"
+                                        (let [{:keys [session-id hook-type input]} params]
+                                          (if-not (get-in @(:state client) [:sessions session-id])
+                                            {:result nil}
+                                            (<! (session/handle-hooks-invoke! client session-id hook-type input))))
 
-                                      ;; System message transform (PR #816)
-                                      "systemMessage.transform"
-                                      (let [{:keys [session-id sections]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          {:result (session/handle-system-message-transform
-                                                    client session-id sections)}))
+                                        ;; System message transform (PR #816)
+                                        "systemMessage.transform"
+                                        (let [{:keys [session-id sections]} params]
+                                          (if-not (get-in @(:state client) [:sessions session-id])
+                                            {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                            {:result (session/handle-system-message-transform
+                                                      client session-id sections)}))
 
-                                      {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
+                                        {:error {:code -32601 :message (str "Unknown method: " method)}}))))))))
 
 (defn- connect-stdio!
   "Connect via stdio to the CLI process."
@@ -790,6 +823,13 @@
 
       ;; Verify protocol version
       (verify-protocol-version! client)
+
+      ;; If a session filesystem provider is configured, register it now
+      (when-let [session-fs (get-in client [:options :session-fs])]
+        (log/debug "Registering sessionFs provider")
+        (let [{:keys [connection-io]} @(:state client)]
+          (proto/send-request! connection-io "sessionFs.setProvider"
+                               (util/clj->wire session-fs))))
 
       ;; Set up notification routing and request handling
       (start-notification-router! client)
@@ -1327,14 +1367,23 @@
    This ensures early events (e.g. session.start) are not dropped.
    Returns the CopilotSession handle."
   [client session-id config]
-  (session/create-session client session-id
+  (let [session (session/create-session client session-id
                           {:tools (:tools config)
                            :commands (:commands config)
                            :on-permission-request (:on-permission-request config)
                            :on-user-input-request (:on-user-input-request config)
                            :hooks (:hooks config)
                            :on-event (:on-event config)
-                           :config config}))
+                           :config config})]
+    ;; If sessionFs is configured in client options, set up per-session handler
+    (when (get-in client [:options :session-fs])
+      (if-let [factory (:create-session-fs-handler config)]
+        (session/set-session-fs-handler! client session-id (factory session))
+        (throw (ex-info
+                (str "A :create-session-fs-handler is required in session config "
+                     "when :session-fs is configured in client options.")
+                {:config config}))))
+    session))
 
 (defn create-session
   "Create a new conversation session.
@@ -1370,6 +1419,11 @@
                             :on-session-start, :on-session-end, :on-error-occurred}
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
+   - :create-session-fs-handler - (fn [session] -> handler-map) Factory for the sessionFs handler.
+                           Required when `:session-fs` is configured in client options.
+                           The handler map must implement keys for each file operation:
+                           :read-file, :write-file, :append-file, :exists, :stat, :mkdir,
+                           :readdir, :readdir-with-types, :rm, :rename (upstream PR #917).
    
    Returns a CopilotSession."
   [client config]
@@ -1419,6 +1473,8 @@
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
+   - :create-session-fs-handler - (fn [session] -> handler-map) Factory for the sessionFs handler.
+                           Required when `:session-fs` is configured in client options (upstream PR #917).
    
    Returns a CopilotSession."
   [client session-id config]

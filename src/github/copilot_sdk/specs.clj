@@ -65,12 +65,32 @@
 ;; Trace context provider: 0-arity fn returning {:traceparent ... :tracestate ...}
 (s/def ::on-get-trace-context fn?)
 
+;; -----------------------------------------------------------------------------
+;; Session filesystem config (upstream PR #917)
+;; -----------------------------------------------------------------------------
+
+(s/def ::initial-cwd ::non-blank-string)
+(s/def ::session-state-path ::non-blank-string)
+(s/def ::conventions #{"windows" "posix"})
+
+(s/def ::session-fs-config
+  (s/keys :req-un [::initial-cwd ::session-state-path ::conventions]))
+
+(s/def ::session-fs ::session-fs-config)
+
+(s/def ::create-session-fs-handler fn?)
+
+;; -----------------------------------------------------------------------------
+;; Client options
+;; -----------------------------------------------------------------------------
+
 (def client-options-keys
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
-    :is-child-process? :on-list-models :telemetry :on-get-trace-context})
+    :is-child-process? :on-list-models :telemetry :on-get-trace-context
+    :session-fs})
 
 (s/def ::client-options
   (closed-keys
@@ -78,7 +98,8 @@
                     ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                     ::notification-queue-size ::router-queue-size
                     ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
-                    ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context])
+                    ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
+                    ::session-fs])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -316,7 +337,7 @@
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :hooks
-    :working-directory :agent :on-event})
+    :working-directory :agent :on-event :create-session-fs-handler})
 
 (s/def ::session-config
   (closed-keys
@@ -327,7 +348,7 @@
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::hooks
-                    ::working-directory ::agent ::on-event])
+                    ::working-directory ::agent ::on-event ::create-session-fs-handler])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -335,7 +356,8 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume? :agent :on-event})
+    :on-user-input-request :hooks :working-directory :disable-resume? :agent :on-event
+    :create-session-fs-handler})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -345,7 +367,7 @@
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
-                    ::on-event])
+                    ::on-event ::create-session-fs-handler])
    resume-session-config-keys))
 
 ;; join-session config: same as resume-session-config but :on-permission-request is optional.
@@ -358,7 +380,7 @@
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
-                    ::on-event])
+                    ::on-event ::create-session-fs-handler])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -684,8 +706,9 @@
          #(contains? #{"create" "update"} (:operation %))))
 
 ;; Session task complete event
+(s/def ::aborted boolean?)
 (s/def ::session.task_complete-data
-  (s/keys :opt-un [::summary]))
+  (s/keys :opt-un [::summary ::aborted]))
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))

@@ -130,6 +130,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
+| `:session-fs` | map | nil | Custom session filesystem provider config (upstream PR #917). Map with `:initial-cwd` (string), `:session-state-path` (string), `:conventions` (`"windows"` or `"posix"`). When set, registers the client as the session filesystem provider on connect; each session config must include `:create-session-fs-handler` |
 
 ### Methods
 
@@ -254,6 +255,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:hooks` | map | Lifecycle hooks (see below) |
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
+| `:create-session-fs-handler` | fn | `(fn [session] -> handler-map)` Factory for the session filesystem handler. Required when `:session-fs` is configured in client options (upstream PR #917). The returned map implements file operations: `:read-file`, `:write-file`, `:append-file`, `:exists`, `:stat`, `:mkdir`, `:readdir`, `:readdir-with-types`, `:rm`, `:rename`. |
 
 #### `resume-session`
 

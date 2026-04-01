@@ -3,7 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-### Added (v0.2.1 sync)
+### Added (upstream PR #917)
+- **Session filesystem provider** — new `:session-fs` option in `create-client` enables applications to virtualize per-session file I/O (event log, large output, etc.) through custom callbacks instead of the server's default local filesystem. Provide a `SessionFsConfig` map with `:initial-cwd`, `:session-state-path`, and `:conventions` (`"windows"` or `"posix"`). On connect, the client sends a `sessionFs.setProvider` RPC to register itself as the provider.
+  - New `:create-session-fs-handler` option in `create-session` / `resume-session` config — required when `:session-fs` is set on the client. A factory `(fn [session] -> handler-map)` called once per session, returning a map implementing the file operations: `:read-file`, `:write-file`, `:append-file`, `:exists`, `:stat`, `:mkdir`, `:readdir`, `:readdir-with-types`, `:rm`, `:rename`. Handler functions receive normalized (kebab-case) params maps and may return values directly or via core.async channels.
+  - New specs: `::session-fs-config`, `::session-fs`, `::create-session-fs-handler`.
+
+### Changed (upstream PR #917)
+- **`session.task_complete` event data** now includes optional `:aborted?` boolean field — `true` when the preceding agentic loop was cancelled via abort signal. New `::aborted` spec added; `::session.task_complete-data` updated to include it.
+- **MCP server connection status** enum extended with `"needs-auth"` value for `mcp.server_status_changed` and `mcp.server_connected` events (in addition to existing `"connected"`, `"failed"`, `"pending"`, `"disabled"`, `"not_configured"`).
+
 - **`steerable` field on `session.start` events** — `session.start` event data now includes optional `:steerable?` boolean field indicating whether the session supports remote steering via Mission Control. New `::steerable?` spec added (upstream PR #927).
 - **`get-session-metadata`** — new function on client for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if not found. Sends `session.getMetadata` JSON-RPC call. Shared `wire->session-metadata` helper extracted from `list-sessions` to eliminate duplication (upstream PR #899).
 
