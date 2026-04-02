@@ -812,6 +812,39 @@ clojure -A:examples -X ask-user-failure/run
 
 ---
 
+## Example 18: Elicitation Provider (`elicitation_provider.clj`)
+
+**Difficulty:** Intermediate  
+**Concepts:** Elicitation requests, provider callbacks, MCP OAuth, capabilities
+
+Demonstrates how to act as an elicitation provider — handling form-based or URL-based input requests from MCP servers and sub-agents.
+
+### What It Demonstrates
+
+- Registering an `:on-elicitation-request` handler
+- Inspecting elicitation mode (`"form"` vs `"url"`)
+- Auto-filling form fields from a JSON Schema
+- Observing `elicitation.requested` and `capabilities.changed` events
+
+### Usage
+
+```bash
+clojure -A:examples -X elicitation-provider/run
+```
+
+### Code Walkthrough
+
+The handler receives a request map with `:message`, optional `:requested-schema` (JSON Schema), `:mode` (`"form"` or `"url"`), `:elicitation-source`, and `:url`. It returns an `ElicitationResult`:
+
+```clojure
+{:action "accept"   ;; or "decline" or "cancel"
+ :content {:field-name "value"}}
+```
+
+If the handler throws, the SDK sends `{:action "cancel"}` to prevent hanging. In a real application, the handler would render a UI dialog or open a browser for OAuth flows.
+
+---
+
 ## Clojure vs JavaScript Comparison
 
 Here's how common patterns compare between the Clojure and JavaScript SDKs:

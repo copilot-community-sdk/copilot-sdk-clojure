@@ -1390,3 +1390,145 @@
                                       {:on-permission-request sdk/approve-all})]
       (is (= {} (get-in @(:state *test-client*)
                         [:sessions (sdk/session-id session) :command-handlers]))))))
+
+;; -----------------------------------------------------------------------------
+;; Elicitation Provider Tests (upstream PR #908)
+;; -----------------------------------------------------------------------------
+
+(deftest test-request-elicitation-wire-flag
+  (testing "requestElicitation is true when :on-elicitation-request is provided"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-elicitation-request (fn [_req _ctx] {:action "cancel"})})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (= 1 (count create-rpcs)))
+      (when (seq create-rpcs)
+        (is (true? (:requestElicitation (:params (first create-rpcs))))))))
+
+  (testing "requestElicitation is false when :on-elicitation-request is not provided"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (= 1 (count create-rpcs)))
+      (when (seq create-rpcs)
+        (is (false? (:requestElicitation (:params (first create-rpcs)))))))))
+
+(deftest test-elicitation-requested-v3
+  (testing "v3 elicitation.requested event routes to handler and sends RPC response"
+    (let [requests (atom [])
+          handler-called (atom nil)
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.ui.handlePendingElicitation" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-elicitation-request
+                                       (fn [request ctx]
+                                         (reset! handler-called {:request request :ctx ctx})
+                                         {:action "accept"
+                                          :content {:name "test-value"}})})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      ;; Inject elicitation.requested event
+      (mock/send-session-event! *mock-server* session-id
+                                "elicitation.requested"
+                                {:requestId "elicit-req-1"
+                                 :message "Enter your name"
+                                 :requestedSchema {:type "object"
+                                                   :properties {"name" {:type "string"}}}
+                                 :mode "form"
+                                 :elicitationSource "mcp-server"})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+      ;; Handler was called
+      (is (some? @handler-called))
+      (is (= "Enter your name" (:message (:request @handler-called))))
+      (is (= session-id (:session-id (:ctx @handler-called))))
+      ;; handlePendingElicitation RPC was sent with handler's result
+      (let [rpcs (filter #(= "session.ui.handlePendingElicitation" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (when (seq rpcs)
+          (is (= "elicit-req-1" (:requestId (:params (first rpcs)))))
+          (is (= "accept" (get-in (first rpcs) [:params :result :action]))))))))
+
+(deftest test-elicitation-handler-error-sends-cancel
+  (testing "handler exception sends cancel response to avoid hanging"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.ui.handlePendingElicitation" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-elicitation-request
+                                       (fn [_req _ctx]
+                                         (throw (Exception. "UI unavailable")))})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-session-event! *mock-server* session-id
+                                "elicitation.requested"
+                                {:requestId "elicit-req-2"
+                                 :message "Prompt"})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+      (let [rpcs (filter #(= "session.ui.handlePendingElicitation" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (when (seq rpcs)
+          (is (= "cancel" (get-in (first rpcs) [:params :result :action]))))))))
+
+(deftest test-capabilities-changed-event
+  (testing "capabilities.changed broadcast updates session capabilities"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      (is (false? (sdk/elicitation-supported? session)))
+      ;; Force protocol v3
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      ;; Inject capabilities.changed event
+      (mock/send-session-event! *mock-server* session-id
+                                "capabilities.changed"
+                                {:ui {:elicitation true}}
+                                :ephemeral? true)
+      ;; Give event routing time to process
+      (Thread/sleep 200)
+      (is (true? (sdk/elicitation-supported? session))))))
+
+;; -----------------------------------------------------------------------------
+;; SessionFs Tests (upstream PR #917)
+;; -----------------------------------------------------------------------------
+
+(deftest test-session-fs-handler-stored
+  (testing "session-fs-handler is stored in session state when provided"
+    (let [fs-handler {:read-file (fn [_] {:content "hello"})
+                      :write-file (fn [_] nil)
+                      :append-file (fn [_] nil)
+                      :exists (fn [_] {:exists true})
+                      :stat (fn [_] {:is-file true :is-directory false :size 5 :mtime "2026-01-01T00:00:00Z"})
+                      :mkdir (fn [_] nil)
+                      :readdir (fn [_] {:entries []})
+                      :readdir-with-types (fn [_] {:entries []})
+                      :rm (fn [_] nil)
+                      :rename (fn [_] nil)}
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      ;; Set handler directly (as client code would do after factory call)
+      (session/set-session-fs-handler! (:client session) session-id fs-handler)
+      (let [stored (get-in @(:state *test-client*)
+                          [:sessions session-id :session-fs-handler])]
+        (is (some? stored))
+        (is (fn? (:read-file stored)))
+        (is (= {:content "hello"} ((:read-file stored) {:path "/test.txt"})))))))

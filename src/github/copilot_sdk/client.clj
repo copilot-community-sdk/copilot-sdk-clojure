@@ -214,7 +214,9 @@
         (:on-list-models opts)
         (assoc :on-list-models (:on-list-models opts))
         (:on-get-trace-context opts)
-        (assoc :on-get-trace-context (:on-get-trace-context opts))))))
+        (assoc :on-get-trace-context (:on-get-trace-context opts))
+        (:session-fs opts)
+        (assoc :session-fs (:session-fs opts))))))
 
 (defn state
   "Get the current connection state."
@@ -351,8 +353,44 @@
                                           :error (ex-message e)}))))
               (catch Exception _ nil))))))))
 
+(defn- handle-v3-elicitation-requested!
+  "Handle v3 elicitation.requested broadcast event.
+   Calls the session's elicitation handler and responds via the
+   session.ui.handlePendingElicitation RPC method.
+   If the handler fails, sends a cancel response to avoid hanging."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)]
+    (when request-id
+      (go
+        (try
+          (let [request {:message (:message data)
+                         :requested-schema (:requested-schema data)
+                         :mode (:mode data)
+                         :elicitation-source (:elicitation-source data)
+                         :url (:url data)}
+                result (<! (session/handle-elicitation-request! client session-id request))]
+            (when result
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.ui.handlePendingElicitation"
+                                         {:session-id session-id
+                                          :request-id request-id
+                                          :result result}))))))
+          (catch Exception e
+            (log/debug "v3 elicitation request error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.ui.handlePendingElicitation"
+                                         {:session-id session-id
+                                          :request-id request-id
+                                          :result {:action "cancel"}}))))
+              (catch Exception _ nil))))))))
+
 (defn- handle-v3-broadcast-event!
-  "Protocol v3: intercept broadcast events for external tools, permissions, and commands.
+  "Protocol v3: intercept broadcast events for external tools, permissions,
+   commands, elicitation, and capabilities.
    In v3, tool.call and permission.request server→client RPC methods are replaced
    by broadcast events that the SDK handles and responds to via new RPC methods."
   [client session-id event]
@@ -366,6 +404,13 @@
 
       :copilot/command.execute
       (handle-v3-command-execute! client session-id event)
+
+      :copilot/elicitation.requested
+      (handle-v3-elicitation-requested! client session-id event)
+
+      ;; capabilities.changed state update is applied before event publish
+      ;; in the notification router (so observers see consistent state)
+      :copilot/capabilities.changed nil
 
       nil)))
 
@@ -421,9 +466,14 @@
                     (log/warn "Model mismatch for session " session-id
                               ": requested " requested-model ", server selected " selected-model))))
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
+                ;; Protocol v3: apply state-mutating broadcast handlers before publishing,
+                ;; so event observers see consistent state (e.g. capabilities.changed)
+                (when (>= (negotiated-protocol-version client) 3)
+                  (when (= event-type :copilot/capabilities.changed)
+                    (session/update-capabilities! client session-id (:data normalized-event))))
                 (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
                   (>! event-chan normalized-event))
-                ;; Protocol v3: handle broadcast events for tools and permissions
+                ;; Protocol v3: handle broadcast events for tools, permissions, elicitation
                 (when (>= (negotiated-protocol-version client) 3)
                   (handle-v3-broadcast-event! client session-id normalized-event))))
 
@@ -532,7 +582,7 @@
         (str/join "\n" lines)))))
 
 (defn- setup-request-handler!
-  "Set up handler for incoming requests (tool calls, permission requests, hooks, user input)."
+  "Set up handler for incoming requests (tool calls, permission requests, hooks, user input, sessionFs)."
   [client]
   (let [{:keys [connection-io]} @(:state client)]
     (proto/set-request-handler! connection-io
@@ -585,6 +635,17 @@
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
                                           {:result (session/handle-system-message-transform
                                                     client session-id sections)}))
+
+                                      ;; SessionFs operations (upstream PR #917)
+                                      ("sessionFs.readFile" "sessionFs.writeFile" "sessionFs.appendFile"
+                                       "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
+                                       "sessionFs.readdir" "sessionFs.readdirWithTypes"
+                                       "sessionFs.rm" "sessionFs.rename")
+                                      (let [{:keys [session-id]} params]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-session-fs-request!
+                                               client session-id method params))))
 
                                       {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
 
@@ -790,6 +851,14 @@
 
       ;; Verify protocol version
       (verify-protocol-version! client)
+
+      ;; Register sessionFs provider if configured
+      (when-let [sf-config (:session-fs client)]
+        (let [{:keys [connection-io]} @(:state client)]
+          (proto/send-request! connection-io "sessionFs.setProvider"
+                               {:initial-cwd (:initial-cwd sf-config)
+                                :session-state-path (:session-state-path sf-config)
+                                :conventions (:conventions sf-config)})))
 
       ;; Set up notification routing and request handling
       (start-notification-router! client)
@@ -1263,6 +1332,7 @@
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
+      true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       true (assoc :env-value-mode "direct"))))
 
@@ -1317,6 +1387,7 @@
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
+      true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
@@ -1332,6 +1403,7 @@
                            :commands (:commands config)
                            :on-permission-request (:on-permission-request config)
                            :on-user-input-request (:on-user-input-request config)
+                           :on-elicitation-request (:on-elicitation-request config)
                            :hooks (:hooks config)
                            :on-event (:on-event config)
                            :config config}))
@@ -1365,6 +1437,10 @@
                             :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
    - :on-user-input-request - Handler for ask_user requests (PR #269)
+   - :on-elicitation-request - Handler for elicitation requests from the agent (upstream PR #908).
+                               When provided, sends requestElicitation=true and enables the
+                               elicitation capability. Handler is (fn [request ctx]) returning
+                               an ElicitationResult map ({:action \"accept\" :content {...}}).
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}
@@ -1386,6 +1462,13 @@
     ;; Register transform callbacks on session before RPC
     (session/register-transform-callbacks! client session-id transform-callbacks)
     (try
+      ;; Attach sessionFs handler if sessionFs is configured
+      (when (:session-fs client)
+        (if-let [factory (:create-session-fs-handler config)]
+          (session/set-session-fs-handler! client session-id (factory session))
+          (throw (ex-info (str ":create-session-fs-handler is required in session config "
+                               "when :session-fs is enabled in client options.")
+                          {:config config}))))
       (let [result (proto/send-request! connection-io "session.create" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
@@ -1416,6 +1499,7 @@
    - :infinite-sessions  - Infinite session configuration
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
+   - :on-elicitation-request - Handler for elicitation requests (upstream PR #908)
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
@@ -1444,6 +1528,13 @@
     ;; Register transform callbacks on session before RPC
     (session/register-transform-callbacks! client session-id transform-callbacks)
     (try
+      ;; Attach sessionFs handler if sessionFs is configured
+      (when (:session-fs client)
+        (if-let [factory (:create-session-fs-handler config)]
+          (session/set-session-fs-handler! client session-id (factory session))
+          (throw (ex-info (str ":create-session-fs-handler is required in session config "
+                               "when :session-fs is enabled in client options.")
+                          {:config config}))))
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
@@ -1482,6 +1573,17 @@
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
         _ (session/register-transform-callbacks! client session-id transform-callbacks)
+        ;; Attach sessionFs handler if sessionFs is configured (synchronously, before RPC)
+        _ (try
+            (when (:session-fs client)
+              (if-let [factory (:create-session-fs-handler config)]
+                (session/set-session-fs-handler! client session-id (factory session))
+                (throw (ex-info (str ":create-session-fs-handler is required in session config "
+                                     "when :session-fs is enabled in client options.")
+                                {:config config}))))
+            (catch Throwable t
+              (session/remove-session! client session-id)
+              (throw t)))
         rpc-ch (proto/send-request connection-io "session.create" params)]
     (go
       (let [response (<! rpc-ch)]
@@ -1539,6 +1641,17 @@
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
         _ (session/register-transform-callbacks! client session-id transform-callbacks)
+        ;; Attach sessionFs handler if sessionFs is configured (synchronously, before RPC)
+        _ (try
+            (when (:session-fs client)
+              (if-let [factory (:create-session-fs-handler config)]
+                (session/set-session-fs-handler! client session-id (factory session))
+                (throw (ex-info (str ":create-session-fs-handler is required in session config "
+                                     "when :session-fs is enabled in client options.")
+                                {:config config}))))
+            (catch Throwable t
+              (session/remove-session! client session-id)
+              (throw t)))
         rpc-ch (proto/send-request connection-io "session.resume" params)]
     (go
       (let [response (<! rpc-ch)]
@@ -1715,6 +1828,13 @@
       (let [conn (proto/connect in out (:state client))]
         (swap! (:state client) assoc :connection-io conn))
       (verify-protocol-version! client)
+      ;; Register sessionFs provider if configured
+      (when-let [sf-config (:session-fs client)]
+        (let [{:keys [connection-io]} @(:state client)]
+          (proto/send-request! connection-io "sessionFs.setProvider"
+                               {:initial-cwd (:initial-cwd sf-config)
+                                :session-state-path (:session-state-path sf-config)
+                                :conventions (:conventions sf-config)})))
       (start-notification-router! client)
       (setup-request-handler! client)
       (swap! (:state client) assoc :status :connected)
