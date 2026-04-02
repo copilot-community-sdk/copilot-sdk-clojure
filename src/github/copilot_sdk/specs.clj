@@ -707,8 +707,8 @@
 
 (s/def ::tool-call-id ::non-blank-string)
 (s/def ::result-type
-  (s/or :keyword #{:success :failure :rejected :denied}
-        :string #{"success" "failure" "rejected" "denied"}))
+  (s/or :keyword #{:success :failure :rejected :denied :timeout}
+        :string #{"success" "failure" "rejected" "denied" "timeout"}))
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
 (s/def ::tool-telemetry map?)
