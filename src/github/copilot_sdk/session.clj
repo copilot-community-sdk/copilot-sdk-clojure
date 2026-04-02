@@ -126,41 +126,6 @@
   [client session-id handler]
   (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] handler))
 
-(def ^:private session-fs-method->handler-key
-  "Map RPC method names to handler map keys."
-  {"sessionFs.readFile"        :read-file
-   "sessionFs.writeFile"       :write-file
-   "sessionFs.appendFile"      :append-file
-   "sessionFs.exists"          :exists
-   "sessionFs.stat"            :stat
-   "sessionFs.mkdir"           :mkdir
-   "sessionFs.readdir"         :readdir
-   "sessionFs.readdirWithTypes" :readdir-with-types
-   "sessionFs.rm"              :rm
-   "sessionFs.rename"          :rename})
-
-(defn handle-session-fs-request!
-  "Handle an incoming sessionFs.* RPC request. Dispatches to the session's
-   FS handler and returns a channel with {:result ...} or {:error ...}."
-  [client session-id method params]
-  (async/thread-call
-   (fn []
-     (let [handler-map (:session-fs-handler (session-state client session-id))
-           handler-key (session-fs-method->handler-key method)]
-       (if-not handler-map
-         {:error {:code -32001 :message (str "No sessionFs handler for session: " session-id)}}
-         (if-let [handler-fn (get handler-map handler-key)]
-           (try
-             (let [result (handler-fn params)
-                   result (if (instance? clojure.core.async.impl.channels.ManyToManyChannel result)
-                            (<!! result) result)]
-               {:result (or result {})})
-             (catch Throwable t
-               (log/warn t "sessionFs handler error" {:method method :session-id session-id})
-               {:error {:code -32603 :message (str "sessionFs error: " (ex-message t))}}))
-           {:error {:code -32601 :message (str "Unknown sessionFs method: " method)}}))))
-   :io))
-
 (defn handle-system-message-transform
   "Handle a systemMessage.transform RPC request from the CLI runtime.
    Dispatches each section to its registered transform callback.
@@ -247,6 +212,40 @@
   "Check if x is a core.async channel."
   [x]
   (instance? clojure.core.async.impl.channels.ManyToManyChannel x))
+
+(def ^:private session-fs-method->handler-key
+  "Map RPC method names to handler map keys."
+  {"sessionFs.readFile"        :read-file
+   "sessionFs.writeFile"       :write-file
+   "sessionFs.appendFile"      :append-file
+   "sessionFs.exists"          :exists
+   "sessionFs.stat"            :stat
+   "sessionFs.mkdir"           :mkdir
+   "sessionFs.readdir"         :readdir
+   "sessionFs.readdirWithTypes" :readdir-with-types
+   "sessionFs.rm"              :rm
+   "sessionFs.rename"          :rename})
+
+(defn handle-session-fs-request!
+  "Handle an incoming sessionFs.* RPC request. Dispatches to the session's
+   FS handler and returns a channel with {:result ...} or {:error ...}."
+  [client session-id method params]
+  (async/thread-call
+   (fn []
+     (let [handler-map (:session-fs-handler (session-state client session-id))
+           handler-key (session-fs-method->handler-key method)]
+       (if-not handler-map
+         {:error {:code -32001 :message (str "No sessionFs handler for session: " session-id)}}
+         (if-let [handler-fn (get handler-map handler-key)]
+           (try
+             (let [result (handler-fn params)
+                   result (if (channel? result) (<!! result) result)]
+               {:result result})
+             (catch Throwable t
+               (log/warn t "sessionFs handler error" {:method method :session-id session-id})
+               {:error {:code -32603 :message (str "sessionFs error: " (ex-message t))}}))
+           {:error {:code -32601 :message (str "Unknown sessionFs method: " method)}}))))
+   :io))
 
 (defn handle-tool-call!
   "Handle an incoming tool call request. Returns a channel with the result wrapper."

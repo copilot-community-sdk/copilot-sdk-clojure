@@ -74,6 +74,17 @@
 
 ;; SessionFs handler — map of keyword→fn for each FS operation.
 ;; Each fn receives a params map (with :session-id, :path, etc.) and returns a result map (or nil for void ops).
+(s/def ::read-file fn?)
+(s/def ::write-file fn?)
+(s/def ::append-file fn?)
+(s/def ::exists fn?)
+(s/def ::stat fn?)
+(s/def ::mkdir fn?)
+(s/def ::readdir fn?)
+(s/def ::readdir-with-types fn?)
+(s/def ::rm fn?)
+(s/def ::rename fn?)
+
 (s/def ::session-fs-handler
   (s/keys :req-un [::read-file ::write-file ::append-file ::exists ::stat
                    ::mkdir ::readdir ::readdir-with-types ::rm ::rename]))
@@ -611,7 +622,7 @@
 (s/def ::event-count nat-int?)
 (s/def ::session.resume-data
   (s/keys :req-un [::event-count]
-          :opt-un [::selected-model ::reasoning-effort ::already-in-use?
+          :opt-un [::selected-model ::reasoning-effort ::already-in-use? ::remote-steerable?
                    ::host-type ::head-commit ::base-commit]))
 
 (s/def ::session.error-data
