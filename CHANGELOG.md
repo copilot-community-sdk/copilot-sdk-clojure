@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (v0.2.1 sync)
-- **`steerable` field on `session.start` events** — `session.start` event data now includes optional `:steerable?` boolean field indicating whether the session supports remote steering via Mission Control. New `::steerable?` spec added (upstream PR #927).
+- **`remote-steerable?` field on `session.start` and `session.resume` events** — event data now includes optional `:remote-steerable?` boolean field indicating whether the session supports remote steering via Mission Control. Replaces previous `:steerable?` (upstream PRs #927, #908).
 - **`get-session-metadata`** — new function on client for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if not found. Sends `session.getMetadata` JSON-RPC call. Shared `wire->session-metadata` helper extracted from `list-sessions` to eliminate duplication (upstream PR #899).
 - **Elicitation provider support** — new `:on-elicitation-request` handler on `SessionConfig` and `ResumeSessionConfig`. When provided, sends `requestElicitation: true` in the session create/resume RPC. The runtime routes `elicitation.requested` broadcast events to the handler, and results are sent back via `session.ui.handlePendingElicitation` RPC. Handler errors automatically send a cancel response. New `::elicitation-request` and `::on-elicitation-request` specs (upstream PR #908).
 - **`capabilities.changed` event handling** — session capabilities are dynamically updated when `capabilities.changed` broadcast events are received, e.g. when another client joins with elicitation support (upstream PR #908).

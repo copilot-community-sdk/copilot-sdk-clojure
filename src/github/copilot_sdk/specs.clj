@@ -638,6 +638,7 @@
 
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 (s/def ::interaction-id string?)
+(s/def ::source string?)
 
 ;; user.message event data — attachments can include blobs (inbound-only types)
 (s/def ::user.message-data
