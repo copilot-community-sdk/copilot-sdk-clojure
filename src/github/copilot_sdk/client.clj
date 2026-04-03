@@ -364,12 +364,12 @@
     (when request-id
       (go
         (try
-          (let [context {:session-id session-id
-                         :message (:message data)
-                         :requested-schema (:requested-schema data)
-                         :mode (:mode data)
-                         :elicitation-source (:elicitation-source data)
-                         :url (:url data)}
+          (let [context (cond-> {:session-id session-id
+                                 :message (:message data)}
+                          (some? (:requested-schema data)) (assoc :requested-schema (:requested-schema data))
+                          (some? (:mode data)) (assoc :mode (:mode data))
+                          (some? (:elicitation-source data)) (assoc :elicitation-source (:elicitation-source data))
+                          (some? (:url data)) (assoc :url (:url data)))
                 result (<! (session/handle-elicitation-request! client session-id context))]
             (when result
               (let [conn (:connection-io @(:state client))]
@@ -1501,7 +1501,10 @@
    - :infinite-sessions  - Infinite session configuration
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
    - :on-user-input-request - Handler for ask_user requests
-   - :on-elicitation-request - Handler for elicitation requests (upstream PR #908)
+   - :on-elicitation-request - Handler for elicitation requests (upstream PRs #908, #960).
+                               Single-arg handler receives an ElicitationContext map with
+                               :session-id, :message, :requested-schema, :mode,
+                               :elicitation-source, :url. Returns an ElicitationResult map.
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
