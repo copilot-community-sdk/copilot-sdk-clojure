@@ -355,8 +355,8 @@
 
 (defn- handle-v3-elicitation-requested!
   "Handle v3 elicitation.requested broadcast event.
-   Calls the session's elicitation handler and responds via the
-   session.ui.handlePendingElicitation RPC method.
+   Builds an ElicitationContext (single-arg, includes session-id) and calls
+   the session's elicitation handler. Responds via handlePendingElicitation RPC.
    If the handler fails, sends a cancel response to avoid hanging."
   [client session-id event]
   (let [data (:data event)
@@ -364,12 +364,13 @@
     (when request-id
       (go
         (try
-          (let [request {:message (:message data)
+          (let [context {:session-id session-id
+                         :message (:message data)
                          :requested-schema (:requested-schema data)
                          :mode (:mode data)
                          :elicitation-source (:elicitation-source data)
                          :url (:url data)}
-                result (<! (session/handle-elicitation-request! client session-id request))]
+                result (<! (session/handle-elicitation-request! client session-id context))]
             (when result
               (let [conn (:connection-io @(:state client))]
                 (when conn
@@ -1437,10 +1438,11 @@
                             :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
    - :on-user-input-request - Handler for ask_user requests (PR #269)
-   - :on-elicitation-request - Handler for elicitation requests from the agent (upstream PR #908).
+   - :on-elicitation-request - Handler for elicitation requests from the agent (upstream PRs #908, #960).
                                When provided, sends requestElicitation=true and enables the
-                               elicitation capability. Handler is (fn [request ctx]) returning
-                               an ElicitationResult map ({:action \"accept\" :content {...}}).
+                               elicitation capability. Single-arg handler receives an ElicitationContext
+                               map with :session-id, :message, :requested-schema, :mode,
+                               :elicitation-source, :url. Returns an ElicitationResult map.
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-post-tool-use, :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}

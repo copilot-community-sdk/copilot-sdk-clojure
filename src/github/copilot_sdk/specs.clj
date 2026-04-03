@@ -327,13 +327,13 @@
 (s/def ::elicitation-params
   (s/keys :req-un [::message ::requested-schema]))
 
-;; Elicitation request — inbound from server when this client is an elicitation provider
+;; Elicitation context — passed to :on-elicitation-request handler (upstream PR #960).
+;; Single-arg pattern: context includes session-id alongside request fields.
 ;; Note: :mode here is "form"/"url" (different from message-options ::mode which is :enqueue/:immediate)
-;; We validate with s/and to avoid spec name collision.
 (s/def ::elicitation-source string?)
 (s/def ::url string?)
-(s/def ::elicitation-request
-  (s/and (s/keys :req-un [::message]
+(s/def ::elicitation-context
+  (s/and (s/keys :req-un [::session-id ::message]
                  :opt-un [::requested-schema ::elicitation-source ::url])
          #(if-let [m (:mode %)]
             (contains? #{"form" "url"} m)

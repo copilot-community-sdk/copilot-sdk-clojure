@@ -15,22 +15,23 @@
 (defn handle-elicitation
   "Handle an elicitation request from the runtime.
    In a real app this would render a UI dialog or open a browser.
-   Here we print the request and auto-approve."
-  [request {:keys [session-id]}]
+   Here we print the request and auto-approve.
+   Takes a single ElicitationContext map (upstream PR #960)."
+  [{:keys [session-id message mode elicitation-source url requested-schema] :as _context}]
   (println "\n📋 Elicitation request received!")
   (println "   Session:" session-id)
-  (println "   Message:" (:message request))
-  (when-let [mode (:mode request)]
+  (println "   Message:" message)
+  (when mode
     (println "   Mode:" mode))
-  (when-let [source (:elicitation-source request)]
-    (println "   Source:" source))
-  (when-let [url (:url request)]
+  (when elicitation-source
+    (println "   Source:" elicitation-source))
+  (when url
     (println "   URL:" url))
-  (when-let [schema (:requested-schema request)]
-    (println "   Schema:" (pr-str schema)))
+  (when requested-schema
+    (println "   Schema:" (pr-str requested-schema)))
 
   ;; Decide how to respond based on mode
-  (case (:mode request)
+  (case mode
     ;; URL mode: the server wants us to open a browser
     "url"
     (do
@@ -38,7 +39,7 @@
       {:action "accept"})
 
     ;; Form mode (or nil): the server wants form field values
-    (if-let [props (get-in request [:requested-schema :properties])]
+    (if-let [props (get-in requested-schema [:properties])]
       (do
         (println "   → Auto-filling form fields:")
         (let [content (reduce-kv

@@ -255,7 +255,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:hooks` | map | Lifecycle hooks (see below) |
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
-| `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Receives `(request ctx)` where request has `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
+| `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
 | `:create-session-fs-handler` | fn | Factory for session filesystem handlers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a map of FS handler functions. See [Session Filesystem](#session-filesystem) |
 
 #### `resume-session`
@@ -1691,19 +1691,22 @@ Provide a handler for elicitation requests from the agent. This enables the SDK 
   (copilot/create-session client
     {:on-permission-request copilot/approve-all
      :on-elicitation-request
-     (fn [request {:keys [session-id]}]
-       ;; request keys: :message, :requested-schema, :mode, :elicitation-source, :url
-       (println "Elicitation:" (:message request))
+     (fn [{:keys [session-id message requested-schema mode]}]
+       (println "Elicitation for session" session-id ":" message)
        {:action "accept"
         :content {:name "user-input"}})}))
 ```
 
-The handler receives two arguments:
+The handler receives a single `ElicitationContext` map:
 
-| Argument | Description |
-|----------|-------------|
-| `request` | Map with `:message` (string), optional `:requested-schema` (JSON Schema map), `:mode` (`"form"` or `"url"`), `:elicitation-source` (string), `:url` (string) |
-| `ctx` | Map with `:session-id` (string) |
+| Key | Type | Description |
+|-----|------|-------------|
+| `:session-id` | string | Session that triggered the request |
+| `:message` | string | What information is needed from the user |
+| `:requested-schema` | map | JSON Schema describing form fields (optional) |
+| `:mode` | string | `"form"` for structured input, `"url"` for browser redirect (optional) |
+| `:elicitation-source` | string | Source that initiated the request, e.g. MCP server name (optional) |
+| `:url` | string | URL to open in browser, url mode only (optional) |
 
 Return an `ElicitationResult` map:
 
