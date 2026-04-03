@@ -61,3 +61,7 @@ clojure -A:examples -X lifecycle-hooks/run
 echo ""
 echo "=== reasoning-effort ==="
 clojure -A:examples -X reasoning-effort/run
+
+echo ""
+echo "=== elicitation-provider ==="
+clojure -A:examples -X elicitation-provider/run

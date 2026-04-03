@@ -65,12 +65,40 @@
 ;; Trace context provider: 0-arity fn returning {:traceparent ... :tracestate ...}
 (s/def ::on-get-trace-context fn?)
 
+;; Session filesystem provider (upstream PR #917)
+(s/def ::initial-cwd ::non-blank-string)
+(s/def ::session-state-path ::non-blank-string)
+(s/def ::conventions #{"windows" "posix"})
+(s/def ::session-fs
+  (s/keys :req-un [::initial-cwd ::session-state-path ::conventions]))
+
+;; SessionFs handler — map of keyword→fn for each FS operation.
+;; Each fn receives a params map (with :session-id, :path, etc.) and returns a result map (or nil for void ops).
+(s/def ::read-file fn?)
+(s/def ::write-file fn?)
+(s/def ::append-file fn?)
+(s/def ::exists fn?)
+(s/def ::stat fn?)
+(s/def ::mkdir fn?)
+(s/def ::readdir fn?)
+(s/def ::readdir-with-types fn?)
+(s/def ::rm fn?)
+(s/def ::rename fn?)
+
+(s/def ::session-fs-handler
+  (s/keys :req-un [::read-file ::write-file ::append-file ::exists ::stat
+                   ::mkdir ::readdir ::readdir-with-types ::rm ::rename]))
+
+;; Factory fn: (session) → session-fs-handler
+(s/def ::create-session-fs-handler fn?)
+
 (def client-options-keys
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
-    :is-child-process? :on-list-models :telemetry :on-get-trace-context})
+    :is-child-process? :on-list-models :telemetry :on-get-trace-context
+    :session-fs})
 
 (s/def ::client-options
   (closed-keys
@@ -78,7 +106,8 @@
                     ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                     ::notification-queue-size ::router-queue-size
                     ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
-                    ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context])
+                    ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
+                    ::session-fs])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -298,6 +327,20 @@
 (s/def ::elicitation-params
   (s/keys :req-un [::message ::requested-schema]))
 
+;; Elicitation request — inbound from server when this client is an elicitation provider
+;; Note: :mode here is "form"/"url" (different from message-options ::mode which is :enqueue/:immediate)
+;; We validate with s/and to avoid spec name collision.
+(s/def ::elicitation-source string?)
+(s/def ::url string?)
+(s/def ::elicitation-request
+  (s/and (s/keys :req-un [::message]
+                 :opt-un [::requested-schema ::elicitation-source ::url])
+         #(if-let [m (:mode %)]
+            (contains? #{"form" "url"} m)
+            true)))
+
+(s/def ::on-elicitation-request fn?)
+
 ;; Input options for the input! convenience method
 (s/def ::title string?)
 (s/def ::min-length nat-int?)
@@ -315,8 +358,8 @@
     :on-permission-request :streaming? :mcp-servers
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
-    :reasoning-effort :on-user-input-request :hooks
-    :working-directory :agent :on-event})
+    :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
+    :working-directory :agent :on-event :create-session-fs-handler})
 
 (s/def ::session-config
   (closed-keys
@@ -326,8 +369,8 @@
                     ::streaming? ::mcp-servers
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
-                    ::reasoning-effort ::on-user-input-request ::hooks
-                    ::working-directory ::agent ::on-event])
+                    ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
+                    ::working-directory ::agent ::on-event ::create-session-fs-handler])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -335,7 +378,8 @@
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
-    :on-user-input-request :hooks :working-directory :disable-resume? :agent :on-event})
+    :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
+    :create-session-fs-handler})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -344,8 +388,8 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
-                    ::on-event])
+                    ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-event ::create-session-fs-handler])
    resume-session-config-keys))
 
 ;; join-session config: same as resume-session-config but :on-permission-request is optional.
@@ -357,8 +401,8 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
-                    ::on-user-input-request ::hooks ::working-directory ::disable-resume? ::agent
-                    ::on-event])
+                    ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-event ::create-session-fs-handler])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -555,11 +599,17 @@
     :copilot/session.tools_updated :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded
-    :copilot/session.custom_agents_updated})
+    :copilot/session.custom_agents_updated
+    ;; Sampling events (upstream PR #908)
+    :copilot/sampling.requested :copilot/sampling.completed
+    ;; Session remote steerable (upstream PR #908)
+    :copilot/session.remote_steerable_changed
+    ;; Capabilities changed (upstream PR #908)
+    :copilot/capabilities.changed})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
-(s/def ::steerable? boolean?)
+(s/def ::remote-steerable? boolean?)
 (s/def ::host-type string?)
 (s/def ::head-commit string?)
 (s/def ::base-commit string?)
@@ -567,12 +617,12 @@
 (s/def ::session.start-data
   (s/keys :req-un [::session-id]
           :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model
-                   ::reasoning-effort ::already-in-use? ::steerable? ::host-type ::head-commit ::base-commit]))
+                   ::reasoning-effort ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit]))
 
 (s/def ::event-count nat-int?)
 (s/def ::session.resume-data
   (s/keys :req-un [::event-count]
-          :opt-un [::selected-model ::reasoning-effort ::already-in-use?
+          :opt-un [::selected-model ::reasoning-effort ::already-in-use? ::remote-steerable?
                    ::host-type ::head-commit ::base-commit]))
 
 (s/def ::session.error-data
@@ -588,6 +638,7 @@
 
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 (s/def ::interaction-id string?)
+(s/def ::source string?)
 
 ;; user.message event data — attachments can include blobs (inbound-only types)
 (s/def ::user.message-data
@@ -684,17 +735,55 @@
          #(contains? #{"create" "update"} (:operation %))))
 
 ;; Session task complete event
+(s/def ::aborted? boolean?)
 (s/def ::session.task_complete-data
-  (s/keys :opt-un [::summary]))
+  (s/keys :opt-un [::summary ::aborted?]))
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))
 (s/def ::plugin-name string?)
 (s/def ::plugin-version string?)
+;; ::description already defined above
 
 (s/def ::skill.invoked-data
   (s/keys :req-un [::name ::path ::content]
-          :opt-un [::allowed-tools ::plugin-name ::plugin-version]))
+          :opt-un [::allowed-tools ::plugin-name ::plugin-version ::description]))
+
+;; Subagent event data (upstream PR #916)
+(s/def ::agent-display-name string?)
+(s/def ::agent-description string?)
+(s/def ::total-tool-calls nat-int?)
+(s/def ::total-tokens nat-int?)
+(s/def ::duration-ms nat-int?)
+
+(s/def ::subagent.started-data
+  (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
+          :opt-un [::agent-description]))
+
+(s/def ::subagent.completed-data
+  (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
+          :opt-un [::model ::total-tool-calls ::total-tokens ::duration-ms]))
+
+(s/def ::subagent.failed-data
+  (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name ::error]
+          :opt-un [::model ::total-tool-calls ::total-tokens ::duration-ms]))
+
+;; session.custom_agents_updated event data (upstream PR #916)
+(s/def ::user-invocable? boolean?)
+(s/def ::agent-tool-names (s/coll-of string?))
+
+(s/def ::custom-agent-info
+  (s/and (s/keys :req-un [::id ::name ::display-name ::description ::source ::user-invocable?]
+                 :opt-un [::model])
+         #(contains? #{"user" "project" "inherited" "remote" "plugin"} (:source %))
+         #(s/valid? ::agent-tool-names (:tools %))))
+
+(s/def ::agents (s/coll-of ::custom-agent-info))
+(s/def ::warnings (s/coll-of string?))
+(s/def ::errors (s/coll-of string?))
+
+(s/def ::session.custom_agents_updated-data
+  (s/keys :req-un [::agents ::warnings ::errors]))
 
 ;; Generic session event
 (s/def ::session-event
@@ -707,8 +796,8 @@
 
 (s/def ::tool-call-id ::non-blank-string)
 (s/def ::result-type
-  (s/or :keyword #{:success :failure :rejected :denied}
-        :string #{"success" "failure" "rejected" "denied"}))
+  (s/or :keyword #{:success :failure :rejected :denied :timeout}
+        :string #{"success" "failure" "rejected" "denied" "timeout"}))
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
 (s/def ::tool-telemetry map?)

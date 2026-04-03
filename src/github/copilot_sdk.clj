@@ -111,7 +111,11 @@
     :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
     :copilot/session.extensions_loaded
-    :copilot/session.custom_agents_updated})
+    :copilot/session.custom_agents_updated
+    :copilot/sampling.requested
+    :copilot/sampling.completed
+    :copilot/session.remote_steerable_changed
+    :copilot/capabilities.changed})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -141,7 +145,9 @@
     :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
     :copilot/session.extensions_loaded
-    :copilot/session.custom_agents_updated})
+    :copilot/session.custom_agents_updated
+    :copilot/session.remote_steerable_changed
+    :copilot/capabilities.changed})
 
 (def assistant-events
   "Assistant response events."
@@ -164,7 +170,7 @@
     :copilot/tool.execution_complete})
 
 (def interaction-events
-  "Events related to permission, user input, elicitation, and external tool flows."
+  "Events related to permission, user input, elicitation, sampling, and external tool flows."
   #{:copilot/permission.requested :copilot/permission.completed
     :copilot/user_input.requested :copilot/user_input.completed
     :copilot/elicitation.requested :copilot/elicitation.completed
@@ -172,7 +178,8 @@
     :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
     :copilot/command.queued :copilot/command.execute :copilot/command.completed
     :copilot/commands.changed
-    :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed})
+    :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+    :copilot/sampling.requested :copilot/sampling.completed})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.

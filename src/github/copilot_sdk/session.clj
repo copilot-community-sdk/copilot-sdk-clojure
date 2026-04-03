@@ -50,7 +50,7 @@
    If :on-event is provided, taps a subscriber that forwards events to the handler
    on a dedicated thread. Uses a sliding buffer, so events may be dropped under
    extreme backpressure if the handler cannot keep up with the event rate."
-  [client session-id {:keys [tools on-permission-request on-user-input-request hooks workspace-path on-event config commands]}]
+  [client session-id {:keys [tools on-permission-request on-user-input-request on-elicitation-request hooks workspace-path on-event config commands]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -66,6 +66,7 @@
                              :command-handlers command-handlers
                              :permission-handler on-permission-request
                              :user-input-handler on-user-input-request
+                             :elicitation-handler on-elicitation-request
                              :hooks hooks
                              :destroyed? false
                              :workspace-path workspace-path
@@ -118,6 +119,12 @@
   [client session-id callbacks]
   (when callbacks
     (swap! (:state client) assoc-in [:sessions session-id :transform-callbacks] callbacks)))
+
+(defn set-session-fs-handler!
+  "Store a sessionFs handler map on a session. Called by client during create/resume
+   when :session-fs is enabled. Handler is a map of keyword→fn for FS operations."
+  [client session-id handler]
+  (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] handler))
 
 (defn handle-system-message-transform
   "Handle a systemMessage.transform RPC request from the CLI runtime.
@@ -205,6 +212,40 @@
   "Check if x is a core.async channel."
   [x]
   (instance? clojure.core.async.impl.channels.ManyToManyChannel x))
+
+(def ^:private session-fs-method->handler-key
+  "Map RPC method names to handler map keys."
+  {"sessionFs.readFile"        :read-file
+   "sessionFs.writeFile"       :write-file
+   "sessionFs.appendFile"      :append-file
+   "sessionFs.exists"          :exists
+   "sessionFs.stat"            :stat
+   "sessionFs.mkdir"           :mkdir
+   "sessionFs.readdir"         :readdir
+   "sessionFs.readdirWithTypes" :readdir-with-types
+   "sessionFs.rm"              :rm
+   "sessionFs.rename"          :rename})
+
+(defn handle-session-fs-request!
+  "Handle an incoming sessionFs.* RPC request. Dispatches to the session's
+   FS handler and returns a channel with {:result ...} or {:error ...}."
+  [client session-id method params]
+  (async/thread-call
+   (fn []
+     (let [handler-map (:session-fs-handler (session-state client session-id))
+           handler-key (session-fs-method->handler-key method)]
+       (if-not handler-map
+         {:error {:code -32001 :message (str "No sessionFs handler for session: " session-id)}}
+         (if-let [handler-fn (get handler-map handler-key)]
+           (try
+             (let [result (handler-fn params)
+                   result (if (channel? result) (<!! result) result)]
+               {:result result})
+             (catch Throwable t
+               (log/warn t "sessionFs handler error" {:method method :session-id session-id})
+               {:error {:code -32603 :message (str "sessionFs error: " (ex-message t))}}))
+           {:error {:code -32601 :message (str "Unknown sessionFs method: " method)}}))))
+   :io))
 
 (defn handle-tool-call!
   "Handle an incoming tool call request. Returns a channel with the result wrapper."
@@ -384,6 +425,36 @@
            (catch Exception e
              {:error (ex-message e)})))))
    :io))
+
+(defn handle-elicitation-request!
+  "Handle an incoming elicitation.requested broadcast event.
+   Calls the session's elicitation handler and returns a channel with the result.
+   If the handler fails, returns {:action \"cancel\"} to avoid hanging requests."
+  [client session-id request]
+  (async/thread-call
+   (fn []
+     (let [handler (:elicitation-handler (session-state client session-id))]
+       (when handler
+         (try
+           (let [result (handler request {:session-id session-id})
+                 result (if (channel? result) (<!! result) result)]
+             (or result {:action "cancel"}))
+           (catch Throwable t
+             (log/warn t "Elicitation handler threw" {:session-id session-id})
+             {:action "cancel"})))))
+   :io))
+
+(defn- deep-merge
+  "Recursively merge maps, preserving nested keys."
+  [a b]
+  (merge-with (fn [x y] (if (and (map? x) (map? y)) (deep-merge x y) y)) a b))
+
+(defn update-capabilities!
+  "Deep-merge capability changes into the session's capabilities map.
+   Called when a capabilities.changed broadcast event is received."
+  [client session-id capability-changes]
+  (swap! (:state client) update-in [:sessions session-id :capabilities]
+         (fn [caps] (deep-merge (or caps {}) capability-changes))))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API - functions that take CopilotSession handle

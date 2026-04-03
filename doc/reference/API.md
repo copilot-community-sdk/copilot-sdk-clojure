@@ -130,6 +130,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
+| `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
 
 ### Methods
 
@@ -254,6 +255,8 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:hooks` | map | Lifecycle hooks (see below) |
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
+| `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Receives `(request ctx)` where request has `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
+| `:create-session-fs-handler` | fn | Factory for session filesystem handlers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a map of FS handler functions. See [Session Filesystem](#session-filesystem) |
 
 #### `resume-session`
 
@@ -1135,8 +1138,8 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
 | `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
 | `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"/"update"}` |
-| `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..."}` (optional) |
-| `:copilot/skill.invoked` | Skill invocation triggered |
+| `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..." :aborted? false}` (both optional) |
+| `:copilot/skill.invoked` | Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
 | `:copilot/assistant.turn_start` | Assistant turn started |
@@ -1154,9 +1157,9 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed |
-| `:copilot/subagent.started` | Subagent started |
-| `:copilot/subagent.completed` | Subagent completed |
-| `:copilot/subagent.failed` | Subagent failed |
+| `:copilot/subagent.started` | Subagent started; data includes :tool-call-id, :agent-name, :agent-display-name, :agent-description |
+| `:copilot/subagent.completed` | Subagent completed; data includes :tool-call-id, :agent-name, :agent-display-name, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
+| `:copilot/subagent.failed` | Subagent failed; data includes :tool-call-id, :agent-name, :agent-display-name, :error, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
 | `:copilot/subagent.selected` | Subagent selected |
 | `:copilot/subagent.deselected` | Subagent deselected |
 | `:copilot/hook.start` | Hook invocation started |
@@ -1186,6 +1189,10 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.mcp_server_status_changed` | MCP server status changed |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |
 | `:copilot/session.custom_agents_updated` | Custom agents list updated |
+| `:copilot/sampling.requested` | MCP sampling request initiated; ephemeral |
+| `:copilot/sampling.completed` | MCP sampling request completed; ephemeral |
+| `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |
+| `:copilot/capabilities.changed` | Session capabilities dynamically changed (e.g., elicitation support); ephemeral. Data: `{:ui {:elicitation true/false}}` |
 
 ### Example: Handling Events
 
@@ -1672,6 +1679,95 @@ The request map includes:
 The response map should include:
 - `:answer` - The user's answer (string, required). `:response` is also accepted for convenience.
 - `:was-freeform` - Whether the answer was freeform (boolean, defaults to true)
+
+### Elicitation Provider
+
+Provide a handler for elicitation requests from the agent. This enables the SDK client to act as a UI provider for form-based dialogs.
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :on-elicitation-request
+     (fn [request {:keys [session-id]}]
+       ;; request keys: :message, :requested-schema, :mode, :elicitation-source, :url
+       (println "Elicitation:" (:message request))
+       {:action "accept"
+        :content {:name "user-input"}})}))
+```
+
+The handler receives two arguments:
+
+| Argument | Description |
+|----------|-------------|
+| `request` | Map with `:message` (string), optional `:requested-schema` (JSON Schema map), `:mode` (`"form"` or `"url"`), `:elicitation-source` (string), `:url` (string) |
+| `ctx` | Map with `:session-id` (string) |
+
+Return an `ElicitationResult` map:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:action` | string | `"accept"`, `"decline"`, or `"cancel"` |
+| `:content` | map | Field values when action is `"accept"` |
+
+If the handler throws, the SDK sends `{:action "cancel"}` to prevent the request from hanging.
+
+When `:on-elicitation-request` is set, the session advertises `requestElicitation=true` in the create/resume RPC. Capabilities are updated dynamically via `capabilities.changed` events.
+
+### Session Filesystem
+
+Virtualize per-session storage with custom filesystem handlers. The runtime routes all session-scoped file I/O (event logs, large outputs, checkpoints) through the provided callbacks.
+
+Configure the client with `:session-fs`:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def client
+  (copilot/client {:session-fs {:initial-cwd "/home/user/project"
+                                :session-state-path "/sessions"
+                                :conventions "posix"}}))
+```
+
+Provide a handler factory per session:
+
+```clojure
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :create-session-fs-handler
+     (fn [session]
+       (let [store (atom {})]
+         {:read-file    (fn [{:keys [path]}] {:content (get @store path "")})
+          :write-file   (fn [{:keys [path content]}] (swap! store assoc path content) nil)
+          :append-file  (fn [{:keys [path content]}] (swap! store update path str content) nil)
+          :exists       (fn [{:keys [path]}] {:exists (contains? @store path)})
+          :stat         (fn [{:keys [path]}] {:is-file true :is-directory false :size (count (get @store path "")) :mtime "2026-01-01T00:00:00Z"})
+          :mkdir        (fn [_] nil)
+          :readdir      (fn [_] {:entries []})
+          :readdir-with-types (fn [_] {:entries []})
+          :rm           (fn [{:keys [path]}] (swap! store dissoc path) nil)
+          :rename       (fn [{:keys [old-path new-path]}] (swap! store (fn [s] (-> s (assoc new-path (get s old-path "")) (dissoc old-path)))) nil)}))}))
+```
+
+The handler map requires all 10 operations:
+
+| Key | Params | Returns |
+|-----|--------|---------|
+| `:read-file` | `{:session-id :path}` | `{:content "..."}` |
+| `:write-file` | `{:session-id :path :content :mode}` | nil |
+| `:append-file` | `{:session-id :path :content}` | nil |
+| `:exists` | `{:session-id :path}` | `{:exists true/false}` |
+| `:stat` | `{:session-id :path}` | `{:is-file :is-directory :size :mtime}` |
+| `:mkdir` | `{:session-id :path :recursive}` | nil |
+| `:readdir` | `{:session-id :path}` | `{:entries [...]}` |
+| `:readdir-with-types` | `{:session-id :path}` | `{:entries [...]}` |
+| `:rm` | `{:session-id :path :recursive :force}` | nil |
+| `:rename` | `{:session-id :old-path :new-path}` | nil |
+
+Handler functions may return values directly or via core.async channels.
 
 ### Session Hooks
 

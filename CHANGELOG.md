@@ -4,10 +4,21 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (v0.2.1 sync)
-- **`steerable` field on `session.start` events** — `session.start` event data now includes optional `:steerable?` boolean field indicating whether the session supports remote steering via Mission Control. New `::steerable?` spec added (upstream PR #927).
+- **`remote-steerable?` field on `session.start` and `session.resume` events** — event data now includes optional `:remote-steerable?` boolean field indicating whether the session supports remote steering via Mission Control. Replaces previous `:steerable?` (upstream PRs #927, #908).
 - **`get-session-metadata`** — new function on client for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if not found. Sends `session.getMetadata` JSON-RPC call. Shared `wire->session-metadata` helper extracted from `list-sessions` to eliminate duplication (upstream PR #899).
+- **Elicitation provider support** — new `:on-elicitation-request` handler on `SessionConfig` and `ResumeSessionConfig`. When provided, sends `requestElicitation: true` in the session create/resume RPC. The runtime routes `elicitation.requested` broadcast events to the handler, and results are sent back via `session.ui.handlePendingElicitation` RPC. Handler errors automatically send a cancel response. New `::elicitation-request` and `::on-elicitation-request` specs (upstream PR #908).
+- **`capabilities.changed` event handling** — session capabilities are dynamically updated when `capabilities.changed` broadcast events are received, e.g. when another client joins with elicitation support (upstream PR #908).
+- **New event types** — `sampling.requested`, `sampling.completed`, `session.remote_steerable_changed`, `capabilities.changed` added to event type enum and event sets (upstream PRs #908, #916).
+- **Subagent event data fields** — `subagent.started`, `subagent.completed`, `subagent.failed` events now include optional `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms` fields. New `::subagent.started-data`, `::subagent.completed-data`, `::subagent.failed-data` specs (upstream PR #916).
+- **`skill.invoked` event `:description` field** — optional `:description` from SKILL.md frontmatter (upstream PR #916).
+- **`session.custom_agents_updated` payload spec** — full `::session.custom_agents_updated-data` spec with `:agents` (array of agent metadata), `:warnings`, `:errors`. New `::custom-agent-info` spec (upstream PR #916).
+- **SessionFs virtual filesystem** — new `:session-fs` client option with `:initial-cwd`, `:session-state-path`, `:conventions`. Client calls `sessionFs.setProvider` RPC on connect. New `:create-session-fs-handler` on session config provides a per-session FS handler factory. The SDK dispatches incoming `sessionFs.*` RPC requests (10 operations: `readFile`, `writeFile`, `appendFile`, `exists`, `stat`, `mkdir`, `readdir`, `readdirWithTypes`, `rm`, `rename`) to the session's handler. Enables custom session storage backends (upstream PR #917).
+- **`aborted?` on `session.task_complete`** — optional boolean indicating the preceding agentic loop was cancelled via abort signal. New `::aborted?` spec (upstream PR #917).
+- **`timeout` tool result type** — `::result-type` now accepts `:timeout` / `"timeout"` for tool calls that timed out (upstream PR #970).
+- Integration tests for elicitation provider routing, handler error→cancel fallback, capabilities.changed updates, and requestElicitation wire flag.
 
 ### Changed (v0.2.1 sync)
+- **BREAKING**: `::steerable?` renamed to `::remote-steerable?` on `session.start` and `session.resume` event data, matching upstream wire field rename from `steerable` to `remoteSteerable` (upstream PR #908).
 - **`session.idle` is now ephemeral** — the runtime no longer persists `session.idle` events in session history. `get-messages` will no longer return `session.idle` events. Live event listeners (used by `send-and-wait!` and `send!`) are unaffected and still receive it (upstream PR #927).
 
 ## [0.2.1.1-SNAPSHOT] - 2026-03-26
