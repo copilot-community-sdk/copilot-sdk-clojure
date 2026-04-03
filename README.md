@@ -2,7 +2,7 @@
 
 Clojure SDK for programmatic control of GitHub Copilot CLI via JSON-RPC.
 
-> **Note:** This SDK is in technical preview and may change in breaking ways.
+> **Note:** This SDK is in [public preview](https://github.blog/changelog/2026-04-02-copilot-sdk-in-public-preview/) and may change in breaking ways.
 
 A fully-featured Clojure port of the official [GitHub Copilot SDK](https://github.com/github/copilot-sdk), designed with idiomatic functional programming patterns. The SDK uses immutable data structures throughout, manages client/session state via Clojure's concurrency primitives (atoms, agents), and leverages [core.async](https://github.com/clojure/core.async) for non-blocking event streams and async operations.
 
@@ -150,6 +150,8 @@ See the [`examples/`](./examples/) directory for complete working examples:
 | [`ask_user_failure.clj`](./examples/ask_user_failure.clj) | Advanced | User cancellation (Esc) with event tracing |
 | [`mcp_local_server.clj`](./examples/mcp_local_server.clj) | Advanced | Model Context Protocol server integration |
 | [`byok_provider.clj`](./examples/byok_provider.clj) | Advanced | Bring Your Own Key provider configuration |
+| [`elicitation_provider.clj`](./examples/elicitation_provider.clj) | Advanced | Custom elicitation provider for UI dialogs |
+| [`commands.clj`](./examples/commands.clj) | Intermediate | Register slash commands on sessions |
 
 Run examples:
 

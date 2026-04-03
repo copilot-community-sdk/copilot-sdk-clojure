@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.2.1 sync)
+- **`resolvedByHook` guard on `permission.requested`** — when the runtime resolves a permission request via a `permissionRequest` hook, the broadcast event includes `resolvedByHook: true`. The SDK now skips the client's `:on-permission-request` handler and does not send the `handlePendingPermissionRequest` RPC, preventing duplicate responses. Event subscribers still observe the event (upstream PR #999, runtime 1.0.17).
+- **New permission result kinds** — `:denied-by-content-exclusion-policy` and `:denied-by-permission-request-hook` added to `::permission-result-kind` spec (upstream PR #999).
+- **MCP fields on `tool.execution_start` events** — optional `:mcp-server-name` and `:mcp-tool-name` fields added to `::tool.execution_start-data` spec indicating the MCP server and original tool name for MCP-originated tool calls (upstream runtime 1.0.17).
+- **`::resolved-by-hook` spec** — boolean spec for the `resolvedByHook` field on `permission.requested` event data.
+- **Commands example** — new `examples/commands.clj` demonstrating slash command registration and handling.
+- Integration tests for `resolvedByHook` guard (both true and false cases), new permission result kind specs, and MCP tool event fields.
+
+### Changed
+- **Public preview branding** — README updated from "technical preview" to "public preview" with link to the [announcement](https://github.blog/changelog/2026-04-02-copilot-sdk-in-public-preview/).
+
 ### Changed (v0.2.1 sync)
 - **BREAKING**: Elicitation handler signature changed from 2-arg `(fn [request ctx])` to single-arg `(fn [context])`. The `ElicitationContext` map now includes `:session-id` alongside request fields (`:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`). Matches upstream cross-SDK consistency change (upstream PR #960). `::elicitation-request` spec renamed to `::elicitation-context`.
 

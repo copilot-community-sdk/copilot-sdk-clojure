@@ -845,6 +845,40 @@ If the handler throws, the SDK sends `{:action "cancel"}` to prevent hanging. In
 
 ---
 
+## Example 19: Commands (`commands.clj`)
+
+**Difficulty**: Intermediate
+**Features**: Slash commands, command definitions, session config
+
+Demonstrates how to register slash commands on a session via the `:commands` option. Commands allow users to invoke named actions via `/command-name` in chat.
+
+```bash
+clojure -A:examples -X commands/run
+```
+
+### Code Walkthrough
+
+Each command is defined as a map with `:name`, optional `:description`, and a `:command-handler` function. The handler receives a `CommandContext` map:
+
+```clojure
+{:session-id "..."
+ :command-name "status"
+ :command "/status"
+ :args ""}
+```
+
+Commands are registered by passing them in the session config:
+
+```clojure
+(copilot/create-session client
+  {:commands [{:name "status"
+               :description "Show session status"
+               :command-handler handle-status}]
+   :on-permission-request copilot/approve-all})
+```
+
+---
+
 ## Clojure vs JavaScript Comparison
 
 Here's how common patterns compare between the Clojure and JavaScript SDKs:

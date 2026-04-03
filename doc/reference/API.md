@@ -1153,7 +1153,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.usage` | Token usage for this turn |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started |
+| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:mcp-server-name`, `:mcp-tool-name` |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed |
@@ -1166,7 +1166,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
 | `:copilot/system.notification` | System notification with structured `:kind` discriminator (e.g. `agent_completed`, `shell_completed`, `shell_detached_completed`) |
-| `:copilot/permission.requested` | Permission request initiated |
+| `:copilot/permission.requested` | Permission request initiated; data includes `:resolved-by-hook` when already handled by a hook |
 | `:copilot/permission.completed` | Permission request resolved |
 | `:copilot/user_input.requested` | User input requested from agent |
 | `:copilot/user_input.completed` | User input received |
@@ -1631,9 +1631,23 @@ fields like `:full-command-text`, `:commands`, and `:possible-paths`.
 ;; Deny after user interaction (optional feedback)
 {:kind :denied-interactively-by-user :feedback "Not allowed"}
 
+;; Denied by content exclusion policy
+{:kind :denied-by-content-exclusion-policy}
+
+;; Denied by a permissionRequest hook
+{:kind :denied-by-permission-request-hook}
+
 ;; Extension declines to answer (another handler may respond)
 {:kind :no-result}
 ```
+
+#### `resolvedByHook` — Hook-Resolved Permissions
+
+When the runtime resolves a permission request via a `permissionRequest` hook, the
+`permission.requested` event includes `:resolved-by-hook true`. The SDK automatically
+skips the client's `:on-permission-request` handler and does not send the
+`handlePendingPermissionRequest` RPC — the event is still published to event subscribers
+for observability.
 
 #### `approve-all`
 

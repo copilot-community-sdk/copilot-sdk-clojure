@@ -65,3 +65,7 @@ clojure -A:examples -X reasoning-effort/run
 echo ""
 echo "=== elicitation-provider ==="
 clojure -A:examples -X elicitation-provider/run
+
+echo ""
+echo "=== commands ==="
+clojure -A:examples -X commands/run

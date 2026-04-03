@@ -2,6 +2,7 @@
   "Integration tests using mock JSON-RPC server."
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [clojure.core.async :as async :refer [<!! >!! chan close! go timeout alts!!]]
+            [clojure.spec.alpha :as s]
             [clojure.tools.logging :as log]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
@@ -1030,6 +1031,89 @@
         (when (seq perm-rpcs)
           (is (= "perm-req-2" (:requestId (:params (first perm-rpcs))))
               "RPC should include the correct request-id"))))))
+
+(deftest test-permission-resolved-by-hook-v3
+  (testing "v3 permission.requested with resolvedByHook=true skips handler entirely"
+    (let [handler-called? (atom false)
+          requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         (reset! handler-called? true)
+                                         {:kind :approved})})
+          session-id (sdk/session-id session)]
+      ;; Force protocol v3
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      ;; Inject permission.requested with resolvedByHook=true
+      (mock/send-session-event! *mock-server* session-id
+                                "permission.requested"
+                                {:requestId "perm-hook-1"
+                                 :permissionRequest {:permissionKind "shell"
+                                                     :fullCommandText "echo test"}
+                                 :resolvedByHook true})
+      (Thread/sleep 500)
+      ;; Handler should NOT be called
+      (is (false? @handler-called?)
+          "permission handler should not be invoked when resolvedByHook is true")
+      ;; No RPC should be sent
+      (is (empty? (filter #(= "session.permissions.handlePendingPermissionRequest"
+                               (:method %))
+                          @requests))
+          "no handlePendingPermissionRequest RPC when resolvedByHook is true")))
+
+  (testing "v3 permission.requested with resolvedByHook=false invokes handler normally"
+    (let [handler-called? (atom false)
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.permissions.handlePendingPermissionRequest" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         (reset! handler-called? true)
+                                         {:kind :approved})})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      ;; Inject permission.requested with resolvedByHook=false
+      (mock/send-session-event! *mock-server* session-id
+                                "permission.requested"
+                                {:requestId "perm-hook-2"
+                                 :permissionRequest {:permissionKind "shell"
+                                                     :fullCommandText "echo test"}
+                                 :resolvedByHook false})
+      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (is (true? @handler-called?)
+          "permission handler should be invoked when resolvedByHook is false")
+      (is (= 1 (count (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                    (:method %))
+                               @requests)))
+          "handlePendingPermissionRequest RPC should be sent"))))
+
+(deftest test-permission-result-kinds-spec
+  (testing "new permission result kinds are valid"
+    (is (s/valid? :github.copilot-sdk.specs/permission-result-kind
+                  :denied-by-content-exclusion-policy)
+        "denied-by-content-exclusion-policy should be a valid permission result kind")
+    (is (s/valid? :github.copilot-sdk.specs/permission-result-kind
+                  :denied-by-permission-request-hook)
+        "denied-by-permission-request-hook should be a valid permission result kind")))
+
+(deftest test-tool-execution-start-mcp-fields
+  (testing "tool.execution_start event data allows MCP fields"
+    (is (s/valid? :github.copilot-sdk.specs/tool.execution_start-data
+                  {:tool-call-id "tc-1"
+                   :tool-name "mcp__server__tool"
+                   :mcp-server-name "my-mcp-server"
+                   :mcp-tool-name "original-tool"})
+        "tool.execution_start-data should accept mcp-server-name and mcp-tool-name")))
 
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
