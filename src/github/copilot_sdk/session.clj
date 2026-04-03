@@ -428,15 +428,16 @@
 
 (defn handle-elicitation-request!
   "Handle an incoming elicitation.requested broadcast event.
-   Calls the session's elicitation handler and returns a channel with the result.
+   Calls the session's elicitation handler with a single ElicitationContext arg
+   (includes :session-id alongside request fields). Returns a channel with the result.
    If the handler fails, returns {:action \"cancel\"} to avoid hanging requests."
-  [client session-id request]
+  [client session-id context]
   (async/thread-call
    (fn []
      (let [handler (:elicitation-handler (session-state client session-id))]
        (when handler
          (try
-           (let [result (handler request {:session-id session-id})
+           (let [result (handler context)
                  result (if (channel? result) (<!! result) result)]
              (or result {:action "cancel"}))
            (catch Throwable t

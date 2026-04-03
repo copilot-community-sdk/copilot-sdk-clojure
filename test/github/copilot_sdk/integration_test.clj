@@ -1403,7 +1403,7 @@
                 (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
-                                       :on-elicitation-request (fn [_req _ctx] {:action "cancel"})})
+                                       :on-elicitation-request (fn [_ctx] {:action "cancel"})})
           create-rpcs (filter #(= "session.create" (:method %)) @requests)]
       (is (= 1 (count create-rpcs)))
       (when (seq create-rpcs)
@@ -1434,8 +1434,8 @@
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :on-elicitation-request
-                                       (fn [request ctx]
-                                         (reset! handler-called {:request request :ctx ctx})
+                                       (fn [context]
+                                         (reset! handler-called context)
                                          {:action "accept"
                                           :content {:name "test-value"}})})
           session-id (sdk/session-id session)]
@@ -1451,10 +1451,10 @@
                                  :mode "form"
                                  :elicitationSource "mcp-server"})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
-      ;; Handler was called
+      ;; Handler was called with ElicitationContext (single arg, includes session-id)
       (is (some? @handler-called))
-      (is (= "Enter your name" (:message (:request @handler-called))))
-      (is (= session-id (:session-id (:ctx @handler-called))))
+      (is (= "Enter your name" (:message @handler-called)))
+      (is (= session-id (:session-id @handler-called)))
       ;; handlePendingElicitation RPC was sent with handler's result
       (let [rpcs (filter #(= "session.ui.handlePendingElicitation" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -1474,7 +1474,7 @@
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :on-elicitation-request
-                                       (fn [_req _ctx]
+                                       (fn [_ctx]
                                          (throw (Exception. "UI unavailable")))})
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)

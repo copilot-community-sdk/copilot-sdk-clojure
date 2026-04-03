@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (v0.2.1 sync)
+- **BREAKING**: Elicitation handler signature changed from 2-arg `(fn [request ctx])` to single-arg `(fn [context])`. The `ElicitationContext` map now includes `:session-id` alongside request fields (`:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`). Matches upstream cross-SDK consistency change (upstream PR #960). `::elicitation-request` spec renamed to `::elicitation-context`.
+
 ### Added (v0.2.1 sync)
 - **`remote-steerable?` field on `session.start` and `session.resume` events** — event data now includes optional `:remote-steerable?` boolean field indicating whether the session supports remote steering via Mission Control. Replaces previous `:steerable?` (upstream PRs #927, #908).
 - **`get-session-metadata`** — new function on client for efficient O(1) session lookup by ID. Returns session metadata map if found, or `nil` if not found. Sends `session.getMetadata` JSON-RPC call. Shared `wire->session-metadata` helper extracted from `list-sessions` to eliminate duplication (upstream PR #899).
