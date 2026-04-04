@@ -1625,3 +1625,542 @@
         (is (some? stored))
         (is (fn? (:read-file stored)))
         (is (= {:content "hello"} ((:read-file stored) {:path "/test.txt"})))))))
+
+;; -----------------------------------------------------------------------------
+;; Hooks Tests (server→client RPC)
+;; -----------------------------------------------------------------------------
+
+(deftest test-hooks-pre-tool-use
+  (testing "hooks.invoke preToolUse calls registered handler and returns result"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :hooks {:on-pre-tool-use
+                             (fn [input ctx]
+                               (reset! handler-called {:input input :ctx ctx})
+                               {:permission-decision "allow"
+                                :additional-context "extra info"})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "hooks.invoke"
+                     {:sessionId session-id
+                      :hookType "preToolUse"
+                      :input {:toolName "bash"
+                              :toolArgs {:command "echo hi"}
+                              :timestamp 12345
+                              :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      ;; Input keys are converted to kebab-case by wire->clj
+      (is (= "bash" (get-in @handler-called [:input :tool-name])))
+      (is (= {:command "echo hi"} (get-in @handler-called [:input :tool-args])))
+      (is (= session-id (get-in @handler-called [:ctx :session-id])))
+      ;; Response contains the handler's return value (wire-converted)
+      (is (= "allow" (get-in response [:result :permissionDecision]))))))
+
+(deftest test-hooks-post-tool-use
+  (testing "hooks.invoke postToolUse calls registered handler"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :hooks {:on-post-tool-use
+                             (fn [input ctx]
+                               (reset! handler-called {:input input :ctx ctx})
+                               nil)}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "hooks.invoke"
+                     {:sessionId session-id
+                      :hookType "postToolUse"
+                      :input {:toolName "bash"
+                              :toolArgs {}
+                              :toolResult {:textResultForLlm "ok"
+                                           :resultType "success"}
+                              :timestamp 12345
+                              :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      (is (= "bash" (get-in @handler-called [:input :tool-name])))
+      ;; Handler returned nil, so result is nil
+      (is (nil? (:result response))))))
+
+(deftest test-hooks-session-start
+  (testing "hooks.invoke sessionStart calls registered handler"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :hooks {:on-session-start
+                             (fn [input ctx]
+                               (reset! handler-called input)
+                               {:additional-context "welcome"})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "hooks.invoke"
+                     {:sessionId session-id
+                      :hookType "sessionStart"
+                      :input {:source "new"
+                              :timestamp 12345
+                              :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      (is (= "new" (:source @handler-called)))
+      (is (= "welcome" (get-in response [:result :additionalContext]))))))
+
+(deftest test-hooks-unknown-type-returns-nil
+  (testing "hooks.invoke with unknown hook type returns nil result"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :hooks {:on-pre-tool-use (fn [_ _] {:permission-decision "allow"})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "hooks.invoke"
+                     {:sessionId session-id
+                      :hookType "unknownHookType"
+                      :input {:timestamp 12345
+                              :cwd "/workspace"}})]
+      (is (nil? (:result response))))))
+
+(deftest test-hooks-handler-exception-returns-nil
+  (testing "hooks.invoke handler exception returns nil gracefully"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :hooks {:on-pre-tool-use (fn [_ _] (throw (Exception. "oops")))}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "hooks.invoke"
+                     {:sessionId session-id
+                      :hookType "preToolUse"
+                      :input {:toolName "bash"
+                              :toolArgs {}
+                              :timestamp 12345
+                              :cwd "/workspace"}})]
+      (is (nil? (:result response))))))
+
+(deftest test-hooks-no-hooks-registered
+  (testing "hooks.invoke with no hooks registered returns nil"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "hooks.invoke"
+                     {:sessionId session-id
+                      :hookType "preToolUse"
+                      :input {:toolName "bash"
+                              :toolArgs {}
+                              :timestamp 12345
+                              :cwd "/workspace"}})]
+      (is (nil? (:result response))))))
+
+;; -----------------------------------------------------------------------------
+;; User Input Handler Tests (server→client RPC)
+;; -----------------------------------------------------------------------------
+
+(deftest test-user-input-handler-invoked
+  (testing "userInput.request calls registered handler with correct shape"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :on-user-input-request
+                     (fn [request ctx]
+                       (reset! handler-called {:request request :ctx ctx})
+                       {:answer "option A" :was-freeform false})})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "userInput.request"
+                     {:sessionId session-id
+                      :question "Which option?"
+                      :choices ["option A" "option B"]
+                      :allowFreeform true})]
+      (is (some? @handler-called))
+      (is (= "Which option?" (get-in @handler-called [:request :question])))
+      (is (= "option A" (get-in response [:result :answer])))
+      (is (false? (get-in response [:result :wasFreeform]))))))
+
+(deftest test-user-input-no-handler-errors
+  (testing "userInput.request without handler returns error"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+            #"User input requested but no handler registered"
+            (mock/send-rpc-request! *mock-server*
+              "userInput.request"
+              {:sessionId session-id
+               :question "Which option?"}))))))
+
+;; -----------------------------------------------------------------------------
+;; System Message Transform Tests (server→client RPC)
+;; -----------------------------------------------------------------------------
+
+(deftest test-system-message-transform-callback
+  (testing "systemMessage.transform invokes registered transform callbacks"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :system-message {:mode :customize
+                                      :sections {:identity {:action (fn [content]
+                                                                     (str content " EXTRA"))}}}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "systemMessage.transform"
+                     {:sessionId session-id
+                      :sections {:identity {:content "I am an agent."}}})]
+      (is (= "I am an agent. EXTRA"
+             (get-in response [:result :sections :identity :content]))))))
+
+(deftest test-system-message-transform-error-returns-original
+  (testing "systemMessage.transform returns original content on callback error"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :system-message {:mode :customize
+                                      :sections {:identity {:action (fn [_] (throw (Exception. "fail")))}}}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "systemMessage.transform"
+                     {:sessionId session-id
+                      :sections {:identity {:content "original text"}}})]
+      (is (= "original text"
+             (get-in response [:result :sections :identity :content]))))))
+
+(deftest test-system-message-transform-no-callback-passthrough
+  (testing "systemMessage.transform passes through sections without callbacks"
+    (let [session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :system-message {:mode :customize
+                                      :sections {:identity {:action (fn [c] (str c "!"))}}}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                     "systemMessage.transform"
+                     {:sessionId session-id
+                      :sections {:identity {:content "hello"}
+                                 :tone {:content "be nice"}}})]
+      (is (= "hello!" (get-in response [:result :sections :identity :content])))
+      (is (= "be nice" (get-in response [:result :sections :tone :content]))))))
+
+;; -----------------------------------------------------------------------------
+;; Tool Result Normalization Tests (v3 broadcast path)
+;; -----------------------------------------------------------------------------
+
+(deftest test-tool-result-string-passthrough
+  (testing "tool handler returning string is normalized to success result"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.tools.handlePendingToolCall" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :tools [{:tool-name "test-tool"
+                              :tool-handler (fn [_args _inv] "hello world")}]})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-session-event! *mock-server* session-id
+                                "external_tool.requested"
+                                {:requestId "tool-req-1"
+                                 :toolName "test-tool"
+                                 :toolCallId "tc-1"
+                                 :arguments {}})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+      (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
+            result (get-in (first rpcs) [:params :result])]
+        (is (= 1 (count rpcs)))
+        (is (map? result))
+        (is (= "hello world" (:textResultForLlm result)))
+        (is (= "success" (:resultType result)))))))
+
+(deftest test-tool-result-nil-normalized
+  (testing "tool handler returning nil is normalized to failure result"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.tools.handlePendingToolCall" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :tools [{:tool-name "nil-tool"
+                              :tool-handler (fn [_args _inv] nil)}]})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-session-event! *mock-server* session-id
+                                "external_tool.requested"
+                                {:requestId "tool-req-2"
+                                 :toolName "nil-tool"
+                                 :toolCallId "tc-2"
+                                 :arguments {}})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+      (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
+            result (get-in (first rpcs) [:params :result])]
+        (is (= 1 (count rpcs)))
+        (is (map? result))
+        (is (= "Tool returned no result" (:textResultForLlm result)))
+        (is (= "failure" (:resultType result)))))))
+
+(deftest test-tool-result-structured-object
+  (testing "tool handler returning structured ToolResultObject is forwarded correctly"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})
+                (when (= "session.tools.handlePendingToolCall" method)
+                  (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all
+                     :tools [{:tool-name "struct-tool"
+                              :tool-handler (fn [_args _inv]
+                                              {:text-result-for-llm "all good"
+                                               :result-type "success"
+                                               :tool-telemetry {:latency-ms 42}})}]})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-session-event! *mock-server* session-id
+                                "external_tool.requested"
+                                {:requestId "tool-req-3"
+                                 :toolName "struct-tool"
+                                 :toolCallId "tc-3"
+                                 :arguments {}})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+      (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
+            result (get-in (first rpcs) [:params :result])]
+        (is (= 1 (count rpcs)))
+        (is (map? result))
+        (is (= "all good" (:textResultForLlm result)))
+        (is (= "success" (:resultType result)))
+        (is (= 42 (get-in result [:toolTelemetry :latencyMs])))))))
+
+;; -----------------------------------------------------------------------------
+;; Session RPC Wrapper Tests (experimental session APIs)
+;; -----------------------------------------------------------------------------
+
+(deftest test-mode-get
+  (testing "mode-get calls session.mode.get RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (let [result (session/mode-get session)]
+        (is (some? result))
+        (is (= "interactive" (:mode result)))
+        (is (some #(= "session.mode.get" (:method %)) @requests))))))
+
+(deftest test-mode-set
+  (testing "mode-set! calls session.mode.set RPC with mode param"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/mode-set! session "plan")
+      (let [mode-rpcs (filter #(= "session.mode.set" (:method %)) @requests)]
+        (is (= 1 (count mode-rpcs)))
+        (is (= "plan" (:mode (:params (first mode-rpcs)))))))))
+
+(deftest test-plan-read
+  (testing "plan-read calls session.plan.read RPC and returns normalized shape"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (let [result (session/plan-read session)]
+        (is (some? result))
+        (is (some #(= "session.plan.read" (:method %)) @requests))
+        ;; Mock returns {:exists false :content nil :filePath nil}
+        ;; plan-read renames :exists → :exists? and wire->clj converts :filePath → :file-path
+        (is (contains? result :exists?) ":exists key should be renamed to :exists?")
+        (is (false? (:exists? result)))
+        (is (nil? (:content result)))))))
+
+(deftest test-plan-update
+  (testing "plan-update! calls session.plan.update RPC with content"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/plan-update! session "# My Plan\n\nStep 1: ...")
+      (let [plan-rpcs (filter #(= "session.plan.update" (:method %)) @requests)]
+        (is (= 1 (count plan-rpcs)))
+        (is (= "# My Plan\n\nStep 1: ..." (:content (:params (first plan-rpcs)))))))))
+
+(deftest test-plan-delete
+  (testing "plan-delete! calls session.plan.delete RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/plan-delete! session)
+      (is (some #(= "session.plan.delete" (:method %)) @requests)))))
+
+(deftest test-workspace-list-files
+  (testing "workspace-list-files calls session.workspace.listFiles RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (let [result (session/workspace-list-files session)]
+        (is (some? result))
+        (is (some #(= "session.workspace.listFiles" (:method %)) @requests))))))
+
+(deftest test-workspace-read-file
+  (testing "workspace-read-file calls session.workspace.readFile RPC with path"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/workspace-read-file session "notes.md")
+      (let [rpcs (filter #(= "session.workspace.readFile" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "notes.md" (:path (:params (first rpcs)))))))))
+
+(deftest test-workspace-create-file
+  (testing "workspace-create-file! calls session.workspace.createFile RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/workspace-create-file! session "test.txt" "content here")
+      (let [rpcs (filter #(= "session.workspace.createFile" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "test.txt" (:path (:params (first rpcs)))))
+        (is (= "content here" (:content (:params (first rpcs)))))))))
+
+(deftest test-agent-list
+  (testing "agent-list calls session.agent.list RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (let [result (session/agent-list session)]
+        (is (some? result))
+        (is (some #(= "session.agent.list" (:method %)) @requests))))))
+
+(deftest test-agent-select
+  (testing "agent-select! calls session.agent.select RPC with agent name"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/agent-select! session "researcher")
+      (let [rpcs (filter #(= "session.agent.select" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "researcher" (:name (:params (first rpcs)))))))))
+
+(deftest test-agent-deselect
+  (testing "agent-deselect! calls session.agent.deselect RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/agent-deselect! session)
+      (is (some #(= "session.agent.deselect" (:method %)) @requests)))))
+
+(deftest test-fleet-start
+  (testing "fleet-start! calls session.fleet.start RPC with session-id forced"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      ;; Pass params that attempt to override session-id
+      (session/fleet-start! session {:prompt "do stuff" :session-id "evil-override"})
+      (let [rpcs (filter #(= "session.fleet.start" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        ;; Session-id must be the real one, not the override
+        (is (= session-id (:sessionId (:params (first rpcs)))))
+        (is (= "do stuff" (:prompt (:params (first rpcs)))))))))
+
+(deftest test-mcp-config-list
+  (testing "mcp-config-list calls mcp.config.list RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-list *test-client*)]
+      (is (some? result))
+      (is (some #(= "mcp.config.list" (:method %)) @requests)))))
+
+(deftest test-mcp-config-add
+  (testing "mcp-config-add! calls mcp.config.add RPC with params"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-add! *test-client*
+                   {:name "my-server" :command "npx" :args ["-y" "server"]})]
+      (is (some? result))
+      (let [rpcs (filter #(= "mcp.config.add" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "my-server" (:name (:params (first rpcs)))))))))
+
+(deftest test-mcp-config-update
+  (testing "mcp-config-update! calls mcp.config.update RPC with params"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-update! *test-client*
+                   {:name "my-server" :tools ["read_file"]})]
+      (is (some? result))
+      (let [rpcs (filter #(= "mcp.config.update" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "my-server" (:name (:params (first rpcs)))))))))
+
+(deftest test-mcp-config-remove
+  (testing "mcp-config-remove! calls mcp.config.remove RPC with params"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-remove! *test-client* {:name "my-server"})]
+      (is (some? result))
+      (let [rpcs (filter #(= "mcp.config.remove" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "my-server" (:name (:params (first rpcs)))))))))
+
+(deftest test-agent-get-current
+  (testing "agent-get-current calls session.agent.getCurrent RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})
+          result (session/agent-get-current session)]
+      (is (some? result))
+      (is (some #(= "session.agent.getCurrent" (:method %)) @requests)))))
+
+(deftest test-agent-reload
+  (testing "agent-reload! calls session.agent.reload RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/agent-reload! session)
+      (is (some #(= "session.agent.reload" (:method %)) @requests)))))

@@ -625,9 +625,14 @@
           :opt-un [::selected-model ::reasoning-effort ::already-in-use? ::remote-steerable?
                    ::host-type ::head-commit ::base-commit]))
 
+(s/def ::status-code integer?)
+(s/def ::provider-call-id string?)
+(s/def ::error-type string?)
+(s/def ::stack string?)
+
 (s/def ::session.error-data
   (s/keys :req-un [::error-type ::message]
-          :opt-un [::stack]))
+          :opt-un [::stack ::status-code ::provider-call-id ::url]))
 
 (s/def ::session.idle-data map?)
 

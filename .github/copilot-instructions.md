@@ -177,9 +177,13 @@ src/github/copilot_sdk/
 ├── client.clj       # Main client API (create-client, create-session, etc.)
 ├── session.clj      # Session operations (send!, send-and-wait!, etc.)
 ├── helpers.clj      # Convenience functions (query, query-seq!, query-chan, etc.)
-├── specs.clj        # clojure.spec definitions
-├── instrument.clj   # Function specs and instrumentation
-└── util.clj         # Internal utilities
+├── tools.clj        # Helper functions for defining tools (define-tool, result-success, etc.)
+├── specs.clj        # clojure.spec definitions for all data shapes
+├── instrument.clj   # Function specs (fdefs) and instrumentation
+├── util.clj         # Wire conversion (camelCase ↔ kebab-case), MCP helpers
+├── protocol.clj     # JSON-RPC 2.0 protocol over NIO channels
+├── process.clj      # CLI process management (spawning, lifecycle)
+└── logging.clj      # Logging facade via clojure.tools.logging
 ```
 
 ## Documentation

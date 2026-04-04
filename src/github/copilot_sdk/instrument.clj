@@ -353,6 +353,83 @@
   :ret nil?)
 
 ;; -----------------------------------------------------------------------------
+;; Session RPC wrapper function specs (experimental)
+;; -----------------------------------------------------------------------------
+
+(s/fdef github.copilot-sdk.session/mode-get
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/mode-set!
+  :args (s/cat :session ::specs/session :mode string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/plan-read
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/plan-update!
+  :args (s/cat :session ::specs/session :content string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/plan-delete!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/workspace-list-files
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/workspace-read-file
+  :args (s/cat :session ::specs/session :path string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/workspace-create-file!
+  :args (s/cat :session ::specs/session :path string? :content string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/agent-list
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/agent-get-current
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/agent-select!
+  :args (s/cat :session ::specs/session :agent-name string?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/agent-deselect!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/agent-reload!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/fleet-start!
+  :args (s/cat :session ::specs/session :params map?)
+  :ret map?)
+
+;; Client-level MCP config function specs
+(s/fdef github.copilot-sdk.client/mcp-config-list
+  :args (s/cat :client ::specs/client)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.client/mcp-config-add!
+  :args (s/cat :client ::specs/client :params map?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.client/mcp-config-update!
+  :args (s/cat :client ::specs/client :params map?)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.client/mcp-config-remove!
+  :args (s/cat :client ::specs/client :params map?)
+  :ret map?)
+
+;; -----------------------------------------------------------------------------
 ;; Instrument all public API functions
 ;; -----------------------------------------------------------------------------
 
@@ -415,6 +492,24 @@
                       github.copilot-sdk.session/compaction-compact!
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
+                      github.copilot-sdk.session/mode-get
+                      github.copilot-sdk.session/mode-set!
+                      github.copilot-sdk.session/plan-read
+                      github.copilot-sdk.session/plan-update!
+                      github.copilot-sdk.session/plan-delete!
+                      github.copilot-sdk.session/workspace-list-files
+                      github.copilot-sdk.session/workspace-read-file
+                      github.copilot-sdk.session/workspace-create-file!
+                      github.copilot-sdk.session/agent-list
+                      github.copilot-sdk.session/agent-get-current
+                      github.copilot-sdk.session/agent-select!
+                      github.copilot-sdk.session/agent-deselect!
+                      github.copilot-sdk.session/agent-reload!
+                      github.copilot-sdk.session/fleet-start!
+                      github.copilot-sdk.client/mcp-config-list
+                      github.copilot-sdk.client/mcp-config-add!
+                      github.copilot-sdk.client/mcp-config-update!
+                      github.copilot-sdk.client/mcp-config-remove!
                       github.copilot-sdk.session/ui-elicitation!
                       github.copilot-sdk.session/capabilities
                       github.copilot-sdk.session/elicitation-supported?
@@ -489,6 +584,24 @@
                       github.copilot-sdk.session/compaction-compact!
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
+                      github.copilot-sdk.session/mode-get
+                      github.copilot-sdk.session/mode-set!
+                      github.copilot-sdk.session/plan-read
+                      github.copilot-sdk.session/plan-update!
+                      github.copilot-sdk.session/plan-delete!
+                      github.copilot-sdk.session/workspace-list-files
+                      github.copilot-sdk.session/workspace-read-file
+                      github.copilot-sdk.session/workspace-create-file!
+                      github.copilot-sdk.session/agent-list
+                      github.copilot-sdk.session/agent-get-current
+                      github.copilot-sdk.session/agent-select!
+                      github.copilot-sdk.session/agent-deselect!
+                      github.copilot-sdk.session/agent-reload!
+                      github.copilot-sdk.session/fleet-start!
+                      github.copilot-sdk.client/mcp-config-list
+                      github.copilot-sdk.client/mcp-config-add!
+                      github.copilot-sdk.client/mcp-config-update!
+                      github.copilot-sdk.client/mcp-config-remove!
                       github.copilot-sdk.session/ui-elicitation!
                       github.copilot-sdk.session/capabilities
                       github.copilot-sdk.session/elicitation-supported?
