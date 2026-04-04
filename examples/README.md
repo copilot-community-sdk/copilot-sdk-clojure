@@ -92,8 +92,8 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs 14 examples that need only the Copilot CLI (examples 1–9 and 12–16).
-> Examples 10 (BYOK) and 11 (MCP) require external dependencies (API keys, Node.js) and must be run manually.
+> **Note:** `run-all-examples.sh` runs 16 examples that need only the Copilot CLI (examples 1–9, 12–16, 18, and 19).
+> Examples 10 (BYOK) and 11 (MCP) require external dependencies (API keys, Node.js), and example 17 (ask-user-failure) is excluded for reliability. Run these manually.
 
 With a custom CLI path:
 ```bash
@@ -834,7 +834,7 @@ clojure -A:examples -X elicitation-provider/run
 
 ### Code Walkthrough
 
-The handler receives a request map with `:message`, optional `:requested-schema` (JSON Schema), `:mode` (`"form"` or `"url"`), `:elicitation-source`, and `:url`. It returns an `ElicitationResult`:
+The handler receives a single `ElicitationContext` map with `:session-id`, `:message`, optional `:requested-schema` (JSON Schema), `:mode` (`"form"` or `"url"`), `:elicitation-source`, and `:url`. It returns an `ElicitationResult`:
 
 ```clojure
 {:action "accept"   ;; or "decline" or "cancel"

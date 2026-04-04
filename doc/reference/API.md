@@ -249,7 +249,6 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:large-output` | map | (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. |
 | `:working-directory` | string | Working directory for the session (tool operations relative to this) |
 | `:infinite-sessions` | map | Infinite session config (see below) |
-| `:env-value-mode` | string | Environment value mode. Defaults to `"direct"` (always sent). |
 | `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, or `"xhigh"` |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
@@ -1153,7 +1152,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.usage` | Token usage for this turn |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:mcp-server-name`, `:mcp-tool-name` |
+| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments`, `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name` |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed |
