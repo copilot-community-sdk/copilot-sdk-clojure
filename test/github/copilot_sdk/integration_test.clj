@@ -2078,16 +2078,21 @@
       (is (some #(= "session.agent.deselect" (:method %)) @requests)))))
 
 (deftest test-fleet-start
-  (testing "fleet-start! calls session.fleet.start RPC"
+  (testing "fleet-start! calls session.fleet.start RPC with session-id forced"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
               (fn [method params]
                 (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
-      (session/fleet-start! session {:prompt "do stuff"})
+                    {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)]
+      ;; Pass params that attempt to override session-id
+      (session/fleet-start! session {:prompt "do stuff" :session-id "evil-override"})
       (let [rpcs (filter #(= "session.fleet.start" (:method %)) @requests)]
-        (is (= 1 (count rpcs)))))))
+        (is (= 1 (count rpcs)))
+        ;; Session-id must be the real one, not the override
+        (is (= session-id (:sessionId (:params (first rpcs)))))
+        (is (= "do stuff" (:prompt (:params (first rpcs)))))))))
 
 (deftest test-mcp-config-list
   (testing "mcp-config-list calls mcp.config.list RPC"
