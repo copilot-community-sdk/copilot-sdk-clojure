@@ -47,6 +47,43 @@
   (testing "invalid states"
     (is (not (s/valid? ::specs/connection-state :invalid)))))
 
+(deftest session-error-data-spec-test
+  (testing "minimal valid session.error data"
+    (is (s/valid? ::specs/session.error-data
+                  {:error-type "authentication" :message "Auth failed"})))
+
+  (testing "with all optional fields"
+    (is (s/valid? ::specs/session.error-data
+                  {:error-type "quota"
+                   :message "Rate limit exceeded"
+                   :stack "at foo.bar (line 42)"
+                   :status-code 429
+                   :provider-call-id "abc-123-def"
+                   :url "https://example.com/billing"})))
+
+  (testing "with subset of optional fields"
+    (is (s/valid? ::specs/session.error-data
+                  {:error-type "query"
+                   :message "Context too large"
+                   :status-code 400})))
+
+  (testing "invalid: missing required fields"
+    (is (not (s/valid? ::specs/session.error-data {})))
+    (is (not (s/valid? ::specs/session.error-data {:error-type "auth"})))
+    (is (not (s/valid? ::specs/session.error-data {:message "fail"}))))
+
+  (testing "invalid: wrong types for optional fields"
+    (is (not (s/valid? ::specs/session.error-data
+                       {:error-type "auth" :message "fail" :status-code "not-a-number"})))
+    (is (not (s/valid? ::specs/session.error-data
+                       {:error-type "auth" :message "fail" :provider-call-id 123}))))
+
+  (testing "invalid: wrong types for required and pre-existing fields"
+    (is (not (s/valid? ::specs/session.error-data
+                       {:error-type 42 :message "fail"})))
+    (is (not (s/valid? ::specs/session.error-data
+                       {:error-type "auth" :message "fail" :stack 99})))))
+
 ;; =============================================================================
 ;; Client Tests
 ;; =============================================================================

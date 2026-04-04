@@ -1120,7 +1120,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 |------------|-------------|
 | `:copilot/session.start` | Session created |
 | `:copilot/session.resume` | Session resumed |
-| `:copilot/session.error` | Session error occurred |
+| `:copilot/session.error` | Session error occurred; data: `{:error-type "..." :message "..." :stack "..." :status-code 429 :provider-call-id "..." :url "..."}` (`:stack`, `:status-code`, `:provider-call-id`, `:url` optional) |
 | `:copilot/session.idle` | Session finished processing |
 | `:copilot/session.info` | Informational session update |
 | `:copilot/session.model_change` | Session model changed |
