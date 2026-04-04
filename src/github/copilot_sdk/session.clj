@@ -1268,7 +1268,7 @@
         conn (connection-io client)]
     (util/wire->clj
      (proto/send-request! conn "session.fleet.start"
-                          (merge {:session-id session-id} params)))))
+                          (assoc (merge {} params) :session-id session-id)))))
 
 ;; -- UI Elicitation ----------------------------------------------------------
 

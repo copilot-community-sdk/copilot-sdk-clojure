@@ -16,7 +16,7 @@ All notable changes to this project will be documented in this file. This change
 - **User input handler tests** — 2 tests for `userInput.request` server→client RPC
 - **System message transform tests** — 3 tests for `systemMessage.transform` callback invocation, error fallback, and passthrough
 - **Tool result normalization tests** — 3 tests for string, nil, and structured ToolResultObject results via v3 broadcast
-- **Session RPC wrapper tests** — 13 integration tests for all new RPC wrapper functions
+- **Session RPC wrapper tests** — 18 integration tests for all new RPC wrapper functions
 - **Mock server enhancements** — `send-rpc-request!` for testing server→client RPCs, response routing in server loop, 30+ new method stubs
 - Full `s/fdef` instrumentation for all 19 new public functions
 

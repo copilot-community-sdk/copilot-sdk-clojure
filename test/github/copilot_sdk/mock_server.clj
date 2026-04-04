@@ -348,7 +348,7 @@
                  "session.compaction.compact" {:success true}
                  "session.shell.exec" {:exitCode 0 :stdout "" :stderr ""}
                  "session.shell.kill" {:success true}
-                 "session.ui.elicitation" {:result {}}
+                 "session.ui.elicitation" {:action "accept" :content {}}
                  "mcp.config.list" {:servers []}
                  "mcp.config.add" {:success true}
                  "mcp.config.update" {:success true}
