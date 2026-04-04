@@ -108,7 +108,13 @@ At minimum:
 3. Push and create PR with `gh pr create`
 4. PR body should include: summary, changes list, validation results, review findings table
 
-### Phase 9: Skill Self-Review
+### Phase 9: Reflecing on code review feedback.
+
+Once the PR is created, Copilot Code Review (and possibly humans) will provide code review feedback.
+
+run: /pr auto Consider Copilot Code Review feedback. For each piece of feedback, determine if its valid and important, or invalid (false positive) and/or not important. For all valid feedback, address it. For each piece of feedback (valid or not), comment in the thread for that particular feedback comment and explain how you addressed the feedback or your rationale for not addressing, or a suggestion for addressing in the future (create issues for future/follow up). Once all feedback is addressed/commented, rerequest a review, and continue iterating this processes until there is no more code review feedback - you should keep iterating this process until you see a review from Copilot Code Review which generates no comments, but no more than 10 rounds (to avoid exploding costs). If more than 10 rounds is needed, prompt the users asking what to do next.
+
+### Phase 10: Skill Self-Review
 
 After each upstream sync, review this skill itself for accuracy and relevance:
 
