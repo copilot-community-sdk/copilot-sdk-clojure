@@ -2093,3 +2093,64 @@
           result (client/mcp-config-list *test-client*)]
       (is (some? result))
       (is (some #(= "mcp.config.list" (:method %)) @requests)))))
+
+(deftest test-mcp-config-add
+  (testing "mcp-config-add! calls mcp.config.add RPC with params"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-add! *test-client*
+                   {:name "my-server" :command "npx" :args ["-y" "server"]})]
+      (is (some? result))
+      (let [rpcs (filter #(= "mcp.config.add" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "my-server" (:name (:params (first rpcs)))))))))
+
+(deftest test-mcp-config-update
+  (testing "mcp-config-update! calls mcp.config.update RPC with params"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-update! *test-client*
+                   {:name "my-server" :tools ["read_file"]})]
+      (is (some? result))
+      (let [rpcs (filter #(= "mcp.config.update" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "my-server" (:name (:params (first rpcs)))))))))
+
+(deftest test-mcp-config-remove
+  (testing "mcp-config-remove! calls mcp.config.remove RPC with params"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          result (client/mcp-config-remove! *test-client* {:name "my-server"})]
+      (is (some? result))
+      (let [rpcs (filter #(= "mcp.config.remove" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "my-server" (:name (:params (first rpcs)))))))))
+
+(deftest test-agent-get-current
+  (testing "agent-get-current calls session.agent.getCurrent RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})
+          result (session/agent-get-current session)]
+      (is (some? result))
+      (is (some #(= "session.agent.getCurrent" (:method %)) @requests)))))
+
+(deftest test-agent-reload
+  (testing "agent-reload! calls session.agent.reload RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/agent-reload! session)
+      (is (some #(= "session.agent.reload" (:method %)) @requests)))))
