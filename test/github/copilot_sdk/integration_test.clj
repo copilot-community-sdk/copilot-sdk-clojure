@@ -1036,6 +1036,8 @@
   (testing "v3 permission.requested with resolvedByHook=true skips handler entirely"
     (let [handler-called? (atom false)
           requests (atom [])
+          ;; Use a latch to wait for the event to be delivered to the session
+          event-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
               (fn [method params]
                 (swap! requests conj {:method method :params params})))
@@ -1043,7 +1045,11 @@
                                       {:on-permission-request
                                        (fn [_request _ctx]
                                          (reset! handler-called? true)
-                                         {:kind :approved})})
+                                         {:kind :approved})
+                                       :on-event
+                                       (fn [event]
+                                         (when (= :copilot/permission.requested (:type event))
+                                           (.countDown event-latch)))})
           session-id (sdk/session-id session)]
       ;; Force protocol v3
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
@@ -1055,7 +1061,9 @@
                                  :permissionRequest {:permissionKind "shell"
                                                      :fullCommandText "echo test"}
                                  :resolvedByHook true})
-      (Thread/sleep 500)
+      ;; Wait for the event to be delivered (proves routing completed)
+      (is (.await event-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+          "timed out waiting for permission.requested event delivery")
       ;; Handler should NOT be called
       (is (false? @handler-called?)
           "permission handler should not be invoked when resolvedByHook is true")
@@ -1089,7 +1097,8 @@
                                  :permissionRequest {:permissionKind "shell"
                                                      :fullCommandText "echo test"}
                                  :resolvedByHook false})
-      (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+          "timed out waiting for handlePendingPermissionRequest RPC")
       (is (true? @handler-called?)
           "permission handler should be invoked when resolvedByHook is false")
       (is (= 1 (count (filter #(= "session.permissions.handlePendingPermissionRequest"
