@@ -1225,7 +1225,8 @@
 
 (defn ^:experimental mcp-config-add!
   "Add an MCP server configuration.
-   params is a map with server config (name, command, args, etc.)."
+   params is a map with server config using plain keys (:name, :command, :args,
+   :tools, etc.) — NOT the :mcp-prefixed keys used in session config :mcp-servers."
   [client params]
   (ensure-connected! client)
   (let [conn (:connection-io @(:state client))]
@@ -1234,7 +1235,7 @@
 
 (defn ^:experimental mcp-config-update!
   "Update an MCP server configuration.
-   params is a map with server config to update."
+   params is a map with server config using plain keys (see mcp-config-add!)."
   [client params]
   (ensure-connected! client)
   (let [conn (:connection-io @(:state client))]
@@ -1243,7 +1244,7 @@
 
 (defn ^:experimental mcp-config-remove!
   "Remove an MCP server configuration.
-   params is a map identifying the server to remove."
+   params is a map identifying the server using plain keys (see mcp-config-add!)."
   [client params]
   (ensure-connected! client)
   (let [conn (:connection-io @(:state client))]
