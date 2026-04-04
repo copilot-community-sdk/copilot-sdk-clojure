@@ -486,6 +486,28 @@ Each quota snapshot map contains:
 | `:overage-allowed-with-exhausted-quota?` | boolean | Whether overage is allowed when quota is exhausted |
 | `:reset-date` | string (optional) | ISO 8601 date when quota resets |
 
+#### `mcp-config-list` / `mcp-config-add!` / `mcp-config-update!` / `mcp-config-remove!`
+
+> **Experimental:** These wrap server-level MCP configuration RPCs and may change.
+
+```clojure
+;; List configured MCP servers
+(copilot/mcp-config-list client)
+;; => {:servers [...]}
+
+;; Add a new MCP server config
+(copilot/mcp-config-add! client {:name "my-server"
+                                  :command "npx"
+                                  :args ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]
+                                  :tools ["*"]})
+
+;; Update an existing config
+(copilot/mcp-config-update! client {:name "my-server" :tools ["read_file"]})
+
+;; Remove a config
+(copilot/mcp-config-remove! client {:name "my-server"})
+```
+
 #### `state`
 
 ```clojure
@@ -930,6 +952,32 @@ Get the client that owns this session.
 ;; Enable/disable MCP servers
 (session/mcp-enable! my-session "my-server")
 (session/mcp-disable! my-session "my-server")
+
+;; Get/set agent mode
+(session/mode-get my-session)
+;; => {:mode "interactive"}
+(session/mode-set! my-session "plan")
+
+;; Read/update session plan
+(session/plan-read my-session)
+;; => {:exists? true :content "# Plan\n..." :file-path "/path/to/plan.md"}
+(session/plan-update! my-session "# Updated Plan\n...")
+(session/plan-delete! my-session)
+
+;; Workspace file operations
+(session/workspace-list-files my-session)
+;; => {:files ["notes.md" "data.json"]}
+(session/workspace-read-file my-session "notes.md")
+;; => {:content "..."}
+(session/workspace-create-file! my-session "output.txt" "result data")
+
+;; Custom agent management
+(session/agent-list my-session)
+;; => {:agents [{:name "researcher" ...} ...]}
+(session/agent-select! my-session "researcher")
+(session/agent-get-current my-session)
+;; => {:name "researcher"}
+(session/agent-deselect! my-session)
 ```
 
 **Skills**
@@ -958,6 +1006,45 @@ Get the client that owns this session.
 | `session/extensions-enable!` | Enable an extension by ID. |
 | `session/extensions-disable!` | Disable an extension by ID. |
 | `session/extensions-reload!` | Reload all extensions. |
+
+**Mode**
+
+| Function | Description |
+|----------|-------------|
+| `session/mode-get` | Get current agent mode. Returns `{:mode "interactive"\|"plan"\|"autopilot"}`. |
+| `session/mode-set!` | Set agent mode. Accepts `"interactive"`, `"plan"`, or `"autopilot"`. |
+
+**Plan**
+
+| Function | Description |
+|----------|-------------|
+| `session/plan-read` | Read the session plan file. Returns `{:exists? :content :file-path}`. |
+| `session/plan-update!` | Update the plan file content. |
+| `session/plan-delete!` | Delete the plan file. |
+
+**Workspace**
+
+| Function | Description |
+|----------|-------------|
+| `session/workspace-list-files` | List files in the session workspace. Returns `{:files [...]}`. |
+| `session/workspace-read-file` | Read a workspace file by relative path. Returns `{:content "..."}`. |
+| `session/workspace-create-file!` | Create a file in the workspace with given path and content. |
+
+**Agents**
+
+| Function | Description |
+|----------|-------------|
+| `session/agent-list` | List available custom agents. Returns `{:agents [...]}`. |
+| `session/agent-get-current` | Get the currently selected agent. Returns `{:name "..."}` or `{:name nil}`. |
+| `session/agent-select!` | Select a custom agent by name. |
+| `session/agent-deselect!` | Deselect the current custom agent. |
+| `session/agent-reload!` | Reload all custom agents. |
+
+**Fleet**
+
+| Function | Description |
+|----------|-------------|
+| `session/fleet-start!` | Start parallel sub-sessions. Accepts a params map. |
 
 **Other**
 
