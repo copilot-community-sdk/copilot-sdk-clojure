@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file. This change
   - `mode-get`, `mode-set!` — get/set agent mode (interactive/plan/autopilot)
   - `plan-read`, `plan-update!`, `plan-delete!` — read/update/delete session plan file
   - `workspace-list-files`, `workspace-read-file`, `workspace-create-file!` — session workspace file operations
-  - `agent-list`, `agent-get-current`, `agent-select!`, `agent-deselect!`, `agent-reload!` — custom agent CRUD
+  - `agent-list`, `agent-get-current`, `agent-select!`, `agent-deselect!`, `agent-reload!` — custom agent management
   - `fleet-start!` — start parallel sub-sessions
 - **MCP config wrappers** — new experimental server-level functions in `client`:
   - `mcp-config-list`, `mcp-config-add!`, `mcp-config-update!`, `mcp-config-remove!` — MCP server configuration management
