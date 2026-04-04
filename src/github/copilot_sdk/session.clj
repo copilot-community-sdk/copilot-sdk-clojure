@@ -1158,9 +1158,14 @@
    and :file-path (string or nil)."
   [session]
   (let [{:keys [session-id client]} session
-        conn (connection-io client)]
-    (util/wire->clj
-     (proto/send-request! conn "session.plan.read" {:sessionId session-id}))))
+        conn (connection-io client)
+        result (util/wire->clj
+                (proto/send-request! conn "session.plan.read" {:sessionId session-id}))]
+    (if (contains? result :exists)
+      (-> result
+          (assoc :exists? (:exists result))
+          (dissoc :exists))
+      result)))
 
 (defn ^:experimental plan-update!
   "Update the plan file content for the session."
@@ -1263,7 +1268,7 @@
         conn (connection-io client)]
     (util/wire->clj
      (proto/send-request! conn "session.fleet.start"
-                          (merge {:sessionId session-id} (util/clj->wire params))))))
+                          (merge {:session-id session-id} params)))))
 
 ;; -- UI Elicitation ----------------------------------------------------------
 

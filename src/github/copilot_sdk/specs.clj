@@ -625,7 +625,7 @@
           :opt-un [::selected-model ::reasoning-effort ::already-in-use? ::remote-steerable?
                    ::host-type ::head-commit ::base-commit]))
 
-(s/def ::status-code int?)
+(s/def ::status-code integer?)
 (s/def ::provider-call-id string?)
 (s/def ::error-type string?)
 (s/def ::stack string?)

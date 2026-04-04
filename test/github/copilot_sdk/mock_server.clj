@@ -371,17 +371,22 @@
     (while @(:running? server)
       (if-let [msg (read-message (:reader server))]
         (if (:method msg)
-          ;; It's a request — handle it
-          (try
-            (let [response (handle-request server msg)]
-              (write-message (:writer server) response))
-            (catch Exception e
-              (let [error-data (ex-data e)]
-                (write-message (:writer server)
-                               {:jsonrpc "2.0"
-                                :id (:id msg)
-                                :error {:code (or (:code error-data) -32603)
-                                        :message (.getMessage e)}}))))
+          (if (contains? msg :id)
+            ;; It's a request (has :method and :id) — handle it and respond
+            (try
+              (let [response (handle-request server msg)]
+                (write-message (:writer server) response))
+              (catch Exception e
+                (let [error-data (ex-data e)]
+                  (write-message (:writer server)
+                                 {:jsonrpc "2.0"
+                                  :id (:id msg)
+                                  :error {:code (or (:code error-data) -32603)
+                                          :message (.getMessage e)}}))))
+            ;; It's a notification (has :method but no :id) — process silently
+            (try
+              (handle-request server msg)
+              (catch Exception _ nil)))
           ;; It's a response to a server→client RPC — deliver to pending promise
           (when-let [id (:id msg)]
             (when-let [response-ch (get @(:pending-responses server) id)]
@@ -515,7 +520,8 @@
    Simulates server→client RPCs like hooks.invoke, userInput.request,
    systemMessage.transform. Blocks until the client responds or timeout.
    Must NOT be called from the mock server's server-loop thread.
-   Returns the response map (:result or :error)."
+   Returns the full JSON-RPC response map on success.
+   Throws ex-info on timeout or when the client responds with :error."
   [server method params & {:keys [timeout-ms] :or {timeout-ms 5000}}]
   (let [id (generate-id (:message-id server))
         response-ch (chan 1)]

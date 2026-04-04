@@ -1230,7 +1230,7 @@
   (ensure-connected! client)
   (let [conn (:connection-io @(:state client))]
     (util/wire->clj
-     (proto/send-request! conn "mcp.config.add" (util/clj->wire params)))))
+     (proto/send-request! conn "mcp.config.add" params))))
 
 (defn ^:experimental mcp-config-update!
   "Update an MCP server configuration.
@@ -1239,7 +1239,7 @@
   (ensure-connected! client)
   (let [conn (:connection-io @(:state client))]
     (util/wire->clj
-     (proto/send-request! conn "mcp.config.update" (util/clj->wire params)))))
+     (proto/send-request! conn "mcp.config.update" params))))
 
 (defn ^:experimental mcp-config-remove!
   "Remove an MCP server configuration.
@@ -1248,7 +1248,7 @@
   (ensure-connected! client)
   (let [conn (:connection-io @(:state client))]
     (util/wire->clj
-     (proto/send-request! conn "mcp.config.remove" (util/clj->wire params)))))
+     (proto/send-request! conn "mcp.config.remove" params))))
 
 (defn- validate-session-config!
   "Validate session config, throwing on invalid input."

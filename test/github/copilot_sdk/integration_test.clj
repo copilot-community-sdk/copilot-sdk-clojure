@@ -1962,7 +1962,7 @@
         (is (= "plan" (:mode (:params (first mode-rpcs)))))))))
 
 (deftest test-plan-read
-  (testing "plan-read calls session.plan.read RPC"
+  (testing "plan-read calls session.plan.read RPC and returns normalized shape"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
               (fn [method params]
@@ -1971,7 +1971,12 @@
                     {:on-permission-request sdk/approve-all})]
       (let [result (session/plan-read session)]
         (is (some? result))
-        (is (some #(= "session.plan.read" (:method %)) @requests))))))
+        (is (some #(= "session.plan.read" (:method %)) @requests))
+        ;; Mock returns {:exists false :content nil :filePath nil}
+        ;; plan-read renames :exists → :exists? and wire->clj converts :filePath → :file-path
+        (is (contains? result :exists?) ":exists key should be renamed to :exists?")
+        (is (false? (:exists? result)))
+        (is (nil? (:content result)))))))
 
 (deftest test-plan-update
   (testing "plan-update! calls session.plan.update RPC with content"
