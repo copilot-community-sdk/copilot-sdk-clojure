@@ -22,7 +22,7 @@ Sync the copilot-sdk-clojure project with upstream [github/copilot-sdk](https://
    ```
 4. For each commit, classify:
    - **Port** — Code changes to `nodejs/src/` (types, client, session, generated)
-   - **Skip** — CI/tooling, docs-only, language-specific (Python/Go/.NET only)
+   - **Skip** — CI/tooling, language-specific (Python/Go/.NET only)
 
 ### Phase 2: Gap Analysis
 
@@ -54,7 +54,7 @@ Show the plan to the user. Wait for approval before implementing.
 For each code/spec change:
 
 1. **RED** — Write a failing test first in `test/github/copilot_sdk/integration_test.clj`
-2. Run tests: `bb test` — confirm failure
+2. Run tests: `bb test` — confirm failure (it's OK to just run the tests you added as you iterate)
 3. **GREEN** — Implement the minimal change in `src/`
 4. Run tests again — confirm all pass (0 failures)
 
@@ -76,7 +76,7 @@ Carefully review example output for regressions.
 
 ### Phase 6: Multi-Model Code Review
 
-Launch parallel code-review agents using at least three distinct model families (e.g., Claude, GPT, Gemini). Different model families catch different categories of issues — use whichever specific models are currently available.
+Launch parallel code-review agents using at least three distinct model families (e.g., Claude Opus 4.6, GPT-5.4, and Gemini 3 Pro - or later if available). Different model families catch different categories of issues — use whichever specific models are currently available.
 
 Each reviewer gets the same context: what changed, why, and what to focus on (correctness, spec completeness, test coverage, Clojure idioms, wire conversion accuracy).
 
@@ -94,7 +94,7 @@ Iterate: fix → re-test → re-review until no actionable findings remain.
 
 ### Phase 7: Documentation
 
-Invoke the `update-docs` skill (or do manually). See `AGENTS.md` § Documentation for the full list of doc files that may need updating.
+Invoke the `update-docs` skill. See `AGENTS.md` § Documentation for the full list of doc files that may need updating.
 
 At minimum:
 1. Update `doc/reference/API.md` — new specs, event fields, behavior changes
@@ -104,7 +104,7 @@ At minimum:
 ### Phase 8: PR Creation
 
 1. Create a feature branch: `git checkout -b upstream-sync/v<version>`
-2. Commit with descriptive message and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+2. Commit changes in logical commits to make them easy to review commit by commit and with descriptive message and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 3. Push and create PR with `gh pr create`
 4. PR body should include: summary, changes list, validation results, review findings table
 
