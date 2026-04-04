@@ -64,7 +64,8 @@
             message-id         ; AtomicLong for generating IDs
      ;; Hooks for testing
             on-request         ; atom fn - called for each request
-            pending-events])   ; atom - events to send on next opportunity
+            pending-events     ; atom - events to send on next opportunity
+            pending-responses]) ; atom {id -> chan} - responses to server→client RPCs
 
 (defn- generate-id [^AtomicLong counter]
   (str "evt-" (.incrementAndGet counter)))
@@ -315,6 +316,43 @@
                  "session.log" (handle-session-log server params)
                  "session.permissions.handlePendingPermissionRequest" {:ok true}
                  "session.commands.handlePendingCommand" {:ok true}
+                 "session.tools.handlePendingToolCall" {:ok true}
+                 "session.ui.handlePendingElicitation" {:ok true}
+                 "session.mode.get" {:mode "interactive"}
+                 "session.mode.set" {:mode (get params :mode "interactive")}
+                 "session.plan.read" {:exists false :content nil :filePath nil}
+                 "session.plan.update" {:success true}
+                 "session.plan.delete" {:success true}
+                 "session.workspace.listFiles" {:files []}
+                 "session.workspace.readFile" {:content ""}
+                 "session.workspace.createFile" {:success true}
+                 "session.agent.list" {:agents []}
+                 "session.agent.getCurrent" {:name nil}
+                 "session.agent.select" {:success true}
+                 "session.agent.deselect" {:success true}
+                 "session.agent.reload" {:success true}
+                 "session.fleet.start" {:success true}
+                 "session.skills.list" {:skills []}
+                 "session.skills.enable" {:success true}
+                 "session.skills.disable" {:success true}
+                 "session.skills.reload" {:success true}
+                 "session.mcp.list" {:servers []}
+                 "session.mcp.enable" {:success true}
+                 "session.mcp.disable" {:success true}
+                 "session.mcp.reload" {:success true}
+                 "session.extensions.list" {:extensions []}
+                 "session.extensions.enable" {:success true}
+                 "session.extensions.disable" {:success true}
+                 "session.extensions.reload" {:success true}
+                 "session.plugins.list" {:plugins []}
+                 "session.compaction.compact" {:success true}
+                 "session.shell.exec" {:exitCode 0 :stdout "" :stderr ""}
+                 "session.shell.kill" {:success true}
+                 "session.ui.elicitation" {:result {}}
+                 "mcp.config.list" {:servers []}
+                 "mcp.config.add" {:success true}
+                 "mcp.config.update" {:success true}
+                 "mcp.config.remove" {:success true}
                  (throw (ex-info "Method not found" {:code -32601 :method method})))
         ;; Merge hook-provided data into result only when hook returns ::merge-response
         ;; This prevents accidental response mutation from spy hooks (e.g. swap! return values)
@@ -332,16 +370,23 @@
   (try
     (while @(:running? server)
       (if-let [msg (read-message (:reader server))]
-        (try
-          (let [response (handle-request server msg)]
-            (write-message (:writer server) response))
-          (catch Exception e
-            (let [error-data (ex-data e)]
-              (write-message (:writer server)
-                             {:jsonrpc "2.0"
-                              :id (:id msg)
-                              :error {:code (or (:code error-data) -32603)
-                                      :message (.getMessage e)}}))))
+        (if (:method msg)
+          ;; It's a request — handle it
+          (try
+            (let [response (handle-request server msg)]
+              (write-message (:writer server) response))
+            (catch Exception e
+              (let [error-data (ex-data e)]
+                (write-message (:writer server)
+                               {:jsonrpc "2.0"
+                                :id (:id msg)
+                                :error {:code (or (:code error-data) -32603)
+                                        :message (.getMessage e)}}))))
+          ;; It's a response to a server→client RPC — deliver to pending promise
+          (when-let [id (:id msg)]
+            (when-let [response-ch (get @(:pending-responses server) id)]
+              (put! response-ch msg)
+              (swap! (:pending-responses server) dissoc id))))
         ;; EOF or closed - exit loop
         (reset! (:running? server) false)))
     (catch Exception e
@@ -370,7 +415,8 @@
       :sessions (atom {})
       :message-id (AtomicLong. 0)
       :on-request (atom nil)
-      :pending-events (atom [])})))
+      :pending-events (atom [])
+      :pending-responses (atom {})})))
 
 (defn start-mock-server!
   "Start the mock server in a background thread."
@@ -463,3 +509,30 @@
   "Set context on a mock session (for testing list-sessions with context)."
   [server session-id context]
   (swap! (:sessions server) assoc-in [session-id :context] context))
+
+(defn send-rpc-request!
+  "Send a JSON-RPC request to the client and wait for the response.
+   Simulates server→client RPCs like hooks.invoke, userInput.request,
+   systemMessage.transform. Blocks until the client responds or timeout.
+   Must NOT be called from the mock server's server-loop thread.
+   Returns the response map (:result or :error)."
+  [server method params & {:keys [timeout-ms] :or {timeout-ms 5000}}]
+  (let [id (generate-id (:message-id server))
+        response-ch (chan 1)]
+    (swap! (:pending-responses server) assoc id response-ch)
+    (write-message (:writer server)
+                   {:jsonrpc "2.0"
+                    :id id
+                    :method method
+                    :params params})
+    (let [[result _] (async/alts!! [response-ch (async/timeout timeout-ms)])]
+      (swap! (:pending-responses server) dissoc id)
+      (close! response-ch)
+      (if (nil? result)
+        (throw (ex-info "Timed out waiting for RPC response"
+                        {:method method :timeout-ms timeout-ms}))
+        (if (:error result)
+          (throw (ex-info (get-in result [:error :message] "RPC error")
+                          {:code (get-in result [:error :code])
+                           :data (get-in result [:error :data])}))
+          result)))))
