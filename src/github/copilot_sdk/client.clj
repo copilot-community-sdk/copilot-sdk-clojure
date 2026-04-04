@@ -1210,6 +1210,46 @@
                           (:reset-date v) (assoc :reset-date (:reset-date v)))))
                {} snapshots)))
 
+;; ---------------------------------------------------------------------------
+;; MCP Config RPCs (server-level, not session-scoped)
+;; ---------------------------------------------------------------------------
+
+(defn ^:experimental mcp-config-list
+  "List all MCP server configurations.
+   Returns a map with :servers (vector of server config maps)."
+  [client]
+  (ensure-connected! client)
+  (let [conn (:connection-io @(:state client))]
+    (util/wire->clj
+     (proto/send-request! conn "mcp.config.list" {}))))
+
+(defn ^:experimental mcp-config-add!
+  "Add an MCP server configuration.
+   params is a map with server config (name, command, args, etc.)."
+  [client params]
+  (ensure-connected! client)
+  (let [conn (:connection-io @(:state client))]
+    (util/wire->clj
+     (proto/send-request! conn "mcp.config.add" (util/clj->wire params)))))
+
+(defn ^:experimental mcp-config-update!
+  "Update an MCP server configuration.
+   params is a map with server config to update."
+  [client params]
+  (ensure-connected! client)
+  (let [conn (:connection-io @(:state client))]
+    (util/wire->clj
+     (proto/send-request! conn "mcp.config.update" (util/clj->wire params)))))
+
+(defn ^:experimental mcp-config-remove!
+  "Remove an MCP server configuration.
+   params is a map identifying the server to remove."
+  [client params]
+  (ensure-connected! client)
+  (let [conn (:connection-io @(:state client))]
+    (util/wire->clj
+     (proto/send-request! conn "mcp.config.remove" (util/clj->wire params)))))
+
 (defn- validate-session-config!
   "Validate session config, throwing on invalid input."
   [config]

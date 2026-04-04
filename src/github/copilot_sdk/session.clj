@@ -1130,6 +1130,141 @@
     (proto/send-request! conn "session.shell.kill"
                          {:sessionId session-id :processId process-id})))
 
+;; -- Mode -------------------------------------------------------------------
+
+(defn ^:experimental mode-get
+  "Get the current agent mode for the session.
+   Returns a map with :mode (\"interactive\", \"plan\", or \"autopilot\")."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.mode.get" {:sessionId session-id}))))
+
+(defn ^:experimental mode-set!
+  "Set the agent mode for the session.
+   mode should be \"interactive\", \"plan\", or \"autopilot\"."
+  [session mode]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.mode.set" {:sessionId session-id :mode mode}))))
+
+;; -- Plan -------------------------------------------------------------------
+
+(defn ^:experimental plan-read
+  "Read the plan file for the session.
+   Returns a map with :exists? (boolean), :content (string or nil),
+   and :file-path (string or nil)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.plan.read" {:sessionId session-id}))))
+
+(defn ^:experimental plan-update!
+  "Update the plan file content for the session."
+  [session content]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.plan.update" {:sessionId session-id :content content}))))
+
+(defn ^:experimental plan-delete!
+  "Delete the plan file for the session."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.plan.delete" {:sessionId session-id}))))
+
+;; -- Workspace --------------------------------------------------------------
+
+(defn ^:experimental workspace-list-files
+  "List files in the session workspace directory.
+   Returns a map with :files (vector of relative file paths)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.workspace.listFiles" {:sessionId session-id}))))
+
+(defn ^:experimental workspace-read-file
+  "Read a file from the session workspace.
+   path is relative to the workspace files directory.
+   Returns a map with :content (string)."
+  [session path]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.workspace.readFile" {:sessionId session-id :path path}))))
+
+(defn ^:experimental workspace-create-file!
+  "Create a file in the session workspace.
+   path is relative to the workspace files directory."
+  [session path content]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.workspace.createFile"
+                          {:sessionId session-id :path path :content content}))))
+
+;; -- Agent ------------------------------------------------------------------
+
+(defn ^:experimental agent-list
+  "List all custom agents available to the session.
+   Returns a map with :agents (vector of agent info maps)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.agent.list" {:sessionId session-id}))))
+
+(defn ^:experimental agent-get-current
+  "Get the currently active custom agent for the session.
+   Returns a map with :name (string or nil)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.agent.getCurrent" {:sessionId session-id}))))
+
+(defn ^:experimental agent-select!
+  "Select a custom agent by name."
+  [session agent-name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.agent.select" {:sessionId session-id :name agent-name}))))
+
+(defn ^:experimental agent-deselect!
+  "Deselect the current custom agent."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.agent.deselect" {:sessionId session-id}))))
+
+(defn ^:experimental agent-reload!
+  "Reload all custom agents."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.agent.reload" {:sessionId session-id}))))
+
+;; -- Fleet ------------------------------------------------------------------
+
+(defn ^:experimental fleet-start!
+  "Start a fleet of parallel sub-sessions.
+   params is a map forwarded to the session.fleet.start RPC."
+  [session params]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.fleet.start"
+                          (merge {:sessionId session-id} (util/clj->wire params))))))
+
 ;; -- UI Elicitation ----------------------------------------------------------
 
 (defn capabilities

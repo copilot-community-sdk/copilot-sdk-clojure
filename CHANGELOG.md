@@ -3,6 +3,26 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added
+- **Session RPC wrappers** — new experimental functions for session-level RPCs previously only accessible via `proto/send-request!`:
+  - `mode-get`, `mode-set!` — get/set agent mode (interactive/plan/autopilot)
+  - `plan-read`, `plan-update!`, `plan-delete!` — read/update/delete session plan file
+  - `workspace-list-files`, `workspace-read-file`, `workspace-create-file!` — session workspace file operations
+  - `agent-list`, `agent-get-current`, `agent-select!`, `agent-deselect!`, `agent-reload!` — custom agent CRUD
+  - `fleet-start!` — start parallel sub-sessions
+- **MCP config wrappers** — new experimental server-level functions in `client`:
+  - `mcp-config-list`, `mcp-config-add!`, `mcp-config-update!`, `mcp-config-remove!` — MCP server configuration management
+- **Hooks integration tests** — 6 tests covering all hook types (preToolUse, postToolUse, sessionStart, unknownType, handler exceptions, no-hooks)
+- **User input handler tests** — 2 tests for `userInput.request` server→client RPC
+- **System message transform tests** — 3 tests for `systemMessage.transform` callback invocation, error fallback, and passthrough
+- **Tool result normalization tests** — 3 tests for string, nil, and structured ToolResultObject results via v3 broadcast
+- **Session RPC wrapper tests** — 13 integration tests for all new RPC wrapper functions
+- **Mock server enhancements** — `send-rpc-request!` for testing server→client RPCs, response routing in server loop, 30+ new method stubs
+- Full `s/fdef` instrumentation for all 19 new public functions
+
+### Changed (v0.2.1 sync)
+- **`session.error` event data spec enriched** — optional `:status-code` (int), `:provider-call-id` (string), and `:url` (string) fields added to `::session.error-data` spec. These fields carry HTTP status codes, GitHub request tracing IDs, and actionable URLs from upstream error events (upstream PR #999, runtime 1.0.17).
+
 ## [0.2.1.0] - 2026-04-04
 ### Added (v0.2.1 sync)
 - **`resolvedByHook` guard on `permission.requested`** — when the runtime resolves a permission request via a `permissionRequest` hook, the broadcast event includes `resolvedByHook: true`. The SDK now skips the client's `:on-permission-request` handler and does not send the `handlePendingPermissionRequest` RPC, preventing duplicate responses. Event subscribers still observe the event (upstream PR #999, runtime 1.0.17).
