@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+## [0.2.1.1] - 2026-04-04
 ### Added
 - **Session RPC wrappers** — new experimental functions for session-level RPCs previously only accessible via `proto/send-request!`:
   - `mode-get`, `mode-set!` — get/set agent mode (interactive/plan/autopilot)
@@ -410,7 +411,8 @@ All notable changes to this project will be documented in this file. This change
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.0...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.1...HEAD
+[0.2.1.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.0...v0.2.1.1
 [0.2.1.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.1-SNAPSHOT...v0.2.1.0
 [0.2.1.1-SNAPSHOT]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.0.0...v0.2.1.1-SNAPSHOT
 [0.2.0.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.1.33.0-SNAPSHOT...v0.2.0.0
