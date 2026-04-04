@@ -92,8 +92,8 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs 14 examples that need only the Copilot CLI (examples 1–9 and 12–16).
-> Examples 10 (BYOK) and 11 (MCP) require external dependencies (API keys, Node.js) and must be run manually.
+> **Note:** `run-all-examples.sh` runs 16 examples that need only the Copilot CLI (examples 1–9, 12–16, 18, and 19).
+> Examples 10 (BYOK) and 11 (MCP) require external dependencies (API keys, Node.js), and example 17 (ask-user-failure) is excluded for reliability. Run these manually.
 
 With a custom CLI path:
 ```bash
@@ -834,7 +834,7 @@ clojure -A:examples -X elicitation-provider/run
 
 ### Code Walkthrough
 
-The handler receives a request map with `:message`, optional `:requested-schema` (JSON Schema), `:mode` (`"form"` or `"url"`), `:elicitation-source`, and `:url`. It returns an `ElicitationResult`:
+The handler receives a single `ElicitationContext` map with `:session-id`, `:message`, optional `:requested-schema` (JSON Schema), `:mode` (`"form"` or `"url"`), `:elicitation-source`, and `:url`. It returns an `ElicitationResult`:
 
 ```clojure
 {:action "accept"   ;; or "decline" or "cancel"
@@ -842,6 +842,40 @@ The handler receives a request map with `:message`, optional `:requested-schema`
 ```
 
 If the handler throws, the SDK sends `{:action "cancel"}` to prevent hanging. In a real application, the handler would render a UI dialog or open a browser for OAuth flows.
+
+---
+
+## Example 19: Commands (`commands.clj`)
+
+**Difficulty**: Intermediate
+**Features**: Slash commands, command definitions, session config
+
+Demonstrates how to register slash commands on a session via the `:commands` option. Commands allow users to invoke named actions via `/command-name` in chat.
+
+```bash
+clojure -A:examples -X commands/run
+```
+
+### Code Walkthrough
+
+Each command is defined as a map with `:name`, optional `:description`, and a `:command-handler` function. The handler receives a `CommandContext` map:
+
+```clojure
+{:session-id "..."
+ :command-name "status"
+ :command "/status"
+ :args ""}
+```
+
+Commands are registered by passing them in the session config:
+
+```clojure
+(copilot/create-session client
+  {:commands [{:name "status"
+               :description "Show session status"
+               :command-handler handle-status}]
+   :on-permission-request copilot/approve-all})
+```
 
 ---
 

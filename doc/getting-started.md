@@ -1,5 +1,7 @@
 # Getting Started with the Copilot SDK for Clojure
 
+> **Note:** This SDK is in [public preview](https://github.blog/changelog/2026-04-02-copilot-sdk-in-public-preview/) and may change in breaking ways.
+
 In this tutorial, you'll use the Copilot SDK for Clojure to build a command-line assistant. You'll start with the basics, add streaming responses, then add custom tools — giving Copilot the ability to call your code.
 
 **What you'll build:**
@@ -18,7 +20,7 @@ Q: How about Tokyo?
 Before you begin, make sure you have:
 
 - **GitHub Copilot CLI** installed and authenticated ([Installation guide](https://docs.github.com/en/copilot/how-tos/set-up/install-copilot-cli))
-- **Clojure** 1.11+ with the `clojure` CLI tool
+- **Clojure** 1.12+ with the `clojure` CLI tool
 - **Java** 11+
 
 Verify the CLI is working:
@@ -32,7 +34,7 @@ copilot --version
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "LATEST"}}}
+{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.2.1.1-SNAPSHOT"}}}
 ```
 
 Or use as a Git dependency:
@@ -40,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "LATEST_SHA"}}}
+         :git/sha "7a30402b9bd843494752c46a18ff7f2fec27a620"}}}
 ```
 
 ## Step 2: Send Your First Message
@@ -82,6 +84,7 @@ Right now, you wait for the complete response before seeing anything. Let's make
 ### Using Lazy Sequences
 
 ```clojure
+(require '[github.copilot-sdk :as copilot])
 (require '[github.copilot-sdk.helpers :as h])
 
 (defmulti handle-event :type)

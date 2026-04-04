@@ -73,7 +73,7 @@
 <tr><th> Key </th><th> Type </th><th> Default </th><th> Description </th></tr>
 </thead>
 <tbody>
-<tr><td> <code>:cli-path</code> </td><td> string </td><td> <code>"copilot"</code> </td><td> Path to CLI executable </td></tr>
+<tr><td> <code>:cli-path</code> </td><td> string </td><td> <code>"copilot"</code> </td><td> Path to CLI executable. Falls back to <code>COPILOT_CLI_PATH</code> env var when not set </td></tr>
 <tr><td> <code>:cli-args</code> </td><td> vector </td><td> <code>[]</code> </td><td> Extra arguments prepended before SDK-managed flags </td></tr>
 <tr><td> <code>:cli-url</code> </td><td> string </td><td> nil </td><td> URL of existing CLI server (e.g., <code>"localhost:8080"</code>). When provided, no CLI process is spawned </td></tr>
 <tr><td> <code>:port</code> </td><td> number </td><td> <code>0</code> </td><td> Server port (0 = random) </td></tr>
@@ -90,6 +90,7 @@
 <tr><td> <code>:use-logged-in-user?</code> </td><td> boolean </td><td> <code>true</code> </td><td> Use logged-in user auth. Defaults to <code>false</code> when <code>:github-token</code> is provided. Cannot be used with <code>:cli-url</code> </td></tr>
 <tr><td> <code>:on-list-models</code> </td><td> fn </td><td> nil </td><td> Zero-arg function returning model info maps. Bypasses <code>models.list</code> RPC; does not require <code>start!</code>. Results are cached the same way as RPC results </td></tr>
 <tr><td> <code>:is-child-process?</code> </td><td> boolean </td><td> <code>false</code> </td><td> When <code>true</code>, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires <code>:use-stdio?</code> <code>true</code>; mutually exclusive with <code>:cli-url</code> </td></tr>
+<tr><td> <code>:session-fs</code> </td><td> map </td><td> nil </td><td> Session filesystem provider config. Keys: <code>:initial-cwd</code> (string, required), <code>:session-state-path</code> (string, required), <code>:conventions</code> (<code>"windows"</code> or <code>"posix"</code>, required). When set, the client calls <code>sessionFs.setProvider</code> on connect and routes filesystem operations through per-session handlers. See <a href="#session-filesystem">Session Filesystem</a> </td></tr>
 </tbody>
 </table>
 <h3><a href="#methods" id="methods"></a>Methods</h3>
@@ -168,6 +169,7 @@
 <tr><td> <code>:excluded-tools</code> </td><td> vector </td><td> List of excluded tool names </td></tr>
 <tr><td> <code>:provider</code> </td><td> map </td><td> Provider config for BYOK (see <a href="../auth/byok.html">BYOK docs</a>). Required key: <code>:base-url</code>. Optional: <code>:provider-type</code> (<code>:openai</code>/<code>:azure</code>/<code>:anthropic</code>), <code>:wire-api</code> (<code>:completions</code>/<code>:responses</code>), <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code> </td></tr>
 <tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by server ID (see <a href="../mcp/overview.html">MCP docs</a>). Local servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code> </td></tr>
+<tr><td> <code>:commands</code> </td><td> vector </td><td> Command definitions (slash commands). See <a href="#commands">Commands</a> </td></tr>
 <tr><td> <code>:custom-agents</code> </td><td> vector </td><td> Custom agent configs </td></tr>
 <tr><td> <code>:on-permission-request</code> </td><td> fn </td><td> <strong>Required.</strong> Permission handler function. Use <code>copilot/approve-all</code> to approve everything. </td></tr>
 <tr><td> <code>:streaming?</code> </td><td> boolean </td><td> Enable streaming deltas </td></tr>
@@ -177,12 +179,13 @@
 <tr><td> <code>:large-output</code> </td><td> map </td><td> (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. </td></tr>
 <tr><td> <code>:working-directory</code> </td><td> string </td><td> Working directory for the session (tool operations relative to this) </td></tr>
 <tr><td> <code>:infinite-sessions</code> </td><td> map </td><td> Infinite session config (see below) </td></tr>
-<tr><td> <code>:env-value-mode</code> </td><td> string </td><td> Environment value mode. Defaults to <code>"direct"</code> (always sent). </td></tr>
 <tr><td> <code>:reasoning-effort</code> </td><td> string </td><td> Reasoning effort level: <code>"low"</code>, <code>"medium"</code>, <code>"high"</code>, or <code>"xhigh"</code> </td></tr>
 <tr><td> <code>:on-user-input-request</code> </td><td> fn </td><td> Handler for <code>ask_user</code> requests (see below) </td></tr>
 <tr><td> <code>:hooks</code> </td><td> map </td><td> Lifecycle hooks (see below) </td></tr>
 <tr><td> <code>:agent</code> </td><td> string </td><td> Name of a custom agent to activate at session start. Must match a name in <code>:custom-agents</code>. Equivalent to calling <code>agent.select</code> after creation. </td></tr>
 <tr><td> <code>:on-event</code> </td><td> fn </td><td> Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like <code>session.start</code> are not missed. </td></tr>
+<tr><td> <code>:on-elicitation-request</code> </td><td> fn </td><td> Handler for elicitation requests from the agent. When provided, advertises <code>requestElicitation=true</code> and handles <code>elicitation.requested</code> broadcast events. Single-arg handler receives an <code>ElicitationContext</code> map with <code>:session-id</code>, <code>:message</code>, <code>:requested-schema</code>, <code>:mode</code>, <code>:elicitation-source</code>, <code>:url</code>. Returns an <code>ElicitationResult</code> map <code>{:action "accept"/"decline"/"cancel" :content {...}}</code>. See <a href="#elicitation-provider">Elicitation Provider</a> </td></tr>
+<tr><td> <code>:create-session-fs-handler</code> </td><td> fn </td><td> Factory for session filesystem handlers. Required when <code>:session-fs</code> is set on the client. Called as <code>(factory session)</code>, returns a map of FS handler functions. See <a href="#session-filesystem">Session Filesystem</a> </td></tr>
 </tbody>
 </table>
 <h4><a href="#resume-session" id="resume-session"></a><code>resume-session</code></h4>
@@ -426,6 +429,22 @@
 ;;                :branch "main"}}
 ;;     ...]
 </code></pre>
+<h4><a href="#get-session-metadata" id="get-session-metadata"></a><code>get-session-metadata</code></h4>
+<pre><code class="language-clojure">(copilot/get-session-metadata client session-id)
+</code></pre>
+<p>Get metadata for a specific session by ID. Returns the session metadata map if found, or <code>nil</code> if the session does not exist. Provides an efficient O(1) lookup instead of calling <code>list-sessions</code> and filtering client-side.</p>
+<p>The returned map has the same shape as entries returned by <code>list-sessions</code>: - <code>:session-id</code> — session ID string - <code>:start-time</code> — <code>java.time.Instant</code> when the session was created - <code>:modified-time</code> — <code>java.time.Instant</code> of last modification - <code>:remote?</code> — boolean, true if the session is remote - <code>:summary</code> — optional summary string - <code>:context</code> — optional map with <code>:cwd</code> and optional <code>:git-root</code>, <code>:repository</code>, <code>:branch</code></p>
+<pre><code class="language-clojure">(def metadata (copilot/get-session-metadata client "session-abc123"))
+;; =&gt; {:session-id "session-abc123"
+;;     :start-time #object[java.time.Instant 0x... "2025-01-15T10:00:00Z"]
+;;     :modified-time #object[java.time.Instant 0x... "2025-01-15T10:05:00Z"]
+;;     :remote? false
+;;     :summary "Refactoring auth module"
+;;     :context {:cwd "/home/user/project"}}
+
+(copilot/get-session-metadata client "non-existent-id")
+;; =&gt; nil
+</code></pre>
 <h4><a href="#delete-session" id="delete-session"></a><code>delete-session!</code></h4>
 <pre><code class="language-clojure">(copilot/delete-session! client session-id)
 </code></pre>
@@ -617,6 +636,135 @@
 </code></pre>
 <p>Get the client that owns this session.</p>
 <hr />
+<h3><a href="#experimental-rpc-methods" id="experimental-rpc-methods"></a>Experimental RPC Methods</h3>
+<blockquote>
+<p><strong>Note:</strong> These are experimental APIs wrapping emerging CLI RPC methods. They may change in future releases.</p>
+</blockquote>
+<pre><code class="language-clojure">(require '[github.copilot-sdk.session :as session])
+
+;; List available skills
+(session/skills-list my-session)
+;; =&gt; {:skills [{:name "update-docs" :source-location "project" ...} ...]}
+
+;; Enable/disable MCP servers
+(session/mcp-enable! my-session "my-server")
+(session/mcp-disable! my-session "my-server")
+</code></pre>
+<p><strong>Skills</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/skills-list</code> </td><td> List available skills. Returns map with <code>:skills</code>. </td></tr>
+<tr><td> <code>session/skills-enable!</code> </td><td> Enable a skill by name. </td></tr>
+<tr><td> <code>session/skills-disable!</code> </td><td> Disable a skill by name. </td></tr>
+<tr><td> <code>session/skills-reload!</code> </td><td> Reload all skills. </td></tr>
+</tbody>
+</table>
+<p><strong>MCP Servers</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/mcp-list</code> </td><td> List configured MCP servers. </td></tr>
+<tr><td> <code>session/mcp-enable!</code> </td><td> Enable an MCP server by name. </td></tr>
+<tr><td> <code>session/mcp-disable!</code> </td><td> Disable an MCP server by name. </td></tr>
+<tr><td> <code>session/mcp-reload!</code> </td><td> Reload all MCP servers. </td></tr>
+</tbody>
+</table>
+<p><strong>Extensions</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/extensions-list</code> </td><td> List extensions. </td></tr>
+<tr><td> <code>session/extensions-enable!</code> </td><td> Enable an extension by ID. </td></tr>
+<tr><td> <code>session/extensions-disable!</code> </td><td> Disable an extension by ID. </td></tr>
+<tr><td> <code>session/extensions-reload!</code> </td><td> Reload all extensions. </td></tr>
+</tbody>
+</table>
+<p><strong>Other</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/plugins-list</code> </td><td> List plugins. </td></tr>
+<tr><td> <code>session/compaction-compact!</code> </td><td> Trigger manual context compaction. </td></tr>
+<tr><td> <code>session/shell-exec!</code> </td><td> Execute a shell command. </td></tr>
+<tr><td> <code>session/shell-kill!</code> </td><td> Kill a running shell process. </td></tr>
+</tbody>
+</table>
+<hr />
+<h2><a href="#ui-elicitation" id="ui-elicitation"></a>UI Elicitation</h2>
+<p>Request structured user input via interactive dialogs. Check host support before calling.</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+</code></pre>
+<h3><a href="#capabilities" id="capabilities"></a><code>capabilities</code></h3>
+<pre><code class="language-clojure">(copilot/capabilities session)
+;; =&gt; {:ui {:elicitation true}}
+</code></pre>
+<p>Get the host capabilities map reported when the session was created or resumed.</p>
+<h3><a href="#elicitation-supported" id="elicitation-supported"></a><code>elicitation-supported?</code></h3>
+<pre><code class="language-clojure">(copilot/elicitation-supported? session)
+;; =&gt; true
+</code></pre>
+<p>Return <code>true</code> if the CLI host supports interactive elicitation dialogs.</p>
+<h3><a href="#confirm" id="confirm"></a><code>confirm!</code></h3>
+<pre><code class="language-clojure">(copilot/confirm! session message)
+</code></pre>
+<p>Show a confirmation dialog. Returns <code>true</code> if the user confirms, <code>false</code> if they decline or cancel. Throws if elicitation is not supported.</p>
+<pre><code class="language-clojure">(when (copilot/elicitation-supported? session)
+  (when (copilot/confirm! session "Deploy to production?")
+    (println "Deploying...")))
+</code></pre>
+<h3><a href="#select" id="select"></a><code>select!</code></h3>
+<pre><code class="language-clojure">(copilot/select! session message options)
+</code></pre>
+<p>Show a selection dialog with the given options. Returns the selected value as a string, or <code>nil</code> if the user declines or cancels. Throws if elicitation is not supported.</p>
+<pre><code class="language-clojure">(when-let [env (copilot/select! session "Choose environment" ["staging" "production"])]
+  (println "Selected:" env))
+</code></pre>
+<h3><a href="#input" id="input"></a><code>input!</code></h3>
+<pre><code class="language-clojure">(copilot/input! session message)
+(copilot/input! session message opts)
+</code></pre>
+<p>Show a text input dialog. Returns the entered text as a string, or <code>nil</code> if the user declines or cancels. Throws if elicitation is not supported.</p>
+<p><strong>Options:</strong></p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:title</code> </td><td> string </td><td> Title for the input field </td></tr>
+<tr><td> <code>:description</code> </td><td> string </td><td> Description text </td></tr>
+<tr><td> <code>:min-length</code> </td><td> integer </td><td> Minimum input length </td></tr>
+<tr><td> <code>:max-length</code> </td><td> integer </td><td> Maximum input length </td></tr>
+<tr><td> <code>:format</code> </td><td> string </td><td> Input format (<code>"email"</code>, <code>"uri"</code>, <code>"date"</code>, <code>"date-time"</code>) </td></tr>
+<tr><td> <code>:default</code> </td><td> string </td><td> Default value </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(when-let [name (copilot/input! session "Enter your name"
+                  {:min-length 1
+                   :max-length 100})]
+  (println "Hello," name))
+</code></pre>
+<h3><a href="#ui-elicitation" id="ui-elicitation"></a><code>ui-elicitation!</code></h3>
+<pre><code class="language-clojure">(copilot/ui-elicitation! session params)
+</code></pre>
+<p>Raw elicitation request for custom JSON schemas. <code>params</code> is a map with <code>:message</code> and <code>:requested-schema</code> keys. Returns a map with <code>:action</code> (<code>"accept"</code>, <code>"decline"</code>, or <code>"cancel"</code>) and <code>:content</code>. Throws if elicitation is not supported.</p>
+<pre><code class="language-clojure">(copilot/ui-elicitation! session
+  {:message "Configure deployment"
+   :requested-schema {:type "object"
+                      :properties {"env" {:type "string" :enum ["staging" "production"]}
+                                   "replicas" {:type "number" :default 3}}
+                      :required ["env"]}})
+;; =&gt; {:action "accept", :content {:env "staging", :replicas 3}}
+</code></pre>
+<hr />
 <h2><a href="#event-types" id="event-types"></a>Event Types</h2>
 <p>Sessions emit various events during processing. All event types are namespaced keywords prefixed with <code>copilot/</code>.</p>
 <h3><a href="#exported-constants" id="exported-constants"></a>Exported Constants</h3>
@@ -641,7 +789,11 @@ copilot/interaction-events
 ;; =&gt; #{:copilot/permission.requested :copilot/permission.completed
 ;;      :copilot/user_input.requested :copilot/user_input.completed
 ;;      :copilot/elicitation.requested :copilot/elicitation.completed
-;;      :copilot/external_tool.requested}
+;;      :copilot/external_tool.requested :copilot/external_tool.completed
+;;      :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+;;      :copilot/command.queued :copilot/command.execute
+;;      :copilot/command.completed :copilot/commands.changed
+;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 </code></pre>
 <h3><a href="#evt-event-keyword-helper" id="evt-event-keyword-helper"></a><code>evt</code> — Event Keyword Helper</h3>
 <pre><code class="language-clojure">(copilot/evt :session.info)      ;; =&gt; :copilot/session.info
@@ -660,7 +812,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.idle</code> </td><td> Session finished processing </td></tr>
 <tr><td> <code>:copilot/session.info</code> </td><td> Informational session update </td></tr>
 <tr><td> <code>:copilot/session.model_change</code> </td><td> Session model changed </td></tr>
-<tr><td> <code>:copilot/session.handoff</code> </td><td> Session handed off to another agent </td></tr>
+<tr><td> <code>:copilot/session.handoff</code> </td><td> Session handed off to another agent; data: <code>{:remote-session-id "..." :host "https://github.com"}</code> (both optional) </td></tr>
 <tr><td> <code>:copilot/session.usage_info</code> </td><td> Token usage information </td></tr>
 <tr><td> <code>:copilot/session.context_changed</code> </td><td> Session context (cwd, repo, branch) changed </td></tr>
 <tr><td> <code>:copilot/session.title_changed</code> </td><td> Session title updated </td></tr>
@@ -673,8 +825,8 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.mode_changed</code> </td><td> Session agent mode changed; data: <code>{:previous-mode "...", :new-mode "..."}</code> </td></tr>
 <tr><td> <code>:copilot/session.plan_changed</code> </td><td> Session plan created/updated/deleted; data: <code>{:operation "create"/"update"/"delete"}</code> </td></tr>
 <tr><td> <code>:copilot/session.workspace_file_changed</code> </td><td> Workspace file created or updated; data: <code>{:path "...", :operation "create"/"update"}</code> </td></tr>
-<tr><td> <code>:copilot/session.task_complete</code> </td><td> Task completed by the session agent; data: <code>{:summary "..."}</code> (optional) </td></tr>
-<tr><td> <code>:copilot/skill.invoked</code> </td><td> Skill invocation triggered </td></tr>
+<tr><td> <code>:copilot/session.task_complete</code> </td><td> Task completed by the session agent; data: <code>{:summary "..." :aborted? false}</code> (both optional) </td></tr>
+<tr><td> <code>:copilot/skill.invoked</code> </td><td> Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version </td></tr>
 <tr><td> <code>:copilot/user.message</code> </td><td> User message added </td></tr>
 <tr><td> <code>:copilot/pending_messages.modified</code> </td><td> Pending message queue updated </td></tr>
 <tr><td> <code>:copilot/assistant.turn_start</code> </td><td> Assistant turn started </td></tr>
@@ -688,26 +840,46 @@ copilot/interaction-events
 <tr><td> <code>:copilot/assistant.usage</code> </td><td> Token usage for this turn </td></tr>
 <tr><td> <code>:copilot/abort</code> </td><td> Current message aborted </td></tr>
 <tr><td> <code>:copilot/tool.user_requested</code> </td><td> Tool execution requested by user </td></tr>
-<tr><td> <code>:copilot/tool.execution_start</code> </td><td> Tool execution started </td></tr>
+<tr><td> <code>:copilot/tool.execution_start</code> </td><td> Tool execution started; data includes <code>:tool-call-id</code>, <code>:tool-name</code>, optional <code>:arguments</code>, <code>:parent-tool-call-id</code>, <code>:mcp-server-name</code>, <code>:mcp-tool-name</code> </td></tr>
 <tr><td> <code>:copilot/tool.execution_progress</code> </td><td> Tool execution progress update </td></tr>
 <tr><td> <code>:copilot/tool.execution_partial_result</code> </td><td> Tool execution partial result </td></tr>
 <tr><td> <code>:copilot/tool.execution_complete</code> </td><td> Tool execution completed </td></tr>
-<tr><td> <code>:copilot/subagent.started</code> </td><td> Subagent started </td></tr>
-<tr><td> <code>:copilot/subagent.completed</code> </td><td> Subagent completed </td></tr>
-<tr><td> <code>:copilot/subagent.failed</code> </td><td> Subagent failed </td></tr>
+<tr><td> <code>:copilot/subagent.started</code> </td><td> Subagent started; data includes :tool-call-id, :agent-name, :agent-display-name, :agent-description </td></tr>
+<tr><td> <code>:copilot/subagent.completed</code> </td><td> Subagent completed; data includes :tool-call-id, :agent-name, :agent-display-name, optional :model, :total-tool-calls, :total-tokens, :duration-ms </td></tr>
+<tr><td> <code>:copilot/subagent.failed</code> </td><td> Subagent failed; data includes :tool-call-id, :agent-name, :agent-display-name, :error, optional :model, :total-tool-calls, :total-tokens, :duration-ms </td></tr>
 <tr><td> <code>:copilot/subagent.selected</code> </td><td> Subagent selected </td></tr>
 <tr><td> <code>:copilot/subagent.deselected</code> </td><td> Subagent deselected </td></tr>
 <tr><td> <code>:copilot/hook.start</code> </td><td> Hook invocation started </td></tr>
 <tr><td> <code>:copilot/hook.end</code> </td><td> Hook invocation finished </td></tr>
 <tr><td> <code>:copilot/system.message</code> </td><td> System message emitted </td></tr>
 <tr><td> <code>:copilot/system.notification</code> </td><td> System notification with structured <code>:kind</code> discriminator (e.g. <code>agent_completed</code>, <code>shell_completed</code>, <code>shell_detached_completed</code>) </td></tr>
-<tr><td> <code>:copilot/permission.requested</code> </td><td> Permission request initiated </td></tr>
+<tr><td> <code>:copilot/permission.requested</code> </td><td> Permission request initiated; data includes <code>:resolved-by-hook</code> when already handled by a hook </td></tr>
 <tr><td> <code>:copilot/permission.completed</code> </td><td> Permission request resolved </td></tr>
 <tr><td> <code>:copilot/user_input.requested</code> </td><td> User input requested from agent </td></tr>
 <tr><td> <code>:copilot/user_input.completed</code> </td><td> User input received </td></tr>
 <tr><td> <code>:copilot/elicitation.requested</code> </td><td> Elicitation request initiated </td></tr>
 <tr><td> <code>:copilot/elicitation.completed</code> </td><td> Elicitation request resolved </td></tr>
 <tr><td> <code>:copilot/external_tool.requested</code> </td><td> External tool call requested (v3) </td></tr>
+<tr><td> <code>:copilot/external_tool.completed</code> </td><td> External tool call completed (v3) </td></tr>
+<tr><td> <code>:copilot/mcp.oauth_required</code> </td><td> MCP server requires OAuth authentication </td></tr>
+<tr><td> <code>:copilot/mcp.oauth_completed</code> </td><td> MCP OAuth authentication completed </td></tr>
+<tr><td> <code>:copilot/command.queued</code> </td><td> Command queued for execution </td></tr>
+<tr><td> <code>:copilot/command.execute</code> </td><td> Command execution started </td></tr>
+<tr><td> <code>:copilot/command.completed</code> </td><td> Command execution completed </td></tr>
+<tr><td> <code>:copilot/commands.changed</code> </td><td> Available commands list changed </td></tr>
+<tr><td> <code>:copilot/exit_plan_mode.requested</code> </td><td> Exit from plan mode requested </td></tr>
+<tr><td> <code>:copilot/exit_plan_mode.completed</code> </td><td> Exit from plan mode completed </td></tr>
+<tr><td> <code>:copilot/session.tools_updated</code> </td><td> Session tools list updated (e.g., after model change) </td></tr>
+<tr><td> <code>:copilot/session.background_tasks_changed</code> </td><td> Background tasks status changed </td></tr>
+<tr><td> <code>:copilot/session.skills_loaded</code> </td><td> Skills loaded for the session </td></tr>
+<tr><td> <code>:copilot/session.mcp_servers_loaded</code> </td><td> MCP servers loaded for the session </td></tr>
+<tr><td> <code>:copilot/session.mcp_server_status_changed</code> </td><td> MCP server status changed </td></tr>
+<tr><td> <code>:copilot/session.extensions_loaded</code> </td><td> Extensions loaded for the session </td></tr>
+<tr><td> <code>:copilot/session.custom_agents_updated</code> </td><td> Custom agents list updated </td></tr>
+<tr><td> <code>:copilot/sampling.requested</code> </td><td> MCP sampling request initiated; ephemeral </td></tr>
+<tr><td> <code>:copilot/sampling.completed</code> </td><td> MCP sampling request completed; ephemeral </td></tr>
+<tr><td> <code>:copilot/session.remote_steerable_changed</code> </td><td> Session remote steering capability changed; data: <code>{:remote-steerable true/false}</code> </td></tr>
+<tr><td> <code>:copilot/capabilities.changed</code> </td><td> Session capabilities dynamically changed (e.g., elicitation support); ephemeral. Data: <code>{:ui {:elicitation true/false}}</code> </td></tr>
 </tbody>
 </table>
 <h3><a href="#example-handling-events" id="example-handling-events"></a>Example: Handling Events</h3>
@@ -831,6 +1003,47 @@ copilot/interaction-events
 (copilot/result-denied "Permission denied")
 (copilot/result-rejected "Invalid parameters")
 </code></pre>
+<h3><a href="#commands" id="commands"></a>Commands</h3>
+<p>Register slash commands that users can invoke in the TUI. Define each command as a map with <code>:name</code>, <code>:description</code>, and <code>:command-handler</code>, then pass them via <code>:commands</code> in session config.</p>
+<pre><code class="language-clojure">(def my-commands
+  [{:name "deploy"
+    :description "Deploy the current project"
+    :command-handler (fn [{:keys [session-id command-name args]}]
+                       (println "Deploying with args:" args))}
+   {:name "status"
+    :description "Show project status"
+    :command-handler (fn [{:keys [session-id command-name args]}]
+                       (println "All systems operational"))}])
+
+(def session (copilot/create-session client
+               {:model "gpt-5.4"
+                :commands my-commands
+                :on-permission-request copilot/approve-all}))
+</code></pre>
+<p><strong>Command definition keys:</strong></p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Required </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:name</code> </td><td> string </td><td> yes </td><td> Command name (without leading slash) </td></tr>
+<tr><td> <code>:description</code> </td><td> string </td><td> no </td><td> Description shown in TUI command list </td></tr>
+<tr><td> <code>:command-handler</code> </td><td> fn </td><td> yes </td><td> Handler function </td></tr>
+</tbody>
+</table>
+<p>The handler receives a context map:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:session-id</code> </td><td> The session ID </td></tr>
+<tr><td> <code>:command</code> </td><td> Full command string </td></tr>
+<tr><td> <code>:command-name</code> </td><td> Matched command name </td></tr>
+<tr><td> <code>:args</code> </td><td> Arguments after the command name </td></tr>
+</tbody>
+</table>
+<p>The handler may return <code>nil</code> or a core.async channel (awaited automatically).</p>
 <h3><a href="#system-message-customization" id="system-message-customization"></a>System Message Customization</h3>
 <p>Control the system prompt:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
@@ -852,6 +1065,56 @@ copilot/interaction-events
    :system-message {:mode :replace
                     :content "You are a helpful assistant."}})
 </code></pre>
+<h4><a href="#customize-mode" id="customize-mode"></a>Customize Mode</h4>
+<p>The <code>:customize</code> mode enables section-level overrides of the system prompt. Ten sections are configurable:</p>
+<table>
+<thead>
+<tr><th> Section </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:identity</code> </td><td> Agent identity preamble and mode statement </td></tr>
+<tr><td> <code>:tone</code> </td><td> Response style, conciseness rules, output formatting </td></tr>
+<tr><td> <code>:tool-efficiency</code> </td><td> Tool usage patterns, parallel calling, batching </td></tr>
+<tr><td> <code>:environment-context</code> </td><td> CWD, OS, git root, directory listing, available tools </td></tr>
+<tr><td> <code>:code-change-rules</code> </td><td> Coding rules, linting/testing, ecosystem tools, style </td></tr>
+<tr><td> <code>:guidelines</code> </td><td> Tips, behavioral best practices </td></tr>
+<tr><td> <code>:safety</code> </td><td> Environment limitations, prohibited actions, security </td></tr>
+<tr><td> <code>:tool-instructions</code> </td><td> Per-tool usage instructions </td></tr>
+<tr><td> <code>:custom-instructions</code> </td><td> Repository and organization custom instructions </td></tr>
+<tr><td> <code>:last-instructions</code> </td><td> End-of-prompt instructions </td></tr>
+</tbody>
+</table>
+<p>Each section supports static actions (<code>:replace</code>, <code>:remove</code>, <code>:append</code>, <code>:prepend</code>) and transform callbacks (1-arity functions).</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :system-message
+     {:mode :customize
+      :sections {:identity {:action :replace
+                            :content "You are Acme Assistant."}
+                 :tone {:action :append
+                        :content "\nAlways respond in bullet points."}
+                 :code-change-rules {:action :remove}}
+      :content "Additional instructions here."}}))
+</code></pre>
+<p>Transform callbacks receive the current section content and return the replacement:</p>
+<pre><code class="language-clojure">(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :system-message
+     {:mode :customize
+      :sections {:identity {:action (fn [current]
+                                     (clojure.string/replace current
+                                       "GitHub Copilot" "Acme Assistant"))}}}}))
+</code></pre>
+<p>Inspect available sections with the <code>system-prompt-sections</code> constant:</p>
+<pre><code class="language-clojure">copilot/system-prompt-sections
+;; =&gt; {:identity {:description "Agent identity preamble and mode statement"}
+;;     :tone {:description "Response style, conciseness rules, ..."} ...}
+</code></pre>
+<p>Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.</p>
 <h3><a href="#config-directory-and-skills" id="config-directory-and-skills"></a>Config Directory and Skills</h3>
 <p><code>config-dir</code> overrides where the CLI reads its config and state (e.g., <code>~/.copilot</code>). It does not define custom agents. Custom agents are provided via <code>:custom-agents</code>.</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
@@ -973,9 +1236,17 @@ copilot/interaction-events
 ;; Deny after user interaction (optional feedback)
 {:kind :denied-interactively-by-user :feedback "Not allowed"}
 
+;; Denied by content exclusion policy
+{:kind :denied-by-content-exclusion-policy}
+
+;; Denied by a permissionRequest hook
+{:kind :denied-by-permission-request-hook}
+
 ;; Extension declines to answer (another handler may respond)
 {:kind :no-result}
 </code></pre>
+<h4><a href="#resolvedbyhook-hook-resolved-permissions" id="resolvedbyhook-hook-resolved-permissions"></a><code>resolvedByHook</code> — Hook-Resolved Permissions</h4>
+<p>When the runtime resolves a permission request via a <code>permissionRequest</code> hook, the <code>permission.requested</code> event includes <code>:resolved-by-hook true</code>. The SDK automatically skips the client’s <code>:on-permission-request</code> handler and does not send the <code>handlePendingPermissionRequest</code> RPC — the event is still published to event subscribers for observability.</p>
 <h4><a href="#approve-all" id="approve-all"></a><code>approve-all</code></h4>
 <pre><code class="language-clojure">(copilot/approve-all request ctx)
 </code></pre>
@@ -1001,6 +1272,92 @@ copilot/interaction-events
 </code></pre>
 <p>The request map includes: - <code>:question</code> - The question being asked - <code>:choices</code> - Optional list of choices for multiple choice questions - <code>:allow-freeform</code> - Whether freeform text input is allowed</p>
 <p>The response map should include: - <code>:answer</code> - The user’s answer (string, required). <code>:response</code> is also accepted for convenience. - <code>:was-freeform</code> - Whether the answer was freeform (boolean, defaults to true)</p>
+<h3><a href="#elicitation-provider" id="elicitation-provider"></a>Elicitation Provider</h3>
+<p>Provide a handler for elicitation requests from the agent. This enables the SDK client to act as a UI provider for form-based dialogs.</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :on-elicitation-request
+     (fn [{:keys [session-id message requested-schema mode]}]
+       (println "Elicitation for session" session-id ":" message)
+       {:action "accept"
+        :content {:name "user-input"}})}))
+</code></pre>
+<p>The handler receives a single <code>ElicitationContext</code> map:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:session-id</code> </td><td> string </td><td> Session that triggered the request </td></tr>
+<tr><td> <code>:message</code> </td><td> string </td><td> What information is needed from the user </td></tr>
+<tr><td> <code>:requested-schema</code> </td><td> map </td><td> JSON Schema describing form fields (optional) </td></tr>
+<tr><td> <code>:mode</code> </td><td> string </td><td> <code>"form"</code> for structured input, <code>"url"</code> for browser redirect (optional) </td></tr>
+<tr><td> <code>:elicitation-source</code> </td><td> string </td><td> Source that initiated the request, e.g. MCP server name (optional) </td></tr>
+<tr><td> <code>:url</code> </td><td> string </td><td> URL to open in browser, url mode only (optional) </td></tr>
+</tbody>
+</table>
+<p>Return an <code>ElicitationResult</code> map:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:action</code> </td><td> string </td><td> <code>"accept"</code>, <code>"decline"</code>, or <code>"cancel"</code> </td></tr>
+<tr><td> <code>:content</code> </td><td> map </td><td> Field values when action is <code>"accept"</code> </td></tr>
+</tbody>
+</table>
+<p>If the handler throws, the SDK sends <code>{:action "cancel"}</code> to prevent the request from hanging.</p>
+<p>When <code>:on-elicitation-request</code> is set, the session advertises <code>requestElicitation=true</code> in the create/resume RPC. Capabilities are updated dynamically via <code>capabilities.changed</code> events.</p>
+<h3><a href="#session-filesystem" id="session-filesystem"></a>Session Filesystem</h3>
+<p>Virtualize per-session storage with custom filesystem handlers. The runtime routes all session-scoped file I/O (event logs, large outputs, checkpoints) through the provided callbacks.</p>
+<p>Configure the client with <code>:session-fs</code>:</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+
+(def client
+  (copilot/client {:session-fs {:initial-cwd "/home/user/project"
+                                :session-state-path "/sessions"
+                                :conventions "posix"}}))
+</code></pre>
+<p>Provide a handler factory per session:</p>
+<pre><code class="language-clojure">(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :create-session-fs-handler
+     (fn [session]
+       (let [store (atom {})]
+         {:read-file    (fn [{:keys [path]}] {:content (get @store path "")})
+          :write-file   (fn [{:keys [path content]}] (swap! store assoc path content) nil)
+          :append-file  (fn [{:keys [path content]}] (swap! store update path str content) nil)
+          :exists       (fn [{:keys [path]}] {:exists (contains? @store path)})
+          :stat         (fn [{:keys [path]}] {:is-file true :is-directory false :size (count (get @store path "")) :mtime "2026-01-01T00:00:00Z"})
+          :mkdir        (fn [_] nil)
+          :readdir      (fn [_] {:entries []})
+          :readdir-with-types (fn [_] {:entries []})
+          :rm           (fn [{:keys [path]}] (swap! store dissoc path) nil)
+          :rename       (fn [{:keys [old-path new-path]}] (swap! store (fn [s] (-&gt; s (assoc new-path (get s old-path "")) (dissoc old-path)))) nil)}))}))
+</code></pre>
+<p>The handler map requires all 10 operations:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Params </th><th> Returns </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:read-file</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:content "..."}</code> </td></tr>
+<tr><td> <code>:write-file</code> </td><td> <code>{:session-id :path :content :mode}</code> </td><td> nil </td></tr>
+<tr><td> <code>:append-file</code> </td><td> <code>{:session-id :path :content}</code> </td><td> nil </td></tr>
+<tr><td> <code>:exists</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:exists true/false}</code> </td></tr>
+<tr><td> <code>:stat</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:is-file :is-directory :size :mtime}</code> </td></tr>
+<tr><td> <code>:mkdir</code> </td><td> <code>{:session-id :path :recursive}</code> </td><td> nil </td></tr>
+<tr><td> <code>:readdir</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:entries [...]}</code> </td></tr>
+<tr><td> <code>:readdir-with-types</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:entries [...]}</code> </td></tr>
+<tr><td> <code>:rm</code> </td><td> <code>{:session-id :path :recursive :force}</code> </td><td> nil </td></tr>
+<tr><td> <code>:rename</code> </td><td> <code>{:session-id :old-path :new-path}</code> </td><td> nil </td></tr>
+</tbody>
+</table>
+<p>Handler functions may return values directly or via core.async channels.</p>
 <h3><a href="#session-hooks" id="session-hooks"></a>Session Hooks</h3>
 <p>Lifecycle hooks allow custom logic at various points during the session:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client

@@ -284,12 +284,16 @@
    Calls the session's permission handler and responds via the
    session.permissions.handlePendingPermissionRequest RPC method.
    When the handler returns :no-result, the RPC call is skipped
-   so the extension does not answer this permission request."
+   so the extension does not answer this permission request.
+   When :resolved-by-hook is true, the runtime already resolved
+   this permission via a permissionRequest hook — skip the handler
+   entirely (the event is still published to subscribers)."
   [client session-id event]
   (let [data (:data event)
         request-id (:request-id data)
         permission-request (:permission-request data)]
-    (when (and request-id permission-request)
+    (when (and request-id permission-request
+               (not (:resolved-by-hook data)))
       (go
         (try
           (let [perm-response (<! (session/handle-permission-request!

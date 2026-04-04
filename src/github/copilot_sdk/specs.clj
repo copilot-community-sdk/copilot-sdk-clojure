@@ -665,9 +665,12 @@
 (s/def ::assistant.streaming_delta-data
   (s/keys :req-un [::total-response-size-bytes]))
 
+(s/def ::mcp-server-name string?)
+(s/def ::mcp-tool-name string?)
+
 (s/def ::tool.execution_start-data
   (s/keys :req-un [::tool-call-id ::tool-name]
-          :opt-un [::arguments ::parent-tool-call-id]))
+          :opt-un [::arguments ::parent-tool-call-id ::mcp-server-name ::mcp-tool-name]))
 
 (s/def ::progress-message string?)
 
@@ -678,6 +681,10 @@
   (s/keys :req-un [::tool-call-id ::success?]
           :opt-un [::is-user-requested? ::result ::error ::tool-telemetry ::parent-tool-call-id
                    ::model ::interaction-id]))
+
+;; Permission event data — resolved-by-hook indicates the runtime already handled
+;; this permission request via a permissionRequest hook (upstream PR #999).
+(s/def ::resolved-by-hook boolean?)
 
 ;; Session shutdown event
 (s/def ::shutdown-type #{"routine" "error"})
@@ -825,6 +832,8 @@
     :denied-by-rules
     :denied-no-approval-rule-and-could-not-request-from-user
     :denied-interactively-by-user
+    :denied-by-content-exclusion-policy
+    :denied-by-permission-request-hook
     :no-result})
 
 (s/def ::permission-result
