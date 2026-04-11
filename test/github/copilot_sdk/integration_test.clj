@@ -2164,3 +2164,132 @@
                     {:on-permission-request sdk/approve-all})]
       (session/agent-reload! session)
       (is (some #(= "session.agent.reload" (:method %)) @requests)))))
+
+;; ---------------------------------------------------------------------------
+;; v0.2.2 sync tests
+;; ---------------------------------------------------------------------------
+
+(deftest test-enable-config-discovery-on-wire
+  (testing "enableConfigDiscovery is forwarded in session.create (upstream PR #1044)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :enable-config-discovery true})
+          create-params (get @seen "session.create")]
+      (is (true? (:enableConfigDiscovery create-params)))))
+
+  (testing "enableConfigDiscovery is forwarded in session.resume (upstream PR #1044)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :enable-config-discovery false})
+          resume-params (get @seen "session.resume")]
+      (is (false? (:enableConfigDiscovery resume-params)))))
+
+  (testing "enableConfigDiscovery is omitted when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :enableConfigDiscovery))))))
+
+(deftest test-model-capabilities-on-wire
+  (testing "modelCapabilities is forwarded in session.create (upstream PR #1029)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model-capabilities {:model-supports {:supports-vision true}}})
+          create-params (get @seen "session.create")]
+      (is (= true (get-in create-params [:modelCapabilities :modelSupports :supportsVision])))))
+
+  (testing "modelCapabilities is forwarded in session.resume (upstream PR #1029)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :model-capabilities {:model-supports {:supports-reasoning-effort true}}})
+          resume-params (get @seen "session.resume")]
+      (is (= true (get-in resume-params [:modelCapabilities :modelSupports :supportsReasoningEffort])))))
+
+  (testing "modelCapabilities is omitted when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :modelCapabilities))))))
+
+(deftest test-switch-model-with-model-capabilities
+  (testing "switch-model! forwards modelCapabilities (upstream PR #1029)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (when (= method "session.model.switchTo")
+                  (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4"
+              {:model-capabilities {:model-supports {:supports-vision false}}})]
+      (is (= false (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision])))))
+
+  (testing "set-model! forwards modelCapabilities (alias for switch-model!)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (when (= method "session.model.switchTo")
+                  (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/set-model! session "gpt-5.4"
+              {:model-capabilities {:model-supports {:supports-vision true}}})]
+      (is (= true (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision]))))))
+
+(deftest test-history-compact-rpc-name
+  (testing "compaction-compact! uses session.history.compact RPC (upstream #1039)"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/compaction-compact! session)
+      (is (some #(= "session.history.compact" (:method %)) @requests))
+      (is (not (some #(= "session.compaction.compact" (:method %)) @requests))))))
+
+(deftest test-history-truncate-rpc
+  (testing "history-truncate! calls session.history.truncate RPC (upstream #1039)"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/history-truncate! session)
+      (is (some #(= "session.history.truncate" (:method %)) @requests)))))
+
+(deftest test-sessions-fork-rpc
+  (testing "sessions-fork! calls sessions.fork RPC (upstream #1039)"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/sessions-fork! session)
+      (is (some #(= "sessions.fork" (:method %)) @requests)))))

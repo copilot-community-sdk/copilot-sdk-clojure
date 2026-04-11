@@ -346,6 +346,9 @@
                  "session.extensions.reload" {:success true}
                  "session.plugins.list" {:plugins []}
                  "session.compaction.compact" {:success true}
+                 "session.history.compact" {:success true}
+                 "session.history.truncate" {:success true}
+                 "sessions.fork" {:sessionId (str (java.util.UUID/randomUUID))}
                  "session.shell.exec" {:exitCode 0 :stdout "" :stderr ""}
                  "session.shell.kill" {:success true}
                  "session.ui.elicitation" {:action "accept" :content {}}

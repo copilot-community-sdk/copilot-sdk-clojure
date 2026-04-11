@@ -296,6 +296,14 @@
   :args (s/cat :session ::specs/session)
   :ret map?)
 
+(s/fdef github.copilot-sdk.session/history-truncate!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/sessions-fork!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
 (s/fdef github.copilot-sdk.session/shell-exec!
   :args (s/cat :session ::specs/session :command string?)
   :ret map?)
@@ -490,6 +498,8 @@
                       github.copilot-sdk.session/extensions-reload!
                       github.copilot-sdk.session/plugins-list
                       github.copilot-sdk.session/compaction-compact!
+                      github.copilot-sdk.session/history-truncate!
+                      github.copilot-sdk.session/sessions-fork!
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/mode-get
@@ -582,6 +592,8 @@
                       github.copilot-sdk.session/extensions-reload!
                       github.copilot-sdk.session/plugins-list
                       github.copilot-sdk.session/compaction-compact!
+                      github.copilot-sdk.session/history-truncate!
+                      github.copilot-sdk.session/sessions-fork!
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/mode-get

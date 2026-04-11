@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.2.2 sync)
+- **`enableConfigDiscovery` session option** — new boolean `:enable-config-discovery` on session and resume configs. Auto-discovers `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files are always loaded regardless. (upstream PR #1044)
+- **`modelCapabilities` override** — new `:model-capabilities` option on session config, resume config, and `switch-model!`/`set-model!`. Pass a partial capabilities map (e.g. `{:model-supports {:supports-vision true}}`) to override model capabilities for the session. (upstream PR #1029)
+- **`history-truncate!`** — new experimental function to trigger manual truncation of session context (upstream PR #1039)
+- **`sessions-fork!`** — new experimental function to fork the current session (upstream PR #1039)
+- Integration tests for all new features (wire param verification, RPC routing)
+
+### Changed (v0.2.2 sync)
+- **`compaction-compact!` RPC renamed** — underlying JSON-RPC method changed from `session.compaction.compact` to `session.history.compact` (upstream PR #1039). The Clojure function name is unchanged for backward compatibility.
+
 ## [0.2.1.1] - 2026-04-04
 ### Added
 - **Session RPC wrappers** — new experimental functions for session-level RPCs previously only accessible via `proto/send-request!`:

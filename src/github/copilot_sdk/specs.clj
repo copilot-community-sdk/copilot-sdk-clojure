@@ -352,6 +352,12 @@
 
 (s/def ::client-name ::non-blank-string)
 
+;; enableConfigDiscovery: auto-discover MCP configs, skills, instruction files (upstream PR #1044)
+(s/def ::enable-config-discovery boolean?)
+
+;; modelCapabilities override for session config / setModel (upstream PR #1029).
+;; DeepPartial<ModelCapabilities> — same shape as ::model-capabilities since all fields are already optional.
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
@@ -359,7 +365,8 @@
     :custom-agents :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
-    :working-directory :agent :on-event :create-session-fs-handler})
+    :working-directory :agent :on-event :create-session-fs-handler
+    :enable-config-discovery :model-capabilities})
 
 (s/def ::session-config
   (closed-keys
@@ -370,7 +377,8 @@
                     ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
-                    ::working-directory ::agent ::on-event ::create-session-fs-handler])
+                    ::working-directory ::agent ::on-event ::create-session-fs-handler
+                    ::enable-config-discovery ::model-capabilities])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -379,7 +387,7 @@
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
-    :create-session-fs-handler})
+    :create-session-fs-handler :enable-config-discovery :model-capabilities})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -389,7 +397,8 @@
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
-                    ::on-event ::create-session-fs-handler])
+                    ::on-event ::create-session-fs-handler
+                    ::enable-config-discovery ::model-capabilities])
    resume-session-config-keys))
 
 ;; join-session config: same as resume-session-config but :on-permission-request is optional.
@@ -402,7 +411,8 @@
                     ::mcp-servers ::custom-agents ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
-                    ::on-event ::create-session-fs-handler])
+                    ::on-event ::create-session-fs-handler
+                    ::enable-config-discovery ::model-capabilities])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
