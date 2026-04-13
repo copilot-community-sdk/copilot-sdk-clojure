@@ -1380,6 +1380,10 @@
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :hooks (boolean (:hooks config)))
+      (some? (:enable-config-discovery config))
+      (assoc :enable-config-discovery (:enable-config-discovery config))
+      (:model-capabilities config)
+      (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :env-value-mode "direct"))))
 
 (defn- build-resume-session-params
@@ -1437,6 +1441,10 @@
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
+      (some? (:enable-config-discovery config))
+      (assoc :enable-config-discovery (:enable-config-discovery config))
+      (:model-capabilities config)
+      (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
@@ -1493,6 +1501,11 @@
                             :on-session-start, :on-session-end, :on-error-occurred}
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
+   - :enable-config-discovery - Boolean. Auto-discover .mcp.json, .vscode/mcp.json, skills, etc.
+                                Instruction files are always loaded regardless. (upstream PR #1044)
+   - :model-capabilities - Model capabilities override map (upstream PR #1029).
+                           DeepPartial of model capabilities, e.g.
+                           {:model-supports {:supports-vision true}}
    
    Returns a CopilotSession."
   [client config]
@@ -1553,6 +1566,8 @@
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
+   - :enable-config-discovery - Boolean. Auto-discover .mcp.json, skills, etc. (upstream PR #1044)
+   - :model-capabilities - Model capabilities override map (upstream PR #1029).
    
    Returns a CopilotSession."
   [client session-id config]

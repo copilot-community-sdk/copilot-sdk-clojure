@@ -256,6 +256,8 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
 | `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
 | `:create-session-fs-handler` | fn | Factory for session filesystem handlers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a map of FS handler functions. See [Session Filesystem](#session-filesystem) |
+| `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
+| `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 
 #### `resume-session`
 
@@ -846,9 +848,17 @@ Get the current model for this session. Returns the model ID string, or nil if n
 ```clojure
 (copilot/switch-model! session "claude-sonnet-4.5")
 ;; => "claude-sonnet-4.5"
+
+;; With model capabilities override (upstream PR #1029):
+(copilot/switch-model! session "gpt-5.4"
+  {:model-capabilities {:model-supports {:supports-vision true}}})
 ```
 
 Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
+
+Optional opts map:
+- `:reasoning-effort` — Reasoning effort level ("low", "medium", "high", "xhigh")
+- `:model-capabilities` — Model capabilities override map, e.g. `{:model-supports {:supports-vision true}}`
 
 #### `set-model!`
 
@@ -1051,7 +1061,9 @@ Get the client that owns this session.
 | Function | Description |
 |----------|-------------|
 | `session/plugins-list` | List plugins. |
-| `session/compaction-compact!` | Trigger manual context compaction. |
+| `session/compaction-compact!` | Trigger manual context compaction (uses `session.history.compact` RPC). |
+| `session/history-truncate!` | Trigger manual context truncation. |
+| `session/sessions-fork!` | Fork the current session. |
 | `session/shell-exec!` | Execute a shell command. |
 | `session/shell-kill!` | Kill a running shell process. |
 

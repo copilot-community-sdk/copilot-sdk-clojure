@@ -223,13 +223,15 @@
 (s/fdef github.copilot-sdk.session/switch-model!
   :args (s/cat :session ::specs/session
                :model-id string?
-               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort]))))
+               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
+                                                      ::specs/model-capabilities]))))
   :ret (s/nilable ::specs/model-id))
 
 (s/fdef github.copilot-sdk.session/set-model!
   :args (s/cat :session ::specs/session
                :model-id string?
-               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort]))))
+               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
+                                                      ::specs/model-capabilities]))))
   :ret (s/nilable ::specs/model-id))
 
 (s/fdef github.copilot-sdk.session/log!
@@ -293,6 +295,14 @@
   :ret map?)
 
 (s/fdef github.copilot-sdk.session/compaction-compact!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/history-truncate!
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/sessions-fork!
   :args (s/cat :session ::specs/session)
   :ret map?)
 
@@ -490,6 +500,8 @@
                       github.copilot-sdk.session/extensions-reload!
                       github.copilot-sdk.session/plugins-list
                       github.copilot-sdk.session/compaction-compact!
+                      github.copilot-sdk.session/history-truncate!
+                      github.copilot-sdk.session/sessions-fork!
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/mode-get
@@ -582,6 +594,8 @@
                       github.copilot-sdk.session/extensions-reload!
                       github.copilot-sdk.session/plugins-list
                       github.copilot-sdk.session/compaction-compact!
+                      github.copilot-sdk.session/history-truncate!
+                      github.copilot-sdk.session/sessions-fork!
                       github.copilot-sdk.session/shell-exec!
                       github.copilot-sdk.session/shell-kill!
                       github.copilot-sdk.session/mode-get

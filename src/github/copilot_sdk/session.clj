@@ -944,7 +944,9 @@
    The new model takes effect for the next message. Conversation history is preserved.
 
    Optional opts map:
-   - :reasoning-effort - Reasoning effort level for the new model (\"low\", \"medium\", \"high\", \"xhigh\")
+   - :reasoning-effort      - Reasoning effort level for the new model (\"low\", \"medium\", \"high\", \"xhigh\")
+   - :model-capabilities    - Model capabilities override map (upstream PR #1029)
+                              e.g. {:model-supports {:supports-vision true}}
 
    Returns the new model ID string, or nil."
   ([session model-id] (switch-model! session model-id nil))
@@ -953,7 +955,9 @@
          conn (connection-io client)
          params (cond-> {:sessionId session-id
                          :modelId model-id}
-                  (:reasoning-effort opts) (assoc :reasoningEffort (:reasoning-effort opts)))
+                  (:reasoning-effort opts) (assoc :reasoningEffort (:reasoning-effort opts))
+                  (:model-capabilities opts) (assoc :modelCapabilities
+                                                    (util/clj->wire (:model-capabilities opts))))
          result (proto/send-request! conn "session.model.switchTo" params)]
      (:model-id result))))
 
@@ -1100,15 +1104,33 @@
     (util/wire->clj
      (proto/send-request! conn "session.plugins.list" {:sessionId session-id}))))
 
-;; -- Compaction --------------------------------------------------------------
+;; -- History (compaction / truncation) ----------------------------------------
 
 (defn ^:experimental compaction-compact!
-  "Trigger manual compaction of the session context."
+  "Trigger manual compaction of the session context.
+   Note: renamed from session.compaction.compact to session.history.compact in upstream #1039."
   [session]
   (let [{:keys [session-id client]} session
         conn (connection-io client)]
     (util/wire->clj
-     (proto/send-request! conn "session.compaction.compact" {:sessionId session-id}))))
+     (proto/send-request! conn "session.history.compact" {:sessionId session-id}))))
+
+(defn ^:experimental history-truncate!
+  "Trigger manual truncation of the session context (upstream #1039)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.history.truncate" {:sessionId session-id}))))
+
+(defn ^:experimental sessions-fork!
+  "Fork the current session (upstream #1039).
+   This is a server-scoped RPC."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "sessions.fork" {:sessionId session-id}))))
 
 ;; -- Shell -------------------------------------------------------------------
 
