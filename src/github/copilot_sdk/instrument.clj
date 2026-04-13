@@ -223,13 +223,15 @@
 (s/fdef github.copilot-sdk.session/switch-model!
   :args (s/cat :session ::specs/session
                :model-id string?
-               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort]))))
+               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
+                                                      ::specs/model-capabilities]))))
   :ret (s/nilable ::specs/model-id))
 
 (s/fdef github.copilot-sdk.session/set-model!
   :args (s/cat :session ::specs/session
                :model-id string?
-               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort]))))
+               :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
+                                                      ::specs/model-capabilities]))))
   :ret (s/nilable ::specs/model-id))
 
 (s/fdef github.copilot-sdk.session/log!
