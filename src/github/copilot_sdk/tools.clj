@@ -1,6 +1,7 @@
 (ns github.copilot-sdk.tools
   "Helper functions for defining tools."
-  (:require [clojure.spec.alpha :as s]))
+  (:require [clojure.spec.alpha :as s]
+            [clojure.string :as str]))
 
 (defn define-tool
   "Define a tool with a handler function.
@@ -125,3 +126,51 @@
    {:text-result-for-llm text
     :result-type "rejected"
     :tool-telemetry telemetry}))
+
+(defn convert-mcp-call-tool-result
+  "Convert an MCP CallToolResult into the SDK's ToolResultObject format.
+
+   The input map should have Clojure-idiomatic keys:
+   - :content    - vector of content blocks, each with :type and type-specific fields
+   - :is-error   - optional boolean, when true the result-type is \"failure\"
+
+   Content block types:
+   - {:type \"text\" :text \"...\"}
+   - {:type \"image\" :data \"base64...\" :mime-type \"image/png\"}
+   - {:type \"resource\" :resource {:uri \"...\" :text \"...\" :blob \"...\" :mime-type \"...\"}}
+
+   Returns a ToolResultObject map with :text-result-for-llm, :result-type, and
+   optionally :binary-results-for-llm."
+  [{:keys [content is-error]}]
+  (let [text-parts (transient [])
+        binary-results (transient [])]
+    (doseq [block content]
+      (case (:type block)
+        "text"
+        (when (string? (:text block))
+          (conj! text-parts (:text block)))
+
+        "image"
+        (when (and (string? (:data block))
+                   (seq (:data block))
+                   (string? (:mime-type block)))
+          (conj! binary-results {:data (:data block)
+                                 :mime-type (:mime-type block)
+                                 :type "image"}))
+
+        "resource"
+        (let [resource (:resource block)]
+          (when (:text resource)
+            (conj! text-parts (:text resource)))
+          (when (:blob resource)
+            (conj! binary-results {:data (:blob resource)
+                                   :mime-type (or (:mime-type resource) "application/octet-stream")
+                                   :type "resource"
+                                   :description (:uri resource)})))
+
+        ;; Unknown content type — skip
+        nil))
+    (let [binaries (persistent! binary-results)]
+      (cond-> {:text-result-for-llm (str/join "\n" (persistent! text-parts))
+               :result-type (if is-error "failure" "success")}
+        (seq binaries) (assoc :binary-results-for-llm binaries)))))

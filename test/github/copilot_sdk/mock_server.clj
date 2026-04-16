@@ -356,6 +356,11 @@
                  "mcp.config.add" {:success true}
                  "mcp.config.update" {:success true}
                  "mcp.config.remove" {:success true}
+                 "session.name.get" {:name nil}
+                 "session.name.set" {:success true}
+                 "session.workspaces.getWorkspace" {:workspace nil}
+                 "mcp.discover" {:servers []}
+                 "session.usage.getMetrics" {}
                  (throw (ex-info "Method not found" {:code -32601 :method method})))
         ;; Merge hook-provided data into result only when hook returns ::merge-response
         ;; This prevents accidental response mutation from spy hooks (e.g. swap! return values)

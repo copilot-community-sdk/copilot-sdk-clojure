@@ -1292,6 +1292,63 @@
      (proto/send-request! conn "session.fleet.start"
                           (assoc (merge {} params) :session-id session-id)))))
 
+;; -- Session Name -----------------------------------------------------------
+
+(defn ^:experimental session-name-get
+  "Get the session name (or auto-generated summary).
+   Returns a map with :name (string or nil)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.name.get" {:session-id session-id}))))
+
+(defn ^:experimental session-name-set!
+  "Set the session name (1–100 characters)."
+  [session name]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.name.set"
+                          {:session-id session-id :name name}))))
+
+;; -- Workspace (extended) ---------------------------------------------------
+
+(defn ^:experimental workspace-get-workspace
+  "Get current workspace metadata. Returns a map with :workspace (map or nil)."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.workspaces.getWorkspace"
+                          {:session-id session-id}))))
+
+;; -- MCP Discovery ----------------------------------------------------------
+
+(defn ^:experimental mcp-discover
+  "Discover MCP servers in the working directory.
+   opts is an optional map with :working-directory."
+  ([session] (mcp-discover session {}))
+  ([session opts]
+   (let [{:keys [session-id client]} session
+         conn (connection-io client)]
+     (util/wire->clj
+      (proto/send-request! conn "mcp.discover"
+                           (cond-> {}
+                             (:working-directory opts)
+                             (assoc :working-directory (:working-directory opts))))))))
+
+;; -- Usage Metrics ----------------------------------------------------------
+
+(defn ^:experimental usage-get-metrics
+  "Get usage metrics for the session."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.usage.getMetrics"
+                          {:session-id session-id}))))
+
 ;; -- UI Elicitation ----------------------------------------------------------
 
 (defn capabilities

@@ -168,9 +168,9 @@
 <tr><td> <code>:available-tools</code> </td><td> vector </td><td> List of allowed tool names </td></tr>
 <tr><td> <code>:excluded-tools</code> </td><td> vector </td><td> List of excluded tool names </td></tr>
 <tr><td> <code>:provider</code> </td><td> map </td><td> Provider config for BYOK (see <a href="../auth/byok.html">BYOK docs</a>). Required key: <code>:base-url</code>. Optional: <code>:provider-type</code> (<code>:openai</code>/<code>:azure</code>/<code>:anthropic</code>), <code>:wire-api</code> (<code>:completions</code>/<code>:responses</code>), <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code> </td></tr>
-<tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by server ID (see <a href="../mcp/overview.html">MCP docs</a>). Local servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code> </td></tr>
+<tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by server ID (see <a href="../mcp/overview.html">MCP docs</a>). Local (stdio) servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote (HTTP/SSE) servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code>. Spec aliases: <code>::mcp-stdio-server</code> = <code>::mcp-local-server</code>, <code>::mcp-http-server</code> = <code>::mcp-remote-server</code> </td></tr>
 <tr><td> <code>:commands</code> </td><td> vector </td><td> Command definitions (slash commands). See <a href="#commands">Commands</a> </td></tr>
-<tr><td> <code>:custom-agents</code> </td><td> vector </td><td> Custom agent configs </td></tr>
+<tr><td> <code>:custom-agents</code> </td><td> vector </td><td> Custom agent configs. Each agent map: <code>:agent-name</code> (required), <code>:agent-prompt</code> (required), <code>:agent-display-name</code>, <code>:agent-description</code>, <code>:agent-tools</code>, <code>:agent-infer?</code>, <code>:agent-skills</code> (vector of strings), <code>:mcp-servers</code> </td></tr>
 <tr><td> <code>:on-permission-request</code> </td><td> fn </td><td> <strong>Required.</strong> Permission handler function. Use <code>copilot/approve-all</code> to approve everything. </td></tr>
 <tr><td> <code>:streaming?</code> </td><td> boolean </td><td> Enable streaming deltas </td></tr>
 <tr><td> <code>:config-dir</code> </td><td> string </td><td> Override config directory for CLI </td></tr>
@@ -186,6 +186,8 @@
 <tr><td> <code>:on-event</code> </td><td> fn </td><td> Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like <code>session.start</code> are not missed. </td></tr>
 <tr><td> <code>:on-elicitation-request</code> </td><td> fn </td><td> Handler for elicitation requests from the agent. When provided, advertises <code>requestElicitation=true</code> and handles <code>elicitation.requested</code> broadcast events. Single-arg handler receives an <code>ElicitationContext</code> map with <code>:session-id</code>, <code>:message</code>, <code>:requested-schema</code>, <code>:mode</code>, <code>:elicitation-source</code>, <code>:url</code>. Returns an <code>ElicitationResult</code> map <code>{:action "accept"/"decline"/"cancel" :content {...}}</code>. See <a href="#elicitation-provider">Elicitation Provider</a> </td></tr>
 <tr><td> <code>:create-session-fs-handler</code> </td><td> fn </td><td> Factory for session filesystem handlers. Required when <code>:session-fs</code> is set on the client. Called as <code>(factory session)</code>, returns a map of FS handler functions. See <a href="#session-filesystem">Session Filesystem</a> </td></tr>
+<tr><td> <code>:enable-config-discovery</code> </td><td> boolean </td><td> Auto-discover <code>.mcp.json</code>, <code>.vscode/mcp.json</code>, skills, etc. Instruction files always load regardless. (upstream PR #1044) </td></tr>
+<tr><td> <code>:model-capabilities</code> </td><td> map </td><td> Model capabilities override. DeepPartial of model capabilities, e.g. <code>{:model-supports {:supports-vision true}}</code>. (upstream PR #1029) </td></tr>
 </tbody>
 </table>
 <h4><a href="#resume-session" id="resume-session"></a><code>resume-session</code></h4>
@@ -200,11 +202,16 @@
 <tr><td> <code>:disable-resume?</code> </td><td> boolean </td><td> When true, skip emitting the session.resume event (default: false) </td></tr>
 </tbody>
 </table>
+<p>When <code>:on-permission-request</code> is set to <code>default-join-session-permission-handler</code>, the SDK sends <code>requestPermission: false</code> on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends <code>requestPermission: true</code>.</p>
 <pre><code class="language-clojure">;; Resume with a different model and reasoning effort
 (copilot/resume-session client "session-123"
   {:model "claude-sonnet-4"
    :reasoning-effort "high"
    :on-permission-request copilot/approve-all})
+
+;; Resume without handling permissions (join-style)
+(copilot/resume-session client "session-123"
+  {:on-permission-request copilot/default-join-session-permission-handler})
 </code></pre>
 <h4><a href="#create-session" id="create-session"></a><code>&lt;create-session</code></h4>
 <pre><code class="language-clojure">(copilot/&lt;create-session client config)
@@ -363,6 +370,26 @@
 <tr><td> <code>:reset-date</code> </td><td> string (optional) </td><td> ISO 8601 date when quota resets </td></tr>
 </tbody>
 </table>
+<h4><a href="#mcp-config-list-mcp-config-add-mcp-config-update-mcp-config-remove" id="mcp-config-list-mcp-config-add-mcp-config-update-mcp-config-remove"></a><code>mcp-config-list</code> / <code>mcp-config-add!</code> / <code>mcp-config-update!</code> / <code>mcp-config-remove!</code></h4>
+<blockquote>
+<p><strong>Experimental:</strong> These wrap server-level MCP configuration RPCs and may change.</p>
+</blockquote>
+<pre><code class="language-clojure">;; List configured MCP servers
+(copilot/mcp-config-list client)
+;; =&gt; {:servers [...]}
+
+;; Add a new MCP server config
+(copilot/mcp-config-add! client {:name "my-server"
+                                  :command "npx"
+                                  :args ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]
+                                  :tools ["*"]})
+
+;; Update an existing config
+(copilot/mcp-config-update! client {:name "my-server" :tools ["read_file"]})
+
+;; Remove a config
+(copilot/mcp-config-remove! client {:name "my-server"})
+</code></pre>
 <h4><a href="#state" id="state"></a><code>state</code></h4>
 <pre><code class="language-clojure">(copilot/state client)
 </code></pre>
@@ -578,8 +605,13 @@
 <h4><a href="#switch-model" id="switch-model"></a><code>switch-model!</code></h4>
 <pre><code class="language-clojure">(copilot/switch-model! session "claude-sonnet-4.5")
 ;; =&gt; "claude-sonnet-4.5"
+
+;; With model capabilities override (upstream PR #1029):
+(copilot/switch-model! session "gpt-5.4"
+  {:model-capabilities {:model-supports {:supports-vision true}}})
 </code></pre>
 <p>Switch the model for this session mid-conversation. Returns the new model ID string, or nil.</p>
+<p>Optional opts map: - <code>:reasoning-effort</code> — Reasoning effort level (“low”, “medium”, “high”, “xhigh”) - <code>:model-capabilities</code> — Model capabilities override map, e.g. <code>{:model-supports {:supports-vision true}}</code></p>
 <h4><a href="#set-model" id="set-model"></a><code>set-model!</code></h4>
 <pre><code class="language-clojure">(copilot/set-model! session "claude-sonnet-4.5")
 ;; =&gt; "claude-sonnet-4.5"
@@ -649,6 +681,32 @@
 ;; Enable/disable MCP servers
 (session/mcp-enable! my-session "my-server")
 (session/mcp-disable! my-session "my-server")
+
+;; Get/set agent mode
+(session/mode-get my-session)
+;; =&gt; {:mode "interactive"}
+(session/mode-set! my-session "plan")
+
+;; Read/update session plan
+(session/plan-read my-session)
+;; =&gt; {:exists? true :content "# Plan\n..." :file-path "/path/to/plan.md"}
+(session/plan-update! my-session "# Updated Plan\n...")
+(session/plan-delete! my-session)
+
+;; Workspace file operations
+(session/workspace-list-files my-session)
+;; =&gt; {:files ["notes.md" "data.json"]}
+(session/workspace-read-file my-session "notes.md")
+;; =&gt; {:content "..."}
+(session/workspace-create-file! my-session "output.txt" "result data")
+
+;; Custom agent management
+(session/agent-list my-session)
+;; =&gt; {:agents [{:name "researcher" ...} ...]}
+(session/agent-select! my-session "researcher")
+(session/agent-get-current my-session)
+;; =&gt; {:name "researcher"}
+(session/agent-deselect! my-session)
 </code></pre>
 <p><strong>Skills</strong></p>
 <table>
@@ -686,6 +744,60 @@
 <tr><td> <code>session/extensions-reload!</code> </td><td> Reload all extensions. </td></tr>
 </tbody>
 </table>
+<p><strong>Mode</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/mode-get</code> </td><td> Get current agent mode. Returns <code>{:mode "interactive"\|"plan"\|"autopilot"}</code>. </td></tr>
+<tr><td> <code>session/mode-set!</code> </td><td> Set agent mode. Accepts <code>"interactive"</code>, <code>"plan"</code>, or <code>"autopilot"</code>. </td></tr>
+</tbody>
+</table>
+<p><strong>Plan</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/plan-read</code> </td><td> Read the session plan file. Returns <code>{:exists? :content :file-path}</code>. </td></tr>
+<tr><td> <code>session/plan-update!</code> </td><td> Update the plan file content. </td></tr>
+<tr><td> <code>session/plan-delete!</code> </td><td> Delete the plan file. </td></tr>
+</tbody>
+</table>
+<p><strong>Workspace</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/workspace-list-files</code> </td><td> List files in the session workspace. Returns <code>{:files [...]}</code>. </td></tr>
+<tr><td> <code>session/workspace-read-file</code> </td><td> Read a workspace file by relative path. Returns <code>{:content "..."}</code>. </td></tr>
+<tr><td> <code>session/workspace-create-file!</code> </td><td> Create a file in the workspace with given path and content. </td></tr>
+</tbody>
+</table>
+<p><strong>Agents</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/agent-list</code> </td><td> List available custom agents. Returns <code>{:agents [...]}</code>. </td></tr>
+<tr><td> <code>session/agent-get-current</code> </td><td> Get the currently selected agent. Returns <code>{:name "..."}</code> or <code>{:name nil}</code>. </td></tr>
+<tr><td> <code>session/agent-select!</code> </td><td> Select a custom agent by name. </td></tr>
+<tr><td> <code>session/agent-deselect!</code> </td><td> Deselect the current custom agent. </td></tr>
+<tr><td> <code>session/agent-reload!</code> </td><td> Reload all custom agents. </td></tr>
+</tbody>
+</table>
+<p><strong>Fleet</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/fleet-start!</code> </td><td> Start parallel sub-sessions. Accepts a params map. </td></tr>
+</tbody>
+</table>
 <p><strong>Other</strong></p>
 <table>
 <thead>
@@ -693,11 +805,64 @@
 </thead>
 <tbody>
 <tr><td> <code>session/plugins-list</code> </td><td> List plugins. </td></tr>
-<tr><td> <code>session/compaction-compact!</code> </td><td> Trigger manual context compaction. </td></tr>
+<tr><td> <code>session/compaction-compact!</code> </td><td> Trigger manual context compaction (uses <code>session.history.compact</code> RPC). </td></tr>
+<tr><td> <code>session/history-truncate!</code> </td><td> Trigger manual context truncation. </td></tr>
+<tr><td> <code>session/sessions-fork!</code> </td><td> Fork the current session. </td></tr>
 <tr><td> <code>session/shell-exec!</code> </td><td> Execute a shell command. </td></tr>
 <tr><td> <code>session/shell-kill!</code> </td><td> Kill a running shell process. </td></tr>
 </tbody>
 </table>
+<p><strong>Session Name</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/session-name-get</code> </td><td> Get the session name (or auto-generated summary). Returns <code>{:name "..."}</code>. </td></tr>
+<tr><td> <code>session/session-name-set!</code> </td><td> Set the session name (1–100 characters). </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(session/session-name-get my-session)
+;; =&gt; {:name "My debugging session"}
+
+(session/session-name-set! my-session "Refactoring auth module")
+</code></pre>
+<p><strong>Workspace (Extended)</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/workspace-get-workspace</code> </td><td> Get current workspace metadata. Returns <code>{:workspace {...}}</code>. </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(session/workspace-get-workspace my-session)
+;; =&gt; {:workspace {:path "/home/user/project" ...}}
+</code></pre>
+<p><strong>MCP Discovery</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/mcp-discover</code> </td><td> Discover MCP servers in a directory. Accepts optional opts map with <code>:working-directory</code>. </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(session/mcp-discover my-session)
+
+(session/mcp-discover my-session {:working-directory "/path/to/project"})
+</code></pre>
+<p><strong>Usage Metrics</strong></p>
+<table>
+<thead>
+<tr><th> Function </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>session/usage-get-metrics</code> </td><td> Get usage metrics for the session. </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(session/usage-get-metrics my-session)
+</code></pre>
 <hr />
 <h2><a href="#ui-elicitation" id="ui-elicitation"></a>UI Elicitation</h2>
 <p>Request structured user input via interactive dialogs. Check host support before calling.</p>
@@ -808,7 +973,7 @@ copilot/interaction-events
 <tbody>
 <tr><td> <code>:copilot/session.start</code> </td><td> Session created </td></tr>
 <tr><td> <code>:copilot/session.resume</code> </td><td> Session resumed </td></tr>
-<tr><td> <code>:copilot/session.error</code> </td><td> Session error occurred </td></tr>
+<tr><td> <code>:copilot/session.error</code> </td><td> Session error occurred; data: <code>{:error-type "..." :message "..." :stack "..." :status-code 429 :provider-call-id "..." :url "..."}</code> (<code>:stack</code>, <code>:status-code</code>, <code>:provider-call-id</code>, <code>:url</code> optional) </td></tr>
 <tr><td> <code>:copilot/session.idle</code> </td><td> Session finished processing </td></tr>
 <tr><td> <code>:copilot/session.info</code> </td><td> Informational session update </td></tr>
 <tr><td> <code>:copilot/session.model_change</code> </td><td> Session model changed </td></tr>
@@ -1003,6 +1168,41 @@ copilot/interaction-events
 (copilot/result-denied "Permission denied")
 (copilot/result-rejected "Invalid parameters")
 </code></pre>
+<p><strong>MCP result conversion:</strong></p>
+<p>Convert an MCP <code>CallToolResult</code> into the SDK’s <code>ToolResultObject</code> format with <code>convert-mcp-call-tool-result</code>:</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk.tools :as tools])
+
+(tools/convert-mcp-call-tool-result
+  {:content [{:type "text" :text "Hello from MCP"}]
+   :is-error false})
+;; =&gt; {:text-result-for-llm "Hello from MCP", :result-type "success"}
+
+(tools/convert-mcp-call-tool-result
+  {:content [{:type "text" :text "Something went wrong"}]
+   :is-error true})
+;; =&gt; {:text-result-for-llm "Something went wrong", :result-type "failure"}
+</code></pre>
+<p>The input map uses Clojure-idiomatic keys:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:content</code> </td><td> vector </td><td> Content blocks, each with <code>:type</code> and type-specific fields </td></tr>
+<tr><td> <code>:is-error</code> </td><td> boolean </td><td> When true, the result-type is <code>"failure"</code> </td></tr>
+</tbody>
+</table>
+<p>Supported content block types:</p>
+<table>
+<thead>
+<tr><th> Type </th><th> Fields </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>"text"</code> </td><td> <code>:text</code> </td><td> Text content, joined with newlines </td></tr>
+<tr><td> <code>"image"</code> </td><td> <code>:data</code>, <code>:mime-type</code> </td><td> Base64-encoded image, added to <code>:binary-results-for-llm</code> </td></tr>
+<tr><td> <code>"resource"</code> </td><td> <code>:resource</code> with <code>:uri</code>, <code>:text</code>, <code>:blob</code>, <code>:mime-type</code> </td><td> Resource content (text and/or binary) </td></tr>
+</tbody>
+</table>
 <h3><a href="#commands" id="commands"></a>Commands</h3>
 <p>Register slash commands that users can invoke in the TUI. Define each command as a map with <code>:name</code>, <code>:description</code>, and <code>:command-handler</code>, then pass them via <code>:commands</code> in session config.</p>
 <pre><code class="language-clojure">(def my-commands
@@ -1221,6 +1421,17 @@ copilot/interaction-events
 <tr><td> <code>:memory</code> </td><td> Memory storage operation (subject, fact, citations) </td></tr>
 </tbody>
 </table>
+<p>Memory permission events include additional data fields (specs <code>::memory-action</code>, <code>::memory-direction</code>, <code>::memory-reason</code>):</p>
+<table>
+<thead>
+<tr><th> Field </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:memory-action</code> </td><td> <code>:store</code> or <code>:vote</code> </td><td> The memory operation type </td></tr>
+<tr><td> <code>:memory-direction</code> </td><td> <code>:upvote</code> or <code>:downvote</code> </td><td> Vote direction (when action is <code>:vote</code>) </td></tr>
+<tr><td> <code>:memory-reason</code> </td><td> string </td><td> Reason for the memory operation </td></tr>
+</tbody>
+</table>
 <p>For fine-grained control, provide your own handler. When the CLI needs approval, it sends a JSON-RPC <code>permission.request</code> to the SDK. Your <code>:on-permission-request</code> callback must return a map compatible with the permission result payload; the SDK wraps this into the JSON-RPC response as <code>{:result &lt;your-map&gt;}</code>:</p>
 <p>The <code>permission_bash.clj</code> example demonstrates both an allowed and a denied shell command and prints the full permission request payload so you can inspect fields like <code>:full-command-text</code>, <code>:commands</code>, and <code>:possible-paths</code>.</p>
 <pre><code class="language-clojure">;; Approve
@@ -1254,6 +1465,15 @@ copilot/interaction-events
 <p>Pass as the <code>:on-permission-request</code> value in session config:</p>
 <pre><code class="language-clojure">(copilot/create-session client {:on-permission-request copilot/approve-all})
 </code></pre>
+<h4><a href="#default-join-session-permission-handler" id="default-join-session-permission-handler"></a><code>default-join-session-permission-handler</code></h4>
+<pre><code class="language-clojure">(copilot/default-join-session-permission-handler request ctx)
+</code></pre>
+<p>Returns <code>{:kind :no-result}</code> — the CLI handles permission decisions itself. When used with <code>resume-session</code>, the SDK sends <code>requestPermission: false</code> on the wire, telling the CLI that this client does not want to handle permission requests.</p>
+<p>Use this when reconnecting to a session where the original client already established permission handling:</p>
+<pre><code class="language-clojure">(copilot/resume-session client "session-123"
+  {:on-permission-request copilot/default-join-session-permission-handler})
+</code></pre>
+<p>Equivalent to the upstream Node.js SDK <code>defaultJoinSessionPermissionHandler</code> export.</p>
 <h3><a href="#user-input-handling" id="user-input-handling"></a>User Input Handling</h3>
 <p>When the agent needs input from the user (via <code>ask_user</code> tool), the <code>:on-user-input-request</code> handler is called. Return a response map with the user’s input:</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client

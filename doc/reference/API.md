@@ -238,9 +238,9 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:available-tools` | vector | List of allowed tool names |
 | `:excluded-tools` | vector | List of excluded tool names |
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options` |
-| `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools` |
+| `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
-| `:custom-agents` | vector | Custom agent configs |
+| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:mcp-servers` |
 | `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
@@ -271,12 +271,18 @@ Resume an existing session by ID. The `config` map accepts the same options as `
 |---|---|---|
 | `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false) |
 
+When `:on-permission-request` is set to `default-join-session-permission-handler`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends `requestPermission: true`.
+
 ```clojure
 ;; Resume with a different model and reasoning effort
 (copilot/resume-session client "session-123"
   {:model "claude-sonnet-4"
    :reasoning-effort "high"
    :on-permission-request copilot/approve-all})
+
+;; Resume without handling permissions (join-style)
+(copilot/resume-session client "session-123"
+  {:on-permission-request copilot/default-join-session-permission-handler})
 ```
 
 #### `<create-session`
@@ -1067,6 +1073,53 @@ Get the client that owns this session.
 | `session/shell-exec!` | Execute a shell command. |
 | `session/shell-kill!` | Kill a running shell process. |
 
+**Session Name**
+
+| Function | Description |
+|----------|-------------|
+| `session/session-name-get` | Get the session name (or auto-generated summary). Returns `{:name "..."}`. |
+| `session/session-name-set!` | Set the session name (1–100 characters). |
+
+```clojure
+(session/session-name-get my-session)
+;; => {:name "My debugging session"}
+
+(session/session-name-set! my-session "Refactoring auth module")
+```
+
+**Workspace (Extended)**
+
+| Function | Description |
+|----------|-------------|
+| `session/workspace-get-workspace` | Get current workspace metadata. Returns `{:workspace {...}}`. |
+
+```clojure
+(session/workspace-get-workspace my-session)
+;; => {:workspace {:path "/home/user/project" ...}}
+```
+
+**MCP Discovery**
+
+| Function | Description |
+|----------|-------------|
+| `session/mcp-discover` | Discover MCP servers in a directory. Accepts optional opts map with `:working-directory`. |
+
+```clojure
+(session/mcp-discover my-session)
+
+(session/mcp-discover my-session {:working-directory "/path/to/project"})
+```
+
+**Usage Metrics**
+
+| Function | Description |
+|----------|-------------|
+| `session/usage-get-metrics` | Get usage metrics for the session. |
+
+```clojure
+(session/usage-get-metrics my-session)
+```
+
 ---
 
 ## UI Elicitation
@@ -1440,6 +1493,39 @@ Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `
 (copilot/result-rejected "Invalid parameters")
 ```
 
+**MCP result conversion:**
+
+Convert an MCP `CallToolResult` into the SDK's `ToolResultObject` format with `convert-mcp-call-tool-result`:
+
+```clojure
+(require '[github.copilot-sdk.tools :as tools])
+
+(tools/convert-mcp-call-tool-result
+  {:content [{:type "text" :text "Hello from MCP"}]
+   :is-error false})
+;; => {:text-result-for-llm "Hello from MCP", :result-type "success"}
+
+(tools/convert-mcp-call-tool-result
+  {:content [{:type "text" :text "Something went wrong"}]
+   :is-error true})
+;; => {:text-result-for-llm "Something went wrong", :result-type "failure"}
+```
+
+The input map uses Clojure-idiomatic keys:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:content` | vector | Content blocks, each with `:type` and type-specific fields |
+| `:is-error` | boolean | When true, the result-type is `"failure"` |
+
+Supported content block types:
+
+| Type | Fields | Description |
+|------|--------|-------------|
+| `"text"` | `:text` | Text content, joined with newlines |
+| `"image"` | `:data`, `:mime-type` | Base64-encoded image, added to `:binary-results-for-llm` |
+| `"resource"` | `:resource` with `:uri`, `:text`, `:blob`, `:mime-type` | Resource content (text and/or binary) |
+
 ### Commands
 
 Register slash commands that users can invoke in the TUI. Define each command as a map with `:name`, `:description`, and `:command-handler`, then pass them via `:commands` in session config.
@@ -1705,6 +1791,14 @@ The `:permission-kind` field in permission requests identifies the type of actio
 | `:custom-tool` | SDK-registered custom tool invocation |
 | `:memory` | Memory storage operation (subject, fact, citations) |
 
+Memory permission events include additional data fields (specs `::memory-action`, `::memory-direction`, `::memory-reason`):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `:memory-action` | `:store` or `:vote` | The memory operation type |
+| `:memory-direction` | `:upvote` or `:downvote` | Vote direction (when action is `:vote`) |
+| `:memory-reason` | string | Reason for the memory operation |
+
 For fine-grained control, provide your own handler. When the CLI needs
 approval, it sends a JSON-RPC `permission.request` to the SDK. Your
 `:on-permission-request` callback must return a map compatible with the
@@ -1761,6 +1855,23 @@ Pass as the `:on-permission-request` value in session config:
 ```clojure
 (copilot/create-session client {:on-permission-request copilot/approve-all})
 ```
+
+#### `default-join-session-permission-handler`
+
+```clojure
+(copilot/default-join-session-permission-handler request ctx)
+```
+
+Returns `{:kind :no-result}` — the CLI handles permission decisions itself. When used with `resume-session`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not want to handle permission requests.
+
+Use this when reconnecting to a session where the original client already established permission handling:
+
+```clojure
+(copilot/resume-session client "session-123"
+  {:on-permission-request copilot/default-join-session-permission-handler})
+```
+
+Equivalent to the upstream Node.js SDK `defaultJoinSessionPermissionHandler` export.
 
 ### User Input Handling
 

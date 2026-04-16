@@ -802,6 +802,23 @@
   [_request _ctx]
   {:kind :approved})
 
+(defn default-join-session-permission-handler
+  "Default permission handler for resuming sessions.
+
+  Returns `{:kind :no-result}` — the CLI handles permission decisions itself.
+  When used with `resume-session`, tells the CLI that this client does NOT
+  want to handle permission requests (`requestPermission: false` on the wire).
+
+  Use this when reconnecting to a session where the original client already
+  established permission handling:
+
+    (copilot/resume-session client session-id
+      {:on-permission-request copilot/default-join-session-permission-handler})
+
+  Equivalent to the upstream `defaultJoinSessionPermissionHandler` export."
+  [_request _ctx]
+  {:kind :no-result})
+
 (defn start!
   "Start the CLI server and establish connection.
    Blocks until connected or throws on error.
@@ -1426,7 +1443,9 @@
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
       wire-provider (assoc :provider wire-provider)
-      true (assoc :request-permission true)
+      true (assoc :request-permission
+                  (not (identical? (:on-permission-request config)
+                                   default-join-session-permission-handler)))
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
@@ -1759,7 +1778,7 @@
     (let [c (client {:is-child-process? true})
           merged-config (cond-> config
                           (not (contains? config :on-permission-request))
-                          (assoc :on-permission-request (constantly {:kind :no-result}))
+                          (assoc :on-permission-request default-join-session-permission-handler)
                           (not (contains? config :disable-resume?))
                           (assoc :disable-resume? true))]
       (try
