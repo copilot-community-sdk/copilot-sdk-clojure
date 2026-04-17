@@ -829,6 +829,12 @@
 (s/def ::session-log string?)
 (s/def ::tool-telemetry map?)
 
+;; Binary result items for tool results (upstream ToolBinaryResult)
+;; Each item has :data (base64 string), :mime-type, :type ("image"/"resource"),
+;; and optional :description. Uses map? to avoid conflicts with existing specs
+;; for ::type (attachment-specific) — binary result items have different semantics.
+(s/def ::binary-results-for-llm (s/coll-of map?))
+
 (s/def ::tool-result-object
   (s/keys :req-un [::text-result-for-llm ::result-type]
           :opt-un [::binary-results-for-llm ::error ::session-log ::tool-telemetry]))
