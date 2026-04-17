@@ -1071,8 +1071,19 @@
 (def result-failure tools/result-failure)
 (def result-denied tools/result-denied)
 (def result-rejected tools/result-rejected)
+(def convert-mcp-call-tool-result
+  "Convert an MCP CallToolResult into the SDK's ToolResultObject format.
+   See `github.copilot-sdk.tools/convert-mcp-call-tool-result`."
+  tools/convert-mcp-call-tool-result)
 
 ;; Re-export permission helpers
 (def approve-all
   "Permission handler that approves all requests. See `github.copilot-sdk.client/approve-all`."
   client/approve-all)
+
+(def default-join-session-permission-handler
+  "Default permission handler for resuming sessions.
+  Returns `{:kind :no-result}` — the CLI handles permissions itself.
+  When used with `resume-session`, sends `requestPermission: false` on the wire.
+  See `github.copilot-sdk.client/default-join-session-permission-handler`."
+  client/default-join-session-permission-handler)

@@ -3,6 +3,22 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v0.2.2 sync)
+- **`convert-mcp-call-tool-result`** — new public function in `tools` namespace that converts MCP `CallToolResult` format into the SDK's `ToolResultObject`. Handles text, image, and resource content types. (upstream PR #1049)
+- **`default-join-session-permission-handler`** — new permission handler for `resume-session` that returns `{:kind :no-result}`, signaling the CLI to handle permissions itself. Sends `requestPermission: false` on the wire. (upstream PR #1056)
+- **MCP config spec aliases** — `::mcp-stdio-server` and `::mcp-http-server` as aliases for `::mcp-local-server` and `::mcp-remote-server` respectively, matching upstream rename from Local→Stdio, Remote→HTTP. Old names kept for backward compatibility. (upstream PR #1051)
+- **Per-agent skills field** — `::agent-skills` (vector of strings) on `::custom-agent` spec, allowing skill injection per custom agent. (upstream PR #995)
+- **Memory permission event specs** — `::memory-action`, `::memory-direction`, `::memory-reason` specs for enriched memory permission request events. (CLI 1.0.22, upstream PR #1055)
+- **New RPC wrappers** in `session` namespace (all experimental):
+  - `session-name-get`, `session-name-set!` — get/set session display name (CLI 1.0.26, upstream PR #1076)
+  - `workspace-get-workspace` — get current workspace metadata (CLI 1.0.26, upstream PR #1076)
+  - `mcp-discover` — discover MCP servers in a working directory (CLI 1.0.22, upstream PR #1055)
+  - `usage-get-metrics` — get session usage metrics (CLI 1.0.22, upstream PR #1055)
+- Integration tests for all new features (18 tests covering convert-mcp-call-tool-result, spec renames, agent skills, requestPermission behavior, new RPCs, and memory specs)
+
+### Changed (post-v0.2.2 sync)
+- **`requestPermission` on resume** — `resume-session` now sends `requestPermission: false` when using `default-join-session-permission-handler`, and `true` when using any other handler (e.g., `approve-all`). Previously always sent `true`. (upstream PR #1056)
+
 ### Added (v0.2.2 sync)
 - **`enableConfigDiscovery` session option** — new boolean `:enable-config-discovery` on session and resume configs. Auto-discovers `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files are always loaded regardless. (upstream PR #1044)
 - **`modelCapabilities` override** — new `:model-capabilities` option on session config, resume config, and `switch-model!`/`set-model!`. Pass a partial capabilities map (e.g. `{:model-supports {:supports-vision true}}`) to override model capabilities for the session. (upstream PR #1029)

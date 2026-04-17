@@ -207,6 +207,10 @@
   (s/keys :req-un [::mcp-server-type ::mcp-url ::mcp-tools]
           :opt-un [::mcp-timeout ::mcp-headers]))
 
+;; New canonical names (upstream PR #1051)
+(s/def ::mcp-stdio-server ::mcp-local-server)
+(s/def ::mcp-http-server ::mcp-remote-server)
+
 (s/def ::mcp-server (s/or :local ::mcp-local-server :remote ::mcp-remote-server))
 (s/def ::mcp-servers (s/map-of #(or (keyword? %) (string? %)) ::mcp-server))
 
@@ -220,11 +224,12 @@
 (s/def ::agent-tools (s/nilable (s/coll-of string?)))
 (s/def ::agent-prompt ::non-blank-string)
 (s/def ::agent-infer? boolean?)
+(s/def ::agent-skills (s/coll-of string?))
 
 (s/def ::custom-agent
   (s/keys :req-un [::agent-name ::agent-prompt]
           :opt-un [::agent-display-name ::agent-description ::agent-tools
-                   ::mcp-servers ::agent-infer?]))
+                   ::mcp-servers ::agent-infer? ::agent-skills]))
 
 (s/def ::custom-agents (s/coll-of ::custom-agent))
 
@@ -824,6 +829,12 @@
 (s/def ::session-log string?)
 (s/def ::tool-telemetry map?)
 
+;; Binary result items for tool results (upstream ToolBinaryResult)
+;; Each item has :data (base64 string), :mime-type, :type ("image"/"resource"),
+;; and optional :description. Uses map? to avoid conflicts with existing specs
+;; for ::type (attachment-specific) — binary result items have different semantics.
+(s/def ::binary-results-for-llm (s/coll-of map?))
+
 (s/def ::tool-result-object
   (s/keys :req-un [::text-result-for-llm ::result-type]
           :opt-un [::binary-results-for-llm ::error ::session-log ::tool-telemetry]))
@@ -838,9 +849,14 @@
 
 (s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory})
 
+;; Memory permission event data fields (CLI 1.0.22, upstream PR #1055)
+(s/def ::memory-action #{:store :vote})
+(s/def ::memory-direction #{:upvote :downvote})
+(s/def ::memory-reason string?)
+
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]
-          :opt-un [::tool-call-id]))
+          :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason]))
 
 (s/def ::permission-result-kind
   #{:approved

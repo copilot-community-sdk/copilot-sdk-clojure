@@ -422,6 +422,35 @@
   :args (s/cat :session ::specs/session :params map?)
   :ret map?)
 
+;; Session name RPC function specs (upstream CLI 1.0.26, PR #1076)
+(s/fdef github.copilot-sdk.session/session-name-get
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+(s/fdef github.copilot-sdk.session/session-name-set!
+  :args (s/cat :session ::specs/session :name string?)
+  :ret map?)
+
+;; Workspace extended RPC function specs (upstream CLI 1.0.26, PR #1076)
+(s/fdef github.copilot-sdk.session/workspace-get-workspace
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+;; MCP discovery RPC function spec (upstream CLI 1.0.22, PR #1055)
+(s/fdef github.copilot-sdk.session/mcp-discover
+  :args (s/cat :session ::specs/session :opts (s/? map?))
+  :ret map?)
+
+;; Usage metrics RPC function spec (upstream CLI 1.0.22, PR #1055)
+(s/fdef github.copilot-sdk.session/usage-get-metrics
+  :args (s/cat :session ::specs/session)
+  :ret map?)
+
+;; convert-mcp-call-tool-result function spec (upstream PR #1049)
+(s/fdef github.copilot-sdk.tools/convert-mcp-call-tool-result
+  :args (s/cat :call-result map?)
+  :ret ::specs/tool-result-object)
+
 ;; Client-level MCP config function specs
 (s/fdef github.copilot-sdk.client/mcp-config-list
   :args (s/cat :client ::specs/client)
@@ -518,6 +547,12 @@
                       github.copilot-sdk.session/agent-deselect!
                       github.copilot-sdk.session/agent-reload!
                       github.copilot-sdk.session/fleet-start!
+                      github.copilot-sdk.session/session-name-get
+                      github.copilot-sdk.session/session-name-set!
+                      github.copilot-sdk.session/workspace-get-workspace
+                      github.copilot-sdk.session/mcp-discover
+                      github.copilot-sdk.session/usage-get-metrics
+                      github.copilot-sdk.tools/convert-mcp-call-tool-result
                       github.copilot-sdk.client/mcp-config-list
                       github.copilot-sdk.client/mcp-config-add!
                       github.copilot-sdk.client/mcp-config-update!
@@ -612,6 +647,12 @@
                       github.copilot-sdk.session/agent-deselect!
                       github.copilot-sdk.session/agent-reload!
                       github.copilot-sdk.session/fleet-start!
+                      github.copilot-sdk.session/session-name-get
+                      github.copilot-sdk.session/session-name-set!
+                      github.copilot-sdk.session/workspace-get-workspace
+                      github.copilot-sdk.session/mcp-discover
+                      github.copilot-sdk.session/usage-get-metrics
+                      github.copilot-sdk.tools/convert-mcp-call-tool-result
                       github.copilot-sdk.client/mcp-config-list
                       github.copilot-sdk.client/mcp-config-add!
                       github.copilot-sdk.client/mcp-config-update!

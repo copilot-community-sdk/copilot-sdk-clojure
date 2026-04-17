@@ -8,6 +8,7 @@
             [github.copilot-sdk.client :as client]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.session :as session]
+            [github.copilot-sdk.tools :as tools]
             [github.copilot-sdk.mock-server :as mock]))
 
 ;; Fixture to manage mock server lifecycle
@@ -2293,3 +2294,231 @@
                     {:on-permission-request sdk/approve-all})]
       (session/sessions-fork! session)
       (is (some #(= "sessions.fork" (:method %)) @requests)))))
+
+;; =============================================================================
+;; Post-v0.2.2 upstream sync tests
+;; =============================================================================
+
+;; --- convert-mcp-call-tool-result (upstream PR #1049) -----------------------
+
+(deftest test-convert-mcp-call-tool-result-text
+  (testing "converts text content blocks to textResultForLlm"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "text" :text "Hello"}
+                             {:type "text" :text "World"}]})]
+      (is (= "Hello\nWorld" (:text-result-for-llm result)))
+      (is (= "success" (:result-type result)))
+      (is (nil? (:binary-results-for-llm result))))))
+
+(deftest test-convert-mcp-call-tool-result-image
+  (testing "converts image content blocks to binaryResultsForLlm"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "image"
+                              :data "base64data"
+                              :mime-type "image/png"}]})]
+      (is (= "" (:text-result-for-llm result)))
+      (is (= "success" (:result-type result)))
+      (is (= 1 (count (:binary-results-for-llm result))))
+      (is (= "base64data" (:data (first (:binary-results-for-llm result)))))
+      (is (= "image/png" (:mime-type (first (:binary-results-for-llm result)))))
+      (is (= "image" (:type (first (:binary-results-for-llm result))))))))
+
+(deftest test-convert-mcp-call-tool-result-resource
+  (testing "converts resource content blocks with text and blob"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "resource"
+                              :resource {:uri "file:///test.txt"
+                                         :text "file content"
+                                         :blob "blobdata"
+                                         :mime-type "text/plain"}}]})]
+      (is (= "file content" (:text-result-for-llm result)))
+      (is (= 1 (count (:binary-results-for-llm result))))
+      (is (= "blobdata" (:data (first (:binary-results-for-llm result)))))
+      (is (= "text/plain" (:mime-type (first (:binary-results-for-llm result)))))
+      (is (= "file:///test.txt" (:description (first (:binary-results-for-llm result))))))))
+
+(deftest test-convert-mcp-call-tool-result-error
+  (testing "isError maps to failure result-type"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "text" :text "something failed"}]
+                   :is-error true})]
+      (is (= "failure" (:result-type result)))
+      (is (= "something failed" (:text-result-for-llm result))))))
+
+(deftest test-convert-mcp-call-tool-result-mixed
+  (testing "mixed content types are handled correctly"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "text" :text "preamble"}
+                             {:type "image" :data "img" :mime-type "image/jpeg"}
+                             {:type "resource" :resource {:uri "f" :text "res-text"}}]})]
+      (is (= "preamble\nres-text" (:text-result-for-llm result)))
+      (is (= 1 (count (:binary-results-for-llm result)))))))
+
+(deftest test-convert-mcp-call-tool-result-empty
+  (testing "empty content array produces empty result"
+    (let [result (tools/convert-mcp-call-tool-result {:content []})]
+      (is (= "" (:text-result-for-llm result)))
+      (is (= "success" (:result-type result)))
+      (is (nil? (:binary-results-for-llm result))))))
+
+;; --- MCP config spec renames (upstream PR #1051) ----------------------------
+
+(deftest test-mcp-stdio-server-spec
+  (testing "::mcp-stdio-server spec validates local/stdio configs"
+    (is (s/valid? :github.copilot-sdk.specs/mcp-stdio-server
+                  {:mcp-command "node" :mcp-args ["server.js"] :mcp-tools ["read"]}))
+    (is (s/valid? :github.copilot-sdk.specs/mcp-stdio-server
+                  {:mcp-command "node" :mcp-args ["server.js"] :mcp-tools ["read"]
+                   :mcp-server-type :stdio}))))
+
+(deftest test-mcp-http-server-spec
+  (testing "::mcp-http-server spec validates remote/http configs"
+    (is (s/valid? :github.copilot-sdk.specs/mcp-http-server
+                  {:mcp-server-type :http :mcp-url "https://example.com" :mcp-tools ["*"]}))
+    (is (s/valid? :github.copilot-sdk.specs/mcp-http-server
+                  {:mcp-server-type :sse :mcp-url "https://example.com" :mcp-tools ["*"]}))))
+
+;; --- Per-agent skills field (upstream PR #995) ------------------------------
+
+(deftest test-custom-agent-skills-spec
+  (testing "::custom-agent spec accepts optional :agent-skills field"
+    (is (s/valid? :github.copilot-sdk.specs/custom-agent
+                  {:agent-name "test" :agent-prompt "You are helpful"}))
+    (is (s/valid? :github.copilot-sdk.specs/custom-agent
+                  {:agent-name "test" :agent-prompt "You are helpful"
+                   :agent-skills ["skill-a" "skill-b"]}))))
+
+(deftest test-custom-agent-skills-on-wire
+  (testing "skills field is sent on wire in session.create"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "test-agent"
+                                                  :agent-prompt "Hello"
+                                                  :agent-skills ["my-skill"]}]})
+          create-params (get @seen "session.create")
+          agent (first (:customAgents create-params))]
+      (is (= ["my-skill"] (:agentSkills agent))))))
+
+;; --- requestPermission behavioral change (upstream PR #1056) ----------------
+
+(deftest test-request-permission-true-on-create
+  (testing "session.create always sends requestPermission: true"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (true? (:requestPermission create-params))))))
+
+(deftest test-request-permission-false-on-resume-without-handler
+  (testing "session.resume sends requestPermission: false with default handler"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/default-join-session-permission-handler})
+          resume-params (get @seen "session.resume")]
+      (is (false? (:requestPermission resume-params))))))
+
+(deftest test-request-permission-true-on-resume-with-handler
+  (testing "session.resume sends requestPermission: true when handler provided"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all})
+          resume-params (get @seen "session.resume")]
+      (is (true? (:requestPermission resume-params))))))
+
+;; --- New RPC wrappers (CLI 1.0.22 / 1.0.26) --------------------------------
+
+(deftest test-session-name-get
+  (testing "session-name-get calls session.name.get RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/session-name-get session)
+      (is (some #(= "session.name.get" (:method %)) @requests)))))
+
+(deftest test-session-name-set
+  (testing "session-name-set! calls session.name.set RPC with name param"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/session-name-set! session "My Session")
+      (let [req (first (filter #(= "session.name.set" (:method %)) @requests))]
+        (is (some? req))
+        (is (= "My Session" (get-in req [:params :name])))))))
+
+(deftest test-workspace-get-workspace
+  (testing "workspace-get-workspace calls session.workspaces.getWorkspace RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/workspace-get-workspace session)
+      (is (some #(= "session.workspaces.getWorkspace" (:method %)) @requests)))))
+
+(deftest test-mcp-discover
+  (testing "mcp-discover calls mcp.discover RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/mcp-discover session)
+      (is (some #(= "mcp.discover" (:method %)) @requests)))))
+
+(deftest test-mcp-discover-with-working-directory
+  (testing "mcp-discover forwards working-directory param"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/mcp-discover session {:working-directory "/tmp"})
+      (let [req (first (filter #(= "mcp.discover" (:method %)) @requests))]
+        (is (some? req))
+        (is (= "/tmp" (get-in req [:params :workingDirectory])))))))
+
+(deftest test-usage-get-metrics
+  (testing "usage-get-metrics calls session.usage.getMetrics RPC"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+              (fn [method params]
+                (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                    {:on-permission-request sdk/approve-all})]
+      (session/usage-get-metrics session)
+      (is (some #(= "session.usage.getMetrics" (:method %)) @requests)))))
+
+;; --- Memory permission event data specs (CLI 1.0.22) -----------------------
+
+(deftest test-memory-permission-event-specs
+  (testing "memory action/direction/reason specs exist and validate"
+    (is (s/valid? :github.copilot-sdk.specs/memory-action :store))
+    (is (s/valid? :github.copilot-sdk.specs/memory-action :vote))
+    (is (not (s/valid? :github.copilot-sdk.specs/memory-action :invalid)))
+    (is (s/valid? :github.copilot-sdk.specs/memory-direction :upvote))
+    (is (s/valid? :github.copilot-sdk.specs/memory-direction :downvote))
+    (is (s/valid? :github.copilot-sdk.specs/memory-reason "some reason"))))
