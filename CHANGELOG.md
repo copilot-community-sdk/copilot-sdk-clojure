@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+## [0.2.2.0] - 2026-04-20
 ### Added (post-v0.2.2 sync, batch 2)
 - **`includeSubAgentStreamingEvents` session option** — new boolean `:include-sub-agent-streaming-events?` on `::session-config`, `::resume-session-config`, and `::join-session-config`. When `true` (default), sub-agent streaming events are forwarded to the parent session's event stream. (upstream PR #1108)
 - **Per-request HTTP headers on `send!`** — new `:request-headers` option (map of string→string) on `::send-options`. Forwarded as wire `requestHeaders` and merged with provider-level headers by the CLI. (upstream PR #1094)
@@ -446,7 +447,8 @@ All notable changes to this project will be documented in this file. This change
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.1...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.2.0...HEAD
+[0.2.2.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.1...v0.2.2.0
 [0.2.1.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.0...v0.2.1.1
 [0.2.1.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.1-SNAPSHOT...v0.2.1.0
 [0.2.1.1-SNAPSHOT]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.0.0...v0.2.1.1-SNAPSHOT
