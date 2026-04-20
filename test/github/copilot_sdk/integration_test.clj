@@ -2522,3 +2522,136 @@
     (is (s/valid? :github.copilot-sdk.specs/memory-direction :upvote))
     (is (s/valid? :github.copilot-sdk.specs/memory-direction :downvote))
     (is (s/valid? :github.copilot-sdk.specs/memory-reason "some reason"))))
+
+;; --- includeSubAgentStreamingEvents wire flag (upstream PR #1108) ---------
+
+(deftest test-include-sub-agent-streaming-events-on-wire
+  (testing "includeSubAgentStreamingEvents defaults to true in session.create (upstream PR #1108)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (true? (:includeSubAgentStreamingEvents create-params)))))
+
+  (testing "includeSubAgentStreamingEvents=false is forwarded in session.create (upstream PR #1108)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :include-sub-agent-streaming-events? false})
+          create-params (get @seen "session.create")]
+      (is (false? (:includeSubAgentStreamingEvents create-params)))))
+
+  (testing "includeSubAgentStreamingEvents defaults to true in session.resume (upstream PR #1108)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all})
+          resume-params (get @seen "session.resume")]
+      (is (true? (:includeSubAgentStreamingEvents resume-params)))))
+
+  (testing "includeSubAgentStreamingEvents=false is forwarded in session.resume (upstream PR #1108)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :include-sub-agent-streaming-events? false})
+          resume-params (get @seen "session.resume")]
+      (is (false? (:includeSubAgentStreamingEvents resume-params))))))
+
+;; --- requestHeaders on send! (upstream PR #1094) --------------------------
+
+(deftest test-send-request-headers-on-wire
+  (testing "send! forwards :request-headers as wire :requestHeaders (upstream PR #1094)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.send"} method)
+                                                      (swap! seen assoc method params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/send! session {:prompt "Hi"
+                                :request-headers {"X-Trace-Id" "abc-123"
+                                                  "X-Custom" "value"}})
+          send-params (get @seen "session.send")]
+      (is (= "abc-123" (get-in send-params [:requestHeaders (keyword "X-Trace-Id")])))
+      (is (= "value" (get-in send-params [:requestHeaders (keyword "X-Custom")])))))
+
+  (testing "send! omits requestHeaders when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.send"} method)
+                                                      (swap! seen assoc method params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/send! session {:prompt "Hi"})
+          send-params (get @seen "session.send")]
+      (is (not (contains? send-params :requestHeaders)))))
+
+  (testing "send-async forwards :request-headers as wire :requestHeaders (upstream PR #1094)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.send"} method)
+                                                      (swap! seen assoc method params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/send-async session {:prompt "Hi"
+                                     :request-headers {"X-Trace-Id" "xyz-789"}})
+          ;; Poll for the async RPC to land rather than fixed sleep (avoids flakes under load).
+          deadline (+ (System/currentTimeMillis) 2000)]
+      (while (and (nil? (get @seen "session.send"))
+                  (< (System/currentTimeMillis) deadline))
+        (Thread/sleep 10))
+      (let [send-params (get @seen "session.send")]
+        (is (some? send-params) "async send should have issued session.send within deadline")
+        (is (= "xyz-789" (get-in send-params [:requestHeaders (keyword "X-Trace-Id")])))))))
+
+;; --- ProviderConfig headers (upstream PR #1094) ---------------------------
+
+(deftest test-provider-headers-on-wire
+  (testing "Provider :headers field is forwarded in session.create (upstream PR #1094)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "gpt-5"
+                                 :provider {:base-url "https://example.com"
+                                            :headers {"X-Org" "acme"}}})
+          create-params (get @seen "session.create")]
+      (is (= "acme" (get-in create-params [:provider :headers (keyword "X-Org")]))))))
+
+;; --- Spec-only additions (event data fields, upstream 1.0.28 / 1.0.32 / #1108) ---
+
+(deftest test-spec-can-offer-session-approval
+  (testing ":can-offer-session-approval is a valid boolean spec (upstream 1.0.28)"
+    (is (s/valid? :github.copilot-sdk.specs/can-offer-session-approval true))
+    (is (s/valid? :github.copilot-sdk.specs/can-offer-session-approval false))
+    (is (not (s/valid? :github.copilot-sdk.specs/can-offer-session-approval "yes")))))
+
+(deftest test-spec-reasoning-tokens
+  (testing ":reasoning-tokens is a non-negative integer spec (upstream 1.0.32)"
+    (is (s/valid? :github.copilot-sdk.specs/reasoning-tokens 0))
+    (is (s/valid? :github.copilot-sdk.specs/reasoning-tokens 1234))
+    (is (not (s/valid? :github.copilot-sdk.specs/reasoning-tokens -1)))
+    (is (not (s/valid? :github.copilot-sdk.specs/reasoning-tokens "100")))))
+
+(deftest test-spec-agent-id-on-base-event
+  (testing ":agent-id is accepted as an optional string on base events (upstream PR #1108)"
+    (let [evt {:event-id "evt-1"
+               :event-timestamp "2026-04-20T10:00:00Z"
+               :parent-id nil
+               :agent-id "subagent-42"}]
+      (is (s/valid? :github.copilot-sdk.specs/base-event evt)))
+    (let [evt-no-agent {:event-id "evt-2"
+                        :event-timestamp "2026-04-20T10:00:00Z"
+                        :parent-id nil}]
+      (is (s/valid? :github.copilot-sdk.specs/base-event evt-no-agent)))))

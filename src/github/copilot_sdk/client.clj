@@ -1401,6 +1401,10 @@
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      true (assoc :include-sub-agent-streaming-events
+                  (if (some? (:include-sub-agent-streaming-events? config))
+                    (:include-sub-agent-streaming-events? config)
+                    true))
       true (assoc :env-value-mode "direct"))))
 
 (defn- build-resume-session-params
@@ -1464,6 +1468,10 @@
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      true (assoc :include-sub-agent-streaming-events
+                  (if (some? (:include-sub-agent-streaming-events? config))
+                    (:include-sub-agent-streaming-events? config)
+                    true))
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
@@ -1525,6 +1533,9 @@
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
                            DeepPartial of model capabilities, e.g.
                            {:model-supports {:supports-vision true}}
+   - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
+                                            sub-agents are forwarded to this session's event stream.
+                                            (upstream PR #1108)
    
    Returns a CopilotSession."
   [client config]
@@ -1587,6 +1598,9 @@
                            Guarantees early events like session.start are not missed.
    - :enable-config-discovery - Boolean. Auto-discover .mcp.json, skills, etc. (upstream PR #1044)
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
+   - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
+                                            sub-agents are forwarded to this session's event stream.
+                                            (upstream PR #1108)
    
    Returns a CopilotSession."
   [client session-id config]

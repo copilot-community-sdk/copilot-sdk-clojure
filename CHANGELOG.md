@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v0.2.2 sync, batch 2)
+- **`includeSubAgentStreamingEvents` session option** — new boolean `:include-sub-agent-streaming-events?` on `::session-config`, `::resume-session-config`, and `::join-session-config`. When `true` (default), sub-agent streaming events are forwarded to the parent session's event stream. (upstream PR #1108)
+- **Per-request HTTP headers on `send!`** — new `:request-headers` option (map of string→string) on `::send-options`. Forwarded as wire `requestHeaders` and merged with provider-level headers by the CLI. (upstream PR #1094)
+- **Provider-level HTTP headers** — new `:headers` field (map of string→string) on `::provider` config. Sent with each model request to BYOK endpoints. (upstream PR #1094)
+- **`::can-offer-session-approval`** spec — boolean field present on `permission.requested` events of kind `writeFile`, indicating the CLI can offer a "trust this session" choice. (CLI 1.0.28, upstream PR #1089)
+- **`::reasoning-tokens`** spec — non-negative integer field on `assistant.usage` and `session.usage_info` events tracking tokens used for reasoning content. (CLI 1.0.32, upstream PR #1105)
+- **`::agent-id`** spec — optional string field on `::base-event`, identifying which (sub-)agent emitted the event. (upstream PR #1108)
+- Integration tests for all new wire fields and specs (6 new `deftest`s covering sync/async wire forwarding and the 3 new spec additions).
+
 ### Added (post-v0.2.2 sync)
 - **`convert-mcp-call-tool-result`** — new public function in `tools` namespace that converts MCP `CallToolResult` format into the SDK's `ToolResultObject`. Handles text, image, and resource content types. (upstream PR #1049)
 - **`default-join-session-permission-handler`** — new permission handler for `resume-session` that returns `{:kind :no-result}`, signaling the CLI to handle permissions itself. Sends `requestPermission: false` on the wire. (upstream PR #1056)

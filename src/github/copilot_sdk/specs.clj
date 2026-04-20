@@ -250,9 +250,14 @@
 (s/def ::azure-options
   (s/keys :opt-un [::azure-api-version]))
 
+;; Provider :headers — extra HTTP headers forwarded with each model request
+;; (upstream PR #1094, available since CLI 1.0.32). Map of header name → value.
+(s/def ::headers (s/map-of string? string?))
+
 (s/def ::provider
   (s/keys :req-un [::base-url]
-          :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options]))
+          :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
+                   ::headers]))
 
 ;; -----------------------------------------------------------------------------
 ;; Session configuration
@@ -360,6 +365,10 @@
 ;; enableConfigDiscovery: auto-discover MCP configs, skills, instruction files (upstream PR #1044)
 (s/def ::enable-config-discovery boolean?)
 
+;; includeSubAgentStreamingEvents: forward streaming events from sub-agents to the parent
+;; session's event stream (upstream PR #1108). Defaults to true on the wire.
+(s/def ::include-sub-agent-streaming-events? boolean?)
+
 ;; modelCapabilities override for session config / setModel (upstream PR #1029).
 ;; DeepPartial<ModelCapabilities> — same shape as ::model-capabilities since all fields are already optional.
 
@@ -371,7 +380,8 @@
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
     :working-directory :agent :on-event :create-session-fs-handler
-    :enable-config-discovery :model-capabilities})
+    :enable-config-discovery :model-capabilities
+    :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
   (closed-keys
@@ -383,7 +393,8 @@
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities])
+                    ::enable-config-discovery ::model-capabilities
+                    ::include-sub-agent-streaming-events?])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -392,7 +403,8 @@
     :mcp-servers :custom-agents :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
-    :create-session-fs-handler :enable-config-discovery :model-capabilities})
+    :create-session-fs-handler :enable-config-discovery :model-capabilities
+    :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -403,7 +415,8 @@
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities])
+                    ::enable-config-discovery ::model-capabilities
+                    ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
 ;; join-session config: same as resume-session-config but :on-permission-request is optional.
@@ -417,7 +430,8 @@
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities])
+                    ::enable-config-discovery ::model-capabilities
+                    ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -504,11 +518,20 @@
 (s/def ::inbound-attachments (s/coll-of ::inbound-attachment))
 (s/def ::mode #{:enqueue :immediate})
 
+;; Per-request HTTP headers forwarded to the model provider (upstream PR #1094).
+;; Map of header name → value, merged with any provider-level headers.
+(s/def ::request-headers (s/map-of string? string?))
+
 (s/def ::send-options
   (s/keys :req-un [::prompt]
-          :opt-un [::attachments ::mode ::timeout-ms]))
+          :opt-un [::attachments ::mode ::timeout-ms ::request-headers]))
 
-(s/def ::timeout-ms pos-int?)
+;; :timeout-ms as used in option maps for send-async / <send! /
+;; send-async-with-id allows nil to "disable" the timeout per the docstrings.
+(s/def ::timeout-ms (s/nilable pos-int?))
+;; send-and-wait!'s positional timeout-ms argument passes the value directly to
+;; async/timeout, so the positional form requires a strict positive integer.
+(s/def ::strict-timeout-ms pos-int?)
 
 ;; -----------------------------------------------------------------------------
 ;; Connection state
@@ -566,6 +589,21 @@
 (s/def ::event-timestamp ::timestamp)
 (s/def ::parent-id (s/nilable ::non-blank-string))
 (s/def ::ephemeral? boolean?)
+;; agent-id: identifies which (sub-)agent emitted an event. Present on most events
+;; once sub-agent streaming is enabled (upstream PR #1108).
+(s/def ::agent-id ::non-blank-string)
+
+;; canOfferSessionApproval: writeFile permission requests carry this hint indicating
+;; whether the CLI can present a "trust this session" option (upstream CLI 1.0.28).
+;; Note: the spec key name omits the `?` suffix because camel-snake-kebab (used
+;; by util/wire->clj) converts `canOfferSessionApproval` to
+;; `:can-offer-session-approval` (no `?`), and `:opt-un` matches on the exact
+;; unqualified keyword — a `?`-suffixed spec would silently never fire.
+(s/def ::can-offer-session-approval boolean?)
+
+;; reasoningTokens: per-message / per-session tokens used for reasoning content
+;; (upstream CLI 1.0.32). Reported on assistant.usage and session.usage_info events.
+(s/def ::reasoning-tokens nat-int?)
 
 ;; Session log specs (upstream PR #737)
 (s/def ::level #{"info" "warning" "error"})
@@ -574,7 +612,7 @@
 
 (s/def ::base-event
   (s/keys :req-un [::event-id ::event-timestamp ::parent-id]
-          :opt-un [::ephemeral?]))
+          :opt-un [::ephemeral? ::agent-id]))
 
 ;; Event type enum (namespaced under :copilot/)
 (s/def ::event-type
@@ -856,7 +894,8 @@
 
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]
-          :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason]))
+          :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason
+                   ::can-offer-session-approval]))
 
 (s/def ::permission-result-kind
   #{:approved

@@ -475,9 +475,14 @@
    Returns the message ID immediately (fire-and-forget).
    
    Options:
-   - :prompt       - The message text (required)
-   - :attachments  - Vector of attachments (file/directory/selection)
-   - :mode         - :enqueue (default) or :immediate"
+   - :prompt          - The message text (required)
+   - :attachments     - Vector of attachments (file/directory/selection)
+   - :mode            - :enqueue (default) or :immediate
+   - :request-headers - Optional map of HTTP headers forwarded to the
+                        upstream LLM on this send (upstream PR #1094).
+                        Keys and values must both be strings (do not use
+                        Clojure keywords — they would be camelized by the
+                        wire-conversion layer)."
   [session opts]
   (when-not (s/valid? ::specs/send-options opts)
     (throw (ex-info "Invalid send options"
@@ -499,7 +504,8 @@
                           :prompt (:prompt opts)}
                    trace-ctx (merge trace-ctx)
                    wire-attachments (assoc :attachments wire-attachments)
-                   (:mode opts) (assoc :mode (name (:mode opts))))
+                   (:mode opts) (assoc :mode (name (:mode opts)))
+                   (:request-headers opts) (assoc :request-headers (:request-headers opts)))
           result (proto/send-request! conn "session.send" params)
           msg-id (:message-id result)]
       (log/debug "send! completed for session " session-id " message-id=" msg-id)
@@ -705,7 +711,8 @@
                                   :prompt (:prompt opts)}
                            trace-ctx (merge trace-ctx)
                            wire-attachments (assoc :attachments wire-attachments)
-                           (:mode opts) (assoc :mode (name (:mode opts))))
+                           (:mode opts) (assoc :mode (name (:mode opts)))
+                           (:request-headers opts) (assoc :request-headers (:request-headers opts)))
                   response-ch (proto/send-request conn "session.send" params)
                   [result port] (if deadline-ch
                                   (async/alts! [response-ch deadline-ch])
@@ -751,9 +758,15 @@
    Serialized per session to avoid mixing concurrent sends.
    Safe for use inside go blocks — no blocking operations.
    
-   Options:
+   Options: same as send! (including :request-headers).
+   
+   Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)"
   [session opts]
+  (when-not (s/valid? ::specs/send-options opts)
+    (throw (ex-info "Invalid send options"
+                    {:opts opts
+                     :explain (s/explain-data ::specs/send-options opts)})))
   (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
         opts (dissoc opts :timeout-ms)]
     (<send-async* session opts timeout-ms)))
@@ -762,7 +775,9 @@
   "Send a message and return a channel that delivers the final content string.
    This is the async equivalent of send-and-wait! - use inside go blocks.
    
-   Options:
+   Options: same as send! (including :request-headers).
+   
+   Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
    
    The returned channel delivers a single value (the response content) then closes."
