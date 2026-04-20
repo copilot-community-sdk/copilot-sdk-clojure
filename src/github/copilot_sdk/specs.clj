@@ -526,7 +526,7 @@
   (s/keys :req-un [::prompt]
           :opt-un [::attachments ::mode ::timeout-ms ::request-headers]))
 
-(s/def ::timeout-ms pos-int?)
+(s/def ::timeout-ms (s/nilable pos-int?))
 
 ;; -----------------------------------------------------------------------------
 ;; Connection state
