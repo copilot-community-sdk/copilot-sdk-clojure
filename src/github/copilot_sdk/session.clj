@@ -765,6 +765,10 @@
   [session opts]
   (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
         opts (dissoc opts :timeout-ms)]
+    (when-not (s/valid? ::specs/send-options opts)
+      (throw (ex-info "Invalid send options"
+                      {:opts opts
+                       :explain (s/explain-data ::specs/send-options opts)})))
     (<send-async* session opts timeout-ms)))
 
 (defn <send!
