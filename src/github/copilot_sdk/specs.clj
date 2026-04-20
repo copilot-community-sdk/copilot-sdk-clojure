@@ -526,7 +526,12 @@
   (s/keys :req-un [::prompt]
           :opt-un [::attachments ::mode ::timeout-ms ::request-headers]))
 
+;; :timeout-ms as used in option maps for send-async / <send! / send-and-wait!
+;; allows nil to "disable" the timeout per the docstrings.
 (s/def ::timeout-ms (s/nilable pos-int?))
+;; send-and-wait!'s positional timeout-ms argument passes the value directly to
+;; async/timeout, so the positional form requires a strict positive integer.
+(s/def ::strict-timeout-ms pos-int?)
 
 ;; -----------------------------------------------------------------------------
 ;; Connection state
