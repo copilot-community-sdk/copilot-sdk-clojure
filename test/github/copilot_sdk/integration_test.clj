@@ -2632,10 +2632,10 @@
 ;; --- Spec-only additions (event data fields, upstream 1.0.28 / 1.0.32 / #1108) ---
 
 (deftest test-spec-can-offer-session-approval
-  (testing ":can-offer-session-approval? is a valid boolean spec (upstream 1.0.28)"
-    (is (s/valid? :github.copilot-sdk.specs/can-offer-session-approval? true))
-    (is (s/valid? :github.copilot-sdk.specs/can-offer-session-approval? false))
-    (is (not (s/valid? :github.copilot-sdk.specs/can-offer-session-approval? "yes")))))
+  (testing ":can-offer-session-approval is a valid boolean spec (upstream 1.0.28)"
+    (is (s/valid? :github.copilot-sdk.specs/can-offer-session-approval true))
+    (is (s/valid? :github.copilot-sdk.specs/can-offer-session-approval false))
+    (is (not (s/valid? :github.copilot-sdk.specs/can-offer-session-approval "yes")))))
 
 (deftest test-spec-reasoning-tokens
   (testing ":reasoning-tokens is a non-negative integer spec (upstream 1.0.32)"

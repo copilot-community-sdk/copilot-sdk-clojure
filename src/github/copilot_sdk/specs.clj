@@ -526,8 +526,8 @@
   (s/keys :req-un [::prompt]
           :opt-un [::attachments ::mode ::timeout-ms ::request-headers]))
 
-;; :timeout-ms as used in option maps for send-async / <send! / send-and-wait!
-;; allows nil to "disable" the timeout per the docstrings.
+;; :timeout-ms as used in option maps for send-async / <send! /
+;; send-async-with-id allows nil to "disable" the timeout per the docstrings.
 (s/def ::timeout-ms (s/nilable pos-int?))
 ;; send-and-wait!'s positional timeout-ms argument passes the value directly to
 ;; async/timeout, so the positional form requires a strict positive integer.
@@ -595,7 +595,11 @@
 
 ;; canOfferSessionApproval: writeFile permission requests carry this hint indicating
 ;; whether the CLI can present a "trust this session" option (upstream CLI 1.0.28).
-(s/def ::can-offer-session-approval? boolean?)
+;; Note: the spec key name omits the `?` suffix because camel-snake-kebab (used
+;; by util/wire->clj) converts `canOfferSessionApproval` to
+;; `:can-offer-session-approval` (no `?`), and `:opt-un` matches on the exact
+;; unqualified keyword — a `?`-suffixed spec would silently never fire.
+(s/def ::can-offer-session-approval boolean?)
 
 ;; reasoningTokens: per-message / per-session tokens used for reasoning content
 ;; (upstream CLI 1.0.32). Reported on assistant.usage and session.usage_info events.
@@ -891,7 +895,7 @@
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]
           :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason
-                   ::can-offer-session-approval?]))
+                   ::can-offer-session-approval]))
 
 (s/def ::permission-result-kind
   #{:approved
