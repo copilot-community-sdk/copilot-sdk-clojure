@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file. This change
 - **`::can-offer-session-approval?`** spec — boolean field present on `permission.requested` events of kind `writeFile`, indicating the CLI can offer a "trust this session" choice. (CLI 1.0.28, upstream PR #1089)
 - **`::reasoning-tokens`** spec — non-negative integer field on `assistant.usage` and `session.usage_info` events tracking tokens used for reasoning content. (CLI 1.0.32, upstream PR #1105)
 - **`::agent-id`** spec — optional string field on `::base-event`, identifying which (sub-)agent emitted the event. (upstream PR #1108)
-- Integration tests for all new wire fields and specs (7 new tests).
+- Integration tests for all new wire fields and specs (6 new `deftest`s covering sync/async wire forwarding and the 3 new spec additions).
 
 ### Added (post-v0.2.2 sync)
 - **`convert-mcp-call-tool-result`** — new public function in `tools` namespace that converts MCP `CallToolResult` format into the SDK's `ToolResultObject`. Handles text, image, and resource content types. (upstream PR #1049)

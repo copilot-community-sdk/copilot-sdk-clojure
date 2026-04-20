@@ -885,7 +885,8 @@
 
 (s/def ::permission-request
   (s/keys :req-un [::permission-kind]
-          :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason]))
+          :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason
+                   ::can-offer-session-approval?]))
 
 (s/def ::permission-result-kind
   #{:approved
