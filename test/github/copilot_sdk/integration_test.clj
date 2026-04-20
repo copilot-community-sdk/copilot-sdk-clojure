@@ -2603,10 +2603,14 @@
                                                       (swap! seen assoc method params))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/send-async session {:prompt "Hi"
-                                     :request-headers {"X-Trace-Id" "xyz-789"}})]
-      ;; Allow async send to issue the RPC.
-      (Thread/sleep 100)
+                                     :request-headers {"X-Trace-Id" "xyz-789"}})
+          ;; Poll for the async RPC to land rather than fixed sleep (avoids flakes under load).
+          deadline (+ (System/currentTimeMillis) 2000)]
+      (while (and (nil? (get @seen "session.send"))
+                  (< (System/currentTimeMillis) deadline))
+        (Thread/sleep 10))
       (let [send-params (get @seen "session.send")]
+        (is (some? send-params) "async send should have issued session.send within deadline")
         (is (= "xyz-789" (get-in send-params [:requestHeaders (keyword "X-Trace-Id")])))))))
 
 ;; --- ProviderConfig headers (upstream PR #1094) ---------------------------

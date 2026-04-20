@@ -586,7 +586,7 @@
 (s/def ::ephemeral? boolean?)
 ;; agent-id: identifies which (sub-)agent emitted an event. Present on most events
 ;; once sub-agent streaming is enabled (upstream PR #1108).
-(s/def ::agent-id string?)
+(s/def ::agent-id ::non-blank-string)
 
 ;; canOfferSessionApproval: writeFile permission requests carry this hint indicating
 ;; whether the CLI can present a "trust this session" option (upstream CLI 1.0.28).
