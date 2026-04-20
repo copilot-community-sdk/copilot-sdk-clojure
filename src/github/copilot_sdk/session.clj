@@ -499,7 +499,8 @@
                           :prompt (:prompt opts)}
                    trace-ctx (merge trace-ctx)
                    wire-attachments (assoc :attachments wire-attachments)
-                   (:mode opts) (assoc :mode (name (:mode opts))))
+                   (:mode opts) (assoc :mode (name (:mode opts)))
+                   (:request-headers opts) (assoc :request-headers (:request-headers opts)))
           result (proto/send-request! conn "session.send" params)
           msg-id (:message-id result)]
       (log/debug "send! completed for session " session-id " message-id=" msg-id)
@@ -705,7 +706,8 @@
                                   :prompt (:prompt opts)}
                            trace-ctx (merge trace-ctx)
                            wire-attachments (assoc :attachments wire-attachments)
-                           (:mode opts) (assoc :mode (name (:mode opts))))
+                           (:mode opts) (assoc :mode (name (:mode opts)))
+                           (:request-headers opts) (assoc :request-headers (:request-headers opts)))
                   response-ch (proto/send-request conn "session.send" params)
                   [result port] (if deadline-ch
                                   (async/alts! [response-ch deadline-ch])

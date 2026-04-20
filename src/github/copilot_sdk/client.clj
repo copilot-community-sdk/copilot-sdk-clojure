@@ -1401,6 +1401,10 @@
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      true (assoc :include-sub-agent-streaming-events
+                  (if (some? (:include-sub-agent-streaming-events? config))
+                    (:include-sub-agent-streaming-events? config)
+                    true))
       true (assoc :env-value-mode "direct"))))
 
 (defn- build-resume-session-params
@@ -1464,6 +1468,10 @@
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      true (assoc :include-sub-agent-streaming-events
+                  (if (some? (:include-sub-agent-streaming-events? config))
+                    (:include-sub-agent-streaming-events? config)
+                    true))
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
