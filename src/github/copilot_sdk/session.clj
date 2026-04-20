@@ -475,9 +475,14 @@
    Returns the message ID immediately (fire-and-forget).
    
    Options:
-   - :prompt       - The message text (required)
-   - :attachments  - Vector of attachments (file/directory/selection)
-   - :mode         - :enqueue (default) or :immediate"
+   - :prompt          - The message text (required)
+   - :attachments     - Vector of attachments (file/directory/selection)
+   - :mode            - :enqueue (default) or :immediate
+   - :request-headers - Optional map of HTTP headers forwarded to the
+                        upstream LLM on this send (upstream PR #1094).
+                        Keys and values must both be strings (do not use
+                        Clojure keywords — they would be camelized by the
+                        wire-conversion layer)."
   [session opts]
   (when-not (s/valid? ::specs/send-options opts)
     (throw (ex-info "Invalid send options"
@@ -753,7 +758,9 @@
    Serialized per session to avoid mixing concurrent sends.
    Safe for use inside go blocks — no blocking operations.
    
-   Options:
+   Options: same as send! (including :request-headers).
+   
+   Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)"
   [session opts]
   (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
@@ -764,7 +771,9 @@
   "Send a message and return a channel that delivers the final content string.
    This is the async equivalent of send-and-wait! - use inside go blocks.
    
-   Options:
+   Options: same as send! (including :request-headers).
+   
+   Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
    
    The returned channel delivers a single value (the response content) then closes."
