@@ -240,6 +240,15 @@
                :opts (s/? (s/nilable ::specs/log-options)))
   :ret ::specs/event-id)
 
+(s/fdef github.copilot-sdk.session/create-session-fs-adapter
+  :args (s/cat :provider ::specs/session-fs-provider)
+  :ret ::specs/session-fs-handler)
+
+(s/fdef github.copilot-sdk.session/adapt-session-fs-handler
+  :args (s/cat :handler-or-provider (s/or :handler ::specs/session-fs-handler
+                                          :provider ::specs/session-fs-provider))
+  :ret ::specs/session-fs-handler)
+
 ;; -- Experimental RPC method specs -------------------------------------------
 
 (s/fdef github.copilot-sdk.session/skills-list
@@ -515,6 +524,8 @@
                       github.copilot-sdk.session/switch-model!
                       github.copilot-sdk.session/set-model!
                       github.copilot-sdk.session/log!
+                      github.copilot-sdk.session/create-session-fs-adapter
+                      github.copilot-sdk.session/adapt-session-fs-handler
                       github.copilot-sdk.session/skills-list
                       github.copilot-sdk.session/skills-enable!
                       github.copilot-sdk.session/skills-disable!
@@ -615,6 +626,8 @@
                       github.copilot-sdk.session/switch-model!
                       github.copilot-sdk.session/set-model!
                       github.copilot-sdk.session/log!
+                      github.copilot-sdk.session/create-session-fs-adapter
+                      github.copilot-sdk.session/adapt-session-fs-handler
                       github.copilot-sdk.session/skills-list
                       github.copilot-sdk.session/skills-enable!
                       github.copilot-sdk.session/skills-disable!
