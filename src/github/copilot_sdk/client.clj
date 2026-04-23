@@ -207,16 +207,16 @@
                                    (assoc :port port)
                                    (assoc :external-server? true))
                       child-process? (assoc :external-server? true))]
-      (cond-> {:options final-opts
-               :external-server? external?
-               :actual-host (or host "localhost")
-               :state (atom (assoc (initial-state port) :options final-opts))}
-        (:on-list-models opts)
-        (assoc :on-list-models (:on-list-models opts))
-        (:on-get-trace-context opts)
-        (assoc :on-get-trace-context (:on-get-trace-context opts))
-        (:session-fs opts)
-        (assoc :session-fs (:session-fs opts))))))
+     (cond-> {:options final-opts
+              :external-server? external?
+              :actual-host (or host "localhost")
+              :state (atom (assoc (initial-state port) :options final-opts))}
+       (:on-list-models opts)
+       (assoc :on-list-models (:on-list-models opts))
+       (:on-get-trace-context opts)
+       (assoc :on-get-trace-context (:on-get-trace-context opts))
+       (:session-fs opts)
+       (assoc :session-fs (:session-fs opts))))))
 
 (defn state
   "Get the current connection state."
@@ -261,22 +261,22 @@
                 conn (:connection-io @(:state client))]
             (when conn
               (<! (proto/send-request conn "session.tools.handlePendingToolCall"
-                                     {:session-id session-id
-                                      :request-id request-id
-                                      :result result}))))
+                                      {:session-id session-id
+                                       :request-id request-id
+                                       :result result}))))
           (catch Exception e
             (log/debug "v3 tool call error for " request-id ": " (ex-message e))
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.tools.handlePendingToolCall"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :result {:text-result-for-llm
-                                                   "Invoking this tool produced an error."
-                                                   :result-type "failure"
-                                                   :error (ex-message e)
-                                                   :tool-telemetry {}}}))))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result {:text-result-for-llm
+                                                    "Invoking this tool produced an error."
+                                                    :result-type "failure"
+                                                    :error (ex-message e)
+                                                    :tool-telemetry {}}}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-permission-requested!
@@ -304,18 +304,18 @@
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :result result}))))))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result result}))))))
           (catch Exception e
             (log/debug "v3 permission request error for " request-id ": " (ex-message e))
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}))))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-command-execute!
@@ -340,21 +340,21 @@
               (when conn
                 (if (:error cmd-response)
                   (<! (proto/send-request conn "session.commands.handlePendingCommand"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :error (:error cmd-response)}))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :error (:error cmd-response)}))
                   (<! (proto/send-request conn "session.commands.handlePendingCommand"
-                                         {:session-id session-id
-                                          :request-id request-id}))))))
+                                          {:session-id session-id
+                                           :request-id request-id}))))))
           (catch Exception e
             (log/debug "v3 command execute error for " request-id ": " (ex-message e))
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.commands.handlePendingCommand"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :error (ex-message e)}))))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :error (ex-message e)}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-elicitation-requested!
@@ -379,18 +379,18 @@
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.ui.handlePendingElicitation"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :result result}))))))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result result}))))))
           (catch Exception e
             (log/debug "v3 elicitation request error for " request-id ": " (ex-message e))
             (try
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.ui.handlePendingElicitation"
-                                         {:session-id session-id
-                                          :request-id request-id
-                                          :result {:action "cancel"}}))))
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result {:action "cancel"}}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-broadcast-event!
@@ -643,9 +643,9 @@
 
                                       ;; SessionFs operations (upstream PR #917)
                                       ("sessionFs.readFile" "sessionFs.writeFile" "sessionFs.appendFile"
-                                       "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
-                                       "sessionFs.readdir" "sessionFs.readdirWithTypes"
-                                       "sessionFs.rm" "sessionFs.rename")
+                                                            "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
+                                                            "sessionFs.readdir" "sessionFs.readdirWithTypes"
+                                                            "sessionFs.rm" "sessionFs.rename")
                                       (let [{:keys [session-id]} params]
                                         (if-not (get-in @(:state client) [:sessions session-id])
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
@@ -1364,6 +1364,8 @@
                            (util/mcp-servers->wire servers))
         wire-custom-agents (when-let [agents (:custom-agents config)]
                              (mapv util/clj->wire agents))
+        wire-default-agent (when-let [agent (:default-agent config)]
+                             (util/clj->wire agent))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
                                  (util/clj->wire is))
         wire-commands (when-let [cmds (:commands config)]
@@ -1386,6 +1388,7 @@
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
+      wire-default-agent (assoc :default-agent wire-default-agent)
       (:config-dir config) (assoc :config-dir (:config-dir config))
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
@@ -1430,6 +1433,8 @@
                            (util/mcp-servers->wire servers))
         wire-custom-agents (when-let [agents (:custom-agents config)]
                              (mapv util/clj->wire agents))
+        wire-default-agent (when-let [agent (:default-agent config)]
+                             (util/clj->wire agent))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
                                  (util/clj->wire is))
         wire-commands (when-let [cmds (:commands config)]
@@ -1453,6 +1458,7 @@
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
+      wire-default-agent (assoc :default-agent wire-default-agent)
       (:config-dir config) (assoc :config-dir (:config-dir config))
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
@@ -1506,6 +1512,7 @@
    - :streaming?         - Enable streaming
    - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
+   - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-dir         - Override config directory for CLI (configDir)
    - :skill-directories  - Additional skill directories to load
    - :disabled-skills    - Disable specific skills by name
@@ -1555,7 +1562,8 @@
       ;; Attach sessionFs handler if sessionFs is configured
       (when (:session-fs client)
         (if-let [factory (:create-session-fs-handler config)]
-          (session/set-session-fs-handler! client session-id (factory session))
+          (session/set-session-fs-handler! client session-id
+                                           (session/adapt-session-fs-handler (factory session)))
           (throw (ex-info (str ":create-session-fs-handler is required in session config "
                                "when :session-fs is enabled in client options.")
                           {:config config}))))
@@ -1583,6 +1591,7 @@
    - :streaming?         - Enable streaming responses
    - :mcp-servers        - MCP server configurations
    - :custom-agents      - Custom agent configurations
+   - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-dir         - Override configuration directory
    - :skill-directories  - Directories to load skills from
    - :disabled-skills    - Skills to disable
@@ -1629,7 +1638,8 @@
       ;; Attach sessionFs handler if sessionFs is configured
       (when (:session-fs client)
         (if-let [factory (:create-session-fs-handler config)]
-          (session/set-session-fs-handler! client session-id (factory session))
+          (session/set-session-fs-handler! client session-id
+                                           (session/adapt-session-fs-handler (factory session)))
           (throw (ex-info (str ":create-session-fs-handler is required in session config "
                                "when :session-fs is enabled in client options.")
                           {:config config}))))
@@ -1675,7 +1685,8 @@
         _ (try
             (when (:session-fs client)
               (if-let [factory (:create-session-fs-handler config)]
-                (session/set-session-fs-handler! client session-id (factory session))
+                (session/set-session-fs-handler! client session-id
+                                                 (session/adapt-session-fs-handler (factory session)))
                 (throw (ex-info (str ":create-session-fs-handler is required in session config "
                                      "when :session-fs is enabled in client options.")
                                 {:config config}))))
@@ -1743,7 +1754,8 @@
         _ (try
             (when (:session-fs client)
               (if-let [factory (:create-session-fs-handler config)]
-                (session/set-session-fs-handler! client session-id (factory session))
+                (session/set-session-fs-handler! client session-id
+                                                 (session/adapt-session-fs-handler (factory session)))
                 (throw (ex-info (str ":create-session-fs-handler is required in session config "
                                      "when :session-fs is enabled in client options.")
                                 {:config config}))))

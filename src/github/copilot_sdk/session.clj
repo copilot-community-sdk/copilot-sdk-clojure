@@ -7,7 +7,7 @@
    
    Functions take client + session-id, accessing state through the client."
   (:require [clojure.core.async :as async :refer [go go-loop <! >! >!! <!! chan close! put! alts!! mult tap untap]]
-            [clojure.core.async.impl.channels :as channels]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.spec.alpha :as s]
             [clojure.data.json :as json]
             [github.copilot-sdk.protocol :as proto]
@@ -61,17 +61,17 @@
     (swap! (:state client)
            (fn [state]
              (-> state
-                  (assoc-in [:sessions session-id]
-                            {:tool-handlers tool-handlers
-                             :command-handlers command-handlers
-                             :permission-handler on-permission-request
-                             :user-input-handler on-user-input-request
-                             :elicitation-handler on-elicitation-request
-                             :hooks hooks
-                             :destroyed? false
-                             :workspace-path workspace-path
-                             :capabilities {}
-                             :config config})
+                 (assoc-in [:sessions session-id]
+                           {:tool-handlers tool-handlers
+                            :command-handlers command-handlers
+                            :permission-handler on-permission-request
+                            :user-input-handler on-user-input-request
+                            :elicitation-handler on-elicitation-request
+                            :hooks hooks
+                            :destroyed? false
+                            :workspace-path workspace-path
+                            :capabilities {}
+                            :config config})
                  (assoc-in [:session-io session-id]
                            {:event-chan event-chan
                             :event-mult event-mult
@@ -120,11 +120,204 @@
   (when callbacks
     (swap! (:state client) assoc-in [:sessions session-id :transform-callbacks] callbacks)))
 
+(defn- validate-session-fs-handler!
+  [handler context]
+  (when-not (s/valid? ::specs/session-fs-handler handler)
+    (throw (ex-info "Invalid sessionFs handler"
+                    (merge {:handler handler
+                            :explain (s/explain-data ::specs/session-fs-handler handler)}
+                           context))))
+  handler)
+
+(defn- validate-session-fs-provider!
+  [provider context]
+  (when-not (s/valid? ::specs/session-fs-provider provider)
+    (throw (ex-info "Invalid sessionFs provider"
+                    (merge {:provider provider
+                            :explain (s/explain-data ::specs/session-fs-provider provider)}
+                           context))))
+  provider)
+
 (defn set-session-fs-handler!
   "Store a sessionFs handler map on a session. Called by client during create/resume
    when :session-fs is enabled. Handler is a map of keyword→fn for FS operations."
   [client session-id handler]
-  (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] handler))
+  (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler]
+         (validate-session-fs-handler! handler {:session-id session-id})))
+
+(defn- channel?
+  "Check if x is a core.async channel."
+  [x]
+  (satisfies? async-protocols/ReadPort x))
+
+(defn- accepts-arity?
+  [f arity]
+  (and (some? f)
+       (let [fixed-arity? (boolean
+                           (some (fn [^java.lang.reflect.Method method]
+                                   (and (= "invoke" (.getName method))
+                                        (= arity (.getParameterCount method))))
+                                 (.getDeclaredMethods (class f))))
+             variadic-min-arity (when (instance? clojure.lang.RestFn f)
+                                  (.getRequiredArity ^clojure.lang.RestFn f))]
+         (or fixed-arity?
+             (and (some? variadic-min-arity)
+                  (<= variadic-min-arity arity))))))
+
+(defn- session-fs-error
+  "Convert a provider exception to the SessionFsError shape expected by the CLI."
+  [err]
+  (let [code (or (:code (ex-data err))
+                 (when (instance? java.io.FileNotFoundException err) "ENOENT"))
+        code (if (= "ENOENT" code) "ENOENT" "UNKNOWN")]
+    {:code code
+     :message (or (ex-message err) (str err))}))
+
+(defn- await-session-fs-result
+  [result]
+  (cond
+    (channel? result) (<!! result)
+    (or (instance? java.util.concurrent.Future result)
+        (instance? clojure.lang.IPending result)) @result
+    :else result))
+
+(defn- session-fs-void-result
+  [f args params]
+  (try
+    (await-session-fs-result (apply f args))
+    nil
+    (catch clojure.lang.ArityException _
+      (try
+        (await-session-fs-result (f params))
+        nil
+        (catch Throwable t
+          (session-fs-error t))))
+    (catch Throwable t
+      (session-fs-error t))))
+
+(defn create-session-fs-adapter
+  "Adapt a provider-style session filesystem implementation to a sessionFs handler map.
+
+   Provider functions use direct arguments and throw on errors:
+   - :read-file          (fn [path] content)
+   - :write-file         (fn [path content mode])
+   - :append-file        (fn [path content mode])
+   - :exists             (fn [path] boolean)
+   - :stat               (fn [path] file-info-map)
+   - :mkdir              (fn [path recursive mode])
+   - :readdir            (fn [path] entries)
+   - :readdir-with-types (fn [path] typed-entries)
+   - :rm                 (fn [path recursive force])
+   - :rename             (fn [src dest])
+   Provider functions may return values directly, core.async channels, futures,
+   or promises.
+
+   The returned handler map has the low-level RPC contract: each function
+   receives a params map and returns RPC-shaped result maps or structured
+   SessionFsError maps. create-session/resume-session automatically adapt
+   provider-style factory returns, so call this directly only when you need the
+   low-level handler map yourself.
+
+   Existing low-level handler maps returned from :create-session-fs-handler are
+   preserved by the client registration path; this helper is for provider-style
+   maps."
+  [provider]
+  (let [provider (validate-session-fs-provider! provider {:contract :session-fs-provider})]
+    {:read-file
+     (fn [{:keys [path]}]
+       (try
+         (let [result (await-session-fs-result ((:read-file provider) path))]
+           (if (and (map? result)
+                    (or (contains? result :content)
+                        (contains? result :error)))
+             result
+             {:content result}))
+         (catch Throwable t
+           {:content "" :error (session-fs-error t)})))
+
+     :write-file
+     (fn [{:keys [path content mode] :as params}]
+       (session-fs-void-result (:write-file provider) [path content mode] params))
+
+     :append-file
+     (fn [{:keys [path content mode] :as params}]
+       (session-fs-void-result (:append-file provider) [path content mode] params))
+
+     :exists
+     (fn [{:keys [path]}]
+       (try
+         (let [result (await-session-fs-result ((:exists provider) path))]
+           (if (and (map? result)
+                    (or (contains? result :exists)
+                        (contains? result :error)))
+             result
+             {:exists (boolean result)}))
+         (catch Throwable _
+           {:exists false})))
+
+     :stat
+     (fn [{:keys [path]}]
+       (try
+         (await-session-fs-result ((:stat provider) path))
+         (catch Throwable t
+           {:is-file false
+            :is-directory false
+            :size 0
+            :mtime (.toString (java.time.Instant/now))
+            :birthtime (.toString (java.time.Instant/now))
+            :error (session-fs-error t)})))
+
+     :mkdir
+     (fn [{:keys [path recursive mode] :as params}]
+       (session-fs-void-result (:mkdir provider) [path (boolean recursive) mode] params))
+
+     :readdir
+     (fn [{:keys [path]}]
+       (try
+         (let [result (await-session-fs-result ((:readdir provider) path))]
+           (if (and (map? result)
+                    (or (contains? result :entries)
+                        (contains? result :error)))
+             result
+             {:entries result}))
+         (catch Throwable t
+           {:entries [] :error (session-fs-error t)})))
+
+     :readdir-with-types
+     (fn [{:keys [path]}]
+       (try
+         (let [result (await-session-fs-result ((:readdir-with-types provider) path))]
+           (if (and (map? result)
+                    (or (contains? result :entries)
+                        (contains? result :error)))
+             result
+             {:entries result}))
+         (catch Throwable t
+           {:entries [] :error (session-fs-error t)})))
+
+     :rm
+     (fn [{:keys [path recursive force] :as params}]
+       (session-fs-void-result (:rm provider) [path (boolean recursive) (boolean force)] params))
+
+     :rename
+     (fn [{:keys [src dest] :as params}]
+       (session-fs-void-result (:rename provider) [src dest] params))}))
+
+(defn adapt-session-fs-handler
+  "Return an RPC-shaped sessionFs handler for either supported factory contract.
+
+   Upstream SDKs expect :create-session-fs-handler to return a provider-style
+   implementation, which this function wraps with create-session-fs-adapter.
+   Existing Clojure callers may already return the low-level one-arg handler
+   map; those maps are preserved."
+  [handler-or-provider]
+  (if (or (accepts-arity? (:write-file handler-or-provider) 3)
+          (accepts-arity? (:append-file handler-or-provider) 3)
+          (accepts-arity? (:mkdir handler-or-provider) 3)
+          (accepts-arity? (:rm handler-or-provider) 3)
+          (accepts-arity? (:rename handler-or-provider) 2))
+    (create-session-fs-adapter handler-or-provider)
+    handler-or-provider))
 
 (defn handle-system-message-transform
   "Handle a systemMessage.transform RPC request from the CLI runtime.
@@ -207,11 +400,6 @@
     {:text-result-for-llm (json/write-str result)
      :result-type "success"
      :tool-telemetry {}}))
-
-(defn- channel?
-  "Check if x is a core.async channel."
-  [x]
-  (instance? clojure.core.async.impl.channels.ManyToManyChannel x))
 
 (def ^:private session-fs-method->handler-key
   "Map RPC method names to handler map keys."
@@ -319,16 +507,16 @@
 
                (and (map? result) (contains? result :result)
                     (map? (:result result)) (contains? (:result result) :kind))
-                result
+               result
 
-                :else
-                (do
-                  (log/warn "Invalid permission response for session " session-id ": " result)
-                  {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))
-             (catch Exception e
-               (log/error "Permission handler error for session " session-id ": " (ex-message e))
-               {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))))
-     :io))
+               :else
+               (do
+                 (log/warn "Invalid permission response for session " session-id ": " result)
+                 {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))
+           (catch Exception e
+             (log/error "Permission handler error for session " session-id ": " (ex-message e))
+             {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))))
+   :io))
 
 (defn handle-user-input-request!
   "Handle an incoming user input request (ask_user). Returns a channel with the result.
@@ -343,22 +531,22 @@
        (if-not handler
          {:error {:code -32001 :message "User input requested but no handler registered"}}
          (try
-            (let [result (handler request {:session-id session-id})
+           (let [result (handler request {:session-id session-id})
                   ;; If handler returns a channel, await it
-                  result (if (channel? result)
-                           (<!! result)
-                           result)
+                 result (if (channel? result)
+                          (<!! result)
+                          result)
                   ;; Normalize result to expected wire format
                   ;; Accept :answer or :response, default was-freeform to true if not specified
-                  answer (or (:answer result) (:response result))
-                  was-freeform (if (contains? result :was-freeform)
-                                 (:was-freeform result)
-                                 true)]
-              (if (and (string? answer) (not (empty? answer)))
-                {:result {:answer answer :was-freeform was-freeform}}
-                (do
-                  (log/warn "Invalid user input response for session " session-id ": " result)
-                  {:error {:code -32001 :message "User input handler returned invalid answer"}})))
+                 answer (or (:answer result) (:response result))
+                 was-freeform (if (contains? result :was-freeform)
+                                (:was-freeform result)
+                                true)]
+             (if (and (string? answer) (not (empty? answer)))
+               {:result {:answer answer :was-freeform was-freeform}}
+               (do
+                 (log/warn "Invalid user input response for session " session-id ": " result)
+                 {:error {:code -32001 :message "User input handler returned invalid answer"}})))
            (catch Exception e
              (log/error "User input handler error for session " session-id ": " (ex-message e))
              {:error {:code -32001 :message (str "User input handler error: " (ex-message e))}})))))
@@ -532,9 +720,9 @@
            last-assistant-msg (atom nil)
            {:keys [event-mult send-lock]} (session-io client session-id)]
         ;; Acquire channel-based lock (blocks calling thread)
-        (<!! send-lock)
+       (<!! send-lock)
 
-        (try
+       (try
          ;; Tap the mult BEFORE sending - ensures we don't miss events
          (log/debug "send-and-wait! tapping event mult for session " session-id)
          (tap event-mult event-ch)
@@ -612,7 +800,7 @@
                    (when-not (async/offer! out-ch event)
                      (log/debug "Dropping event for session " session-id " due to full async buffer")))]
         ;; Acquire channel-based lock (blocks calling thread)
-        (<!! send-lock)
+       (<!! send-lock)
 
        ;; Tap the mult for events, then send
        (try
@@ -1402,11 +1590,11 @@
    Throws if the host does not support elicitation."
   [session message]
   (let [result (ui-elicitation! session
-                 {:message message
-                  :requested-schema
-                  {:type "object"
-                   :properties {"confirmed" {:type "boolean" :default true}}
-                   :required ["confirmed"]}})]
+                                {:message message
+                                 :requested-schema
+                                 {:type "object"
+                                  :properties {"confirmed" {:type "boolean" :default true}}
+                                  :required ["confirmed"]}})]
     (and (= "accept" (:action result))
          (true? (get-in result [:content :confirmed])))))
 
@@ -1416,13 +1604,13 @@
    Throws if the host does not support elicitation."
   [session message options]
   (let [result (ui-elicitation! session
-                 {:message message
-                  :requested-schema
-                  {:type "object"
-                   :properties {"selection" {:type "string" :enum (vec options)}}
-                   :required ["selection"]}})]
+                                {:message message
+                                 :requested-schema
+                                 {:type "object"
+                                  :properties {"selection" {:type "string" :enum (vec options)}}
+                                  :required ["selection"]}})]
     (when (and (= "accept" (:action result))
-              (some? (get-in result [:content :selection])))
+               (some? (get-in result [:content :selection])))
       (get-in result [:content :selection]))))
 
 (defn input!
@@ -1440,11 +1628,11 @@
                  (:format opts) (assoc :format (:format opts))
                  (some? (:default opts)) (assoc :default (:default opts)))
          result (ui-elicitation! session
-                  {:message message
-                   :requested-schema
-                   {:type "object"
-                    :properties {"value" field}
-                    :required ["value"]}})]
+                                 {:message message
+                                  :requested-schema
+                                  {:type "object"
+                                   :properties {"value" field}
+                                   :required ["value"]}})]
      (when (and (= "accept" (:action result))
-               (some? (get-in result [:content :value])))
+                (some? (get-in result [:content :value])))
        (get-in result [:content :value])))))

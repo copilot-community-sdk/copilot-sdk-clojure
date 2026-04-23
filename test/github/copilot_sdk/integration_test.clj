@@ -353,9 +353,9 @@
   (testing "Log sends correct RPC params"
     (let [captured-params (atom nil)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (when (= method "session.log")
-                  (reset! captured-params params))))
+                                    (fn [method params]
+                                      (when (= method "session.log")
+                                        (reset! captured-params params))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/log! session "test message" {:level "warning" :ephemeral? true})]
       (is (= (:message @captured-params) "test message"))
@@ -532,7 +532,7 @@
                                     :data {:content "Here is the final answer with all the details." :message-id "msg-3"}})
           ;; Session idle
           (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
-          
+
           ;; Verify <send! returns the LAST message content, not the first empty one
           (let [[result _] (alts!! [result-ch (timeout 2000)])]
             (is (= "Here is the final answer with all the details." result)
@@ -865,7 +865,7 @@
                                   {:session-id "session-1"})]
       (is (= {:kind :approved} result))))
 
-   (testing "approve-all works for any permission kind"
+  (testing "approve-all works for any permission kind"
     (doseq [kind [:shell :write :mcp :read :url :custom-tool]]
       (is (= {:kind :approved}
              (sdk/approve-all {:permission-kind kind} {:session-id "s1"}))))))
@@ -901,7 +901,7 @@
                                   :permission-request {:permission-kind "shell"
                                                        :full-command-text "echo test"}}))]
       (is (= :denied-no-approval-rule-and-could-not-request-from-user
-              (get-in response [:result :result :kind]))))))
+             (get-in response [:result :result :kind]))))))
 
 (deftest test-permission-approved-with-handler
   (testing "Permission requests use configured handler"
@@ -925,7 +925,7 @@
                                            {:kind :approved}
                                            {:kind :denied-by-rules
                                             :rules [{:kind "shell"
-                                                      :argument (:full-command-text request)}]}))})
+                                                     :argument (:full-command-text request)}]}))})
           session-id (sdk/session-id session)
           handler (get-in @(:state *test-client*) [:connection :request-handler])
           approved (<!! (handler "permission.request"
@@ -974,8 +974,8 @@
   (testing "v3 no-result skips handlePendingPermissionRequest RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request
                                        (fn [_request _ctx]
@@ -995,7 +995,7 @@
       (Thread/sleep 500)
       ;; The handler returned no-result — no handlePendingPermissionRequest RPC
       (is (empty? (filter #(= "session.permissions.handlePendingPermissionRequest"
-                               (:method %))
+                              (:method %))
                           @requests))
           "no-result should skip the handlePendingPermissionRequest RPC"))))
 
@@ -1004,10 +1004,10 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.permissions.handlePendingPermissionRequest" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.permissions.handlePendingPermissionRequest" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)]
@@ -1025,7 +1025,7 @@
       (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
       ;; The handler approved — should send handlePendingPermissionRequest RPC
       (let [perm-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
-                                   (:method %))
+                                  (:method %))
                               @requests)]
         (is (= 1 (count perm-rpcs))
             "approved result should send handlePendingPermissionRequest RPC")
@@ -1040,8 +1040,8 @@
           ;; Use a latch to wait for the event to be delivered to the session
           event-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request
                                        (fn [_request _ctx]
@@ -1070,7 +1070,7 @@
           "permission handler should not be invoked when resolvedByHook is true")
       ;; No RPC should be sent
       (is (empty? (filter #(= "session.permissions.handlePendingPermissionRequest"
-                               (:method %))
+                              (:method %))
                           @requests))
           "no handlePendingPermissionRequest RPC when resolvedByHook is true")))
 
@@ -1079,10 +1079,10 @@
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.permissions.handlePendingPermissionRequest" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.permissions.handlePendingPermissionRequest" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request
                                        (fn [_request _ctx]
@@ -1103,8 +1103,8 @@
       (is (true? @handler-called?)
           "permission handler should be invoked when resolvedByHook is false")
       (is (= 1 (count (filter #(= "session.permissions.handlePendingPermissionRequest"
-                                    (:method %))
-                               @requests)))
+                                  (:method %))
+                              @requests)))
           "handlePendingPermissionRequest RPC should be sent"))))
 
 (deftest test-permission-result-kinds-spec
@@ -1124,6 +1124,67 @@
                    :mcp-server-name "my-mcp-server"
                    :mcp-tool-name "original-tool"})
         "tool.execution_start-data should accept mcp-server-name and mcp-tool-name")))
+
+(deftest test-upstream-event-data-field-specs
+  (testing "assistant reasoning and message fields from generated events are explicitly spec'd"
+    (doseq [spec-key [:github.copilot-sdk.specs/reasoning-id
+                      :github.copilot-sdk.specs/encrypted-content
+                      :github.copilot-sdk.specs/output-tokens
+                      :github.copilot-sdk.specs/phase
+                      :github.copilot-sdk.specs/reasoning-opaque
+                      :github.copilot-sdk.specs/reasoning-text
+                      :github.copilot-sdk.specs/request-id]]
+      (is (some? (s/get-spec spec-key)) (str spec-key " should exist")))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.reasoning-data
+                  {:reasoning-id "r1" :content "thinking"}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.message-data
+                  {:message-id "m1"
+                   :content "answer"
+                   :encrypted-content "ciphertext"
+                   :output-tokens 42
+                   :phase "response"
+                   :reasoning-opaque "opaque"
+                   :reasoning-text "visible reasoning"
+                   :request-id "req-1"}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/assistant.reasoning-data
+                          {:reasoning-id "r1" :content {:unexpected true}})))
+    (is (false? (s/valid? :github.copilot-sdk.specs/assistant.message-data
+                          {:message-id "m1" :content {:unexpected true}})))
+    (is (false? (s/valid? :github.copilot-sdk.specs/user.message-data
+                          {:content {:unexpected true}})))
+    (is (s/valid? :github.copilot-sdk.specs/elicitation-result
+                  {:action "accept" :content {:name "test-value"}})))
+
+  (testing "status and loaded event data fields from generated events are explicitly spec'd"
+    (doseq [spec-key [:github.copilot-sdk.specs/mcp-server-status
+                      :github.copilot-sdk.specs/mcp-loaded-server
+                      :github.copilot-sdk.specs/session.mcp_servers_loaded-data
+                      :github.copilot-sdk.specs/session.mcp_server_status_changed-data
+                      :github.copilot-sdk.specs/session.skills_loaded-data
+                      :github.copilot-sdk.specs/session.extensions_loaded-data]]
+      (is (some? (s/get-spec spec-key)) (str spec-key " should exist")))
+    (is (s/valid? :github.copilot-sdk.specs/session.mcp_server_status_changed-data
+                  {:server-name "github" :status "needs-auth"}))
+    (is (s/valid? :github.copilot-sdk.specs/session.skills_loaded-data
+                  {:skills [{:name "skill-a"
+                             :description "A skill"
+                             :enabled true
+                             :source "project"
+                             :user-invocable false}]}))
+    (is (s/valid? :github.copilot-sdk.specs/session.extensions_loaded-data
+                  {:extensions [{:id "project:ext-a"
+                                 :name "ext-a"
+                                 :source "project"
+                                 :status "running"}
+                                {:id "user:ext-b"
+                                 :name "ext-b"
+                                 :source "user"
+                                 :status "starting"}]}))
+    (is (not (s/valid? :github.copilot-sdk.specs/session.extensions_loaded-data
+                       {:extensions [{:id "project:ext-a"
+                                      :name "ext-a"
+                                      :source "project"
+                                      :status "enabled"}]})))))
 
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
@@ -1353,10 +1414,10 @@
           handler-called (atom nil)
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.commands.handlePendingCommand" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.commands.handlePendingCommand" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :commands [{:name "deploy"
@@ -1392,10 +1453,10 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.commands.handlePendingCommand" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.commands.handlePendingCommand" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :commands [{:name "deploy"
@@ -1421,10 +1482,10 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.commands.handlePendingCommand" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.commands.handlePendingCommand" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :commands [{:name "fail"
@@ -1459,9 +1520,9 @@
 (deftest test-session-capabilities-from-response
   (testing "capabilities stored from session.create response"
     (let [_ (mock/set-request-hook! *mock-server*
-              (fn [method _params]
-                (when (= "session.create" method)
-                  {::mock/merge-response {:capabilities {:ui {:elicitation true}}}})))
+                                    (fn [method _params]
+                                      (when (= "session.create" method)
+                                        {::mock/merge-response {:capabilities {:ui {:elicitation true}}}})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})]
       (is (= {:ui {:elicitation true}} (sdk/capabilities session)))
@@ -1472,11 +1533,11 @@
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not supported"
-            (sdk/confirm! session "test")))
+                            (sdk/confirm! session "test")))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not supported"
-            (sdk/select! session "test" ["a" "b"])))
+                            (sdk/select! session "test" ["a" "b"])))
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"not supported"
-            (sdk/input! session "test"))))))
+                            (sdk/input! session "test"))))))
 
 (deftest test-session-without-commands
   (testing "session without commands has empty command handlers"
@@ -1493,8 +1554,8 @@
   (testing "requestElicitation is true when :on-elicitation-request is provided"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :on-elicitation-request (fn [_ctx] {:action "cancel"})})
@@ -1506,8 +1567,8 @@
   (testing "requestElicitation is false when :on-elicitation-request is not provided"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})
           create-rpcs (filter #(= "session.create" (:method %)) @requests)]
@@ -1521,10 +1582,10 @@
           handler-called (atom nil)
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.ui.handlePendingElicitation" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.ui.handlePendingElicitation" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :on-elicitation-request
@@ -1561,10 +1622,10 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.ui.handlePendingElicitation" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.ui.handlePendingElicitation" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :on-elicitation-request
@@ -1622,10 +1683,254 @@
       ;; Set handler directly (as client code would do after factory call)
       (session/set-session-fs-handler! (:client session) session-id fs-handler)
       (let [stored (get-in @(:state *test-client*)
-                          [:sessions session-id :session-fs-handler])]
+                           [:sessions session-id :session-fs-handler])]
         (is (some? stored))
         (is (fn? (:read-file stored)))
         (is (= {:content "hello"} ((:read-file stored) {:path "/test.txt"})))))))
+
+(deftest test-create-session-fs-adapter
+  (testing "provider-style functions are adapted to sessionFs handler results"
+    (let [provider {:read-file (fn [path]
+                                 (is (= "/ok.txt" path))
+                                 "hello")
+                    :write-file (fn [path content mode]
+                                  (is (= "/ok.txt" path))
+                                  (is (= "updated" content))
+                                  (is (= 420 mode)))
+                    :exists (fn [_path] true)
+                    :stat (fn [_path] {:is-file true
+                                       :is-directory false
+                                       :size 5
+                                       :mtime "2026-01-01T00:00:00Z"
+                                       :birthtime "2026-01-01T00:00:00Z"})
+                    :readdir (fn [_path] ["a.txt"])
+                    :readdir-with-types (fn [_path] [{:name "a.txt" :is-file true :is-directory false}])
+                    :append-file (fn [_path _content _mode] nil)
+                    :mkdir (fn [_path _recursive _mode] nil)
+                    :rm (fn [_path _recursive _force] nil)
+                    :rename (fn [_src _dest] nil)}
+          handler (session/create-session-fs-adapter provider)]
+      (is (= {:content "hello"} ((:read-file handler) {:path "/ok.txt"})))
+      (is (nil? ((:write-file handler) {:path "/ok.txt"
+                                        :content "updated"
+                                        :mode 420})))
+      (is (= {:exists true} ((:exists handler) {:path "/ok.txt"})))
+      (is (= {:entries ["a.txt"]} ((:readdir handler) {:path "/"})))))
+
+  (testing "provider exceptions become structured sessionFs errors"
+    (let [missing (ex-info "missing file" {:code "ENOENT"})
+          provider {:read-file (fn [_path] (throw missing))
+                    :write-file (fn [_path _content _mode]
+                                  (throw (ex-info "disk full" {})))
+                    :exists (fn [_path] (throw (ex-info "boom" {})))
+                    :stat (fn [_path] (throw missing))
+                    :readdir (fn [_path] (throw missing))
+                    :readdir-with-types (fn [_path] (throw missing))
+                    :append-file (fn [_path _content _mode] nil)
+                    :mkdir (fn [_path _recursive _mode] nil)
+                    :rm (fn [_path _recursive _force] nil)
+                    :rename (fn [_src _dest] nil)}
+          handler (session/create-session-fs-adapter provider)]
+      (is (= {:content ""
+              :error {:code "ENOENT" :message "missing file"}}
+             ((:read-file handler) {:path "/missing.txt"})))
+      (is (= {:code "UNKNOWN" :message "disk full"}
+             ((:write-file handler) {:path "/x" :content "data"})))
+      (is (= {:exists false} ((:exists handler) {:path "/x"})))
+      (is (= "ENOENT" (get-in ((:stat handler) {:path "/x"}) [:error :code])))
+      (is (= {:entries []
+              :error {:code "ENOENT" :message "missing file"}}
+             ((:readdir handler) {:path "/x"})))))
+
+  (testing "provider async results are realized before normalization"
+    (letfn [(value-chan [value]
+              (let [ch (chan 1)]
+                (>!! ch value)
+                (close! ch)
+                ch))
+            (promise-value [value]
+              (let [ch (async/promise-chan)]
+                (>!! ch value)
+                ch))]
+      (let [writes (atom [])
+            provider {:read-file (fn [_path] (value-chan "async content"))
+                      :write-file (fn [path content mode]
+                                    (future (swap! writes conj [path content mode])))
+                      :exists (fn [_path] (promise-value false))
+                      :stat (fn [_path] (future {:is-file true
+                                                 :is-directory false
+                                                 :size 13}))
+                      :readdir (fn [_path] (value-chan ["async.txt"]))
+                      :readdir-with-types (fn [_path] (future [{:name "async.txt"
+                                                                :is-file true
+                                                                :is-directory false}]))
+                      :append-file (fn [_path _content _mode] (value-chan nil))
+                      :mkdir (fn [_path _recursive _mode] (future nil))
+                      :rm (fn [_path _recursive _force] (value-chan nil))
+                      :rename (fn [_src _dest] (future nil))}
+            handler (session/create-session-fs-adapter provider)]
+        (is (= {:content "async content"}
+               ((:read-file handler) {:path "/async.txt"})))
+        (is (nil? ((:write-file handler) {:path "/async.txt"
+                                          :content "updated"
+                                          :mode 420})))
+        (is (= [["/async.txt" "updated" 420]] @writes))
+        (is (= {:exists false} ((:exists handler) {:path "/async.txt"})))
+        (is (= {:is-file true :is-directory false :size 13}
+               ((:stat handler) {:path "/async.txt"})))
+        (is (= {:entries ["async.txt"]} ((:readdir handler) {:path "/"})))
+        (is (= {:entries [{:name "async.txt" :is-file true :is-directory false}]}
+               ((:readdir-with-types handler) {:path "/"}))))))
+
+  (testing "one-arg fallback exceptions are converted to sessionFs errors"
+    (let [provider {:read-file (fn [_path] "ok")
+                    :write-file (fn [& args]
+                                  (if (= 1 (count args))
+                                    (throw (ex-info "fallback missing" {:code "ENOENT"}))
+                                    (throw (clojure.lang.ArityException. 3 "write-file"))))
+                    :exists (fn [_path] true)
+                    :stat (fn [_path] {:is-file true :is-directory false :size 2})
+                    :readdir (fn [_path] [])
+                    :readdir-with-types (fn [_path] [])
+                    :append-file (fn [_path _content _mode] nil)
+                    :mkdir (fn [_path _recursive _mode] nil)
+                    :rm (fn [_path _recursive _force] nil)
+                    :rename (fn [_src _dest] nil)}
+          handler (session/create-session-fs-adapter provider)]
+      (is (= {:code "ENOENT" :message "fallback missing"}
+             ((:write-file handler) {:path "/x" :content "data"})))))
+
+  (testing "provider spec distinguishes provider-style maps from low-level handlers"
+    (let [provider {:read-file (fn [_path] "ok")
+                    :write-file (fn [_path _content _mode] nil)
+                    :exists (fn [_path] true)
+                    :stat (fn [_path] {:is-file true :is-directory false :size 2})
+                    :readdir (fn [_path] [])
+                    :readdir-with-types (fn [_path] [])
+                    :append-file (fn [_path _content _mode] nil)
+                    :mkdir (fn [_path _recursive _mode] nil)
+                    :rm (fn [_path _recursive _force] nil)
+                    :rename (fn [_src _dest] nil)}
+          low-level-handler {:read-file (fn [_params] {:content "ok"})
+                             :write-file (fn [_params] nil)
+                             :exists (fn [_params] {:exists true})
+                             :stat (fn [_params] {:is-file true :is-directory false :size 2})
+                             :readdir (fn [_params] {:entries []})
+                             :readdir-with-types (fn [_params] {:entries []})
+                             :append-file (fn [_params] nil)
+                             :mkdir (fn [_params] nil)
+                             :rm (fn [_params] nil)
+                             :rename (fn [_params] nil)}]
+      (is (s/valid? :github.copilot-sdk.specs/session-fs-provider provider))
+      (is (not (s/valid? :github.copilot-sdk.specs/session-fs-provider low-level-handler)))
+      (is (s/valid? :github.copilot-sdk.specs/session-fs-handler low-level-handler))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"Invalid sessionFs provider"
+                            (session/create-session-fs-adapter low-level-handler)))))
+
+  (testing "adapter detection is nil-safe for incomplete maps"
+    (is (= {:read-file ::only}
+           (session/adapt-session-fs-handler {:read-file ::only})))))
+
+(deftest test-create-session-fs-handler-factory-auto-adapts-provider
+  (testing "create-session auto-adapts provider-style factory return like upstream Node"
+    (let [calls (atom [])
+          client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"})
+          session (sdk/create-session client-with-fs
+                                      {:on-permission-request sdk/approve-all
+                                       :create-session-fs-handler
+                                       (fn [_session]
+                                         {:read-file (fn [path]
+                                                       (swap! calls conj [:read-file path])
+                                                       "content")
+                                          :write-file (fn [path content mode]
+                                                        (swap! calls conj [:write-file path content mode]))
+                                          :append-file (fn [_path _content _mode] nil)
+                                          :exists (fn [_path] true)
+                                          :stat (fn [_path] {:is-file true :is-directory false :size 7})
+                                          :mkdir (fn [_path _recursive _mode] nil)
+                                          :readdir (fn [_path] [])
+                                          :readdir-with-types (fn [_path] [])
+                                          :rm (fn [_path _recursive _force] nil)
+                                          :rename (fn [_src _dest] nil)})})
+          session-id (sdk/session-id session)
+          read-response (mock/send-rpc-request! *mock-server*
+                                                "sessionFs.readFile"
+                                                {:sessionId session-id :path "/file.txt"})
+          write-response (mock/send-rpc-request! *mock-server*
+                                                 "sessionFs.writeFile"
+                                                 {:sessionId session-id
+                                                  :path "/file.txt"
+                                                  :content "updated"
+                                                  :mode 420})]
+      (is (= {:content "content"} (:result read-response)))
+      (is (nil? (:result write-response)))
+      (is (= [[:read-file "/file.txt"]
+              [:write-file "/file.txt" "updated" 420]]
+             @calls)))))
+
+(deftest test-create-session-fs-handler-factory-preserves-low-level-handler
+  (testing "create-session still accepts existing one-arg RPC-shaped handler maps"
+    (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"})
+          session (sdk/create-session client-with-fs
+                                      {:on-permission-request sdk/approve-all
+                                       :create-session-fs-handler
+                                       (fn [_session]
+                                         {:read-file (fn [{:keys [path]}]
+                                                       {:content (str "read " path)})
+                                          :write-file (fn [_params] nil)
+                                          :append-file (fn [_params] nil)
+                                          :exists (fn [_params] {:exists true})
+                                          :stat (fn [_params] {:is-file true :is-directory false :size 7})
+                                          :mkdir (fn [_params] nil)
+                                          :readdir (fn [_params] {:entries []})
+                                          :readdir-with-types (fn [_params] {:entries []})
+                                          :rm (fn [_params] nil)
+                                          :rename (fn [_params] nil)})})
+          response (mock/send-rpc-request! *mock-server*
+                                           "sessionFs.readFile"
+                                           {:sessionId (sdk/session-id session)
+                                            :path "/legacy.txt"})]
+      (is (= {:content "read /legacy.txt"} (:result response))))))
+
+(deftest test-create-session-fs-handler-factory-validates-return
+  (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                         :session-state-path "/state"
+                                                         :conventions "posix"})
+        invalid-factory (fn [_session]
+                          {:read-file (fn [_params] {:content "partial"})})
+        config {:on-permission-request sdk/approve-all
+                :create-session-fs-handler invalid-factory}]
+    (testing "create-session fails before storing an invalid handler"
+      (let [session-id "invalid-fs-create"]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Invalid sessionFs handler"
+                              (sdk/create-session client-with-fs
+                                                  (assoc config :session-id session-id))))
+        (is (nil? (get-in @(:state client-with-fs) [:sessions session-id])))))
+    (testing "<create-session fails synchronously before returning a channel"
+      (let [session-id "invalid-fs-create-async"]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Invalid sessionFs handler"
+                              (sdk/<create-session client-with-fs
+                                                   (assoc config :session-id session-id))))
+        (is (nil? (get-in @(:state client-with-fs) [:sessions session-id])))))
+    (testing "resume-session fails before storing an invalid handler"
+      (let [session-id "invalid-fs-resume"]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Invalid sessionFs handler"
+                              (sdk/resume-session client-with-fs session-id config)))
+        (is (nil? (get-in @(:state client-with-fs) [:sessions session-id])))))
+    (testing "<resume-session fails synchronously before returning a channel"
+      (let [session-id "invalid-fs-resume-async"]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"Invalid sessionFs handler"
+                              (sdk/<resume-session client-with-fs session-id config)))
+        (is (nil? (get-in @(:state client-with-fs) [:sessions session-id])))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Hooks Tests (server→client RPC)
@@ -1635,21 +1940,21 @@
   (testing "hooks.invoke preToolUse calls registered handler and returns result"
     (let [handler-called (atom nil)
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :hooks {:on-pre-tool-use
-                             (fn [input ctx]
-                               (reset! handler-called {:input input :ctx ctx})
-                               {:permission-decision "allow"
-                                :additional-context "extra info"})}})
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-tool-use
+                                               (fn [input ctx]
+                                                 (reset! handler-called {:input input :ctx ctx})
+                                                 {:permission-decision "allow"
+                                                  :additional-context "extra info"})}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "hooks.invoke"
-                     {:sessionId session-id
-                      :hookType "preToolUse"
-                      :input {:toolName "bash"
-                              :toolArgs {:command "echo hi"}
-                              :timestamp 12345
-                              :cwd "/workspace"}})]
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "preToolUse"
+                                            :input {:toolName "bash"
+                                                    :toolArgs {:command "echo hi"}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
       (is (some? @handler-called))
       ;; Input keys are converted to kebab-case by wire->clj
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
@@ -1662,22 +1967,22 @@
   (testing "hooks.invoke postToolUse calls registered handler"
     (let [handler-called (atom nil)
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :hooks {:on-post-tool-use
-                             (fn [input ctx]
-                               (reset! handler-called {:input input :ctx ctx})
-                               nil)}})
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-post-tool-use
+                                               (fn [input ctx]
+                                                 (reset! handler-called {:input input :ctx ctx})
+                                                 nil)}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "hooks.invoke"
-                     {:sessionId session-id
-                      :hookType "postToolUse"
-                      :input {:toolName "bash"
-                              :toolArgs {}
-                              :toolResult {:textResultForLlm "ok"
-                                           :resultType "success"}
-                              :timestamp 12345
-                              :cwd "/workspace"}})]
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "postToolUse"
+                                            :input {:toolName "bash"
+                                                    :toolArgs {}
+                                                    :toolResult {:textResultForLlm "ok"
+                                                                 :resultType "success"}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
       (is (some? @handler-called))
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
       ;; Handler returned nil, so result is nil
@@ -1687,19 +1992,19 @@
   (testing "hooks.invoke sessionStart calls registered handler"
     (let [handler-called (atom nil)
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :hooks {:on-session-start
-                             (fn [input ctx]
-                               (reset! handler-called input)
-                               {:additional-context "welcome"})}})
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-session-start
+                                               (fn [input ctx]
+                                                 (reset! handler-called input)
+                                                 {:additional-context "welcome"})}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "hooks.invoke"
-                     {:sessionId session-id
-                      :hookType "sessionStart"
-                      :input {:source "new"
-                              :timestamp 12345
-                              :cwd "/workspace"}})]
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "sessionStart"
+                                            :input {:source "new"
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
       (is (some? @handler-called))
       (is (= "new" (:source @handler-called)))
       (is (= "welcome" (get-in response [:result :additionalContext]))))))
@@ -1707,46 +2012,46 @@
 (deftest test-hooks-unknown-type-returns-nil
   (testing "hooks.invoke with unknown hook type returns nil result"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :hooks {:on-pre-tool-use (fn [_ _] {:permission-decision "allow"})}})
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-tool-use (fn [_ _] {:permission-decision "allow"})}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "hooks.invoke"
-                     {:sessionId session-id
-                      :hookType "unknownHookType"
-                      :input {:timestamp 12345
-                              :cwd "/workspace"}})]
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "unknownHookType"
+                                            :input {:timestamp 12345
+                                                    :cwd "/workspace"}})]
       (is (nil? (:result response))))))
 
 (deftest test-hooks-handler-exception-returns-nil
   (testing "hooks.invoke handler exception returns nil gracefully"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :hooks {:on-pre-tool-use (fn [_ _] (throw (Exception. "oops")))}})
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-tool-use (fn [_ _] (throw (Exception. "oops")))}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "hooks.invoke"
-                     {:sessionId session-id
-                      :hookType "preToolUse"
-                      :input {:toolName "bash"
-                              :toolArgs {}
-                              :timestamp 12345
-                              :cwd "/workspace"}})]
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "preToolUse"
+                                            :input {:toolName "bash"
+                                                    :toolArgs {}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
       (is (nil? (:result response))))))
 
 (deftest test-hooks-no-hooks-registered
   (testing "hooks.invoke with no hooks registered returns nil"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})
+                                      {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "hooks.invoke"
-                     {:sessionId session-id
-                      :hookType "preToolUse"
-                      :input {:toolName "bash"
-                              :toolArgs {}
-                              :timestamp 12345
-                              :cwd "/workspace"}})]
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "preToolUse"
+                                            :input {:toolName "bash"
+                                                    :toolArgs {}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
       (is (nil? (:result response))))))
 
 ;; -----------------------------------------------------------------------------
@@ -1757,18 +2062,18 @@
   (testing "userInput.request calls registered handler with correct shape"
     (let [handler-called (atom nil)
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :on-user-input-request
-                     (fn [request ctx]
-                       (reset! handler-called {:request request :ctx ctx})
-                       {:answer "option A" :was-freeform false})})
+                                      {:on-permission-request sdk/approve-all
+                                       :on-user-input-request
+                                       (fn [request ctx]
+                                         (reset! handler-called {:request request :ctx ctx})
+                                         {:answer "option A" :was-freeform false})})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "userInput.request"
-                     {:sessionId session-id
-                      :question "Which option?"
-                      :choices ["option A" "option B"]
-                      :allowFreeform true})]
+                                           "userInput.request"
+                                           {:sessionId session-id
+                                            :question "Which option?"
+                                            :choices ["option A" "option B"]
+                                            :allowFreeform true})]
       (is (some? @handler-called))
       (is (= "Which option?" (get-in @handler-called [:request :question])))
       (is (= "option A" (get-in response [:result :answer])))
@@ -1777,14 +2082,14 @@
 (deftest test-user-input-no-handler-errors
   (testing "userInput.request without handler returns error"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})
+                                      {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)]
       (is (thrown-with-msg? clojure.lang.ExceptionInfo
-            #"User input requested but no handler registered"
-            (mock/send-rpc-request! *mock-server*
-              "userInput.request"
-              {:sessionId session-id
-               :question "Which option?"}))))))
+                            #"User input requested but no handler registered"
+                            (mock/send-rpc-request! *mock-server*
+                                                    "userInput.request"
+                                                    {:sessionId session-id
+                                                     :question "Which option?"}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; System Message Transform Tests (server→client RPC)
@@ -1793,44 +2098,44 @@
 (deftest test-system-message-transform-callback
   (testing "systemMessage.transform invokes registered transform callbacks"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :system-message {:mode :customize
-                                      :sections {:identity {:action (fn [content]
-                                                                     (str content " EXTRA"))}}}})
+                                      {:on-permission-request sdk/approve-all
+                                       :system-message {:mode :customize
+                                                        :sections {:identity {:action (fn [content]
+                                                                                        (str content " EXTRA"))}}}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "systemMessage.transform"
-                     {:sessionId session-id
-                      :sections {:identity {:content "I am an agent."}}})]
+                                           "systemMessage.transform"
+                                           {:sessionId session-id
+                                            :sections {:identity {:content "I am an agent."}}})]
       (is (= "I am an agent. EXTRA"
              (get-in response [:result :sections :identity :content]))))))
 
 (deftest test-system-message-transform-error-returns-original
   (testing "systemMessage.transform returns original content on callback error"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :system-message {:mode :customize
-                                      :sections {:identity {:action (fn [_] (throw (Exception. "fail")))}}}})
+                                      {:on-permission-request sdk/approve-all
+                                       :system-message {:mode :customize
+                                                        :sections {:identity {:action (fn [_] (throw (Exception. "fail")))}}}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "systemMessage.transform"
-                     {:sessionId session-id
-                      :sections {:identity {:content "original text"}}})]
+                                           "systemMessage.transform"
+                                           {:sessionId session-id
+                                            :sections {:identity {:content "original text"}}})]
       (is (= "original text"
              (get-in response [:result :sections :identity :content]))))))
 
 (deftest test-system-message-transform-no-callback-passthrough
   (testing "systemMessage.transform passes through sections without callbacks"
     (let [session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :system-message {:mode :customize
-                                      :sections {:identity {:action (fn [c] (str c "!"))}}}})
+                                      {:on-permission-request sdk/approve-all
+                                       :system-message {:mode :customize
+                                                        :sections {:identity {:action (fn [c] (str c "!"))}}}})
           session-id (sdk/session-id session)
           response (mock/send-rpc-request! *mock-server*
-                     "systemMessage.transform"
-                     {:sessionId session-id
-                      :sections {:identity {:content "hello"}
-                                 :tone {:content "be nice"}}})]
+                                           "systemMessage.transform"
+                                           {:sessionId session-id
+                                            :sections {:identity {:content "hello"}
+                                                       :tone {:content "be nice"}}})]
       (is (= "hello!" (get-in response [:result :sections :identity :content])))
       (is (= "be nice" (get-in response [:result :sections :tone :content]))))))
 
@@ -1843,14 +2148,14 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.tools.handlePendingToolCall" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.tools.handlePendingToolCall" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :tools [{:tool-name "test-tool"
-                              :tool-handler (fn [_args _inv] "hello world")}]})
+                                      {:on-permission-request sdk/approve-all
+                                       :tools [{:tool-name "test-tool"
+                                                :tool-handler (fn [_args _inv] "hello world")}]})
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
@@ -1873,14 +2178,14 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.tools.handlePendingToolCall" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.tools.handlePendingToolCall" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :tools [{:tool-name "nil-tool"
-                              :tool-handler (fn [_args _inv] nil)}]})
+                                      {:on-permission-request sdk/approve-all
+                                       :tools [{:tool-name "nil-tool"
+                                                :tool-handler (fn [_args _inv] nil)}]})
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
@@ -1903,17 +2208,17 @@
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})
-                (when (= "session.tools.handlePendingToolCall" method)
-                  (.countDown rpc-latch))))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.tools.handlePendingToolCall" method)
+                                        (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all
-                     :tools [{:tool-name "struct-tool"
-                              :tool-handler (fn [_args _inv]
-                                              {:text-result-for-llm "all good"
-                                               :result-type "success"
-                                               :tool-telemetry {:latency-ms 42}})}]})
+                                      {:on-permission-request sdk/approve-all
+                                       :tools [{:tool-name "struct-tool"
+                                                :tool-handler (fn [_args _inv]
+                                                                {:text-result-for-llm "all good"
+                                                                 :result-type "success"
+                                                                 :tool-telemetry {:latency-ms 42}})}]})
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
@@ -1940,10 +2245,10 @@
   (testing "mode-get calls session.mode.get RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (let [result (session/mode-get session)]
         (is (some? result))
         (is (= "interactive" (:mode result)))
@@ -1953,10 +2258,10 @@
   (testing "mode-set! calls session.mode.set RPC with mode param"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/mode-set! session "plan")
       (let [mode-rpcs (filter #(= "session.mode.set" (:method %)) @requests)]
         (is (= 1 (count mode-rpcs)))
@@ -1966,10 +2271,10 @@
   (testing "plan-read calls session.plan.read RPC and returns normalized shape"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (let [result (session/plan-read session)]
         (is (some? result))
         (is (some #(= "session.plan.read" (:method %)) @requests))
@@ -1983,10 +2288,10 @@
   (testing "plan-update! calls session.plan.update RPC with content"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/plan-update! session "# My Plan\n\nStep 1: ...")
       (let [plan-rpcs (filter #(= "session.plan.update" (:method %)) @requests)]
         (is (= 1 (count plan-rpcs)))
@@ -1996,10 +2301,10 @@
   (testing "plan-delete! calls session.plan.delete RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/plan-delete! session)
       (is (some #(= "session.plan.delete" (:method %)) @requests)))))
 
@@ -2007,10 +2312,10 @@
   (testing "workspace-list-files calls session.workspace.listFiles RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (let [result (session/workspace-list-files session)]
         (is (some? result))
         (is (some #(= "session.workspace.listFiles" (:method %)) @requests))))))
@@ -2019,10 +2324,10 @@
   (testing "workspace-read-file calls session.workspace.readFile RPC with path"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/workspace-read-file session "notes.md")
       (let [rpcs (filter #(= "session.workspace.readFile" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -2032,10 +2337,10 @@
   (testing "workspace-create-file! calls session.workspace.createFile RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/workspace-create-file! session "test.txt" "content here")
       (let [rpcs (filter #(= "session.workspace.createFile" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -2046,10 +2351,10 @@
   (testing "agent-list calls session.agent.list RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (let [result (session/agent-list session)]
         (is (some? result))
         (is (some #(= "session.agent.list" (:method %)) @requests))))))
@@ -2058,10 +2363,10 @@
   (testing "agent-select! calls session.agent.select RPC with agent name"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/agent-select! session "researcher")
       (let [rpcs (filter #(= "session.agent.select" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -2071,10 +2376,10 @@
   (testing "agent-deselect! calls session.agent.deselect RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/agent-deselect! session)
       (is (some #(= "session.agent.deselect" (:method %)) @requests)))))
 
@@ -2082,10 +2387,10 @@
   (testing "fleet-start! calls session.fleet.start RPC with session-id forced"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})
+                                      {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)]
       ;; Pass params that attempt to override session-id
       (session/fleet-start! session {:prompt "do stuff" :session-id "evil-override"})
@@ -2099,8 +2404,8 @@
   (testing "mcp-config-list calls mcp.config.list RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           result (client/mcp-config-list *test-client*)]
       (is (some? result))
       (is (some #(= "mcp.config.list" (:method %)) @requests)))))
@@ -2109,10 +2414,10 @@
   (testing "mcp-config-add! calls mcp.config.add RPC with params"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           result (client/mcp-config-add! *test-client*
-                   {:name "my-server" :command "npx" :args ["-y" "server"]})]
+                                         {:name "my-server" :command "npx" :args ["-y" "server"]})]
       (is (some? result))
       (let [rpcs (filter #(= "mcp.config.add" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -2122,10 +2427,10 @@
   (testing "mcp-config-update! calls mcp.config.update RPC with params"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           result (client/mcp-config-update! *test-client*
-                   {:name "my-server" :tools ["read_file"]})]
+                                            {:name "my-server" :tools ["read_file"]})]
       (is (some? result))
       (let [rpcs (filter #(= "mcp.config.update" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -2135,8 +2440,8 @@
   (testing "mcp-config-remove! calls mcp.config.remove RPC with params"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           result (client/mcp-config-remove! *test-client* {:name "my-server"})]
       (is (some? result))
       (let [rpcs (filter #(= "mcp.config.remove" (:method %)) @requests)]
@@ -2147,10 +2452,10 @@
   (testing "agent-get-current calls session.agent.getCurrent RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})
+                                      {:on-permission-request sdk/approve-all})
           result (session/agent-get-current session)]
       (is (some? result))
       (is (some #(= "session.agent.getCurrent" (:method %)) @requests)))))
@@ -2159,10 +2464,10 @@
   (testing "agent-reload! calls session.agent.reload RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/agent-reload! session)
       (is (some #(= "session.agent.reload" (:method %)) @requests)))))
 
@@ -2242,33 +2547,33 @@
   (testing "switch-model! forwards modelCapabilities (upstream PR #1029)"
     (let [captured-params (atom nil)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (when (= method "session.model.switchTo")
-                  (reset! captured-params params))))
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/switch-model! session "gpt-5.4"
-              {:model-capabilities {:model-supports {:supports-vision false}}})]
+                               {:model-capabilities {:model-supports {:supports-vision false}}})]
       (is (= false (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision])))))
 
   (testing "set-model! forwards modelCapabilities (alias for switch-model!)"
     (let [captured-params (atom nil)
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (when (= method "session.model.switchTo")
-                  (reset! captured-params params))))
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/set-model! session "gpt-5.4"
-              {:model-capabilities {:model-supports {:supports-vision true}}})]
+                            {:model-capabilities {:model-supports {:supports-vision true}}})]
       (is (= true (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision]))))))
 
 (deftest test-history-compact-rpc-name
   (testing "compaction-compact! uses session.history.compact RPC (upstream #1039)"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/compaction-compact! session)
       (is (some #(= "session.history.compact" (:method %)) @requests))
       (is (not (some #(= "session.compaction.compact" (:method %)) @requests))))))
@@ -2277,10 +2582,10 @@
   (testing "history-truncate! calls session.history.truncate RPC (upstream #1039)"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/history-truncate! session)
       (is (some #(= "session.history.truncate" (:method %)) @requests)))))
 
@@ -2288,10 +2593,10 @@
   (testing "sessions-fork! calls sessions.fork RPC (upstream #1039)"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/sessions-fork! session)
       (is (some #(= "sessions.fork" (:method %)) @requests)))))
 
@@ -2403,6 +2708,35 @@
           agent (first (:customAgents create-params))]
       (is (= ["my-skill"] (:agentSkills agent))))))
 
+;; --- Default agent config (upstream PR #1098) --------------------------------
+
+(deftest test-default-agent-excluded-tools-on-wire
+  (testing "session.create forwards defaultAgent.excludedTools"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :default-agent {:excluded-tools ["private_tool" "delegate_only"]}})
+          create-params (get @seen "session.create")]
+      (is (= ["private_tool" "delegate_only"]
+             (get-in create-params [:defaultAgent :excludedTools])))))
+
+  (testing "session.resume forwards defaultAgent.excludedTools"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client*
+                                                         {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :default-agent {:excluded-tools ["private_tool"]}})
+          resume-params (get @seen "session.resume")]
+      (is (= ["private_tool"]
+             (get-in resume-params [:defaultAgent :excludedTools]))))))
+
 ;; --- requestPermission behavioral change (upstream PR #1056) ----------------
 
 (deftest test-request-permission-true-on-create
@@ -2446,10 +2780,10 @@
   (testing "session-name-get calls session.name.get RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/session-name-get session)
       (is (some #(= "session.name.get" (:method %)) @requests)))))
 
@@ -2457,10 +2791,10 @@
   (testing "session-name-set! calls session.name.set RPC with name param"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/session-name-set! session "My Session")
       (let [req (first (filter #(= "session.name.set" (:method %)) @requests))]
         (is (some? req))
@@ -2470,10 +2804,10 @@
   (testing "workspace-get-workspace calls session.workspaces.getWorkspace RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/workspace-get-workspace session)
       (is (some #(= "session.workspaces.getWorkspace" (:method %)) @requests)))))
 
@@ -2481,10 +2815,10 @@
   (testing "mcp-discover calls mcp.discover RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/mcp-discover session)
       (is (some #(= "mcp.discover" (:method %)) @requests)))))
 
@@ -2492,10 +2826,10 @@
   (testing "mcp-discover forwards working-directory param"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/mcp-discover session {:working-directory "/tmp"})
       (let [req (first (filter #(= "mcp.discover" (:method %)) @requests))]
         (is (some? req))
@@ -2505,10 +2839,10 @@
   (testing "usage-get-metrics calls session.usage.getMetrics RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
-              (fn [method params]
-                (swap! requests conj {:method method :params params})))
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
           session (sdk/create-session *test-client*
-                    {:on-permission-request sdk/approve-all})]
+                                      {:on-permission-request sdk/approve-all})]
       (session/usage-get-metrics session)
       (is (some #(= "session.usage.getMetrics" (:method %)) @requests)))))
 

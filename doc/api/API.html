@@ -167,10 +167,11 @@
 <tr><td> <code>:system-message</code> </td><td> map </td><td> System message customization (see below) </td></tr>
 <tr><td> <code>:available-tools</code> </td><td> vector </td><td> List of allowed tool names </td></tr>
 <tr><td> <code>:excluded-tools</code> </td><td> vector </td><td> List of excluded tool names </td></tr>
-<tr><td> <code>:provider</code> </td><td> map </td><td> Provider config for BYOK (see <a href="../auth/byok.html">BYOK docs</a>). Required key: <code>:base-url</code>. Optional: <code>:provider-type</code> (<code>:openai</code>/<code>:azure</code>/<code>:anthropic</code>), <code>:wire-api</code> (<code>:completions</code>/<code>:responses</code>), <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code> </td></tr>
+<tr><td> <code>:provider</code> </td><td> map </td><td> Provider config for BYOK (see <a href="../auth/byok.html">BYOK docs</a>). Required key: <code>:base-url</code>. Optional: <code>:provider-type</code> (<code>:openai</code>/<code>:azure</code>/<code>:anthropic</code>), <code>:wire-api</code> (<code>:completions</code>/<code>:responses</code>), <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code>, <code>:headers</code> (map of HTTP header name→value, sent with each provider request — upstream PR #1094) </td></tr>
 <tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by server ID (see <a href="../mcp/overview.html">MCP docs</a>). Local (stdio) servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote (HTTP/SSE) servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code>. Spec aliases: <code>::mcp-stdio-server</code> = <code>::mcp-local-server</code>, <code>::mcp-http-server</code> = <code>::mcp-remote-server</code> </td></tr>
 <tr><td> <code>:commands</code> </td><td> vector </td><td> Command definitions (slash commands). See <a href="#commands">Commands</a> </td></tr>
 <tr><td> <code>:custom-agents</code> </td><td> vector </td><td> Custom agent configs. Each agent map: <code>:agent-name</code> (required), <code>:agent-prompt</code> (required), <code>:agent-display-name</code>, <code>:agent-description</code>, <code>:agent-tools</code>, <code>:agent-infer?</code>, <code>:agent-skills</code> (vector of strings), <code>:mcp-servers</code> </td></tr>
+<tr><td> <code>:default-agent</code> </td><td> map </td><td> Built-in/default agent config. Use <code>{:excluded-tools [...]}</code> to hide tools from the default agent while leaving them available to custom agents </td></tr>
 <tr><td> <code>:on-permission-request</code> </td><td> fn </td><td> <strong>Required.</strong> Permission handler function. Use <code>copilot/approve-all</code> to approve everything. </td></tr>
 <tr><td> <code>:streaming?</code> </td><td> boolean </td><td> Enable streaming deltas </td></tr>
 <tr><td> <code>:config-dir</code> </td><td> string </td><td> Override config directory for CLI </td></tr>
@@ -185,9 +186,10 @@
 <tr><td> <code>:agent</code> </td><td> string </td><td> Name of a custom agent to activate at session start. Must match a name in <code>:custom-agents</code>. Equivalent to calling <code>agent.select</code> after creation. </td></tr>
 <tr><td> <code>:on-event</code> </td><td> fn </td><td> Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like <code>session.start</code> are not missed. </td></tr>
 <tr><td> <code>:on-elicitation-request</code> </td><td> fn </td><td> Handler for elicitation requests from the agent. When provided, advertises <code>requestElicitation=true</code> and handles <code>elicitation.requested</code> broadcast events. Single-arg handler receives an <code>ElicitationContext</code> map with <code>:session-id</code>, <code>:message</code>, <code>:requested-schema</code>, <code>:mode</code>, <code>:elicitation-source</code>, <code>:url</code>. Returns an <code>ElicitationResult</code> map <code>{:action "accept"/"decline"/"cancel" :content {...}}</code>. See <a href="#elicitation-provider">Elicitation Provider</a> </td></tr>
-<tr><td> <code>:create-session-fs-handler</code> </td><td> fn </td><td> Factory for session filesystem handlers. Required when <code>:session-fs</code> is set on the client. Called as <code>(factory session)</code>, returns a map of FS handler functions. See <a href="#session-filesystem">Session Filesystem</a> </td></tr>
+<tr><td> <code>:create-session-fs-handler</code> </td><td> fn </td><td> Factory for session filesystem providers. Required when <code>:session-fs</code> is set on the client. Called as <code>(factory session)</code>, returns a provider-style map or a low-level handler map. See <a href="#session-filesystem">Session Filesystem</a> </td></tr>
 <tr><td> <code>:enable-config-discovery</code> </td><td> boolean </td><td> Auto-discover <code>.mcp.json</code>, <code>.vscode/mcp.json</code>, skills, etc. Instruction files always load regardless. (upstream PR #1044) </td></tr>
 <tr><td> <code>:model-capabilities</code> </td><td> map </td><td> Model capabilities override. DeepPartial of model capabilities, e.g. <code>{:model-supports {:supports-vision true}}</code>. (upstream PR #1029) </td></tr>
+<tr><td> <code>:include-sub-agent-streaming-events?</code> </td><td> boolean </td><td> Forward streaming events from sub-agents to the parent session’s event stream. Defaults to <code>true</code> on the wire. (upstream PR #1108) </td></tr>
 </tbody>
 </table>
 <h4><a href="#resume-session" id="resume-session"></a><code>resume-session</code></h4>
@@ -505,6 +507,7 @@
 <tr><td> <code>:prompt</code> </td><td> string </td><td> The message/prompt to send </td></tr>
 <tr><td> <code>:attachments</code> </td><td> vector </td><td> File attachments (see below) </td></tr>
 <tr><td> <code>:mode</code> </td><td> keyword </td><td> <code>:enqueue</code> or <code>:immediate</code> </td></tr>
+<tr><td> <code>:request-headers</code> </td><td> map </td><td> Extra HTTP headers (string→string) forwarded to the model provider for this request. Merged with provider-level <code>:headers</code>. (upstream PR #1094) </td></tr>
 </tbody>
 </table>
 <p><strong>Attachment types:</strong></p>
@@ -1315,6 +1318,29 @@ copilot/interaction-events
 ;;     :tone {:description "Response style, conciseness rules, ..."} ...}
 </code></pre>
 <p>Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.</p>
+<h3><a href="#default-agent-tool-exclusions" id="default-agent-tool-exclusions"></a>Default Agent Tool Exclusions</h3>
+<p>Hide tools from the built-in/default agent while keeping them available to custom agents with <code>:default-agent</code>.</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+
+(def repo-index-tool
+  (copilot/define-tool "repo_index_search"
+    {:description "Search the private repository index"
+     :parameters {:type "object"
+                  :properties {:query {:type "string"}}
+                  :required ["query"]}
+     :handler (fn [{:keys [query]} _]
+                (str "index results for " query))}))
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :tools [repo-index-tool]
+     :custom-agents [{:agent-name "repo-auditor"
+                      :agent-prompt "Audit repository changes."
+                      :agent-tools ["repo_index_search"]}]
+     :default-agent {:excluded-tools ["repo_index_search"]}}))
+</code></pre>
+<p>The default agent cannot call <code>repo_index_search</code>. The <code>repo-auditor</code> custom agent can still call it because custom-agent tool assignment is independent of <code>:default-agent</code>.</p>
 <h3><a href="#config-directory-and-skills" id="config-directory-and-skills"></a>Config Directory and Skills</h3>
 <p><code>config-dir</code> overrides where the CLI reads its config and state (e.g., <code>~/.copilot</code>). It does not define custom agents. Custom agents are provided via <code>:custom-agents</code>.</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
@@ -1541,25 +1567,62 @@ copilot/interaction-events
                                 :session-state-path "/sessions"
                                 :conventions "posix"}}))
 </code></pre>
-<p>Provide a handler factory per session:</p>
+<p>Provide a provider factory per session:</p>
 <pre><code class="language-clojure">(def session
   (copilot/create-session client
     {:on-permission-request copilot/approve-all
      :create-session-fs-handler
-     (fn [session]
+     (fn [_session]
        (let [store (atom {})]
-         {:read-file    (fn [{:keys [path]}] {:content (get @store path "")})
-          :write-file   (fn [{:keys [path content]}] (swap! store assoc path content) nil)
-          :append-file  (fn [{:keys [path content]}] (swap! store update path str content) nil)
-          :exists       (fn [{:keys [path]}] {:exists (contains? @store path)})
-          :stat         (fn [{:keys [path]}] {:is-file true :is-directory false :size (count (get @store path "")) :mtime "2026-01-01T00:00:00Z"})
-          :mkdir        (fn [_] nil)
-          :readdir      (fn [_] {:entries []})
-          :readdir-with-types (fn [_] {:entries []})
-          :rm           (fn [{:keys [path]}] (swap! store dissoc path) nil)
-          :rename       (fn [{:keys [old-path new-path]}] (swap! store (fn [s] (-&gt; s (assoc new-path (get s old-path "")) (dissoc old-path)))) nil)}))}))
+         {:read-file (fn [path]
+                       (or (get @store path)
+                           (throw (ex-info "missing file" {:code "ENOENT"}))))
+          :write-file (fn [path content _mode]
+                        (swap! store assoc path content))
+          :append-file (fn [path content _mode]
+                         (swap! store update path str content))
+          :exists (fn [path]
+                    (contains? @store path))
+          :stat (fn [path]
+                  {:is-file true
+                   :is-directory false
+                   :size (count (get @store path ""))
+                   :mtime "2026-01-01T00:00:00Z"
+                   :birthtime "2026-01-01T00:00:00Z"})
+          :mkdir (fn [_path _recursive _mode] nil)
+          :readdir (fn [_path] [])
+          :readdir-with-types (fn [_path] [])
+          :rm (fn [path _recursive _force]
+                (swap! store dissoc path))
+          :rename (fn [src dest]
+                    (swap! store
+                      (fn [s]
+                        (-&gt; s
+                            (assoc dest (get s src ""))
+                            (dissoc src)))))}))}))
 </code></pre>
-<p>The handler map requires all 10 operations:</p>
+<p>Provider functions use direct arguments and throw on failure. Errors with <code>{:code "ENOENT"}</code> become structured <code>SessionFsError</code> maps with code <code>"ENOENT"</code>; all other exceptions become <code>"UNKNOWN"</code>. <code>create-session</code> and <code>resume-session</code> automatically adapt provider-style factory returns to the low-level RPC handler contract.</p>
+<p>Use <code>create-session-fs-adapter</code> when you need the low-level handler map explicitly:</p>
+<pre><code class="language-clojure">(require '[clojure.java.io :as io])
+
+(def provider
+  {:read-file slurp
+   :write-file (fn [path content _mode] (spit path content))
+   :append-file (fn [path content _mode] (spit path content :append true))
+   :exists (fn [path] (.exists (io/file path)))
+   :stat (fn [path] {:is-file (.isFile (io/file path))
+                     :is-directory (.isDirectory (io/file path))
+                     :size (.length (io/file path))})
+   :mkdir (fn [path _recursive _mode] (.mkdirs (io/file path)))
+   :readdir (fn [path] (vec (.list (io/file path))))
+   :readdir-with-types (fn [_path] [])
+   :rm (fn [path _recursive _force] (clojure.java.io/delete-file path true))
+   :rename (fn [src dest] (.renameTo (io/file src) (io/file dest)))})
+
+(def handler
+  (copilot/create-session-fs-adapter provider))
+</code></pre>
+<p>The low-level handler map requires all 10 operations:</p>
 <table>
 <thead>
 <tr><th> Key </th><th> Params </th><th> Returns </th></tr>
@@ -1567,14 +1630,14 @@ copilot/interaction-events
 <tbody>
 <tr><td> <code>:read-file</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:content "..."}</code> </td></tr>
 <tr><td> <code>:write-file</code> </td><td> <code>{:session-id :path :content :mode}</code> </td><td> nil </td></tr>
-<tr><td> <code>:append-file</code> </td><td> <code>{:session-id :path :content}</code> </td><td> nil </td></tr>
+<tr><td> <code>:append-file</code> </td><td> <code>{:session-id :path :content :mode}</code> </td><td> nil </td></tr>
 <tr><td> <code>:exists</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:exists true/false}</code> </td></tr>
-<tr><td> <code>:stat</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:is-file :is-directory :size :mtime}</code> </td></tr>
-<tr><td> <code>:mkdir</code> </td><td> <code>{:session-id :path :recursive}</code> </td><td> nil </td></tr>
+<tr><td> <code>:stat</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:is-file :is-directory :size :mtime :birthtime}</code> </td></tr>
+<tr><td> <code>:mkdir</code> </td><td> <code>{:session-id :path :recursive :mode}</code> </td><td> nil </td></tr>
 <tr><td> <code>:readdir</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:entries [...]}</code> </td></tr>
 <tr><td> <code>:readdir-with-types</code> </td><td> <code>{:session-id :path}</code> </td><td> <code>{:entries [...]}</code> </td></tr>
 <tr><td> <code>:rm</code> </td><td> <code>{:session-id :path :recursive :force}</code> </td><td> nil </td></tr>
-<tr><td> <code>:rename</code> </td><td> <code>{:session-id :old-path :new-path}</code> </td><td> nil </td></tr>
+<tr><td> <code>:rename</code> </td><td> <code>{:session-id :src :dest}</code> </td><td> nil </td></tr>
 </tbody>
 </table>
 <p>Handler functions may return values directly or via core.async channels.</p>

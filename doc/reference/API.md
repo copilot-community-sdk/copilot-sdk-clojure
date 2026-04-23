@@ -241,6 +241,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
 | `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:mcp-servers` |
+| `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
 | `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
@@ -255,7 +256,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
 | `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
-| `:create-session-fs-handler` | fn | Factory for session filesystem handlers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a map of FS handler functions. See [Session Filesystem](#session-filesystem) |
+| `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
@@ -1655,6 +1656,34 @@ copilot/system-prompt-sections
 
 Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.
 
+### Default Agent Tool Exclusions
+
+Hide tools from the built-in/default agent while keeping them available to custom agents with `:default-agent`.
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def repo-index-tool
+  (copilot/define-tool "repo_index_search"
+    {:description "Search the private repository index"
+     :parameters {:type "object"
+                  :properties {:query {:type "string"}}
+                  :required ["query"]}
+     :handler (fn [{:keys [query]} _]
+                (str "index results for " query))}))
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :tools [repo-index-tool]
+     :custom-agents [{:agent-name "repo-auditor"
+                      :agent-prompt "Audit repository changes."
+                      :agent-tools ["repo_index_search"]}]
+     :default-agent {:excluded-tools ["repo_index_search"]}}))
+```
+
+The default agent cannot call `repo_index_search`. The `repo-auditor` custom agent can still call it because custom-agent tool assignment is independent of `:default-agent`.
+
 ### Config Directory and Skills
 
 `config-dir` overrides where the CLI reads its config and state (e.g., `~/.copilot`).
@@ -1959,41 +1988,82 @@ Configure the client with `:session-fs`:
                                 :conventions "posix"}}))
 ```
 
-Provide a handler factory per session:
+Provide a provider factory per session:
 
 ```clojure
 (def session
   (copilot/create-session client
     {:on-permission-request copilot/approve-all
      :create-session-fs-handler
-     (fn [session]
+     (fn [_session]
        (let [store (atom {})]
-         {:read-file    (fn [{:keys [path]}] {:content (get @store path "")})
-          :write-file   (fn [{:keys [path content]}] (swap! store assoc path content) nil)
-          :append-file  (fn [{:keys [path content]}] (swap! store update path str content) nil)
-          :exists       (fn [{:keys [path]}] {:exists (contains? @store path)})
-          :stat         (fn [{:keys [path]}] {:is-file true :is-directory false :size (count (get @store path "")) :mtime "2026-01-01T00:00:00Z"})
-          :mkdir        (fn [_] nil)
-          :readdir      (fn [_] {:entries []})
-          :readdir-with-types (fn [_] {:entries []})
-          :rm           (fn [{:keys [path]}] (swap! store dissoc path) nil)
-          :rename       (fn [{:keys [old-path new-path]}] (swap! store (fn [s] (-> s (assoc new-path (get s old-path "")) (dissoc old-path)))) nil)}))}))
+         {:read-file (fn [path]
+                       (or (get @store path)
+                           (throw (ex-info "missing file" {:code "ENOENT"}))))
+          :write-file (fn [path content _mode]
+                        (swap! store assoc path content))
+          :append-file (fn [path content _mode]
+                         (swap! store update path str content))
+          :exists (fn [path]
+                    (contains? @store path))
+          :stat (fn [path]
+                  {:is-file true
+                   :is-directory false
+                   :size (count (get @store path ""))
+                   :mtime "2026-01-01T00:00:00Z"
+                   :birthtime "2026-01-01T00:00:00Z"})
+          :mkdir (fn [_path _recursive _mode] nil)
+          :readdir (fn [_path] [])
+          :readdir-with-types (fn [_path] [])
+          :rm (fn [path _recursive _force]
+                (swap! store dissoc path))
+          :rename (fn [src dest]
+                    (swap! store
+                      (fn [s]
+                        (-> s
+                            (assoc dest (get s src ""))
+                            (dissoc src)))))}))}))
 ```
 
-The handler map requires all 10 operations:
+Provider functions use direct arguments and throw on failure. Errors with `{:code "ENOENT"}` become structured `SessionFsError` maps with code `"ENOENT"`; all other exceptions become `"UNKNOWN"`. `create-session` and `resume-session` automatically adapt provider-style factory returns to the low-level RPC handler contract.
+
+Use `create-session-fs-adapter` when you need the low-level handler map explicitly:
+
+```clojure
+(require '[clojure.java.io :as io])
+
+(def provider
+  {:read-file slurp
+   :write-file (fn [path content _mode] (spit path content))
+   :append-file (fn [path content _mode] (spit path content :append true))
+   :exists (fn [path] (.exists (io/file path)))
+   :stat (fn [path] {:is-file (.isFile (io/file path))
+                     :is-directory (.isDirectory (io/file path))
+                     :size (.length (io/file path))})
+   :mkdir (fn [path _recursive _mode] (.mkdirs (io/file path)))
+   :readdir (fn [path] (vec (.list (io/file path))))
+   :readdir-with-types (fn [_path] [])
+   :rm (fn [path _recursive _force] (clojure.java.io/delete-file path true))
+   :rename (fn [src dest] (.renameTo (io/file src) (io/file dest)))})
+
+(def handler
+  (copilot/create-session-fs-adapter provider))
+```
+
+The low-level handler map requires all 10 operations:
 
 | Key | Params | Returns |
 |-----|--------|---------|
 | `:read-file` | `{:session-id :path}` | `{:content "..."}` |
 | `:write-file` | `{:session-id :path :content :mode}` | nil |
-| `:append-file` | `{:session-id :path :content}` | nil |
+| `:append-file` | `{:session-id :path :content :mode}` | nil |
 | `:exists` | `{:session-id :path}` | `{:exists true/false}` |
-| `:stat` | `{:session-id :path}` | `{:is-file :is-directory :size :mtime}` |
-| `:mkdir` | `{:session-id :path :recursive}` | nil |
+| `:stat` | `{:session-id :path}` | `{:is-file :is-directory :size :mtime :birthtime}` |
+| `:mkdir` | `{:session-id :path :recursive :mode}` | nil |
 | `:readdir` | `{:session-id :path}` | `{:entries [...]}` |
 | `:readdir-with-types` | `{:session-id :path}` | `{:entries [...]}` |
 | `:rm` | `{:session-id :path :recursive :force}` | nil |
-| `:rename` | `{:session-id :old-path :new-path}` | nil |
+| `:rename` | `{:session-id :src :dest}` | nil |
 
 Handler functions may return values directly or via core.async channels.
 

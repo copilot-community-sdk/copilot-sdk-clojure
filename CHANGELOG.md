@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.3.0-preview.0 sync)
+- **`defaultAgent.excludedTools` session option** — new `:default-agent {:excluded-tools [...]}` config for create, resume, and join session paths. This hides selected tools from the built-in/default agent while preserving tool availability for custom agents. (upstream commit `b1b0df5c`)
+- **Session FS provider adapter** — new `create-session-fs-adapter` helper adapts provider-style filesystem functions into structured `sessionFs.*` RPC results. Session factories now also auto-adapt provider-style maps while preserving the existing low-level one-arg handler contract. (upstream commit `a3e273c9`)
+- **Generated event data specs** — added explicit specs for assistant reasoning/message/usage fields, MCP server status/load events, skills loaded events, and extension loaded events from the upstream generated schema.
+- Integration tests for `defaultAgent` wire params, session FS adapter behavior, session FS factory auto-adaptation, extension status values, and event data specs.
+
+### Fixed (v0.3.0-preview.0 sync)
+- **Extension status enum parity** — `session.extensions_loaded` now accepts upstream statuses `"running"`, `"starting"`, `"disabled"`, and `"failed"` and rejects obsolete `"enabled"`.
+- **Message content specs** — assistant/user message and reasoning event content remains string-only while elicitation result content accepts maps, matching upstream generated schemas.
+
 ## [0.2.2.0] - 2026-04-20
 ### Added (post-v0.2.2 sync, batch 2)
 - **`includeSubAgentStreamingEvents` session option** — new boolean `:include-sub-agent-streaming-events?` on `::session-config`, `::resume-session-config`, and `::join-session-config`. When `true` (default), sub-agent streaming events are forwarded to the parent session's event stream. (upstream PR #1108)

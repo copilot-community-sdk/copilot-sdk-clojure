@@ -436,6 +436,7 @@
    - :streaming?           - Enable streaming deltas
    - :mcp-servers          - MCP server configs map (keyed by server ID)
    - :custom-agents        - Custom agent configs
+   - :default-agent        - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-dir           - Override config directory for CLI (configDir)
    - :skill-directories    - Additional skill directories to load
    - :disabled-skills      - Disable specific skills by name
@@ -940,6 +941,26 @@
    (session/input! session message))
   ([session message opts]
    (session/input! session message opts)))
+
+(defn create-session-fs-adapter
+  "Adapt a provider-style session filesystem implementation to a sessionFs handler map.
+
+   Provider functions receive direct arguments and throw on errors; the adapter
+   returns the structured RPC results expected by the CLI. Session factories may
+   return provider-style maps directly because create-session/resume-session
+   auto-adapt them. Use this helper when you need the low-level handler map
+   yourself.
+
+   Example:
+   ```clojure
+   (copilot/create-session-fs-adapter
+     {:read-file slurp
+      :write-file (fn [path content _mode] (spit path content))
+      ;; implement the remaining sessionFs operations...
+      })
+   ```"
+  [provider]
+  (session/create-session-fs-adapter provider))
 
 (defn get-current-model
   "Get the current model for this session.

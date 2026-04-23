@@ -89,6 +89,45 @@
   (s/keys :req-un [::read-file ::write-file ::append-file ::exists ::stat
                    ::mkdir ::readdir ::readdir-with-types ::rm ::rename]))
 
+(defn- fn-accepts-arity?
+  [f n]
+  (and (fn? f)
+       (let [fixed-arity? (boolean
+                           (some (fn [^java.lang.reflect.Method method]
+                                   (and (= "invoke" (.getName method))
+                                        (= n (.getParameterCount method))))
+                                 (.getDeclaredMethods (class f))))
+             variadic-min-arity (when (instance? clojure.lang.RestFn f)
+                                  (.getRequiredArity ^clojure.lang.RestFn f))]
+         (or fixed-arity?
+             (and (some? variadic-min-arity)
+                  (<= variadic-min-arity n))))))
+
+(def ^:private session-fs-provider-arities
+  {:read-file 1
+   :write-file 3
+   :append-file 3
+   :exists 1
+   :stat 1
+   :mkdir 3
+   :readdir 1
+   :readdir-with-types 1
+   :rm 3
+   :rename 2})
+
+(defn- session-fs-provider?
+  [provider]
+  (and (map? provider)
+       (every? (fn [[operation arity]]
+                 (fn-accepts-arity? (get provider operation) arity))
+               session-fs-provider-arities)))
+
+;; Provider-style session filesystem implementation. Same operation keys as
+;; ::session-fs-handler, but functions take direct positional arguments and
+;; throw on errors instead of returning RPC-shaped success/error maps.
+(s/def ::session-fs-provider
+  (s/and ::session-fs-handler session-fs-provider?))
+
 ;; Factory fn: (session) → session-fs-handler
 (s/def ::create-session-fs-handler fn?)
 
@@ -233,6 +272,11 @@
 
 (s/def ::custom-agents (s/coll-of ::custom-agent))
 
+;; Default agent configuration (upstream PR #1098). This controls tool
+;; visibility for the built-in/default agent independently of custom agents.
+(s/def ::default-agent
+  (s/keys :opt-un [::excluded-tools]))
+
 ;; Agent selection (upstream PR #722)
 (s/def ::agent ::non-blank-string)
 
@@ -328,10 +372,11 @@
                                        :strings (s/coll-of string?)))
 (s/def ::elicitation-content (s/map-of keyword? ::elicitation-field-value))
 (s/def ::action ::elicitation-action)
-(s/def ::content (s/nilable ::elicitation-content))
+(s/def ::content string?)
 (s/def ::elicitation-result
-  (s/keys :req-un [::action]
-          :opt-un [::content]))
+  (s/and (s/keys :req-un [::action])
+         #(or (not (contains? % :content))
+              (s/valid? ::elicitation-content (:content %)))))
 (s/def ::requested-schema map?)
 (s/def ::message ::non-blank-string)
 (s/def ::elicitation-params
@@ -376,7 +421,7 @@
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
-    :custom-agents :config-dir :skill-directories
+    :custom-agents :default-agent :config-dir :skill-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
     :working-directory :agent :on-event :create-session-fs-handler
@@ -389,7 +434,7 @@
            :opt-un [::session-id ::client-name ::model ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
-                    ::custom-agents ::config-dir ::skill-directories
+                    ::custom-agents ::default-agent ::config-dir ::skill-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
@@ -400,7 +445,7 @@
 (def ^:private resume-session-config-keys
   #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
     :provider :streaming? :on-permission-request
-    :mcp-servers :custom-agents :config-dir :skill-directories
+    :mcp-servers :custom-agents :default-agent :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
     :create-session-fs-handler :enable-config-discovery :model-capabilities
@@ -411,7 +456,7 @@
    (s/keys :req-un [::on-permission-request]
            :opt-un [::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
-                    ::mcp-servers ::custom-agents ::config-dir ::skill-directories
+                    ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
@@ -426,7 +471,7 @@
    (s/keys :opt-un [::on-permission-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
-                    ::mcp-servers ::custom-agents ::config-dir ::skill-directories
+                    ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
@@ -604,11 +649,17 @@
 ;; reasoningTokens: per-message / per-session tokens used for reasoning content
 ;; (upstream CLI 1.0.32). Reported on assistant.usage and session.usage_info events.
 (s/def ::reasoning-tokens nat-int?)
+(s/def ::reasoning-id ::non-blank-string)
+(s/def ::encrypted-content string?)
+(s/def ::output-tokens nat-int?)
+(s/def ::phase string?)
+(s/def ::reasoning-opaque string?)
+(s/def ::reasoning-text string?)
+(s/def ::request-id ::non-blank-string)
 
 ;; Session log specs (upstream PR #737)
 (s/def ::level #{"info" "warning" "error"})
 (s/def ::log-options (s/keys :opt-un [::level ::ephemeral?]))
-
 
 (s/def ::base-event
   (s/keys :req-un [::event-id ::event-timestamp ::parent-id]
@@ -707,7 +758,9 @@
 
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
-          :opt-un [::tool-requests ::parent-tool-call-id]))
+          :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
+                   ::interaction-id ::output-tokens ::phase ::reasoning-opaque
+                   ::reasoning-text ::request-id]))
 
 (s/def ::total-response-size-bytes nat-int?)
 (s/def ::turn-id ::non-blank-string)
@@ -716,12 +769,40 @@
   (s/keys :req-un [::turn-id]
           :opt-un [::interaction-id]))
 
+(s/def ::assistant.reasoning-data
+  (s/keys :req-un [::reasoning-id ::content]))
+
+(s/def ::delta-content string?)
+
+(s/def ::assistant.reasoning_delta-data
+  (s/keys :req-un [::reasoning-id ::delta-content]))
+
 (s/def ::assistant.message_delta-data
   (s/keys :req-un [::message-id ::delta-content]
           :opt-un [::parent-tool-call-id ::interaction-id]))
 
 (s/def ::assistant.streaming_delta-data
   (s/keys :req-un [::total-response-size-bytes]))
+
+(s/def ::api-call-id string?)
+(s/def ::cache-read-tokens nat-int?)
+(s/def ::cache-write-tokens nat-int?)
+(s/def ::cost number?)
+(s/def ::duration nat-int?)
+(s/def ::initiator string?)
+(s/def ::input-tokens nat-int?)
+(s/def ::inter-token-latency-ms nat-int?)
+(s/def ::quota-snapshots map?)
+(s/def ::ttft-ms nat-int?)
+(s/def ::copilot-usage map?)
+
+(s/def ::assistant.usage-data
+  (s/keys :req-un [::model]
+          :opt-un [::api-call-id ::cache-read-tokens ::cache-write-tokens
+                   ::copilot-usage ::cost ::duration ::initiator ::input-tokens
+                   ::inter-token-latency-ms ::output-tokens ::parent-tool-call-id
+                   ::provider-call-id ::quota-snapshots ::reasoning-effort
+                   ::reasoning-tokens ::ttft-ms]))
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
@@ -849,6 +930,38 @@
 
 (s/def ::session.custom_agents_updated-data
   (s/keys :req-un [::agents ::warnings ::errors]))
+
+;; Session status/listing events from generated session-events schema.
+(s/def ::mcp-server-status
+  #{"connected" "failed" "needs-auth" "pending" "disabled" "not_configured"})
+(s/def ::status string?)
+(s/def ::mcp-loaded-server
+  (s/and (s/keys :req-un [::name ::status]
+                 :opt-un [::error ::source])
+         #(s/valid? ::mcp-server-status (:status %))))
+(s/def ::servers (s/coll-of ::mcp-loaded-server))
+(s/def ::session.mcp_servers_loaded-data
+  (s/keys :req-un [::servers]))
+(s/def ::server-name string?)
+(s/def ::session.mcp_server_status_changed-data
+  (s/and (s/keys :req-un [::server-name ::status])
+         #(s/valid? ::mcp-server-status (:status %))))
+
+(s/def ::user-invocable boolean?)
+(s/def ::skill-info
+  (s/keys :req-un [::name ::description ::enabled ::source ::user-invocable]
+          :opt-un [::path]))
+(s/def ::skills (s/coll-of ::skill-info))
+(s/def ::session.skills_loaded-data
+  (s/keys :req-un [::skills]))
+
+(s/def ::extension-status #{"running" "disabled" "failed" "starting"})
+(s/def ::extension-info
+  (s/and (s/keys :req-un [::id ::name ::source ::status])
+         #(s/valid? ::extension-status (:status %))))
+(s/def ::extensions (s/coll-of ::extension-info))
+(s/def ::session.extensions_loaded-data
+  (s/keys :req-un [::extensions]))
 
 ;; Generic session event
 (s/def ::session-event
