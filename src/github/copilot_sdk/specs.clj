@@ -817,12 +817,13 @@
           :opt-un [::arguments ::parent-tool-call-id ::mcp-server-name ::mcp-tool-name]))
 
 (s/def ::progress-message string?)
+(s/def ::success boolean?)
 
 (s/def ::tool.execution_progress-data
   (s/keys :req-un [::tool-call-id ::progress-message]))
 
 (s/def ::tool.execution_complete-data
-  (s/keys :req-un [::tool-call-id ::success?]
+  (s/keys :req-un [::tool-call-id ::success]
           :opt-un [::is-user-requested? ::result ::error ::tool-telemetry ::parent-tool-call-id
                    ::model ::interaction-id]))
 

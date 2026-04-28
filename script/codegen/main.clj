@@ -4,7 +4,9 @@
 ;;
 ;; Usage:
 ;;   bb codegen          ;; regenerate everything
-;;   bb codegen --check  ;; (added in Phase 8) regenerate then exit non-zero on diff
+;;
+;; CI enforces drift via `git diff --exit-code` after running this script;
+;; see .github/workflows/codegen-check.yml.
 
 (ns codegen.main
   (:require [babashka.fs :as fs]

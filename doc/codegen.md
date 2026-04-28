@@ -137,8 +137,10 @@ raw enum strings,                              kebab-case maps
    sets make sense. These are the contract callers see.
 
 3. **Adding a richer idiom spec (Instant, keyword, set) requires a coercion
-   entry.** CI will eventually enforce this — see Phase 3.5 in
-   [`plan.md`](../.copilot/session-state/.../plan.md) (planned).
+   entry.** The drift-audit test
+   (`test/github/copilot_sdk/codegen_test.clj :: hand-written-specs-agree-with-generated`)
+   enforces this — adding a hand-written idiom spec without a matching
+   coercion entry will fail the test by leaving an unregistered "drift" field.
 
 4. **Bumping the pinned schema version requires reviewing the diff in BOTH the
    generated specs and the coercion table.** New schema properties default to

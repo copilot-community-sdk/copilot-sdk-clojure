@@ -8,8 +8,8 @@
 ;;   bb schemas:fetch --version 0.0.404 ;; one-shot override (does not change the pin)
 ;;
 ;; The fetched schemas are committed to the repo for reproducible offline builds.
-;; Bumping the pinned version is a deliberate human-reviewed action — use
-;; `bb schemas:bump --version <new>` (added in Phase 8).
+;; To bump the pinned version, edit .copilot-schema-version and re-run
+;; `bb schemas:fetch` followed by `bb codegen`.
 
 (ns codegen.fetch-schemas
   (:require [babashka.fs :as fs]
@@ -50,10 +50,13 @@
 
 (defn extract-schemas! [tgz dest-dir]
   ;; Tarball layout: package/schemas/*.json (npm convention prepends `package/`).
+  ;; Extract into a dedicated `schemas` subdir so we can copy from a
+  ;; clean directory (avoids accidentally picking up package.json or
+  ;; other extracted files).
   (println (format "Extracting schemas from %s" tgz))
   (let [{:keys [exit err]}
         @(p/process ["tar" "-xzf" tgz "-C" dest-dir
-                     "--strip-components=2"
+                     "--strip-components=1"
                      "package/schemas"]
                     {:err :string})]
     (when-not (zero? exit)
@@ -88,16 +91,19 @@
         tmp     (str (fs/create-temp-dir {:prefix "copilot-schemas-"}))]
     (try
       (println (format "Pinned schema version: %s" version))
-      (let [tgz (fetch-tarball! version tmp)]
+      (let [tgz       (fetch-tarball! version tmp)
+            schemas-extract-dir (str (fs/path tmp "schemas"))]
         (fs/create-dirs tmp)
         (extract-package-json! tgz tmp)
         (verify-tarball-version! (str (fs/path tmp "package.json")) version)
         (extract-schemas! tgz tmp)
-        ;; Wipe destination to avoid stale schemas, then copy fresh ones.
+        ;; Wipe destination to avoid stale schemas, then copy fresh ones from
+        ;; the extracted `schemas/` subdir (NOT the temp root, which also
+        ;; contains the extracted package.json).
         (when (fs/exists? schemas-dir)
           (fs/delete-tree schemas-dir))
         (fs/create-dirs schemas-dir)
-        (doseq [f (fs/list-dir tmp)
+        (doseq [f (fs/list-dir schemas-extract-dir)
                 :when (and (fs/regular-file? f)
                            (str/ends-with? (str f) ".json"))]
           (let [target (fs/path schemas-dir (fs/file-name f))]
