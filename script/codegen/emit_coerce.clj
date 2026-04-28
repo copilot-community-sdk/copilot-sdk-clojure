@@ -17,7 +17,9 @@
      - nil       → nil
      - already-idiom value → unchanged (so re-applying coercion is safe)
      - wire value → coerced
-     - anything else → throws ex-info with field/value context"
+     - anything else → the converter throws ex-info with the raw value and
+       its class; `coerce-data` catches and re-throws with `:event-type`,
+       `:field`, and `:direction` added to ex-data for diagnosability."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]))
 
@@ -132,7 +134,12 @@
      "Apply coercions to a `data` map for the given event-type and direction
       (:wire->idiom or :idiom->wire). Unknown event types and unknown fields
       pass through unchanged. Each converter is nil-safe and idempotent so
-      the same coercion can be applied twice without corruption."
+      the same coercion can be applied twice without corruption.
+
+      If a converter throws (e.g. malformed wire payload), the exception is
+      re-thrown as ex-info with `:event-type`, `:field`, and `:direction`
+      added to ex-data so callers can diagnose without inspecting the
+      converter source."
      [~'event-type ~'data ~'direction]
      (~'if-let [~'fields (~'get ~'field-coercions ~'event-type)]
               (~'reduce-kv
@@ -140,7 +147,21 @@
                      (~'assoc ~'acc ~'k
                               (~'if-let [~'tag-pair (~'get ~'fields ~'k)]
                                        (~'if-let [~'f (~'get-in ~'converters [~'tag-pair ~'direction])]
-                                                (~'f ~'v)
+                                                (~'try
+                                                  (~'f ~'v)
+                                                  (~'catch ~'Exception ~'e
+                                                    (~'throw
+                                                      (~'ex-info
+                                                        (~'str "Coercion failed for "
+                                                               ~'event-type "/" ~'k
+                                                               " (" ~'direction "): "
+                                                               (~'.getMessage ~'e))
+                                                        (~'merge (~'or (~'ex-data ~'e) {})
+                                                                 {:event-type ~'event-type
+                                                                  :field ~'k
+                                                                  :direction ~'direction
+                                                                  :tag-pair ~'tag-pair})
+                                                        ~'e))))
                                                 ~'v)
                                        ~'v)))
                {}

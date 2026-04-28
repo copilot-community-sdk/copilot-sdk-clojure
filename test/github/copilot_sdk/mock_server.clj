@@ -527,7 +527,10 @@
 
 (defn set-session-messages!
   "Seed historical events on a mock session for testing session.getMessages.
-   Events should be in wire shape (camelCase keys, string :type)."
+   Events should be in wire shape (camelCase keyword keys like
+   :sessionId/:startTime, and `:type` as a string event identifier).
+   The mock serializes them with `clojure.data.json/write-str` which turns
+   camelCase keyword keys into camelCase JSON strings on the wire."
   [server session-id events]
   (swap! (:sessions server) assoc-in [session-id :messages] events))
 

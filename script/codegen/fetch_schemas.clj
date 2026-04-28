@@ -33,8 +33,16 @@
   (loop [acc {} [a & rst] args]
     (cond
       (nil? a) acc
-      (= a "--version") (recur (assoc acc :version (first rst)) (rest rst))
-      :else (do (println "Unknown arg:" a) (System/exit 2)))))
+      (= a "--version")
+      (let [v (first rst)]
+        (when (or (nil? v) (str/blank? v))
+          (println "Error: --version requires a non-blank value")
+          (println "Usage: bb schemas:fetch [--version VERSION]")
+          (System/exit 2))
+        (recur (assoc acc :version v) (rest rst)))
+      :else (do (println "Unknown arg:" a)
+                (println "Usage: bb schemas:fetch [--version VERSION]")
+                (System/exit 2)))))
 
 (defn fetch-tarball! [version dest-dir]
   (let [url (format "https://registry.npmjs.org/@github/copilot/-/copilot-%s.tgz"

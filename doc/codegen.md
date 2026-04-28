@@ -14,6 +14,10 @@ generator in `script/codegen/`. Currently:
   variant in `session-events.schema.json`. One spec per event variant's `data`
   payload (e.g. `::session.start-data`), one per envelope (e.g.
   `::session.start`), an aggregate `::event` spec, and an `event-types` set.
+- `coerce.clj` — field-level wire↔idiom coercion (e.g. ISO strings ↔
+  `java.time.Instant`). Generated from `script/codegen/coercions.edn`. Used
+  at runtime by the notification dispatcher and `session/get-messages` to
+  bridge the wire and idiom layers (see "Wire vs idiom" below).
 
 These files start with an `AUTO-GENERATED` banner. **Do not edit them by
 hand** — your edits will be overwritten by the next `bb codegen` run.
@@ -123,7 +127,7 @@ raw enum strings,                              kebab-case maps
 | Layer | Source of truth | Drift-proof? | Caller-facing? |
 |---|---|---|---|
 | Wire (`github.copilot-sdk.generated.event-specs`) | upstream JSON Schema (auto) | ✅ yes | ❌ never |
-| Coercion (planned: `util.coerce`)                  | schema + `coercions.edn`     | ✅ yes | ❌ internal |
+| Coercion (`github.copilot-sdk.generated.coerce`)   | `coercions.edn` (auto)        | ✅ yes | ❌ internal |
 | Idiom (`github.copilot-sdk.specs`)                 | hand-curated, deliberately Clojure-native | curator-reviewed | ✅ yes |
 
 ### Policy for contributors
