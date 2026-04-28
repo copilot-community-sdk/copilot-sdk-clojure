@@ -10,6 +10,7 @@
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.util :as util]
+            [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.logging :as log])
   (:import [java.net Socket]
            [java.util.concurrent LinkedBlockingQueue]))
@@ -459,12 +460,27 @@
           (case (:method notif)
             "session.event"
             (let [{:keys [session-id event]} (:params notif)
-                  normalized-event (update event :type util/event-type->keyword)
+                  ;; Apply per-event coercion (wire → idiomatic Clojure types,
+                  ;; e.g. ISO strings → java.time.Instant) BEFORE type
+                  ;; normalization, since the coercion table keys events by
+                  ;; their original wire-shape `:type` string (e.g.
+                  ;; "session.start"). Coercion failures are non-fatal: log
+                  ;; and fall back to the uncoerced (but normalized) event so
+                  ;; one malformed payload cannot break notification routing.
+                  normalized-event (try
+                                     (-> event
+                                         coerce/event-wire->idiom
+                                         (update :type util/event-type->keyword))
+                                     (catch Exception e
+                                       (log/warn "Failed to coerce session event for"
+                                                 session-id ": " (ex-message e)
+                                                 " ex-data=" (pr-str (ex-data e)))
+                                       (update event :type util/event-type->keyword)))
                   event-type (:type normalized-event)]
               (log/debug "Routing event to session " session-id ": type=" event-type)
               ;; Validate model selection on session.start
               (when (= event-type :copilot/session.start)
-                (let [selected-model (get-in event [:data :selectedModel])
+                (let [selected-model (get-in normalized-event [:data :selected-model])
                       requested-model (get-in @(:state client) [:sessions session-id :config :model])]
                   (when (and requested-model selected-model
                              (not= requested-model selected-model))

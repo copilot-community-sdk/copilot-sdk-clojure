@@ -1,0 +1,14 @@
+;; Hand-curated coercion table for the wire/coerce/idiom three-tier
+;; architecture. Read by `script/codegen/emit_coerce.clj` and emitted into
+;; `src/github/copilot_sdk/generated/coerce.clj`.
+;;
+;; Shape:  event-type-string -> {field-keyword [wire-tag idiom-tag]}
+;;
+;; Tags must be present in the converters table in `emit_coerce.clj`. Adding
+;; a new tag pair requires adding a converter entry there. Adding a new field
+;; entry here only requires the tag pair already exist.
+;;
+;; Coverage invariant: every entry must be exercised by at least one fixture
+;; in `test/github/copilot_sdk/codegen_test.clj`. CI enforces.
+{"session.start"
+ {:start-time [:iso-string :instant]}}

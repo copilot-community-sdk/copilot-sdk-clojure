@@ -1,0 +1,3899 @@
+{
+  "$ref": "#/definitions/SessionEvent",
+  "definitions": {
+    "SessionEvent": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.start"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "number"
+                },
+                "producer": {
+                  "type": "string"
+                },
+                "copilotVersion": {
+                  "type": "string"
+                },
+                "startTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "selectedModel": {
+                  "type": "string"
+                },
+                "context": {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "type": "string"
+                    },
+                    "gitRoot": {
+                      "type": "string"
+                    },
+                    "repository": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cwd"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "sessionId",
+                "version",
+                "producer",
+                "copilotVersion",
+                "startTime"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.resume"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "resumeTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "eventCount": {
+                  "type": "number"
+                },
+                "context": {
+                  "type": "object",
+                  "properties": {
+                    "cwd": {
+                      "type": "string"
+                    },
+                    "gitRoot": {
+                      "type": "string"
+                    },
+                    "repository": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "cwd"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "resumeTime",
+                "eventCount"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.error"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "errorType": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "stack": {
+                  "type": "string"
+                },
+                "statusCode": {
+                  "type": "integer"
+                },
+                "providerCallId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "errorType",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "session.idle"
+            },
+            "data": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.info"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "infoType": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "infoType",
+                "message"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.model_change"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "previousModel": {
+                  "type": "string"
+                },
+                "newModel": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "newModel"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.import_legacy"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "legacySession": {
+                  "type": "object",
+                  "properties": {
+                    "sessionId": {
+                      "type": "string"
+                    },
+                    "startTime": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "chatMessages": {
+                      "type": "array",
+                      "items": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "text"
+                                        },
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                ]
+                              },
+                              "role": {
+                                "type": "string",
+                                "const": "developer"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "role"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "text"
+                                        },
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                ]
+                              },
+                              "role": {
+                                "type": "string",
+                                "const": "system"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "role"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "anyOf": [
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "text"
+                                            },
+                                            "text": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "text"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "image_url"
+                                            },
+                                            "image_url": {
+                                              "type": "object",
+                                              "properties": {
+                                                "url": {
+                                                  "type": "string"
+                                                },
+                                                "detail": {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "auto",
+                                                    "low",
+                                                    "high"
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "url"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "image_url"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "input_audio"
+                                            },
+                                            "input_audio": {
+                                              "type": "object",
+                                              "properties": {
+                                                "data": {
+                                                  "type": "string"
+                                                },
+                                                "format": {
+                                                  "type": "string",
+                                                  "enum": [
+                                                    "wav",
+                                                    "mp3"
+                                                  ]
+                                                }
+                                              },
+                                              "required": [
+                                                "data",
+                                                "format"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "input_audio"
+                                          ],
+                                          "additionalProperties": false
+                                        },
+                                        {
+                                          "type": "object",
+                                          "properties": {
+                                            "type": {
+                                              "type": "string",
+                                              "const": "file"
+                                            },
+                                            "file": {
+                                              "type": "object",
+                                              "properties": {
+                                                "file_date": {
+                                                  "type": "string"
+                                                },
+                                                "file_id": {
+                                                  "type": "string"
+                                                },
+                                                "filename": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "additionalProperties": false
+                                            }
+                                          },
+                                          "required": [
+                                            "type",
+                                            "file"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      ]
+                                    }
+                                  }
+                                ]
+                              },
+                              "role": {
+                                "type": "string",
+                                "const": "user"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "role"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "anyOf": [
+                                  {
+                                    "anyOf": [
+                                      {
+                                        "type": "string"
+                                      },
+                                      {
+                                        "type": "array",
+                                        "items": {
+                                          "anyOf": [
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "const": "text"
+                                                },
+                                                "text": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "type",
+                                                "text"
+                                              ],
+                                              "additionalProperties": false
+                                            },
+                                            {
+                                              "type": "object",
+                                              "properties": {
+                                                "type": {
+                                                  "type": "string",
+                                                  "const": "refusal"
+                                                },
+                                                "refusal": {
+                                                  "type": "string"
+                                                }
+                                              },
+                                              "required": [
+                                                "type",
+                                                "refusal"
+                                              ],
+                                              "additionalProperties": false
+                                            }
+                                          ]
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "role": {
+                                "type": "string",
+                                "const": "assistant"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "refusal": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "audio": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "id": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "id"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "function_call": {
+                                "anyOf": [
+                                  {
+                                    "type": "object",
+                                    "properties": {
+                                      "name": {
+                                        "type": "string"
+                                      },
+                                      "arguments": {
+                                        "type": "string"
+                                      }
+                                    },
+                                    "required": [
+                                      "name",
+                                      "arguments"
+                                    ],
+                                    "additionalProperties": false
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "tool_calls": {
+                                "type": "array",
+                                "items": {
+                                  "anyOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "const": "function"
+                                        },
+                                        "function": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string"
+                                            },
+                                            "arguments": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "name",
+                                            "arguments"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "type",
+                                        "function"
+                                      ],
+                                      "additionalProperties": false
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "id": {
+                                          "type": "string"
+                                        },
+                                        "type": {
+                                          "type": "string",
+                                          "const": "custom"
+                                        },
+                                        "custom": {
+                                          "type": "object",
+                                          "properties": {
+                                            "name": {
+                                              "type": "string"
+                                            },
+                                            "input": {
+                                              "type": "string"
+                                            }
+                                          },
+                                          "required": [
+                                            "name",
+                                            "input"
+                                          ],
+                                          "additionalProperties": false
+                                        }
+                                      },
+                                      "required": [
+                                        "id",
+                                        "type",
+                                        "custom"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  ]
+                                }
+                              }
+                            },
+                            "required": [
+                              "role"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "anyOf": [
+                                  {
+                                    "type": "string"
+                                  },
+                                  {
+                                    "type": "array",
+                                    "items": {
+                                      "type": "object",
+                                      "properties": {
+                                        "type": {
+                                          "type": "string",
+                                          "const": "text"
+                                        },
+                                        "text": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "type",
+                                        "text"
+                                      ],
+                                      "additionalProperties": false
+                                    }
+                                  }
+                                ]
+                              },
+                              "role": {
+                                "type": "string",
+                                "const": "tool"
+                              },
+                              "tool_call_id": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "role",
+                              "tool_call_id"
+                            ],
+                            "additionalProperties": false
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "content": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "role": {
+                                "type": "string",
+                                "const": "function"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "content",
+                              "role",
+                              "name"
+                            ],
+                            "additionalProperties": false
+                          }
+                        ]
+                      }
+                    },
+                    "timeline": {
+                      "type": "array",
+                      "items": {
+                        "allOf": [
+                          {
+                            "anyOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "copilot"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  },
+                                  "isStreaming": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "error"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "info"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "warning"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "user"
+                                  },
+                                  "text": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "text"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "tool_call_requested"
+                                  },
+                                  "callId": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "toolTitle": {
+                                    "type": "string"
+                                  },
+                                  "intentionSummary": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "arguments": {
+                                    "anyOf": [
+                                      {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string"
+                                              },
+                                              "description": {
+                                                "type": "string"
+                                              },
+                                              "timeout": {
+                                                "type": "number"
+                                              },
+                                              "sessionId": {
+                                                "type": "string"
+                                              },
+                                              "async": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "description"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "sessionId": {
+                                                "type": "string"
+                                              },
+                                              "input": {
+                                                "type": "string"
+                                              },
+                                              "delay": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "sessionId",
+                                              "input"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "sessionId": {
+                                                "type": "string"
+                                              },
+                                              "delay": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "sessionId",
+                                              "delay"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "sessionId": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "sessionId"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "view"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "view_range": {
+                                                "type": "array",
+                                                "minItems": 2,
+                                                "maxItems": 2,
+                                                "items": [
+                                                  {
+                                                    "type": "number"
+                                                  },
+                                                  {
+                                                    "type": "number"
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "create"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "file_text": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path",
+                                              "file_text"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "str_replace"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "new_str": {
+                                                "type": "string"
+                                              },
+                                              "old_str": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path",
+                                              "old_str"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "insert"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "insert_line": {
+                                                "type": "number"
+                                              },
+                                              "new_str": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path",
+                                              "insert_line",
+                                              "new_str"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      {}
+                                    ]
+                                  },
+                                  "partialOutput": {
+                                    "type": "string"
+                                  },
+                                  "isHidden": {
+                                    "type": "boolean"
+                                  },
+                                  "isAlwaysExpanded": {
+                                    "type": "boolean"
+                                  },
+                                  "showNoContent": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "callId",
+                                  "name",
+                                  "intentionSummary"
+                                ],
+                                "additionalProperties": false
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "type": {
+                                    "type": "string",
+                                    "const": "tool_call_completed"
+                                  },
+                                  "callId": {
+                                    "type": "string"
+                                  },
+                                  "name": {
+                                    "type": "string"
+                                  },
+                                  "toolTitle": {
+                                    "type": "string"
+                                  },
+                                  "intentionSummary": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ]
+                                  },
+                                  "result": {
+                                    "anyOf": [
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "success"
+                                          },
+                                          "log": {
+                                            "type": "string"
+                                          },
+                                          "detailedLog": {
+                                            "type": "string"
+                                          },
+                                          "markdown": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "log"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "failure"
+                                          },
+                                          "log": {
+                                            "type": "string"
+                                          },
+                                          "markdown": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "log"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "rejected"
+                                          },
+                                          "markdown": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "type"
+                                        ],
+                                        "additionalProperties": false
+                                      },
+                                      {
+                                        "type": "object",
+                                        "properties": {
+                                          "type": {
+                                            "type": "string",
+                                            "const": "denied"
+                                          },
+                                          "log": {
+                                            "type": "string"
+                                          },
+                                          "markdown": {
+                                            "type": "boolean"
+                                          }
+                                        },
+                                        "required": [
+                                          "type",
+                                          "log"
+                                        ],
+                                        "additionalProperties": false
+                                      }
+                                    ]
+                                  },
+                                  "arguments": {
+                                    "anyOf": [
+                                      {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string"
+                                              },
+                                              "description": {
+                                                "type": "string"
+                                              },
+                                              "timeout": {
+                                                "type": "number"
+                                              },
+                                              "sessionId": {
+                                                "type": "string"
+                                              },
+                                              "async": {
+                                                "type": "boolean"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "description"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "sessionId": {
+                                                "type": "string"
+                                              },
+                                              "input": {
+                                                "type": "string"
+                                              },
+                                              "delay": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "sessionId",
+                                              "input"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "sessionId": {
+                                                "type": "string"
+                                              },
+                                              "delay": {
+                                                "type": "number"
+                                              }
+                                            },
+                                            "required": [
+                                              "sessionId",
+                                              "delay"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "sessionId": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "sessionId"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      {
+                                        "anyOf": [
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "view"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "view_range": {
+                                                "type": "array",
+                                                "minItems": 2,
+                                                "maxItems": 2,
+                                                "items": [
+                                                  {
+                                                    "type": "number"
+                                                  },
+                                                  {
+                                                    "type": "number"
+                                                  }
+                                                ]
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "create"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "file_text": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path",
+                                              "file_text"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "str_replace"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "new_str": {
+                                                "type": "string"
+                                              },
+                                              "old_str": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path",
+                                              "old_str"
+                                            ],
+                                            "additionalProperties": false
+                                          },
+                                          {
+                                            "type": "object",
+                                            "properties": {
+                                              "command": {
+                                                "type": "string",
+                                                "const": "insert"
+                                              },
+                                              "path": {
+                                                "type": "string"
+                                              },
+                                              "insert_line": {
+                                                "type": "number"
+                                              },
+                                              "new_str": {
+                                                "type": "string"
+                                              }
+                                            },
+                                            "required": [
+                                              "command",
+                                              "path",
+                                              "insert_line",
+                                              "new_str"
+                                            ],
+                                            "additionalProperties": false
+                                          }
+                                        ]
+                                      },
+                                      {}
+                                    ]
+                                  },
+                                  "isHidden": {
+                                    "type": "boolean"
+                                  },
+                                  "isAlwaysExpanded": {
+                                    "type": "boolean"
+                                  },
+                                  "showNoContent": {
+                                    "type": "boolean"
+                                  }
+                                },
+                                "required": [
+                                  "type",
+                                  "callId",
+                                  "name",
+                                  "intentionSummary",
+                                  "result"
+                                ],
+                                "additionalProperties": false
+                              }
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string"
+                              },
+                              "timestamp": {
+                                "type": "string",
+                                "format": "date-time"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "timestamp"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "selectedModel": {
+                      "type": "string",
+                      "enum": [
+                        "claude-sonnet-4.5",
+                        "claude-haiku-4.5",
+                        "claude-opus-4.5",
+                        "claude-sonnet-4",
+                        "gemini-3-pro-preview",
+                        "gpt-5.2-codex",
+                        "gpt-5.2",
+                        "gpt-5.1-codex-max",
+                        "gpt-5.1-codex",
+                        "gpt-5.1",
+                        "gpt-5",
+                        "gpt-5.1-codex-mini",
+                        "gpt-5-mini",
+                        "gpt-4.1"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "sessionId",
+                    "startTime",
+                    "chatMessages",
+                    "timeline"
+                  ],
+                  "additionalProperties": false
+                },
+                "importTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "sourceFile": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "legacySession",
+                "importTime",
+                "sourceFile"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.handoff"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "handoffTime": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "sourceType": {
+                  "type": "string",
+                  "enum": [
+                    "remote",
+                    "local"
+                  ]
+                },
+                "repository": {
+                  "type": "object",
+                  "properties": {
+                    "owner": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "branch": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "owner",
+                    "name"
+                  ],
+                  "additionalProperties": false
+                },
+                "context": {
+                  "type": "string"
+                },
+                "summary": {
+                  "type": "string"
+                },
+                "remoteSessionId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "handoffTime",
+                "sourceType"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.truncation"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "tokenLimit": {
+                  "type": "number"
+                },
+                "preTruncationTokensInMessages": {
+                  "type": "number"
+                },
+                "preTruncationMessagesLength": {
+                  "type": "number"
+                },
+                "postTruncationTokensInMessages": {
+                  "type": "number"
+                },
+                "postTruncationMessagesLength": {
+                  "type": "number"
+                },
+                "tokensRemovedDuringTruncation": {
+                  "type": "number"
+                },
+                "messagesRemovedDuringTruncation": {
+                  "type": "number"
+                },
+                "performedBy": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "tokenLimit",
+                "preTruncationTokensInMessages",
+                "preTruncationMessagesLength",
+                "postTruncationTokensInMessages",
+                "postTruncationMessagesLength",
+                "tokensRemovedDuringTruncation",
+                "messagesRemovedDuringTruncation",
+                "performedBy"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "session.snapshot_rewind"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "upToEventId": {
+                  "type": "string"
+                },
+                "eventsRemoved": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "upToEventId",
+                "eventsRemoved"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "session.shutdown"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "shutdownType": {
+                  "type": "string",
+                  "enum": [
+                    "routine",
+                    "error"
+                  ]
+                },
+                "errorReason": {
+                  "type": "string"
+                },
+                "totalPremiumRequests": {
+                  "type": "number"
+                },
+                "totalApiDurationMs": {
+                  "type": "number"
+                },
+                "sessionStartTime": {
+                  "type": "number"
+                },
+                "codeChanges": {
+                  "type": "object",
+                  "properties": {
+                    "linesAdded": {
+                      "type": "number"
+                    },
+                    "linesRemoved": {
+                      "type": "number"
+                    },
+                    "filesModified": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "linesAdded",
+                    "linesRemoved",
+                    "filesModified"
+                  ],
+                  "additionalProperties": false
+                },
+                "modelMetrics": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "requests": {
+                        "type": "object",
+                        "properties": {
+                          "count": {
+                            "type": "number"
+                          },
+                          "cost": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "count",
+                          "cost"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "usage": {
+                        "type": "object",
+                        "properties": {
+                          "inputTokens": {
+                            "type": "number"
+                          },
+                          "outputTokens": {
+                            "type": "number"
+                          },
+                          "cacheReadTokens": {
+                            "type": "number"
+                          },
+                          "cacheWriteTokens": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "inputTokens",
+                          "outputTokens",
+                          "cacheReadTokens",
+                          "cacheWriteTokens"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": [
+                      "requests",
+                      "usage"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "currentModel": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "shutdownType",
+                "totalPremiumRequests",
+                "totalApiDurationMs",
+                "sessionStartTime",
+                "codeChanges",
+                "modelMetrics"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "session.usage_info"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "tokenLimit": {
+                  "type": "number"
+                },
+                "currentTokens": {
+                  "type": "number"
+                },
+                "messagesLength": {
+                  "type": "number"
+                }
+              },
+              "required": [
+                "tokenLimit",
+                "currentTokens",
+                "messagesLength"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.compaction_start"
+            },
+            "data": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "session.compaction_complete"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": "string"
+                },
+                "preCompactionTokens": {
+                  "type": "number"
+                },
+                "postCompactionTokens": {
+                  "type": "number"
+                },
+                "preCompactionMessagesLength": {
+                  "type": "number"
+                },
+                "messagesRemoved": {
+                  "type": "number"
+                },
+                "tokensRemoved": {
+                  "type": "number"
+                },
+                "summaryContent": {
+                  "type": "string"
+                },
+                "checkpointNumber": {
+                  "type": "number"
+                },
+                "checkpointPath": {
+                  "type": "string"
+                },
+                "compactionTokensUsed": {
+                  "type": "object",
+                  "properties": {
+                    "input": {
+                      "type": "number"
+                    },
+                    "output": {
+                      "type": "number"
+                    },
+                    "cachedInput": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "input",
+                    "output",
+                    "cachedInput"
+                  ],
+                  "additionalProperties": false
+                },
+                "requestId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "success"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "user.message"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "transformedContent": {
+                  "type": "string"
+                },
+                "attachments": {
+                  "type": "array",
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "file"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "path",
+                          "displayName"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "directory"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "path",
+                          "displayName"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "selection"
+                          },
+                          "filePath": {
+                            "type": "string"
+                          },
+                          "displayName": {
+                            "type": "string"
+                          },
+                          "text": {
+                            "type": "string"
+                          },
+                          "selection": {
+                            "type": "object",
+                            "properties": {
+                              "start": {
+                                "type": "object",
+                                "properties": {
+                                  "line": {
+                                    "type": "number"
+                                  },
+                                  "character": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "line",
+                                  "character"
+                                ],
+                                "additionalProperties": false
+                              },
+                              "end": {
+                                "type": "object",
+                                "properties": {
+                                  "line": {
+                                    "type": "number"
+                                  },
+                                  "character": {
+                                    "type": "number"
+                                  }
+                                },
+                                "required": [
+                                  "line",
+                                  "character"
+                                ],
+                                "additionalProperties": false
+                              }
+                            },
+                            "required": [
+                              "start",
+                              "end"
+                            ],
+                            "additionalProperties": false
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "filePath",
+                          "displayName",
+                          "text",
+                          "selection"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  }
+                },
+                "source": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "pending_messages.modified"
+            },
+            "data": {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.turn_start"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "turnId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "turnId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.intent"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "intent": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "intent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.reasoning"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "reasoningId": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reasoningId",
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.reasoning_delta"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "reasoningId": {
+                  "type": "string"
+                },
+                "deltaContent": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reasoningId",
+                "deltaContent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.message"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "toolRequests": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "toolCallId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "arguments": {},
+                      "type": {
+                        "type": "string",
+                        "enum": [
+                          "function",
+                          "custom"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "toolCallId",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "reasoningOpaque": {
+                  "type": "string"
+                },
+                "reasoningText": {
+                  "type": "string"
+                },
+                "encryptedContent": {
+                  "type": "string"
+                },
+                "parentToolCallId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "messageId",
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.message_delta"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "messageId": {
+                  "type": "string"
+                },
+                "deltaContent": {
+                  "type": "string"
+                },
+                "totalResponseSizeBytes": {
+                  "type": "number"
+                },
+                "parentToolCallId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "messageId",
+                "deltaContent"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.turn_end"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "turnId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "turnId"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "assistant.usage"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "model": {
+                  "type": "string"
+                },
+                "inputTokens": {
+                  "type": "number"
+                },
+                "outputTokens": {
+                  "type": "number"
+                },
+                "cacheReadTokens": {
+                  "type": "number"
+                },
+                "cacheWriteTokens": {
+                  "type": "number"
+                },
+                "cost": {
+                  "type": "number"
+                },
+                "duration": {
+                  "type": "number"
+                },
+                "initiator": {
+                  "type": "string"
+                },
+                "apiCallId": {
+                  "type": "string"
+                },
+                "providerCallId": {
+                  "type": "string"
+                },
+                "parentToolCallId": {
+                  "type": "string"
+                },
+                "quotaSnapshots": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "properties": {
+                      "isUnlimitedEntitlement": {
+                        "type": "boolean"
+                      },
+                      "entitlementRequests": {
+                        "type": "number"
+                      },
+                      "usedRequests": {
+                        "type": "number"
+                      },
+                      "usageAllowedWithExhaustedQuota": {
+                        "type": "boolean"
+                      },
+                      "overage": {
+                        "type": "number"
+                      },
+                      "overageAllowedWithExhaustedQuota": {
+                        "type": "boolean"
+                      },
+                      "remainingPercentage": {
+                        "type": "number"
+                      },
+                      "resetDate": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    },
+                    "required": [
+                      "isUnlimitedEntitlement",
+                      "entitlementRequests",
+                      "usedRequests",
+                      "usageAllowedWithExhaustedQuota",
+                      "overage",
+                      "overageAllowedWithExhaustedQuota",
+                      "remainingPercentage"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "model"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "abort"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "tool.user_requested"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "arguments": {}
+              },
+              "required": [
+                "toolCallId",
+                "toolName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "tool.execution_start"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "arguments": {},
+                "mcpServerName": {
+                  "type": "string"
+                },
+                "mcpToolName": {
+                  "type": "string"
+                },
+                "parentToolCallId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "toolName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "tool.execution_partial_result"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "partialOutput": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "partialOutput"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean",
+              "const": true
+            },
+            "type": {
+              "type": "string",
+              "const": "tool.execution_progress"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "progressMessage": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "progressMessage"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "ephemeral",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "tool.execution_complete"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "success": {
+                  "type": "boolean"
+                },
+                "isUserRequested": {
+                  "type": "boolean"
+                },
+                "result": {
+                  "type": "object",
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "detailedContent": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "content"
+                  ],
+                  "additionalProperties": false
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "code": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "additionalProperties": false
+                },
+                "toolTelemetry": {
+                  "type": "object",
+                  "additionalProperties": {}
+                },
+                "parentToolCallId": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "success"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "skill.invoked"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "string"
+                },
+                "allowedTools": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "path",
+                "content"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "subagent.started"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "agentName": {
+                  "type": "string"
+                },
+                "agentDisplayName": {
+                  "type": "string"
+                },
+                "agentDescription": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "agentName",
+                "agentDisplayName",
+                "agentDescription"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "subagent.completed"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "agentName": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "agentName"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "subagent.failed"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "toolCallId": {
+                  "type": "string"
+                },
+                "agentName": {
+                  "type": "string"
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "toolCallId",
+                "agentName",
+                "error"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "subagent.selected"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "agentName": {
+                  "type": "string"
+                },
+                "agentDisplayName": {
+                  "type": "string"
+                },
+                "tools": {
+                  "anyOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "agentName",
+                "agentDisplayName",
+                "tools"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "hook.start"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "hookInvocationId": {
+                  "type": "string"
+                },
+                "hookType": {
+                  "type": "string"
+                },
+                "input": {}
+              },
+              "required": [
+                "hookInvocationId",
+                "hookType"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "hook.end"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "hookInvocationId": {
+                  "type": "string"
+                },
+                "hookType": {
+                  "type": "string"
+                },
+                "output": {},
+                "success": {
+                  "type": "boolean"
+                },
+                "error": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "stack": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "message"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "hookInvocationId",
+                "hookType",
+                "success"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "timestamp": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "parentId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "ephemeral": {
+              "type": "boolean"
+            },
+            "type": {
+              "type": "string",
+              "const": "system.message"
+            },
+            "data": {
+              "type": "object",
+              "properties": {
+                "content": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "system",
+                    "developer"
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object",
+                  "properties": {
+                    "promptVersion": {
+                      "type": "string"
+                    },
+                    "variables": {
+                      "type": "object",
+                      "additionalProperties": {}
+                    }
+                  },
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "content",
+                "role"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "id",
+            "timestamp",
+            "parentId",
+            "type",
+            "data"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "$schema": "http://json-schema.org/draft-07/schema#"
+}

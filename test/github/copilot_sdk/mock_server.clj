@@ -194,7 +194,9 @@
     {:success true}))
 
 (defn- handle-session-get-messages [server params]
-  {:events []})
+  (let [session-id (:sessionId params)
+        session-state (get @(:sessions server) session-id)]
+    {:events (or (:messages session-state) [])}))
 
 (defn- handle-session-list [server params]
   (let [filter-opts (:filter params)
@@ -522,6 +524,12 @@
   "Set context on a mock session (for testing list-sessions with context)."
   [server session-id context]
   (swap! (:sessions server) assoc-in [session-id :context] context))
+
+(defn set-session-messages!
+  "Seed historical events on a mock session for testing session.getMessages.
+   Events should be in wire shape (camelCase keys, string :type)."
+  [server session-id events]
+  (swap! (:sessions server) assoc-in [session-id :messages] events))
 
 (defn send-rpc-request!
   "Send a JSON-RPC request to the client and wait for the response.

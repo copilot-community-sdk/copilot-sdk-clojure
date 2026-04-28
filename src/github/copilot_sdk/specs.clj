@@ -719,8 +719,13 @@
 (s/def ::base-commit string?)
 
 (s/def ::session.start-data
+  ;; Note: ::version is intentionally omitted from this hand-written spec.
+  ;; The upstream schema types it as `number` while the global `::version`
+  ;; spec (used by ::model-info) is `string?`. The generated wire spec
+  ;; (github.copilot-sdk.generated.event-specs/session.start-data) is the
+  ;; canonical contract for this field.
   (s/keys :req-un [::session-id]
-          :opt-un [::version ::producer ::copilot-version ::start-time ::selected-model
+          :opt-un [::producer ::copilot-version ::start-time ::selected-model
                    ::reasoning-effort ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit]))
 
 (s/def ::event-count nat-int?)

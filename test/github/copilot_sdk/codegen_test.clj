@@ -1,0 +1,286 @@
+(ns github.copilot-sdk.codegen-test
+  "Cross-validation tests for the schema-driven codegen pipeline.
+
+   Four distinct purposes:
+
+   1. **Forward correctness** — generated `*-data` specs in
+      `github.copilot-sdk.generated.event-specs` must accept canonical wire
+      payloads (post `util/wire->clj`). If they don't, the generator or the
+      pinned schema is wrong.
+
+   2. **Envelope discrimination** — generated full envelope specs (e.g.
+      `::session.start`) and the aggregate `::event` spec must reject
+      payloads with a wrong `:type` literal, mismatched `:data` shape, or
+      an unknown event type. These tests pin the envelope-as-discriminator
+      contract: a feature regression here would silently destroy the value
+      of `::event`.
+
+   3. **Three-tier coercion contract** (Phase 3.5) — every coercion entry
+      in `script/codegen/coercions.edn` must:
+        a. round-trip semantically through wire→idiom→wire (Instant
+           equality, not string equality, since ISO 8601 normalization can
+           reshape the textual form);
+        b. be exercised by at least one fixture (no dead entries);
+        c. produce a value that satisfies the hand-written idiom spec.
+
+   4. **Drift audit** — for every event variant that has BOTH a hand-written
+      spec in `github.copilot-sdk.specs` and a generated spec, the hand spec
+      must accept the COERCED payload (not the raw wire payload). After
+      Phase 3.5 the audit's `known-drifts` set is empty: every richer hand
+      spec is either reconciled by coercion or reflected in a passthrough
+      spec.
+
+   These tests do **not** instrument any runtime path. They validate the
+   generated artifacts directly against fixture payloads, so they are pure
+   regression coverage for the codegen pipeline."
+  (:require [clojure.test :refer [deftest is testing]]
+            [clojure.set]
+            [clojure.spec.alpha :as s]
+            [github.copilot-sdk.generated.coerce :as coerce]
+            [github.copilot-sdk.generated.event-specs :as gen]
+            [github.copilot-sdk.specs])
+  (:import [java.time Instant]))
+
+;; ---------------------------------------------------------------------------
+;; Canonical wire-shape fixtures (post `util/wire->clj`, i.e. kebab-case keys).
+;; Keep these minimal but type-correct per the upstream JSON schema.
+;; ---------------------------------------------------------------------------
+
+(def ^:private fixtures
+  "Map of event-type → minimal-but-valid `data` payload."
+  {"session.start"
+   {:session-id "s-1"
+    :version 1                                 ;; number per schema
+    :producer "test"
+    :copilot-version "1.0.0"
+    :start-time "2024-01-01T00:00:00Z"}        ;; ISO string per schema
+
+   "session.resume"
+   {:resume-time "2024-01-01T00:00:00Z"
+    :event-count 0}
+
+   "session.error"
+   {:error-type "internal"
+    :message "boom"}
+
+   "session.idle"
+   {}
+
+   "session.info"
+   {:info-type "general"
+    :message "hello"}
+
+   "session.shutdown"
+   {:shutdown-type "routine"
+    :total-premium-requests 0
+    :total-api-duration-ms 0
+    :session-start-time 1700000000
+    :code-changes {}
+    :model-metrics {}}})
+
+(defn- envelope
+  "Wrap a data payload in a minimal valid envelope of the given type."
+  [event-type data]
+  {:id "evt-1"
+   :timestamp "2024-01-01T00:00:00Z"
+   :parent-id "p-1"
+   :ephemeral false
+   :type event-type
+   :data data})
+
+;; ---------------------------------------------------------------------------
+;; Forward correctness — generated specs must accept wire-shape payloads.
+;; ---------------------------------------------------------------------------
+
+(deftest generated-data-specs-accept-wire-payloads
+  (doseq [[event-type payload] fixtures]
+    (testing (str "generated " event-type "-data accepts canonical payload")
+      (let [spec-kw (keyword "github.copilot-sdk.generated.event-specs"
+                             (str event-type "-data"))]
+        (is (s/get-spec spec-kw)
+            (str "generated spec missing for " event-type))
+        (is (s/valid? spec-kw payload)
+            (str "generated spec rejected wire payload for " event-type
+                 ": " (s/explain-str spec-kw payload)))))))
+
+(deftest event-types-set-matches-fixtures
+  (testing "every fixture event-type is in the generated event-types set"
+    (doseq [event-type (keys fixtures)]
+      (is (contains? gen/event-types event-type)
+          (str event-type " missing from gen/event-types — schema may have moved")))))
+
+;; ---------------------------------------------------------------------------
+;; Envelope discrimination — type and data binding must be tight.
+;; ---------------------------------------------------------------------------
+
+(deftest envelope-accepts-matching-type-and-data
+  (doseq [[event-type payload] fixtures]
+    (testing (str "::" event-type " accepts a well-formed envelope")
+      (let [spec-kw (keyword "github.copilot-sdk.generated.event-specs" event-type)
+            env    (envelope event-type payload)]
+        (is (s/valid? spec-kw env)
+            (str "envelope rejected: " (s/explain-str spec-kw env)))))))
+
+(deftest envelope-rejects-wrong-type-literal
+  (let [start-payload (get fixtures "session.start")
+        wrong-env     (envelope "session.shutdown" start-payload)]
+    (is (not (s/valid? :github.copilot-sdk.generated.event-specs/session.start
+                       wrong-env))
+        "::session.start must reject envelope whose :type is not \"session.start\"")
+    (is (not (s/valid? :github.copilot-sdk.generated.event-specs/session.shutdown
+                       wrong-env))
+        "::session.shutdown must reject envelope whose :data does not match its data spec")))
+
+(deftest envelope-rejects-mismatched-data-shape
+  (let [bad-env (envelope "session.start" {:totally "unrelated"})]
+    (is (not (s/valid? :github.copilot-sdk.generated.event-specs/session.start
+                       bad-env))
+        "::session.start must reject envelope when :data does not satisfy ::session.start-data")))
+
+(deftest aggregate-event-spec-discriminates
+  (testing "::event accepts known event types with matching data"
+    (doseq [[event-type payload] fixtures]
+      (let [env (envelope event-type payload)]
+        (is (s/valid? ::gen/event env)
+            (str "::event rejected " event-type ": " (s/explain-str ::gen/event env))))))
+  (testing "::event rejects unknown :type"
+    (let [env (envelope "definitely-not-an-event"
+                        (get fixtures "session.start"))]
+      (is (not (s/valid? ::gen/event env))
+          "::event must reject unknown :type values")))
+  (testing "::event rejects mismatched (type, data) pairs"
+    (let [env (envelope "session.start" (get fixtures "session.shutdown"))]
+      (is (not (s/valid? ::gen/event env))
+          "::event must reject envelopes whose :data shape does not match :type"))))
+
+;; ---------------------------------------------------------------------------
+;; Three-tier coercion contract (Phase 3.5).
+;; ---------------------------------------------------------------------------
+
+(deftest coercion-table-is-exercised-by-fixtures
+  (testing "every coercion entry is exercised by ≥1 fixture with a non-nil value"
+    (doseq [[event-type fields] coerce/field-coercions
+            [field _tag-pair]   fields]
+      (is (contains? fixtures event-type)
+          (str "coercion declared for " event-type "/" field
+               " but no fixture covers it"))
+      (is (contains? (get fixtures event-type) field)
+          (str "fixture for " event-type " is missing field " field
+               " required by coercion table"))
+      (is (some? (get-in fixtures [event-type field]))
+          (str "fixture for " event-type "/" field
+               " has nil value; coverage would be vacuous")))))
+
+(deftest coercion-is-idempotent
+  (testing "applying wire->idiom twice equals applying it once"
+    (doseq [[event-type payload] fixtures]
+      (let [event   {:type event-type :data payload}
+            once    (coerce/event-wire->idiom event)
+            twice   (coerce/event-wire->idiom once)]
+        (is (= once twice)
+            (str "coercion not idempotent for " event-type))))))
+
+(deftest coercion-round-trips-semantically
+  (testing "wire → idiom → wire preserves field values (semantic equality)"
+    (doseq [[event-type payload] fixtures]
+      (let [event       {:type event-type :data payload}
+            round-trip  (coerce/event-idiom->wire (coerce/event-wire->idiom event))
+            fields      (get coerce/field-coercions event-type)]
+        (doseq [[field [wire-tag _idiom-tag]] fields
+                :let [orig-v (get-in event       [:data field])
+                      rt-v   (get-in round-trip  [:data field])]
+                :when (some? orig-v)]
+          ;; For ISO timestamps, compare semantically (Instant equality)
+          ;; rather than textually — ISO 8601 has multiple valid string
+          ;; representations and Instant/toString canonicalizes.
+          (case wire-tag
+            :iso-string
+            (is (= (Instant/parse orig-v) (Instant/parse rt-v))
+                (str "round-trip lost semantic equality for "
+                     event-type "/" field ": " orig-v " ⇄ " rt-v))
+            ;; default: structural equality
+            (is (= orig-v rt-v)
+                (str "round-trip lost equality for "
+                     event-type "/" field))))))))
+
+(deftest coerced-data-satisfies-hand-spec
+  (testing "after wire->idiom, hand-written spec accepts the data"
+    (doseq [[event-type payload] fixtures]
+      (let [hand-kw (keyword "github.copilot-sdk.specs" (str event-type "-data"))]
+        (when (s/get-spec hand-kw)
+          (let [coerced-data (coerce/coerce-data event-type payload :wire->idiom)]
+            (is (s/valid? hand-kw coerced-data)
+                (str "hand spec " hand-kw " rejected coerced data: "
+                     (s/explain-str hand-kw coerced-data)))))))))
+
+;; ---------------------------------------------------------------------------
+;; Drift audit — surfaces residual disagreements between hand-written and
+;; generated specs after coercion is applied.
+;;
+;; The audit is FIELD-PRECISE:
+;;   * `known-drifts` lists [event-type field reason] tuples for any
+;;     residual drift that the coercion layer does NOT reconcile.
+;;   * For every fixture, we extract the set of failing fields from
+;;     `s/explain-data` against the hand-written spec, AFTER coercion.
+;;   * We assert that set is exactly equal to the documented drifts for
+;;     that event-type — so stale entries (drift was fixed but registry
+;;     still references it) AND undocumented drifts both fail the test.
+;;
+;; After Phase 3.5 reconciliation, this set should be empty: every
+;; richer hand spec is reconciled either via coercion (Instant) or by
+;; intentional omission from the hand spec (e.g. session.start :version,
+;; where the global ::version is shared with ::model-info and the
+;; generated wire spec is the canonical contract).
+;; ---------------------------------------------------------------------------
+
+(def ^:private known-drifts
+  "Hand-written specs known to disagree with the schema even after
+   coercion. Each entry is a [event-type field reason] tuple. Empty after
+   Phase 3.5: the test fails if any drift is detected, forcing the
+   contributor to either add a coercion entry or fix the hand spec."
+  #{})
+
+(defn- failing-fields
+  "Extract the set of map keys (top-level :in path heads) where `payload`
+   fails `spec`. Returns #{} when payload is valid."
+  [spec payload]
+  (let [data (s/explain-data spec payload)]
+    (->> (:clojure.spec.alpha/problems data)
+         (map (fn [{:keys [in path]}]
+                ;; Prefer :in (which targets actual map keys) over :path
+                ;; (which references the s/keys spec name).
+                (or (first in) (last path))))
+         (remove nil?)
+         set)))
+
+(deftest hand-written-specs-agree-with-generated
+  (doseq [[event-type payload] fixtures]
+    (testing (str "specs.clj ::" event-type "-data agrees with generated for canonical payload (post-coercion)")
+      (let [hand-kw (keyword "github.copilot-sdk.specs" (str event-type "-data"))
+            gen-kw  (keyword "github.copilot-sdk.generated.event-specs"
+                             (str event-type "-data"))]
+        (when (s/get-spec hand-kw)
+          (is (s/valid? gen-kw payload)
+              (str "Generator regression: " gen-kw " rejects fixture: "
+                   (s/explain-str gen-kw payload)))
+          (let [coerced-data    (coerce/coerce-data event-type payload :wire->idiom)
+                actual-failing  (failing-fields hand-kw coerced-data)
+                registered-fields (->> known-drifts
+                                       (filter #(= event-type (first %)))
+                                       (map second)
+                                       set)]
+            (is (= actual-failing registered-fields)
+                (str "Drift mismatch for " event-type " (after coercion):\n"
+                     "  actual failing fields:    " (sort actual-failing) "\n"
+                     "  registered known-drifts:  " (sort registered-fields) "\n"
+                     (cond
+                       (seq (clojure.set/difference actual-failing registered-fields))
+                       (str "  → undocumented drifts: "
+                            (sort (clojure.set/difference actual-failing registered-fields))
+                            " (add a coercion entry, fix specs.clj, or add to known-drifts)")
+                       (seq (clojure.set/difference registered-fields actual-failing))
+                       (str "  → stale drift entries: "
+                            (sort (clojure.set/difference registered-fields actual-failing))
+                            " (remove from known-drifts; the drift is no longer reproducible)")
+                       :else "")))))))))
+

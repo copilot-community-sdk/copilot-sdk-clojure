@@ -556,6 +556,29 @@
       ;; Mock server returns empty events vector
       (is (vector? messages)))))
 
+(deftest test-get-messages-applies-coercion
+  (testing "Historical session.start events have :start-time coerced to Instant"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (:session-id session)
+          iso "2024-01-01T00:00:00Z"]
+      ;; Seed a wire-shape session.start event into the mock server's history
+      (mock/set-session-messages!
+       *mock-server* session-id
+       [{:type "session.start"
+         :data {:sessionId session-id
+                :version 1
+                :producer "test"
+                :copilotVersion "1.0.0"
+                :startTime iso}}])
+      (let [[msg] (sdk/get-messages session)]
+        (is (= :copilot/session.start (:type msg))
+            "type is normalized to a keyword")
+        (is (instance? java.time.Instant (get-in msg [:data :start-time]))
+            "wire ISO string is coerced to java.time.Instant")
+        (is (= (java.time.Instant/parse iso)
+               (get-in msg [:data :start-time]))
+            "Instant value is preserved across coercion")))))
+
 ;; -----------------------------------------------------------------------------
 ;; Event Channel Tests
 ;; -----------------------------------------------------------------------------

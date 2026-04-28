@@ -13,7 +13,8 @@
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.specs :as specs]
-            [github.copilot-sdk.util :as util]))
+            [github.copilot-sdk.util :as util]
+            [github.copilot-sdk.generated.coerce :as coerce]))
 
 ;; -----------------------------------------------------------------------------
 ;; State accessors - all state lives in client's atom
@@ -1006,6 +1007,22 @@
       (proto/send-request! conn "session.abort" {:session-id session-id})
       nil)))
 
+(defn- coerce+normalize-event
+  "Apply wire→idiom coercion then normalize :type to a keyword. Fail-open: on
+   coercion failure, log a warning (with ex-data) and return the event with
+   :type normalized but data uncoerced. Mirrors the pipeline in
+   `client/notification-dispatcher` so live and historical events have the
+   same shape."
+  [event]
+  (try
+    (-> event
+        coerce/event-wire->idiom
+        (update :type util/event-type->keyword))
+    (catch Exception e
+      (log/warn "Failed to coerce historical session event: " (ex-message e)
+                " ex-data=" (pr-str (ex-data e)))
+      (update event :type util/event-type->keyword))))
+
 (defn get-messages
   "Get all events/messages from this session's history."
   [session]
@@ -1014,7 +1031,7 @@
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
-      (mapv #(update % :type util/event-type->keyword) (:events result)))))
+      (mapv coerce+normalize-event (:events result)))))
 
 (defn disconnect!
   "Disconnects the session and releases in-memory resources (event handlers,

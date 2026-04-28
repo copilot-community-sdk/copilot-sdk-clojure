@@ -45,4 +45,10 @@
            :task (clojure "-T:build" "install")}
 
   validate-docs {:doc "Validate documentation: links, code blocks, and structure."
-                 :task (shell "bb" "script/validate_docs.clj")}}}
+                 :task (shell "bb" "script/validate_docs.clj")}
+
+  schemas:fetch {:doc "Fetch upstream @github/copilot JSON Schemas at the pinned version into schemas/."
+                 :task (shell "bb" "script/codegen/fetch_schemas.clj")}
+
+  codegen {:doc "Regenerate Clojure code from upstream JSON Schemas in schemas/."
+           :task (shell "bb" "-cp" "script" "-m" "codegen.main")}}}
