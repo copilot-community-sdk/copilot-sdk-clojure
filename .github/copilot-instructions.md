@@ -90,10 +90,11 @@ integration tests), every public function call is validated against its spec at 
 This means integration tests run with full spec checking — any argument or return
 value that violates a spec will throw immediately. When adding new public functions:
 
-1. Add an `s/fdef` in `src/github/copilot_sdk/instrument.clj`
-2. Add the function to both `instrument-all!` and `unstrument-all!` lists
-3. Ensure the corresponding specs exist in `src/github/copilot_sdk/specs.clj`
-4. Run `bb test` — if specs are wrong, instrumented tests will catch it
+1. Add a `register-fdef!` form in `src/github/copilot_sdk/instrument.clj` (same syntax as
+   `s/fdef`, but also records the symbol in a single registry so `instrument-all!` /
+   `unstrument-all!` derive their target list automatically — no parallel symbol lists)
+2. Ensure the corresponding specs exist in `src/github/copilot_sdk/specs.clj`
+3. Run `bb test` — if specs are wrong, instrumented tests will catch it
 
 ### Running Examples
 

@@ -36,6 +36,19 @@ All notable changes to this project will be documented in this file. This change
   `java.time.Instant`. New integration test
   `test-get-messages-applies-coercion` enforces this.
 
+### Changed (instrumentation)
+- **Phase 6: instrument deduplication** — `src/github/copilot_sdk/instrument.clj`
+  no longer maintains three parallel symbol lists (one `s/fdef` per public API
+  fn, one symbol list passed to `instrument-all!`, one to `unstrument-all!`).
+  A new private `register-fdef!` macro both delegates to `s/fdef` and records
+  the fully-qualified symbol in a single `registered-fdefs` registry; both
+  `instrument-all!` and `unstrument-all!` now derive their target list from
+  that registry. The macro fail-fast rejects unqualified symbols at
+  macroexpansion time, so a stale or alias-qualified entry is caught
+  immediately rather than silently leaving an instrumentation gap. Net effect:
+  ~162 lines removed from `instrument.clj`, no behavior change, and adding a
+  new public API fn now requires a single edit instead of three.
+
 ### Fixed (codegen)
 - **`session.start` event delivery** — `:selected-model` was being read with
   the wrong (camelCase) key `:selectedModel` in the runtime dispatcher; fixed
