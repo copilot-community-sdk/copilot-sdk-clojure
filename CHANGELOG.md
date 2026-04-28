@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (instrumentation)
+- **Phase 6: instrument deduplication** — `src/github/copilot_sdk/instrument.clj`
+  no longer maintains three parallel symbol lists (one `s/fdef` per public API
+  fn, one symbol list passed to `instrument-all!`, one to `unstrument-all!`).
+  A new private `register-fdef!` macro both delegates to `s/fdef` and records
+  the fully-qualified symbol in a single `registered-fdefs` registry; both
+  `instrument-all!` and `unstrument-all!` now derive their target list from
+  that registry. The macro fail-fast rejects unqualified symbols at
+  macroexpansion time, so a stale or alias-qualified entry is caught
+  immediately rather than silently leaving an instrumentation gap. Net effect:
+  ~162 lines removed from `instrument.clj`, no behavior change, and adding a
+  new public API fn now requires a single edit instead of three.
+
 ## [0.3.0.0-SNAPSHOT] - 2026-04-23
 ### Added (v0.3.0-preview.0 sync)
 - **`defaultAgent.excludedTools` session option** — new `:default-agent {:excluded-tools [...]}` config for create, resume, and join session paths. This hides selected tools from the built-in/default agent while preserving tool availability for custom agents. (upstream commit `b1b0df5c`)
