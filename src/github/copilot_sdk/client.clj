@@ -315,7 +315,7 @@
                   (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
                                           {:session-id session-id
                                            :request-id request-id
-                                           :result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}))))
+                                           :result {:kind :user-not-available}}))))
               (catch Exception _ nil))))))))
 
 (defn- handle-v3-command-execute!
@@ -607,12 +607,12 @@
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
                                           {:result (<! (session/handle-tool-call! client session-id tool-call-id tool-name arguments))}))
 
-                                      "permission.request"
-                                      (let [{:keys [session-id permission-request]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}
-                                          (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
-                                                result (:result perm-response)]
+                                       "permission.request"
+                                       (let [{:keys [session-id permission-request]} params]
+                                         (if-not (get-in @(:state client) [:sessions session-id])
+                                           {:result {:result {:kind :user-not-available}}}
+                                           (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
+                                                 result (:result perm-response)]
                                             (if (= :no-result result)
                                               ;; no-result must propagate as an error on v2 protocol
                                               ;; so the CLI knows no answer was given (matches upstream -32603)
@@ -805,9 +805,12 @@
 
     (copilot/create-session client {:on-permission-request copilot/approve-all})
 
+  Returns `{:kind :approve-once}`, matching the upstream `approveAll`
+  permission decision.
+
   For fine-grained control, provide your own handler function instead."
   [_request _ctx]
-  {:kind :approved})
+  {:kind :approve-once})
 
 (defn default-join-session-permission-handler
   "Default permission handler for resuming sessions.
@@ -1385,6 +1388,7 @@
       (:session-id config) (assoc :session-id (:session-id config))
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
+      (:github-token config) (assoc :git-hub-token (:github-token config))
       wire-tools (assoc :tools wire-tools)
       wire-commands (assoc :commands wire-commands)
       wire-sys-msg (assoc :system-message wire-sys-msg)
@@ -1453,6 +1457,7 @@
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
+      (:github-token config) (assoc :git-hub-token (:github-token config))
       wire-tools (assoc :tools wire-tools)
       wire-commands (assoc :commands wire-commands)
       wire-sys-msg (assoc :system-message wire-sys-msg)
@@ -1526,12 +1531,13 @@
    - :large-output       - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir}
                            Note: CLI protocol feature, not in official SDK. outputDir may be ignored.
    - :working-directory  - Working directory for the session (tool operations relative to this)
-   - :infinite-sessions  - Infinite session config for automatic context compaction
-                           {:enabled (default true)
-                            :background-compaction-threshold (0.0-1.0, default 0.80)
-                            :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
-   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
-   - :on-user-input-request - Handler for ask_user requests (PR #269)
+    - :infinite-sessions  - Infinite session config for automatic context compaction
+                            {:enabled (default true)
+                             :background-compaction-threshold (0.0-1.0, default 0.80)
+                             :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
+    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
+    - :github-token       - GitHub token for this session (sent as gitHubToken)
+    - :on-user-input-request - Handler for ask_user requests (PR #269)
    - :on-elicitation-request - Handler for elicitation requests from the agent (upstream PRs #908, #960).
                                When provided, sends requestElicitation=true and enables the
                                elicitation capability. Single-arg handler receives an ElicitationContext
@@ -1601,10 +1607,11 @@
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-dir         - Override configuration directory
    - :skill-directories  - Directories to load skills from
-   - :disabled-skills    - Skills to disable
-   - :infinite-sessions  - Infinite session configuration
-   - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
-   - :on-user-input-request - Handler for ask_user requests
+    - :disabled-skills    - Skills to disable
+    - :infinite-sessions  - Infinite session configuration
+    - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
+    - :github-token       - GitHub token for this session (sent as gitHubToken)
+    - :on-user-input-request - Handler for ask_user requests
    - :on-elicitation-request - Handler for elicitation requests (upstream PRs #908, #960).
                                Single-arg handler receives an ElicitationContext map with
                                :session-id, :message, :requested-schema, :mode,

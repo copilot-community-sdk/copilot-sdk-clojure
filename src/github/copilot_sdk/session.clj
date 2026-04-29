@@ -473,6 +473,62 @@
                        :tool-telemetry {}}})))))
    :mixed))
 
+(defn- normalize-permission-result
+  "Normalize legacy Clojure permission results to the upstream v0.3.0
+   PermissionDecision shape before sending them to the CLI."
+  [result]
+  (let [feedback (fn [fallback-feedback]
+                   (or (:feedback result) (:message result) fallback-feedback))
+        reject-decision (fn [fallback-feedback]
+                          (cond-> {:kind :reject}
+                            (feedback fallback-feedback)
+                            (assoc :feedback (feedback fallback-feedback))))
+        session-decision (fn []
+                           (cond-> {:kind :approve-for-session}
+                             (:approval result)
+                             (assoc :approval (:approval result))))
+        location-decision (fn []
+                            (cond-> {:kind :approve-for-location}
+                              (:approval result)
+                              (assoc :approval (:approval result))
+                              (:location-key result)
+                              (assoc :location-key (:location-key result))))]
+    (case (:kind result)
+      :approve-once
+      {:kind :approve-once}
+
+      :approved
+      {:kind :approve-once}
+
+      :approve-for-session
+      (session-decision)
+
+      :approve-for-location
+      (location-decision)
+
+      :denied-no-approval-rule-and-could-not-request-from-user
+      {:kind :user-not-available}
+
+      :user-not-available
+      {:kind :user-not-available}
+
+      :denied-by-rules
+      (reject-decision "Denied by rules")
+
+      :denied-interactively-by-user
+      (reject-decision "Denied by user")
+
+      :denied-by-content-exclusion-policy
+      (reject-decision "Denied by content exclusion policy")
+
+      :denied-by-permission-request-hook
+      (reject-decision "Denied by permission request hook")
+
+      :reject
+      (reject-decision nil)
+
+      result)))
+
 (defn handle-permission-request!
   "Handle an incoming permission request. Returns a channel with the result.
    When the handler returns `{:kind :no-result}`, the result is
@@ -486,7 +542,7 @@
    (fn []
      (let [handler (:permission-handler (session-state client session-id))]
        (if-not handler
-         {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}
+         {:result {:kind :user-not-available}}
          (try
            (let [result (handler request {:session-id session-id})
                  ;; If handler returns a channel, await it
@@ -499,7 +555,7 @@
                {:result :no-result}
 
                (and (map? result) (contains? result :kind))
-               {:result result}
+               {:result (normalize-permission-result result)}
 
                ;; Wrapped form: {:result {:kind ...}}
                (and (map? result) (contains? result :result)
@@ -508,15 +564,15 @@
 
                (and (map? result) (contains? result :result)
                     (map? (:result result)) (contains? (:result result) :kind))
-               result
+               (update result :result normalize-permission-result)
 
                :else
                (do
                  (log/warn "Invalid permission response for session " session-id ": " result)
-                 {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))
+                 {:result {:kind :user-not-available}})))
            (catch Exception e
              (log/error "Permission handler error for session " session-id ": " (ex-message e))
-             {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))))
+             {:result {:kind :user-not-available}})))))
    :io))
 
 (defn handle-user-input-request!

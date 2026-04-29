@@ -52,6 +52,31 @@ Use an OAuth GitHub App to authenticate users through your application. This ena
   )
 ```
 
+Pass a GitHub token in session config when one client manages sessions for
+different users:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(copilot/with-client [client {}]
+  (def alice-session
+    (copilot/create-session client
+      {:github-token alice-access-token
+       :on-permission-request copilot/approve-all}))
+
+  (def bob-session
+    (copilot/create-session client
+      {:github-token bob-access-token
+       :on-permission-request copilot/approve-all}))
+
+  (copilot/disconnect! alice-session)
+  (copilot/disconnect! bob-session))
+```
+
+Session-level `:github-token` is sent only with `session.create` or
+`session.resume`. It does not change the client's process environment or
+default authentication for other sessions.
+
 **Supported token types:**
 - `gho_` — OAuth user access tokens
 - `ghu_` — GitHub App user access tokens
@@ -114,12 +139,13 @@ See the [BYOK documentation](./byok.md) for complete details.
 
 When multiple authentication methods are available, the CLI uses them in this priority order:
 
-1. **Explicit `:github-token`** — Token passed directly to client constructor
-2. **HMAC key** — `CAPI_HMAC_KEY` or `COPILOT_HMAC_KEY` environment variables
-3. **Direct API token** — `GITHUB_COPILOT_API_TOKEN` with `COPILOT_API_URL`
-4. **Environment variable tokens** — `COPILOT_GITHUB_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`
-5. **Stored OAuth credentials** — From previous `copilot` CLI login
-6. **GitHub CLI** — `gh auth` credentials
+1. **Session `:github-token`** — Token passed in `create-session` or `resume-session` config for that session
+2. **Client `:github-token`** — Token passed directly to the client constructor
+3. **HMAC key** — `CAPI_HMAC_KEY` or `COPILOT_HMAC_KEY` environment variables
+4. **Direct API token** — `GITHUB_COPILOT_API_TOKEN` with `COPILOT_API_URL`
+5. **Environment variable tokens** — `COPILOT_GITHUB_TOKEN` → `GH_TOKEN` → `GITHUB_TOKEN`
+6. **Stored OAuth credentials** — From previous `copilot` CLI login
+7. **GitHub CLI** — `gh auth` credentials
 
 ## Disabling Auto-Login
 

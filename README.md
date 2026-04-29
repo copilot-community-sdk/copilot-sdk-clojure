@@ -187,16 +187,15 @@ For fine-grained control, provide a custom handler:
   {:on-permission-request
    (fn [request _ctx]
      (case (keyword (:permission-kind request))
-       :shell {:kind :approved}
-       :read  {:kind :approved}
+       :shell {:kind :approve-once}
+       :read  {:kind :approve-once}
        ;; deny everything else
-       {:kind :denied-by-rules
-        :rules [{:kind (name (:permission-kind request))
-                 :argument "not permitted"}]}))})
+       {:kind :reject
+        :feedback "not permitted"}))})
 ```
 
 Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,
-`:custom-tool`, `:memory` (arrive as strings from the wire; use `keyword`
+`:custom-tool`, `:memory`, `:hook` (arrive as strings from the wire; use `keyword`
 to match).
 
 See [Permission Handling](./doc/reference/API.md#permission-handling) in the

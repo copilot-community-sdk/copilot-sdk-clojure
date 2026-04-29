@@ -1099,7 +1099,8 @@
 
 ;; Re-export permission helpers
 (def approve-all
-  "Permission handler that approves all requests. See `github.copilot-sdk.client/approve-all`."
+  "Permission handler that approves all requests with `{:kind :approve-once}`.
+   See `github.copilot-sdk.client/approve-all`."
   client/approve-all)
 
 (def default-join-session-permission-handler
