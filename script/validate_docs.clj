@@ -40,7 +40,10 @@
     "github.copilot-sdk.session"
     "github.copilot-sdk.helpers"
     "github.copilot-sdk.specs"
-    "github.copilot-sdk.instrument"})
+    "github.copilot-sdk.instrument"
+    "github.copilot-sdk.tools"
+    "github.copilot-sdk.generated.event-specs"
+    "github.copilot-sdk.generated.coerce"})
 
 ;; --- State ---
 
