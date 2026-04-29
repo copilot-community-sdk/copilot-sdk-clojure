@@ -473,6 +473,39 @@
                        :tool-telemetry {}}})))))
    :mixed))
 
+(defn- normalize-permission-result
+  "Normalize legacy Clojure permission results to the upstream v0.3.0
+   PermissionDecision shape before sending them to the CLI."
+  [result]
+  (let [legacy-reject (fn [result fallback-feedback]
+                        (cond-> {:kind :reject}
+                          (or (:feedback result) (:message result) fallback-feedback)
+                          (assoc :feedback (or (:feedback result)
+                                               (:message result)
+                                               fallback-feedback))))]
+    (case (:kind result)
+      :approved
+      (assoc result :kind :approve-once)
+
+      :denied-no-approval-rule-and-could-not-request-from-user
+      (-> result
+          (dissoc :rules)
+          (assoc :kind :user-not-available))
+
+      :denied-by-rules
+      (legacy-reject result "Denied by rules")
+
+      :denied-interactively-by-user
+      (legacy-reject result "Denied by user")
+
+      :denied-by-content-exclusion-policy
+      (legacy-reject result "Denied by content exclusion policy")
+
+      :denied-by-permission-request-hook
+      (legacy-reject result "Denied by permission request hook")
+
+      result)))
+
 (defn handle-permission-request!
   "Handle an incoming permission request. Returns a channel with the result.
    When the handler returns `{:kind :no-result}`, the result is
@@ -486,7 +519,7 @@
    (fn []
      (let [handler (:permission-handler (session-state client session-id))]
        (if-not handler
-         {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}}
+         {:result {:kind :user-not-available}}
          (try
            (let [result (handler request {:session-id session-id})
                  ;; If handler returns a channel, await it
@@ -499,7 +532,7 @@
                {:result :no-result}
 
                (and (map? result) (contains? result :kind))
-               {:result result}
+               {:result (normalize-permission-result result)}
 
                ;; Wrapped form: {:result {:kind ...}}
                (and (map? result) (contains? result :result)
@@ -508,15 +541,15 @@
 
                (and (map? result) (contains? result :result)
                     (map? (:result result)) (contains? (:result result) :kind))
-               result
+               (update result :result normalize-permission-result)
 
                :else
                (do
                  (log/warn "Invalid permission response for session " session-id ": " result)
-                 {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))
+                 {:result {:kind :user-not-available}})))
            (catch Exception e
              (log/error "Permission handler error for session " session-id ": " (ex-message e))
-             {:result {:kind :denied-no-approval-rule-and-could-not-request-from-user}})))))
+             {:result {:kind :user-not-available}})))))
    :io))
 
 (defn handle-user-input-request!

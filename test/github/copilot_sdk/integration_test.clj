@@ -781,6 +781,42 @@
           create-params (get @seen "session.create")]
       (is (not (contains? create-params :clientName))))))
 
+(deftest test-per-session-github-token-forwarded-on-wire
+  (testing "githubToken is forwarded in session.create when set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :github-token "session-token-create"})
+          create-params (get @seen "session.create")]
+      (is (= "session-token-create" (:gitHubToken create-params)))
+      (is (not (contains? create-params :githubToken)))))
+
+  (testing "githubToken is forwarded in session.resume when set"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.resume" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :github-token "session-token-resume"})
+          resume-params (get @seen "session.resume")]
+      (is (= "session-token-resume" (:gitHubToken resume-params)))
+      (is (not (contains? resume-params :githubToken)))))
+
+  (testing "githubToken is omitted from wire when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :gitHubToken)))
+      (is (not (contains? create-params :githubToken))))))
+
 (deftest test-agent-forwarded-on-wire
   (testing "agent is forwarded in session.create when set (upstream PR #722)"
     (let [seen (atom {})
@@ -881,16 +917,16 @@
       (is (true? (:requestPermission resume-params))
           "requestPermission must be true on resume with handler"))))
 
-(deftest test-approve-all-returns-approved
-  (testing "approve-all returns {:kind :approved}"
+(deftest test-approve-all-returns-approve-once
+  (testing "approve-all returns {:kind :approve-once}"
     (let [result (sdk/approve-all {:permission-kind :shell
                                    :tool-call-id "tc-1"}
                                   {:session-id "session-1"})]
-      (is (= {:kind :approved} result))))
+      (is (= {:kind :approve-once} result))))
 
   (testing "approve-all works for any permission kind"
     (doseq [kind [:shell :write :mcp :read :url :custom-tool]]
-      (is (= {:kind :approved}
+      (is (= {:kind :approve-once}
              (sdk/approve-all {:permission-kind kind} {:session-id "s1"}))))))
 
 (deftest test-permission-handler-required
@@ -923,7 +959,7 @@
                                  {:session-id session-id
                                   :permission-request {:permission-kind "shell"
                                                        :full-command-text "echo test"}}))]
-      (is (= :denied-no-approval-rule-and-could-not-request-from-user
+      (is (= :user-not-available
              (get-in response [:result :result :kind]))))))
 
 (deftest test-permission-approved-with-handler
@@ -936,8 +972,7 @@
                                  {:session-id session-id
                                   :permission-request {:permission-kind "shell"
                                                        :full-command-text "echo test"}}))]
-      ;; approve-all returns keyword :approved
-      (is (= :approved (get-in response [:result :result :kind]))))))
+      (is (= :approve-once (get-in response [:result :result :kind]))))))
 
 (deftest test-permission-custom-handler
   (testing "Custom permission handler can selectively deny"
@@ -945,7 +980,7 @@
                                       {:on-permission-request
                                        (fn [request _ctx]
                                          (if (= "safe-cmd" (:full-command-text request))
-                                           {:kind :approved}
+                                           {:kind :approve-once}
                                            {:kind :denied-by-rules
                                             :rules [{:kind "shell"
                                                      :argument (:full-command-text request)}]}))})
@@ -959,9 +994,8 @@
                                {:session-id session-id
                                 :permission-request {:permission-kind "shell"
                                                      :full-command-text "dangerous-cmd"}}))]
-      ;; Custom handler returns keywords
-      (is (= :approved (get-in approved [:result :result :kind])))
-      (is (= :denied-by-rules (get-in denied [:result :result :kind]))))))
+      (is (= :approve-once (get-in approved [:result :result :kind])))
+      (is (= :reject (get-in denied [:result :result :kind]))))))
 
 (deftest test-permission-no-result-v2
   (testing "no-result permission handler returns error on v2 protocol"
@@ -1010,10 +1044,10 @@
       (reset! requests [])
       ;; Inject a v3 permission.requested broadcast event
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "permission.requested"
-                                {:requestId "perm-req-1"
-                                 :permissionRequest {:permissionKind "shell"
-                                                     :fullCommandText "echo test"}})
+                                     "permission.requested"
+                                     {:requestId "perm-req-1"
+                                      :permissionRequest {:permissionKind "shell"
+                                                          :fullCommandText "echo test"}})
       ;; Allow async handler to process
       (Thread/sleep 500)
       ;; The handler returned no-result — no handlePendingPermissionRequest RPC
@@ -1023,7 +1057,7 @@
           "no-result should skip the handlePendingPermissionRequest RPC"))))
 
 (deftest test-permission-approved-v3
-  (testing "v3 approved handler sends handlePendingPermissionRequest RPC"
+  (testing "v3 approve-once handler sends handlePendingPermissionRequest RPC"
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
@@ -1040,10 +1074,10 @@
       (reset! requests [])
       ;; Inject a v3 permission.requested broadcast event
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "permission.requested"
-                                {:requestId "perm-req-2"
-                                 :permissionRequest {:permissionKind "shell"
-                                                     :fullCommandText "echo test"}})
+                                     "permission.requested"
+                                     {:requestId "perm-req-2"
+                                      :permissionRequest {:permissionKind "shell"
+                                                          :fullCommandText "echo test"}})
       ;; Wait for the RPC to arrive (up to 5 seconds)
       (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
       ;; The handler approved — should send handlePendingPermissionRequest RPC
@@ -1055,6 +1089,46 @@
         (when (seq perm-rpcs)
           (is (= "perm-req-2" (:requestId (:params (first perm-rpcs))))
               "RPC should include the correct request-id"))))))
+
+(deftest test-legacy-permission-denials-normalize-to-v3-reject
+  (testing "legacy denial aliases send upstream reject decisions with feedback"
+    (doseq [[legacy-kind expected-feedback]
+            [[:denied-by-rules "Denied by rules"]
+             [:denied-interactively-by-user "custom feedback"]
+             [:denied-by-content-exclusion-policy "Denied by content exclusion policy"]
+             [:denied-by-permission-request-hook "Denied by permission request hook"]]]
+      (let [requests (atom [])
+            rpc-latch (java.util.concurrent.CountDownLatch. 1)
+            _ (mock/set-request-hook! *mock-server*
+                                      (fn [method params]
+                                        (swap! requests conj {:method method :params params})
+                                        (when (= "session.permissions.handlePendingPermissionRequest" method)
+                                          (.countDown rpc-latch))))
+            session (sdk/create-session *test-client*
+                                        {:on-permission-request
+                                         (fn [_request _ctx]
+                                           (cond-> {:kind legacy-kind}
+                                             (= legacy-kind :denied-interactively-by-user)
+                                             (assoc :feedback "custom feedback")))})
+            session-id (sdk/session-id session)]
+        (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+        (reset! requests [])
+        (mock/send-v3-broadcast-event! *mock-server* session-id
+                                       "permission.requested"
+                                       {:requestId (str "perm-" (name legacy-kind))
+                                        :permissionRequest {:permissionKind "shell"
+                                                            :fullCommandText "echo test"}})
+        (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+            (str "timed out waiting for legacy denial " legacy-kind))
+        (let [decision (->> @requests
+                            (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                        (:method %)))
+                            first
+                            :params
+                            :result)]
+          (is (= "reject" (:kind decision)))
+          (is (= expected-feedback (:feedback decision)))
+          (is (not (contains? decision :message))))))))
 
 (deftest test-permission-resolved-by-hook-v3
   (testing "v3 permission.requested with resolvedByHook=true skips handler entirely"
@@ -1069,7 +1143,7 @@
                                       {:on-permission-request
                                        (fn [_request _ctx]
                                          (reset! handler-called? true)
-                                         {:kind :approved})
+                                         {:kind :approve-once})
                                        :on-event
                                        (fn [event]
                                          (when (= :copilot/permission.requested (:type event))
@@ -1080,11 +1154,11 @@
       (reset! requests [])
       ;; Inject permission.requested with resolvedByHook=true
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "permission.requested"
-                                {:requestId "perm-hook-1"
-                                 :permissionRequest {:permissionKind "shell"
-                                                     :fullCommandText "echo test"}
-                                 :resolvedByHook true})
+                                     "permission.requested"
+                                     {:requestId "perm-hook-1"
+                                      :permissionRequest {:permissionKind "shell"
+                                                          :fullCommandText "echo test"}
+                                      :resolvedByHook true})
       ;; Wait for the event to be delivered (proves routing completed)
       (is (.await event-latch 5 java.util.concurrent.TimeUnit/SECONDS)
           "timed out waiting for permission.requested event delivery")
@@ -1110,17 +1184,17 @@
                                       {:on-permission-request
                                        (fn [_request _ctx]
                                          (reset! handler-called? true)
-                                         {:kind :approved})})
+                                         {:kind :approve-once})})
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       ;; Inject permission.requested with resolvedByHook=false
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "permission.requested"
-                                {:requestId "perm-hook-2"
-                                 :permissionRequest {:permissionKind "shell"
-                                                     :fullCommandText "echo test"}
-                                 :resolvedByHook false})
+                                     "permission.requested"
+                                     {:requestId "perm-hook-2"
+                                      :permissionRequest {:permissionKind "shell"
+                                                          :fullCommandText "echo test"}
+                                      :resolvedByHook false})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
           "timed out waiting for handlePendingPermissionRequest RPC")
       (is (true? @handler-called?)
@@ -1131,13 +1205,43 @@
           "handlePendingPermissionRequest RPC should be sent"))))
 
 (deftest test-permission-result-kinds-spec
-  (testing "new permission result kinds are valid"
-    (is (s/valid? :github.copilot-sdk.specs/permission-result-kind
-                  :denied-by-content-exclusion-policy)
-        "denied-by-content-exclusion-policy should be a valid permission result kind")
-    (is (s/valid? :github.copilot-sdk.specs/permission-result-kind
-                  :denied-by-permission-request-hook)
-        "denied-by-permission-request-hook should be a valid permission result kind")))
+  (testing "upstream v0.3.0 permission decision kinds are valid"
+    (doseq [kind [:approve-once
+                  :approve-for-session
+                  :approve-for-location
+                  :reject
+                  :user-not-available
+                  :no-result]]
+      (is (s/valid? :github.copilot-sdk.specs/permission-result-kind kind)
+          (str kind " should be a valid permission result kind"))))
+  (testing "legacy Clojure permission result kinds remain accepted for compatibility"
+    (doseq [kind [:approved
+                  :denied-by-rules
+                  :denied-no-approval-rule-and-could-not-request-from-user
+                  :denied-interactively-by-user
+                  :denied-by-content-exclusion-policy
+                  :denied-by-permission-request-hook]]
+      (is (s/valid? :github.copilot-sdk.specs/permission-result-kind kind)
+          (str kind " should remain accepted")))))
+
+(deftest test-permission-result-spec-uses-kind-key
+  (testing "permission result maps use the public :kind key"
+    (doseq [result [{:kind :approve-once}
+                    {:kind :approve-for-session
+                     :approval {:kind :commands
+                                :command-identifiers ["echo"]}}
+                    {:kind :approve-for-location
+                     :approval {:kind :write}
+                     :location-key "/workspace"}
+                    {:kind :reject
+                     :feedback "Not allowed"}
+                    {:kind :user-not-available}
+                    {:kind :no-result}]]
+      (is (s/valid? :github.copilot-sdk.specs/permission-result result)
+          (str result " should be a valid permission result"))))
+  (testing "internal spec key is not part of the public permission result shape"
+    (is (not (s/valid? :github.copilot-sdk.specs/permission-result
+                       {:permission-result-kind :approve-once})))))
 
 (deftest test-tool-execution-start-mcp-fields
   (testing "tool.execution_start event data allows MCP fields"
@@ -1452,11 +1556,11 @@
       (reset! requests [])
       ;; Inject command.execute event
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "command.execute"
-                                {:requestId "cmd-req-1"
-                                 :command "/deploy production"
-                                 :commandName "deploy"
-                                 :args "production"})
+                                     "command.execute"
+                                     {:requestId "cmd-req-1"
+                                      :command "/deploy production"
+                                      :commandName "deploy"
+                                      :args "production"})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       ;; Handler was called with context
       (is (some? @handler-called))
@@ -1488,11 +1592,11 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "command.execute"
-                                {:requestId "cmd-req-2"
-                                 :command "/unknown"
-                                 :commandName "unknown"
-                                 :args ""})
+                                     "command.execute"
+                                     {:requestId "cmd-req-2"
+                                      :command "/unknown"
+                                      :commandName "unknown"
+                                      :args ""})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
         (is (= 1 (count cmd-rpcs)))
@@ -1518,11 +1622,11 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "command.execute"
-                                {:requestId "cmd-req-3"
-                                 :command "/fail"
-                                 :commandName "fail"
-                                 :args ""})
+                                     "command.execute"
+                                     {:requestId "cmd-req-3"
+                                      :command "/fail"
+                                      :commandName "fail"
+                                      :args ""})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
         (is (= 1 (count cmd-rpcs)))
@@ -1621,13 +1725,13 @@
       (reset! requests [])
       ;; Inject elicitation.requested event
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "elicitation.requested"
-                                {:requestId "elicit-req-1"
-                                 :message "Enter your name"
-                                 :requestedSchema {:type "object"
-                                                   :properties {"name" {:type "string"}}}
-                                 :mode "form"
-                                 :elicitationSource "mcp-server"})
+                                     "elicitation.requested"
+                                     {:requestId "elicit-req-1"
+                                      :message "Enter your name"
+                                      :requestedSchema {:type "object"
+                                                        :properties {"name" {:type "string"}}}
+                                      :mode "form"
+                                      :elicitationSource "mcp-server"})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       ;; Handler was called with ElicitationContext (single arg, includes session-id)
       (is (some? @handler-called))
@@ -1658,9 +1762,9 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "elicitation.requested"
-                                {:requestId "elicit-req-2"
-                                 :message "Prompt"})
+                                     "elicitation.requested"
+                                     {:requestId "elicit-req-2"
+                                      :message "Prompt"})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [rpcs (filter #(= "session.ui.handlePendingElicitation" (:method %)) @requests)]
         (is (= 1 (count rpcs)))
@@ -1677,9 +1781,9 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       ;; Inject capabilities.changed event
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "capabilities.changed"
-                                {:ui {:elicitation true}}
-                                :ephemeral? true)
+                                     "capabilities.changed"
+                                     {:ui {:elicitation true}}
+                                     :ephemeral? true)
       ;; Give event routing time to process
       (Thread/sleep 200)
       (is (true? (sdk/elicitation-supported? session))))))
@@ -2183,11 +2287,11 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "external_tool.requested"
-                                {:requestId "tool-req-1"
-                                 :toolName "test-tool"
-                                 :toolCallId "tc-1"
-                                 :arguments {}})
+                                     "external_tool.requested"
+                                     {:requestId "tool-req-1"
+                                      :toolName "test-tool"
+                                      :toolCallId "tc-1"
+                                      :arguments {}})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
             result (get-in (first rpcs) [:params :result])]
@@ -2213,11 +2317,11 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "external_tool.requested"
-                                {:requestId "tool-req-2"
-                                 :toolName "nil-tool"
-                                 :toolCallId "tc-2"
-                                 :arguments {}})
+                                     "external_tool.requested"
+                                     {:requestId "tool-req-2"
+                                      :toolName "nil-tool"
+                                      :toolCallId "tc-2"
+                                      :arguments {}})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
             result (get-in (first rpcs) [:params :result])]
@@ -2246,11 +2350,11 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       (mock/send-v3-broadcast-event! *mock-server* session-id
-                                "external_tool.requested"
-                                {:requestId "tool-req-3"
-                                 :toolName "struct-tool"
-                                 :toolCallId "tc-3"
-                                 :arguments {}})
+                                     "external_tool.requested"
+                                     {:requestId "tool-req-3"
+                                      :toolName "struct-tool"
+                                      :toolCallId "tc-3"
+                                      :arguments {}})
       (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
       (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
             result (get-in (first rpcs) [:params :result])]

@@ -425,7 +425,7 @@
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
     :working-directory :agent :on-event :create-session-fs-handler
-    :enable-config-discovery :model-capabilities
+    :enable-config-discovery :model-capabilities :github-token
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
@@ -438,7 +438,7 @@
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities
+                    ::enable-config-discovery ::model-capabilities ::github-token
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
@@ -448,7 +448,7 @@
     :mcp-servers :custom-agents :default-agent :config-dir :skill-directories
     :disabled-skills :infinite-sessions :reasoning-effort
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
-    :create-session-fs-handler :enable-config-discovery :model-capabilities
+    :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
     :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
@@ -460,7 +460,7 @@
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities
+                    ::enable-config-discovery ::model-capabilities ::github-token
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -475,7 +475,7 @@
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities
+                    ::enable-config-discovery ::model-capabilities ::github-token
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -1004,7 +1004,7 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory})
+(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory :hook})
 
 ;; Memory permission event data fields (CLI 1.0.22, upstream PR #1055)
 (s/def ::memory-action #{:store :vote})
@@ -1017,17 +1017,29 @@
                    ::can-offer-session-approval]))
 
 (s/def ::permission-result-kind
-  #{:approved
+  #{:approve-once
+    :approve-for-session
+    :approve-for-location
+    :reject
+    :user-not-available
+    :no-result
+    ;; Legacy Clojure aliases accepted at API boundaries and normalized before
+    ;; sending decisions to the CLI.
+    :approved
     :denied-by-rules
     :denied-no-approval-rule-and-could-not-request-from-user
     :denied-interactively-by-user
     :denied-by-content-exclusion-policy
-    :denied-by-permission-request-hook
-    :no-result})
+    :denied-by-permission-request-hook})
+(s/def ::approval map?)
+(s/def ::location-key ::non-blank-string)
+(s/def ::rules (s/coll-of map?))
+(s/def ::feedback string?)
+(s/def ::kind ::permission-result-kind)
 
 (s/def ::permission-result
-  (s/keys :req-un [::permission-result-kind]
-          :opt-un [::rules]))
+  (s/keys :req-un [::kind]
+          :opt-un [::rules ::approval ::location-key ::feedback]))
 
 ;; -----------------------------------------------------------------------------
 ;; Client record spec

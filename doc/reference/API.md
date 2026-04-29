@@ -251,6 +251,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:working-directory` | string | Working directory for the session (tool operations relative to this) |
 | `:infinite-sessions` | map | Infinite session config (see below) |
 | `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, or `"xhigh"` |
+| `:github-token` | string | GitHub token for this session. Sent as `gitHubToken` on `session.create`; use this for per-session authentication when one client manages sessions for different GitHub users |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
@@ -267,7 +268,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 (copilot/resume-session client session-id config)
 ```
 
-Resume an existing session by ID. The `config` map accepts the same options as `create-session` (except `:session-id`), plus:
+Resume an existing session by ID. The `config` map accepts the same options as `create-session` (except `:session-id`), including per-session `:github-token`, plus:
 
 | Option | Type | Description |
 |---|---|---|
@@ -1821,6 +1822,7 @@ The `:permission-kind` field in permission requests identifies the type of actio
 | `:url` | URL fetch / HTTP request |
 | `:custom-tool` | SDK-registered custom tool invocation |
 | `:memory` | Memory storage operation (subject, fact, citations) |
+| `:hook` | Hook-triggered permission check |
 
 Memory permission events include additional data fields (specs `::memory-action`, `::memory-direction`, `::memory-reason`):
 
@@ -1841,28 +1843,33 @@ shell command and prints the full permission request payload so you can inspect
 fields like `:full-command-text`, `:commands`, and `:possible-paths`.
 
 ```clojure
-;; Approve
-{:kind :approved}
+;; Approve this request once
+{:kind :approve-once}
 
-;; Deny with rules
-{:kind :denied-by-rules
- :rules [{:kind "shell" :argument "echo hi"}]}
+;; Approve and remember for the session
+{:kind :approve-for-session
+ :approval {:kind :commands
+            :command-identifiers ["echo"]}}
 
-;; Deny without interactive approval
-{:kind :denied-no-approval-rule-and-could-not-request-from-user}
+;; Approve and persist for the project location
+{:kind :approve-for-location
+ :approval {:kind :write}
+ :location-key "/path/to/project"}
 
-;; Deny after user interaction (optional feedback)
-{:kind :denied-interactively-by-user :feedback "Not allowed"}
+;; Reject with optional user-facing detail
+{:kind :reject
+ :feedback "Not allowed"}
 
-;; Denied by content exclusion policy
-{:kind :denied-by-content-exclusion-policy}
-
-;; Denied by a permissionRequest hook
-{:kind :denied-by-permission-request-hook}
+;; No user confirmation is available
+{:kind :user-not-available}
 
 ;; Extension declines to answer (another handler may respond)
 {:kind :no-result}
 ```
+
+Legacy Clojure permission result kinds such as `:approved` and
+`:denied-by-rules` remain accepted and are normalized before the SDK sends the
+decision to the CLI.
 
 #### `resolvedByHook` — Hook-Resolved Permissions
 
@@ -1878,8 +1885,9 @@ for observability.
 (copilot/approve-all request ctx)
 ```
 
-A convenience permission handler that approves all permission requests.
-Equivalent to the upstream Node.js SDK `approveAll` export.
+A convenience permission handler that approves all permission requests by
+returning `{:kind :approve-once}`. Equivalent to the upstream Node.js SDK
+`approveAll` export.
 
 Pass as the `:on-permission-request` value in session config:
 

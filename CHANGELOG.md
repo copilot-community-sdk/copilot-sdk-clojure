@@ -3,6 +3,25 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v0.3.0 sync)
+- **Per-session GitHub authentication** — `:github-token` is now accepted in
+  `create-session`, `<create-session`, `resume-session`, `<resume-session`, and
+  `join-session` configs and is forwarded as `gitHubToken` on session
+  create/resume RPCs. This enables one client to manage sessions authenticated
+  as different GitHub users. (upstream PR #1124)
+- **Stable v0.3.0 permission decision kinds** — `::permission-kind` now includes
+  `:hook`, and `::permission-result-kind` accepts upstream decision kinds
+  `:approve-once`, `:approve-for-session`, `:approve-for-location`, `:reject`,
+  and `:user-not-available` in addition to `:no-result`. Legacy Clojure denial
+  aliases remain accepted and are normalized before the SDK sends decisions to
+  the CLI. (upstream PR #1124)
+
+### Changed (v0.3.0 sync)
+- **`approve-all` parity** — `copilot/approve-all` now returns
+  `{:kind :approve-once}`, matching the upstream Node.js SDK `approveAll`
+  helper. Existing legacy `:approved` permission results are still accepted
+  from custom handlers and normalized to `:approve-once`. (upstream PR #1124)
+
 ### Added (codegen)
 - **Schema-driven codegen pipeline** — new `bb codegen` task generates
   `src/github/copilot_sdk/generated/event_specs.clj` from the upstream
