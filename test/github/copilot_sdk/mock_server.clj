@@ -519,10 +519,8 @@
 ;;   them in `client/handle-v3-broadcast-event!`). Tests that inject these
 ;;   should prefer `send-v3-broadcast-event!` to make the intent explicit.
 ;;   Kept in sync with the dispatch table in `client.clj` by hand; a
-;;   sanity invariant below asserts it remains a subset of
-;;   `known-event-types`. The schema-derived `event-specs/event-types`
-;;   set is also used as a sanity invariant — generated schema events
-;;   must be a subset of the SDK's public registry.
+;;   sanity invariant below enforces it remains a subset of
+;;   `known-event-types`.
 
 (def ^:private v3-broadcast-event-types
   "Protocol v3 broadcast events the SDK treats as RPC replacements. Keep in
@@ -541,14 +539,19 @@
   (into #{} (map name) sdk/event-types))
 
 ;; Sanity invariant — fails at namespace load time if our hand-curated
-;; v3 set drifts away from the canonical SDK registry. We do NOT assert
-;; `event-specs/event-types ⊆ known-event-types` because schema/SDK
-;; drift is a known pre-existing issue tracked separately by the
-;; codegen pipeline (e.g. `session.import_legacy` is in the upstream
-;; schema but not yet exposed by the SDK).
-(assert (set/subset? v3-broadcast-event-types known-event-types)
-        (str "v3-broadcast-event-types must be a subset of known-event-types; "
-             "missing: " (set/difference v3-broadcast-event-types known-event-types)))
+;; v3 set drifts away from the canonical SDK registry. Uses an explicit
+;; throw rather than `assert` so the check runs regardless of `*assert*`.
+;; We do NOT assert `event-specs/event-types ⊆ known-event-types`
+;; because schema/SDK drift is a known pre-existing issue tracked
+;; separately by the codegen pipeline (e.g. `session.import_legacy` is
+;; in the upstream schema but not yet exposed by the SDK).
+(when-not (set/subset? v3-broadcast-event-types known-event-types)
+  (let [missing-types (set/difference v3-broadcast-event-types known-event-types)]
+    (throw (ex-info (str "v3-broadcast-event-types must be a subset of known-event-types; "
+                         "missing: " missing-types)
+                    {:v3-broadcast-event-types v3-broadcast-event-types
+                     :known-event-types known-event-types
+                     :missing missing-types}))))
 
 (defn- validate-event-type! [event-type valid-set context]
   (let [type-str (name event-type)]
@@ -561,13 +564,17 @@
 
 (defn send-session-event!
   "Send a session event to the client.
-   Event should be a map with :type and :data keys.
 
-   The `event-type` must be a known SDK event type (from
-   `github.copilot-sdk/event-types`). Throws if unknown — fails fast on
-   typos instead of silently dropping the event on the client side. For
-   protocol v3 broadcast events, prefer `send-v3-broadcast-event!` to
-   make the intent explicit.
+   Arguments:
+   - `event-type`: event type keyword/string recognised by the SDK
+     (must be a member of `github.copilot-sdk/event-types`)
+   - `event-data`: payload map for the event
+   - optional `:ephemeral?`: when truthy, marks the event as ephemeral
+
+   Throws if `event-type` is unknown — fails fast on typos instead of
+   silently dropping the event on the client side. For protocol v3
+   broadcast events, prefer `send-v3-broadcast-event!` to make the
+   intent explicit.
 
    For negative tests that need to inject deliberately-unknown event
    types, use `send-notification!` to bypass validation."
