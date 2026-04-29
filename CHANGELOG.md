@@ -55,6 +55,18 @@ All notable changes to this project will be documented in this file. This change
   to `:selected-model` to match the kebab-case keys produced by
   `util/wire->clj`.
 
+### Changed (testing)
+- **Mock server validates injected event types** — `mock/send-session-event!`
+  now rejects unknown event types instead of silently emitting an
+  unrecognised notification. Validation uses the SDK's canonical public
+  `event-types` registry as the source of truth, so any event the SDK
+  recognises can still be injected. A dedicated
+  `mock/send-v3-broadcast-event!` helper restricts injection to the five
+  protocol v3 broadcast events (kept in sync with
+  `client/handle-v3-broadcast-event!`); the four v3 integration tests
+  have migrated to it. Surfaces typos like `"session.startt"`
+  immediately rather than as a confusing missing-event test failure.
+
 ## [0.3.0.0-SNAPSHOT] - 2026-04-23
 ### Added (v0.3.0-preview.0 sync)
 - **`defaultAgent.excludedTools` session option** — new `:default-agent {:excluded-tools [...]}` config for create, resume, and join session paths. This hides selected tools from the built-in/default agent while preserving tool availability for custom agents. (upstream commit `b1b0df5c`)

@@ -2,7 +2,9 @@
   "Mock JSON-RPC server for integration testing.
    Simulates the Copilot CLI server behavior."
   (:require [clojure.data.json :as json]
-            [clojure.core.async :as async :refer [go go-loop <! >! chan close! put!]])
+            [clojure.core.async :as async :refer [go go-loop <! >! chan close! put!]]
+            [clojure.set :as set]
+            [github.copilot-sdk :as sdk])
   (:import [java.io BufferedReader BufferedWriter InputStreamReader OutputStreamWriter
             PipedInputStream PipedOutputStream]
            [java.util.concurrent.atomic AtomicLong]))
@@ -495,12 +497,105 @@
                   :method method
                   :params params}))
 
+;; -----------------------------------------------------------------------------
+;; Event-type registries
+;; -----------------------------------------------------------------------------
+;;
+;; Mock-side validation of injected event types catches typos that would
+;; otherwise produce silently-ignored notifications (e.g. "session.startt"
+;; → no observable session.start event → confusing test failure).
+;;
+;; Two complementary registries:
+;;
+;; * `known-event-types`  — derived from the SDK's public `event-types` set
+;;   (`github.copilot-sdk/event-types`). This is the canonical
+;;   human-curated list of every event the SDK recognises and includes
+;;   protocol-level events that are not in the upstream session-events
+;;   schema (e.g. `permission.requested`, `mcp.oauth_required`,
+;;   `commands.changed`).
+;;
+;; * `v3-broadcast-event-types` — small hand-curated subset of the v3
+;;   broadcast events that act as RPC replacements (the SDK intercepts
+;;   them in `client/handle-v3-broadcast-event!`). Tests that inject these
+;;   should prefer `send-v3-broadcast-event!` to make the intent explicit.
+;;   Kept in sync with the dispatch table in `client.clj` by hand; a
+;;   sanity invariant below enforces it remains a subset of
+;;   `known-event-types`.
+
+(def ^:private v3-broadcast-event-types
+  "Protocol v3 broadcast events the SDK treats as RPC replacements. Keep in
+   sync with the case dispatch in
+   `github.copilot-sdk.client/handle-v3-broadcast-event!`."
+  #{"external_tool.requested"
+    "permission.requested"
+    "command.execute"
+    "elicitation.requested"
+    "capabilities.changed"})
+
+(def ^:private known-event-types
+  "All event types the mock server will emit. Sourced from the SDK's
+   public `event-types` registry — the canonical human-curated list of
+   every event the SDK recognises."
+  (into #{} (map name) sdk/event-types))
+
+;; Sanity invariant — fails at namespace load time if our hand-curated
+;; v3 set drifts away from the canonical SDK registry. Uses an explicit
+;; throw rather than `assert` so the check runs regardless of `*assert*`.
+;; We do NOT assert `event-specs/event-types ⊆ known-event-types`
+;; because schema/SDK drift is a known pre-existing issue tracked
+;; separately by the codegen pipeline (e.g. `session.import_legacy` is
+;; in the upstream schema but not yet exposed by the SDK).
+(when-not (set/subset? v3-broadcast-event-types known-event-types)
+  (let [missing-types (set/difference v3-broadcast-event-types known-event-types)]
+    (throw (ex-info (str "v3-broadcast-event-types must be a subset of known-event-types; "
+                         "missing: " missing-types)
+                    {:v3-broadcast-event-types v3-broadcast-event-types
+                     :known-event-types known-event-types
+                     :missing missing-types}))))
+
+(defn- validate-event-type! [event-type valid-set context]
+  (let [type-str (name event-type)]
+    (when-not (contains? valid-set type-str)
+      (throw (ex-info (str "Unknown event type for " context ": " (pr-str type-str))
+                      {:event-type type-str
+                       :context context
+                       :valid-count (count valid-set)})))
+    type-str))
+
 (defn send-session-event!
   "Send a session event to the client.
-   Event should be a map with :type and :data keys."
+
+   Arguments:
+   - `event-type`: event type keyword/string recognised by the SDK;
+     its `name` must match a known SDK event type string (i.e. the
+     unqualified name from `github.copilot-sdk/event-types`)
+   - `event-data`: payload map for the event
+   - optional `:ephemeral?`: when truthy, marks the event as ephemeral
+
+   Throws if `event-type` is unknown — fails fast on typos instead of
+   silently dropping the event on the client side. For protocol v3
+   broadcast events, prefer `send-v3-broadcast-event!` to make the
+   intent explicit.
+
+   For negative tests that need to inject deliberately-unknown event
+   types, use `send-notification!` to bypass validation."
   [server session-id event-type event-data & {:keys [ephemeral?]}]
-  (send-session-event server session-id
-                      (make-event server (name event-type) event-data :ephemeral? ephemeral?)))
+  (let [type-str (validate-event-type! event-type known-event-types "send-session-event!")]
+    (send-session-event server session-id
+                        (make-event server type-str event-data :ephemeral? ephemeral?))))
+
+(defn send-v3-broadcast-event!
+  "Send a protocol v3 broadcast event (an RPC-replacement event the SDK
+   intercepts in `client/handle-v3-broadcast-event!`).
+
+   Like `send-session-event!` but restricts `event-type` to the v3
+   broadcast set — passing a regular schema event here surfaces the
+   intent mismatch immediately. Use this for v3-specific tests; use
+   `send-session-event!` for non-v3 events."
+  [server session-id event-type event-data & {:keys [ephemeral?]}]
+  (let [type-str (validate-event-type! event-type v3-broadcast-event-types "send-v3-broadcast-event!")]
+    (send-session-event server session-id
+                        (make-event server type-str event-data :ephemeral? ephemeral?))))
 
 (defn inject-permission-request!
   "Inject a permission request from the mock server.

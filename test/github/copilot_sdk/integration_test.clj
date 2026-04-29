@@ -1009,7 +1009,7 @@
       ;; Reset captured requests after session creation
       (reset! requests [])
       ;; Inject a v3 permission.requested broadcast event
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "permission.requested"
                                 {:requestId "perm-req-1"
                                  :permissionRequest {:permissionKind "shell"
@@ -1039,7 +1039,7 @@
       ;; Reset captured requests after session creation
       (reset! requests [])
       ;; Inject a v3 permission.requested broadcast event
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "permission.requested"
                                 {:requestId "perm-req-2"
                                  :permissionRequest {:permissionKind "shell"
@@ -1079,7 +1079,7 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       ;; Inject permission.requested with resolvedByHook=true
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "permission.requested"
                                 {:requestId "perm-hook-1"
                                  :permissionRequest {:permissionKind "shell"
@@ -1115,7 +1115,7 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       ;; Inject permission.requested with resolvedByHook=false
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "permission.requested"
                                 {:requestId "perm-hook-2"
                                  :permissionRequest {:permissionKind "shell"
@@ -1451,7 +1451,7 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       ;; Inject command.execute event
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "command.execute"
                                 {:requestId "cmd-req-1"
                                  :command "/deploy production"
@@ -1487,7 +1487,7 @@
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "command.execute"
                                 {:requestId "cmd-req-2"
                                  :command "/unknown"
@@ -1517,7 +1517,7 @@
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "command.execute"
                                 {:requestId "cmd-req-3"
                                  :command "/fail"
@@ -1620,7 +1620,7 @@
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
       ;; Inject elicitation.requested event
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "elicitation.requested"
                                 {:requestId "elicit-req-1"
                                  :message "Enter your name"
@@ -1657,7 +1657,7 @@
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "elicitation.requested"
                                 {:requestId "elicit-req-2"
                                  :message "Prompt"})
@@ -1676,7 +1676,7 @@
       ;; Force protocol v3
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       ;; Inject capabilities.changed event
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "capabilities.changed"
                                 {:ui {:elicitation true}}
                                 :ephemeral? true)
@@ -2182,7 +2182,7 @@
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "external_tool.requested"
                                 {:requestId "tool-req-1"
                                  :toolName "test-tool"
@@ -2212,7 +2212,7 @@
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "external_tool.requested"
                                 {:requestId "tool-req-2"
                                  :toolName "nil-tool"
@@ -2245,7 +2245,7 @@
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
-      (mock/send-session-event! *mock-server* session-id
+      (mock/send-v3-broadcast-event! *mock-server* session-id
                                 "external_tool.requested"
                                 {:requestId "tool-req-3"
                                  :toolName "struct-tool"
