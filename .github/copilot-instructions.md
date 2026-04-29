@@ -194,7 +194,7 @@ schemas/       # Pinned upstream JSON Schemas (committed)
 .copilot-schema-version  # Pinned @github/copilot npm version
 ```
 
-See [`../doc/codegen.md`](../doc/codegen.md) for the schema-driven code generation
+See [`doc/codegen.md`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/codegen.md) for the schema-driven code generation
 workflow.
 
 ### Wire vs idiom — the three-tier rule

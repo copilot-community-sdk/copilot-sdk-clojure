@@ -92,10 +92,14 @@ Currently supported JSON Schema → spec mappings:
 | `boolean`             | `boolean?`                                 |
 | `null`                | `nil?`                                     |
 | `array`               | `(s/coll-of <items>)`                      |
-| `object` w/ properties| `(s/keys :req-un [...] :opt-un [...])`     |
+| `object` w/ properties| `map?` for nested object properties        |
 | `anyOf` (incl. `null`)| `(s/or ...)` or `(s/nilable ...)`          |
 | `$ref`                | resolved (single-pass)                     |
 | anything else         | `any?` (with a `WARN:` on stderr)          |
+
+Note: the generator currently emits `(s/keys :req-un [...] :opt-un [...])`
+only for the top-level `data` payload and event envelope objects. Nested
+object properties are emitted as `map?`.
 
 Wire keys (`sessionId`, `parentId`, ...) are converted to kebab-case
 (`session-id`, `parent-id`) before being emitted as spec keywords. This matches

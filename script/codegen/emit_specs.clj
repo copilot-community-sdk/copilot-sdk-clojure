@@ -16,9 +16,11 @@
    - `number` / `integer`→ `number?` / `integer?`
    - `boolean`           → `boolean?`
    - `array`             → `(s/coll-of <items>)`
-   - `object` w/ properties → `(s/keys :req-un [...] :opt-un [...])`
+   - top-level `data` / envelope objects with properties
+     → `(s/keys :req-un [...] :opt-un [...])`
+   - nested `object` nodes handled by `emit-type` → `map?`
    - `anyOf` (incl. nullable)   → `(s/or ...)` or `(s/nilable ...)`
-   - Otherwise           → `any?`
+   - Otherwise / less precise cases → `any?`
 
    Unqualified keys in `s/keys` use namespace-qualified spec keywords; the
    :req-un / :opt-un mechanism then matches the unqualified name part against

@@ -1010,9 +1010,9 @@
 (defn- coerce+normalize-event
   "Apply wire→idiom coercion then normalize :type to a keyword. Fail-open: on
    coercion failure, log a warning (with ex-data) and return the event with
-   :type normalized but data uncoerced. Mirrors the pipeline in
-   `client/notification-dispatcher` so live and historical events have the
-   same shape."
+   :type normalized but data uncoerced. Mirrors the pipeline in the
+   notification router (`start-notification-router!`) so live and historical
+   events have the same shape."
   [event]
   (try
     (-> event
