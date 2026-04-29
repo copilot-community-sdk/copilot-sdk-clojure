@@ -90,10 +90,11 @@ integration tests), every public function call is validated against its spec at 
 This means integration tests run with full spec checking — any argument or return
 value that violates a spec will throw immediately. When adding new public functions:
 
-1. Add an `s/fdef` in `src/github/copilot_sdk/instrument.clj`
-2. Add the function to both `instrument-all!` and `unstrument-all!` lists
-3. Ensure the corresponding specs exist in `src/github/copilot_sdk/specs.clj`
-4. Run `bb test` — if specs are wrong, instrumented tests will catch it
+1. Add a `register-fdef!` form in `src/github/copilot_sdk/instrument.clj` (same syntax as
+   `s/fdef`, but also records the symbol in a single registry so `instrument-all!` /
+   `unstrument-all!` derive their target list automatically — no parallel symbol lists)
+2. Ensure the corresponding specs exist in `src/github/copilot_sdk/specs.clj`
+3. Run `bb test` — if specs are wrong, instrumented tests will catch it
 
 ### Running Examples
 
@@ -185,14 +186,15 @@ src/github/copilot_sdk/
 ├── process.clj      # CLI process management (spawning, lifecycle)
 ├── logging.clj      # Logging facade via clojure.tools.logging
 └── generated/       # AUTO-GENERATED — produced by `bb codegen`. Do not edit.
-    └── event_specs.clj  # clojure.spec for upstream session events
+    ├── event_specs.clj  # clojure.spec for upstream session events
+    └── coerce.clj       # field-level wire↔idiom coercion (Instants, etc.)
 
 script/codegen/          # Babashka generator (build-time only; not in JAR)
 schemas/       # Pinned upstream JSON Schemas (committed)
 .copilot-schema-version  # Pinned @github/copilot npm version
 ```
 
-See [`doc/codegen.md`](doc/codegen.md) for the schema-driven code generation
+See [`doc/codegen.md`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/codegen.md) for the schema-driven code generation
 workflow.
 
 ### Wire vs idiom — the three-tier rule
@@ -204,8 +206,8 @@ The SDK keeps two distinct spec namespaces, on purpose:
   **NEVER re-export these as the public API.**
 - **Idiom specs** (`github.copilot-sdk.specs`, HAND-CURATED) — define the
   Clojure-native API: `java.time.Instant`, keywords, sets. This is what callers see.
-- **Coercion** (planned in `util.coerce`) bridges the two and is generated from
-  schema + a curated `coercions.edn` overrides table.
+- **Coercion** (`github.copilot-sdk.generated.coerce`, AUTO-GENERATED) bridges
+  the two; the table is generated from a curated `script/codegen/coercions.edn`.
 
 When the upstream schema changes, the wire layer is regenerated automatically
 and CI fails the PR if generated output is out of date. The idiom layer only

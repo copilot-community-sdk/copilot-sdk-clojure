@@ -34,12 +34,45 @@
    generated artifacts directly against fixture payloads, so they are pure
    regression coverage for the codegen pipeline."
   (:require [clojure.test :refer [deftest is testing]]
+            [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.set]
             [clojure.spec.alpha :as s]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-specs :as gen]
             [github.copilot-sdk.specs])
   (:import [java.time Instant]))
+
+;; ---------------------------------------------------------------------------
+;; Schema introspection helpers — used by the envelope helper to honour
+;; per-variant `const` properties (e.g. `ephemeral: const true` on
+;; `session.idle`). Reading the schema at test time keeps the test in
+;; lock-step with whatever the generator was run against; if upstream changes
+;; the const value, the generated spec changes and the test agrees.
+;; ---------------------------------------------------------------------------
+
+(def ^:private schema
+  (with-open [r (io/reader (io/file "schemas/session-events.schema.json"))]
+    (json/read r :key-fn keyword)))
+
+(def ^:private envelope-consts-by-event
+  "Map of event-type → {envelope-property → const-value} for every variant
+   property declaring a JSON Schema `const`. Used to construct envelopes
+   that satisfy the generator's const predicates."
+  (let [variants (-> schema :definitions :SessionEvent :anyOf)]
+    (into {}
+          (keep (fn [variant]
+                  (let [props      (:properties variant)
+                        event-type (get-in props [:type :const])
+                        consts     (->> props
+                                        (keep (fn [[k v]]
+                                                (when (contains? v :const)
+                                                  [(keyword (name k))
+                                                   (:const v)])))
+                                        (into {}))]
+                    (when event-type
+                      [event-type consts])))
+                variants))))
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical wire-shape fixtures (post `util/wire->clj`, i.e. kebab-case keys).
@@ -76,17 +109,88 @@
     :total-api-duration-ms 0
     :session-start-time 1700000000
     :code-changes {}
-    :model-metrics {}}})
+    :model-metrics {}}
+
+   "session.model_change"
+   {:new-model "gpt-4o"}
+
+   "session.handoff"
+   {:handoff-time "2024-01-01T00:00:00Z"
+    :source-type "remote"}
+
+   "user.message"
+   {:content "hello"}
+
+   "assistant.turn_start"
+   {:turn-id "t-1"}
+
+   "assistant.reasoning"
+   {:reasoning-id "r-1"
+    :content "thinking"}
+
+   "assistant.reasoning_delta"
+   {:reasoning-id "r-1"
+    :delta-content "thi"}
+
+   "assistant.message"
+   {:message-id "m-1"
+    :content "hi"}
+
+   "assistant.message_delta"
+   {:message-id "m-1"
+    :delta-content "hi"}
+
+   "assistant.usage"
+   {:model "gpt-4o"}
+
+   "tool.execution_start"
+   {:tool-call-id "tc-1"
+    :tool-name "shell"}
+
+   "tool.execution_progress"
+   {:tool-call-id "tc-1"
+    :progress-message "running…"}
+
+   "tool.execution_complete"
+   {:tool-call-id "tc-1"
+    :success true}
+
+   "skill.invoked"
+   {:name "my-skill"
+    :path "/skills/my-skill"
+    :content "skill body"}
+
+   "subagent.started"
+   {:tool-call-id "tc-1"
+    :agent-name "subagent"
+    :agent-display-name "SubAgent"
+    :agent-description "does things"}
+
+   "subagent.completed"
+   {:tool-call-id "tc-1"
+    :agent-name "subagent"
+    :agent-display-name "SubAgent"}
+
+   "subagent.failed"
+   {:tool-call-id "tc-1"
+    :agent-name "subagent"
+    :agent-display-name "SubAgent"
+    :error "boom"}})
 
 (defn- envelope
-  "Wrap a data payload in a minimal valid envelope of the given type."
+  "Wrap a data payload in a minimal valid envelope of the given type. Honours
+   per-variant `const` envelope fields from the schema (e.g. some variants
+   pin `ephemeral: const true`); fields without a const default to literals
+   the schema's structural rules accept."
   [event-type data]
-  {:id "evt-1"
-   :timestamp "2024-01-01T00:00:00Z"
-   :parent-id "p-1"
-   :ephemeral false
-   :type event-type
-   :data data})
+  (let [consts (get envelope-consts-by-event event-type {})]
+    (merge {:id "evt-1"
+            :timestamp "2024-01-01T00:00:00Z"
+            :parent-id "p-1"
+            :ephemeral false
+            :type event-type
+            :data data}
+           consts)))
 
 ;; ---------------------------------------------------------------------------
 ;; Forward correctness — generated specs must accept wire-shape payloads.
@@ -283,4 +387,25 @@
                             (sort (clojure.set/difference registered-fields actual-failing))
                             " (remove from known-drifts; the drift is no longer reproducible)")
                        :else "")))))))))
+
+(deftest every-hand-written-event-data-spec-has-a-fixture
+  ;; Coverage gate: the drift audit above only inspects event-types present
+  ;; in `fixtures`. This test fails if `specs.clj` defines a richer hand-
+  ;; written `::<event>-data` spec for an event that has NO fixture, so a
+  ;; contributor cannot silently introduce a hand spec that the drift audit
+  ;; never exercises.
+  (let [hand-spec-event-types
+        (->> gen/event-types
+             (filter (fn [event-type]
+                       (s/get-spec
+                         (keyword "github.copilot-sdk.specs"
+                                  (str event-type "-data")))))
+             set)
+        covered (set (keys fixtures))
+        missing (clojure.set/difference hand-spec-event-types covered)]
+    (is (empty? missing)
+        (str "Hand-written `*-data` specs without a fixture (drift audit "
+             "would silently skip them): " (sort missing) ". Either add a "
+             "minimal valid fixture in `fixtures`, or remove the hand spec "
+             "from `github.copilot-sdk.specs`."))))
 

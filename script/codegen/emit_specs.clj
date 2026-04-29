@@ -16,9 +16,11 @@
    - `number` / `integer`→ `number?` / `integer?`
    - `boolean`           → `boolean?`
    - `array`             → `(s/coll-of <items>)`
-   - `object` w/ properties → `(s/keys :req-un [...] :opt-un [...])`
+   - top-level `data` / envelope objects with properties
+     → `(s/keys :req-un [...] :opt-un [...])`
+   - nested `object` nodes handled by `emit-type` → `map?`
    - `anyOf` (incl. nullable)   → `(s/or ...)` or `(s/nilable ...)`
-   - Otherwise           → `any?`
+   - Otherwise / less precise cases → `any?`
 
    Unqualified keys in `s/keys` use namespace-qualified spec keywords; the
    :req-un / :opt-un mechanism then matches the unqualified name part against
@@ -159,8 +161,10 @@
 
 (defn- emit-envelope-spec
   "Emit the full envelope spec `(s/def ::<event> ...)`. Uses `s/and` to
-   combine the structural `s/keys` (presence + leaf types) with two predicates
-   that bind the `:type` field to the variant's literal value and delegate
+   combine the structural `s/keys` (presence + leaf types) with predicates
+   that bind every envelope property declaring a JSON Schema `const` value
+   to that literal (e.g. `:type` for the variant, `:ephemeral true` for
+   variants like `session.idle`), and a final predicate that delegates
    `:data` validation to the variant's `::<event>-data` spec, so envelopes
    from one event variant cannot validate against another."
   [variant]
@@ -182,11 +186,22 @@
                      (seq req-keys) (concat [:req-un req-keys])
                      (seq opt-keys) (concat [:opt-un opt-keys])
                      true           seq)
-        data-kw    (ns-kw (str event-type "-data"))]
+        data-kw    (ns-kw (str event-type "-data"))
+        ;; Emit one predicate per envelope property with a JSON Schema
+        ;; `const` value. Sorted by property name for deterministic output.
+        const-preds (->> envelope
+                         (keep (fn [[k v]]
+                                 (when (contains? v :const)
+                                   [(kebab k) (:const v)])))
+                         (sort-by first)
+                         (map (fn [[prop-name const-val]]
+                                `(~'fn [~'event]
+                                   (= ~const-val
+                                      (~(keyword prop-name) ~'event))))))]
     `(~'s/def ~(ns-kw event-type)
               (~'s/and
                 ~keys-form
-                (~'fn [~'event] (= ~event-type (:type ~'event)))
+                ~@const-preds
                 (~'fn [~'event] (~'s/valid? ~data-kw (:data ~'event)))))))
 
 (defn- emit-event-multi-spec

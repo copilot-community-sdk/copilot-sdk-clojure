@@ -514,7 +514,7 @@
                                     :data {:tool-call-id "tc-1" :tool-name "view"}})
           (session/dispatch-event! client session-id
                                    {:type :copilot/tool.execution_complete
-                                    :data {:tool-call-id "tc-1" :success? true}})
+                                    :data {:tool-call-id "tc-1" :success true}})
           ;; Second assistant.message (intermediate, may also be empty)
           (session/dispatch-event! client session-id
                                    {:type :copilot/assistant.message
@@ -525,7 +525,7 @@
                                     :data {:tool-call-id "tc-2" :tool-name "grep"}})
           (session/dispatch-event! client session-id
                                    {:type :copilot/tool.execution_complete
-                                    :data {:tool-call-id "tc-2" :success? true}})
+                                    :data {:tool-call-id "tc-2" :success true}})
           ;; Final assistant.message with actual content
           (session/dispatch-event! client session-id
                                    {:type :copilot/assistant.message

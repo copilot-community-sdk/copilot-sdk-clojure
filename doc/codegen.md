@@ -14,6 +14,10 @@ generator in `script/codegen/`. Currently:
   variant in `session-events.schema.json`. One spec per event variant's `data`
   payload (e.g. `::session.start-data`), one per envelope (e.g.
   `::session.start`), an aggregate `::event` spec, and an `event-types` set.
+- `coerce.clj` — field-level wire↔idiom coercion (e.g. ISO strings ↔
+  `java.time.Instant`). Generated from `script/codegen/coercions.edn`. Used
+  at runtime by the notification dispatcher and `session/get-messages` to
+  bridge the wire and idiom layers (see "Wire vs idiom" below).
 
 These files start with an `AUTO-GENERATED` banner. **Do not edit them by
 hand** — your edits will be overwritten by the next `bb codegen` run.
@@ -88,10 +92,14 @@ Currently supported JSON Schema → spec mappings:
 | `boolean`             | `boolean?`                                 |
 | `null`                | `nil?`                                     |
 | `array`               | `(s/coll-of <items>)`                      |
-| `object` w/ properties| `(s/keys :req-un [...] :opt-un [...])`     |
+| `object` w/ properties| `map?` for nested object properties        |
 | `anyOf` (incl. `null`)| `(s/or ...)` or `(s/nilable ...)`          |
 | `$ref`                | resolved (single-pass)                     |
 | anything else         | `any?` (with a `WARN:` on stderr)          |
+
+Note: the generator currently emits `(s/keys :req-un [...] :opt-un [...])`
+only for the top-level `data` payload and event envelope objects. Nested
+object properties are emitted as `map?`.
 
 Wire keys (`sessionId`, `parentId`, ...) are converted to kebab-case
 (`session-id`, `parent-id`) before being emitted as spec keywords. This matches
@@ -123,7 +131,7 @@ raw enum strings,                              kebab-case maps
 | Layer | Source of truth | Drift-proof? | Caller-facing? |
 |---|---|---|---|
 | Wire (`github.copilot-sdk.generated.event-specs`) | upstream JSON Schema (auto) | ✅ yes | ❌ never |
-| Coercion (planned: `util.coerce`)                  | schema + `coercions.edn`     | ✅ yes | ❌ internal |
+| Coercion (`github.copilot-sdk.generated.coerce`)   | `coercions.edn` (auto)        | ✅ yes | ❌ internal |
 | Idiom (`github.copilot-sdk.specs`)                 | hand-curated, deliberately Clojure-native | curator-reviewed | ✅ yes |
 
 ### Policy for contributors
@@ -137,8 +145,10 @@ raw enum strings,                              kebab-case maps
    sets make sense. These are the contract callers see.
 
 3. **Adding a richer idiom spec (Instant, keyword, set) requires a coercion
-   entry.** CI will eventually enforce this — see Phase 3.5 in
-   [`plan.md`](../.copilot/session-state/.../plan.md) (planned).
+   entry.** The drift-audit test
+   (`test/github/copilot_sdk/codegen_test.clj :: hand-written-specs-agree-with-generated`)
+   enforces this — adding a hand-written idiom spec without a matching
+   coercion entry will fail the test by leaving an unregistered "drift" field.
 
 4. **Bumping the pinned schema version requires reviewing the diff in BOTH the
    generated specs and the coercion table.** New schema properties default to
