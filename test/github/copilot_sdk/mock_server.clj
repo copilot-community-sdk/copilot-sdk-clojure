@@ -566,8 +566,9 @@
   "Send a session event to the client.
 
    Arguments:
-   - `event-type`: event type keyword/string recognised by the SDK
-     (must be a member of `github.copilot-sdk/event-types`)
+   - `event-type`: event type keyword/string recognised by the SDK;
+     its `name` must match a known SDK event type string (i.e. the
+     unqualified name from `github.copilot-sdk/event-types`)
    - `event-data`: payload map for the event
    - optional `:ephemeral?`: when truthy, marks the event as ephemeral
 
