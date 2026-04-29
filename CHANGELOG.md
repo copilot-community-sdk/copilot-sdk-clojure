@@ -3,6 +3,39 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (codegen)
+- **Schema-driven codegen pipeline** — new `bb codegen` task generates
+  `src/github/copilot_sdk/generated/event_specs.clj` from the upstream
+  `@github/copilot/schemas/session-events.schema.json`. Produces ~190 spec forms
+  (one leaf spec per unique property, one `*-data` spec per event variant, one
+  envelope spec per variant, and an aggregate `::event` spec).
+- **Schema fetch task** — new `bb schemas:fetch` downloads the upstream npm
+  package at the version pinned in `.copilot-schema-version` and extracts schema
+  JSON files into `schemas/` (committed for reproducibility).
+- **CI codegen-check workflow** — `.github/workflows/codegen-check.yml`
+  regenerates on every PR touching schemas, generator, generated files, or the
+  pinned version, and fails on drift between committed and regenerated output.
+- **Developer documentation** — new `doc/codegen.md` explains the pipeline,
+  workflows for local development, and the JSON Schema → `clojure.spec`
+  translation rules.
+- **Phase 3.5: three-tier wire/coerce/idiom architecture** — new
+  `script/codegen/coercions.edn` (hand-curated event-scoped coercion table) and
+  generated `src/github/copilot_sdk/generated/coerce.clj` (`event-wire->idiom`
+  and `event-idiom->wire`). The runtime event dispatcher in `client.clj` now
+  applies idiomatic coercion (e.g. ISO-8601 strings → `java.time.Instant`)
+  before delivering events to user handlers. Coercion is fail-open: parse
+  failures log a warning and deliver the uncoerced-but-normalized event so a
+  malformed payload cannot kill the notification go-loop. The
+  `hand-written-specs-agree-with-generated` drift audit now runs against
+  coerced data with an empty `known-drifts` set, and three new invariants are
+  enforced by tests (every coercion is exercised, converters are idempotent,
+  round-trip is semantically lossless).
+- **Historical event coercion** — `session/get-messages` now applies the same
+  wire→idiom coercion pipeline as the live notification path, so `:start-time`
+  on `session.start` events fetched from history is also delivered as a
+  `java.time.Instant`. New integration test
+  `test-get-messages-applies-coercion` enforces this.
+
 ### Changed (instrumentation)
 - **Phase 6: instrument deduplication** — `src/github/copilot_sdk/instrument.clj`
   no longer maintains three parallel symbol lists (one `s/fdef` per public API
@@ -15,6 +48,12 @@ All notable changes to this project will be documented in this file. This change
   immediately rather than silently leaving an instrumentation gap. Net effect:
   ~162 lines removed from `instrument.clj`, no behavior change, and adding a
   new public API fn now requires a single edit instead of three.
+
+### Fixed (codegen)
+- **`session.start` event delivery** — `:selected-model` was being read with
+  the wrong (camelCase) key `:selectedModel` in the runtime dispatcher; fixed
+  to `:selected-model` to match the kebab-case keys produced by
+  `util/wire->clj`.
 
 ## [0.3.0.0-SNAPSHOT] - 2026-04-23
 ### Added (v0.3.0-preview.0 sync)

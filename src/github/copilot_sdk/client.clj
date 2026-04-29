@@ -459,12 +459,19 @@
           (case (:method notif)
             "session.event"
             (let [{:keys [session-id event]} (:params notif)
-                  normalized-event (update event :type util/event-type->keyword)
+                  ;; Apply wire→idiom coercion + :type normalization with
+                  ;; fail-open semantics. Shared with `session/get-messages`
+                  ;; via `session/coerce+normalize-event` so live and
+                  ;; historical events have identical shape and error
+                  ;; behavior. Coercion is keyed by the original wire-shape
+                  ;; `:type` string (e.g. "session.start") and runs BEFORE
+                  ;; type normalization to keyword.
+                  normalized-event (session/coerce+normalize-event event session-id)
                   event-type (:type normalized-event)]
               (log/debug "Routing event to session " session-id ": type=" event-type)
               ;; Validate model selection on session.start
               (when (= event-type :copilot/session.start)
-                (let [selected-model (get-in event [:data :selectedModel])
+                (let [selected-model (get-in normalized-event [:data :selected-model])
                       requested-model (get-in @(:state client) [:sessions session-id :config :model])]
                   (when (and requested-model selected-model
                              (not= requested-model selected-model))

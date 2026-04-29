@@ -1,0 +1,64 @@
+name: Codegen Check
+
+# Verify generated code in src/github/copilot_sdk/generated/ matches what
+# `bb codegen` would produce from the pinned upstream JSON Schemas in
+# schemas/. Mirrors the pattern used by github/copilot-sdk-java.
+
+on:
+  pull_request:
+    paths:
+      - 'schemas/**'
+      - 'script/codegen/**'
+      - 'src/github/copilot_sdk/generated/**'
+      - '.copilot-schema-version'
+      - '.github/workflows/codegen-check.yml'
+  push:
+    branches:
+      - main
+
+jobs:
+  codegen-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Set up Clojure
+        uses: DeLaGuardo/setup-clojure@13.5.2
+        with:
+          cli: latest
+          bb: 1.12.214
+
+      - name: Cache Clojure deps
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.m2/repository
+            ~/.gitlibs
+            ~/.deps.clj
+            .cpcache
+          key: cljdeps-${{ hashFiles('deps.edn', 'bb.edn') }}
+          restore-keys: cljdeps-
+
+      - name: Regenerate code from schemas
+        run: bb codegen
+
+      - name: Fail on uncommitted generator output
+        run: |
+          if ! git diff --exit-code -- src/github/copilot_sdk/generated/; then
+            echo
+            echo "::error::Generated code is out of sync with schemas/."
+            echo "Run \`bb codegen\` locally and commit the result."
+            exit 1
+          fi
+
+      - name: Verify generated namespaces load
+        run: |
+          clojure -M -e "(require 'github.copilot-sdk.generated.event-specs)
+                        (println :loaded
+                                 :event-types-count
+                                 (count github.copilot-sdk.generated.event-specs/event-types))"

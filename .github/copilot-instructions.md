@@ -184,8 +184,35 @@ src/github/copilot_sdk/
 ├── util.clj         # Wire conversion (camelCase ↔ kebab-case), MCP helpers
 ├── protocol.clj     # JSON-RPC 2.0 protocol over NIO channels
 ├── process.clj      # CLI process management (spawning, lifecycle)
-└── logging.clj      # Logging facade via clojure.tools.logging
+├── logging.clj      # Logging facade via clojure.tools.logging
+└── generated/       # AUTO-GENERATED — produced by `bb codegen`. Do not edit.
+    ├── event_specs.clj  # clojure.spec for upstream session events
+    └── coerce.clj       # field-level wire↔idiom coercion (Instants, etc.)
+
+script/codegen/          # Babashka generator (build-time only; not in JAR)
+schemas/       # Pinned upstream JSON Schemas (committed)
+.copilot-schema-version  # Pinned @github/copilot npm version
 ```
+
+See [`doc/codegen.md`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/codegen.md) for the schema-driven code generation
+workflow.
+
+### Wire vs idiom — the three-tier rule
+
+The SDK keeps two distinct spec namespaces, on purpose:
+
+- **Wire specs** (`github.copilot-sdk.generated.event-specs`, AUTO-GENERATED) —
+  validate raw post-`wire->clj` payloads. ISO strings, raw enum strings. Drift-proof.
+  **NEVER re-export these as the public API.**
+- **Idiom specs** (`github.copilot-sdk.specs`, HAND-CURATED) — define the
+  Clojure-native API: `java.time.Instant`, keywords, sets. This is what callers see.
+- **Coercion** (`github.copilot-sdk.generated.coerce`, AUTO-GENERATED) bridges
+  the two; the table is generated from a curated `script/codegen/coercions.edn`.
+
+When the upstream schema changes, the wire layer is regenerated automatically
+and CI fails the PR if generated output is out of date. The idiom layer only
+moves under deliberate curator review. This is what makes the API both
+schema-faithful at the wire AND idiomatic in Clojure.
 
 ## Documentation
 
