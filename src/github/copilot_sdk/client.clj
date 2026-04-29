@@ -607,12 +607,12 @@
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
                                           {:result (<! (session/handle-tool-call! client session-id tool-call-id tool-name arguments))}))
 
-                                      "permission.request"
-                                      (let [{:keys [session-id permission-request]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:result {:kind :user-not-available}}
-                                          (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
-                                                result (:result perm-response)]
+                                       "permission.request"
+                                       (let [{:keys [session-id permission-request]} params]
+                                         (if-not (get-in @(:state client) [:sessions session-id])
+                                           {:result {:result {:kind :user-not-available}}}
+                                           (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
+                                                 result (:result perm-response)]
                                             (if (= :no-result result)
                                               ;; no-result must propagate as an error on v2 protocol
                                               ;; so the CLI knows no answer was given (matches upstream -32603)

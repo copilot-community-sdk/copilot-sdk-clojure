@@ -965,7 +965,7 @@
 (deftest test-permission-approved-with-handler
   (testing "Permission requests use configured handler"
     (let [session (sdk/create-session *test-client*
-                                      {:on-permission-request sdk/approve-all})
+                                       {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           handler (get-in @(:state *test-client*) [:connection :request-handler])
           response (<!! (handler "permission.request"
@@ -973,6 +973,17 @@
                                   :permission-request {:permission-kind "shell"
                                                        :full-command-text "echo test"}}))]
       (is (= :approve-once (get-in response [:result :result :kind]))))))
+
+(deftest test-permission-unknown-session-response-shape
+  (testing "unknown-session permission requests use the same nested result shape as handled requests"
+    (let [handler (get-in @(:state *test-client*) [:connection :request-handler])
+          response (<!! (handler "permission.request"
+                                 {:session-id "missing-session"
+                                  :permission-request {:permission-kind "shell"
+                                                       :full-command-text "echo test"}}))]
+      (is (= :user-not-available
+             (get-in response [:result :result :kind])))
+      (is (nil? (get-in response [:result :kind]))))))
 
 (deftest test-permission-custom-handler
   (testing "Custom permission handler can selectively deny"
@@ -1106,10 +1117,14 @@
                                           (.countDown rpc-latch))))
             session (sdk/create-session *test-client*
                                         {:on-permission-request
-                                         (fn [_request _ctx]
-                                           (cond-> {:kind legacy-kind}
-                                             (= legacy-kind :denied-interactively-by-user)
-                                             (assoc :feedback "custom feedback")))})
+                                          (fn [_request _ctx]
+                                            (cond-> {:kind legacy-kind}
+                                              (= legacy-kind :denied-interactively-by-user)
+                                              (assoc :feedback "custom feedback")
+
+                                              true
+                                              (assoc :rules [{:kind "shell"}]
+                                                     :internal true)))})
             session-id (sdk/session-id session)]
         (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
         (reset! requests [])
@@ -1128,7 +1143,43 @@
                             :result)]
           (is (= "reject" (:kind decision)))
           (is (= expected-feedback (:feedback decision)))
-          (is (not (contains? decision :message))))))))
+          (is (not (contains? decision :message)))
+          (is (not (contains? decision :rules)))
+          (is (not (contains? decision :internal))))))))
+
+(deftest test-permission-decisions-drop-legacy-and-extra-fields
+  (testing "normalized permission decisions only forward upstream decision fields"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.permissions.handlePendingPermissionRequest" method)
+                                        (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request
+                                       (fn [_request _ctx]
+                                         {:kind :approved
+                                          :message "legacy message"
+                                          :feedback "extra feedback"
+                                          :rules [{:kind "shell"}]
+                                          :internal true})})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-v3-broadcast-event! *mock-server* session-id
+                                     "permission.requested"
+                                     {:requestId "perm-legacy-approved"
+                                      :permissionRequest {:permissionKind "shell"
+                                                          :fullCommandText "echo test"}})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+      (let [decision (->> @requests
+                          (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                      (:method %)))
+                          first
+                          :params
+                          :result)]
+        (is (= {:kind "approve-once"} decision))))))
 
 (deftest test-permission-resolved-by-hook-v3
   (testing "v3 permission.requested with resolvedByHook=true skips handler entirely"

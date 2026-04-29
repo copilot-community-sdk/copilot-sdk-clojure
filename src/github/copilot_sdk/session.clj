@@ -477,32 +477,55 @@
   "Normalize legacy Clojure permission results to the upstream v0.3.0
    PermissionDecision shape before sending them to the CLI."
   [result]
-  (let [legacy-reject (fn [result fallback-feedback]
-                        (cond-> {:kind :reject}
-                          (or (:feedback result) (:message result) fallback-feedback)
-                          (assoc :feedback (or (:feedback result)
-                                               (:message result)
-                                               fallback-feedback))))]
+  (let [feedback (fn [fallback-feedback]
+                   (or (:feedback result) (:message result) fallback-feedback))
+        reject-decision (fn [fallback-feedback]
+                          (cond-> {:kind :reject}
+                            (feedback fallback-feedback)
+                            (assoc :feedback (feedback fallback-feedback))))
+        session-decision (fn []
+                           (cond-> {:kind :approve-for-session}
+                             (:approval result)
+                             (assoc :approval (:approval result))))
+        location-decision (fn []
+                            (cond-> {:kind :approve-for-location}
+                              (:approval result)
+                              (assoc :approval (:approval result))
+                              (:location-key result)
+                              (assoc :location-key (:location-key result))))]
     (case (:kind result)
+      :approve-once
+      {:kind :approve-once}
+
       :approved
-      (assoc result :kind :approve-once)
+      {:kind :approve-once}
+
+      :approve-for-session
+      (session-decision)
+
+      :approve-for-location
+      (location-decision)
 
       :denied-no-approval-rule-and-could-not-request-from-user
-      (-> result
-          (dissoc :rules)
-          (assoc :kind :user-not-available))
+      {:kind :user-not-available}
+
+      :user-not-available
+      {:kind :user-not-available}
 
       :denied-by-rules
-      (legacy-reject result "Denied by rules")
+      (reject-decision "Denied by rules")
 
       :denied-interactively-by-user
-      (legacy-reject result "Denied by user")
+      (reject-decision "Denied by user")
 
       :denied-by-content-exclusion-policy
-      (legacy-reject result "Denied by content exclusion policy")
+      (reject-decision "Denied by content exclusion policy")
 
       :denied-by-permission-request-hook
-      (legacy-reject result "Denied by permission request hook")
+      (reject-decision "Denied by permission request hook")
+
+      :reject
+      (reject-decision nil)
 
       result)))
 
