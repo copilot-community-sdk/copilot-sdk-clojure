@@ -128,6 +128,8 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:env` | map | nil | Environment variables |
 | `:github-token` | string | nil | GitHub token for authentication. Sets `COPILOT_SDK_AUTH_TOKEN` env var and passes `--auth-token-env` flag |
 | `:use-logged-in-user?` | boolean | `true` | Use logged-in user auth. Defaults to `false` when `:github-token` is provided. Cannot be used with `:cli-url` |
+| `:copilot-home` | string | nil | Base directory for Copilot data files. Sets `COPILOT_HOME` env var on the spawned CLI. (upstream PR #1191) |
+| `:tcp-connection-token` | string | nil | Connection token for the headless CLI server (TCP only). When the SDK spawns its own CLI in TCP mode and this is omitted, a UUID is generated automatically so the loopback listener is safe by default. The token is sent to the CLI via `COPILOT_CONNECTION_TOKEN` and forwarded over the wire on the new `connect` handshake. Rejected when combined with `:use-stdio? true`. (upstream PR #1176) |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
@@ -246,6 +248,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
+| `:instruction-directories` | vector | Additional directories to search for custom instruction files. Forwarded as `instructionDirectories` on `session.create` and `session.resume`. (upstream PR #1190) |
 | `:disabled-skills` | vector | Disable specific skills by name |
 | `:large-output` | map | (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. |
 | `:working-directory` | string | Working directory for the session (tool operations relative to this) |
@@ -273,6 +276,7 @@ Resume an existing session by ID. The `config` map accepts the same options as `
 | Option | Type | Description |
 |---|---|---|
 | `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false) |
+| `:continue-pending-work?` | boolean | When true, the runtime re-emits any pending `permission.requested` and external tool calls so handlers can re-respond on resume; default false treats pending work as interrupted. Forwarded as `continuePendingWork` on `session.resume`. |
 
 When `:on-permission-request` is set to `default-join-session-permission-handler`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends `requestPermission: true`.
 

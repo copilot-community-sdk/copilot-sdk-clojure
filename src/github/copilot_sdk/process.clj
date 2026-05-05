@@ -26,6 +26,49 @@
     github-token (conj "--auth-token-env")
     (false? use-logged-in-user?) (conj "--no-auto-login")))
 
+(defn cli-env-overrides
+  "Compute the environment variable contract the SDK applies to the spawned CLI.
+
+   Returns a map with two entries:
+   - `:defaults` — env-var → value-or-nil applied **before** user-provided
+     `:env` so the user can override them. Currently just `{\"NODE_DEBUG\" nil}`
+     (default: strip NODE_DEBUG to avoid polluting stdout, but a user can
+     re-enable it via `:env`).
+   - `:overrides` — env-var → value-or-nil applied **after** user-provided
+     `:env` so explicit SDK options win over stale env (e.g. an explicit
+     `:github-token` must beat a `COPILOT_SDK_AUTH_TOKEN` coming from `:env`).
+
+   This is a pure helper extracted so we can unit-test the env contract
+   without spawning a real process."
+  [{:keys [github-token telemetry copilot-home tcp-connection-token] :as _opts}]
+  {:defaults {"NODE_DEBUG" nil}
+   :overrides
+   (cond-> {}
+     ;; Auth token (PR #237)
+     github-token
+     (assoc "COPILOT_SDK_AUTH_TOKEN" github-token)
+     ;; copilotHome (upstream PR #1191) — base directory for Copilot data
+     copilot-home
+     (assoc "COPILOT_HOME" copilot-home)
+     ;; tcpConnectionToken (upstream PR #1176) — required when server enforces a token
+     tcp-connection-token
+     (assoc "COPILOT_CONNECTION_TOKEN" tcp-connection-token)
+     ;; OpenTelemetry (upstream PR #785)
+     telemetry
+     (as-> m
+           (cond-> (assoc m "COPILOT_OTEL_ENABLED" "true")
+             (:otlp-endpoint telemetry)
+             (assoc "OTEL_EXPORTER_OTLP_ENDPOINT" (:otlp-endpoint telemetry))
+             (:file-path telemetry)
+             (assoc "COPILOT_OTEL_FILE_EXPORTER_PATH" (:file-path telemetry))
+             (:exporter-type telemetry)
+             (assoc "COPILOT_OTEL_EXPORTER_TYPE" (:exporter-type telemetry))
+             (:source-name telemetry)
+             (assoc "COPILOT_OTEL_SOURCE_NAME" (:source-name telemetry))
+             (some? (:capture-content? telemetry))
+             (assoc "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
+                    (str (:capture-content? telemetry))))))})
+
 (defn spawn-cli
   "Spawn the Copilot CLI process.
    
@@ -39,9 +82,11 @@
    - :port - TCP port (when not using stdio)
    - :github-token - GitHub token for authentication (PR #237)
    - :use-logged-in-user? - Whether to use logged-in user auth (PR #237)
-   
+   - :copilot-home - Base directory for Copilot data (sets COPILOT_HOME) (upstream PR #1191)
+   - :tcp-connection-token - Connection token sent via COPILOT_CONNECTION_TOKEN (upstream PR #1176)
+
    Returns a ManagedProcess record."
-  [{:keys [cli-path cwd env use-stdio? github-token]
+  [{:keys [cli-path cwd env use-stdio?]
     :or {cli-path "copilot"
          use-stdio? true}
     :as opts}]
@@ -54,34 +99,22 @@
       (.directory builder (File. ^String cwd)))
 
     ;; Set environment
-    (let [env-map (.environment builder)]
-      ;; Remove NODE_DEBUG to avoid polluting stdout
-      (.remove env-map "NODE_DEBUG")
-      ;; Apply user-provided environment variables
+    (let [env-map (.environment builder)
+          ;; SDK env contract: defaults applied first (user :env can override
+          ;; them), then user :env, then strict overrides (which beat :env).
+          {:keys [defaults overrides]} (cli-env-overrides opts)
+          apply-map! (fn [m]
+                       (doseq [[k v] m]
+                         (if (some? v)
+                           (.put env-map ^String k ^String v)
+                           (.remove env-map ^String k))))]
+      (apply-map! defaults)
       (when env
         (doseq [[k v] env]
           (if (some? v)
             (.put env-map k v)
             (.remove env-map k))))
-      ;; Set github token in environment if provided (PR #237).
-      ;; Explicit github-token should take precedence over env.
-      (when github-token
-        (.put env-map "COPILOT_SDK_AUTH_TOKEN" github-token))
-
-      ;; Set OpenTelemetry environment variables if telemetry is configured (upstream PR #785)
-      (when-let [telemetry (:telemetry opts)]
-        (.put env-map "COPILOT_OTEL_ENABLED" "true")
-        (when-let [v (:otlp-endpoint telemetry)]
-          (.put env-map "OTEL_EXPORTER_OTLP_ENDPOINT" v))
-        (when-let [v (:file-path telemetry)]
-          (.put env-map "COPILOT_OTEL_FILE_EXPORTER_PATH" v))
-        (when-let [v (:exporter-type telemetry)]
-          (.put env-map "COPILOT_OTEL_EXPORTER_TYPE" v))
-        (when-let [v (:source-name telemetry)]
-          (.put env-map "COPILOT_OTEL_SOURCE_NAME" v))
-        (when (some? (:capture-content? telemetry))
-          (.put env-map "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
-                (str (:capture-content? telemetry))))))
+      (apply-map! overrides))
 
     ;; Configure stdio — use explicit PIPE redirects for all three streams.
     ;; On Windows, the JVM's ProcessImpl sets CREATE_NO_WINDOW when none of the

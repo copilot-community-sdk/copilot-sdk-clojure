@@ -38,6 +38,7 @@
             [clojure.java.io :as io]
             [clojure.set]
             [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-specs :as gen]
             [github.copilot-sdk.specs])
@@ -59,10 +60,16 @@
   "Map of event-type → {envelope-property → const-value} for every variant
    property declaring a JSON Schema `const`. Used to construct envelopes
    that satisfy the generator's const predicates."
-  (let [variants (-> schema :definitions :SessionEvent :anyOf)]
+  (let [variants (-> schema :definitions :SessionEvent :anyOf)
+        deref-ref (fn [node]
+                    (if-let [r (:$ref node)]
+                      (let [path (rest (str/split r #"/"))]
+                        (get-in schema (mapv keyword path)))
+                      node))]
     (into {}
           (keep (fn [variant]
-                  (let [props      (:properties variant)
+                  (let [variant    (deref-ref variant)
+                        props      (:properties variant)
                         event-type (get-in props [:type :const])
                         consts     (->> props
                                         (keep (fn [[k v]]
@@ -175,7 +182,52 @@
    {:tool-call-id "tc-1"
     :agent-name "subagent"
     :agent-display-name "SubAgent"
-    :error "boom"}})
+    :error "boom"}
+
+   "assistant.streaming_delta"
+   {:total-response-size-bytes 1024}
+
+   "session.title_changed"
+   {:title "My Title"}
+
+   "session.warning"
+   {:warning-type "general"
+    :message "watch out"}
+
+   "session.context_changed"
+   {:cwd "/tmp"}
+
+   "session.mode_changed"
+   {:previous-mode "interactive"
+    :new-mode "plan"}
+
+   "session.plan_changed"
+   {:operation "create"}
+
+   "session.workspace_file_changed"
+   {:path "/tmp/file"
+    :operation "create"}
+
+   "session.task_complete"
+   {}
+
+   "session.custom_agents_updated"
+   {:agents []
+    :warnings []
+    :errors []}
+
+   "session.mcp_servers_loaded"
+   {:servers []}
+
+   "session.mcp_server_status_changed"
+   {:server-name "server-1"
+    :status "connected"}
+
+   "session.skills_loaded"
+   {:skills []}
+
+   "session.extensions_loaded"
+   {:extensions []}})
 
 (defn- envelope
   "Wrap a data payload in a minimal valid envelope of the given type. Honours

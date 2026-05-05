@@ -76,7 +76,7 @@ Carefully review example output for regressions.
 
 ### Phase 6: Multi-Model Code Review
 
-Launch parallel code-review agents using at least three distinct model families (e.g., Claude Opus 4.6, GPT-5.4, and Gemini 3 Pro - or later if available). Different model families catch different categories of issues — use whichever specific models are currently available.
+Launch parallel code-review agents using two distinct model families (e.g., Claude Opus 4.7 and GPT-5.5 — or later if available). Different model families catch different categories of issues; use whichever specific models are currently available.
 
 Each reviewer gets the same context: what changed, why, and what to focus on (correctness, spec completeness, test coverage, Clojure idioms, wire conversion accuracy).
 
@@ -133,7 +133,7 @@ If any drift is found, describe your findings to the user and propose specific e
 
 3. **Red/green TDD is mandatory.** Never implement without a failing test first. This catches wire conversion bugs (camelCase → kebab-case) and spec mismatches early.
 
-4. **Multi-model review catches different things.** Different model families tend to find different categories of issues — API contracts, logic/concurrency bugs, spec inconsistencies. Use at least three distinct families.
+4. **Multi-model review catches different things.** Different model families tend to find different categories of issues — API contracts, logic/concurrency bugs, spec inconsistencies. Use at least two distinct families.
 
 5. **Wire conversion is the #1 source of bugs.** Always verify camelCase → kebab-case conversion for new fields. See `references/PROJECT.md` § Wire Conversion Cheat Sheet.
 

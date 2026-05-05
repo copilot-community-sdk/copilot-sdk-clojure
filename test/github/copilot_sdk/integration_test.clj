@@ -752,6 +752,144 @@
       (is (= "direct" (:envValueMode create-params)))
       (is (= "direct" (:envValueMode resume-params))))))
 
+(deftest test-instruction-directories-forwarded-on-wire
+  (testing ":instruction-directories is forwarded to both session.create and session.resume (upstream PR #1190)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          dirs ["/tmp/instructions/a" "/tmp/instructions/b"]
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :instruction-directories dirs})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :instruction-directories dirs})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (= dirs (:instructionDirectories create-params)))
+      (is (= dirs (:instructionDirectories resume-params))))))
+
+(deftest test-continue-pending-work-forwarded-on-resume
+  (testing ":continue-pending-work? is forwarded as continuePendingWork on session.resume (upstream PR — types.ts:1458)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :continue-pending-work? true})
+          resume-params (get @seen "session.resume")]
+      (is (= true (:continuePendingWork resume-params))
+          "continuePendingWork should appear on the wire when option is set"))))
+
+;; -----------------------------------------------------------------------------
+
+(deftest test-connect-rpc-used-for-handshake
+  (testing "verify-protocol-version! sends `connect` and forwards token"
+    (let [seen (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"connect" "ping"} method)
+                                        (swap! seen conj [method params]))))
+          ;; The fixture client is already connected — just exercise verify
+          ;; with a fresh client option that pre-loaded a token via state.
+          _ (swap! (:state *test-client*) assoc-in [:options :tcp-connection-token] "tok-123")
+          _ (reset! (:expected-token *mock-server*) "tok-123")
+          verify-version (var client/verify-protocol-version!)
+          _ (verify-version *test-client*)
+          calls @seen]
+      (is (some (fn [[m p]] (and (= m "connect") (= "tok-123" (:token p)))) calls)
+          "connect should be called with the token")
+      (is (not-any? (fn [[m _]] (= m "ping")) calls)
+          "ping should NOT be called when connect succeeds"))))
+
+(deftest test-connect-falls-back-to-ping-on-method-not-found
+  (testing "legacy server without `connect` falls back to `ping`"
+    (let [seen (atom [])
+          _ (reset! (:supports-connect? *mock-server*) false)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"connect" "ping"} method)
+                                        (swap! seen conj [method params]))))
+          verify-version (var client/verify-protocol-version!)
+          _ (verify-version *test-client*)
+          methods (map first @seen)]
+      (is (some #{"connect"} methods) "connect should be tried first")
+      (is (some #{"ping"} methods) "ping should be the fallback")
+      (is (= "connect" (first methods))
+          "connect should precede ping"))))
+
+(deftest test-connect-falls-back-to-ping-on-unhandled-method-message
+  (testing "legacy server returning non-MethodNotFound code but \"Unhandled method connect\" message also falls back to ping (upstream parity)"
+    (let [seen (atom [])
+          _ (reset! (:supports-connect? *mock-server*) :legacy-message)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method _]
+                                      (when (#{"connect" "ping"} method)
+                                        (swap! seen conj method))))
+          verify-version (var client/verify-protocol-version!)
+          _ (verify-version *test-client*)]
+      (is (= ["connect" "ping"] @seen)
+          "ping must be the fallback when error message is exactly \"Unhandled method connect\""))))
+
+(deftest test-connect-non-method-not-found-error-propagates
+  (testing "non-MethodNotFound errors from `connect` are NOT swallowed by ping fallback"
+    ;; Token validation is enforced — a wrong token returns -32603 (not -32601),
+    ;; so the SDK must propagate the error rather than silently fall back to ping.
+    (let [seen (atom [])
+          _ (reset! (:expected-token *mock-server*) "correct-token")
+          _ (swap! (:state *test-client*) assoc-in [:options :tcp-connection-token] "wrong-token")
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method _]
+                                      (when (#{"connect" "ping"} method)
+                                        (swap! seen conj method))))
+          verify-version (var client/verify-protocol-version!)]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"Invalid connection token"
+           (verify-version *test-client*))
+          "non-MethodNotFound error should propagate")
+      (is (= ["connect"] @seen)
+          "ping fallback must NOT be triggered for non-MethodNotFound errors"))))
+
+(deftest test-tcp-connection-token-rejected-with-use-stdio
+  (testing ":tcp-connection-token cannot be combined with :use-stdio? true"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"tcp-connection-token cannot be used with use-stdio"
+         (sdk/client {:tcp-connection-token "tok"
+                      :use-stdio? true
+                      :auto-start? false})))))
+
+(deftest test-tcp-connection-token-auto-generated-for-tcp-spawn
+  (testing "SDK auto-generates a UUID token when spawning CLI in TCP mode"
+    (let [c (sdk/client {:use-stdio? false
+                         :auto-start? false})
+          token (get-in c [:options :tcp-connection-token])]
+      (is (string? token) "auto-generated token should be a non-blank string")
+      (is (re-matches
+           #"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+           token)
+          "auto-generated token should be a UUID")))
+  (testing "explicit token wins over auto-generation"
+    (let [c (sdk/client {:use-stdio? false
+                         :tcp-connection-token "explicit-token"
+                         :auto-start? false})]
+      (is (= "explicit-token" (get-in c [:options :tcp-connection-token])))))
+  (testing "no token auto-generated for stdio mode"
+    (let [c (sdk/client {:use-stdio? true :auto-start? false})]
+      (is (nil? (get-in c [:options :tcp-connection-token])))))
+  (testing "no token auto-generated for cli-url (external server)"
+    (let [c (sdk/client {:cli-url "localhost:9999" :auto-start? false})]
+      (is (nil? (get-in c [:options :tcp-connection-token])))))
+  (testing "no token auto-generated when running as a child process"
+    (let [c (sdk/client {:is-child-process? true :auto-start? false})]
+      (is (nil? (get-in c [:options :tcp-connection-token]))))))
+
 (deftest test-client-name-forwarded-on-wire
   (testing "clientName is forwarded in session.create when set (upstream PR #510)"
     (let [seen (atom {})

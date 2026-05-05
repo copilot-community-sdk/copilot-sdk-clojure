@@ -159,6 +159,11 @@
    (when (and (:is-child-process? opts) (= false (:use-stdio? opts)))
      (throw (ex-info "is-child-process? requires use-stdio? to be true (or unset)"
                      {:is-child-process? true :use-stdio? false})))
+   ;; tcp-connection-token cannot be combined with use-stdio?:true (upstream PR #1176).
+   ;; cli-url is fine — cli-url implies TCP regardless of :use-stdio? (see above).
+   (when (and (some? (:tcp-connection-token opts)) (= true (:use-stdio? opts)))
+     (throw (ex-info "tcp-connection-token cannot be used with use-stdio? true (stdio is pre-authenticated by transport)"
+                     {:tcp-connection-token "***" :use-stdio? true})))
    (when-not (s/valid? ::specs/client-options opts)
      (let [unknown (specs/unknown-keys opts specs/client-options-keys)
            explain (s/explain-data ::specs/client-options opts)
@@ -201,12 +206,29 @@
          external? (or cli-url? child-process?)
          {:keys [host port]} (when cli-url?
                                (parse-cli-url (:cli-url opts)))
+         ;; tcp-connection-token (upstream PR #1176): use the user-provided
+         ;; token when present; else auto-generate a UUID when the SDK spawns
+         ;; the CLI in TCP mode (i.e. not stdio, not cli-url, not child-process).
+         ;; Note: `merged` already has :use-stdio? defaulted to true, so the
+         ;; "TCP spawn" predicate looks at the *resolved* transport.
+         resolved-use-stdio? (cond
+                               cli-url? false
+                               (some? (:use-stdio? merged)) (:use-stdio? merged)
+                               :else true)
+         sdk-spawns-cli? (and (not resolved-use-stdio?)
+                              (not cli-url?)
+                              (not child-process?))
+         effective-connection-token (or (:tcp-connection-token opts)
+                                        (when sdk-spawns-cli?
+                                          (str (java.util.UUID/randomUUID))))
          final-opts (cond-> merged
                       cli-url? (-> (assoc :use-stdio? false)
                                    (assoc :host host)
                                    (assoc :port port)
                                    (assoc :external-server? true))
-                      child-process? (assoc :external-server? true))]
+                      child-process? (assoc :external-server? true)
+                      effective-connection-token (assoc :tcp-connection-token
+                                                        effective-connection-token))]
      (cond-> {:options final-opts
               :external-server? external?
               :actual-host (or host "localhost")
@@ -709,64 +731,84 @@
 
 (defn- verify-protocol-version!
   "Verify the server's protocol version matches ours.
-   Races the ping against process exit to detect early CLI failures."
+
+   Sends the `connect` handshake (upstream PR #1176) carrying the optional
+   tcp-connection-token, and races it against process exit to detect early
+   CLI failures. If the server returns a JSON-RPC `MethodNotFound` (-32601)
+   error, OR an error whose message is exactly \"Unhandled method connect\"
+   (matching upstream Node parity, client.ts:1132-1135), falls back to `ping`
+   for compatibility with legacy servers."
   [client]
-  (let [{:keys [connection-io process]} @(:state client)
-        ping-ch (proto/send-request connection-io "ping" {})
+  (let [{:keys [connection-io process options]} @(:state client)
+        token (:tcp-connection-token options)
+        connect-params (cond-> {} token (assoc :token token))
         exit-ch (:exit-chan process)
         timeout-ch (async/timeout 60000)
-        ;; Race: wait for ping result or process exit (whichever comes first)
-        result (if exit-ch
-                 (let [exit-poll (async/poll! exit-ch)]
-                   (if exit-poll
-                     ;; Process already exited before we even sent the ping
-                     (let [stderr (get-stderr-output client)]
-                       (throw (ex-info
-                               (cond-> (str "CLI server exited with code " (:exit-code exit-poll))
-                                 stderr (str "\nstderr: " stderr))
-                               {:exit-code (:exit-code exit-poll) :stderr stderr})))
-                     ;; Process still running — race ping against exit and timeout
-                     (let [[v ch] (async/alts!! [ping-ch exit-ch timeout-ch])]
-                       (cond
-                         ;; Timeout
-                         (identical? ch timeout-ch)
-                         (let [stderr (get-stderr-output client)]
-                           (throw (ex-info
-                                   (cond-> "Ping request timed out"
-                                     stderr (str "\nstderr: " stderr))
-                                   {:method "ping" :timeout-ms 60000 :stderr stderr})))
+        await-rpc (fn [rpc-ch method-name]
+                    (if exit-ch
+                      (let [exit-poll (async/poll! exit-ch)]
+                        (if exit-poll
+                          (let [stderr (get-stderr-output client)]
+                            (throw (ex-info
+                                    (cond-> (str "CLI server exited with code " (:exit-code exit-poll))
+                                      stderr (str "\nstderr: " stderr))
+                                    {:exit-code (:exit-code exit-poll) :stderr stderr})))
+                          (let [[v ch] (async/alts!! [rpc-ch exit-ch timeout-ch])]
+                            (cond
+                              (identical? ch timeout-ch)
+                              (let [stderr (get-stderr-output client)]
+                                (throw (ex-info
+                                        (cond-> (str method-name " request timed out")
+                                          stderr (str "\nstderr: " stderr))
+                                        {:method method-name :timeout-ms 60000 :stderr stderr})))
 
-                         ;; Ping completed
-                         (identical? ch ping-ch)
-                         (cond
-                           (nil? v)
-                           (throw (ex-info "Ping channel closed unexpectedly" {:method "ping"}))
+                              (identical? ch rpc-ch)
+                              v
 
-                           (:error v)
-                           (throw (ex-info (get-in v [:error :message] "RPC error")
-                                           {:error (:error v) :method "ping"}))
+                              :else
+                              (let [stderr (get-stderr-output client)]
+                                (throw (ex-info
+                                        (cond-> (str "CLI server exited with code " (:exit-code v))
+                                          stderr (str "\nstderr: " stderr))
+                                        {:exit-code (:exit-code v) :stderr stderr})))))))
+                      (let [[v ch] (async/alts!! [rpc-ch timeout-ch])]
+                        (cond
+                          (identical? ch timeout-ch)
+                          (throw (ex-info (str method-name " request timed out")
+                                          {:method method-name :timeout-ms 60000}))
+                          :else v))))
+        ;; Try `connect` first; on -32601 fall back to `ping`.
+        connect-resp (await-rpc (proto/send-request connection-io "connect" connect-params)
+                                "connect")
+        result (cond
+                 (nil? connect-resp)
+                 (throw (ex-info "Connect channel closed unexpectedly" {:method "connect"}))
 
-                           :else (:result v))
-
-                         ;; Process exited first
-                         :else
-                         (let [stderr (get-stderr-output client)]
-                           (throw (ex-info
-                                   (cond-> (str "CLI server exited with code " (:exit-code v))
-                                     stderr (str "\nstderr: " stderr))
-                                   {:exit-code (:exit-code v) :stderr stderr})))))))
-                 ;; No process (external server) — just wait for ping with timeout
-                 (let [[v ch] (async/alts!! [ping-ch timeout-ch])]
+                 (and (:error connect-resp)
+                      (or (= -32601 (get-in connect-resp [:error :code]))
+                          ;; Some legacy servers return a non-MethodNotFound code
+                          ;; but a message of exactly "Unhandled method connect".
+                          ;; Match upstream Node parity (client.ts:1132-1135).
+                          (= "Unhandled method connect"
+                             (get-in connect-resp [:error :message]))))
+                 ;; Legacy server without `connect`; fall back to `ping`. The
+                 ;; token, if any, is silently dropped — the legacy server can't
+                 ;; enforce one.
+                 (let [ping-resp (await-rpc (proto/send-request connection-io "ping" {})
+                                            "ping")]
                    (cond
-                     (identical? ch timeout-ch)
-                     (throw (ex-info "Ping request timed out"
-                                     {:method "ping" :timeout-ms 60000}))
-                     (nil? v)
-                     (throw (ex-info "Ping channel closed" {:method "ping"}))
-                     (:error v)
-                     (throw (ex-info (get-in v [:error :message] "RPC error")
-                                     {:error (:error v) :method "ping"}))
-                     :else (:result v))))
+                     (nil? ping-resp)
+                     (throw (ex-info "Ping channel closed unexpectedly" {:method "ping"}))
+                     (:error ping-resp)
+                     (throw (ex-info (get-in ping-resp [:error :message] "RPC error")
+                                     {:error (:error ping-resp) :method "ping"}))
+                     :else (:result ping-resp)))
+
+                 (:error connect-resp)
+                 (throw (ex-info (get-in connect-resp [:error :message] "RPC error")
+                                 {:error (:error connect-resp) :method "connect"}))
+
+                 :else (:result connect-resp))
         server-version (:protocol-version result)]
     (when (nil? server-version)
       (throw (ex-info
@@ -1402,6 +1444,7 @@
       wire-default-agent (assoc :default-agent wire-default-agent)
       (:config-dir config) (assoc :config-dir (:config-dir config))
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+      (:instruction-directories config) (assoc :instruction-directories (:instruction-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
       (:large-output config) (assoc :large-output (:large-output config))
       (:working-directory config) (assoc :working-directory (:working-directory config))
@@ -1473,6 +1516,7 @@
       wire-default-agent (assoc :default-agent wire-default-agent)
       (:config-dir config) (assoc :config-dir (:config-dir config))
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+      (:instruction-directories config) (assoc :instruction-directories (:instruction-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
@@ -1482,6 +1526,8 @@
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
+      (some? (:continue-pending-work? config))
+      (assoc :continue-pending-work (:continue-pending-work? config))
       (some? (:enable-config-discovery config))
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (:model-capabilities config)

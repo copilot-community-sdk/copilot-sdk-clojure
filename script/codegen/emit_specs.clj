@@ -106,8 +106,9 @@
    representative node when names collide consistently. Warns on conflicts."
   [root variants]
   (let [pairs   (mapcat (fn [{:keys [variant]}]
-                          (concat (walk-props (:properties variant))
-                                  (walk-props (get-in variant [:properties :data :properties]))))
+                          (let [data-node (cc/deref-once root (get-in variant [:properties :data]))]
+                            (concat (walk-props (:properties variant))
+                                    (walk-props (:properties data-node)))))
                         variants)
         groups  (group-by first pairs)]
     (into (sorted-map)
@@ -136,9 +137,9 @@
 
 (defn- emit-data-spec
   "Emit `(s/def ::<event>-data (s/keys ...))` for one event's data payload."
-  [variant]
+  [root variant]
   (let [event-type (get-in variant [:properties :type :const])
-        data-node  (get-in variant [:properties :data])
+        data-node  (cc/deref-once root (get-in variant [:properties :data]))
         props      (:properties data-node)
         required   (set (:required data-node))
         kebab      (fn [k] (cc/wire-key->kebab (name k)))
@@ -252,7 +253,7 @@
    Source: schemas/session-events.schema.json"
               (:require [clojure.spec.alpha :as ~'s]))]
       (emit-leaf-defs root leaf-map)
-      (mapv #(emit-data-spec     (:variant %)) sorted)
+      (mapv #(emit-data-spec     root (:variant %)) sorted)
       (mapv #(emit-envelope-spec (:variant %)) sorted)
       [(emit-event-types-set variants)]
       (emit-event-multi-spec variants))))

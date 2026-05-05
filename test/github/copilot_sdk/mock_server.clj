@@ -66,6 +66,8 @@
             message-id         ; AtomicLong for generating IDs
      ;; Hooks for testing
             on-request         ; atom fn - called for each request
+            expected-token     ; atom string-or-nil - when set, `connect` validates token
+            supports-connect?  ; atom boolean - when false, `connect` returns -32601 (legacy fallback)
             pending-events     ; atom - events to send on next opportunity
             pending-responses]) ; atom {id -> chan} - responses to server→client RPCs
 
@@ -95,6 +97,20 @@
   {:message (:message params)
    :timestamp (System/currentTimeMillis)
    :protocolVersion PROTOCOL_VERSION})
+
+(defn- handle-connect
+  "Handle the `connect` handshake (upstream PR #1176). When :expected-token is
+   set on the server, validate the supplied token; otherwise accept any token.
+   Returns {:ok true :protocolVersion N :version \"...\"}."
+  [server params]
+  (let [expected (some-> server :expected-token deref)
+        provided (:token params)]
+    (when (and expected (not= expected provided))
+      (throw (ex-info "Invalid connection token"
+                      {:code -32603 :method "connect"})))
+    {:ok true
+     :protocolVersion PROTOCOL_VERSION
+     :version "0.0.389-mock"}))
 
 (defn- handle-status-get [server params]
   {:version "0.0.389-mock"
@@ -300,6 +316,11 @@
                       (hook method params))
         result (case method
                  "ping" (handle-ping server params)
+                 "connect" (case @(:supports-connect? server)
+                             true (handle-connect server params)
+                             false (throw (ex-info "Method not found" {:code -32601 :method method}))
+                             :legacy-message (throw (ex-info "Unhandled method connect"
+                                                             {:code -32603 :method method})))
                  "status.get" (handle-status-get server params)
                  "auth.getStatus" (handle-auth-get-status server params)
                  "models.list" (handle-models-list server params)
@@ -432,6 +453,8 @@
       :sessions (atom {})
       :message-id (AtomicLong. 0)
       :on-request (atom nil)
+      :expected-token (atom nil)
+      :supports-connect? (atom true)
       :pending-events (atom [])
       :pending-responses (atom {})})))
 
