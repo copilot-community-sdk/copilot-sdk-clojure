@@ -3,6 +3,40 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.0-beta.1 sync)
+- **`:copilot-home` client option** — base directory for Copilot data files;
+  forwarded to the spawned CLI as the `COPILOT_HOME` environment variable.
+  (upstream PR #1191)
+- **`:instruction-directories` session config** — additional directories to
+  search for custom instruction files. Accepted in `create-session`,
+  `resume-session`, and `join-session` configs and forwarded as
+  `instructionDirectories` on the wire. (upstream PR #1190)
+- **`:tcp-connection-token` client option** — connection token for the headless
+  CLI server when running in TCP mode. When the SDK spawns its own CLI in TCP
+  mode and the caller did not supply a token, a UUID is auto-generated so the
+  loopback listener is safe by default. The token is sent to the CLI via the
+  `COPILOT_CONNECTION_TOKEN` environment variable. Rejected when combined with
+  `:use-stdio? true` (stdio is pre-authenticated by transport).
+  (upstream PR #1176)
+- **`connect` handshake** — the SDK now performs the protocol-version handshake
+  via the new `connect` JSON-RPC method (carrying the optional connection
+  token). Falls back to `ping` against legacy servers that respond with
+  JSON-RPC `MethodNotFound` (-32601), or with a non-MethodNotFound code but
+  the message `"Unhandled method connect"` (matching upstream Node parity,
+  `client.ts:1132-1135`). (upstream PR #1176)
+- **`:continue-pending-work?` resume/join session config** — when truthy, the
+  CLI re-emits any in-flight `permission.requested` and external tool requests
+  on resume so the consumer can respond, instead of treating them as
+  interrupted. Forwarded as `continuePendingWork` on `session.resume`.
+
+### Changed (v1.0.0-beta.1 sync)
+- **Schema bump** — `.copilot-schema-version` advanced from `0.0.403` to
+  `1.0.41-0`; generated wire specs (`src/github/copilot_sdk/generated/`) and
+  field-level coercions regenerated. The upstream session-events schema now
+  references each event variant via `$ref`; the codegen emitter (`script/`)
+  was updated to dereference these refs when collecting leaf properties and
+  emitting per-event data specs. (upstream PR #1184)
+
 ### Added (v0.3.0 sync)
 - **Per-session GitHub authentication** — `:github-token` is now accepted in
   `create-session`, `<create-session`, `resume-session`, `<resume-session`, and
