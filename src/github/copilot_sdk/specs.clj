@@ -53,6 +53,16 @@
 ;; Custom model listing handler (upstream PR #730)
 (s/def ::on-list-models fn?)
 
+;; copilotHome — base directory for Copilot data (sets COPILOT_HOME on spawn).
+;; Upstream PR #1191 (@github/copilot-sdk).
+(s/def ::copilot-home ::non-blank-string)
+
+;; tcpConnectionToken — connection token sent on the `connect` RPC and via the
+;; COPILOT_CONNECTION_TOKEN env var. Auto-generated as a UUID when the SDK
+;; spawns the CLI in TCP mode and the caller did not provide one.
+;; Upstream PR #1176 (@github/copilot-sdk).
+(s/def ::tcp-connection-token ::non-blank-string)
+
 ;; OpenTelemetry configuration (upstream PR #785)
 (s/def ::otlp-endpoint string?)
 (s/def ::exporter-type string?)
@@ -137,7 +147,7 @@
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
-    :session-fs})
+    :session-fs :copilot-home :tcp-connection-token})
 
 (s/def ::client-options
   (closed-keys
@@ -146,7 +156,7 @@
                     ::notification-queue-size ::router-queue-size
                     ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
                     ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
-                    ::session-fs])
+                    ::session-fs ::copilot-home ::tcp-connection-token])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -314,6 +324,9 @@
 (s/def ::on-permission-request fn?)
 (s/def ::config-dir ::non-blank-string)
 (s/def ::skill-directories (s/coll-of ::non-blank-string))
+;; instructionDirectories — additional directories to search for custom
+;; instruction files. Upstream PR #1190 (@github/copilot-sdk).
+(s/def ::instruction-directories (s/coll-of ::non-blank-string))
 (s/def ::disabled-skills (s/coll-of ::non-blank-string))
 (s/def ::enabled boolean?)
 (s/def ::max-size-bytes pos-int?)
@@ -347,6 +360,7 @@
 
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
+(s/def ::continue-pending-work? boolean?)
 
 ;; Event handler — 1-arity fn receiving event map. Uses fn? for consistency
 ;; with ::on-permission-request and ::on-user-input-request specs.
@@ -422,6 +436,7 @@
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
     :custom-agents :default-agent :config-dir :skill-directories
+    :instruction-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
     :working-directory :agent :on-event :create-session-fs-handler
@@ -435,6 +450,7 @@
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::default-agent ::config-dir ::skill-directories
+                    ::instruction-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
@@ -446,8 +462,10 @@
   #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
     :provider :streaming? :on-permission-request
     :mcp-servers :custom-agents :default-agent :config-dir :skill-directories
+    :instruction-directories
     :disabled-skills :infinite-sessions :reasoning-effort
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
+    :continue-pending-work?
     :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
     :include-sub-agent-streaming-events?})
 
@@ -457,10 +475,12 @@
            :opt-un [::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
+                    ::instruction-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
+                    ::continue-pending-work?
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -472,10 +492,12 @@
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
+                    ::instruction-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
+                    ::continue-pending-work?
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
