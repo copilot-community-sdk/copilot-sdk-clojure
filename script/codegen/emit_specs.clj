@@ -102,38 +102,77 @@
     [(cc/wire-key->kebab (name wire-k)) node]))
 
 (defn- collect-leaf-properties
-  "Return a sorted-by-name map of kebab-name → emitted spec form. When the
-   same property name maps to multiple distinct schemas across event/data
-   payloads, emit a non-conforming union — `(s/and (some-fn ...))` for
-   predicate-only forms, or a `(fn [v] (or (s/valid? f1 v) ...))` wrapper
-   otherwise. We avoid `s/or` because it conforms values, which would break
-   the envelope spec's `s/and` chain (the per-event `:type` predicate
-   inspects the raw map and would see a conformed `[:v0 ...]` tuple)."
+  "Return a map describing emitted leaf-property forms.
+
+   `:leaf-map`         — sorted-by-name map of kebab-name → emitted spec form.
+                         When the same property name maps to multiple distinct
+                         schemas across event/data payloads, emit a
+                         non-conforming union — a `(fn [v] (or (s/valid? f1 v)
+                         ...))` wrapper. We avoid `s/or` because it conforms
+                         values, which would break the envelope spec's
+                         `s/and` chain (the per-event `:type` predicate
+                         inspects the raw map and would see a conformed
+                         `[:v0 ...]` tuple).
+
+   `:env-form-by-kebab` — kebab-name → strict spec form derived from envelope
+                         occurrences only (i.e., excluding nested `data`).
+                         Used by the envelope emitter to enforce the
+                         envelope-specific shape independent of any weakening
+                         introduced by data-side conflicts.
+
+   `:conflicted`       — set of kebab-names whose `:leaf-map` form is a
+                         non-conforming union. Envelope emission adds a
+                         per-property strict predicate for any envelope key
+                         appearing in this set, so e.g. envelope `id` (UUID
+                         string) is not weakened by a data-payload `id`
+                         (positive integer)."
   [root variants]
-  (let [pairs   (mapcat (fn [{:keys [variant]}]
-                          (let [data-node (cc/deref-once root (get-in variant [:properties :data]))]
-                            (concat (walk-props (:properties variant))
-                                    (walk-props (:properties data-node)))))
-                        variants)
-        groups  (group-by first pairs)]
-    (into (sorted-map)
-          (for [[kebab pairs] groups
-                :let [nodes  (mapv second pairs)
-                      forms  (mapv #(emit-type root %) nodes)
-                      uniq   (vec (distinct forms))]]
-            (if (= 1 (count uniq))
-              [kebab (first uniq)]
-              ;; Conflict: emit a non-conforming union so each constituent
-              ;; type is still validated AND the value passes through `s/keys`
-              ;; unchanged.
-              (let [v (gensym "v")
-                    union-form `(~'s/spec
-                                 (~'fn [~v]
-                                  (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) uniq))))]
-                (binding [*out* *err*]
-                  (println (format "INFO: property '%s' has %d distinct schemas — emitting non-conforming union"
-                                   kebab (count uniq))))
-                [kebab union-form]))))))
+  (let [env-pairs  (mapcat (fn [{:keys [variant]}]
+                             (walk-props (:properties variant)))
+                           variants)
+        data-pairs (mapcat (fn [{:keys [variant]}]
+                             (let [data-node (cc/deref-once root (get-in variant [:properties :data]))]
+                               (walk-props (:properties data-node))))
+                           variants)
+        all-pairs  (concat env-pairs data-pairs)
+        groups     (group-by first all-pairs)
+        env-groups (group-by first env-pairs)
+        ;; Strict, envelope-only form per kebab name. If envelopes disagree
+        ;; (rare: would mean two variants declare the same envelope property
+        ;; with incompatible schemas), fall back to a non-conforming union of
+        ;; envelope forms only.
+        env-form-by-kebab
+        (into {}
+              (for [[kebab pairs] env-groups
+                    :let [forms (vec (distinct (mapv #(emit-type root (second %)) pairs)))]]
+                [kebab
+                 (if (= 1 (count forms))
+                   (first forms)
+                   (let [v (gensym "ev")]
+                     `(~'s/spec
+                       (~'fn [~v]
+                        (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) forms))))))]))
+        conflicted (atom #{})
+        leaf-map
+        (into (sorted-map)
+              (for [[kebab pairs] groups
+                    :let [nodes (mapv second pairs)
+                          forms (mapv #(emit-type root %) nodes)
+                          uniq  (vec (distinct forms))]]
+                (if (= 1 (count uniq))
+                  [kebab (first uniq)]
+                  (let [v (gensym "v")
+                        union-form `(~'s/spec
+                                     (~'fn [~v]
+                                      (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) uniq))))]
+                    (swap! conflicted conj kebab)
+                    (binding [*out* *err*]
+                      (println (format "INFO: property '%s' has %d distinct schemas — emitting non-conforming union"
+                                       kebab (count uniq))))
+                    [kebab union-form]))))]
+    {:leaf-map          leaf-map
+     :env-form-by-kebab env-form-by-kebab
+     :conflicted        @conflicted}))
 
 ;; ---------------------------------------------------------------------------
 ;; Emission
@@ -178,8 +217,16 @@
    to that literal (e.g. `:type` for the variant, `:ephemeral true` for
    variants like `session.idle`), and a final predicate that delegates
    `:data` validation to the variant's `::<event>-data` spec, so envelopes
-   from one event variant cannot validate against another."
-  [variant]
+   from one event variant cannot validate against another.
+
+   When an envelope property's name conflicts with a data-payload property
+   that has a different schema, the global leaf spec is a non-conforming
+   union (e.g. envelope `id` is a UUID string, but `session.schedule_*`
+   data payloads use a positive-integer `id`). Without intervention the
+   envelope `s/keys` would accept the weakened union. We therefore emit an
+   extra predicate per conflicted envelope key validating it against the
+   strict envelope-only form (`env-form-by-kebab`)."
+  [variant env-form-by-kebab conflicted]
   (let [event-type (get-in variant [:properties :type :const])
         envelope   (:properties variant)
         required   (set (:required variant))
@@ -209,11 +256,31 @@
                          (map (fn [[prop-name const-val]]
                                 `(~'fn [~'event]
                                    (= ~const-val
-                                      (~(keyword prop-name) ~'event))))))]
+                                      (~(keyword prop-name) ~'event))))))
+        ;; Strict per-property predicates for envelope keys whose global
+        ;; leaf spec is a non-conforming union (i.e., weakened by a
+        ;; data-payload conflict). Required keys are validated unconditionally;
+        ;; optional keys are validated only when present.
+        strict-preds (->> envelope
+                          (keep (fn [[k _]]
+                                  (let [kb       (kebab k)
+                                        env-form (get env-form-by-kebab kb)]
+                                    (when (and (contains? conflicted kb) env-form)
+                                      [kb env-form (contains? required (name k))]))))
+                          (sort-by first)
+                          (map (fn [[prop-name env-form req?]]
+                                 (let [getter `(~(keyword prop-name) ~'event)]
+                                   (if req?
+                                     `(~'fn [~'event]
+                                        (~'s/valid? ~env-form ~getter))
+                                     `(~'fn [~'event]
+                                        (~'or (~'not (~'contains? ~'event ~(keyword prop-name)))
+                                              (~'s/valid? ~env-form ~getter))))))))]
     `(~'s/def ~(ns-kw event-type)
               (~'s/and
                 ~keys-form
                 ~@const-preds
+                ~@strict-preds
                 (~'fn [~'event] (~'s/valid? ~data-kw (:data ~'event)))))))
 
 (defn- emit-event-multi-spec
@@ -251,7 +318,8 @@
   (let [variants  (cc/collect-anyOf-discriminators root)
         ;; Sort variants by event-type for deterministic emission.
         sorted    (sort-by :type variants)
-        leaf-map  (collect-leaf-properties root variants)]
+        {:keys [leaf-map env-form-by-kebab conflicted]}
+        (collect-leaf-properties root variants)]
     (concat
       [`(~'ns ~(symbol ns-name)
               "AUTO-GENERATED. clojure.spec definitions for upstream session events.
@@ -265,6 +333,6 @@
               (:require [clojure.spec.alpha :as ~'s]))]
       (emit-leaf-defs leaf-map)
       (mapv #(emit-data-spec     root (:variant %)) sorted)
-      (mapv #(emit-envelope-spec (:variant %)) sorted)
+      (mapv #(emit-envelope-spec (:variant %) env-form-by-kebab conflicted) sorted)
       [(emit-event-types-set variants)]
       (emit-event-multi-spec variants))))

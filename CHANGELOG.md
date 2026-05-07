@@ -19,9 +19,9 @@ All notable changes to this project will be documented in this file. This change
   is renamed to wire `maxPromptTokens` to match upstream's
   `toWireProviderConfig`. (upstream PR #966)
 - **`session.schedule_created` / `session.schedule_cancelled` events** — the
-  CLI now emits these events when a `/schedule` slash-command schedules or
-  cancels a scheduled prompt; both are added to `event-types` and
-  `session-events`. (upstream schema 1.0.42)
+  CLI now emits these events when the `/every` slash-command registers a
+  scheduled prompt or it is cancelled from the schedule manager dialog; both
+  are added to `event-types` and `session-events`. (upstream schema 1.0.42)
 - **`mcpToolName` field on tool requests** — already-existing `:mcp-tool-name`
   on `AssistantMessageToolRequest` is now spec-validated by the regenerated
   wire layer. (upstream schema 1.0.42)

@@ -944,16 +944,17 @@
   (s/keys :opt-un [::summary ::aborted?]))
 
 ;; Schedule events (upstream schema 1.0.42)
-;; Note: schedule data uses an integer `:id` (numeric scheduled-prompt id),
-;; distinct from the string ::id (UUID) used elsewhere — validated via
-;; predicate to avoid colliding with the global ::id spec.
-(s/def ::interval-ms integer?)
+;; Note: schedule data uses a positive integer `:id` (numeric scheduled-prompt
+;; id, `exclusiveMinimum: 0` in the schema), distinct from the string ::id
+;; (UUID) used elsewhere — validated via predicate to avoid colliding with the
+;; global ::id spec. ::interval-ms is also strictly positive per schema.
+(s/def ::interval-ms pos-int?)
 ;; ::prompt is already defined above (::non-blank-string), reused here
 (s/def ::session.schedule_created-data
   (s/and (s/keys :req-un [::interval-ms ::prompt])
-         #(integer? (:id %))))
+         #(pos-int? (:id %))))
 (s/def ::session.schedule_cancelled-data
-  (s/and map? #(integer? (:id %))))
+  (s/and map? #(pos-int? (:id %))))
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))
