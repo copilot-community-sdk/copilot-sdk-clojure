@@ -310,26 +310,45 @@
 
 ;; Provider model override (upstream PR #966).
 ;; Wire model name sent to the provider API for inference; falls back to
-;; :model-id, then SessionConfig :model. Note: ::model-id (defined later
-;; near model-info) and ::max-input-tokens/::max-output-tokens are reused
-;; here for the new ProviderConfig override fields.
+;; :model-id, then SessionConfig :model. Note: ::max-input-tokens and
+;; ::max-output-tokens are reused here for the new ProviderConfig override
+;; fields. ::model-id is *not* reused: the model-info response spec at line
+;; ~1237 below registers ::model-id as `(s/nilable string?)` because the
+;; current-model getter can return nil. Provider overrides, in contrast,
+;; correspond to upstream's `modelId?: string` (optional but never null), so
+;; we validate `:model-id` explicitly via an extra predicate below rather
+;; than letting the nilable leaf weaken the provider config.
 (s/def ::wire-model ::non-blank-string)
 
 (s/def ::provider
-  (s/keys :req-un [::base-url]
-          :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
-                   ::headers
-                   ;; ProviderConfig overrides (upstream PR #966).
-                   ;; ::model-id ↦ wire `modelId` (well-known model name for
-                   ;; agent config + token-limit lookup; default wire model
-                   ;; when ::wire-model is unset).
-                   ;; ::wire-model ↦ wire `wireModel` (provider-API model name).
-                   ;; ::max-input-tokens  ↦ wire `maxPromptTokens` (compaction
-                   ;; trigger; SDK↔wire key disagreement is handled by
-                   ;; provider->wire in client.clj).
-                   ;; ::max-output-tokens ↦ wire `maxOutputTokens`.
-                   ::model-id ::wire-model
-                   ::max-input-tokens ::max-output-tokens]))
+  (s/and
+   (s/keys :req-un [::base-url]
+           :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
+                    ::headers
+                    ;; ProviderConfig overrides (upstream PR #966).
+                    ;; ::model-id ↦ wire `modelId` (well-known model name for
+                    ;; agent config + token-limit lookup; default wire model
+                    ;; when ::wire-model is unset).
+                    ;; ::wire-model ↦ wire `wireModel` (provider-API model name).
+                    ;; ::max-input-tokens  ↦ wire `maxPromptTokens` (compaction
+                    ;; trigger; SDK↔wire key disagreement is handled by
+                    ;; provider->wire in client.clj).
+                    ;; ::max-output-tokens ↦ wire `maxOutputTokens`.
+                    ::model-id ::wire-model
+                    ::max-input-tokens ::max-output-tokens])
+   ;; Provider override `:model-id` must be a non-blank string when present
+   ;; (upstream `modelId?: string`, never null). The shared ::model-id leaf
+   ;; is `(s/nilable string?)` for the model-info getter, so we re-validate
+   ;; here to avoid sending `modelId: null` on the wire.
+   #(or (not (contains? % :model-id))
+        (s/valid? ::non-blank-string (:model-id %)))
+   ;; Token-limit overrides must be strictly positive when present (upstream
+   ;; semantics: a `≤ 0` budget would either disable the feature or trigger
+   ;; immediate compaction/truncation, both nonsensical).
+   #(or (not (contains? % :max-input-tokens))
+        (pos-int? (:max-input-tokens %)))
+   #(or (not (contains? % :max-output-tokens))
+        (pos-int? (:max-output-tokens %)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session configuration
@@ -993,7 +1012,11 @@
   (s/and (s/keys :req-un [::id ::name ::display-name ::description ::source ::user-invocable?]
                  :opt-un [::model])
          #(contains? #{"user" "project" "inherited" "remote" "plugin"} (:source %))
-         ;; tools: string[] | null on the wire (upstream schema 1.0.41-1)
+         ;; tools is required by the upstream schema but the value may be
+         ;; null (`tools: string[] | null` in CustomAgentsUpdatedAgent;
+         ;; upstream schema 1.0.41-1). Enforce key presence here, then
+         ;; validate the value as either nil or a string-coll.
+         #(contains? % :tools)
          #(or (nil? (:tools %)) (s/valid? ::agent-tool-names (:tools %)))))
 
 (s/def ::agents (s/coll-of ::custom-agent-info))

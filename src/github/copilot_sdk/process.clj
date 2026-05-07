@@ -86,6 +86,8 @@
    - :use-logged-in-user? - Whether to use logged-in user auth (PR #237)
    - :copilot-home - Base directory for Copilot data (sets COPILOT_HOME) (upstream PR #1191)
    - :tcp-connection-token - Connection token sent via COPILOT_CONNECTION_TOKEN (upstream PR #1176)
+   - :remote? - When true, append `--remote` so the CLI exposes its session
+                over a GitHub-hosted remote endpoint (upstream PR #1192)
 
    Returns a ManagedProcess record."
   [{:keys [cli-path cwd env use-stdio?]
