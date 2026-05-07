@@ -125,7 +125,14 @@
                          per-property strict predicate for any envelope key
                          appearing in this set, so e.g. envelope `id` (UUID
                          string) is not weakened by a data-payload `id`
-                         (positive integer)."
+                         (positive integer). Note: `:conflicted` is narrowed
+                         to *envelope-vs-data* collisions only — keys that
+                         differ purely across envelope variants (e.g. `:type`,
+                         which has a distinct `const` per variant) are
+                         excluded, because the envelope spec's existing
+                         per-variant `const-preds` already enforce them, and
+                         emitting a redundant union-of-all-variants strict
+                         predicate would noticeably bloat validation."
   [root variants]
   (let [env-pairs  (mapcat (fn [{:keys [variant]}]
                              (walk-props (:properties variant)))
@@ -137,6 +144,7 @@
         all-pairs  (concat env-pairs data-pairs)
         groups     (group-by first all-pairs)
         env-groups (group-by first env-pairs)
+        data-groups (group-by first data-pairs)
         ;; Strict, envelope-only form per kebab name. If envelopes disagree
         ;; (rare: would mean two variants declare the same envelope property
         ;; with incompatible schemas), fall back to a non-conforming union of
@@ -152,6 +160,16 @@
                      `(~'s/spec
                        (~'fn [~v]
                         (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) forms))))))]))
+        ;; Per-kebab distinct envelope forms and data forms — used to decide
+        ;; whether a key's leaf-union is *truly* weakened from the envelope's
+        ;; perspective (i.e., the data side contributes a form not already in
+        ;; the envelope side).
+        env-forms-by-kebab
+        (into {} (for [[k pairs] env-groups]
+                   [k (set (map #(emit-type root (second %)) pairs))]))
+        data-forms-by-kebab
+        (into {} (for [[k pairs] data-groups]
+                   [k (set (map #(emit-type root (second %)) pairs))]))
         conflicted (atom #{})
         leaf-map
         (into (sorted-map)
@@ -164,11 +182,21 @@
                   (let [v (gensym "v")
                         union-form `(~'s/spec
                                      (~'fn [~v]
-                                      (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) uniq))))]
-                    (swap! conflicted conj kebab)
+                                      (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) uniq))))
+                        env-fs (env-forms-by-kebab kebab #{})
+                        data-fs (data-forms-by-kebab kebab #{})
+                        ;; Only consider this key "envelope-weakened" if data
+                        ;; contributes a form not already in the envelope set.
+                        env-vs-data-conflict? (and (seq env-fs)
+                                                   (some #(not (contains? env-fs %)) data-fs))]
+                    (when env-vs-data-conflict?
+                      (swap! conflicted conj kebab))
                     (binding [*out* *err*]
-                      (println (format "INFO: property '%s' has %d distinct schemas — emitting non-conforming union"
-                                       kebab (count uniq))))
+                      (println (format "INFO: property '%s' has %d distinct schemas — emitting non-conforming union%s"
+                                       kebab (count uniq)
+                                       (if env-vs-data-conflict?
+                                         " (envelope strict-pred added)"
+                                         ""))))
                     [kebab union-form]))))]
     {:leaf-map          leaf-map
      :env-form-by-kebab env-form-by-kebab
