@@ -102,8 +102,13 @@
     [(cc/wire-key->kebab (name wire-k)) node]))
 
 (defn- collect-leaf-properties
-  "Return a sorted-by-name map of kebab-name → schema-node, picking a
-   representative node when names collide consistently. Warns on conflicts."
+  "Return a sorted-by-name map of kebab-name → emitted spec form. When the
+   same property name maps to multiple distinct schemas across event/data
+   payloads, emit a non-conforming union — `(s/and (some-fn ...))` for
+   predicate-only forms, or a `(fn [v] (or (s/valid? f1 v) ...))` wrapper
+   otherwise. We avoid `s/or` because it conforms values, which would break
+   the envelope spec's `s/and` chain (the per-event `:type` predicate
+   inspects the raw map and would see a conformed `[:v0 ...]` tuple)."
   [root variants]
   (let [pairs   (mapcat (fn [{:keys [variant]}]
                           (let [data-node (cc/deref-once root (get-in variant [:properties :data]))]
@@ -115,25 +120,31 @@
           (for [[kebab pairs] groups
                 :let [nodes  (mapv second pairs)
                       forms  (mapv #(emit-type root %) nodes)
-                      uniq   (set forms)]]
+                      uniq   (vec (distinct forms))]]
             (if (= 1 (count uniq))
-              [kebab (first nodes)]
-              ;; Conflict: widen to any?
-              (do
+              [kebab (first uniq)]
+              ;; Conflict: emit a non-conforming union so each constituent
+              ;; type is still validated AND the value passes through `s/keys`
+              ;; unchanged.
+              (let [v (gensym "v")
+                    union-form `(~'s/spec
+                                 (~'fn [~v]
+                                  (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) uniq))))]
                 (binding [*out* *err*]
-                  (println (format "WARN: property '%s' has %d distinct schemas — widening to any?"
+                  (println (format "INFO: property '%s' has %d distinct schemas — emitting non-conforming union"
                                    kebab (count uniq))))
-                [kebab {:type "any"}]))))))
+                [kebab union-form]))))))
 
 ;; ---------------------------------------------------------------------------
 ;; Emission
 ;; ---------------------------------------------------------------------------
 
 (defn- emit-leaf-defs
-  "Emit `(s/def ::<kebab> <form>)` for every leaf property."
-  [root leaf-map]
-  (for [[kebab node] leaf-map]
-    `(~'s/def ~(ns-kw kebab) ~(emit-type root node))))
+  "Emit `(s/def ::<kebab> <form>)` for every leaf property. `leaf-map`
+   values are pre-emitted spec forms (see `collect-leaf-properties`)."
+  [leaf-map]
+  (for [[kebab form] leaf-map]
+    `(~'s/def ~(ns-kw kebab) ~form)))
 
 (defn- emit-data-spec
   "Emit `(s/def ::<event>-data (s/keys ...))` for one event's data payload."
@@ -252,7 +263,7 @@
 
    Source: schemas/session-events.schema.json"
               (:require [clojure.spec.alpha :as ~'s]))]
-      (emit-leaf-defs root leaf-map)
+      (emit-leaf-defs leaf-map)
       (mapv #(emit-data-spec     root (:variant %)) sorted)
       (mapv #(emit-envelope-spec (:variant %)) sorted)
       [(emit-event-types-set variants)]
