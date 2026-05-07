@@ -971,9 +971,12 @@
 ;; ::prompt is already defined above (::non-blank-string), reused here
 (s/def ::session.schedule_created-data
   (s/and (s/keys :req-un [::interval-ms ::prompt])
+         #(contains? % :id)
          #(pos-int? (:id %))))
 (s/def ::session.schedule_cancelled-data
-  (s/and map? #(pos-int? (:id %))))
+  (s/and map?
+         #(contains? % :id)
+         #(pos-int? (:id %))))
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))
