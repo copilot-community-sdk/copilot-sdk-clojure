@@ -147,7 +147,7 @@
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
-    :session-fs :copilot-home :tcp-connection-token})
+    :session-fs :copilot-home :tcp-connection-token :remote?})
 
 (s/def ::client-options
   (closed-keys
@@ -156,7 +156,7 @@
                     ::notification-queue-size ::router-queue-size
                     ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
                     ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
-                    ::session-fs ::copilot-home ::tcp-connection-token])
+                    ::session-fs ::copilot-home ::tcp-connection-token ::remote?])
    client-options-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -308,10 +308,47 @@
 ;; (upstream PR #1094, available since CLI 1.0.32). Map of header name → value.
 (s/def ::headers (s/map-of string? string?))
 
+;; Provider model override (upstream PR #966).
+;; Wire model name sent to the provider API for inference; falls back to
+;; :model-id, then SessionConfig :model. Note: ::max-input-tokens and
+;; ::max-output-tokens are reused here for the new ProviderConfig override
+;; fields. ::model-id is *not* reused: the model-info response spec at line
+;; ~1237 below registers ::model-id as `(s/nilable string?)` because the
+;; current-model getter can return nil. Provider overrides, in contrast,
+;; correspond to upstream's `modelId?: string` (optional but never null), so
+;; we validate `:model-id` explicitly via an extra predicate below rather
+;; than letting the nilable leaf weaken the provider config.
+(s/def ::wire-model ::non-blank-string)
+
 (s/def ::provider
-  (s/keys :req-un [::base-url]
-          :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
-                   ::headers]))
+  (s/and
+   (s/keys :req-un [::base-url]
+           :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
+                    ::headers
+                    ;; ProviderConfig overrides (upstream PR #966).
+                    ;; ::model-id ↦ wire `modelId` (well-known model name for
+                    ;; agent config + token-limit lookup; default wire model
+                    ;; when ::wire-model is unset).
+                    ;; ::wire-model ↦ wire `wireModel` (provider-API model name).
+                    ;; ::max-input-tokens  ↦ wire `maxPromptTokens` (compaction
+                    ;; trigger; SDK↔wire key disagreement is handled by
+                    ;; provider->wire in client.clj).
+                    ;; ::max-output-tokens ↦ wire `maxOutputTokens`.
+                    ::model-id ::wire-model
+                    ::max-input-tokens ::max-output-tokens])
+   ;; Provider override `:model-id` must be a non-blank string when present
+   ;; (upstream `modelId?: string`, never null). The shared ::model-id leaf
+   ;; is `(s/nilable string?)` for the model-info getter, so we re-validate
+   ;; here to avoid sending `modelId: null` on the wire.
+   #(or (not (contains? % :model-id))
+        (s/valid? ::non-blank-string (:model-id %)))
+   ;; Token-limit overrides must be strictly positive when present (upstream
+   ;; semantics: a `≤ 0` budget would either disable the feature or trigger
+   ;; immediate compaction/truncation, both nonsensical).
+   #(or (not (contains? % :max-input-tokens))
+        (pos-int? (:max-input-tokens %)))
+   #(or (not (contains? % :max-output-tokens))
+        (pos-int? (:max-output-tokens %)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session configuration
@@ -731,7 +768,9 @@
     ;; Session remote steerable (upstream PR #908)
     :copilot/session.remote_steerable_changed
     ;; Capabilities changed (upstream PR #908)
-    :copilot/capabilities.changed})
+    :copilot/capabilities.changed
+    ;; Schedule events (upstream schema 1.0.42)
+    :copilot/session.schedule_created :copilot/session.schedule_cancelled})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
@@ -771,6 +810,16 @@
 
 (s/def ::session.handoff-data
   (s/keys :opt-un [::remote-session-id ::host]))
+
+;; Remote sessions (Mission Control) — RPC result for session.remote.enable
+;; (upstream PR #1192). The wire shape `{ url?, remoteSteerable }` becomes
+;; `{ :url, :remote-steerable }` after `util/wire->clj` (camel-snake-kebab
+;; does not append `?` for booleans). Note this is distinct from the
+;; session-event spec ::remote-steerable? above.
+(s/def ::remote-steerable boolean?)
+(s/def ::remote-enable-result
+  (s/keys :req-un [::remote-steerable]
+          :opt-un [::url]))
 
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 (s/def ::interaction-id string?)
@@ -913,6 +962,22 @@
 (s/def ::session.task_complete-data
   (s/keys :opt-un [::summary ::aborted?]))
 
+;; Schedule events (upstream schema 1.0.42)
+;; Note: schedule data uses a positive integer `:id` (numeric scheduled-prompt
+;; id, `exclusiveMinimum: 0` in the schema), distinct from the string ::id
+;; (UUID) used elsewhere — validated via predicate to avoid colliding with the
+;; global ::id spec. ::interval-ms is also strictly positive per schema.
+(s/def ::interval-ms pos-int?)
+;; ::prompt is already defined above (::non-blank-string), reused here
+(s/def ::session.schedule_created-data
+  (s/and (s/keys :req-un [::interval-ms ::prompt])
+         #(contains? % :id)
+         #(pos-int? (:id %))))
+(s/def ::session.schedule_cancelled-data
+  (s/and map?
+         #(contains? % :id)
+         #(pos-int? (:id %))))
+
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))
 (s/def ::plugin-name string?)
@@ -950,7 +1015,12 @@
   (s/and (s/keys :req-un [::id ::name ::display-name ::description ::source ::user-invocable?]
                  :opt-un [::model])
          #(contains? #{"user" "project" "inherited" "remote" "plugin"} (:source %))
-         #(s/valid? ::agent-tool-names (:tools %))))
+         ;; tools is required by the upstream schema but the value may be
+         ;; null (`tools: string[] | null` in CustomAgentsUpdatedAgent;
+         ;; upstream schema 1.0.41-1). Enforce key presence here, then
+         ;; validate the value as either nil or a string-coll.
+         #(contains? % :tools)
+         #(or (nil? (:tools %)) (s/valid? ::agent-tool-names (:tools %)))))
 
 (s/def ::agents (s/coll-of ::custom-agent-info))
 (s/def ::warnings (s/coll-of string?))

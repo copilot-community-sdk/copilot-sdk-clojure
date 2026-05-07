@@ -429,6 +429,10 @@
           "type": "string",
           "description": "Name of the MCP server hosting this tool, when the tool is an MCP tool"
         },
+        "mcpToolName": {
+          "type": "string",
+          "description": "Original tool name on the MCP server, when the tool is an MCP tool"
+        },
         "intentionSummary": {
           "type": [
             "string",
@@ -2000,11 +2004,18 @@
           "description": "Source location: user, project, inherited, remote, or plugin"
         },
         "tools": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "List of tool names available to this agent"
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "List of tool names available to this agent, or null when all tools are available"
         },
         "userInvocable": {
           "type": "boolean",
@@ -5704,6 +5715,153 @@
       "additionalProperties": false,
       "title": "SamplingRequestedEvent"
     },
+    "ScheduleCancelledData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Id of the scheduled prompt that was cancelled"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "additionalProperties": false,
+      "description": "Scheduled prompt cancelled from the schedule manager dialog",
+      "title": "ScheduleCancelledData"
+    },
+    "ScheduleCancelledEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.schedule_cancelled"
+        },
+        "data": {
+          "$ref": "#/definitions/ScheduleCancelledData",
+          "description": "Scheduled prompt cancelled from the schedule manager dialog"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "title": "ScheduleCancelledEvent"
+    },
+    "ScheduleCreatedData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Sequential id assigned to the scheduled prompt within the session"
+        },
+        "intervalMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Interval between ticks in milliseconds"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt text that gets enqueued on every tick"
+        }
+      },
+      "required": [
+        "id",
+        "intervalMs",
+        "prompt"
+      ],
+      "additionalProperties": false,
+      "description": "Scheduled prompt registered via /every",
+      "title": "ScheduleCreatedData"
+    },
+    "ScheduleCreatedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.schedule_created"
+        },
+        "data": {
+          "$ref": "#/definitions/ScheduleCreatedData",
+          "description": "Scheduled prompt registered via /every"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "title": "ScheduleCreatedEvent"
+    },
     "SessionEvent": {
       "anyOf": [
         {
@@ -5723,6 +5881,12 @@
         },
         {
           "$ref": "#/definitions/TitleChangedEvent"
+        },
+        {
+          "$ref": "#/definitions/ScheduleCreatedEvent"
+        },
+        {
+          "$ref": "#/definitions/ScheduleCancelledEvent"
         },
         {
           "$ref": "#/definitions/InfoEvent"

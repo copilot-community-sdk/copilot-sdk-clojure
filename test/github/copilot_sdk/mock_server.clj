@@ -386,6 +386,8 @@
                  "session.workspaces.getWorkspace" {:workspace nil}
                  "mcp.discover" {:servers []}
                  "session.usage.getMetrics" {}
+                 "session.remote.enable" {:url "https://copilot-remote.test/abc" :remoteSteerable true}
+                 "session.remote.disable" {}
                  (throw (ex-info "Method not found" {:code -32601 :method method})))
         ;; Merge hook-provided data into result only when hook returns ::merge-response
         ;; This prevents accidental response mutation from spy hooks (e.g. swap! return values)
