@@ -787,6 +787,106 @@
           "continuePendingWork should appear on the wire when option is set"))))
 
 ;; -----------------------------------------------------------------------------
+;; ProviderConfig override fields (upstream PR #966)
+;; -----------------------------------------------------------------------------
+
+(deftest test-provider-config-overrides-forwarded-on-wire
+  (testing "ProviderConfig override fields are forwarded with correct wire keys (upstream PR #966)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          provider {:base-url "https://example.test"
+                    :api-key "key"
+                    :model-id "gpt-5"
+                    :wire-model "gpt-5-2026"
+                    :max-input-tokens 100000
+                    :max-output-tokens 4096}
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})
+          create-provider (get-in @seen ["session.create" :provider])
+          resume-provider (get-in @seen ["session.resume" :provider])]
+      (testing "create"
+        (is (= "gpt-5" (:modelId create-provider)))
+        (is (= "gpt-5-2026" (:wireModel create-provider)))
+        (is (= 100000 (:maxPromptTokens create-provider))
+            "SDK :max-input-tokens must serialize as wire `maxPromptTokens` (matches upstream toWireProviderConfig)")
+        (is (= 4096 (:maxOutputTokens create-provider)))
+        (is (not (contains? create-provider :maxInputTokens))
+            "the SDK-side key `maxInputTokens` must NOT leak onto the wire"))
+      (testing "resume"
+        (is (= "gpt-5" (:modelId resume-provider)))
+        (is (= "gpt-5-2026" (:wireModel resume-provider)))
+        (is (= 100000 (:maxPromptTokens resume-provider)))
+        (is (= 4096 (:maxOutputTokens resume-provider)))
+        (is (not (contains? resume-provider :maxInputTokens)))))))
+
+(deftest test-provider-config-without-overrides-passes-through
+  (testing "ProviderConfig without override fields is forwarded unchanged"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= method "session.create")
+                                                      (reset! seen params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "gpt-5.4"
+                                 :provider {:base-url "https://example.test"
+                                            :api-key "key"}})
+          create-provider (get-in @seen [:provider])]
+      (is (= "https://example.test" (:baseUrl create-provider)))
+      (is (= "key" (:apiKey create-provider)))
+      (is (not (contains? create-provider :maxPromptTokens)))
+      (is (not (contains? create-provider :maxInputTokens))))))
+
+;; -----------------------------------------------------------------------------
+;; Schedule events (upstream schema 1.0.42 — adds session.schedule_created and
+;; session.schedule_cancelled to the event types known by the SDK)
+;; -----------------------------------------------------------------------------
+
+(deftest test-schedule-events-in-public-event-types
+  (testing "schedule events are part of the public ::sdk/event-types set (upstream schema 1.0.42)"
+    (is (contains? sdk/event-types :copilot/session.schedule_created))
+    (is (contains? sdk/event-types :copilot/session.schedule_cancelled)))
+  (testing "schedule events are also categorized under session-events"
+    (is (contains? sdk/session-events :copilot/session.schedule_created))
+    (is (contains? sdk/session-events :copilot/session.schedule_cancelled)))
+  (testing "schedule events are accepted by the idiom ::specs/event-type spec"
+    (is (s/valid? :github.copilot-sdk.specs/event-type :copilot/session.schedule_created))
+    (is (s/valid? :github.copilot-sdk.specs/event-type :copilot/session.schedule_cancelled)))
+  (testing "schedule data idiom specs validate well-formed payloads (integer :id)"
+    (is (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
+                  {:id 42 :interval-ms 1000 :prompt "hi"}))
+    (is (not (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
+                       {:id "uuid" :interval-ms 1000 :prompt "hi"}))
+        "schedule data must reject non-integer :id (vs the UUID-string ::id used elsewhere)")
+    (is (s/valid? :github.copilot-sdk.specs/session.schedule_cancelled-data {:id 42}))))
+
+(deftest test-custom-agent-info-tools-nilable
+  (testing "::custom-agent-info accepts :tools nil (upstream schema 1.0.41-1: tools: string[] | null)"
+    (let [agent-with-nil-tools {:id "a"
+                                :name "agent"
+                                :display-name "Agent"
+                                :description "test"
+                                :source "user"
+                                :user-invocable? true
+                                :tools nil}
+          agent-with-vec-tools (assoc agent-with-nil-tools :tools ["read" "write"])]
+      (is (s/valid? :github.copilot-sdk.specs/custom-agent-info agent-with-nil-tools)
+          "tools=nil must be accepted")
+      (is (s/valid? :github.copilot-sdk.specs/custom-agent-info agent-with-vec-tools)
+          "tools=vector still accepted")
+      (is (not (s/valid? :github.copilot-sdk.specs/custom-agent-info
+                         (assoc agent-with-nil-tools :tools "not-a-vec")))
+          "tools must still reject non-nil non-collection values"))))
+
+;; -----------------------------------------------------------------------------
 
 (deftest test-connect-rpc-used-for-handshake
   (testing "verify-protocol-version! sends `connect` and forwards token"
@@ -3161,6 +3261,35 @@
                                       {:on-permission-request sdk/approve-all})]
       (session/usage-get-metrics session)
       (is (some #(= "session.usage.getMetrics" (:method %)) @requests)))))
+
+;; --- Remote sessions (upstream PR #1192) -----------------------------------
+
+(deftest test-remote-enable-rpc
+  (testing "remote-enable calls session.remote.enable RPC and coerces the result to kebab-case"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          result (session/remote-enable session)]
+      (is (some #(= "session.remote.enable" (:method %)) @requests))
+      (is (= "https://copilot-remote.test/abc" (:url result)))
+      (is (= true (:remote-steerable result))
+          "wire `remoteSteerable` must arrive on the SDK side as :remote-steerable (no `?` suffix)")
+      (is (s/valid? :github.copilot-sdk.specs/remote-enable-result result)))))
+
+(deftest test-remote-disable-rpc
+  (testing "remote-disable calls session.remote.disable RPC and returns nil"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          result (session/remote-disable session)]
+      (is (some #(= "session.remote.disable" (:method %)) @requests))
+      (is (nil? result)))))
 
 ;; --- Memory permission event data specs (CLI 1.0.22) -----------------------
 

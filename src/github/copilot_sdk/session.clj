@@ -1631,6 +1631,38 @@
      (proto/send-request! conn "session.usage.getMetrics"
                           {:session-id session-id}))))
 
+;; -- Remote sessions (Mission Control) -------------------------------------
+
+(defn ^:experimental remote-enable
+  "Enable remote steering for this session, exposing it to GitHub Mission
+   Control web/mobile clients.
+
+   Returns a map:
+   - `:url`               — Mission Control frontend URL (may be absent).
+   - `:remote-steerable`  — boolean; whether remote steering is enabled.
+
+   **Experimental** — corresponds to the `session.remote.enable` JSON-RPC
+   method introduced upstream in PR #1192. The shape of the result and
+   guarantees may change."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.remote.enable"
+                          {:session-id session-id}))))
+
+(defn ^:experimental remote-disable
+  "Disable remote steering for this session. Returns nil.
+
+   **Experimental** — corresponds to the `session.remote.disable` JSON-RPC
+   method introduced upstream in PR #1192."
+  [session]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (proto/send-request! conn "session.remote.disable"
+                         {:session-id session-id})
+    nil))
+
 ;; -- UI Elicitation ----------------------------------------------------------
 
 (defn capabilities

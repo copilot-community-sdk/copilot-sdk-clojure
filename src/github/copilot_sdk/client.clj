@@ -137,7 +137,11 @@
     - :is-child-process? - When true, SDK is a child of an existing Copilot CLI process and uses stdio to communicate with it (no process spawning)
     - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
     - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
-    - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation"
+    - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
+    - :remote?       - **Experimental**. Enable remote session support (Mission Control). When true,
+                       the SDK appends `--remote` to the spawned CLI; sessions in a GitHub repository
+                       working directory become accessible from GitHub web and mobile. Ignored when
+                       `:cli-url` is set. (upstream PR #1192)"
   ([]
    (client {}))
   ([opts]
@@ -1393,6 +1397,22 @@
     ;; default: append mode
     {:mode "append" :content (:content sm)}))
 
+(defn- provider->wire
+  "Convert a Clojure ProviderConfig map to its JSON-RPC wire shape.
+
+   `util/clj->wire` handles the camelCase conversion for most fields, but the
+   SDK property name `:max-input-tokens` (camelizes to `maxInputTokens`) does
+   NOT match the wire field name (`maxPromptTokens`). This helper renames the
+   field after the standard conversion. Mirrors upstream
+   `toWireProviderConfig` in `nodejs/src/client.ts` (PR #966)."
+  [provider]
+  (let [wire (util/clj->wire provider)]
+    (if (contains? wire :maxInputTokens)
+      (-> wire
+          (dissoc :maxInputTokens)
+          (assoc :maxPromptTokens (:maxInputTokens wire)))
+      wire)))
+
 (defn- build-create-session-params
   "Build wire params for session.create from config."
   [config]
@@ -1411,7 +1431,7 @@
         wire-sys-msg (when-let [sm (:system-message config)]
                        (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
-                        (util/clj->wire provider))
+                        (provider->wire provider))
         wire-mcp-servers (when-let [servers (:mcp-servers config)]
                            (util/mcp-servers->wire servers))
         wire-custom-agents (when-let [agents (:custom-agents config)]
@@ -1482,7 +1502,7 @@
         wire-sys-msg (when-let [sm (:system-message config)]
                        (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
-                        (util/clj->wire provider))
+                        (provider->wire provider))
         wire-mcp-servers (when-let [servers (:mcp-servers config)]
                            (util/mcp-servers->wire servers))
         wire-custom-agents (when-let [agents (:custom-agents config)]

@@ -497,6 +497,15 @@
   :args (s/cat :session ::specs/session)
   :ret map?)
 
+;; Remote sessions RPC function specs (upstream PR #1192)
+(register-fdef! github.copilot-sdk.session/remote-enable
+  :args (s/cat :session ::specs/session)
+  :ret ::specs/remote-enable-result)
+
+(register-fdef! github.copilot-sdk.session/remote-disable
+  :args (s/cat :session ::specs/session)
+  :ret nil?)
+
 ;; convert-mcp-call-tool-result function spec (upstream PR #1049)
 (register-fdef! github.copilot-sdk.tools/convert-mcp-call-tool-result
   :args (s/cat :call-result map?)

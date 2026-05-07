@@ -15,7 +15,7 @@
 
 (defn- build-cli-args
   "Build CLI arguments based on options."
-  [{:keys [log-level use-stdio? port cli-args github-token use-logged-in-user?]}]
+  [{:keys [log-level use-stdio? port cli-args github-token use-logged-in-user? remote?]}]
   (cond-> (vec (or cli-args []))
     true (conj "--server")
     true (conj "--no-auto-update")
@@ -24,7 +24,9 @@
     (and (not use-stdio?) port (pos? port)) (conj "--port" (str port))
     ;; Auth options (PR #237)
     github-token (conj "--auth-token-env")
-    (false? use-logged-in-user?) (conj "--no-auto-login")))
+    (false? use-logged-in-user?) (conj "--no-auto-login")
+    ;; Remote session support (upstream PR #1192)
+    remote? (conj "--remote")))
 
 (defn cli-env-overrides
   "Compute the environment variable contract the SDK applies to the spawned CLI.

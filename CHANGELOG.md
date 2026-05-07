@@ -3,6 +3,36 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.0-beta.2 sync)
+- **`:remote?` client option** — when `true`, the SDK appends `--remote` to
+  the spawned CLI args so the headless CLI exposes its session over a
+  GitHub-hosted remote endpoint. Ignored when `:cli-url` is set (i.e., when
+  connecting to an externally-managed CLI). (upstream PR #1192)
+- **`session/remote-enable`, `session/remote-disable` (experimental)** —
+  enable/disable remote steerability for an active session via the new
+  `session.remote.enable` / `session.remote.disable` JSON-RPC methods.
+  `remote-enable` returns `{:url ... :remote-steerable boolean}`. (upstream
+  PR #1192)
+- **ProviderConfig overrides** — `:provider` config now accepts
+  `:model-id`, `:wire-model`, `:max-input-tokens`, and `:max-output-tokens`
+  alongside the existing `:base-url` / `:api-key` fields. `:max-input-tokens`
+  is renamed to wire `maxPromptTokens` to match upstream's
+  `toWireProviderConfig`. (upstream PR #966)
+- **`session.schedule_created` / `session.schedule_cancelled` events** — the
+  CLI now emits these events when a `/schedule` slash-command schedules or
+  cancels a scheduled prompt; both are added to `event-types` and
+  `session-events`. (upstream schema 1.0.42)
+- **`mcpToolName` field on tool requests** — already-existing `:mcp-tool-name`
+  on `AssistantMessageToolRequest` is now spec-validated by the regenerated
+  wire layer. (upstream schema 1.0.42)
+
+### Changed (v1.0.0-beta.2 sync)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.41-0` to
+  `1.0.42`; generated wire specs and coercions regenerated.
+- **`CustomAgentsUpdatedAgent.tools`** is now nilable (`tools: string[] | null`)
+  on the wire; the regenerated wire spec accepts `nil`. (upstream schema
+  1.0.41-1)
+
 ### Added (v1.0.0-beta.1 sync)
 - **`:copilot-home` client option** — base directory for Copilot data files;
   forwarded to the spawned CLI as the `COPILOT_HOME` environment variable.

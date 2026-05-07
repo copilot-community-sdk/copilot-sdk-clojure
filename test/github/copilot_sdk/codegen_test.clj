@@ -227,7 +227,13 @@
    {:skills []}
 
    "session.extensions_loaded"
-   {:extensions []}})
+   {:extensions []}
+
+   "session.schedule_created"
+   {:id 42 :interval-ms 1000 :prompt "ping me"}
+
+   "session.schedule_cancelled"
+   {:id 42}})
 
 (defn- envelope
   "Wrap a data payload in a minimal valid envelope of the given type. Honours

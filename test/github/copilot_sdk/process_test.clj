@@ -78,3 +78,23 @@
   (testing "must be non-blank"
     (is (not (s/valid? ::specs/client-options {:tcp-connection-token ""})))
     (is (not (s/valid? ::specs/client-options {:tcp-connection-token "   "})))))
+
+(deftest remote-accepted-by-client-options-spec
+  (testing ":remote? accepted by ::client-options (upstream PR #1192)"
+    (is (s/valid? ::specs/client-options {:remote? true}))
+    (is (s/valid? ::specs/client-options {:remote? false}))
+    (testing "must be boolean"
+      (is (not (s/valid? ::specs/client-options {:remote? "yes"}))))))
+
+(deftest build-cli-args-remote-flag
+  (testing ":remote? true appends --remote to the spawned CLI args (upstream PR #1192)"
+    (let [build-cli-args @#'proc/build-cli-args
+          args (build-cli-args {:use-stdio? true :remote? true})]
+      (is (some #{"--remote"} args)
+          "--remote must be present when :remote? is true")))
+  (testing ":remote? false (or unset) does NOT append --remote"
+    (let [build-cli-args @#'proc/build-cli-args]
+      (is (not (some #{"--remote"} (build-cli-args {:use-stdio? true})))
+          "--remote must NOT be present by default")
+      (is (not (some #{"--remote"} (build-cli-args {:use-stdio? true :remote? false})))
+          "--remote must NOT be present when :remote? is explicitly false"))))

@@ -57,6 +57,8 @@
     :copilot/session.shutdown
     :copilot/session.context_changed
     :copilot/session.title_changed
+    :copilot/session.schedule_created
+    :copilot/session.schedule_cancelled
     :copilot/session.warning
     :copilot/session.mode_changed
     :copilot/session.plan_changed
@@ -139,6 +141,8 @@
     :copilot/session.plan_changed
     :copilot/session.workspace_file_changed
     :copilot/session.task_complete
+    :copilot/session.schedule_created
+    :copilot/session.schedule_cancelled
     :copilot/session.tools_updated
     :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded
@@ -219,6 +223,7 @@
    - :env           - Environment variables map
    - :telemetry     - OpenTelemetry config map with :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
    - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...}
+   - :remote?       - **Experimental**. Enable remote session support (Mission Control). (upstream PR #1192)
 
    Example:
    ```clojure
