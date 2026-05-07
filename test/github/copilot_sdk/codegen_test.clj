@@ -271,6 +271,16 @@
       (is (contains? gen/event-types event-type)
           (str event-type " missing from gen/event-types — schema may have moved")))))
 
+(deftest generated-data-specs-reject-envelope-weakened-types
+  (testing "session.schedule_created-data rejects string :id (must be positive integer)"
+    (let [spec-kw :github.copilot-sdk.generated.event-specs/session.schedule_created-data]
+      (is (not (s/valid? spec-kw {:id "uuid-string" :interval-ms 1000 :prompt "x"}))
+          "data spec must not accept envelope-shaped UUID :id")))
+  (testing "session.schedule_cancelled-data rejects string :id (must be positive integer)"
+    (let [spec-kw :github.copilot-sdk.generated.event-specs/session.schedule_cancelled-data]
+      (is (not (s/valid? spec-kw {:id "uuid-string"}))
+          "data spec must not accept envelope-shaped UUID :id"))))
+
 ;; ---------------------------------------------------------------------------
 ;; Envelope discrimination — type and data binding must be tight.
 ;; ---------------------------------------------------------------------------
