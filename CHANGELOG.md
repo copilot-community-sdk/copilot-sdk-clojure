@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+## [1.0.0-beta.3.0] - 2026-05-12
 ### Changed (release tooling)
 - **Version scheme — Maven qualifier support.** The release workflow,
   `script/release.sh`, and `build.clj` (`sync-version`, `bump-version`)
@@ -669,7 +670,8 @@ All notable changes to this project will be documented in this file. This change
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.3.0.0-SNAPSHOT...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.0-beta.3.0...HEAD
+[1.0.0-beta.3.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.3.0.0-SNAPSHOT...v1.0.0-beta.3.0
 [0.3.0.0-SNAPSHOT]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.2.0...v0.3.0.0-SNAPSHOT
 [0.2.2.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.1...v0.2.2.0
 [0.2.1.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.1.0...v0.2.1.1
