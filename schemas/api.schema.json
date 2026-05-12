@@ -1582,6 +1582,49 @@
         },
         "stability": "experimental"
       }
+    },
+    "remote": {
+      "enable": {
+        "rpcMethod": "session.remote.enable",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/RemoteEnableResult"
+        },
+        "stability": "experimental"
+      },
+      "disable": {
+        "rpcMethod": "session.remote.disable",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "type": "null",
+          "title": "RemoteDisableResult"
+        },
+        "stability": "experimental"
+      }
     }
   },
   "clientSession": {
@@ -4459,6 +4502,24 @@
       ],
       "additionalProperties": false,
       "title": "PluginList"
+    },
+    "RemoteEnableResult": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Mission Control frontend URL for this session"
+        },
+        "remoteSteerable": {
+          "type": "boolean",
+          "description": "Whether remote steering is enabled"
+        }
+      },
+      "required": [
+        "remoteSteerable"
+      ],
+      "additionalProperties": false,
+      "title": "RemoteEnableResult"
     },
     "ServerSkill": {
       "type": "object",

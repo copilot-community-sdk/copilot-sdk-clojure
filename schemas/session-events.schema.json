@@ -5,8 +5,8 @@
       "type": "object",
       "properties": {
         "reason": {
-          "type": "string",
-          "description": "Reason the current turn was aborted (e.g., \"user initiated\")"
+          "$ref": "#/definitions/AbortReason",
+          "description": "Finite reason code describing why the current turn was aborted"
         }
       },
       "required": [
@@ -67,6 +67,16 @@
       ],
       "additionalProperties": false,
       "title": "AbortEvent"
+    },
+    "AbortReason": {
+      "type": "string",
+      "enum": [
+        "user_initiated",
+        "remote_command",
+        "user_abort"
+      ],
+      "description": "Finite reason code describing why the current turn was aborted",
+      "title": "AbortReason"
     },
     "AssistantIntentData": {
       "type": "object",
@@ -7124,6 +7134,10 @@
         "agentDescription": {
           "type": "string",
           "description": "Description of what the sub-agent does"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model the sub-agent will run with, when known at start. Surfaced in the timeline for auto-selected sub-agents (e.g. rubber-duck)."
         }
       },
       "required": [
