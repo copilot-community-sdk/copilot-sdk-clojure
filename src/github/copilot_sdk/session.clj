@@ -697,11 +697,21 @@
 (defn- exit-plan-result->wire
   "Convert an idiomatic exit-plan-mode result map to wire format.
    Idiom keys: :approved? (required), :selected-action, :feedback.
-   Wire keys: :approved (required), :selected-action (kept kebab; clj->wire camelizes), :feedback."
+   Wire keys: :approved (required), :selected-action (kept kebab; clj->wire camelizes), :feedback.
+   Optional fields whose values are not strings are dropped with a logged
+   warning so we never forward malformed payloads to the CLI."
   [result]
-  (let [m (cond-> {:approved (boolean (:approved? result))}
-            (some? (:selected-action result)) (assoc :selected-action (:selected-action result))
-            (some? (:feedback result)) (assoc :feedback (:feedback result)))]
+  (let [drop-non-string (fn [m k]
+                          (let [v (get result k)]
+                            (cond
+                              (nil? v) m
+                              (string? v) (assoc m k v)
+                              :else (do (log/warn "Exit-plan-mode handler result has non-string value for optional key; dropping"
+                                                  {:key k :value v})
+                                        m))))
+        m (-> {:approved (boolean (:approved? result))}
+              (drop-non-string :selected-action)
+              (drop-non-string :feedback))]
     (util/clj->wire m)))
 
 (defn handle-exit-plan-mode-request!

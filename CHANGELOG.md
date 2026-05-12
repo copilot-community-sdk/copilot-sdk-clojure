@@ -18,7 +18,8 @@ All notable changes to this project will be documented in this file. This change
   `:summary`, optional `:plan-content`, `:actions` (vec of string), and
   `:recommended-action`. Returns an idiomatic map with `:approved?` (required
   boolean), optional `:selected-action`, `:feedback`. When omitted, the SDK
-  auto-replies `{:approved? true}` and sets the
+  auto-replies with the wire-shaped equivalent of `{:approved? true}` (i.e.,
+  `{"approved": true}` on the wire) and sets the
   `requestExitPlanMode` capability flag to `false`. Accepted in both
   `create-session` and `resume-session`. (upstream PR #1228)
 - **`:on-auto-mode-switch` session handler** — restores the Auto Mode Switch
@@ -28,7 +29,8 @@ All notable changes to this project will be documented in this file. This change
   `(request, {:session-id ...})` where `request` may include `:error-code`
   and `:retry-after-seconds`. Returns `:yes`, `:yes-always`, or `:no`
   (keyword or matching string), or a map `{:response ...}` with the same.
-  When omitted, the SDK auto-replies `{:response :no}` and sets the
+  When omitted, the SDK auto-replies with the wire-shaped equivalent of
+  `:no` (i.e., `{"response": "no"}` on the wire) and sets the
   `requestAutoModeSwitch` capability flag to `false`. Accepted in both
   `create-session` and `resume-session`. (upstream PR #1228)
 - **`AbortReason` wire enum** — `abort` events now carry a `:reason`
