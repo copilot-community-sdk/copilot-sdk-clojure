@@ -357,7 +357,7 @@
                              "## [" ver "] - " today "\n"
                              unreleased-content)
             updated (str/replace changelog #"(?s)## \[Unreleased\]\n.*?(?=\n## \[)"
-                                 (str new-section "\n"))
+                                 (java.util.regex.Matcher/quoteReplacement (str new-section "\n")))
             ;; Update comparison links at bottom:
             ;; [Unreleased]: .../compare/OLD...HEAD  →  .../compare/vNEW...HEAD
             ;; Add new version link: [NEW]: .../compare/OLD_TAG...vNEW
