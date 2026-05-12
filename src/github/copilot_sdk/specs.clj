@@ -465,6 +465,44 @@
 ;; session's event stream (upstream PR #1108). Defaults to true on the wire.
 (s/def ::include-sub-agent-streaming-events? boolean?)
 
+;; enableSessionTelemetry: enable/disable internal session telemetry (upstream PR #1224).
+;; When omitted (the default) or true, telemetry is enabled for GitHub-authenticated
+;; sessions. When false, internal session telemetry is disabled. With a custom
+;; ::provider (BYOK), session telemetry is always disabled regardless of this setting.
+;; Independent of the OpenTelemetry config in ::telemetry.
+(s/def ::enable-session-telemetry? boolean?)
+
+;; Exit Plan Mode handler (upstream PR #1228). Server may ask the client to
+;; approve leaving plan mode. Idiom: request map has :summary, optional
+;; :plan-content, :actions (vec string), :recommended-action. Result map has
+;; :approved? (required boolean), optional :selected-action and :feedback.
+(s/def ::plan-content string?)
+(s/def ::actions (s/coll-of string?))
+(s/def ::recommended-action string?)
+(s/def ::exit-plan-mode-request
+  (s/keys :req-un [::summary ::actions ::recommended-action]
+          :opt-un [::plan-content]))
+(s/def ::approved? boolean?)
+(s/def ::selected-action string?)
+(s/def ::feedback string?)
+(s/def ::exit-plan-mode-result
+  (s/keys :req-un [::approved?]
+          :opt-un [::selected-action ::feedback]))
+(s/def ::on-exit-plan-mode fn?)
+
+;; Auto Mode Switch handler (upstream PR #1228). Server may ask the client to
+;; switch the agent to auto mode after a rate-limit event. Idiom: request map
+;; has optional :error-code and :retry-after-seconds; response is a keyword
+;; :yes | :yes-always | :no (or the matching wire string).
+(s/def ::error-code string?)
+(s/def ::retry-after-seconds (s/and number? #(>= % 0)))
+(s/def ::auto-mode-switch-request
+  (s/keys :opt-un [::error-code ::retry-after-seconds]))
+(s/def ::auto-mode-switch-response
+  (s/or :keyword #{:yes :yes-always :no}
+        :string  #{"yes" "yes_always" "no"}))
+(s/def ::on-auto-mode-switch fn?)
+
 ;; modelCapabilities override for session config / setModel (upstream PR #1029).
 ;; DeepPartial<ModelCapabilities> — same shape as ::model-capabilities since all fields are already optional.
 
@@ -476,8 +514,10 @@
     :instruction-directories
     :disabled-skills :large-output :infinite-sessions
     :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
+    :on-exit-plan-mode :on-auto-mode-switch
     :working-directory :agent :on-event :create-session-fs-handler
     :enable-config-discovery :model-capabilities :github-token
+    :enable-session-telemetry?
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
@@ -490,8 +530,10 @@
                     ::instruction-directories
                     ::disabled-skills ::large-output ::infinite-sessions
                     ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
+                    ::on-exit-plan-mode ::on-auto-mode-switch
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
+                    ::enable-session-telemetry?
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
@@ -502,8 +544,10 @@
     :instruction-directories
     :disabled-skills :infinite-sessions :reasoning-effort
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
+    :on-exit-plan-mode :on-auto-mode-switch
     :continue-pending-work?
     :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
+    :enable-session-telemetry?
     :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
@@ -515,9 +559,11 @@
                     ::instruction-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-exit-plan-mode ::on-auto-mode-switch
                     ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::continue-pending-work?
+                    ::enable-session-telemetry?
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -532,9 +578,11 @@
                     ::instruction-directories
                     ::disabled-skills ::infinite-sessions ::reasoning-effort
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
+                    ::on-exit-plan-mode ::on-auto-mode-switch
                     ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::continue-pending-work?
+                    ::enable-session-telemetry?
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -758,6 +806,8 @@
     :copilot/commands.changed
     ;; Plan mode events
     :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+    ;; Auto-mode switch events (upstream PR #1228)
+    :copilot/auto_mode_switch.requested :copilot/auto_mode_switch.completed
     ;; Session status events
     :copilot/session.tools_updated :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
@@ -997,7 +1047,7 @@
 
 (s/def ::subagent.started-data
   (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
-          :opt-un [::agent-description]))
+          :opt-un [::agent-description ::model]))
 
 (s/def ::subagent.completed-data
   (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]

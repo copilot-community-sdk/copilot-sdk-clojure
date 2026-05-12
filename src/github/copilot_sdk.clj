@@ -107,6 +107,8 @@
     :copilot/commands.changed
     :copilot/exit_plan_mode.requested
     :copilot/exit_plan_mode.completed
+    :copilot/auto_mode_switch.requested
+    :copilot/auto_mode_switch.completed
     :copilot/session.tools_updated
     :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded
@@ -183,6 +185,7 @@
     :copilot/command.queued :copilot/command.execute :copilot/command.completed
     :copilot/commands.changed
     :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+    :copilot/auto_mode_switch.requested :copilot/auto_mode_switch.completed
     :copilot/sampling.requested :copilot/sampling.completed})
 
 (defn evt

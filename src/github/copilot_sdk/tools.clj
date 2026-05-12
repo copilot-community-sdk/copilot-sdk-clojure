@@ -163,10 +163,13 @@
           (when (:text resource)
             (conj! text-parts (:text resource)))
           (when (:blob resource)
-            (conj! binary-results {:data (:blob resource)
-                                   :mime-type (or (:mime-type resource) "application/octet-stream")
-                                   :type "resource"
-                                   :description (:uri resource)})))
+            (let [mt (:mime-type resource)]
+              (conj! binary-results {:data (:blob resource)
+                                     :mime-type (if (and (string? mt) (seq mt))
+                                                  mt
+                                                  "application/octet-stream")
+                                     :type "resource"
+                                     :description (:uri resource)}))))
 
         ;; Unknown content type — skip
         nil))

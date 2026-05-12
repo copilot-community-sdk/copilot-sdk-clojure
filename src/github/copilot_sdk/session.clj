@@ -51,7 +51,9 @@
    If :on-event is provided, taps a subscriber that forwards events to the handler
    on a dedicated thread. Uses a sliding buffer, so events may be dropped under
    extreme backpressure if the handler cannot keep up with the event rate."
-  [client session-id {:keys [tools on-permission-request on-user-input-request on-elicitation-request hooks workspace-path on-event config commands]}]
+  [client session-id {:keys [tools on-permission-request on-user-input-request on-elicitation-request
+                             on-exit-plan-mode on-auto-mode-switch
+                             hooks workspace-path on-event config commands]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -68,6 +70,8 @@
                             :permission-handler on-permission-request
                             :user-input-handler on-user-input-request
                             :elicitation-handler on-elicitation-request
+                            :exit-plan-mode-handler on-exit-plan-mode
+                            :auto-mode-switch-handler on-auto-mode-switch
                             :hooks hooks
                             :destroyed? false
                             :workspace-path workspace-path
@@ -688,6 +692,96 @@
            (catch Throwable t
              (log/warn t "Elicitation handler threw" {:session-id session-id})
              {:action "cancel"})))))
+   :io))
+
+(defn- exit-plan-result->wire
+  "Convert an idiomatic exit-plan-mode result map to wire format.
+   Idiom keys: :approved? (required), :selected-action, :feedback.
+   Wire keys: :approved (required), :selected-action (kept kebab; clj->wire camelizes), :feedback."
+  [result]
+  (let [m (cond-> {:approved (boolean (:approved? result))}
+            (some? (:selected-action result)) (assoc :selected-action (:selected-action result))
+            (some? (:feedback result)) (assoc :feedback (:feedback result)))]
+    (util/clj->wire m)))
+
+(defn handle-exit-plan-mode-request!
+  "Handle an incoming exitPlanMode.request RPC (upstream PR #1228).
+   The server asks the client whether to exit plan mode. Calls the
+   session's :exit-plan-mode-handler with `(request, {:session-id ...})`.
+   If the handler returns a channel, awaits its value. Returns a channel
+   with a wire-shaped response wrapped in {:result ...} or {:error ...}.
+
+   Default behavior (no handler): {:result {:approved true}}.
+   Handler must return an idiomatic map containing :approved? (required
+   boolean), optional :selected-action (string), :feedback (string).
+   Invalid handler results are treated as an error so the caller doesn't
+   silently fall through to :approved false."
+  [client session-id request]
+  (async/thread-call
+   (fn []
+     (let [handler (:exit-plan-mode-handler (session-state client session-id))]
+       (if-not handler
+         {:result {:approved true}}
+         (try
+           (let [result (handler request {:session-id session-id})
+                 result (if (channel? result) (<!! result) result)]
+             (cond
+               (not (map? result))
+               (do (log/warn "Exit-plan-mode handler returned non-map; defaulting to {:approved true}"
+                             {:session-id session-id :result result})
+                   {:result {:approved true}})
+
+               (not (contains? result :approved?))
+               (do (log/warn "Exit-plan-mode handler result is missing :approved?; defaulting to {:approved true}"
+                             {:session-id session-id :result result})
+                   {:result {:approved true}})
+
+               (not (boolean? (:approved? result)))
+               (do (log/warn "Exit-plan-mode handler result :approved? is not a boolean; defaulting to {:approved true}"
+                             {:session-id session-id :result result})
+                   {:result {:approved true}})
+
+               :else
+               {:result (exit-plan-result->wire result)}))
+           (catch Throwable t
+             (log/warn t "Exit-plan-mode handler threw" {:session-id session-id})
+             {:error {:code -32603 :message (str "Exit plan mode handler error: " (ex-message t))}})))))
+   :io))
+
+(defn- auto-mode-response->wire
+  "Coerce an auto-mode response value to wire form.
+   Accepts keyword :yes / :yes-always / :no or matching string. Returns wire string."
+  [resp]
+  (cond
+    (= resp :yes) "yes"
+    (= resp :yes-always) "yes_always"
+    (= resp :no) "no"
+    (and (string? resp) (#{"yes" "yes_always" "no"} resp)) resp
+    :else "no"))
+
+(defn handle-auto-mode-switch-request!
+  "Handle an incoming autoModeSwitch.request RPC (upstream PR #1228).
+   The server asks the client whether to switch the agent to auto mode after
+   a rate-limit event. Calls the session's :auto-mode-switch-handler with
+   `(request, {:session-id ...})`. If the handler returns a channel, awaits it.
+
+   Default behavior (no handler): {:result {:response \"no\"}}.
+   Handler may return :yes / :yes-always / :no (or matching string), or a map
+   {:response ...} with the same value."
+  [client session-id request]
+  (async/thread-call
+   (fn []
+     (let [handler (:auto-mode-switch-handler (session-state client session-id))]
+       (if-not handler
+         {:result {:response "no"}}
+         (try
+           (let [result (handler request {:session-id session-id})
+                 result (if (channel? result) (<!! result) result)
+                 resp (if (map? result) (:response result) result)]
+             {:result {:response (auto-mode-response->wire resp)}})
+           (catch Throwable t
+             (log/warn t "Auto-mode-switch handler threw" {:session-id session-id})
+             {:error {:code -32603 :message (str "Auto mode switch handler error: " (ex-message t))}})))))
    :io))
 
 (defn- deep-merge

@@ -9,6 +9,7 @@
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.tools :as tools]
+            [github.copilot-sdk.generated.event-specs]
             [github.copilot-sdk.mock-server :as mock]))
 
 ;; Fixture to manage mock server lifecycle
@@ -3434,3 +3435,225 @@
                         :event-timestamp "2026-04-20T10:00:00Z"
                         :parent-id nil}]
       (is (s/valid? :github.copilot-sdk.specs/base-event evt-no-agent)))))
+
+;; =============================================================================
+;; v1.0.0-beta.3 upstream sync tests
+;; =============================================================================
+
+;; --- enableSessionTelemetry (upstream PR #1224) -----------------------------
+
+(deftest test-enable-session-telemetry-on-wire
+  (testing "enableSessionTelemetry is forwarded in session.create when true"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :enable-session-telemetry? true})
+          create-params (get @seen "session.create")]
+      (is (true? (:enableSessionTelemetry create-params)))))
+
+  (testing "enableSessionTelemetry is forwarded in session.create when false"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :enable-session-telemetry? false})
+          create-params (get @seen "session.create")]
+      (is (false? (:enableSessionTelemetry create-params)))))
+
+  (testing "enableSessionTelemetry is omitted when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :enableSessionTelemetry)))))
+
+  (testing "enableSessionTelemetry is forwarded in session.resume"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :enable-session-telemetry? false})
+          resume-params (get @seen "session.resume")]
+      (is (false? (:enableSessionTelemetry resume-params))))))
+
+;; --- Exit Plan Mode handler (upstream PR #1228) -----------------------------
+
+(deftest test-request-exit-plan-mode-wire-flag
+  (testing "requestExitPlanMode is true when :on-exit-plan-mode is provided"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :on-exit-plan-mode (fn [_req _ctx] {:approved? true})})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (= 1 (count create-rpcs)))
+      (is (true? (:requestExitPlanMode (:params (first create-rpcs)))))))
+
+  (testing "requestExitPlanMode is false when no handler"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (false? (:requestExitPlanMode (:params (first create-rpcs))))))))
+
+(deftest test-exit-plan-mode-handler-invoked
+  (testing "exitPlanMode.request calls registered handler"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-exit-plan-mode
+                                       (fn [request ctx]
+                                         (reset! handler-called {:request request :ctx ctx})
+                                         {:approved? true :selected-action "continue" :feedback "ok"})})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "exitPlanMode.request"
+                                           {:sessionId session-id
+                                            :summary "Plan summary"
+                                            :planContent "1. Step\n2. Step"
+                                            :actions ["continue" "abort"]
+                                            :recommendedAction "continue"})]
+      (is (some? @handler-called))
+      (is (= "Plan summary" (get-in @handler-called [:request :summary])))
+      (is (= ["continue" "abort"] (get-in @handler-called [:request :actions])))
+      (is (= "continue" (get-in @handler-called [:request :recommended-action])))
+      (is (= session-id (get-in @handler-called [:ctx :session-id])))
+      (is (true? (get-in response [:result :approved])))
+      (is (= "continue" (get-in response [:result :selectedAction])))
+      (is (= "ok" (get-in response [:result :feedback]))))))
+
+(deftest test-exit-plan-mode-no-handler-default-approves
+  (testing "exitPlanMode.request without handler returns {:approved true}"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "exitPlanMode.request"
+                                           {:sessionId session-id
+                                            :summary "p"
+                                            :actions ["go"]
+                                            :recommendedAction "go"})]
+      (is (true? (get-in response [:result :approved]))))))
+
+;; --- Auto Mode Switch handler (upstream PR #1228) ---------------------------
+
+(deftest test-request-auto-mode-switch-wire-flag
+  (testing "requestAutoModeSwitch is true when :on-auto-mode-switch is provided"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :on-auto-mode-switch (fn [_req _ctx] :no)})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (= 1 (count create-rpcs)))
+      (is (true? (:requestAutoModeSwitch (:params (first create-rpcs)))))))
+
+  (testing "requestAutoModeSwitch is false when no handler"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (false? (:requestAutoModeSwitch (:params (first create-rpcs))))))))
+
+(deftest test-auto-mode-switch-handler-invoked
+  (testing "autoModeSwitch.request calls handler; response wrapped in {response}"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-auto-mode-switch
+                                       (fn [request ctx]
+                                         (reset! handler-called {:request request :ctx ctx})
+                                         :yes-always)})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "autoModeSwitch.request"
+                                           {:sessionId session-id
+                                            :errorCode "rate_limited"
+                                            :retryAfterSeconds 60})]
+      (is (some? @handler-called))
+      (is (= "rate_limited" (get-in @handler-called [:request :error-code])))
+      (is (= 60 (get-in @handler-called [:request :retry-after-seconds])))
+      (is (= session-id (get-in @handler-called [:ctx :session-id])))
+      (is (= "yes_always" (get-in response [:result :response]))))))
+
+(deftest test-auto-mode-switch-handler-string-response
+  (testing "handler may return wire string directly"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :on-auto-mode-switch (fn [_ _] "yes")})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "autoModeSwitch.request"
+                                           {:sessionId session-id})]
+      (is (= "yes" (get-in response [:result :response]))))))
+
+(deftest test-auto-mode-switch-no-handler-default-no
+  (testing "autoModeSwitch.request without handler returns {:response \"no\"}"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "autoModeSwitch.request"
+                                           {:sessionId session-id})]
+      (is (= "no" (get-in response [:result :response]))))))
+
+;; --- MCP binary tool result mime-type fallback (upstream PR #1222) ----------
+
+(deftest test-convert-mcp-call-tool-result-empty-mime-type
+  (testing "empty mime-type string falls back to application/octet-stream"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "resource"
+                              :resource {:uri "file:///x"
+                                         :blob "blobdata"
+                                         :mime-type ""}}]})]
+      (is (= 1 (count (:binary-results-for-llm result))))
+      (is (= "application/octet-stream"
+             (:mime-type (first (:binary-results-for-llm result))))))))
+
+(deftest test-convert-mcp-call-tool-result-non-string-mime-type
+  (testing "non-string mime-type falls back to application/octet-stream"
+    (let [result (tools/convert-mcp-call-tool-result
+                  {:content [{:type "resource"
+                              :resource {:uri "file:///x"
+                                         :blob "blobdata"
+                                         :mime-type 123}}]})]
+      (is (= "application/octet-stream"
+             (:mime-type (first (:binary-results-for-llm result))))))))
+
+;; --- AbortReason / SubagentStartedData.model (upstream PR #1225 codegen) -----
+
+(deftest test-abort-reason-enum
+  (testing "wire spec for abort reason is a closed enum"
+    (is (s/valid? :github.copilot-sdk.generated.event-specs/reason "user_initiated"))
+    (is (s/valid? :github.copilot-sdk.generated.event-specs/reason "remote_command"))
+    (is (s/valid? :github.copilot-sdk.generated.event-specs/reason "user_abort"))
+    (is (not (s/valid? :github.copilot-sdk.generated.event-specs/reason "arbitrary_reason")))))
+
+(deftest test-subagent-started-model-field
+  (testing "idiom ::subagent.started-data spec accepts optional :model"
+    (is (s/valid? :github.copilot-sdk.specs/subagent.started-data
+                  {:tool-call-id "tc-1"
+                   :agent-name "rubber-duck"
+                   :agent-display-name "Rubber Duck"
+                   :model "gpt-5.4"}))
+    (is (s/valid? :github.copilot-sdk.specs/subagent.started-data
+                  {:tool-call-id "tc-1"
+                   :agent-name "rubber-duck"
+                   :agent-display-name "Rubber Duck"}))))
