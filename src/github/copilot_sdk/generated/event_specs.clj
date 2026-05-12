@@ -257,7 +257,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/quota-snapshots clojure.core/map?)
 
-(s/def :github.copilot-sdk.generated.event-specs/reason clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/reason #{"user_abort" "remote_command" "user_initiated"})
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-effort clojure.core/string?)
 
@@ -541,7 +541,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/subagent.selected-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/agent-display-name :github.copilot-sdk.generated.event-specs/agent-name :github.copilot-sdk.generated.event-specs/tools]))
 
-(s/def :github.copilot-sdk.generated.event-specs/subagent.started-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/agent-description :github.copilot-sdk.generated.event-specs/agent-display-name :github.copilot-sdk.generated.event-specs/agent-name :github.copilot-sdk.generated.event-specs/tool-call-id]))
+(s/def :github.copilot-sdk.generated.event-specs/subagent.started-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/agent-description :github.copilot-sdk.generated.event-specs/agent-display-name :github.copilot-sdk.generated.event-specs/agent-name :github.copilot-sdk.generated.event-specs/tool-call-id] :opt-un [:github.copilot-sdk.generated.event-specs/model]))
 
 (s/def :github.copilot-sdk.generated.event-specs/system.message-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/content :github.copilot-sdk.generated.event-specs/role] :opt-un [:github.copilot-sdk.generated.event-specs/metadata :github.copilot-sdk.generated.event-specs/name]))
 

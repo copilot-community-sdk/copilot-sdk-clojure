@@ -3,6 +3,60 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.0-beta.3 sync)
+- **`:enable-session-telemetry?` session config** — boolean. When omitted
+  (default) or `true`, the CLI's internal session telemetry is enabled for
+  GitHub-authenticated sessions. Set to `false` to disable. With a custom
+  `:provider` (BYOK), session telemetry is always disabled regardless of this
+  setting. Independent of the OpenTelemetry config in `:telemetry`. Accepted in
+  both `create-session` and `resume-session`. Wire key: `enableSessionTelemetry`.
+  (upstream PR #1224)
+- **`:on-exit-plan-mode` session handler** — restores the Exit Plan Mode
+  request RPC. When the SDK is configured with this handler, the CLI sends an
+  `exitPlanMode.request` RPC asking the client to approve leaving plan mode.
+  The handler receives `(request, {:session-id ...})` where `request` has
+  `:summary`, optional `:plan-content`, `:actions` (vec of string), and
+  `:recommended-action`. Returns an idiomatic map with `:approved?` (required
+  boolean), optional `:selected-action`, `:feedback`. When omitted, the SDK
+  auto-replies with the wire-shaped equivalent of `{:approved? true}` (i.e.,
+  `{"approved": true}` on the wire) and sets the
+  `requestExitPlanMode` capability flag to `false`. Accepted in both
+  `create-session` and `resume-session`. (upstream PR #1228)
+- **`:on-auto-mode-switch` session handler** — restores the Auto Mode Switch
+  request RPC. When the SDK is configured with this handler, the CLI sends an
+  `autoModeSwitch.request` RPC asking the client whether to switch the agent
+  to auto mode after a rate-limit event. The handler receives
+  `(request, {:session-id ...})` where `request` may include `:error-code`
+  and `:retry-after-seconds`. Returns `:yes`, `:yes-always`, or `:no`
+  (keyword or matching string), or a map `{:response ...}` with the same.
+  When omitted, the SDK auto-replies with the wire-shaped equivalent of
+  `:no` (i.e., `{"response": "no"}` on the wire) and sets the
+  `requestAutoModeSwitch` capability flag to `false`. Accepted in both
+  `create-session` and `resume-session`. (upstream PR #1228)
+- **`AbortReason` wire enum** — `abort` events now carry a `:reason`
+  field that is a closed enum of `"user_initiated"`, `"remote_command"`,
+  `"user_abort"`. Validated by the regenerated wire spec. (upstream
+  schema 1.0.44-2)
+- **`subagent.started.model` field** — `subagent.started` events now expose
+  an optional `:model` field identifying the model the sub-agent will run
+  against. Both the regenerated wire spec and the hand-curated idiom spec
+  (`::specs/subagent.started-data`) accept it. (upstream schema 1.0.44-2)
+- **`session.remote.enable` / `session.remote.disable` (schema-only)** — the
+  regenerated `schemas/api.schema.json` introduces two new experimental
+  RPC methods for enabling/disabling remote session access, along with a
+  `RemoteEnableResult` definition. **Not yet surfaced in the Clojure
+  public API** — the schemas are tracked here so future ports can lift
+  them without another schema bump. (upstream schema 1.0.44-2)
+
+### Changed (v1.0.0-beta.3 sync)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.42` to
+  `1.0.44-2`; generated wire specs and coercions regenerated.
+- **MCP binary tool result mime-type fallback** — when an MCP tool returns a
+  blob resource whose `:mime-type` is missing, the empty string, or any
+  non-string value, the SDK now falls back to `"application/octet-stream"`
+  (previously only `nil` triggered the fallback). Matches upstream Node.js
+  behavior. (upstream PR #1222)
+
 ### Added (v1.0.0-beta.2 sync)
 - **`:remote?` client option** — when `true`, the SDK appends `--remote` to
   the spawned CLI args so the headless CLI exposes its session over a

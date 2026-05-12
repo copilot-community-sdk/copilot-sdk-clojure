@@ -648,6 +648,22 @@
                                                 (log/debug "Permission response for session " session-id ": " result)
                                                 {:result perm-response})))))
 
+                                      ;; Exit Plan Mode request (upstream PR #1228)
+                                      "exitPlanMode.request"
+                                      (let [{:keys [session-id]} params
+                                            request (dissoc params :session-id)]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-exit-plan-mode-request! client session-id request))))
+
+                                      ;; Auto Mode Switch request (upstream PR #1228)
+                                      "autoModeSwitch.request"
+                                      (let [{:keys [session-id]} params
+                                            request (dissoc params :session-id)]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-auto-mode-switch-request! client session-id request))))
+
                                       ;; User input request (PR #269)
                                       "userInput.request"
                                       (let [{:keys [session-id question choices allow-freeform]} params]
@@ -1473,9 +1489,13 @@
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
+      true (assoc :request-exit-plan-mode (boolean (:on-exit-plan-mode config)))
+      true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
       true (assoc :hooks (boolean (:hooks config)))
       (some? (:enable-config-discovery config))
       (assoc :enable-config-discovery (:enable-config-discovery config))
+      (some? (:enable-session-telemetry? config))
+      (assoc :enable-session-telemetry (:enable-session-telemetry? config))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :include-sub-agent-streaming-events
@@ -1543,6 +1563,8 @@
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
+      true (assoc :request-exit-plan-mode (boolean (:on-exit-plan-mode config)))
+      true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
@@ -1550,6 +1572,8 @@
       (assoc :continue-pending-work (:continue-pending-work? config))
       (some? (:enable-config-discovery config))
       (assoc :enable-config-discovery (:enable-config-discovery config))
+      (some? (:enable-session-telemetry? config))
+      (assoc :enable-session-telemetry (:enable-session-telemetry? config))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :include-sub-agent-streaming-events
@@ -1569,6 +1593,8 @@
                            :on-permission-request (:on-permission-request config)
                            :on-user-input-request (:on-user-input-request config)
                            :on-elicitation-request (:on-elicitation-request config)
+                           :on-exit-plan-mode (:on-exit-plan-mode config)
+                           :on-auto-mode-switch (:on-auto-mode-switch config)
                            :hooks (:hooks config)
                            :on-event (:on-event config)
                            :config config}))
@@ -1690,6 +1716,11 @@
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)
+   - :enable-session-telemetry? - Boolean. See `create-session` (upstream PR #1224).
+   - :on-exit-plan-mode  - Handler for exitPlanMode.request RPCs. See `create-session`
+                           (upstream PR #1228).
+   - :on-auto-mode-switch - Handler for autoModeSwitch.request RPCs. See `create-session`
+                            (upstream PR #1228).
    
    Returns a CopilotSession."
   [client session-id config]
