@@ -477,7 +477,7 @@
 ;; :plan-content, :actions (vec string), :recommended-action. Result map has
 ;; :approved? (required boolean), optional :selected-action and :feedback.
 (s/def ::plan-content string?)
-(s/def ::actions (s/coll-of string?))
+(s/def ::actions (s/coll-of string? :kind vector?))
 (s/def ::recommended-action string?)
 (s/def ::exit-plan-mode-request
   (s/keys :req-un [::summary ::actions ::recommended-action]

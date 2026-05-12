@@ -39,6 +39,12 @@ All notable changes to this project will be documented in this file. This change
   an optional `:model` field identifying the model the sub-agent will run
   against. Both the regenerated wire spec and the hand-curated idiom spec
   (`::specs/subagent.started-data`) accept it. (upstream schema 1.0.44-2)
+- **`session.remote.enable` / `session.remote.disable` (schema-only)** — the
+  regenerated `schemas/api.schema.json` introduces two new experimental
+  RPC methods for enabling/disabling remote session access, along with a
+  `RemoteEnableResult` definition. **Not yet surfaced in the Clojure
+  public API** — the schemas are tracked here so future ports can lift
+  them without another schema bump. (upstream schema 1.0.44-2)
 
 ### Changed (v1.0.0-beta.3 sync)
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.42` to

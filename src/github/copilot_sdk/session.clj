@@ -714,8 +714,11 @@
    Default behavior (no handler): {:result {:approved true}}.
    Handler must return an idiomatic map containing :approved? (required
    boolean), optional :selected-action (string), :feedback (string).
-   Invalid handler results are treated as an error so the caller doesn't
-   silently fall through to :approved false."
+   If the handler result is malformed (non-map, missing :approved?, or
+   :approved? is not a boolean), a warning is logged and the response
+   falls back to {:result {:approved true}} (matching the no-handler
+   default). Exceptions thrown by the handler are converted to
+   {:error {:code -32603 :message ...}}."
   [client session-id request]
   (async/thread-call
    (fn []
