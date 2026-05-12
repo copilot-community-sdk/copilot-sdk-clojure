@@ -694,10 +694,12 @@
              {:action "cancel"})))))
    :io))
 
-(defn- exit-plan-result->wire
-  "Convert an idiomatic exit-plan-mode result map to wire format.
-   Idiom keys: :approved? (required), :selected-action, :feedback.
-   Wire keys: :approved (required), :selected-action (kept kebab; clj->wire camelizes), :feedback.
+(defn- exit-plan-result->idiom
+  "Convert an idiomatic exit-plan-mode handler result to the SDK-internal
+   idiomatic response map that the protocol layer will wire-convert.
+   Idiom keys: :approved? (required) → re-keyed to :approved (no ? suffix),
+   optional :selected-action, :feedback (carried through; the protocol layer
+   camelizes them to selectedAction / feedback).
    Optional fields whose values are not strings are dropped with a logged
    warning so we never forward malformed payloads to the CLI."
   [result]
@@ -708,11 +710,10 @@
                               (string? v) (assoc m k v)
                               :else (do (log/warn "Exit-plan-mode handler result has non-string value for optional key; dropping"
                                                   {:key k :value v})
-                                        m))))
-        m (-> {:approved (boolean (:approved? result))}
-              (drop-non-string :selected-action)
-              (drop-non-string :feedback))]
-    (util/clj->wire m)))
+                                        m))))]
+    (-> {:approved (boolean (:approved? result))}
+        (drop-non-string :selected-action)
+        (drop-non-string :feedback))))
 
 (defn handle-exit-plan-mode-request!
   "Handle an incoming exitPlanMode.request RPC (upstream PR #1228).
@@ -755,7 +756,7 @@
                    {:result {:approved true}})
 
                :else
-               {:result (exit-plan-result->wire result)}))
+               {:result (exit-plan-result->idiom result)}))
            (catch Throwable t
              (log/warn t "Exit-plan-mode handler threw" {:session-id session-id})
              {:error {:code -32603 :message (str "Exit plan mode handler error: " (ex-message t))}})))))
