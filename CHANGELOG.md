@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (release tooling)
+- **Version scheme — Maven qualifier support.** The release workflow,
+  `script/release.sh`, and `build.clj` (`sync-version`, `bump-version`)
+  now accept upstream versions carrying Maven pre-release qualifiers
+  (e.g., `1.0.0-beta.3` in addition to `0.1.23`) and the corresponding
+  4th-segment forms (e.g., `1.0.0-beta.3.0`, `1.0.0-beta.3.0-SNAPSHOT`).
+  The full grammar is `X.Y.Z[-(alpha|beta|rc).M].N[-SNAPSHOT]`. Maven and
+  tools.deps already sort these correctly; only our own validation regex
+  was too strict.
+
 ### Added (v1.0.0-beta.3 sync)
 - **`:enable-session-telemetry?` session config** — boolean. When omitted
   (default) or `true`, the CLI's internal session telemetry is enabled for

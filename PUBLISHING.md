@@ -133,8 +133,8 @@ Go to **Actions → Release → Run workflow** and fill in the inputs below.
 | Input | Type | Description |
 |-------|------|-------------|
 | `version_strategy` | choice | `none` (use current), `sync-upstream`, `bump-clj-patch`, or `set-version` |
-| `upstream_version` | string | Required for `sync-upstream`; 3-segment version (e.g., `0.1.23`) |
-| `explicit_version` | string | Required for `set-version`; full version (e.g., `0.1.23.1` or `0.1.23.1-SNAPSHOT`) |
+| `upstream_version` | string | Required for `sync-upstream`; upstream version, e.g., `0.1.23` or `1.0.0-beta.3` |
+| `explicit_version` | string | Required for `set-version`; full version with Clojure patch, e.g., `0.1.23.1`, `0.1.23.1-SNAPSHOT`, or `1.0.0-beta.3.0` |
 | `snapshot` | boolean | Append `-SNAPSHOT` for `sync-upstream`/`bump-clj-patch` |
 
 When `version_strategy` is not `none`, the workflow:

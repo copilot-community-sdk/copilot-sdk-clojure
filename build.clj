@@ -252,48 +252,65 @@
     (spit "README.md" updated))
   (println "Updated: build.clj, README.md"))
 
+(def ^:private upstream-version-re
+  "Matches an upstream version: X.Y.Z or X.Y.Z-(alpha|beta|rc).N."
+  #"^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[0-9]+)?$")
+
+(def ^:private full-version-re
+  "Matches a full Clojure-SDK version: <upstream>.<clj-patch>(-SNAPSHOT)?.
+   Group 1 captures the upstream portion; group 2 captures the Clojure patch."
+  #"^([0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[0-9]+)?)\.([0-9]+)(-SNAPSHOT)?$")
+
 (defn- parse-version
-  "Parse a 4-segment version string into [upstream-major upstream-minor upstream-patch clj-patch]."
+  "Parse a version string into [upstream-string clj-patch].
+   Accepts:
+   - X.Y.Z          (treated as upstream with clj-patch 0)
+   - X.Y.Z.N        (4-segment numeric)
+   - X.Y.Z-Q.M.N    (upstream with Maven qualifier, e.g., 1.0.0-beta.3.0)
+   The optional trailing -SNAPSHOT is stripped before parsing."
   [v]
-  (let [base (str/replace v #"-SNAPSHOT$" "")
-        parts (str/split base #"\.")
-        nums (mapv parse-long parts)]
-    (case (count nums)
-      3 (conj nums 0)
-      4 nums
-      (throw (ex-info (str "Expected 3 or 4 version segments, got: " v) {:version v})))))
+  (let [base (str/replace v #"-SNAPSHOT$" "")]
+    (cond
+      (re-matches upstream-version-re base) [base 0]
+      :else (if-let [[_ upstream clj-patch _] (re-matches full-version-re base)]
+              [upstream (parse-long clj-patch)]
+              (throw (ex-info (str "Unrecognized version format: " v) {:version v}))))))
 
 (defn sync-version
   "Set version to match an upstream copilot-sdk release.
-   The version format is UPSTREAM.PATCH where UPSTREAM is the 3-segment
-   upstream version and PATCH is a Clojure-specific patch counter (starts at 0).
+   The version format is <upstream>.<clj-patch> where upstream is either the
+   3-segment upstream version (e.g., \"0.1.22\") or includes a Maven qualifier
+   (e.g., \"1.0.0-beta.3\"), and clj-patch is a Clojure-specific patch counter
+   (starts at 0).
 
    Usage: clj -T:build sync-version :upstream '\"0.1.22\"'
-          clj -T:build sync-version :upstream '\"0.1.23\"' :snapshot true"
+          clj -T:build sync-version :upstream '\"1.0.0-beta.3\"' :snapshot true"
   [{:keys [upstream snapshot] :or {snapshot false}}]
   (when-not upstream
-    (throw (ex-info "Required: :upstream version (e.g., :upstream '\"0.1.22\"')" {})))
-  (let [parts (str/split upstream #"\.")
-        _ (when-not (= 3 (count parts))
-            (throw (ex-info "Upstream version must be 3 segments (e.g., \"0.1.22\")" {:upstream upstream})))
-        new-version (str upstream ".0" (when snapshot "-SNAPSHOT"))]
+    (throw (ex-info "Required: :upstream version (e.g., :upstream '\"0.1.22\"' or '\"1.0.0-beta.3\"')" {})))
+  (when-not (re-matches upstream-version-re upstream)
+    (throw (ex-info "Upstream version must match X.Y.Z or X.Y.Z-(alpha|beta|rc).N (e.g., \"0.1.22\" or \"1.0.0-beta.3\")"
+                    {:upstream upstream})))
+  (let [new-version (str upstream ".0" (when snapshot "-SNAPSHOT"))]
     (update-version-in-files! new-version)
     (println (str "Synced version to upstream " upstream ": " version " -> " new-version))
     new-version))
 
 (defn bump-version
   "Bump the Clojure-specific patch segment of the version.
-   Version format: UPSTREAM_MAJOR.UPSTREAM_MINOR.UPSTREAM_PATCH.CLJ_PATCH
+   Version format: <upstream>.<clj-patch> where upstream may be X.Y.Z or
+   X.Y.Z-(alpha|beta|rc).N (Maven qualifier).
 
    Usage: clj -T:build bump-version                    ; 0.1.22.0 -> 0.1.22.1
           clj -T:build bump-version :snapshot true      ; 0.1.22.0 -> 0.1.22.1-SNAPSHOT
-          clj -T:build bump-version :version '\"0.1.23.0\"'  ; explicit version"
+          clj -T:build bump-version :version '\"0.1.23.0\"'  ; explicit version
+          clj -T:build bump-version                    ; 1.0.0-beta.3.0 -> 1.0.0-beta.3.1"
   [{:keys [version snapshot] :or {snapshot false}}]
   (let [current (str/replace build/version #"-SNAPSHOT$" "")
-        [maj min patch clj-patch] (parse-version current)
+        [upstream clj-patch] (parse-version current)
         new-version (cond
                       version version
-                      :else (format "%d.%d.%d.%d" maj min patch (inc clj-patch)))
+                      :else (str upstream "." (inc clj-patch)))
         new-version (if snapshot (str new-version "-SNAPSHOT") new-version)]
     (update-version-in-files! new-version)
     (println (str "Bumped version: " build/version " -> " new-version))
