@@ -3,6 +3,57 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.0-beta.3 CLI sync)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.44-2` to
+  `1.0.46` (current `latest` on npm). Generated wire specs and coercions
+  regenerated.
+- **Extension permission kinds** — `::permission-kind` accepts the new
+  upstream values `:extension-management` and `:extension-permission-access`,
+  emitted by the CLI for extension lifecycle and capability-access prompts.
+  (upstream PR #1239, CLI 1.0.44-3)
+- **`:detached-from-spawning-parent-session-id` on `session.start` events** —
+  when a session continues another session's context (e.g., a detached
+  headless rem-agent run launched on the parent's interactive shutdown),
+  `session.start` now exposes the spawning parent's session id. Telemetry
+  from such sessions is reported under the parent's `session_id`.
+  Accepted by both the regenerated wire spec and the hand-curated
+  `::specs/session.start-data`. (upstream PR #1239, CLI 1.0.44-3)
+- **Anthropic advisor block fields on `assistant.message`** —
+  `::assistant.message-data` now accepts the optional `:anthropic-advisor-blocks`
+  (raw Anthropic content array with advisor blocks, for verbatim replay),
+  `:anthropic-advisor-model`, and `:model` (model that produced the response,
+  when known). The regenerated wire spec already exposed these; the
+  hand-curated idiom spec now mirrors them. (upstream PR #1263, CLI 1.0.45)
+- **`:model-picker-category` / `:model-picker-price-category` on `list-models`** —
+  the regenerated `Model` shape carries upstream's new model-picker
+  categorization fields (`"lightweight" | "versatile" | "powerful"` and
+  `"low" | "medium" | "high" | "very_high"`). `parse-model-info` now
+  surfaces both as idiomatic strings (open enum) on each entry returned by
+  `copilot/list-models`. (upstream PR #1270, CLI 1.0.46)
+- **`session/respond-to-queued-command!` (experimental)** — wraps the new
+  `session.commands.respondToQueuedCommand` RPC for acknowledging
+  `:copilot/command.queued` events. Accepts
+  `{:request-id ... :handled? true/false :stop-processing-queue? bool?}` and
+  forwards the wire shape
+  `{:requestId ..., :result {:handled bool, :stopProcessingQueue bool?}}`.
+  Marked experimental, mirroring upstream's exposure of this only via the
+  generated low-level RPC. (upstream PR #1263, CLI 1.0.45)
+
+### Tracked-but-not-ported (post-v1.0.0-beta.3 CLI sync)
+- **`session.tasks.sendMessage` (experimental)** — the upstream Tasks API
+  (`session.tasks.*`) is intentionally not surfaced in the Clojure SDK
+  yet; the new `sendMessage` RPC is tracked here for a future port.
+  (upstream PR #1239, CLI 1.0.44-3)
+- **`UserToolSessionApproval` extension kinds** — upstream adds
+  `extension-management` and `extension-permission-access` to the
+  `UserToolSessionApproval` discriminated union. The Clojure idiom spec
+  for `::approval` is intentionally broad (`map?`), so these payloads pass
+  through unchanged; only the wire-side discriminator changed.
+  (upstream PR #1263, CLI 1.0.45)
+- **`WorkspacesGetWorkspaceResult.session_sync_level` removal** — upstream
+  dropped this field. The Clojure SDK never surfaced it; no change needed.
+  (upstream PR #1239, CLI 1.0.44-3)
+
 ## [1.0.0-beta.3.0] - 2026-05-12
 ### Changed (release tooling)
 - **Version scheme — Maven qualifier support.** The release workflow,

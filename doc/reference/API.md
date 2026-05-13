@@ -415,6 +415,9 @@ Requires authentication (unless `:on-list-models` is provided). Returns a vector
   :model-policy {:policy-state "enabled"
                  :terms "..."}
   :model-billing {:multiplier 1.0}
+  ;; Model picker categorization (CLI 1.0.46+):
+  :model-picker-category "powerful"            ;; "lightweight" | "versatile" | "powerful"
+  :model-picker-price-category "very_high"     ;; "low" | "medium" | "high" | "very_high"
   ;; For models supporting reasoning:
   :supported-reasoning-efforts ["low" "medium" "high" "xhigh"]
   :default-reasoning-effort "medium"}
@@ -1013,6 +1016,29 @@ Get the client that owns this session.
 | `session/skills-enable!` | Enable a skill by name. |
 | `session/skills-disable!` | Disable a skill by name. |
 | `session/skills-reload!` | Reload all skills. |
+
+**Queued commands**
+
+The CLI emits `:copilot/command.queued` events when a slash-command is
+dispatched for client-side execution. Each event carries a `:request-id`
+and `:command`. Clients respond via `respond-to-queued-command!`:
+
+```clojure
+;; Inside an event handler that observes :copilot/command.queued
+(session/respond-to-queued-command! session
+                                    {:request-id (:request-id event-data)
+                                     :handled? true
+                                     :stop-processing-queue? false})
+
+;; Or, to let the CLI fall back to default handling:
+(session/respond-to-queued-command! session
+                                    {:request-id (:request-id event-data)
+                                     :handled? false})
+```
+
+| Function | Description |
+|----------|-------------|
+| `session/respond-to-queued-command!` | Acknowledge a `command.queued` event (experimental). |
 
 **MCP Servers**
 
