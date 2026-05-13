@@ -1607,6 +1607,85 @@
 ;; Last Session ID Tests
 ;; -----------------------------------------------------------------------------
 
+(deftest test-cli-1.0.46-sync-spec-additions
+  (testing "::permission-kind accepts new extension-* kinds (CLI 1.0.44-3)"
+    (is (s/valid? :github.copilot-sdk.specs/permission-kind :extension-management))
+    (is (s/valid? :github.copilot-sdk.specs/permission-kind :extension-permission-access))
+    (is (false? (s/valid? :github.copilot-sdk.specs/permission-kind :bogus-kind))))
+
+  (testing "::assistant.message-data accepts new advisor + model fields (CLI 1.0.45)"
+    (is (s/valid? :github.copilot-sdk.specs/assistant.message-data
+                  {:message-id "m1"
+                   :content "answer"
+                   :anthropic-advisor-blocks [{:type "server_tool_use"}]
+                   :anthropic-advisor-model "claude-advisor"
+                   :model "gpt-5"})))
+
+  (testing "::session.start-data accepts :detached-from-spawning-parent-session-id (CLI 1.0.44-3)"
+    (is (s/valid? :github.copilot-sdk.specs/session.start-data
+                  {:session-id "s1"
+                   :detached-from-spawning-parent-session-id "parent-s0"})))
+
+  (testing "::model-info accepts model-picker categorization fields (CLI 1.0.46)"
+    (is (s/valid? :github.copilot-sdk.specs/model-info
+                  {:id "m1"
+                   :name "Model 1"
+                   :model-picker-category "powerful"
+                   :model-picker-price-category "very_high"}))
+    ;; Open string enum — unknown values should still validate as strings.
+    (is (s/valid? :github.copilot-sdk.specs/model-info
+                  {:id "m1"
+                   :name "Model 1"
+                   :model-picker-category "future-tier-not-yet-defined"}))))
+
+(deftest test-list-models-surfaces-model-picker-fields
+  (testing "list-models exposes modelPickerCategory and modelPickerPriceCategory (CLI 1.0.46)"
+    (mock/set-request-hook! *mock-server*
+                            (fn [method _params]
+                              (when (= "models.list" method)
+                                {:github.copilot-sdk.mock-server/merge-response
+                                 {:models [{:id "m-picker"
+                                            :name "Picker Model"
+                                            :modelPickerCategory "powerful"
+                                            :modelPickerPriceCategory "very_high"}]}})))
+    (let [models (sdk/list-models *test-client*)
+          m (first models)]
+      (is (= "m-picker" (:id m)))
+      (is (= "powerful" (:model-picker-category m)))
+      (is (= "very_high" (:model-picker-price-category m))))))
+
+(deftest test-respond-to-queued-command
+  (testing "respond-to-queued-command! sends correct wire shape with handled=true"
+    (let [requests (atom [])
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
+      (mock/set-request-hook! *mock-server*
+                              (fn [method params]
+                                (swap! requests conj {:method method :params params})
+                                nil))
+      (session/respond-to-queued-command! session
+                                          {:request-id "cmd-q-1"
+                                           :handled? true
+                                           :stop-processing-queue? true})
+      (let [req (first (filter #(= "session.commands.respondToQueuedCommand" (:method %)) @requests))]
+        (is (some? req))
+        (is (= "cmd-q-1" (:requestId (:params req))))
+        (is (= {:handled true :stopProcessingQueue true} (:result (:params req)))))))
+
+  (testing "respond-to-queued-command! sends correct wire shape with handled=false"
+    (let [requests (atom [])
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
+      (mock/set-request-hook! *mock-server*
+                              (fn [method params]
+                                (swap! requests conj {:method method :params params})
+                                nil))
+      (session/respond-to-queued-command! session
+                                          {:request-id "cmd-q-2"
+                                           :handled? false})
+      (let [req (first (filter #(= "session.commands.respondToQueuedCommand" (:method %)) @requests))]
+        (is (some? req))
+        (is (= "cmd-q-2" (:requestId (:params req))))
+        (is (= {:handled false} (:result (:params req))))))))
+
 (deftest test-send-async-untaps-on-send-failure
   (testing "send-async cleans up tap when RPC fails"
     (log/info "Warnings expected in this test: async send RPC error is deliberate.")

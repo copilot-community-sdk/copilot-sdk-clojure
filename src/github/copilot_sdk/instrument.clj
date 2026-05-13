@@ -309,6 +309,12 @@
   :args (s/cat :session ::specs/session)
   :ret any?)
 
+(register-fdef! github.copilot-sdk.session/respond-to-queued-command!
+  :args (s/cat :session ::specs/session
+               :params (s/keys :req-un [::specs/request-id ::specs/handled?]
+                               :opt-un [::specs/stop-processing-queue?]))
+  :ret any?)
+
 (register-fdef! github.copilot-sdk.session/mcp-list
   :args (s/cat :session ::specs/session)
   :ret map?)

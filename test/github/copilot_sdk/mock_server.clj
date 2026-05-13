@@ -341,6 +341,7 @@
                  "session.log" (handle-session-log server params)
                  "session.permissions.handlePendingPermissionRequest" {:ok true}
                  "session.commands.handlePendingCommand" {:ok true}
+                 "session.commands.respondToQueuedCommand" {:success true}
                  "session.tools.handlePendingToolCall" {:ok true}
                  "session.ui.handlePendingElicitation" {:ok true}
                  "session.mode.get" {:mode "interactive"}
