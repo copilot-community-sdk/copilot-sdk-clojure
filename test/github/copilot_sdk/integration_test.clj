@@ -1684,7 +1684,23 @@
       (let [req (first (filter #(= "session.commands.respondToQueuedCommand" (:method %)) @requests))]
         (is (some? req))
         (is (= "cmd-q-2" (:requestId (:params req))))
-        (is (= {:handled false} (:result (:params req))))))))
+        (is (= {:handled false} (:result (:params req)))))))
+
+  (testing "respond-to-queued-command! forwards explicit stop-processing-queue?=false"
+    (let [requests (atom [])
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
+      (mock/set-request-hook! *mock-server*
+                              (fn [method params]
+                                (swap! requests conj {:method method :params params})
+                                nil))
+      (session/respond-to-queued-command! session
+                                          {:request-id "cmd-q-3"
+                                           :handled? true
+                                           :stop-processing-queue? false})
+      (let [req (first (filter #(= "session.commands.respondToQueuedCommand" (:method %)) @requests))]
+        (is (some? req))
+        (is (= {:handled true :stopProcessingQueue false} (:result (:params req)))
+            "explicit false should be forwarded on the wire (not silently dropped)")))))
 
 (deftest test-send-async-untaps-on-send-failure
   (testing "send-async cleans up tap when RPC fails"

@@ -311,8 +311,14 @@
 
 (register-fdef! github.copilot-sdk.session/respond-to-queued-command!
   :args (s/cat :session ::specs/session
-               :params (s/keys :req-un [::specs/request-id ::specs/handled?]
-                               :opt-un [::specs/stop-processing-queue?]))
+               :params (s/and
+                        (s/keys :req-un [::specs/request-id ::specs/handled?]
+                                :opt-un [::specs/stop-processing-queue?])
+                        ;; Wire schema: stopProcessingQueue is only valid on the
+                        ;; handled=true branch (QueuedCommandHandled). Reject
+                        ;; stop-processing-queue? alongside handled?=false.
+                        #(or (:handled? %)
+                             (not (contains? % :stop-processing-queue?)))))
   :ret any?)
 
 (register-fdef! github.copilot-sdk.session/mcp-list

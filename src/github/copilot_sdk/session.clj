@@ -1437,12 +1437,12 @@
    Marked experimental — the upstream Node SDK exposes this only via the
    generated low-level `commands.respondToQueuedCommand` RPC (no high-level
    helper)."
-  [session {:keys [request-id handled? stop-processing-queue?] :as _params}]
+  [session {:keys [request-id handled? stop-processing-queue?] :as params}]
   (let [{:keys [session-id client]} session
         conn (connection-io client)
         result (cond-> {:handled (boolean handled?)}
-                 (and handled? stop-processing-queue?)
-                 (assoc :stopProcessingQueue true))]
+                 (and handled? (contains? params :stop-processing-queue?))
+                 (assoc :stopProcessingQueue (boolean stop-processing-queue?)))]
     (proto/send-request! conn "session.commands.respondToQueuedCommand"
                          {:sessionId session-id
                           :requestId request-id
