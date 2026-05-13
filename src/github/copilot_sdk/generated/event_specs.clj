@@ -29,6 +29,10 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/answer clojure.core/string?)
 
+(s/def :github.copilot-sdk.generated.event-specs/anthropic-advisor-blocks (s/coll-of clojure.core/any?))
+
+(s/def :github.copilot-sdk.generated.event-specs/anthropic-advisor-model clojure.core/string?)
+
 (s/def :github.copilot-sdk.generated.event-specs/api-call-id clojure.core/string?)
 
 (s/def :github.copilot-sdk.generated.event-specs/approved clojure.core/boolean?)
@@ -92,6 +96,8 @@
 (s/def :github.copilot-sdk.generated.event-specs/delta-content clojure.core/string?)
 
 (s/def :github.copilot-sdk.generated.event-specs/description clojure.core/string?)
+
+(s/def :github.copilot-sdk.generated.event-specs/detached-from-spawning-parent-session-id clojure.core/string?)
 
 (s/def :github.copilot-sdk.generated.event-specs/duration clojure.core/number?)
 
@@ -213,7 +219,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/performed-by clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/permission-request (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map?))
+(s/def :github.copilot-sdk.generated.event-specs/permission-request (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map? :branch-9 clojure.core/map?))
 
 (s/def :github.copilot-sdk.generated.event-specs/phase clojure.core/string?)
 
@@ -249,7 +255,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/prompt clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/prompt-request (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map?))
+(s/def :github.copilot-sdk.generated.event-specs/prompt-request (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map? :branch-9 clojure.core/map? :branch-10 clojure.core/map?))
 
 (s/def :github.copilot-sdk.generated.event-specs/provider-call-id clojure.core/string?)
 
@@ -407,7 +413,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/assistant.intent-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/intent]))
 
-(s/def :github.copilot-sdk.generated.event-specs/assistant.message-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/content :github.copilot-sdk.generated.event-specs/message-id] :opt-un [:github.copilot-sdk.generated.event-specs/encrypted-content :github.copilot-sdk.generated.event-specs/interaction-id :github.copilot-sdk.generated.event-specs/output-tokens :github.copilot-sdk.generated.event-specs/parent-tool-call-id :github.copilot-sdk.generated.event-specs/phase :github.copilot-sdk.generated.event-specs/reasoning-opaque :github.copilot-sdk.generated.event-specs/reasoning-text :github.copilot-sdk.generated.event-specs/request-id :github.copilot-sdk.generated.event-specs/tool-requests :github.copilot-sdk.generated.event-specs/turn-id]))
+(s/def :github.copilot-sdk.generated.event-specs/assistant.message-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/content :github.copilot-sdk.generated.event-specs/message-id] :opt-un [:github.copilot-sdk.generated.event-specs/anthropic-advisor-blocks :github.copilot-sdk.generated.event-specs/anthropic-advisor-model :github.copilot-sdk.generated.event-specs/encrypted-content :github.copilot-sdk.generated.event-specs/interaction-id :github.copilot-sdk.generated.event-specs/model :github.copilot-sdk.generated.event-specs/output-tokens :github.copilot-sdk.generated.event-specs/parent-tool-call-id :github.copilot-sdk.generated.event-specs/phase :github.copilot-sdk.generated.event-specs/reasoning-opaque :github.copilot-sdk.generated.event-specs/reasoning-text :github.copilot-sdk.generated.event-specs/request-id :github.copilot-sdk.generated.event-specs/tool-requests :github.copilot-sdk.generated.event-specs/turn-id]))
 
 (s/def :github.copilot-sdk.generated.event-specs/assistant.message_delta-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/delta-content :github.copilot-sdk.generated.event-specs/message-id] :opt-un [:github.copilot-sdk.generated.event-specs/parent-tool-call-id]))
 
@@ -515,7 +521,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/session.snapshot_rewind-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/events-removed :github.copilot-sdk.generated.event-specs/up-to-event-id]))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.start-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/copilot-version :github.copilot-sdk.generated.event-specs/producer :github.copilot-sdk.generated.event-specs/session-id :github.copilot-sdk.generated.event-specs/start-time :github.copilot-sdk.generated.event-specs/version] :opt-un [:github.copilot-sdk.generated.event-specs/already-in-use :github.copilot-sdk.generated.event-specs/context :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/remote-steerable :github.copilot-sdk.generated.event-specs/selected-model]))
+(s/def :github.copilot-sdk.generated.event-specs/session.start-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/copilot-version :github.copilot-sdk.generated.event-specs/producer :github.copilot-sdk.generated.event-specs/session-id :github.copilot-sdk.generated.event-specs/start-time :github.copilot-sdk.generated.event-specs/version] :opt-un [:github.copilot-sdk.generated.event-specs/already-in-use :github.copilot-sdk.generated.event-specs/context :github.copilot-sdk.generated.event-specs/detached-from-spawning-parent-session-id :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/remote-steerable :github.copilot-sdk.generated.event-specs/selected-model]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.task_complete-data (s/keys :opt-un [:github.copilot-sdk.generated.event-specs/success :github.copilot-sdk.generated.event-specs/summary]))
 
