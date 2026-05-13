@@ -1415,6 +1415,39 @@
         conn (connection-io client)]
     (proto/send-request! conn "session.skills.reload" {:sessionId session-id})))
 
+;; -- Commands (queued command response) --------------------------------------
+
+(defn ^:experimental respond-to-queued-command!
+  "Respond to a `:copilot/command.queued` event from the CLI.
+
+   The CLI emits `command.queued` events when a slash-command is dispatched
+   for client-side execution. Each event carries a `:request-id` (and
+   `:command`). Clients should respond with either:
+
+     {:request-id <id> :handled? true                       ;; consumed by client
+      :stop-processing-queue? false}                        ;; optional
+     {:request-id <id> :handled? false}                     ;; fall through
+
+   When `:handled?` is `true`, the CLI marks the queued command done; when
+   `:stop-processing-queue?` is also `true`, the CLI stops processing the
+   remainder of the queue. When `:handled?` is `false`, the CLI re-routes
+   the command to its default handling. The CLI accepts the response via
+   the `session.commands.respondToQueuedCommand` RPC.
+
+   Marked experimental — the upstream Node SDK exposes this only via the
+   generated low-level `commands.respondToQueuedCommand` RPC (no high-level
+   helper)."
+  [session {:keys [request-id handled? stop-processing-queue?] :as params}]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)
+        result (cond-> {:handled (boolean handled?)}
+                 (and handled? (contains? params :stop-processing-queue?))
+                 (assoc :stopProcessingQueue (boolean stop-processing-queue?)))]
+    (proto/send-request! conn "session.commands.respondToQueuedCommand"
+                         {:sessionId session-id
+                          :requestId request-id
+                          :result result})))
+
 ;; -- MCP Servers -------------------------------------------------------------
 
 (defn ^:experimental mcp-list

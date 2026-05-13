@@ -153,6 +153,10 @@
           "type": "string",
           "description": "Unique identifier for this assistant message"
         },
+        "model": {
+          "type": "string",
+          "description": "Model that produced this assistant message, if known"
+        },
         "content": {
           "type": "string",
           "description": "The assistant's text response content"
@@ -192,6 +196,15 @@
         "requestId": {
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for correlating with server-side logs"
+        },
+        "anthropicAdvisorBlocks": {
+          "type": "array",
+          "items": {},
+          "description": "Raw Anthropic content array with advisor blocks (server_tool_use, advisor_tool_result) for verbatim round-tripping"
+        },
+        "anthropicAdvisorModel": {
+          "type": "string",
+          "description": "Anthropic advisor model ID used for this response, for timeline display on replay"
         },
         "turnId": {
           "type": "string",
@@ -4409,6 +4422,14 @@
         {
           "$ref": "#/definitions/PermissionPromptRequestHook",
           "description": "Hook confirmation permission prompt"
+        },
+        {
+          "$ref": "#/definitions/PermissionPromptRequestExtensionManagement",
+          "description": "Extension management permission prompt"
+        },
+        {
+          "$ref": "#/definitions/PermissionPromptRequestExtensionPermissionAccess",
+          "description": "Extension permission access prompt"
         }
       ],
       "description": "Derived user-facing permission prompt details for UI consumers",
@@ -4493,6 +4514,68 @@
       "additionalProperties": false,
       "description": "Custom tool invocation permission prompt",
       "title": "PermissionPromptRequestCustomTool"
+    },
+    "PermissionPromptRequestExtensionManagement": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-management",
+          "description": "Prompt kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "operation": {
+          "type": "string",
+          "description": "The extension management operation (scaffold, reload)"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Name of the extension being managed"
+        }
+      },
+      "required": [
+        "kind",
+        "operation"
+      ],
+      "additionalProperties": false,
+      "description": "Extension management permission prompt",
+      "title": "PermissionPromptRequestExtensionManagement"
+    },
+    "PermissionPromptRequestExtensionPermissionAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-permission-access",
+          "description": "Prompt kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Name of the extension requesting permission access"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Capabilities the extension is requesting"
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName",
+        "capabilities"
+      ],
+      "additionalProperties": false,
+      "description": "Extension permission access prompt",
+      "title": "PermissionPromptRequestExtensionPermissionAccess"
     },
     "PermissionPromptRequestHook": {
       "type": "object",
@@ -4814,6 +4897,14 @@
         {
           "$ref": "#/definitions/PermissionRequestHook",
           "description": "Hook confirmation permission request"
+        },
+        {
+          "$ref": "#/definitions/PermissionRequestExtensionManagement",
+          "description": "Extension management permission request"
+        },
+        {
+          "$ref": "#/definitions/PermissionRequestExtensionPermissionAccess",
+          "description": "Extension permission access request"
         }
       ],
       "description": "Details of the permission being requested",
@@ -4931,6 +5022,68 @@
       ],
       "additionalProperties": false,
       "title": "PermissionRequestedEvent"
+    },
+    "PermissionRequestExtensionManagement": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-management",
+          "description": "Permission kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "operation": {
+          "type": "string",
+          "description": "The extension management operation (scaffold, reload)"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Name of the extension being managed"
+        }
+      },
+      "required": [
+        "kind",
+        "operation"
+      ],
+      "additionalProperties": false,
+      "description": "Extension management permission request",
+      "title": "PermissionRequestExtensionManagement"
+    },
+    "PermissionRequestExtensionPermissionAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-permission-access",
+          "description": "Permission kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Name of the extension requesting permission access"
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Capabilities the extension is requesting"
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName",
+        "capabilities"
+      ],
+      "additionalProperties": false,
+      "description": "Extension permission access request",
+      "title": "PermissionRequestExtensionPermissionAccess"
     },
     "PermissionRequestHook": {
       "type": "object",
@@ -6714,6 +6867,10 @@
         "remoteSteerable": {
           "type": "boolean",
           "description": "Whether this session supports remote steering via Mission Control"
+        },
+        "detachedFromSpawningParentSessionId": {
+          "type": "string",
+          "description": "When set, identifies a parent session whose context this session continues — e.g., a detached headless rem-agent run launched on the parent's interactive shutdown. Telemetry from this session is reported under the parent's session_id."
         }
       },
       "required": [
@@ -9295,6 +9452,12 @@
         },
         {
           "$ref": "#/definitions/UserToolSessionApprovalCustomTool"
+        },
+        {
+          "$ref": "#/definitions/UserToolSessionApprovalExtensionManagement"
+        },
+        {
+          "$ref": "#/definitions/UserToolSessionApprovalExtensionPermissionAccess"
         }
       ],
       "description": "The approval to add as a session-scoped rule",
@@ -9342,6 +9505,45 @@
       ],
       "additionalProperties": false,
       "title": "UserToolSessionApprovalCustomTool"
+    },
+    "UserToolSessionApprovalExtensionManagement": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-management",
+          "description": "Extension management approval kind"
+        },
+        "operation": {
+          "type": "string",
+          "description": "Optional operation identifier"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "title": "UserToolSessionApprovalExtensionManagement"
+    },
+    "UserToolSessionApprovalExtensionPermissionAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-permission-access",
+          "description": "Extension permission access approval kind"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Extension name"
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName"
+      ],
+      "additionalProperties": false,
+      "title": "UserToolSessionApprovalExtensionPermissionAccess"
     },
     "UserToolSessionApprovalMcp": {
       "type": "object",

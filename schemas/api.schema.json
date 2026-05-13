@@ -843,6 +843,41 @@
           "$ref": "#/definitions/TasksRemoveResult"
         },
         "stability": "experimental"
+      },
+      "sendMessage": {
+        "rpcMethod": "session.tasks.sendMessage",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "id": {
+              "type": "string",
+              "description": "Agent task identifier"
+            },
+            "message": {
+              "type": "string",
+              "description": "Message content to send to the agent"
+            },
+            "fromAgentId": {
+              "type": "string",
+              "description": "Agent ID of the sender, if sent on behalf of another agent"
+            }
+          },
+          "required": [
+            "sessionId",
+            "id",
+            "message"
+          ],
+          "additionalProperties": false,
+          "title": "TasksSendMessageRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/TasksSendMessageResult"
+        },
+        "stability": "experimental"
       }
     },
     "skills": {
@@ -1267,6 +1302,36 @@
         },
         "result": {
           "$ref": "#/definitions/CommandsHandlePendingCommandResult"
+        }
+      },
+      "respondToQueuedCommand": {
+        "rpcMethod": "session.commands.respondToQueuedCommand",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "requestId": {
+              "type": "string",
+              "description": "Request ID from the queued command event"
+            },
+            "result": {
+              "$ref": "#/definitions/QueuedCommandResult",
+              "description": "Result of the queued command execution"
+            }
+          },
+          "required": [
+            "sessionId",
+            "requestId",
+            "result"
+          ],
+          "additionalProperties": false,
+          "title": "CommandsRespondToQueuedCommandRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/CommandsRespondToQueuedCommandResult"
         }
       }
     },
@@ -2195,6 +2260,39 @@
       ],
       "additionalProperties": false,
       "title": "CommandsHandlePendingCommandResult"
+    },
+    "CommandsRespondToQueuedCommandRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID from the queued command event"
+        },
+        "result": {
+          "$ref": "#/definitions/QueuedCommandResult",
+          "description": "Result of the queued command execution"
+        }
+      },
+      "required": [
+        "requestId",
+        "result"
+      ],
+      "additionalProperties": false,
+      "title": "CommandsRespondToQueuedCommandRequest"
+    },
+    "CommandsRespondToQueuedCommandResult": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "Whether the response was accepted (false if the requestId was not found or already resolved)"
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "additionalProperties": false,
+      "title": "CommandsRespondToQueuedCommandResult"
     },
     "ConnectRequest": {
       "type": "object",
@@ -3539,6 +3637,14 @@
         "defaultReasoningEffort": {
           "type": "string",
           "description": "Default reasoning effort level (only present if model supports reasoning effort)"
+        },
+        "modelPickerCategory": {
+          "$ref": "#/definitions/ModelPickerCategory",
+          "description": "Model capability category for grouping in the model picker"
+        },
+        "modelPickerPriceCategory": {
+          "$ref": "#/definitions/ModelPickerPriceCategory",
+          "description": "Relative cost tier for token-based billing users"
         }
       },
       "required": [
@@ -3557,9 +3663,6 @@
           "description": "Billing cost multiplier relative to the base rate"
         }
       },
-      "required": [
-        "multiplier"
-      ],
       "additionalProperties": false,
       "description": "Billing information",
       "title": "ModelBilling"
@@ -3748,6 +3851,27 @@
       "additionalProperties": false,
       "title": "ModelList"
     },
+    "ModelPickerCategory": {
+      "type": "string",
+      "enum": [
+        "lightweight",
+        "versatile",
+        "powerful"
+      ],
+      "description": "Model capability category for grouping in the model picker",
+      "title": "ModelPickerCategory"
+    },
+    "ModelPickerPriceCategory": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "very_high"
+      ],
+      "description": "Relative cost tier for token-based billing users",
+      "title": "ModelPickerPriceCategory"
+    },
     "ModelPolicy": {
       "type": "object",
       "properties": {
@@ -3927,6 +4051,12 @@
         },
         {
           "$ref": "#/definitions/PermissionDecisionApproveForLocationApprovalCustomTool"
+        },
+        {
+          "$ref": "#/definitions/PermissionDecisionApproveForLocationApprovalExtensionManagement"
+        },
+        {
+          "$ref": "#/definitions/PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess"
         }
       ],
       "description": "The approval to persist for this location",
@@ -3970,6 +4100,41 @@
       ],
       "additionalProperties": false,
       "title": "PermissionDecisionApproveForLocationApprovalCustomTool"
+    },
+    "PermissionDecisionApproveForLocationApprovalExtensionManagement": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-management"
+        },
+        "operation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "title": "PermissionDecisionApproveForLocationApprovalExtensionManagement"
+    },
+    "PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-permission-access"
+        },
+        "extensionName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName"
+      ],
+      "additionalProperties": false,
+      "title": "PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess"
     },
     "PermissionDecisionApproveForLocationApprovalMcp": {
       "type": "object",
@@ -4101,6 +4266,12 @@
         },
         {
           "$ref": "#/definitions/PermissionDecisionApproveForSessionApprovalCustomTool"
+        },
+        {
+          "$ref": "#/definitions/PermissionDecisionApproveForSessionApprovalExtensionManagement"
+        },
+        {
+          "$ref": "#/definitions/PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess"
         }
       ],
       "description": "The approval to add as a session-scoped rule",
@@ -4144,6 +4315,41 @@
       ],
       "additionalProperties": false,
       "title": "PermissionDecisionApproveForSessionApprovalCustomTool"
+    },
+    "PermissionDecisionApproveForSessionApprovalExtensionManagement": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-management"
+        },
+        "operation": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "title": "PermissionDecisionApproveForSessionApprovalExtensionManagement"
+    },
+    "PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-permission-access"
+        },
+        "extensionName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName"
+      ],
+      "additionalProperties": false,
+      "title": "PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess"
     },
     "PermissionDecisionApproveForSessionApprovalMcp": {
       "type": "object",
@@ -4502,6 +4708,52 @@
       ],
       "additionalProperties": false,
       "title": "PluginList"
+    },
+    "QueuedCommandHandled": {
+      "type": "object",
+      "properties": {
+        "handled": {
+          "type": "boolean",
+          "const": true,
+          "description": "The command was handled"
+        },
+        "stopProcessingQueue": {
+          "type": "boolean",
+          "description": "If true, stop processing remaining queued items"
+        }
+      },
+      "required": [
+        "handled"
+      ],
+      "additionalProperties": false,
+      "title": "QueuedCommandHandled"
+    },
+    "QueuedCommandNotHandled": {
+      "type": "object",
+      "properties": {
+        "handled": {
+          "type": "boolean",
+          "const": false,
+          "description": "The command was not handled"
+        }
+      },
+      "required": [
+        "handled"
+      ],
+      "additionalProperties": false,
+      "title": "QueuedCommandNotHandled"
+    },
+    "QueuedCommandResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/QueuedCommandHandled"
+        },
+        {
+          "$ref": "#/definitions/QueuedCommandNotHandled"
+        }
+      ],
+      "description": "Result of the queued command execution",
+      "title": "QueuedCommandResult"
     },
     "RemoteEnableResult": {
       "type": "object",
@@ -5592,6 +5844,47 @@
       "additionalProperties": false,
       "title": "TasksRemoveResult"
     },
+    "TasksSendMessageRequest": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Agent task identifier"
+        },
+        "message": {
+          "type": "string",
+          "description": "Message content to send to the agent"
+        },
+        "fromAgentId": {
+          "type": "string",
+          "description": "Agent ID of the sender, if sent on behalf of another agent"
+        }
+      },
+      "required": [
+        "id",
+        "message"
+      ],
+      "additionalProperties": false,
+      "title": "TasksSendMessageRequest"
+    },
+    "TasksSendMessageResult": {
+      "type": "object",
+      "properties": {
+        "sent": {
+          "type": "boolean",
+          "description": "Whether the message was successfully delivered or steered"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if delivery failed"
+        }
+      },
+      "required": [
+        "sent"
+      ],
+      "additionalProperties": false,
+      "title": "TasksSendMessageResult"
+    },
     "TasksStartAgentRequest": {
       "type": "object",
       "properties": {
@@ -6448,9 +6741,6 @@
                 "user_named": {
                   "type": "boolean"
                 },
-                "summary": {
-                  "type": "string"
-                },
                 "summary_count": {
                   "type": "integer",
                   "minimum": 0,
@@ -6475,14 +6765,6 @@
                 },
                 "mc_last_event_id": {
                   "type": "string"
-                },
-                "session_sync_level": {
-                  "type": "string",
-                  "enum": [
-                    "local",
-                    "user",
-                    "repo_and_user"
-                  ]
                 },
                 "chronicle_sync_dismissed": {
                   "type": "boolean"
