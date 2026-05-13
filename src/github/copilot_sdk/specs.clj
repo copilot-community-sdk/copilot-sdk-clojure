@@ -829,6 +829,7 @@
 (s/def ::head-commit string?)
 (s/def ::base-commit string?)
 
+(s/def ::detached-from-spawning-parent-session-id string?)
 (s/def ::session.start-data
   ;; Note: ::version is intentionally omitted from this hand-written spec.
   ;; The upstream schema types it as `number` while the global `::version`
@@ -837,7 +838,8 @@
   ;; canonical contract for this field.
   (s/keys :req-un [::session-id]
           :opt-un [::producer ::copilot-version ::start-time ::selected-model
-                   ::reasoning-effort ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit]))
+                   ::reasoning-effort ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit
+                   ::detached-from-spawning-parent-session-id]))
 
 (s/def ::event-count nat-int?)
 (s/def ::session.resume-data
@@ -882,11 +884,18 @@
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
 
+;; Queued command response (CLI 1.0.45, session.commands.respondToQueuedCommand)
+(s/def ::handled? boolean?)
+(s/def ::stop-processing-queue? boolean?)
+
+(s/def ::anthropic-advisor-blocks (s/coll-of any?))
+(s/def ::anthropic-advisor-model string?)
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
                    ::interaction-id ::output-tokens ::phase ::reasoning-opaque
-                   ::reasoning-text ::request-id]))
+                   ::reasoning-text ::request-id
+                   ::anthropic-advisor-blocks ::anthropic-advisor-model ::model]))
 
 (s/def ::total-response-size-bytes nat-int?)
 (s/def ::turn-id ::non-blank-string)
@@ -1146,7 +1155,8 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory :hook})
+(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory :hook
+                           :extension-management :extension-permission-access})
 
 ;; Memory permission event data fields (CLI 1.0.22, upstream PR #1055)
 (s/def ::memory-action #{:store :vote})
@@ -1250,6 +1260,12 @@
 (s/def ::supported-reasoning-efforts (s/coll-of string?))
 (s/def ::default-reasoning-effort string?)
 
+;; Model picker categorization (CLI 1.0.46). Upstream defines closed enums,
+;; but the idiom spec keeps these as strings so future categories pass through
+;; unchanged on the wire.
+(s/def ::model-picker-category string?)
+(s/def ::model-picker-price-category string?)
+
 ;; Model info
 (s/def ::id string?)
 (s/def ::name string?)
@@ -1264,7 +1280,8 @@
                    ::preview? ::default-temperature ::model-picker-priority
                    ::model-capabilities ::model-policy ::model-billing
                    ::supported-reasoning-efforts ::default-reasoning-effort
-                   ::vision-limits]))
+                   ::vision-limits
+                   ::model-picker-category ::model-picker-price-category]))
 
 ;; Misc specs for instrument.clj
 (s/def ::message-id string?)

@@ -1165,7 +1165,9 @@
         optional (merge
                   (select-keys m [:default-temperature
                                   :model-picker-priority
-                                  :default-reasoning-effort])
+                                  :default-reasoning-effort
+                                  :model-picker-category
+                                  :model-picker-price-category])
                   (when (contains? m :policy)
                     (let [mp (:policy m)]
                       (cond
@@ -1214,6 +1216,7 @@
    Returns a vector of model info maps with keys:
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
    :preview? :default-temperature :model-picker-priority
+   :model-picker-category :model-picker-price-category
    :model-capabilities {:model-supports {:supports-vision :supports-reasoning-effort}
                         :model-limits {:max-prompt-tokens :max-context-window-tokens
                                        :vision-capabilities {:supported-media-types
