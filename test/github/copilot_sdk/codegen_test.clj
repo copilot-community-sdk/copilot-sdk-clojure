@@ -233,7 +233,14 @@
    {:id 42 :interval-ms 1000 :prompt "ping me"}
 
    "session.schedule_cancelled"
-   {:id 42}})
+   {:id 42}
+
+   "session.custom_notification"
+   {:source "my-extension"
+    :name "doc.opened"
+    :payload {:path "/tmp/x"}
+    :subject {:doc "foo"}
+    :version 1}})
 
 (defn- envelope
   "Wrap a data payload in a minimal valid envelope of the given type. Honours
