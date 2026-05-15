@@ -919,7 +919,40 @@
       (is (= 42 (get-in data [:payload :nested :userId]))
           "payload nested keys must not be kebab-cased")
       (is (= "Foo" (get-in data [:payload :firstName]))
-          "payload top-level keys must not be kebab-cased"))))
+          "payload top-level keys must not be kebab-cased")))
+  (testing "subject and payload keys are preserved in historical events from session.getMessages responses"
+    ;; Response messages (id, no :method) carrying :result :events collections
+    ;; must apply the same preservation rules per-event, so live and
+    ;; historical custom_notification events have the same shape.
+    (let [normalize @#'github.copilot-sdk.protocol/normalize-incoming
+          raw-response {:jsonrpc "2.0"
+                        :id 42
+                        :result {:events [{:type "session.start"
+                                           :data {:sessionId "s1"}}
+                                          {:type "session.custom_notification"
+                                           :data {:source "ext"
+                                                  :name "x"
+                                                  :subject {:GitHub-Login "octocat"}
+                                                  :payload {:nestedKey {:userId 7}}}}
+                                          {:type "external_tool.requested"
+                                           :data {:id "t1"
+                                                  :name "do"
+                                                  :arguments {:OriginalKey "v"}}}]}}
+          normalized (normalize raw-response)
+          events (get-in normalized [:result :events])
+          custom (nth events 1)
+          ext-tool (nth events 2)]
+      (is (= "octocat" (get-in custom [:data :subject :GitHub-Login]))
+          "historical custom_notification subject keys must be preserved")
+      (is (= 7 (get-in custom [:data :payload :nestedKey :userId]))
+          "historical custom_notification payload keys must be preserved")
+      (is (= {:OriginalKey "v"} (get-in ext-tool [:data :arguments]))
+          "historical external_tool.requested arguments must be preserved")))
+  (testing "remote-enable opts are validated synchronously when provided"
+    (let [session {:session-id "s" :client {}}]
+      (is (thrown? Exception (github.copilot-sdk.session/remote-enable session {:mode :bogus})))
+      (is (thrown? Exception (github.copilot-sdk.session/remote-enable session {:mode "on"}))
+          "string :mode value is rejected — the spec requires a keyword from #{:off :export :on}"))))
 
 (deftest test-custom-agent-info-tools-nilable
   (testing "::custom-agent-info accepts :tools nil (upstream schema 1.0.41-1: tools: string[] | null)"

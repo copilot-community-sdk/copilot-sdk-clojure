@@ -171,42 +171,65 @@
                            :error {:code -32603
                                    :message (str "Internal error: " (ex-message e))}}))))))
 
+(defn- preserve-event-opaque-fields
+  "Given a raw wire event (pre-`wire->clj`) and a converted event, restore
+   source-defined / opaque fields verbatim onto the converted shape so
+   kebab-casing doesn't mangle user-supplied keys. Applies the per-event-type
+   rules used by `normalize-incoming` for live notifications, so live and
+   historical events share the same shape."
+  [raw-event converted-event]
+  (case (:type raw-event)
+    "external_tool.requested"
+    (cond-> converted-event
+      (contains? (:data raw-event) :arguments)
+      (assoc-in [:data :arguments] (get-in raw-event [:data :arguments])))
+
+    "session.custom_notification"
+    (cond-> converted-event
+      (contains? (:data raw-event) :subject)
+      (assoc-in [:data :subject] (get-in raw-event [:data :subject]))
+      (contains? (:data raw-event) :payload)
+      (assoc-in [:data :payload] (get-in raw-event [:data :payload])))
+
+    converted-event))
+
 (defn- normalize-incoming
   "Convert wire-format keys to Clojure keys, preserving opaque user data.
    For v2 tool.call RPC and v3 external_tool.requested broadcast events,
    tool arguments are kept in their original wire format so user-defined
    tool handlers receive the keys the server sent. For v3
    session.custom_notification events, the source-defined `:subject` and
-   opaque `:payload` are also preserved verbatim."
+   opaque `:payload` are also preserved verbatim. The same preservation
+   applies to historical events returned in `session.getMessages` responses
+   so live and historical event shapes agree."
   [msg]
   (let [method (:method msg)
         params (:params msg)
-        converted (util/wire->clj msg)]
+        converted (util/wire->clj msg)
+        raw-events (get-in msg [:result :events])]
     (cond
       ;; v2: preserve raw arguments for tool.call RPC
       (and (= "tool.call" method) (map? params) (contains? params :arguments))
       (assoc-in converted [:params :arguments] (:arguments params))
 
-      ;; v3: preserve raw arguments in external_tool.requested broadcast events
+      ;; v3: preserve raw arguments / subject / payload in broadcast events
       (and (= "session.event" method)
-           (= "external_tool.requested" (get-in params [:event :type]))
-           (contains? (get-in params [:event :data]) :arguments))
-      (assoc-in converted [:params :event :data :arguments]
-                (get-in params [:event :data :arguments]))
+           (map? (:event params)))
+      (assoc-in converted [:params :event]
+                (preserve-event-opaque-fields (:event params)
+                                              (get-in converted [:params :event])))
 
-      ;; v3: preserve raw subject/payload keys in session.custom_notification
-      ;; events. Both fields contain source-defined identifiers/opaque JSON
-      ;; (PR #1292); kebab-casing would mangle keys like "GitHub-Login" and
-      ;; collapse "actor" / "Actor" into the same keyword.
-      (and (= "session.event" method)
-           (= "session.custom_notification" (get-in params [:event :type])))
-      (cond-> converted
-        (contains? (get-in params [:event :data]) :subject)
-        (assoc-in [:params :event :data :subject]
-                  (get-in params [:event :data :subject]))
-        (contains? (get-in params [:event :data]) :payload)
-        (assoc-in [:params :event :data :payload]
-                  (get-in params [:event :data :payload])))
+      ;; Response carrying an event collection (e.g. session.getMessages).
+      ;; Preserve opaque fields per-event so historical custom_notification
+      ;; events keep their subject/payload keys, and historical
+      ;; external_tool.requested events keep their arguments. Without this,
+      ;; live and historical events would have divergent key shapes.
+      (and (:id msg) (not method) (sequential? raw-events))
+      (assoc-in converted [:result :events]
+                (mapv (fn [raw conv]
+                        (preserve-event-opaque-fields raw conv))
+                      raw-events
+                      (get-in converted [:result :events])))
 
       :else
       converted)))

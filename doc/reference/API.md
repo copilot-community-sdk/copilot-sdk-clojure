@@ -1400,7 +1400,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.mcp_server_status_changed` | MCP server status changed |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |
 | `:copilot/session.custom_agents_updated` | Custom agents list updated |
-| `:copilot/session.custom_notification` | Custom Skill notification (Notify block); ephemeral. Data: `{:source "<ext-id>" :name "<event>" :payload <any> :subject? {<k> <v>} :version? <pos-int>}` (upstream PR #1292, CLI 1.0.48) |
+| `:copilot/session.custom_notification` | Custom Skill notification (Notify block); ephemeral. Data: `{:source "<ext-id>" :name "<event>" :payload <any> :subject {<k> <v>} :version <pos-int>}` (`:subject` and `:version` are optional; `:subject` keys are preserved verbatim — see PR #1292, CLI 1.0.48) |
 | `:copilot/sampling.requested` | MCP sampling request initiated; ephemeral |
 | `:copilot/sampling.completed` | MCP sampling request completed; ephemeral |
 | `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |

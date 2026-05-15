@@ -1794,6 +1794,10 @@
    guarantees may change."
   ([session] (remote-enable session nil))
   ([session opts]
+   (when (and opts (not (s/valid? ::specs/remote-enable-opts opts)))
+     (throw (ex-info "Invalid remote-enable opts"
+                     {:opts opts
+                      :explain (s/explain-data ::specs/remote-enable-opts opts)})))
    (let [{:keys [session-id client]} session
          conn (connection-io client)
          base {:session-id session-id}
