@@ -4,8 +4,8 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.0-beta.3 CLI sync)
-- **Schema bump** — `.copilot-schema-version` advanced from `1.0.44-2` to
-  `1.0.48` (the latest GA on npm; previously pinned at `1.0.48-1`).
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.46` to
+  `1.0.48` (the latest GA on npm).
   Generated wire specs and coercions regenerated.
 - **`:remote-session` session config option** — `create-session` and
   `resume-session` accept an optional `:remote-session` key set to `:off`,
