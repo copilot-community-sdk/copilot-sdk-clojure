@@ -832,6 +832,17 @@
       "additionalProperties": false,
       "title": "AssistantTurnStartEvent"
     },
+    "AssistantUsageApiEndpoint": {
+      "type": "string",
+      "enum": [
+        "/chat/completions",
+        "/v1/messages",
+        "/responses",
+        "ws:/responses"
+      ],
+      "description": "API endpoint used for this model call, matching CAPI supported_endpoints vocabulary",
+      "title": "AssistantUsageApiEndpoint"
+    },
     "AssistantUsageCopilotUsage": {
       "type": "object",
       "properties": {
@@ -940,6 +951,10 @@
         "providerCallId": {
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for server-side log correlation"
+        },
+        "apiEndpoint": {
+          "$ref": "#/definitions/AssistantUsageApiEndpoint",
+          "description": "API endpoint used for this model call, matching CAPI supported_endpoints vocabulary"
         },
         "parentToolCallId": {
           "type": "string",
@@ -2146,6 +2161,129 @@
       "additionalProperties": false,
       "title": "CustomAgentsUpdatedEvent"
     },
+    "CustomNotificationData": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Namespace for the custom notification producer"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Source-defined custom notification name"
+        },
+        "version": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Optional source-defined payload schema version"
+        },
+        "subject": {
+          "$ref": "#/definitions/CustomNotificationSubject",
+          "description": "Optional source-defined string identifiers describing the payload subject"
+        },
+        "payload": {
+          "$ref": "#/definitions/CustomNotificationPayload",
+          "description": "Source-defined JSON payload for the custom notification"
+        }
+      },
+      "required": [
+        "source",
+        "name",
+        "payload"
+      ],
+      "additionalProperties": false,
+      "description": "Opaque custom notification data. Consumers may branch on source and name, but payload semantics are source-defined.",
+      "title": "CustomNotificationData"
+    },
+    "CustomNotificationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.custom_notification"
+        },
+        "data": {
+          "$ref": "#/definitions/CustomNotificationData",
+          "description": "Opaque custom notification data. Consumers may branch on source and name, but payload semantics are source-defined."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "title": "CustomNotificationEvent"
+    },
+    "CustomNotificationPayload": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "number"
+        },
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        },
+        {
+          "type": "array",
+          "items": {}
+        },
+        {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      ],
+      "description": "Source-defined JSON payload for the custom notification",
+      "title": "CustomNotificationPayload"
+    },
+    "CustomNotificationSubject": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Optional source-defined string identifiers describing the payload subject",
+      "title": "CustomNotificationSubject"
+    },
     "ElicitationCompletedAction": {
       "type": "string",
       "enum": [
@@ -2442,7 +2580,7 @@
         },
         "errorCode": {
           "type": "string",
-          "description": "Fine-grained error code from the upstream provider, when available. For `errorType: \"rate_limit\"`, this is one of the `RateLimitErrorCode` values (e.g., `\"user_weekly_rate_limited\"`, `\"user_global_rate_limited\"`, `\"rate_limited\"`, `\"user_model_rate_limited\"`, `\"integration_rate_limited\"`)."
+          "description": "Fine-grained error code from the upstream provider, when available. For `errorType: \"rate_limit\"`, this is one of the `RateLimitErrorCode` values (e.g., `\"user_weekly_rate_limited\"`, `\"user_global_rate_limited\"`, `\"rate_limited\"`, `\"user_model_rate_limited\"`, `\"integration_rate_limited\"`). For `errorType: \"quota\"`, this is the CAPI quota error code (e.g., `\"quota_exceeded\"`, `\"session_quota_exceeded\"`, `\"billing_not_configured\"`)."
         },
         "eligibleForAutoSwitch": {
           "type": "boolean",
@@ -5962,6 +6100,10 @@
         "prompt": {
           "type": "string",
           "description": "Prompt text that gets enqueued on every tick"
+        },
+        "recurring": {
+          "type": "boolean",
+          "description": "Whether the schedule re-arms after each tick (`/every`) or fires once (`/after`)"
         }
       },
       "required": [
@@ -5970,7 +6112,7 @@
         "prompt"
       ],
       "additionalProperties": false,
-      "description": "Scheduled prompt registered via /every",
+      "description": "Scheduled prompt registered via /every or /after",
       "title": "ScheduleCreatedData"
     },
     "ScheduleCreatedEvent": {
@@ -6012,7 +6154,7 @@
         },
         "data": {
           "$ref": "#/definitions/ScheduleCreatedData",
-          "description": "Scheduled prompt registered via /every"
+          "description": "Scheduled prompt registered via /every or /after"
         }
       },
       "required": [
@@ -6212,6 +6354,9 @@
         },
         {
           "$ref": "#/definitions/McpOauthCompletedEvent"
+        },
+        {
+          "$ref": "#/definitions/CustomNotificationEvent"
         },
         {
           "$ref": "#/definitions/ExternalToolRequestedEvent"
@@ -9366,6 +9511,10 @@
         "agentMode": {
           "$ref": "#/definitions/UserMessageAgentMode",
           "description": "The agent mode that was active when this message was sent"
+        },
+        "isAutopilotContinuation": {
+          "type": "boolean",
+          "description": "True when this user message was auto-injected by autopilot's continuation loop rather than typed by the user; used to distinguish autopilot-driven turns in telemetry."
         },
         "interactionId": {
           "type": "string",
