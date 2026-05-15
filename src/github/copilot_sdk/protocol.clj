@@ -172,10 +172,12 @@
                                    :message (str "Internal error: " (ex-message e))}}))))))
 
 (defn- normalize-incoming
-  "Convert wire-format keys to Clojure keys, preserving tool.call arguments.
+  "Convert wire-format keys to Clojure keys, preserving opaque user data.
    For v2 tool.call RPC and v3 external_tool.requested broadcast events,
    tool arguments are kept in their original wire format so user-defined
-   tool handlers receive the keys the server sent."
+   tool handlers receive the keys the server sent. For v3
+   session.custom_notification events, the source-defined `:subject` and
+   opaque `:payload` are also preserved verbatim."
   [msg]
   (let [method (:method msg)
         params (:params msg)
@@ -191,6 +193,20 @@
            (contains? (get-in params [:event :data]) :arguments))
       (assoc-in converted [:params :event :data :arguments]
                 (get-in params [:event :data :arguments]))
+
+      ;; v3: preserve raw subject/payload keys in session.custom_notification
+      ;; events. Both fields contain source-defined identifiers/opaque JSON
+      ;; (PR #1292); kebab-casing would mangle keys like "GitHub-Login" and
+      ;; collapse "actor" / "Actor" into the same keyword.
+      (and (= "session.event" method)
+           (= "session.custom_notification" (get-in params [:event :type])))
+      (cond-> converted
+        (contains? (get-in params [:event :data]) :subject)
+        (assoc-in [:params :event :data :subject]
+                  (get-in params [:event :data :subject]))
+        (contains? (get-in params [:event :data]) :payload)
+        (assoc-in [:params :event :data :payload]
+                  (get-in params [:event :data :payload])))
 
       :else
       converted)))

@@ -518,6 +518,7 @@
     :working-directory :agent :on-event :create-session-fs-handler
     :enable-config-discovery :model-capabilities :github-token
     :enable-session-telemetry?
+    :remote-session
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
@@ -534,6 +535,7 @@
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::enable-session-telemetry?
+                    ::remote-session
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
@@ -548,6 +550,7 @@
     :continue-pending-work?
     :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
     :enable-session-telemetry?
+    :remote-session
     :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
@@ -564,6 +567,7 @@
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::continue-pending-work?
                     ::enable-session-telemetry?
+                    ::remote-session
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -583,6 +587,7 @@
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::continue-pending-work?
                     ::enable-session-telemetry?
+                    ::remote-session
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -813,6 +818,8 @@
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed :copilot/session.extensions_loaded
     :copilot/session.custom_agents_updated
+    ;; Custom notification (upstream PR #1292, CLI 1.0.48)
+    :copilot/session.custom_notification
     ;; Sampling events (upstream PR #908)
     :copilot/sampling.requested :copilot/sampling.completed
     ;; Session remote steerable (upstream PR #908)
@@ -873,14 +880,38 @@
   (s/keys :req-un [::remote-steerable]
           :opt-un [::url]))
 
+;; Per-session remote mode (upstream CLI 1.0.48-1, PR #1288). `:off` disables
+;; remote, `:export` exports session events to Mission Control without
+;; enabling remote steering, `:on` enables both export and remote steering.
+(s/def ::remote-session-mode #{:off :export :on})
+;; Per-session remote mode set via session config (upstream PR #1295).
+;; Same allowed values as the `remote-enable` opts `:mode`.
+(s/def ::remote-session ::remote-session-mode)
+;; Note: opts uses an unqualified `:mode` key (distinct from ::mode which is
+;; reused elsewhere for the send queue mode). A custom predicate validates the
+;; value rather than s/keys so we don't collide with the existing ::mode spec.
+(s/def ::remote-enable-opts
+  (s/and map?
+         (fn [m]
+           (or (not (contains? m :mode))
+               (s/valid? ::remote-session-mode (:mode m))))))
+
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 (s/def ::interaction-id string?)
 (s/def ::source string?)
 
 ;; user.message event data — attachments can include blobs (inbound-only types)
+;; :is-autopilot-continuation — boolean, added upstream CLI 1.0.47 (PR #1286).
+;; True when the message was auto-injected by autopilot's continuation loop
+;; rather than typed by the user. Note: NO trailing `?` — camel-snake-kebab
+;; converts wire `isAutopilotContinuation` to `:is-autopilot-continuation`
+;; (csk does not append `?` for booleans). See `::remote-steerable` for the
+;; same precedent.
+(s/def ::is-autopilot-continuation boolean?)
 (s/def ::user.message-data
   (s/and (s/keys :req-un [::content]
-                 :opt-un [::transformed-content ::source ::agent-mode ::interaction-id])
+                 :opt-un [::transformed-content ::source ::agent-mode
+                          ::interaction-id ::is-autopilot-continuation])
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
 
@@ -931,13 +962,22 @@
 (s/def ::ttft-ms nat-int?)
 (s/def ::copilot-usage map?)
 
+;; :api-endpoint — open string enum, added upstream CLI 1.0.47 (PR #1286).
+;; API endpoint used for this model call, matching CAPI supported_endpoints
+;; vocabulary. Known values: "/chat/completions", "/v1/messages", "/responses",
+;; "ws:/responses". Modeled as an open string for forward-compatibility — the
+;; upstream wire spec restricts the enum, but the idiom spec deliberately
+;; doesn't so unknown future values pass through.
+(s/def ::api-endpoint string?)
+
 (s/def ::assistant.usage-data
   (s/keys :req-un [::model]
-          :opt-un [::api-call-id ::cache-read-tokens ::cache-write-tokens
-                   ::copilot-usage ::cost ::duration ::initiator ::input-tokens
-                   ::inter-token-latency-ms ::output-tokens ::parent-tool-call-id
-                   ::provider-call-id ::quota-snapshots ::reasoning-effort
-                   ::reasoning-tokens ::ttft-ms]))
+          :opt-un [::api-call-id ::api-endpoint ::cache-read-tokens
+                   ::cache-write-tokens ::copilot-usage ::cost ::duration
+                   ::initiator ::input-tokens ::inter-token-latency-ms
+                   ::output-tokens ::parent-tool-call-id ::provider-call-id
+                   ::quota-snapshots ::reasoning-effort ::reasoning-tokens
+                   ::ttft-ms]))
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
@@ -1028,8 +1068,14 @@
 ;; global ::id spec. ::interval-ms is also strictly positive per schema.
 (s/def ::interval-ms pos-int?)
 ;; ::prompt is already defined above (::non-blank-string), reused here
+;; :recurring — boolean, added upstream CLI 1.0.48-1 (PR #1288). Whether the
+;; schedule re-arms after each tick (`/every`) or fires once (`/after`).
+;; Note: NO trailing `?` — camel-snake-kebab converts wire `recurring` to
+;; `:recurring` (csk does not append `?` for booleans).
+(s/def ::recurring boolean?)
 (s/def ::session.schedule_created-data
-  (s/and (s/keys :req-un [::interval-ms ::prompt])
+  (s/and (s/keys :req-un [::interval-ms ::prompt]
+                 :opt-un [::recurring])
          #(contains? % :id)
          #(pos-int? (:id %))))
 (s/def ::session.schedule_cancelled-data
@@ -1087,6 +1133,23 @@
 
 (s/def ::session.custom_agents_updated-data
   (s/keys :req-un [::agents ::warnings ::errors]))
+
+;; session.custom_notification (upstream PR #1292, CLI 1.0.48). Emitted from
+;; Skills via Notify; opaque envelope with extension-supplied payload.
+;; Note: the wire schema's :version is a positive integer, distinct from the
+;; SDK's global ::version spec (string?) used by ::model-info. We validate
+;; :version inline via s/and to avoid collision.
+;; `:subject` keys are preserved verbatim (not kebab-cased) by
+;; protocol/normalize-incoming — subject identifiers and payload contents are
+;; source-defined and opaque. Keys are still keywords (JSON parser uses
+;; `:key-fn keyword`) but retain original casing/dots.
+(s/def ::payload any?)
+(s/def ::subject (s/map-of keyword? string?))
+(s/def ::session.custom_notification-data
+  (s/and (s/keys :req-un [::source ::name ::payload]
+                 :opt-un [::subject])
+         #(or (not (contains? % :version))
+              (pos-int? (:version %)))))
 
 ;; Session status/listing events from generated session-events schema.
 (s/def ::mcp-server-status

@@ -1778,6 +1778,13 @@
   "Enable remote steering for this session, exposing it to GitHub Mission
    Control web/mobile clients.
 
+   Optional `opts`:
+   - `:mode` — keyword, one of `:off`, `:export`, or `:on`. Per-session remote
+     mode. `:off` disables remote, `:export` exports session events to Mission
+     Control without enabling remote steering, `:on` enables both export and
+     remote steering. When omitted, the CLI applies its default. (Upstream CLI
+     1.0.48-1, PR #1288.)
+
    Returns a map:
    - `:url`               — Mission Control frontend URL (may be absent).
    - `:remote-steerable`  — boolean; whether remote steering is enabled.
@@ -1785,12 +1792,16 @@
    **Experimental** — corresponds to the `session.remote.enable` JSON-RPC
    method introduced upstream in PR #1192. The shape of the result and
    guarantees may change."
-  [session]
-  (let [{:keys [session-id client]} session
-        conn (connection-io client)]
-    (util/wire->clj
-     (proto/send-request! conn "session.remote.enable"
-                          {:session-id session-id}))))
+  ([session] (remote-enable session nil))
+  ([session opts]
+   (let [{:keys [session-id client]} session
+         conn (connection-io client)
+         base {:session-id session-id}
+         params (if-let [m (:mode opts)]
+                  (assoc base :mode (name m))
+                  base)]
+     (util/wire->clj
+      (proto/send-request! conn "session.remote.enable" params)))))
 
 (defn ^:experimental remote-disable
   "Disable remote steering for this session. Returns nil.
