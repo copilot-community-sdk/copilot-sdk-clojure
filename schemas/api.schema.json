@@ -26,15 +26,7 @@
       "list": {
         "rpcMethod": "models.list",
         "params": {
-          "anyOf": [
-            {
-              "not": {}
-            },
-            {
-              "$ref": "#/definitions/ModelsListRequest"
-            }
-          ],
-          "title": "ModelsListRequest"
+          "$ref": "#/definitions/ModelsListRequest"
         },
         "result": {
           "$ref": "#/definitions/ModelList"
@@ -56,15 +48,7 @@
       "getQuota": {
         "rpcMethod": "account.getQuota",
         "params": {
-          "anyOf": [
-            {
-              "not": {}
-            },
-            {
-              "$ref": "#/definitions/AccountGetQuotaRequest"
-            }
-          ],
-          "title": "AccountGetQuotaRequest"
+          "$ref": "#/definitions/AccountGetQuotaRequest"
         },
         "result": {
           "$ref": "#/definitions/AccountGetQuotaResult"
@@ -971,8 +955,7 @@
           "additionalProperties": false
         },
         "result": {
-          "type": "null",
-          "title": "SkillsReloadResult"
+          "$ref": "#/definitions/SkillsLoadDiagnostics"
         },
         "stability": "experimental"
       }
@@ -1275,6 +1258,76 @@
       }
     },
     "commands": {
+      "list": {
+        "rpcMethod": "session.commands.list",
+        "params": {
+          "anyOf": [
+            {
+              "not": {}
+            },
+            {
+              "type": "object",
+              "properties": {
+                "includeBuiltins": {
+                  "type": "boolean",
+                  "description": "Include runtime built-in commands"
+                },
+                "includeSkills": {
+                  "type": "boolean",
+                  "description": "Include enabled user-invocable skills and commands"
+                },
+                "includeClientCommands": {
+                  "type": "boolean",
+                  "description": "Include commands registered by protocol clients, including SDK clients and extensions"
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "title": "CommandsListRequest",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        },
+        "result": {
+          "$ref": "#/definitions/CommandList"
+        }
+      },
+      "invoke": {
+        "rpcMethod": "session.commands.invoke",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Command name. Leading slashes are stripped and the name is matched case-insensitively."
+            },
+            "input": {
+              "type": "string",
+              "description": "Raw input after the command name"
+            }
+          },
+          "required": [
+            "sessionId",
+            "name"
+          ],
+          "additionalProperties": false,
+          "title": "CommandsInvokeRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/SlashCommandInvocationResult"
+        }
+      },
       "handlePendingCommand": {
         "rpcMethod": "session.commands.handlePendingCommand",
         "params": {
@@ -1657,12 +1710,17 @@
             "sessionId": {
               "type": "string",
               "description": "Target session identifier"
+            },
+            "mode": {
+              "$ref": "#/definitions/RemoteSessionMode",
+              "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to Mission Control without enabling remote steering, \"on\" enables both export and remote steering."
             }
           },
+          "additionalProperties": false,
+          "title": "RemoteEnableRequest",
           "required": [
             "sessionId"
-          ],
-          "additionalProperties": false
+          ]
         },
         "result": {
           "$ref": "#/definitions/RemoteEnableResult"
@@ -2035,14 +2093,22 @@
   },
   "definitions": {
     "AccountGetQuotaRequest": {
-      "type": "object",
-      "properties": {
-        "gitHubToken": {
-          "type": "string",
-          "description": "GitHub token for per-user quota lookup. When provided, resolves this token to determine the user's quota instead of using the global auth."
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gitHubToken": {
+              "type": "string",
+              "description": "GitHub token for per-user quota lookup. When provided, resolves this token to determine the user's quota instead of using the global auth."
+            }
+          },
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false
+      ],
+      "title": "AccountGetQuotaRequest"
     },
     "AccountGetQuotaResult": {
       "type": "object",
@@ -2229,6 +2295,23 @@
       "description": "Authentication type",
       "title": "AuthInfoType"
     },
+    "CommandList": {
+      "type": "object",
+      "properties": {
+        "commands": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SlashCommandInfo"
+          },
+          "description": "Commands available in this session"
+        }
+      },
+      "required": [
+        "commands"
+      ],
+      "additionalProperties": false,
+      "title": "CommandList"
+    },
     "CommandsHandlePendingCommandRequest": {
       "type": "object",
       "properties": {
@@ -2260,6 +2343,50 @@
       ],
       "additionalProperties": false,
       "title": "CommandsHandlePendingCommandResult"
+    },
+    "CommandsInvokeRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Command name. Leading slashes are stripped and the name is matched case-insensitively."
+        },
+        "input": {
+          "type": "string",
+          "description": "Raw input after the command name"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "title": "CommandsInvokeRequest"
+    },
+    "CommandsListRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "includeBuiltins": {
+              "type": "boolean",
+              "description": "Include runtime built-in commands"
+            },
+            "includeSkills": {
+              "type": "boolean",
+              "description": "Include enabled user-invocable skills and commands"
+            },
+            "includeClientCommands": {
+              "type": "boolean",
+              "description": "Include commands registered by protocol clients, including SDK clients and extensions"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "title": "CommandsListRequest"
     },
     "CommandsRespondToQueuedCommandRequest": {
       "type": "object",
@@ -3661,11 +3788,39 @@
         "multiplier": {
           "type": "number",
           "description": "Billing cost multiplier relative to the base rate"
+        },
+        "tokenPrices": {
+          "$ref": "#/definitions/ModelBillingTokenPrices",
+          "description": "Token-level pricing information for this model"
         }
       },
       "additionalProperties": false,
       "description": "Billing information",
       "title": "ModelBilling"
+    },
+    "ModelBillingTokenPrices": {
+      "type": "object",
+      "properties": {
+        "inputPrice": {
+          "type": "integer",
+          "description": "Price per billing batch of input tokens in nano-AIUs (1 nano-AIU = 0.000000001 AIU, 1 AIU = $0.01 USD)"
+        },
+        "outputPrice": {
+          "type": "integer",
+          "description": "Price per billing batch of output tokens in nano-AIUs (1 nano-AIU = 0.000000001 AIU, 1 AIU = $0.01 USD)"
+        },
+        "cachePrice": {
+          "type": "integer",
+          "description": "Price per billing batch of cached tokens in nano-AIUs (1 nano-AIU = 0.000000001 AIU, 1 AIU = $0.01 USD)"
+        },
+        "batchSize": {
+          "type": "integer",
+          "description": "Number of tokens per standard billing batch"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Token-level pricing information for this model",
+      "title": "ModelBillingTokenPrices"
     },
     "ModelCapabilities": {
       "type": "object",
@@ -3892,14 +4047,22 @@
       "title": "ModelPolicy"
     },
     "ModelsListRequest": {
-      "type": "object",
-      "properties": {
-        "gitHubToken": {
-          "type": "string",
-          "description": "GitHub token for per-user model listing. When provided, resolves this token to determine the user's Copilot plan and available models instead of using the global auth."
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gitHubToken": {
+              "type": "string",
+              "description": "GitHub token for per-user model listing. When provided, resolves this token to determine the user's Copilot plan and available models instead of using the global auth."
+            }
+          },
+          "additionalProperties": false
         }
-      },
-      "additionalProperties": false
+      ],
+      "title": "ModelsListRequest"
     },
     "ModelSwitchToRequest": {
       "type": "object",
@@ -4755,6 +4918,17 @@
       "description": "Result of the queued command execution",
       "title": "QueuedCommandResult"
     },
+    "RemoteEnableRequest": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/RemoteSessionMode",
+          "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to Mission Control without enabling remote steering, \"on\" enables both export and remote steering."
+        }
+      },
+      "additionalProperties": false,
+      "title": "RemoteEnableRequest"
+    },
     "RemoteEnableResult": {
       "type": "object",
       "properties": {
@@ -4772,6 +4946,16 @@
       ],
       "additionalProperties": false,
       "title": "RemoteEnableResult"
+    },
+    "RemoteSessionMode": {
+      "type": "string",
+      "enum": [
+        "off",
+        "export",
+        "on"
+      ],
+      "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to Mission Control without enabling remote steering, \"on\" enables both export and remote steering.",
+      "title": "RemoteSessionMode"
     },
     "ServerSkill": {
       "type": "object",
@@ -5296,6 +5480,10 @@
         "toEventId": {
           "type": "string",
           "description": "Optional event ID boundary. When provided, the fork includes only events before this ID (exclusive). When omitted, all events are included."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional friendly name to assign to the forked session."
         }
       },
       "required": [
@@ -5310,6 +5498,10 @@
         "sessionId": {
           "type": "string",
           "description": "The new forked session's ID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Friendly name assigned to the forked session, if any."
         }
       },
       "required": [
@@ -5518,6 +5710,232 @@
       ],
       "additionalProperties": false,
       "title": "SkillsEnableRequest"
+    },
+    "SkillsLoadDiagnostics": {
+      "type": "object",
+      "properties": {
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Warnings emitted while loading skills (e.g. skills that loaded but had issues)"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Errors emitted while loading skills (e.g. skills that failed to load entirely)"
+        }
+      },
+      "required": [
+        "warnings",
+        "errors"
+      ],
+      "additionalProperties": false,
+      "title": "SkillsLoadDiagnostics"
+    },
+    "SlashCommandAgentPromptMode": {
+      "type": "string",
+      "enum": [
+        "interactive",
+        "plan",
+        "autopilot"
+      ],
+      "description": "Optional target session mode",
+      "title": "SlashCommandAgentPromptMode"
+    },
+    "SlashCommandAgentPromptResult": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "agent-prompt",
+          "description": "Agent prompt result discriminator"
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt to submit to the agent"
+        },
+        "displayPrompt": {
+          "type": "string",
+          "description": "Prompt text to display to the user"
+        },
+        "mode": {
+          "$ref": "#/definitions/SlashCommandAgentPromptMode",
+          "description": "Optional target session mode"
+        },
+        "runtimeSettingsChanged": {
+          "type": "boolean",
+          "description": "True when the invocation mutated user runtime settings; consumers caching settings should refresh"
+        }
+      },
+      "required": [
+        "kind",
+        "prompt",
+        "displayPrompt"
+      ],
+      "additionalProperties": false,
+      "title": "SlashCommandAgentPromptResult"
+    },
+    "SlashCommandCompletedResult": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "completed",
+          "description": "Completed result discriminator"
+        },
+        "message": {
+          "type": "string",
+          "description": "Optional user-facing message describing the completed command"
+        },
+        "runtimeSettingsChanged": {
+          "type": "boolean",
+          "description": "True when the invocation mutated user runtime settings; consumers caching settings should refresh"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "title": "SlashCommandCompletedResult"
+    },
+    "SlashCommandInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Canonical command name without a leading slash"
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Canonical aliases without leading slashes"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable command description"
+        },
+        "kind": {
+          "$ref": "#/definitions/SlashCommandKind",
+          "description": "Coarse command category for grouping and behavior: runtime built-in, skill-backed command, or SDK/client-owned command"
+        },
+        "input": {
+          "$ref": "#/definitions/SlashCommandInput",
+          "description": "Optional unstructured input hint"
+        },
+        "allowDuringAgentExecution": {
+          "type": "boolean",
+          "description": "Whether the command may run while an agent turn is active"
+        },
+        "experimental": {
+          "type": "boolean",
+          "description": "Whether the command is experimental"
+        }
+      },
+      "required": [
+        "name",
+        "description",
+        "kind",
+        "allowDuringAgentExecution"
+      ],
+      "additionalProperties": false,
+      "title": "SlashCommandInfo"
+    },
+    "SlashCommandInput": {
+      "type": "object",
+      "properties": {
+        "hint": {
+          "type": "string",
+          "description": "Hint to display when command input has not been provided"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "When true, the command requires non-empty input; clients should render the input hint as required"
+        },
+        "completion": {
+          "$ref": "#/definitions/SlashCommandInputCompletion",
+          "description": "Optional completion hint for the input (e.g. 'directory' for filesystem path completion)"
+        },
+        "preserveMultilineInput": {
+          "type": "boolean",
+          "description": "When true, clients should pass the full text after the command name as a single argument rather than splitting on whitespace"
+        }
+      },
+      "required": [
+        "hint"
+      ],
+      "additionalProperties": false,
+      "description": "Optional unstructured input hint",
+      "title": "SlashCommandInput"
+    },
+    "SlashCommandInputCompletion": {
+      "type": "string",
+      "enum": [
+        "directory"
+      ],
+      "description": "Optional completion hint for the input (e.g. 'directory' for filesystem path completion)",
+      "title": "SlashCommandInputCompletion"
+    },
+    "SlashCommandInvocationResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SlashCommandTextResult"
+        },
+        {
+          "$ref": "#/definitions/SlashCommandAgentPromptResult"
+        },
+        {
+          "$ref": "#/definitions/SlashCommandCompletedResult"
+        }
+      ],
+      "title": "SlashCommandInvocationResult"
+    },
+    "SlashCommandKind": {
+      "type": "string",
+      "enum": [
+        "builtin",
+        "skill",
+        "client"
+      ],
+      "description": "Coarse command category for grouping and behavior: runtime built-in, skill-backed command, or SDK/client-owned command",
+      "title": "SlashCommandKind"
+    },
+    "SlashCommandTextResult": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "text",
+          "description": "Text result discriminator"
+        },
+        "text": {
+          "type": "string",
+          "description": "Text output for the client to render"
+        },
+        "markdown": {
+          "type": "boolean",
+          "description": "Whether text contains Markdown"
+        },
+        "preserveAnsi": {
+          "type": "boolean",
+          "description": "Whether ANSI sequences should be preserved"
+        },
+        "runtimeSettingsChanged": {
+          "type": "boolean",
+          "description": "True when the invocation mutated user runtime settings; consumers caching settings should refresh"
+        }
+      },
+      "required": [
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false,
+      "title": "SlashCommandTextResult"
     },
     "TaskAgentInfo": {
       "type": "object",
