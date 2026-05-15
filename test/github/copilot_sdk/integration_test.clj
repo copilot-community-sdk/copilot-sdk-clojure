@@ -9,6 +9,7 @@
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.tools :as tools]
+            [github.copilot-sdk.util :as util]
             [github.copilot-sdk.generated.event-specs]
             [github.copilot-sdk.mock-server :as mock]))
 
@@ -869,6 +870,57 @@
         "schedule data must reject non-integer :id (vs the UUID-string ::id used elsewhere)")
     (is (s/valid? :github.copilot-sdk.specs/session.schedule_cancelled-data {:id 42}))))
 
+(deftest test-custom-notification-event-type
+  (testing "session.custom_notification is part of the public ::sdk/event-types set (upstream PR #1292)"
+    (is (contains? sdk/event-types :copilot/session.custom_notification)))
+  (testing "session.custom_notification is categorized under session-events"
+    (is (contains? sdk/session-events :copilot/session.custom_notification)))
+  (testing "session.custom_notification is accepted by the idiom ::specs/event-type spec"
+    (is (s/valid? :github.copilot-sdk.specs/event-type :copilot/session.custom_notification)))
+  (testing "::session.custom_notification-data idiom spec accepts a well-formed payload"
+    (is (s/valid? :github.copilot-sdk.specs/session.custom_notification-data
+                  {:source "my-extension"
+                   :name "doc.opened"
+                   :payload {:path "/tmp/x"}
+                   :subject {:doc "foo"}
+                   :version 1}))
+    (is (s/valid? :github.copilot-sdk.specs/session.custom_notification-data
+                  {:source "my-extension"
+                   :name "ping"
+                   :payload "scalar-ok"})
+        "payload may be a scalar")
+    (is (not (s/valid? :github.copilot-sdk.specs/session.custom_notification-data
+                       {:name "doc.opened" :payload {}}))
+        "missing :source must reject"))
+  (testing "subject and payload keys are preserved verbatim (not kebab-cased) by normalize-incoming"
+    ;; Source-defined identifiers (subject) and opaque JSON (payload) must
+    ;; survive normalize-incoming without key transformation, matching the
+    ;; existing escape hatch for external_tool.requested arguments.
+    (let [normalize @#'github.copilot-sdk.protocol/normalize-incoming
+          raw-msg {:jsonrpc "2.0"
+                   :method "session.event"
+                   :params {:sessionId "abc"
+                            :event {:type "session.custom_notification"
+                                    :data {:source "my-ext"
+                                           :name "doc.opened"
+                                           :subject {:GitHub-Login "octocat"
+                                                     :actor.id "123"}
+                                           :payload {:firstName "Foo"
+                                                     :nested {:userId 42}}}}}}
+          normalized (normalize raw-msg)
+          data (get-in normalized [:params :event :data])]
+      (is (= "session.custom_notification" (get-in normalized [:params :event :type])))
+      (is (s/valid? :github.copilot-sdk.specs/session.custom_notification-data data))
+      (is (contains? (:subject data) :GitHub-Login)
+          "subject must preserve original casing, not collapse to :git-hub-login")
+      (is (= "octocat" (get-in data [:subject :GitHub-Login])))
+      (is (= "123" (get-in data [:subject :actor.id]))
+          "subject must preserve dotted keys")
+      (is (= 42 (get-in data [:payload :nested :userId]))
+          "payload nested keys must not be kebab-cased")
+      (is (= "Foo" (get-in data [:payload :firstName]))
+          "payload top-level keys must not be kebab-cased"))))
+
 (deftest test-custom-agent-info-tools-nilable
   (testing "::custom-agent-info accepts :tools nil (upstream schema 1.0.41-1: tools: string[] | null)"
     (let [agent-with-nil-tools {:id "a"
@@ -1055,6 +1107,57 @@
           create-params (get @seen "session.create")]
       (is (not (contains? create-params :gitHubToken)))
       (is (not (contains? create-params :githubToken))))))
+
+(deftest test-remote-session-config-forwarded-on-wire
+  (testing "remote-session :on is forwarded as remoteSession in session.create (upstream PR #1295)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :remote-session :on})
+          create-params (get @seen "session.create")]
+      (is (= "on" (:remoteSession create-params)))
+      (is (not (contains? create-params :remote-session)))))
+
+  (testing "remote-session :export is forwarded in session.resume (upstream PR #1295)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.resume" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :remote-session :export})
+          resume-params (get @seen "session.resume")]
+      (is (= "export" (:remoteSession resume-params)))))
+
+  (testing "remote-session :off is forwarded literally (not stripped)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :remote-session :off})
+          create-params (get @seen "session.create")]
+      (is (= "off" (:remoteSession create-params)))))
+
+  (testing "remote-session is omitted from wire when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :remoteSession)))))
+
+  (testing "remote-session config rejects unknown values via spec validation"
+    (is (thrown? Exception
+                 (sdk/create-session *test-client*
+                                     {:on-permission-request sdk/approve-all
+                                      :remote-session :bogus})))))
 
 (deftest test-agent-forwarded-on-wire
   (testing "agent is forwarded in session.create when set (upstream PR #722)"
@@ -3386,6 +3489,109 @@
           result (session/remote-disable session)]
       (is (some #(= "session.remote.disable" (:method %)) @requests))
       (is (nil? result)))))
+
+;; --- Remote enable mode parameter (upstream CLI 1.0.48-1, PR #1288) --------
+
+(deftest test-remote-enable-no-mode
+  (testing "remote-enable with no args sends no :mode on the wire (back-compat)"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all})
+          _ (session/remote-enable session)
+          req (first (filter #(= "session.remote.enable" (:method %)) @requests))]
+      (is (some? req))
+      (is (not (contains? (:params req) :mode))
+          "no-arg call must not include :mode in wire params"))))
+
+(deftest test-remote-enable-with-mode
+  (testing "remote-enable accepts opts {:mode :export} and forwards as wire string"
+    (doseq [m [:off :export :on]]
+      (let [requests (atom [])
+            _ (mock/set-request-hook! *mock-server*
+                                      (fn [method params]
+                                        (swap! requests conj {:method method :params params})))
+            session (sdk/create-session *test-client*
+                                        {:on-permission-request sdk/approve-all})
+            _ (session/remote-enable session {:mode m})
+            req (first (filter #(= "session.remote.enable" (:method %)) @requests))]
+        (is (some? req))
+        (is (= (name m) (:mode (:params req)))
+            (str ":mode " m " must arrive on the wire as the raw enum string"))))))
+
+(deftest test-remote-enable-mode-spec
+  (testing "::remote-session-mode accepts upstream values"
+    (is (s/valid? :github.copilot-sdk.specs/remote-session-mode :off))
+    (is (s/valid? :github.copilot-sdk.specs/remote-session-mode :export))
+    (is (s/valid? :github.copilot-sdk.specs/remote-session-mode :on))
+    (is (not (s/valid? :github.copilot-sdk.specs/remote-session-mode :bogus)))))
+
+;; --- session.schedule_created :recurring? (upstream CLI 1.0.48-1) ----------
+
+(deftest test-schedule-created-recurring-field
+  (testing "session.schedule_created-data accepts optional :recurring boolean"
+    (is (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
+                  {:id 1 :interval-ms 1000 :prompt "ping" :recurring true}))
+    (is (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
+                  {:id 1 :interval-ms 1000 :prompt "ping" :recurring false}))
+    (is (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
+                  {:id 1 :interval-ms 1000 :prompt "ping"})
+        "still valid without :recurring for back-compat")
+    (is (not (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
+                       {:id 1 :interval-ms 1000 :prompt "ping" :recurring "yes"}))
+        ":recurring must be a boolean if present"))
+  (testing "wire-shaped event from wire->clj round-trip validates against idiom spec"
+    ;; Real upstream wire data uses `recurring` (csk does NOT append `?`)
+    (let [wire-data {:id 1 :intervalMs 1000 :prompt "ping" :recurring true}
+          clj-data (util/wire->clj wire-data)]
+      (is (= true (:recurring clj-data))
+          "wire->clj must produce :recurring (no `?` suffix)")
+      (is (s/valid? :github.copilot-sdk.specs/session.schedule_created-data clj-data)
+          "post-wire->clj event data must validate against the idiom spec"))))
+
+;; --- user.message :is-autopilot-continuation (upstream CLI 1.0.47) ---------
+
+(deftest test-user-message-is-autopilot-continuation-field
+  (testing "user.message-data accepts optional :is-autopilot-continuation boolean"
+    (is (s/valid? :github.copilot-sdk.specs/user.message-data
+                  {:content "hello" :is-autopilot-continuation true}))
+    (is (s/valid? :github.copilot-sdk.specs/user.message-data
+                  {:content "hello" :is-autopilot-continuation false}))
+    (is (s/valid? :github.copilot-sdk.specs/user.message-data {:content "hello"})
+        "still valid without :is-autopilot-continuation for back-compat")
+    (is (not (s/valid? :github.copilot-sdk.specs/user.message-data
+                       {:content "hello" :is-autopilot-continuation "no"}))
+        ":is-autopilot-continuation must be boolean if present"))
+  (testing "wire-shaped event from wire->clj round-trip validates against idiom spec"
+    (let [wire-data {:content "hi" :isAutopilotContinuation true}
+          clj-data (util/wire->clj wire-data)]
+      (is (= true (:is-autopilot-continuation clj-data))
+          "wire->clj must produce :is-autopilot-continuation (no `?` suffix)")
+      (is (s/valid? :github.copilot-sdk.specs/user.message-data clj-data)
+          "post-wire->clj event data must validate against the idiom spec"))))
+
+;; --- assistant.usage :api-endpoint (upstream CLI 1.0.47) -------------------
+
+(deftest test-assistant-usage-api-endpoint-field
+  (testing "assistant.usage-data accepts optional :api-endpoint string (open enum)"
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :api-endpoint "/chat/completions"}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :api-endpoint "/v1/messages"}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :api-endpoint "/responses"}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :api-endpoint "ws:/responses"}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :api-endpoint "/future-unknown"})
+        "open enum: unknown future strings should validate (forward-compat)")
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data {:model "gpt-5"})
+        "still valid without :api-endpoint")
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5" :api-endpoint 42}))
+        ":api-endpoint must be a string if present")))
 
 ;; --- Memory permission event data specs (CLI 1.0.22) -----------------------
 
