@@ -33,10 +33,10 @@ Launch three parallel explore agents to build a comprehensive inventory. Use the
 3. **Clojure SDK** — Read all `src/github/copilot_sdk/*.clj`. Catalog public functions, specs, event sets, wire conversion.
 
 Compare inventories to identify gaps:
-- Missing behavioral guards (e.g., `resolvedByHook`)
-- Missing spec fields (new event data, new config options)
-- Missing permission result kinds, event types
-- API signature changes (e.g., handler arity)
+- New or changed public functions, types, or method signatures
+- New event types and event data fields
+- New config options or enum values
+- Behavioral changes — new guards, fields that gate logic, or shape changes to existing data
 
 ### Phase 3: Planning
 
@@ -120,7 +120,7 @@ After each upstream sync, review this skill itself for accuracy and relevance:
 
 1. **Project structure** — Compare the file listing in `AGENTS.md` § Project Structure against the actual contents of `src/github/copilot_sdk/`. Flag any new, renamed, or removed source files.
 2. **Upstream file mapping** — Compare the mapping table in `references/PROJECT.md` against the current upstream `nodejs/src/` directory. Flag new or removed upstream files.
-3. **Common Pitfalls** — Check whether any pitfalls were encountered during this sync that aren't listed, or whether any listed pitfalls are no longer relevant (e.g., patterns that have been refactored away).
+3. **Common Pitfalls** — Only propose a new pitfall if it generalizes to a *class* of recurring bug. Single-occurrence specifics belong in commit messages or PR descriptions, not here. Also flag listed pitfalls that no longer apply (e.g., refactored away).
 4. **Process phases** — Note any workflow steps that were awkward, missing, or unnecessary during this sync.
 
 If any drift is found, describe your findings to the user and propose specific edits to `SKILL.md`, `references/PROJECT.md`, or `AGENTS.md`. **Do not commit** the skill updates — wait for the maintainer to review and approve them.
@@ -143,11 +143,14 @@ If any drift is found, describe your findings to the user and propose specific e
 
 ## Common Pitfalls
 
-These are verified sources of real bugs in this codebase:
+Real recurring traps when porting upstream changes:
 
-- **Boolean wire fields don't get `?` suffix.** camel-snake-kebab converts `resolvedByHook` → `:resolved-by-hook`, not `:resolved-by-hook?`. Code that manually maps wire booleans to `?`-suffixed keywords (like `:preview?`) must do so explicitly.
-- **Forgetting to register fdefs.** Every new public function needs an `s/fdef` declared via the private `register-fdef!` macro in `instrument.clj`. `instrument-all!`/`unstrument-all!` derive their target list from the `registered-fdefs` atom, so a plain `s/fdef` (or one outside `instrument.clj`) leaves a silent instrumentation gap. Integration tests run instrumented, so a missed registration means the spec is never enforced.
-- **Closed config key sets.** When adding session config options, update both `session-config-keys` and `resume-session-config-keys` in `specs.clj`. Missing a set causes the option to be silently stripped.
-- **`::join-session-config` `:opt-un` must mirror `resume-session-config-keys`.** New keys added to the resume key set must also be listed in the `::join-session-config` spec's `:opt-un` vector. The shared `closed-keys` membership check lets them through, but without `:opt-un` their value specs aren't enforced on joined sessions.
-- **Don't double-convert wire format in RPC handlers.** The protocol layer (`protocol/handle-request!`) automatically applies `util/clj->wire` to `:result` before sending. RPC request handlers in `session.clj` must therefore return **idiomatic** shapes (kebab-case keys). A handler that calls `util/clj->wire` itself causes double conversion — silently harmless when csk is idempotent on already-camelCased keys, but conceptually wrong. The only manual re-keying needed is for keys csk doesn't transform: e.g., `:approved?` → `:approved` (csk preserves the `?` suffix). Use `handle-permission-request!` as the reference example.
-- **Mock data vs wire format.** Test fixtures should use wire-shaped data (camelCase) for mock server responses and Clojure-shaped data (kebab-case with `?` suffixes where applicable) for client-side assertions. The mock server parses incoming JSON with `:key-fn keyword` only — it does NOT apply `util/wire->clj`, so test assertions on RPC responses see literal wire camelCase keys.
+1. **Data shapes are declared in multiple sites — find them all.** A new config option, event type, or permission kind typically lives in 3–5 places: a value spec, a closed-keys set, one or more `:opt-un` lists, a public set, and a docstring. Missing any one site causes the option to be silently stripped, the spec to go unenforced, or the value to be invisible to consumers. Grep for an existing analogous key and mirror every site.
+
+2. **Wire conversion happens once, at the boundary; don't convert again.** Inbound responses are normalized by `util/wire->clj` in `protocol/normalize-incoming`; outbound results are converted by `util/clj->wire`. RPC handlers, specs, tests, and event consumers work in idiomatic shapes (kebab-case). Escape hatches exist for opaque source-defined data (tool call arguments, custom-notification subject/payload) — these must be applied to **both** the notification path and the response path if the field is reachable via `session.getMessages` (historical events go through responses).
+
+3. **Public functions need an fdef registered in `instrument.clj`.** Use the `register-fdef!` macro — a plain `s/fdef` or one outside that file leaves a silent instrumentation gap, and integration tests (which run instrumented) won't enforce the spec.
+
+4. **Test fixtures: match the shape the layer actually produces.** Mock server responses use wire shape; client-side assertions use idiomatic shape. Production conversion (`util/wire->clj`) only transforms keyword keys — string-keyed fixtures silently bypass it and produce tests that pass for the wrong reason.
+
+For the mechanics of camelCase ↔ kebab-case conversion (including the `?`-suffix rule), see the cheat sheet in `references/PROJECT.md`.

@@ -33,9 +33,13 @@ When syncing, map upstream changes to the corresponding Clojure files:
 
 ## Wire Conversion Cheat Sheet
 
-camelCase → kebab-case conversion is handled by `util/wire->clj` and `util/clj->wire`.
+camelCase ↔ kebab-case is handled by `util/wire->clj` and `util/clj->wire` (camel-snake-kebab). Conversion happens **once**, at the protocol boundary.
 
 Test a conversion: `(csk/->kebab-case-keyword :yourCamelCaseField)`
 
-**Key rule**: camel-snake-kebab does **not** add a `?` suffix for booleans.
-`resolvedByHook` → `:resolved-by-hook` (not `:resolved-by-hook?`).
+Mechanics worth remembering:
+
+- **Booleans don't get a `?` suffix.** `resolvedByHook` → `:resolved-by-hook`, not `:resolved-by-hook?`. Code that wants `?`-suffixed keywords (e.g., `:approved?`) must re-key manually. csk preserves an existing `?` if you pass it in.
+- **`wire->clj` only transforms keyword keys.** String-keyed maps pass through untouched. The mock server parses JSON with `:key-fn keyword` and does **not** apply `wire->clj`, so request-hook callbacks see camelCase keyword keys (e.g., `:remoteSession`).
+- **Opaque user data must be preserved.** Source-defined identifiers (`tool.call` arguments, `session.custom_notification` `:subject`/`:payload`) bypass conversion via explicit escape hatches in `protocol/normalize-incoming`. When adding a new event with opaque fields, apply the escape hatch on both the notification path and the response path (for `session.getMessages`).
+- **`handle-permission-request!`** in `session.clj` is the reference example for an RPC handler: returns idiomatic shapes and only manually re-keys what csk can't (`:approved?` → `:approved`).
