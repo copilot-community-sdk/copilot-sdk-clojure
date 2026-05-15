@@ -511,7 +511,8 @@
 
 ;; Remote sessions RPC function specs (upstream PR #1192)
 (register-fdef! github.copilot-sdk.session/remote-enable
-  :args (s/cat :session ::specs/session)
+  :args (s/cat :session ::specs/session
+               :opts (s/? (s/nilable ::specs/remote-enable-opts)))
   :ret ::specs/remote-enable-result)
 
 (register-fdef! github.copilot-sdk.session/remote-disable

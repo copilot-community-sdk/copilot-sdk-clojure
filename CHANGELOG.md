@@ -4,9 +4,25 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.0-beta.3 CLI sync)
-- **Schema bump** — `.copilot-schema-version` advanced from `1.0.44-2` to
-  `1.0.46` (current `latest` on npm). Generated wire specs and coercions
-  regenerated.
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.46` to
+  `1.0.48` (the latest GA on npm).
+  Generated wire specs and coercions regenerated.
+- **`:remote-session` session config option** — `create-session` and
+  `resume-session` accept an optional `:remote-session` key set to `:off`,
+  `:export`, or `:on`, enabling per-session Mission Control remote mode at
+  session-creation time without a separate `remote-enable` call. Forwarded to
+  the wire as `remoteSession`. Reuses the `::remote-session-mode` spec.
+  (upstream PR #1295, CLI 1.0.48)
+- **`:copilot/session.custom_notification` event** — Skills (via the `Notify`
+  block) can emit arbitrary application-level events to the SDK. The event
+  exposes `:source`, `:name`, `:payload` (any JSON value), optional
+  `:subject` (map of keyword→string), and optional `:version` (positive
+  integer). Added to `sdk/event-types` and `sdk/session-events`; new idiom
+  spec `::session.custom_notification-data`. The `:subject` and `:payload`
+  fields contain source-defined identifiers and opaque JSON, so their keys
+  are preserved verbatim by the protocol normalizer (no kebab-casing) —
+  matching the existing escape hatch for `external_tool.requested`
+  arguments. (upstream PR #1292, CLI 1.0.48)
 - **Extension permission kinds** — `::permission-kind` accepts the new
   upstream values `:extension-management` and `:extension-permission-access`,
   emitted by the CLI for extension lifecycle and capability-access prompts.
@@ -38,6 +54,34 @@ All notable changes to this project will be documented in this file. This change
   `{:requestId ..., :result {:handled bool, :stopProcessingQueue bool?}}`.
   Marked experimental, mirroring upstream's exposure of this only via the
   generated low-level RPC. (upstream PR #1263, CLI 1.0.45)
+- **`:is-autopilot-continuation` on `user.message` events** —
+  `::user.message-data` now accepts the optional boolean flag emitted by
+  autopilot's continuation loop. `true` indicates the message was
+  auto-injected rather than typed by the user; used to distinguish
+  autopilot-driven turns in telemetry. Wire key: `isAutopilotContinuation`
+  → kebab-case key `:is-autopilot-continuation` (no `?` suffix —
+  camel-snake-kebab does not append `?` for booleans). (upstream PR #1286,
+  CLI 1.0.47)
+- **`:api-endpoint` on `assistant.usage` events** —
+  `::assistant.usage-data` now accepts the optional API endpoint string
+  identifying which CAPI endpoint produced the model call. Known values:
+  `"/chat/completions"`, `"/v1/messages"`, `"/responses"`, `"ws:/responses"`.
+  Modeled as an open string spec for forward-compatibility; the regenerated
+  wire spec enforces the closed enum. (upstream PR #1286, CLI 1.0.47)
+- **`:mode` on `session/remote-enable` (experimental)** — the
+  `session.remote.enable` RPC now accepts an optional `RemoteSessionMode`
+  parameter. `remote-enable` gained a 2-arity overload `(remote-enable session
+  opts)` where `opts` may contain `:mode` set to `:off`, `:export`, or `:on`.
+  `:off` disables remote, `:export` exports session events to Mission Control
+  without enabling remote steering, `:on` enables both. Zero-arg call is
+  unchanged. New idiom specs: `::remote-session-mode` and
+  `::remote-enable-opts`. (upstream PR #1288, CLI 1.0.48-1)
+- **`:recurring` on `session.schedule_created` events** —
+  `::session.schedule_created-data` now accepts the optional boolean flag
+  indicating whether the schedule re-arms after each tick (`/every`) or fires
+  once (`/after`). Wire key: `recurring` → kebab-case key `:recurring` (no
+  `?` suffix — csk does not append `?` for booleans). (upstream PR #1288,
+  CLI 1.0.48-1)
 
 ### Tracked-but-not-ported (post-v1.0.0-beta.3 CLI sync)
 - **`session.tasks.sendMessage` (experimental)** — the upstream Tasks API
@@ -53,6 +97,17 @@ All notable changes to this project will be documented in this file. This change
 - **`WorkspacesGetWorkspaceResult.session_sync_level` removal** — upstream
   dropped this field. The Clojure SDK never surfaced it; no change needed.
   (upstream PR #1239, CLI 1.0.44-3)
+- **`session.commands.list` / `session.commands.invoke` RPCs** — upstream
+  added these slash-command discovery and invocation methods to the generated
+  RPC layer in CLI 1.0.47. The Node.js SDK's public `CopilotSession` does
+  NOT expose them as high-level methods (only via the low-level generated
+  RPC), so per the API-parity rule the Clojure SDK does not surface them
+  either. (upstream PR #1286, CLI 1.0.47)
+- **`ModelBilling.tokenPrices`** — upstream added per-token pricing fields
+  (`inputPrice`, `outputPrice`, `cachePrice`, `batchSize`) to `Model.billing`.
+  The Clojure idiom spec for `::billing` is intentionally broad (open map),
+  so these payloads pass through `list-models` unchanged. No dedicated idiom
+  spec added yet. (upstream PR #1270, CLI 1.0.46)
 
 ## [1.0.0-beta.3.0] - 2026-05-12
 ### Changed (release tooling)

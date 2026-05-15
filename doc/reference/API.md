@@ -265,6 +265,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
+| `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
 
 #### `resume-session`
 
@@ -1159,12 +1160,19 @@ and `:command`. Clients respond via `respond-to-queued-command!`:
 
 | Function | Description |
 |----------|-------------|
-| `session/remote-enable` | Enable remote steerability for the session. Returns `{:url <string?> :remote-steerable <boolean>}`. |
+| `session/remote-enable` | Enable remote steerability for the session. Returns `{:url <string?> :remote-steerable <boolean>}`. Optional 2-arity `opts` map accepts `:mode` set to `:off`, `:export`, or `:on` (upstream CLI 1.0.48-1). |
 | `session/remote-disable` | Disable remote steerability for the session. Returns `nil`. |
 
 ```clojure
 (session/remote-enable my-session)
 ;; => {:url "https://copilot-remote.test/abc" :remote-steerable true}
+
+;; Optional per-session mode (upstream CLI 1.0.48-1):
+;; - :off    — disable remote
+;; - :export — export session events to Mission Control without remote steering
+;; - :on     — export + enable remote steering
+(session/remote-enable my-session {:mode :export})
+;; => {:remote-steerable false}
 
 (session/remote-disable my-session)
 ;; => nil
@@ -1392,6 +1400,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.mcp_server_status_changed` | MCP server status changed |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |
 | `:copilot/session.custom_agents_updated` | Custom agents list updated |
+| `:copilot/session.custom_notification` | Custom Skill notification (Notify block); ephemeral. Data: `{:source "<ext-id>" :name "<event>" :payload <any> :subject {<k> <v>} :version <pos-int>}` (`:subject` and `:version` are optional; `:subject` keys are preserved verbatim — see PR #1292, CLI 1.0.48) |
 | `:copilot/sampling.requested` | MCP sampling request initiated; ephemeral |
 | `:copilot/sampling.completed` | MCP sampling request completed; ephemeral |
 | `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |

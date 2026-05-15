@@ -1499,6 +1499,8 @@
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (some? (:enable-session-telemetry? config))
       (assoc :enable-session-telemetry (:enable-session-telemetry? config))
+      (:remote-session config)
+      (assoc :remote-session (name (:remote-session config)))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :include-sub-agent-streaming-events
@@ -1577,6 +1579,8 @@
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (some? (:enable-session-telemetry? config))
       (assoc :enable-session-telemetry (:enable-session-telemetry? config))
+      (:remote-session config)
+      (assoc :remote-session (name (:remote-session config)))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :include-sub-agent-streaming-events
@@ -1651,6 +1655,9 @@
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)
+   - :remote-session     - Keyword. Per-session Mission Control remote mode: :off, :export, or :on.
+                           Forwarded as `remoteSession` on session.create. When omitted, the CLI
+                           applies its default. (upstream PR #1295, CLI 1.0.48)
    
    Returns a CopilotSession."
   [client config]

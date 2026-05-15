@@ -116,6 +116,7 @@
     :copilot/session.mcp_server_status_changed
     :copilot/session.extensions_loaded
     :copilot/session.custom_agents_updated
+    :copilot/session.custom_notification
     :copilot/sampling.requested
     :copilot/sampling.completed
     :copilot/session.remote_steerable_changed
@@ -152,6 +153,7 @@
     :copilot/session.mcp_server_status_changed
     :copilot/session.extensions_loaded
     :copilot/session.custom_agents_updated
+    :copilot/session.custom_notification
     :copilot/session.remote_steerable_changed
     :copilot/capabilities.changed})
 
