@@ -3,7 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-### Added (post-v1.0.0-beta.3 CLI sync)
+### Notes (v1.0.0-beta.4 sync)
+Upstream `v1.0.0-beta.4` shipped no new Node.js SDK API surface relative to
+`v1.0.0-beta.3` — every SDK-visible change in the upstream diff
+(`ModelBilling.multiplier` optional, extension permission kinds,
+`detachedFromSpawningParentSessionId`, advisor block fields on
+`assistant.message`, `model` on `assistant.message`, model-picker categories,
+`session.commands.respondToQueuedCommand`) was already brought in by the
+earlier CLI 1.0.48 schema sync (PR #103), whose entries appear below.
+`session.tasks.sendMessage` and the C#/Go-only changes from beta.4 are
+deliberately out of scope per the API-parity rule (see Tracked-but-not-ported).
+This release bumps the upstream marker from `1.0.0-beta.3` to `1.0.0-beta.4`.
+
+### Added (v1.0.0-beta.4 sync)
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.46` to
   `1.0.48` (the latest GA on npm).
   Generated wire specs and coercions regenerated.
@@ -83,7 +95,7 @@ All notable changes to this project will be documented in this file. This change
   `?` suffix — csk does not append `?` for booleans). (upstream PR #1288,
   CLI 1.0.48-1)
 
-### Tracked-but-not-ported (post-v1.0.0-beta.3 CLI sync)
+### Tracked-but-not-ported (v1.0.0-beta.4 sync)
 - **`session.tasks.sendMessage` (experimental)** — the upstream Tasks API
   (`session.tasks.*`) is intentionally not surfaced in the Clojure SDK
   yet; the new `sendMessage` RPC is tracked here for a future port.
