@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.0-beta.4 sync)
+- **`:agent-model` on custom-agent configs** — Custom agent maps in
+  `:custom-agents` now accept an optional `:agent-model` string (e.g.
+  `"claude-haiku-4.5"`). When set, the runtime attempts to use that model
+  for the agent, falling back to the parent session model if unavailable.
+  Forwarded on the wire as `agentModel` on each entry in `customAgents`
+  for both `session.create` and `session.resume`. (upstream PR #1309)
+
 ### Notes (v1.0.0-beta.4 sync)
 Upstream `v1.0.0-beta.4` shipped no new Node.js SDK API surface relative to
 `v1.0.0-beta.3` — every SDK-visible change in the upstream diff

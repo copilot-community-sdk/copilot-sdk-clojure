@@ -274,11 +274,15 @@
 (s/def ::agent-prompt ::non-blank-string)
 (s/def ::agent-infer? boolean?)
 (s/def ::agent-skills (s/coll-of string?))
+;; Model identifier for the agent (e.g. "claude-haiku-4.5"). When set, the
+;; runtime will attempt to use this model for the agent, falling back to the
+;; parent session model if unavailable. Upstream PR #1309.
+(s/def ::agent-model ::non-blank-string)
 
 (s/def ::custom-agent
   (s/keys :req-un [::agent-name ::agent-prompt]
           :opt-un [::agent-display-name ::agent-description ::agent-tools
-                   ::mcp-servers ::agent-infer? ::agent-skills]))
+                   ::mcp-servers ::agent-infer? ::agent-skills ::agent-model]))
 
 (s/def ::custom-agents (s/coll-of ::custom-agent))
 

@@ -3356,6 +3356,57 @@
           agent (first (:customAgents create-params))]
       (is (= ["my-skill"] (:agentSkills agent))))))
 
+;; --- Per-agent model field (upstream PR #1309) ------------------------------
+
+(deftest test-custom-agent-model-spec
+  (testing "::custom-agent spec accepts optional :agent-model field"
+    (is (s/valid? :github.copilot-sdk.specs/custom-agent
+                  {:agent-name "test" :agent-prompt "You are helpful"}))
+    (is (s/valid? :github.copilot-sdk.specs/custom-agent
+                  {:agent-name "test" :agent-prompt "You are helpful"
+                   :agent-model "claude-haiku-4.5"}))
+    (is (not (s/valid? :github.copilot-sdk.specs/custom-agent
+                       {:agent-name "test" :agent-prompt "You are helpful"
+                        :agent-model 42}))
+        ":agent-model must be a string when provided")))
+
+(deftest test-custom-agent-model-on-wire
+  (testing "model field is sent on wire in session.create and session.resume (upstream PR #1309)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "haiku-agent"
+                                                  :agent-prompt "Hello"
+                                                  :agent-model "claude-haiku-4.5"}]})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "haiku-agent-2"
+                                                  :agent-prompt "Hi"
+                                                  :agent-model "gpt-5.4"}]})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (= "claude-haiku-4.5"
+             (get-in create-params [:customAgents 0 :agentModel])))
+      (is (= "gpt-5.4"
+             (get-in resume-params [:customAgents 0 :agentModel]))))))
+
+(deftest test-custom-agent-model-omitted-when-not-set
+  (testing ":agent-model is omitted from wire when not provided"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "no-model"
+                                                  :agent-prompt "Hi"}]})
+          agent (first (get-in @seen ["session.create" :customAgents]))]
+      (is (not (contains? agent :agentModel))))))
+
 ;; --- Default agent config (upstream PR #1098) --------------------------------
 
 (deftest test-default-agent-excluded-tools-on-wire
