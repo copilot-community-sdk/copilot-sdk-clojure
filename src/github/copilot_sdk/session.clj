@@ -9,6 +9,7 @@
   (:require [clojure.core.async :as async :refer [go go-loop <! >! >!! <!! chan close! put! alts!! mult tap untap]]
             [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.data.json :as json]
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.logging :as log]
@@ -1217,6 +1218,42 @@
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
       (mapv coerce+normalize-event (:events result)))))
 
+(def ^:private supported-permission-decision-kinds
+  "Accepted `:kind` values when manually resolving a pending permission
+   request via `handle-pending-permission-request!`. Matches the documented
+   PermissionDecision shape. `:no-result` is deliberately excluded — to
+   decline answering, do not call the resolver."
+  #{:approve-once
+    :approve-for-session
+    :approve-for-location
+    :approve-permanently
+    :reject})
+
+(defn- check-pending-request-id!
+  "Validate the :request-id supplied to a pending-RPC resolver. Must be a
+   non-blank string."
+  [request-id opts]
+  (when-not (and (string? request-id) (not (str/blank? request-id)))
+    (throw (ex-info ":request-id must be a non-blank string" {:opts opts}))))
+
+(defn- check-pending-permission-result!
+  "Validate the :result map supplied to a pending permission resolver. Must be
+   a map with a keyword `:kind` from `supported-permission-decision-kinds`."
+  [result opts]
+  (when-not (and (map? result) (contains? result :kind))
+    (throw (ex-info ":result must be a map with a :kind key" {:opts opts})))
+  (let [kind (:kind result)]
+    (when-not (keyword? kind)
+      (throw (ex-info ":result :kind must be a keyword" {:opts opts :kind kind})))
+    (when (= :no-result kind)
+      (throw (ex-info ":no-result is not a valid decision for the pending RPC"
+                      {:opts opts})))
+    (when-not (contains? supported-permission-decision-kinds kind)
+      (throw (ex-info ":result :kind is not a supported permission decision"
+                      {:opts opts
+                       :kind kind
+                       :supported supported-permission-decision-kinds})))))
+
 (defn handle-pending-tool-call!
   "Manually resolve a pending external tool call (upstream PR #1308).
 
@@ -1236,8 +1273,7 @@
   (let [{:keys [session-id client]} session]
     (when (:destroyed? (session-state client session-id))
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
-    (when-not (string? request-id)
-      (throw (ex-info ":request-id is required" {:opts opts})))
+    (check-pending-request-id! request-id opts)
     (when-not (or (contains? opts :result) (contains? opts :error))
       (throw (ex-info "exactly one of :result or :error is required" {:opts opts})))
     (when (and (contains? opts :result) (contains? opts :error))
@@ -1258,8 +1294,7 @@
         {:keys [request-id result error]} opts]
     (when (:destroyed? (session-state client session-id))
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
-    (when-not (string? request-id)
-      (throw (ex-info ":request-id is required" {:opts opts})))
+    (check-pending-request-id! request-id opts)
     (when-not (or (contains? opts :result) (contains? opts :error))
       (throw (ex-info "exactly one of :result or :error is required" {:opts opts})))
     (when (and (contains? opts :result) (contains? opts :error))
@@ -1295,13 +1330,8 @@
   (let [{:keys [session-id client]} session]
     (when (:destroyed? (session-state client session-id))
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
-    (when-not (string? request-id)
-      (throw (ex-info ":request-id is required" {:opts opts})))
-    (when-not (and (map? result) (contains? result :kind))
-      (throw (ex-info ":result must be a map with a :kind key" {:opts opts})))
-    (when (= :no-result (:kind result))
-      (throw (ex-info ":no-result is not a valid decision for the pending RPC"
-                      {:opts opts})))
+    (check-pending-request-id! request-id opts)
+    (check-pending-permission-result! result opts)
     (let [conn (connection-io client)
           normalized (normalize-permission-result result)]
       (proto/send-request! conn "session.permissions.handlePendingPermissionRequest"
@@ -1316,13 +1346,8 @@
         {:keys [request-id result]} opts]
     (when (:destroyed? (session-state client session-id))
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
-    (when-not (string? request-id)
-      (throw (ex-info ":request-id is required" {:opts opts})))
-    (when-not (and (map? result) (contains? result :kind))
-      (throw (ex-info ":result must be a map with a :kind key" {:opts opts})))
-    (when (= :no-result (:kind result))
-      (throw (ex-info ":no-result is not a valid decision for the pending RPC"
-                      {:opts opts})))
+    (check-pending-request-id! request-id opts)
+    (check-pending-permission-result! result opts)
     (let [conn (connection-io client)
           normalized (normalize-permission-result result)]
       (proto/send-request conn "session.permissions.handlePendingPermissionRequest"

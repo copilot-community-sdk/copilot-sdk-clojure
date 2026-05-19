@@ -50,6 +50,16 @@ All notable changes to this project will be documented in this file. This change
   default "tool returned no result" payload).
 - `handle-pending-tool-call!` / `<handle-pending-tool-call!` validate that
   `:error`, when supplied, is a string.
+- All four pending-RPC resolvers (`handle-pending-tool-call!`,
+  `<handle-pending-tool-call!`, `handle-pending-permission-request!`,
+  `<handle-pending-permission-request!`) now require `:request-id` to be a
+  non-blank string.
+- `handle-pending-permission-request!` and async variant validate that
+  `:result :kind` is a keyword in the documented decision set
+  (`:approve-once`, `:approve-for-session`, `:approve-for-location`,
+  `:approve-permanently`, `:reject`); previously unsupported values
+  (e.g. `{:kind 42}`) would be sent on the wire and surface as opaque
+  server-side errors.
 - `tools/define-tool-from-spec` mirrors `tools/define-tool`: when `:handler`
   is omitted, no `:tool-handler` wrapper is installed (declaration-only tool).
 

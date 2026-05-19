@@ -4256,7 +4256,36 @@
       (is (thrown? Exception
                    (sdk/handle-pending-permission-request!
                     session
-                    {:request-id "req-1" :result "not-a-map"}))))))
+                    {:request-id "req-1" :result "not-a-map"})))))
+
+  (testing "handle-pending-permission-request! rejects blank :request-id"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "" :result {:kind :approve-once}})))
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "   " :result {:kind :approve-once}})))))
+
+  (testing "handle-pending-permission-request! rejects non-keyword :kind"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":kind must be a keyword"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "req-1" :result {:kind "approve-once"}})))
+      (is (thrown-with-msg? Exception #":kind must be a keyword"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "req-1" :result {:kind 42}})))))
+
+  (testing "handle-pending-permission-request! rejects unsupported :kind"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #"not a supported permission decision"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "req-1" :result {:kind :totally-made-up}}))))))
 
 (deftest test-handle-pending-tool-call!-sends-rpc
   (testing "handle-pending-tool-call! with :result issues session.tools.handlePendingToolCall"
@@ -4320,4 +4349,15 @@
       (is (thrown-with-msg? Exception #"exactly one of :result or :error"
                             (sdk/<handle-pending-tool-call!
                              session
-                             {:request-id "x"}))))))
+                             {:request-id "x"})))))
+
+  (testing "handle-pending-tool-call! rejects blank :request-id"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "" :result "ok"})))
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "   " :result "ok"}))))))
