@@ -5,53 +5,68 @@
   "server": {
     "ping": {
       "rpcMethod": "ping",
+      "description": "Checks server responsiveness and returns protocol information.",
       "params": {
-        "$ref": "#/definitions/PingRequest"
+        "$ref": "#/definitions/PingRequest",
+        "description": "Optional message to echo back to the caller."
       },
       "result": {
-        "$ref": "#/definitions/PingResult"
+        "$ref": "#/definitions/PingResult",
+        "description": "Server liveness response, including the echoed message, current timestamp, and protocol version."
       }
     },
     "connect": {
       "rpcMethod": "connect",
+      "description": "Performs the SDK server connection handshake and validates the optional connection token.",
       "params": {
-        "$ref": "#/definitions/ConnectRequest"
+        "$ref": "#/definitions/ConnectRequest",
+        "description": "Optional connection token presented by the SDK client during the handshake."
       },
       "result": {
-        "$ref": "#/definitions/ConnectResult"
+        "$ref": "#/definitions/ConnectResult",
+        "description": "Handshake result reporting the server's protocol version and package version on success."
       },
       "visibility": "internal"
     },
     "models": {
       "list": {
         "rpcMethod": "models.list",
+        "description": "Lists Copilot models available to the authenticated user.",
         "params": {
-          "$ref": "#/definitions/ModelsListRequest"
+          "$ref": "#/definitions/ModelsListRequest",
+          "description": "Optional GitHub token used to list models for a specific user instead of the global auth context."
         },
         "result": {
-          "$ref": "#/definitions/ModelList"
+          "$ref": "#/definitions/ModelList",
+          "description": "List of Copilot models available to the resolved user, including capabilities and billing metadata."
         }
       }
     },
     "tools": {
       "list": {
         "rpcMethod": "tools.list",
+        "description": "Lists built-in tools available for a model.",
         "params": {
-          "$ref": "#/definitions/ToolsListRequest"
+          "$ref": "#/definitions/ToolsListRequest",
+          "description": "Optional model identifier whose tool overrides should be applied to the listing."
         },
         "result": {
-          "$ref": "#/definitions/ToolList"
+          "$ref": "#/definitions/ToolList",
+          "description": "Built-in tools available for the requested model, with their parameters and instructions."
         }
       }
     },
     "account": {
       "getQuota": {
         "rpcMethod": "account.getQuota",
+        "description": "Gets Copilot quota usage for the authenticated user or supplied GitHub token.",
         "params": {
-          "$ref": "#/definitions/AccountGetQuotaRequest"
+          "$ref": "#/definitions/AccountGetQuotaRequest",
+          "description": "Optional GitHub token used to look up quota for a specific user instead of the global auth context."
         },
         "result": {
-          "$ref": "#/definitions/AccountGetQuotaResult"
+          "$ref": "#/definitions/AccountGetQuotaResult",
+          "description": "Quota usage snapshots for the resolved user, keyed by quota type."
         }
       }
     },
@@ -59,69 +74,79 @@
       "config": {
         "list": {
           "rpcMethod": "mcp.config.list",
+          "description": "Lists MCP servers from user configuration.",
           "params": null,
           "result": {
-            "$ref": "#/definitions/McpConfigList"
+            "$ref": "#/definitions/McpConfigList",
+            "description": "User-configured MCP servers, keyed by server name."
           }
         },
         "add": {
           "rpcMethod": "mcp.config.add",
+          "description": "Adds an MCP server to user configuration.",
           "params": {
-            "$ref": "#/definitions/McpConfigAddRequest"
+            "$ref": "#/definitions/McpConfigAddRequest",
+            "description": "MCP server name and configuration to add to user configuration."
           },
           "result": {
-            "type": "null",
-            "title": "McpConfigAddResult"
+            "type": "null"
           }
         },
         "update": {
           "rpcMethod": "mcp.config.update",
+          "description": "Updates an MCP server in user configuration.",
           "params": {
-            "$ref": "#/definitions/McpConfigUpdateRequest"
+            "$ref": "#/definitions/McpConfigUpdateRequest",
+            "description": "MCP server name and replacement configuration to write to user configuration."
           },
           "result": {
-            "type": "null",
-            "title": "McpConfigUpdateResult"
+            "type": "null"
           }
         },
         "remove": {
           "rpcMethod": "mcp.config.remove",
+          "description": "Removes an MCP server from user configuration.",
           "params": {
-            "$ref": "#/definitions/McpConfigRemoveRequest"
+            "$ref": "#/definitions/McpConfigRemoveRequest",
+            "description": "MCP server name to remove from user configuration."
           },
           "result": {
-            "type": "null",
-            "title": "McpConfigRemoveResult"
+            "type": "null"
           }
         },
         "enable": {
           "rpcMethod": "mcp.config.enable",
+          "description": "Enables MCP servers in user configuration for new sessions.",
           "params": {
-            "$ref": "#/definitions/McpConfigEnableRequest"
+            "$ref": "#/definitions/McpConfigEnableRequest",
+            "description": "MCP server names to enable for new sessions."
           },
           "result": {
-            "type": "null",
-            "title": "McpConfigEnableResult"
+            "type": "null"
           }
         },
         "disable": {
           "rpcMethod": "mcp.config.disable",
+          "description": "Disables MCP servers in user configuration for new sessions.",
           "params": {
-            "$ref": "#/definitions/McpConfigDisableRequest"
+            "$ref": "#/definitions/McpConfigDisableRequest",
+            "description": "MCP server names to disable for new sessions."
           },
           "result": {
-            "type": "null",
-            "title": "McpConfigDisableResult"
+            "type": "null"
           }
         }
       },
       "discover": {
         "rpcMethod": "mcp.discover",
+        "description": "Discovers MCP servers from user, workspace, plugin, and builtin sources.",
         "params": {
-          "$ref": "#/definitions/McpDiscoverRequest"
+          "$ref": "#/definitions/McpDiscoverRequest",
+          "description": "Optional working directory used as context for MCP server discovery."
         },
         "result": {
-          "$ref": "#/definitions/McpDiscoverResult"
+          "$ref": "#/definitions/McpDiscoverResult",
+          "description": "MCP servers discovered from user, workspace, plugin, and built-in sources."
         }
       }
     },
@@ -129,44 +154,67 @@
       "config": {
         "setDisabledSkills": {
           "rpcMethod": "skills.config.setDisabledSkills",
+          "description": "Replaces the global list of disabled skills.",
           "params": {
-            "$ref": "#/definitions/SkillsConfigSetDisabledSkillsRequest"
+            "$ref": "#/definitions/SkillsConfigSetDisabledSkillsRequest",
+            "description": "Skill names to mark as disabled in global configuration, replacing any previous list."
           },
           "result": {
-            "type": "null",
-            "title": "SkillsConfigSetDisabledSkillsResult"
+            "type": "null"
           }
         }
       },
       "discover": {
         "rpcMethod": "skills.discover",
+        "description": "Discovers skills across global and project sources.",
         "params": {
-          "$ref": "#/definitions/SkillsDiscoverRequest"
+          "$ref": "#/definitions/SkillsDiscoverRequest",
+          "description": "Optional project paths and additional skill directories to include in discovery."
         },
         "result": {
-          "$ref": "#/definitions/ServerSkillList"
+          "$ref": "#/definitions/ServerSkillList",
+          "description": "Skills discovered across global and project sources."
         }
       }
     },
     "sessionFs": {
       "setProvider": {
         "rpcMethod": "sessionFs.setProvider",
+        "description": "Registers an SDK client as the session filesystem provider.",
         "params": {
-          "$ref": "#/definitions/SessionFsSetProviderRequest"
+          "$ref": "#/definitions/SessionFsSetProviderRequest",
+          "description": "Initial working directory, session-state path layout, and path conventions used to register the calling SDK client as the session filesystem provider."
         },
         "result": {
-          "$ref": "#/definitions/SessionFsSetProviderResult"
+          "$ref": "#/definitions/SessionFsSetProviderResult",
+          "description": "Indicates whether the calling client was registered as the session filesystem provider."
         }
       }
     },
     "sessions": {
       "fork": {
         "rpcMethod": "sessions.fork",
+        "description": "Creates a new session by forking persisted history from an existing session.",
         "params": {
-          "$ref": "#/definitions/SessionsForkRequest"
+          "$ref": "#/definitions/SessionsForkRequest",
+          "description": "Source session identifier to fork from, optional event-ID boundary, and optional friendly name for the new session."
         },
         "result": {
-          "$ref": "#/definitions/SessionsForkResult"
+          "$ref": "#/definitions/SessionsForkResult",
+          "description": "Identifier and optional friendly name assigned to the newly forked session."
+        },
+        "stability": "experimental"
+      },
+      "connect": {
+        "rpcMethod": "sessions.connect",
+        "description": "Connects to an existing remote session and exposes it as an SDK session.",
+        "params": {
+          "$ref": "#/definitions/ConnectRemoteSessionParams",
+          "description": "Remote session connection parameters."
+        },
+        "result": {
+          "$ref": "#/definitions/RemoteSessionConnectionResult",
+          "description": "Remote session connection result."
         },
         "stability": "experimental"
       }
@@ -175,8 +223,10 @@
   "session": {
     "suspend": {
       "rpcMethod": "session.suspend",
+      "description": "Suspends the session while preserving persisted state for later resume.",
       "params": {
         "type": "object",
+        "description": "Identifies the target session.",
         "properties": {
           "sessionId": {
             "type": "string",
@@ -189,15 +239,16 @@
         "additionalProperties": false
       },
       "result": {
-        "type": "null",
-        "title": "SuspendResult"
+        "type": "null"
       }
     },
     "auth": {
       "getStatus": {
         "rpcMethod": "session.auth.getStatus",
+        "description": "Gets authentication status and account metadata for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -210,15 +261,18 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/SessionAuthStatus"
+          "$ref": "#/definitions/SessionAuthStatus",
+          "description": "Authentication status and account metadata for the session."
         }
       }
     },
     "model": {
       "getCurrent": {
         "rpcMethod": "session.model.getCurrent",
+        "description": "Gets the currently selected model for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -231,11 +285,13 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/CurrentModel"
+          "$ref": "#/definitions/CurrentModel",
+          "description": "The currently selected model for the session."
         }
       },
       "switchTo": {
         "rpcMethod": "session.model.switchTo",
+        "description": "Switches the session to a model and optional reasoning configuration.",
         "params": {
           "type": "object",
           "properties": {
@@ -249,7 +305,11 @@
             },
             "reasoningEffort": {
               "type": "string",
-              "description": "Reasoning effort level to use for the model"
+              "description": "Reasoning effort level to use for the model. \"none\" disables reasoning."
+            },
+            "reasoningSummary": {
+              "$ref": "#/definitions/ReasoningSummary",
+              "description": "Reasoning summary mode to request for supported model clients"
             },
             "modelCapabilities": {
               "$ref": "#/definitions/ModelCapabilitiesOverride",
@@ -261,18 +321,22 @@
             "modelId"
           ],
           "additionalProperties": false,
+          "description": "Target model identifier and optional reasoning effort, summary, and capability overrides.",
           "title": "ModelSwitchToRequest"
         },
         "result": {
-          "$ref": "#/definitions/ModelSwitchToResult"
+          "$ref": "#/definitions/ModelSwitchToResult",
+          "description": "The model identifier active on the session after the switch."
         }
       }
     },
     "mode": {
       "get": {
         "rpcMethod": "session.mode.get",
+        "description": "Gets the current agent interaction mode.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -291,6 +355,7 @@
       },
       "set": {
         "rpcMethod": "session.mode.set",
+        "description": "Sets the current agent interaction mode.",
         "params": {
           "type": "object",
           "properties": {
@@ -308,19 +373,21 @@
             "mode"
           ],
           "additionalProperties": false,
+          "description": "Agent interaction mode to apply to the session.",
           "title": "ModeSetRequest"
         },
         "result": {
-          "type": "null",
-          "title": "ModeSetResult"
+          "type": "null"
         }
       }
     },
     "name": {
       "get": {
         "rpcMethod": "session.name.get",
+        "description": "Gets the session's friendly name.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -333,11 +400,13 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/NameGetResult"
+          "$ref": "#/definitions/NameGetResult",
+          "description": "The session's friendly name, or null when not yet set."
         }
       },
       "set": {
         "rpcMethod": "session.name.set",
+        "description": "Sets the session's friendly name.",
         "params": {
           "type": "object",
           "properties": {
@@ -357,19 +426,21 @@
             "name"
           ],
           "additionalProperties": false,
+          "description": "New friendly name to apply to the session.",
           "title": "NameSetRequest"
         },
         "result": {
-          "type": "null",
-          "title": "NameSetResult"
+          "type": "null"
         }
       }
     },
     "plan": {
       "read": {
         "rpcMethod": "session.plan.read",
+        "description": "Reads the session plan file from the workspace.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -382,11 +453,13 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/PlanReadResult"
+          "$ref": "#/definitions/PlanReadResult",
+          "description": "Existence, contents, and resolved path of the session plan file."
         }
       },
       "update": {
         "rpcMethod": "session.plan.update",
+        "description": "Writes new content to the session plan file.",
         "params": {
           "type": "object",
           "properties": {
@@ -404,17 +477,19 @@
             "content"
           ],
           "additionalProperties": false,
+          "description": "Replacement contents to write to the session plan file.",
           "title": "PlanUpdateRequest"
         },
         "result": {
-          "type": "null",
-          "title": "PlanUpdateResult"
+          "type": "null"
         }
       },
       "delete": {
         "rpcMethod": "session.plan.delete",
+        "description": "Deletes the session plan file from the workspace.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -427,16 +502,17 @@
           "additionalProperties": false
         },
         "result": {
-          "type": "null",
-          "title": "PlanDeleteResult"
+          "type": "null"
         }
       }
     },
     "workspaces": {
       "getWorkspace": {
         "rpcMethod": "session.workspaces.getWorkspace",
+        "description": "Gets current workspace metadata for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -449,13 +525,16 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/WorkspacesGetWorkspaceResult"
+          "$ref": "#/definitions/WorkspacesGetWorkspaceResult",
+          "description": "Current workspace metadata for the session, or null when not available."
         }
       },
       "listFiles": {
         "rpcMethod": "session.workspaces.listFiles",
+        "description": "Lists files stored in the session workspace files directory.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -468,11 +547,13 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/WorkspacesListFilesResult"
+          "$ref": "#/definitions/WorkspacesListFilesResult",
+          "description": "Relative paths of files stored in the session workspace files directory."
         }
       },
       "readFile": {
         "rpcMethod": "session.workspaces.readFile",
+        "description": "Reads a file from the session workspace files directory.",
         "params": {
           "type": "object",
           "properties": {
@@ -490,14 +571,17 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Relative path of the workspace file to read.",
           "title": "WorkspacesReadFileRequest"
         },
         "result": {
-          "$ref": "#/definitions/WorkspacesReadFileResult"
+          "$ref": "#/definitions/WorkspacesReadFileResult",
+          "description": "Contents of the requested workspace file as a UTF-8 string."
         }
       },
       "createFile": {
         "rpcMethod": "session.workspaces.createFile",
+        "description": "Creates or overwrites a file in the session workspace files directory.",
         "params": {
           "type": "object",
           "properties": {
@@ -520,19 +604,21 @@
             "content"
           ],
           "additionalProperties": false,
+          "description": "Relative path and UTF-8 content for the workspace file to create or overwrite.",
           "title": "WorkspacesCreateFileRequest"
         },
         "result": {
-          "type": "null",
-          "title": "WorkspacesCreateFileResult"
+          "type": "null"
         }
       }
     },
     "instructions": {
       "getSources": {
         "rpcMethod": "session.instructions.getSources",
+        "description": "Gets instruction sources loaded for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -545,13 +631,15 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/InstructionsGetSourcesResult"
+          "$ref": "#/definitions/InstructionsGetSourcesResult",
+          "description": "Instruction sources loaded for the session, in merge order."
         }
       }
     },
     "fleet": {
       "start": {
         "rpcMethod": "session.fleet.start",
+        "description": "Starts fleet mode by submitting the fleet orchestration prompt to the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -565,13 +653,15 @@
             }
           },
           "additionalProperties": false,
+          "description": "Optional user prompt to combine with the fleet orchestration instructions.",
           "title": "FleetStartRequest",
           "required": [
             "sessionId"
           ]
         },
         "result": {
-          "$ref": "#/definitions/FleetStartResult"
+          "$ref": "#/definitions/FleetStartResult",
+          "description": "Indicates whether fleet mode was successfully activated."
         },
         "stability": "experimental"
       }
@@ -579,8 +669,10 @@
     "agent": {
       "list": {
         "rpcMethod": "session.agent.list",
+        "description": "Lists custom agents available to the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -593,14 +685,17 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/AgentList"
+          "$ref": "#/definitions/AgentList",
+          "description": "Custom agents available to the session."
         },
         "stability": "experimental"
       },
       "getCurrent": {
         "rpcMethod": "session.agent.getCurrent",
+        "description": "Gets the currently selected custom agent for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -613,12 +708,14 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/AgentGetCurrentResult"
+          "$ref": "#/definitions/AgentGetCurrentResult",
+          "description": "The currently selected custom agent, or null when using the default agent."
         },
         "stability": "experimental"
       },
       "select": {
         "rpcMethod": "session.agent.select",
+        "description": "Selects a custom agent for subsequent turns in the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -636,17 +733,21 @@
             "name"
           ],
           "additionalProperties": false,
+          "description": "Name of the custom agent to select for subsequent turns.",
           "title": "AgentSelectRequest"
         },
         "result": {
-          "$ref": "#/definitions/AgentSelectResult"
+          "$ref": "#/definitions/AgentSelectResult",
+          "description": "The newly selected custom agent."
         },
         "stability": "experimental"
       },
       "deselect": {
         "rpcMethod": "session.agent.deselect",
+        "description": "Clears the selected custom agent and returns the session to the default agent.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -659,15 +760,16 @@
           "additionalProperties": false
         },
         "result": {
-          "type": "null",
-          "title": "AgentDeselectResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "reload": {
         "rpcMethod": "session.agent.reload",
+        "description": "Reloads custom agent definitions and returns the refreshed list.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -680,7 +782,8 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/AgentReloadResult"
+          "$ref": "#/definitions/AgentReloadResult",
+          "description": "Custom agents available to the session after reloading definitions from disk."
         },
         "stability": "experimental"
       }
@@ -688,6 +791,7 @@
     "tasks": {
       "startAgent": {
         "rpcMethod": "session.tasks.startAgent",
+        "description": "Starts a background agent task in the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -723,17 +827,21 @@
             "name"
           ],
           "additionalProperties": false,
+          "description": "Agent type, prompt, name, and optional description and model override for the new task.",
           "title": "TasksStartAgentRequest"
         },
         "result": {
-          "$ref": "#/definitions/TasksStartAgentResult"
+          "$ref": "#/definitions/TasksStartAgentResult",
+          "description": "Identifier assigned to the newly started background agent task."
         },
         "stability": "experimental"
       },
       "list": {
         "rpcMethod": "session.tasks.list",
+        "description": "Lists background tasks tracked by the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -746,12 +854,14 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/TaskList"
+          "$ref": "#/definitions/TaskList",
+          "description": "Background tasks currently tracked by the session."
         },
         "stability": "experimental"
       },
       "promoteToBackground": {
         "rpcMethod": "session.tasks.promoteToBackground",
+        "description": "Promotes an eligible synchronously-waited task so it continues running in the background.",
         "params": {
           "type": "object",
           "properties": {
@@ -769,15 +879,18 @@
             "id"
           ],
           "additionalProperties": false,
+          "description": "Identifier of the task to promote to background mode.",
           "title": "TasksPromoteToBackgroundRequest"
         },
         "result": {
-          "$ref": "#/definitions/TasksPromoteToBackgroundResult"
+          "$ref": "#/definitions/TasksPromoteToBackgroundResult",
+          "description": "Indicates whether the task was successfully promoted to background mode."
         },
         "stability": "experimental"
       },
       "cancel": {
         "rpcMethod": "session.tasks.cancel",
+        "description": "Cancels a background task.",
         "params": {
           "type": "object",
           "properties": {
@@ -795,15 +908,18 @@
             "id"
           ],
           "additionalProperties": false,
+          "description": "Identifier of the background task to cancel.",
           "title": "TasksCancelRequest"
         },
         "result": {
-          "$ref": "#/definitions/TasksCancelResult"
+          "$ref": "#/definitions/TasksCancelResult",
+          "description": "Indicates whether the background task was successfully cancelled."
         },
         "stability": "experimental"
       },
       "remove": {
         "rpcMethod": "session.tasks.remove",
+        "description": "Removes a completed or cancelled background task from tracking.",
         "params": {
           "type": "object",
           "properties": {
@@ -821,15 +937,18 @@
             "id"
           ],
           "additionalProperties": false,
+          "description": "Identifier of the completed or cancelled task to remove from tracking.",
           "title": "TasksRemoveRequest"
         },
         "result": {
-          "$ref": "#/definitions/TasksRemoveResult"
+          "$ref": "#/definitions/TasksRemoveResult",
+          "description": "Indicates whether the task was removed. False when the task does not exist or is still running/idle."
         },
         "stability": "experimental"
       },
       "sendMessage": {
         "rpcMethod": "session.tasks.sendMessage",
+        "description": "Sends a message to a background agent task.",
         "params": {
           "type": "object",
           "properties": {
@@ -856,10 +975,12 @@
             "message"
           ],
           "additionalProperties": false,
+          "description": "Identifier of the target agent task, message content, and optional sender agent ID.",
           "title": "TasksSendMessageRequest"
         },
         "result": {
-          "$ref": "#/definitions/TasksSendMessageResult"
+          "$ref": "#/definitions/TasksSendMessageResult",
+          "description": "Indicates whether the message was delivered, with an error message when delivery failed."
         },
         "stability": "experimental"
       }
@@ -867,8 +988,10 @@
     "skills": {
       "list": {
         "rpcMethod": "session.skills.list",
+        "description": "Lists skills available to the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -881,12 +1004,14 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/SkillList"
+          "$ref": "#/definitions/SkillList",
+          "description": "Skills available to the session, with their enabled state."
         },
         "stability": "experimental"
       },
       "enable": {
         "rpcMethod": "session.skills.enable",
+        "description": "Enables a skill for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -904,16 +1029,17 @@
             "name"
           ],
           "additionalProperties": false,
+          "description": "Name of the skill to enable for the session.",
           "title": "SkillsEnableRequest"
         },
         "result": {
-          "type": "null",
-          "title": "SkillsEnableResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "disable": {
         "rpcMethod": "session.skills.disable",
+        "description": "Disables a skill for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -931,18 +1057,20 @@
             "name"
           ],
           "additionalProperties": false,
+          "description": "Name of the skill to disable for the session.",
           "title": "SkillsDisableRequest"
         },
         "result": {
-          "type": "null",
-          "title": "SkillsDisableResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "reload": {
         "rpcMethod": "session.skills.reload",
+        "description": "Reloads skill definitions for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -955,7 +1083,8 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/SkillsLoadDiagnostics"
+          "$ref": "#/definitions/SkillsLoadDiagnostics",
+          "description": "Diagnostics from reloading skill definitions, with warnings and errors as separate lists."
         },
         "stability": "experimental"
       }
@@ -963,8 +1092,10 @@
     "mcp": {
       "list": {
         "rpcMethod": "session.mcp.list",
+        "description": "Lists MCP servers configured for the session and their connection status.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -977,12 +1108,14 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/McpServerList"
+          "$ref": "#/definitions/McpServerList",
+          "description": "MCP servers configured for the session, with their connection status."
         },
         "stability": "experimental"
       },
       "enable": {
         "rpcMethod": "session.mcp.enable",
+        "description": "Enables an MCP server for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1002,16 +1135,17 @@
             "serverName"
           ],
           "additionalProperties": false,
+          "description": "Name of the MCP server to enable for the session.",
           "title": "McpEnableRequest"
         },
         "result": {
-          "type": "null",
-          "title": "McpEnableResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "disable": {
         "rpcMethod": "session.mcp.disable",
+        "description": "Disables an MCP server for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1031,18 +1165,20 @@
             "serverName"
           ],
           "additionalProperties": false,
+          "description": "Name of the MCP server to disable for the session.",
           "title": "McpDisableRequest"
         },
         "result": {
-          "type": "null",
-          "title": "McpDisableResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "reload": {
         "rpcMethod": "session.mcp.reload",
+        "description": "Reloads MCP server connections for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1055,14 +1191,14 @@
           "additionalProperties": false
         },
         "result": {
-          "type": "null",
-          "title": "McpReloadResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "oauth": {
         "login": {
           "rpcMethod": "session.mcp.oauth.login",
+          "description": "Starts OAuth authentication for a remote MCP server.",
           "params": {
             "type": "object",
             "properties": {
@@ -1094,10 +1230,12 @@
               "serverName"
             ],
             "additionalProperties": false,
+            "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, and the callback success-page copy.",
             "title": "McpOauthLoginRequest"
           },
           "result": {
-            "$ref": "#/definitions/McpOauthLoginResult"
+            "$ref": "#/definitions/McpOauthLoginResult",
+            "description": "OAuth authorization URL the caller should open, or empty when cached tokens already authenticated the server."
           },
           "stability": "experimental"
         }
@@ -1106,8 +1244,10 @@
     "plugins": {
       "list": {
         "rpcMethod": "session.plugins.list",
+        "description": "Lists plugins installed for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1120,7 +1260,8 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/PluginList"
+          "$ref": "#/definitions/PluginList",
+          "description": "Plugins installed for the session, with their enabled state and version metadata."
         },
         "stability": "experimental"
       }
@@ -1128,8 +1269,10 @@
     "extensions": {
       "list": {
         "rpcMethod": "session.extensions.list",
+        "description": "Lists extensions discovered for the session and their current status.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1142,12 +1285,14 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/ExtensionList"
+          "$ref": "#/definitions/ExtensionList",
+          "description": "Extensions discovered for the session, with their current status."
         },
         "stability": "experimental"
       },
       "enable": {
         "rpcMethod": "session.extensions.enable",
+        "description": "Enables an extension for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1165,16 +1310,17 @@
             "id"
           ],
           "additionalProperties": false,
+          "description": "Source-qualified extension identifier to enable for the session.",
           "title": "ExtensionsEnableRequest"
         },
         "result": {
-          "type": "null",
-          "title": "ExtensionsEnableResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "disable": {
         "rpcMethod": "session.extensions.disable",
+        "description": "Disables an extension for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1192,18 +1338,20 @@
             "id"
           ],
           "additionalProperties": false,
+          "description": "Source-qualified extension identifier to disable for the session.",
           "title": "ExtensionsDisableRequest"
         },
         "result": {
-          "type": "null",
-          "title": "ExtensionsDisableResult"
+          "type": "null"
         },
         "stability": "experimental"
       },
       "reload": {
         "rpcMethod": "session.extensions.reload",
+        "description": "Reloads extension definitions and processes for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1216,8 +1364,7 @@
           "additionalProperties": false
         },
         "result": {
-          "type": "null",
-          "title": "ExtensionsReloadResult"
+          "type": "null"
         },
         "stability": "experimental"
       }
@@ -1225,6 +1372,7 @@
     "tools": {
       "handlePendingToolCall": {
         "rpcMethod": "session.tools.handlePendingToolCall",
+        "description": "Provides the result for a pending external tool call.",
         "params": {
           "type": "object",
           "properties": {
@@ -1250,16 +1398,19 @@
             "requestId"
           ],
           "additionalProperties": false,
+          "description": "Pending external tool call request ID, with the tool result or an error describing why it failed.",
           "title": "HandlePendingToolCallRequest"
         },
         "result": {
-          "$ref": "#/definitions/HandlePendingToolCallResult"
+          "$ref": "#/definitions/HandlePendingToolCallResult",
+          "description": "Indicates whether the external tool call result was handled successfully."
         }
       }
     },
     "commands": {
       "list": {
         "rpcMethod": "session.commands.list",
+        "description": "Lists slash commands available in the session.",
         "params": {
           "anyOf": [
             {
@@ -1284,6 +1435,7 @@
               "additionalProperties": false
             }
           ],
+          "description": "Optional filters controlling which command sources to include in the listing.",
           "title": "CommandsListRequest",
           "properties": {
             "sessionId": {
@@ -1296,11 +1448,13 @@
           ]
         },
         "result": {
-          "$ref": "#/definitions/CommandList"
+          "$ref": "#/definitions/CommandList",
+          "description": "Slash commands available in the session, after applying any include/exclude filters."
         }
       },
       "invoke": {
         "rpcMethod": "session.commands.invoke",
+        "description": "Invokes a slash command in the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1322,14 +1476,17 @@
             "name"
           ],
           "additionalProperties": false,
+          "description": "Slash command name and optional raw input string to invoke.",
           "title": "CommandsInvokeRequest"
         },
         "result": {
-          "$ref": "#/definitions/SlashCommandInvocationResult"
+          "$ref": "#/definitions/SlashCommandInvocationResult",
+          "description": "Result of invoking the slash command (text output, prompt to send to the agent, or completion)."
         }
       },
       "handlePendingCommand": {
         "rpcMethod": "session.commands.handlePendingCommand",
+        "description": "Reports completion of a pending client-handled slash command.",
         "params": {
           "type": "object",
           "properties": {
@@ -1351,14 +1508,17 @@
             "requestId"
           ],
           "additionalProperties": false,
+          "description": "Pending command request ID and an optional error if the client handler failed.",
           "title": "CommandsHandlePendingCommandRequest"
         },
         "result": {
-          "$ref": "#/definitions/CommandsHandlePendingCommandResult"
+          "$ref": "#/definitions/CommandsHandlePendingCommandResult",
+          "description": "Indicates whether the pending client-handled command was completed successfully."
         }
       },
       "respondToQueuedCommand": {
         "rpcMethod": "session.commands.respondToQueuedCommand",
+        "description": "Responds to a queued command request from the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1381,16 +1541,19 @@
             "result"
           ],
           "additionalProperties": false,
+          "description": "Queued command request ID and the result indicating whether the client handled it.",
           "title": "CommandsRespondToQueuedCommandRequest"
         },
         "result": {
-          "$ref": "#/definitions/CommandsRespondToQueuedCommandResult"
+          "$ref": "#/definitions/CommandsRespondToQueuedCommandResult",
+          "description": "Indicates whether the queued-command response was accepted by the session."
         }
       }
     },
     "ui": {
       "elicitation": {
         "rpcMethod": "session.ui.elicitation",
+        "description": "Requests structured input from a UI-capable client.",
         "params": {
           "type": "object",
           "properties": {
@@ -1413,6 +1576,7 @@
             "requestedSchema"
           ],
           "additionalProperties": false,
+          "description": "Prompt message and JSON schema describing the form fields to elicit from the user.",
           "title": "UIElicitationRequest"
         },
         "result": {
@@ -1422,6 +1586,7 @@
       },
       "handlePendingElicitation": {
         "rpcMethod": "session.ui.handlePendingElicitation",
+        "description": "Provides the user response for a pending elicitation request.",
         "params": {
           "type": "object",
           "properties": {
@@ -1444,16 +1609,19 @@
             "result"
           ],
           "additionalProperties": false,
+          "description": "Pending elicitation request ID and the user's response (accept/decline/cancel + form values).",
           "title": "UIHandlePendingElicitationRequest"
         },
         "result": {
-          "$ref": "#/definitions/UIElicitationResult"
+          "$ref": "#/definitions/UIElicitationResult",
+          "description": "Indicates whether the elicitation response was accepted; false if it was already resolved by another client."
         }
       }
     },
     "permissions": {
       "handlePendingPermissionRequest": {
         "rpcMethod": "session.permissions.handlePendingPermissionRequest",
+        "description": "Provides a decision for a pending tool permission request.",
         "params": {
           "type": "object",
           "properties": {
@@ -1466,7 +1634,8 @@
               "description": "Request ID of the pending permission request"
             },
             "result": {
-              "$ref": "#/definitions/PermissionDecision"
+              "$ref": "#/definitions/PermissionDecision",
+              "description": "Decision to apply to a pending permission request."
             }
           },
           "required": [
@@ -1475,14 +1644,17 @@
             "result"
           ],
           "additionalProperties": false,
+          "description": "Pending permission request ID and the decision to apply (approve/reject and scope).",
           "title": "PermissionDecisionRequest"
         },
         "result": {
-          "$ref": "#/definitions/PermissionRequestResult"
+          "$ref": "#/definitions/PermissionRequestResult",
+          "description": "Indicates whether the permission decision was applied; false when the request was already resolved."
         }
       },
       "setApproveAll": {
         "rpcMethod": "session.permissions.setApproveAll",
+        "description": "Enables or disables automatic approval of tool permission requests for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -1500,14 +1672,17 @@
             "enabled"
           ],
           "additionalProperties": false,
+          "description": "Whether to auto-approve all tool permission requests for the rest of the session.",
           "title": "PermissionsSetApproveAllRequest"
         },
         "result": {
-          "$ref": "#/definitions/PermissionsSetApproveAllResult"
+          "$ref": "#/definitions/PermissionsSetApproveAllResult",
+          "description": "Indicates whether the operation succeeded."
         }
       },
       "resetSessionApprovals": {
         "rpcMethod": "session.permissions.resetSessionApprovals",
+        "description": "Clears session-scoped tool permission approvals.",
         "params": {
           "type": "object",
           "properties": {
@@ -1517,18 +1692,21 @@
             }
           },
           "additionalProperties": false,
+          "description": "No parameters; clears all session-scoped tool permission approvals.",
           "title": "PermissionsResetSessionApprovalsRequest",
           "required": [
             "sessionId"
           ]
         },
         "result": {
-          "$ref": "#/definitions/PermissionsResetSessionApprovalsResult"
+          "$ref": "#/definitions/PermissionsResetSessionApprovalsResult",
+          "description": "Indicates whether the operation succeeded."
         }
       }
     },
     "log": {
       "rpcMethod": "session.log",
+      "description": "Emits a user-visible session log event.",
       "params": {
         "type": "object",
         "properties": {
@@ -1559,15 +1737,18 @@
           "message"
         ],
         "additionalProperties": false,
+        "description": "Message text, optional severity level, persistence flag, and optional follow-up URL.",
         "title": "LogRequest"
       },
       "result": {
-        "$ref": "#/definitions/LogResult"
+        "$ref": "#/definitions/LogResult",
+        "description": "Identifier of the session event that was emitted for the log message."
       }
     },
     "shell": {
       "exec": {
         "rpcMethod": "session.shell.exec",
+        "description": "Starts a shell command and streams output through session notifications.",
         "params": {
           "type": "object",
           "properties": {
@@ -1595,14 +1776,17 @@
             "command"
           ],
           "additionalProperties": false,
+          "description": "Shell command to run, with optional working directory and timeout in milliseconds.",
           "title": "ShellExecRequest"
         },
         "result": {
-          "$ref": "#/definitions/ShellExecResult"
+          "$ref": "#/definitions/ShellExecResult",
+          "description": "Identifier of the spawned process, used to correlate streamed output and exit notifications."
         }
       },
       "kill": {
         "rpcMethod": "session.shell.kill",
+        "description": "Sends a signal to a shell process previously started via \"shell.exec\".",
         "params": {
           "type": "object",
           "properties": {
@@ -1624,18 +1808,22 @@
             "processId"
           ],
           "additionalProperties": false,
+          "description": "Identifier of a process previously returned by \"shell.exec\" and the signal to send.",
           "title": "ShellKillRequest"
         },
         "result": {
-          "$ref": "#/definitions/ShellKillResult"
+          "$ref": "#/definitions/ShellKillResult",
+          "description": "Indicates whether the signal was delivered; false if the process was unknown or already exited."
         }
       }
     },
     "history": {
       "compact": {
         "rpcMethod": "session.history.compact",
+        "description": "Compacts the session history to reduce context usage.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1648,12 +1836,14 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/HistoryCompactResult"
+          "$ref": "#/definitions/HistoryCompactResult",
+          "description": "Compaction outcome with the number of tokens and messages removed and the resulting context window breakdown."
         },
         "stability": "experimental"
       },
       "truncate": {
         "rpcMethod": "session.history.truncate",
+        "description": "Truncates persisted session history to a specific event.",
         "params": {
           "type": "object",
           "properties": {
@@ -1671,10 +1861,12 @@
             "eventId"
           ],
           "additionalProperties": false,
+          "description": "Identifier of the event to truncate to; this event and all later events are removed.",
           "title": "HistoryTruncateRequest"
         },
         "result": {
-          "$ref": "#/definitions/HistoryTruncateResult"
+          "$ref": "#/definitions/HistoryTruncateResult",
+          "description": "Number of events that were removed by the truncation."
         },
         "stability": "experimental"
       }
@@ -1682,8 +1874,10 @@
     "usage": {
       "getMetrics": {
         "rpcMethod": "session.usage.getMetrics",
+        "description": "Gets accumulated usage metrics for the session.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1696,7 +1890,8 @@
           "additionalProperties": false
         },
         "result": {
-          "$ref": "#/definitions/UsageGetMetricsResult"
+          "$ref": "#/definitions/UsageGetMetricsResult",
+          "description": "Accumulated session usage metrics, including premium request cost, token counts, model breakdown, and code-change totals."
         },
         "stability": "experimental"
       }
@@ -1704,6 +1899,7 @@
     "remote": {
       "enable": {
         "rpcMethod": "session.remote.enable",
+        "description": "Enables remote session export or steering.",
         "params": {
           "type": "object",
           "properties": {
@@ -1713,24 +1909,28 @@
             },
             "mode": {
               "$ref": "#/definitions/RemoteSessionMode",
-              "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to Mission Control without enabling remote steering, \"on\" enables both export and remote steering."
+              "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to GitHub without enabling remote steering, \"on\" enables both export and remote steering."
             }
           },
           "additionalProperties": false,
+          "description": "Optional remote session mode (\"off\", \"export\", or \"on\"); defaults to enabling both export and remote steering.",
           "title": "RemoteEnableRequest",
           "required": [
             "sessionId"
           ]
         },
         "result": {
-          "$ref": "#/definitions/RemoteEnableResult"
+          "$ref": "#/definitions/RemoteEnableResult",
+          "description": "GitHub URL for the session and a flag indicating whether remote steering is enabled."
         },
         "stability": "experimental"
       },
       "disable": {
         "rpcMethod": "session.remote.disable",
+        "description": "Disables remote session export and steering.",
         "params": {
           "type": "object",
+          "description": "Identifies the target session.",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -1743,8 +1943,7 @@
           "additionalProperties": false
         },
         "result": {
-          "type": "null",
-          "title": "RemoteDisableResult"
+          "type": "null"
         },
         "stability": "experimental"
       }
@@ -1754,6 +1953,7 @@
     "sessionFs": {
       "readFile": {
         "rpcMethod": "sessionFs.readFile",
+        "description": "Reads a file from the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1771,14 +1971,17 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Path of the file to read from the client-provided session filesystem.",
           "title": "SessionFsReadFileRequest"
         },
         "result": {
-          "$ref": "#/definitions/SessionFsReadFileResult"
+          "$ref": "#/definitions/SessionFsReadFileResult",
+          "description": "File content as a UTF-8 string, or a filesystem error if the read failed."
         }
       },
       "writeFile": {
         "rpcMethod": "sessionFs.writeFile",
+        "description": "Writes a file in the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1806,6 +2009,7 @@
             "content"
           ],
           "additionalProperties": false,
+          "description": "File path, content to write, and optional mode for the client-provided session filesystem.",
           "title": "SessionFsWriteFileRequest"
         },
         "result": {
@@ -1823,6 +2027,7 @@
       },
       "appendFile": {
         "rpcMethod": "sessionFs.appendFile",
+        "description": "Appends content to a file in the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1850,6 +2055,7 @@
             "content"
           ],
           "additionalProperties": false,
+          "description": "File path, content to append, and optional mode for the client-provided session filesystem.",
           "title": "SessionFsAppendFileRequest"
         },
         "result": {
@@ -1867,6 +2073,7 @@
       },
       "exists": {
         "rpcMethod": "sessionFs.exists",
+        "description": "Checks whether a path exists in the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1884,14 +2091,17 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Path to test for existence in the client-provided session filesystem.",
           "title": "SessionFsExistsRequest"
         },
         "result": {
-          "$ref": "#/definitions/SessionFsExistsResult"
+          "$ref": "#/definitions/SessionFsExistsResult",
+          "description": "Indicates whether the requested path exists in the client-provided session filesystem."
         }
       },
       "stat": {
         "rpcMethod": "sessionFs.stat",
+        "description": "Gets metadata for a path in the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1909,14 +2119,17 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Path whose metadata should be returned from the client-provided session filesystem.",
           "title": "SessionFsStatRequest"
         },
         "result": {
-          "$ref": "#/definitions/SessionFsStatResult"
+          "$ref": "#/definitions/SessionFsStatResult",
+          "description": "Filesystem metadata for the requested path, or a filesystem error if the stat failed."
         }
       },
       "mkdir": {
         "rpcMethod": "sessionFs.mkdir",
+        "description": "Creates a directory in the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1943,6 +2156,7 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Directory path to create in the client-provided session filesystem, with options for recursive creation and POSIX mode.",
           "title": "SessionFsMkdirRequest"
         },
         "result": {
@@ -1960,6 +2174,7 @@
       },
       "readdir": {
         "rpcMethod": "sessionFs.readdir",
+        "description": "Lists entry names in a directory from the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -1977,14 +2192,17 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Directory path whose entries should be listed from the client-provided session filesystem.",
           "title": "SessionFsReaddirRequest"
         },
         "result": {
-          "$ref": "#/definitions/SessionFsReaddirResult"
+          "$ref": "#/definitions/SessionFsReaddirResult",
+          "description": "Names of entries in the requested directory, or a filesystem error if the read failed."
         }
       },
       "readdirWithTypes": {
         "rpcMethod": "sessionFs.readdirWithTypes",
+        "description": "Lists directory entries with type information from the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -2002,14 +2220,17 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Directory path whose entries (with type information) should be listed from the client-provided session filesystem.",
           "title": "SessionFsReaddirWithTypesRequest"
         },
         "result": {
-          "$ref": "#/definitions/SessionFsReaddirWithTypesResult"
+          "$ref": "#/definitions/SessionFsReaddirWithTypesResult",
+          "description": "Entries in the requested directory paired with file/directory type information, or a filesystem error if the read failed."
         }
       },
       "rm": {
         "rpcMethod": "sessionFs.rm",
+        "description": "Removes a file or directory from the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -2035,6 +2256,7 @@
             "path"
           ],
           "additionalProperties": false,
+          "description": "Path to remove from the client-provided session filesystem, with options for recursive removal and force.",
           "title": "SessionFsRmRequest"
         },
         "result": {
@@ -2052,6 +2274,7 @@
       },
       "rename": {
         "rpcMethod": "sessionFs.rename",
+        "description": "Renames or moves a path in the client-provided session filesystem.",
         "params": {
           "type": "object",
           "properties": {
@@ -2074,6 +2297,7 @@
             "dest"
           ],
           "additionalProperties": false,
+          "description": "Source and destination paths for renaming or moving an entry in the client-provided session filesystem.",
           "title": "SessionFsRenameRequest"
         },
         "result": {
@@ -2108,6 +2332,7 @@
           "additionalProperties": false
         }
       ],
+      "description": "Optional GitHub token used to look up quota for a specific user instead of the global auth context.",
       "title": "AccountGetQuotaRequest"
     },
     "AccountGetQuotaResult": {
@@ -2125,6 +2350,7 @@
         "quotaSnapshots"
       ],
       "additionalProperties": false,
+      "description": "Quota usage snapshots for the resolved user, keyed by quota type.",
       "title": "AccountGetQuotaResult"
     },
     "AccountQuotaSnapshot": {
@@ -2175,7 +2401,8 @@
         "overageAllowedWithExhaustedQuota"
       ],
       "additionalProperties": false,
-      "title": "AccountQuotaSnapshot"
+      "title": "AccountQuotaSnapshot",
+      "description": "Schema for the `AccountQuotaSnapshot` type."
     },
     "AgentGetCurrentResult": {
       "type": "object",
@@ -2189,6 +2416,7 @@
         "agent"
       ],
       "additionalProperties": false,
+      "description": "The currently selected custom agent, or null when using the default agent.",
       "title": "AgentGetCurrentResult"
     },
     "AgentInfo": {
@@ -2217,7 +2445,8 @@
         "description"
       ],
       "additionalProperties": false,
-      "title": "AgentInfo"
+      "title": "AgentInfo",
+      "description": "Schema for the `AgentInfo` type."
     },
     "AgentList": {
       "type": "object",
@@ -2234,6 +2463,7 @@
         "agents"
       ],
       "additionalProperties": false,
+      "description": "Custom agents available to the session.",
       "title": "AgentList"
     },
     "AgentReloadResult": {
@@ -2251,6 +2481,7 @@
         "agents"
       ],
       "additionalProperties": false,
+      "description": "Custom agents available to the session after reloading definitions from disk.",
       "title": "AgentReloadResult"
     },
     "AgentSelectRequest": {
@@ -2265,6 +2496,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "Name of the custom agent to select for subsequent turns.",
       "title": "AgentSelectRequest"
     },
     "AgentSelectResult": {
@@ -2279,6 +2511,7 @@
         "agent"
       ],
       "additionalProperties": false,
+      "description": "The newly selected custom agent.",
       "title": "AgentSelectResult"
     },
     "AuthInfoType": {
@@ -2310,6 +2543,7 @@
         "commands"
       ],
       "additionalProperties": false,
+      "description": "Slash commands available in the session, after applying any include/exclude filters.",
       "title": "CommandList"
     },
     "CommandsHandlePendingCommandRequest": {
@@ -2328,6 +2562,7 @@
         "requestId"
       ],
       "additionalProperties": false,
+      "description": "Pending command request ID and an optional error if the client handler failed.",
       "title": "CommandsHandlePendingCommandRequest"
     },
     "CommandsHandlePendingCommandResult": {
@@ -2342,6 +2577,7 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the pending client-handled command was completed successfully.",
       "title": "CommandsHandlePendingCommandResult"
     },
     "CommandsInvokeRequest": {
@@ -2360,6 +2596,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "Slash command name and optional raw input string to invoke.",
       "title": "CommandsInvokeRequest"
     },
     "CommandsListRequest": {
@@ -2386,6 +2623,7 @@
           "additionalProperties": false
         }
       ],
+      "description": "Optional filters controlling which command sources to include in the listing.",
       "title": "CommandsListRequest"
     },
     "CommandsRespondToQueuedCommandRequest": {
@@ -2405,6 +2643,7 @@
         "result"
       ],
       "additionalProperties": false,
+      "description": "Queued command request ID and the result indicating whether the client handled it.",
       "title": "CommandsRespondToQueuedCommandRequest"
     },
     "CommandsRespondToQueuedCommandResult": {
@@ -2419,7 +2658,116 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the queued-command response was accepted by the session.",
       "title": "CommandsRespondToQueuedCommandResult"
+    },
+    "ConnectedRemoteSessionMetadata": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "SDK session ID for the connected remote session."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional friendly session name."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Optional session summary."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Session start time as an ISO 8601 string."
+        },
+        "modifiedTime": {
+          "type": "string",
+          "description": "Last session update time as an ISO 8601 string."
+        },
+        "repository": {
+          "$ref": "#/definitions/ConnectedRemoteSessionMetadataRepository",
+          "description": "Repository associated with the connected remote session."
+        },
+        "pullRequestNumber": {
+          "type": "integer",
+          "description": "Pull request number associated with the session."
+        },
+        "resourceId": {
+          "type": "string",
+          "description": "Original remote resource identifier."
+        },
+        "kind": {
+          "$ref": "#/definitions/ConnectedRemoteSessionMetadataKind",
+          "description": "Neutral SDK discriminator for the connected remote session kind."
+        },
+        "staleAt": {
+          "type": "string",
+          "description": "Remote session staleness deadline as an ISO 8601 string."
+        },
+        "state": {
+          "type": "string",
+          "description": "Remote session state returned by the backing service."
+        }
+      },
+      "required": [
+        "sessionId",
+        "startTime",
+        "modifiedTime",
+        "repository",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Metadata for a connected remote session.",
+      "title": "ConnectedRemoteSessionMetadata"
+    },
+    "ConnectedRemoteSessionMetadataKind": {
+      "type": "string",
+      "enum": [
+        "remote-session",
+        "coding-agent"
+      ],
+      "description": "Neutral SDK discriminator for the connected remote session kind.",
+      "title": "ConnectedRemoteSessionMetadataKind"
+    },
+    "ConnectedRemoteSessionMetadataRepository": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Repository owner or organization login."
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name."
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch associated with the remote session."
+        }
+      },
+      "required": [
+        "owner",
+        "name",
+        "branch"
+      ],
+      "additionalProperties": false,
+      "description": "Repository associated with the connected remote session.",
+      "title": "ConnectedRemoteSessionMetadataRepository"
+    },
+    "ConnectRemoteSessionParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID to connect to."
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Remote session connection parameters.",
+      "title": "ConnectRemoteSessionParams"
     },
     "ConnectRequest": {
       "type": "object",
@@ -2430,6 +2778,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "Optional connection token presented by the SDK client during the handshake.",
       "title": "ConnectRequest",
       "visibility": "internal"
     },
@@ -2456,6 +2805,7 @@
         "version"
       ],
       "additionalProperties": false,
+      "description": "Handshake result reporting the server's protocol version and package version on success.",
       "title": "ConnectResult",
       "visibility": "internal"
     },
@@ -2468,6 +2818,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "The currently selected model for the session.",
       "title": "CurrentModel"
     },
     "DiscoveredMcpServer": {
@@ -2498,7 +2849,8 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "title": "DiscoveredMcpServer"
+      "title": "DiscoveredMcpServer",
+      "description": "Schema for the `DiscoveredMcpServer` type."
     },
     "DiscoveredMcpServerSource": {
       "type": "string",
@@ -2544,7 +2896,8 @@
         "blob"
       ],
       "additionalProperties": false,
-      "title": "EmbeddedBlobResourceContents"
+      "title": "EmbeddedBlobResourceContents",
+      "description": "Schema for the `EmbeddedBlobResourceContents` type."
     },
     "EmbeddedTextResourceContents": {
       "type": "object",
@@ -2567,7 +2920,8 @@
         "text"
       ],
       "additionalProperties": false,
-      "title": "EmbeddedTextResourceContents"
+      "title": "EmbeddedTextResourceContents",
+      "description": "Schema for the `EmbeddedTextResourceContents` type."
     },
     "Extension": {
       "type": "object",
@@ -2600,7 +2954,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "Extension"
+      "title": "Extension",
+      "description": "Schema for the `Extension` type."
     },
     "ExtensionList": {
       "type": "object",
@@ -2617,6 +2972,7 @@
         "extensions"
       ],
       "additionalProperties": false,
+      "description": "Extensions discovered for the session, with their current status.",
       "title": "ExtensionList"
     },
     "ExtensionsDisableRequest": {
@@ -2631,6 +2987,7 @@
         "id"
       ],
       "additionalProperties": false,
+      "description": "Source-qualified extension identifier to disable for the session.",
       "title": "ExtensionsDisableRequest"
     },
     "ExtensionsEnableRequest": {
@@ -2645,6 +3002,7 @@
         "id"
       ],
       "additionalProperties": false,
+      "description": "Source-qualified extension identifier to enable for the session.",
       "title": "ExtensionsEnableRequest"
     },
     "ExtensionSource": {
@@ -2989,6 +3347,7 @@
           "$ref": "#/definitions/FilterMappingString"
         }
       ],
+      "description": "Content filtering mode to apply to all tools, or a map of tool name to content filtering mode.",
       "title": "FilterMapping"
     },
     "FilterMappingString": {
@@ -2998,7 +3357,8 @@
         "markdown",
         "hidden_characters"
       ],
-      "title": "FilterMappingString"
+      "title": "FilterMappingString",
+      "description": "Allowed values for the `FilterMappingString` enumeration."
     },
     "FilterMappingValue": {
       "type": "string",
@@ -3007,7 +3367,8 @@
         "markdown",
         "hidden_characters"
       ],
-      "title": "FilterMappingValue"
+      "title": "FilterMappingValue",
+      "description": "Allowed values for the `FilterMappingValue` enumeration."
     },
     "FleetStartRequest": {
       "type": "object",
@@ -3018,6 +3379,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "Optional user prompt to combine with the fleet orchestration instructions.",
       "title": "FleetStartRequest"
     },
     "FleetStartResult": {
@@ -3032,6 +3394,7 @@
         "started"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether fleet mode was successfully activated.",
       "title": "FleetStartResult"
     },
     "HandlePendingToolCallRequest": {
@@ -3054,6 +3417,7 @@
         "requestId"
       ],
       "additionalProperties": false,
+      "description": "Pending external tool call request ID, with the tool result or an error describing why it failed.",
       "title": "HandlePendingToolCallRequest"
     },
     "HandlePendingToolCallResult": {
@@ -3068,6 +3432,7 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the external tool call result was handled successfully.",
       "title": "HandlePendingToolCallResult"
     },
     "HistoryCompactContextWindow": {
@@ -3141,6 +3506,7 @@
         "messagesRemoved"
       ],
       "additionalProperties": false,
+      "description": "Compaction outcome with the number of tokens and messages removed and the resulting context window breakdown.",
       "title": "HistoryCompactResult"
     },
     "HistoryTruncateRequest": {
@@ -3155,6 +3521,7 @@
         "eventId"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the event to truncate to; this event and all later events are removed.",
       "title": "HistoryTruncateRequest"
     },
     "HistoryTruncateResult": {
@@ -3170,6 +3537,7 @@
         "eventsRemoved"
       ],
       "additionalProperties": false,
+      "description": "Number of events that were removed by the truncation.",
       "title": "HistoryTruncateResult"
     },
     "InstructionsGetSourcesResult": {
@@ -3187,6 +3555,7 @@
         "sources"
       ],
       "additionalProperties": false,
+      "description": "Instruction sources loaded for the session, in merge order.",
       "title": "InstructionsGetSourcesResult"
     },
     "InstructionsSources": {
@@ -3234,7 +3603,8 @@
         "location"
       ],
       "additionalProperties": false,
-      "title": "InstructionsSources"
+      "title": "InstructionsSources",
+      "description": "Schema for the `InstructionsSources` type."
     },
     "InstructionsSourcesLocation": {
       "type": "string",
@@ -3284,6 +3654,7 @@
         "message"
       ],
       "additionalProperties": false,
+      "description": "Message text, optional severity level, persistence flag, and optional follow-up URL.",
       "title": "LogRequest"
     },
     "LogResult": {
@@ -3299,6 +3670,7 @@
         "eventId"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the session event that was emitted for the log message.",
       "title": "LogResult"
     },
     "McpConfigAddRequest": {
@@ -3320,6 +3692,7 @@
         "config"
       ],
       "additionalProperties": false,
+      "description": "MCP server name and configuration to add to user configuration.",
       "title": "McpConfigAddRequest"
     },
     "McpConfigDisableRequest": {
@@ -3330,7 +3703,8 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$"
+            "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+            "description": "MCP server name used as a configuration key."
           },
           "description": "Names of MCP servers to disable. Each server is added to the persisted disabled list so new sessions skip it. Already-disabled names are ignored. Active sessions keep their current connections until they end."
         }
@@ -3339,6 +3713,7 @@
         "names"
       ],
       "additionalProperties": false,
+      "description": "MCP server names to disable for new sessions.",
       "title": "McpConfigDisableRequest"
     },
     "McpConfigEnableRequest": {
@@ -3349,7 +3724,8 @@
           "items": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$"
+            "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+            "description": "MCP server name used as a configuration key."
           },
           "description": "Names of MCP servers to enable. Each server is removed from the persisted disabled list so new sessions spawn it. Unknown or already-enabled names are ignored."
         }
@@ -3358,6 +3734,7 @@
         "names"
       ],
       "additionalProperties": false,
+      "description": "MCP server names to enable for new sessions.",
       "title": "McpConfigEnableRequest"
     },
     "McpConfigList": {
@@ -3380,6 +3757,7 @@
         "servers"
       ],
       "additionalProperties": false,
+      "description": "User-configured MCP servers, keyed by server name.",
       "title": "McpConfigList"
     },
     "McpConfigRemoveRequest": {
@@ -3396,6 +3774,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "MCP server name to remove from user configuration.",
       "title": "McpConfigRemoveRequest"
     },
     "McpConfigUpdateRequest": {
@@ -3417,6 +3796,7 @@
         "config"
       ],
       "additionalProperties": false,
+      "description": "MCP server name and replacement configuration to write to user configuration.",
       "title": "McpConfigUpdateRequest"
     },
     "McpDisableRequest": {
@@ -3433,6 +3813,7 @@
         "serverName"
       ],
       "additionalProperties": false,
+      "description": "Name of the MCP server to disable for the session.",
       "title": "McpDisableRequest"
     },
     "McpDiscoverRequest": {
@@ -3444,6 +3825,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "Optional working directory used as context for MCP server discovery.",
       "title": "McpDiscoverRequest"
     },
     "McpDiscoverResult": {
@@ -3461,6 +3843,7 @@
         "servers"
       ],
       "additionalProperties": false,
+      "description": "MCP servers discovered from user, workspace, plugin, and built-in sources.",
       "title": "McpDiscoverResult"
     },
     "McpEnableRequest": {
@@ -3477,6 +3860,7 @@
         "serverName"
       ],
       "additionalProperties": false,
+      "description": "Name of the MCP server to enable for the session.",
       "title": "McpEnableRequest"
     },
     "McpOauthLoginRequest": {
@@ -3505,6 +3889,7 @@
         "serverName"
       ],
       "additionalProperties": false,
+      "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, and the callback success-page copy.",
       "title": "McpOauthLoginRequest"
     },
     "McpOauthLoginResult": {
@@ -3516,6 +3901,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "OAuth authorization URL the caller should open, or empty when cached tokens already authenticated the server.",
       "title": "McpOauthLoginResult"
     },
     "McpServer": {
@@ -3545,15 +3931,18 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "McpServer"
+      "title": "McpServer",
+      "description": "Schema for the `McpServer` type."
     },
     "McpServerConfig": {
       "anyOf": [
         {
-          "$ref": "#/definitions/McpServerConfigLocal"
+          "$ref": "#/definitions/McpServerConfigLocal",
+          "description": "Local MCP server configuration launched as a child process."
         },
         {
-          "$ref": "#/definitions/McpServerConfigHttp"
+          "$ref": "#/definitions/McpServerConfigHttp",
+          "description": "Remote MCP server configuration accessed over HTTP or SSE."
         }
       ],
       "description": "MCP server configuration (local/stdio or remote/http)",
@@ -3574,10 +3963,12 @@
           "description": "Remote transport type. Defaults to \"http\" when omitted."
         },
         "isDefaultServer": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether this server is a built-in fallback used when the user has not configured their own server."
         },
         "filterMapping": {
-          "$ref": "#/definitions/FilterMapping"
+          "$ref": "#/definitions/FilterMapping",
+          "description": "Content filtering mode to apply to all tools, or a map of tool name to content filtering mode."
         },
         "timeout": {
           "type": "integer",
@@ -3588,28 +3979,34 @@
         },
         "url": {
           "type": "string",
-          "format": "uri"
+          "format": "uri",
+          "description": "URL of the remote MCP server endpoint."
         },
         "headers": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "HTTP headers to include in requests to the remote MCP server."
         },
         "oauthClientId": {
-          "type": "string"
+          "type": "string",
+          "description": "OAuth client ID for a pre-registered remote MCP OAuth client."
         },
         "oauthPublicClient": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the configured OAuth client is public and does not require a client secret."
         },
         "oauthGrantType": {
-          "$ref": "#/definitions/McpServerConfigHttpOauthGrantType"
+          "$ref": "#/definitions/McpServerConfigHttpOauthGrantType",
+          "description": "OAuth grant type to use when authenticating to the remote MCP server."
         }
       },
       "required": [
         "url"
       ],
       "additionalProperties": false,
+      "description": "Remote MCP server configuration accessed over HTTP or SSE.",
       "title": "McpServerConfigHttp"
     },
     "McpServerConfigHttpOauthGrantType": {
@@ -3618,6 +4015,7 @@
         "authorization_code",
         "client_credentials"
       ],
+      "description": "OAuth grant type to use when authenticating to the remote MCP server.",
       "title": "McpServerConfigHttpOauthGrantType"
     },
     "McpServerConfigHttpType": {
@@ -3641,13 +4039,16 @@
           "description": "Tools to include. Defaults to all tools if not specified."
         },
         "type": {
-          "$ref": "#/definitions/McpServerConfigLocalType"
+          "$ref": "#/definitions/McpServerConfigLocalType",
+          "description": "Local transport type. Defaults to \"local\"."
         },
         "isDefaultServer": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether this server is a built-in fallback used when the user has not configured their own server."
         },
         "filterMapping": {
-          "$ref": "#/definitions/FilterMapping"
+          "$ref": "#/definitions/FilterMapping",
+          "description": "Content filtering mode to apply to all tools, or a map of tool name to content filtering mode."
         },
         "timeout": {
           "type": "integer",
@@ -3657,22 +4058,26 @@
           "format": "duration"
         },
         "command": {
-          "type": "string"
+          "type": "string",
+          "description": "Executable command used to start the local MCP server process."
         },
         "args": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Command-line arguments passed to the local MCP server process."
         },
         "cwd": {
-          "type": "string"
+          "type": "string",
+          "description": "Working directory for the local MCP server process."
         },
         "env": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "Environment variables to pass to the local MCP server process."
         }
       },
       "required": [
@@ -3680,6 +4085,7 @@
         "args"
       ],
       "additionalProperties": false,
+      "description": "Local MCP server configuration launched as a child process.",
       "title": "McpServerConfigLocal"
     },
     "McpServerConfigLocalType": {
@@ -3688,6 +4094,7 @@
         "local",
         "stdio"
       ],
+      "description": "Local transport type. Defaults to \"local\".",
       "title": "McpServerConfigLocalType"
     },
     "McpServerList": {
@@ -3705,6 +4112,7 @@
         "servers"
       ],
       "additionalProperties": false,
+      "description": "MCP servers configured for the session, with their connection status.",
       "title": "McpServerList"
     },
     "McpServerSource": {
@@ -3780,7 +4188,8 @@
         "capabilities"
       ],
       "additionalProperties": false,
-      "title": "Model"
+      "title": "Model",
+      "description": "Schema for the `Model` type."
     },
     "ModelBilling": {
       "type": "object",
@@ -3916,11 +4325,13 @@
       "properties": {
         "max_prompt_tokens": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Maximum number of prompt/input tokens"
         },
         "max_output_tokens": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Maximum number of output/completion tokens"
         },
         "max_context_window_tokens": {
           "type": "integer",
@@ -3928,7 +4339,8 @@
           "description": "Maximum total context window size in tokens"
         },
         "vision": {
-          "$ref": "#/definitions/ModelCapabilitiesOverrideLimitsVision"
+          "$ref": "#/definitions/ModelCapabilitiesOverrideLimitsVision",
+          "description": "Vision-specific limits"
         }
       },
       "additionalProperties": false,
@@ -3957,16 +4369,19 @@
         }
       },
       "additionalProperties": false,
+      "description": "Vision-specific limits",
       "title": "ModelCapabilitiesOverrideLimitsVision"
     },
     "ModelCapabilitiesOverrideSupports": {
       "type": "object",
       "properties": {
         "vision": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether this model supports vision/image input"
         },
         "reasoningEffort": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether this model supports reasoning effort configuration"
         }
       },
       "additionalProperties": false,
@@ -4004,6 +4419,7 @@
         "models"
       ],
       "additionalProperties": false,
+      "description": "List of Copilot models available to the resolved user, including capabilities and billing metadata.",
       "title": "ModelList"
     },
     "ModelPickerCategory": {
@@ -4062,6 +4478,7 @@
           "additionalProperties": false
         }
       ],
+      "description": "Optional GitHub token used to list models for a specific user instead of the global auth context.",
       "title": "ModelsListRequest"
     },
     "ModelSwitchToRequest": {
@@ -4073,7 +4490,11 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level to use for the model"
+          "description": "Reasoning effort level to use for the model. \"none\" disables reasoning."
+        },
+        "reasoningSummary": {
+          "$ref": "#/definitions/ReasoningSummary",
+          "description": "Reasoning summary mode to request for supported model clients"
         },
         "modelCapabilities": {
           "$ref": "#/definitions/ModelCapabilitiesOverride",
@@ -4084,6 +4505,7 @@
         "modelId"
       ],
       "additionalProperties": false,
+      "description": "Target model identifier and optional reasoning effort, summary, and capability overrides.",
       "title": "ModelSwitchToRequest"
     },
     "ModelSwitchToResult": {
@@ -4095,6 +4517,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "The model identifier active on the session after the switch.",
       "title": "ModelSwitchToResult"
     },
     "ModeSetRequest": {
@@ -4109,6 +4532,7 @@
         "mode"
       ],
       "additionalProperties": false,
+      "description": "Agent interaction mode to apply to the session.",
       "title": "ModeSetRequest"
     },
     "NameGetResult": {
@@ -4126,6 +4550,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "The session's friendly name, or null when not yet set.",
       "title": "NameGetResult"
     },
     "NameSetRequest": {
@@ -4142,6 +4567,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "New friendly name to apply to the session.",
       "title": "NameSetRequest"
     },
     "PermissionDecision": {
@@ -4165,6 +4591,7 @@
           "$ref": "#/definitions/PermissionDecisionUserNotAvailable"
         }
       ],
+      "description": "Decision to apply to a pending permission request.",
       "title": "PermissionDecision"
     },
     "PermissionDecisionApproveForLocation": {
@@ -4190,7 +4617,8 @@
         "locationKey"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocation"
+      "title": "PermissionDecisionApproveForLocation",
+      "description": "Schema for the `PermissionDecisionApproveForLocation` type."
     },
     "PermissionDecisionApproveForLocationApproval": {
       "anyOf": [
@@ -4230,13 +4658,15 @@
       "properties": {
         "kind": {
           "type": "string",
-          "const": "commands"
+          "const": "commands",
+          "description": "Approval scoped to specific command identifiers."
         },
         "commandIdentifiers": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Command identifiers covered by this approval."
         }
       },
       "required": [
@@ -4244,17 +4674,20 @@
         "commandIdentifiers"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalCommands"
+      "title": "PermissionDecisionApproveForLocationApprovalCommands",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalCommands` type."
     },
     "PermissionDecisionApproveForLocationApprovalCustomTool": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "custom-tool"
+          "const": "custom-tool",
+          "description": "Approval covering a custom tool."
         },
         "toolName": {
-          "type": "string"
+          "type": "string",
+          "description": "Custom tool name."
         }
       },
       "required": [
@@ -4262,34 +4695,40 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalCustomTool"
+      "title": "PermissionDecisionApproveForLocationApprovalCustomTool",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalCustomTool` type."
     },
     "PermissionDecisionApproveForLocationApprovalExtensionManagement": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "extension-management"
+          "const": "extension-management",
+          "description": "Approval covering extension lifecycle operations such as enable, disable, or reload."
         },
         "operation": {
-          "type": "string"
+          "type": "string",
+          "description": "Optional operation identifier; when omitted, the approval covers all extension management operations."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalExtensionManagement"
+      "title": "PermissionDecisionApproveForLocationApprovalExtensionManagement",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalExtensionManagement` type."
     },
     "PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "extension-permission-access"
+          "const": "extension-permission-access",
+          "description": "Approval covering an extension's request to access a permission-gated capability."
         },
         "extensionName": {
-          "type": "string"
+          "type": "string",
+          "description": "Extension name."
         }
       },
       "required": [
@@ -4297,23 +4736,27 @@
         "extensionName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess"
+      "title": "PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalExtensionPermissionAccess` type."
     },
     "PermissionDecisionApproveForLocationApprovalMcp": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "mcp"
+          "const": "mcp",
+          "description": "Approval covering an MCP tool."
         },
         "serverName": {
-          "type": "string"
+          "type": "string",
+          "description": "MCP server name."
         },
         "toolName": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "MCP tool name, or null to cover every tool on the server."
         }
       },
       "required": [
@@ -4322,17 +4765,20 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalMcp"
+      "title": "PermissionDecisionApproveForLocationApprovalMcp",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalMcp` type."
     },
     "PermissionDecisionApproveForLocationApprovalMcpSampling": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "mcp-sampling"
+          "const": "mcp-sampling",
+          "description": "Approval covering MCP sampling requests for a server."
         },
         "serverName": {
-          "type": "string"
+          "type": "string",
+          "description": "MCP server name."
         }
       },
       "required": [
@@ -4340,49 +4786,56 @@
         "serverName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalMcpSampling"
+      "title": "PermissionDecisionApproveForLocationApprovalMcpSampling",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalMcpSampling` type."
     },
     "PermissionDecisionApproveForLocationApprovalMemory": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "memory"
+          "const": "memory",
+          "description": "Approval covering writes to long-term memory."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalMemory"
+      "title": "PermissionDecisionApproveForLocationApprovalMemory",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalMemory` type."
     },
     "PermissionDecisionApproveForLocationApprovalRead": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "read"
+          "const": "read",
+          "description": "Approval covering read-only filesystem operations."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalRead"
+      "title": "PermissionDecisionApproveForLocationApprovalRead",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalRead` type."
     },
     "PermissionDecisionApproveForLocationApprovalWrite": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "write"
+          "const": "write",
+          "description": "Approval covering filesystem write operations."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForLocationApprovalWrite"
+      "title": "PermissionDecisionApproveForLocationApprovalWrite",
+      "description": "Schema for the `PermissionDecisionApproveForLocationApprovalWrite` type."
     },
     "PermissionDecisionApproveForSession": {
       "type": "object",
@@ -4405,7 +4858,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSession"
+      "title": "PermissionDecisionApproveForSession",
+      "description": "Schema for the `PermissionDecisionApproveForSession` type."
     },
     "PermissionDecisionApproveForSessionApproval": {
       "anyOf": [
@@ -4445,13 +4899,15 @@
       "properties": {
         "kind": {
           "type": "string",
-          "const": "commands"
+          "const": "commands",
+          "description": "Approval scoped to specific command identifiers."
         },
         "commandIdentifiers": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Command identifiers covered by this approval."
         }
       },
       "required": [
@@ -4459,17 +4915,20 @@
         "commandIdentifiers"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalCommands"
+      "title": "PermissionDecisionApproveForSessionApprovalCommands",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalCommands` type."
     },
     "PermissionDecisionApproveForSessionApprovalCustomTool": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "custom-tool"
+          "const": "custom-tool",
+          "description": "Approval covering a custom tool."
         },
         "toolName": {
-          "type": "string"
+          "type": "string",
+          "description": "Custom tool name."
         }
       },
       "required": [
@@ -4477,34 +4936,40 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalCustomTool"
+      "title": "PermissionDecisionApproveForSessionApprovalCustomTool",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalCustomTool` type."
     },
     "PermissionDecisionApproveForSessionApprovalExtensionManagement": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "extension-management"
+          "const": "extension-management",
+          "description": "Approval covering extension lifecycle operations such as enable, disable, or reload."
         },
         "operation": {
-          "type": "string"
+          "type": "string",
+          "description": "Optional operation identifier; when omitted, the approval covers all extension management operations."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalExtensionManagement"
+      "title": "PermissionDecisionApproveForSessionApprovalExtensionManagement",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalExtensionManagement` type."
     },
     "PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "extension-permission-access"
+          "const": "extension-permission-access",
+          "description": "Approval covering an extension's request to access a permission-gated capability."
         },
         "extensionName": {
-          "type": "string"
+          "type": "string",
+          "description": "Extension name."
         }
       },
       "required": [
@@ -4512,23 +4977,27 @@
         "extensionName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess"
+      "title": "PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalExtensionPermissionAccess` type."
     },
     "PermissionDecisionApproveForSessionApprovalMcp": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "mcp"
+          "const": "mcp",
+          "description": "Approval covering an MCP tool."
         },
         "serverName": {
-          "type": "string"
+          "type": "string",
+          "description": "MCP server name."
         },
         "toolName": {
           "type": [
             "string",
             "null"
-          ]
+          ],
+          "description": "MCP tool name, or null to cover every tool on the server."
         }
       },
       "required": [
@@ -4537,17 +5006,20 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalMcp"
+      "title": "PermissionDecisionApproveForSessionApprovalMcp",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalMcp` type."
     },
     "PermissionDecisionApproveForSessionApprovalMcpSampling": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "mcp-sampling"
+          "const": "mcp-sampling",
+          "description": "Approval covering MCP sampling requests for a server."
         },
         "serverName": {
-          "type": "string"
+          "type": "string",
+          "description": "MCP server name."
         }
       },
       "required": [
@@ -4555,49 +5027,56 @@
         "serverName"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalMcpSampling"
+      "title": "PermissionDecisionApproveForSessionApprovalMcpSampling",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalMcpSampling` type."
     },
     "PermissionDecisionApproveForSessionApprovalMemory": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "memory"
+          "const": "memory",
+          "description": "Approval covering writes to long-term memory."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalMemory"
+      "title": "PermissionDecisionApproveForSessionApprovalMemory",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalMemory` type."
     },
     "PermissionDecisionApproveForSessionApprovalRead": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "read"
+          "const": "read",
+          "description": "Approval covering read-only filesystem operations."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalRead"
+      "title": "PermissionDecisionApproveForSessionApprovalRead",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalRead` type."
     },
     "PermissionDecisionApproveForSessionApprovalWrite": {
       "type": "object",
       "properties": {
         "kind": {
           "type": "string",
-          "const": "write"
+          "const": "write",
+          "description": "Approval covering filesystem write operations."
         }
       },
       "required": [
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveForSessionApprovalWrite"
+      "title": "PermissionDecisionApproveForSessionApprovalWrite",
+      "description": "Schema for the `PermissionDecisionApproveForSessionApprovalWrite` type."
     },
     "PermissionDecisionApproveOnce": {
       "type": "object",
@@ -4612,7 +5091,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApproveOnce"
+      "title": "PermissionDecisionApproveOnce",
+      "description": "Schema for the `PermissionDecisionApproveOnce` type."
     },
     "PermissionDecisionApprovePermanently": {
       "type": "object",
@@ -4632,7 +5112,8 @@
         "domain"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionApprovePermanently"
+      "title": "PermissionDecisionApprovePermanently",
+      "description": "Schema for the `PermissionDecisionApprovePermanently` type."
     },
     "PermissionDecisionReject": {
       "type": "object",
@@ -4651,7 +5132,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionReject"
+      "title": "PermissionDecisionReject",
+      "description": "Schema for the `PermissionDecisionReject` type."
     },
     "PermissionDecisionRequest": {
       "type": "object",
@@ -4661,7 +5143,8 @@
           "description": "Request ID of the pending permission request"
         },
         "result": {
-          "$ref": "#/definitions/PermissionDecision"
+          "$ref": "#/definitions/PermissionDecision",
+          "description": "Decision to apply to a pending permission request."
         }
       },
       "required": [
@@ -4669,6 +5152,7 @@
         "result"
       ],
       "additionalProperties": false,
+      "description": "Pending permission request ID and the decision to apply (approve/reject and scope).",
       "title": "PermissionDecisionRequest"
     },
     "PermissionDecisionUserNotAvailable": {
@@ -4684,7 +5168,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDecisionUserNotAvailable"
+      "title": "PermissionDecisionUserNotAvailable",
+      "description": "Schema for the `PermissionDecisionUserNotAvailable` type."
     },
     "PermissionRequestResult": {
       "type": "object",
@@ -4698,12 +5183,14 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the permission decision was applied; false when the request was already resolved.",
       "title": "PermissionRequestResult"
     },
     "PermissionsResetSessionApprovalsRequest": {
       "type": "object",
       "properties": {},
       "additionalProperties": false,
+      "description": "No parameters; clears all session-scoped tool permission approvals.",
       "title": "PermissionsResetSessionApprovalsRequest"
     },
     "PermissionsResetSessionApprovalsResult": {
@@ -4718,6 +5205,7 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the operation succeeded.",
       "title": "PermissionsResetSessionApprovalsResult"
     },
     "PermissionsSetApproveAllRequest": {
@@ -4732,6 +5220,7 @@
         "enabled"
       ],
       "additionalProperties": false,
+      "description": "Whether to auto-approve all tool permission requests for the rest of the session.",
       "title": "PermissionsSetApproveAllRequest"
     },
     "PermissionsSetApproveAllResult": {
@@ -4746,6 +5235,7 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the operation succeeded.",
       "title": "PermissionsSetApproveAllResult"
     },
     "PingRequest": {
@@ -4757,6 +5247,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "Optional message to echo back to the caller.",
       "title": "PingRequest"
     },
     "PingResult": {
@@ -4781,6 +5272,7 @@
         "protocolVersion"
       ],
       "additionalProperties": false,
+      "description": "Server liveness response, including the echoed message, current timestamp, and protocol version.",
       "title": "PingResult"
     },
     "PlanReadResult": {
@@ -4811,6 +5303,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Existence, contents, and resolved path of the session plan file.",
       "title": "PlanReadResult"
     },
     "PlanUpdateRequest": {
@@ -4825,6 +5318,7 @@
         "content"
       ],
       "additionalProperties": false,
+      "description": "Replacement contents to write to the session plan file.",
       "title": "PlanUpdateRequest"
     },
     "Plugin": {
@@ -4853,7 +5347,8 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "title": "Plugin"
+      "title": "Plugin",
+      "description": "Schema for the `Plugin` type."
     },
     "PluginList": {
       "type": "object",
@@ -4870,6 +5365,7 @@
         "plugins"
       ],
       "additionalProperties": false,
+      "description": "Plugins installed for the session, with their enabled state and version metadata.",
       "title": "PluginList"
     },
     "QueuedCommandHandled": {
@@ -4889,7 +5385,8 @@
         "handled"
       ],
       "additionalProperties": false,
-      "title": "QueuedCommandHandled"
+      "title": "QueuedCommandHandled",
+      "description": "Schema for the `QueuedCommandHandled` type."
     },
     "QueuedCommandNotHandled": {
       "type": "object",
@@ -4904,7 +5401,8 @@
         "handled"
       ],
       "additionalProperties": false,
-      "title": "QueuedCommandNotHandled"
+      "title": "QueuedCommandNotHandled",
+      "description": "Schema for the `QueuedCommandNotHandled` type."
     },
     "QueuedCommandResult": {
       "anyOf": [
@@ -4918,15 +5416,26 @@
       "description": "Result of the queued command execution",
       "title": "QueuedCommandResult"
     },
+    "ReasoningSummary": {
+      "type": "string",
+      "enum": [
+        "none",
+        "concise",
+        "detailed"
+      ],
+      "description": "Reasoning summary mode to request for supported model clients",
+      "title": "ReasoningSummary"
+    },
     "RemoteEnableRequest": {
       "type": "object",
       "properties": {
         "mode": {
           "$ref": "#/definitions/RemoteSessionMode",
-          "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to Mission Control without enabling remote steering, \"on\" enables both export and remote steering."
+          "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to GitHub without enabling remote steering, \"on\" enables both export and remote steering."
         }
       },
       "additionalProperties": false,
+      "description": "Optional remote session mode (\"off\", \"export\", or \"on\"); defaults to enabling both export and remote steering.",
       "title": "RemoteEnableRequest"
     },
     "RemoteEnableResult": {
@@ -4934,7 +5443,7 @@
       "properties": {
         "url": {
           "type": "string",
-          "description": "Mission Control frontend URL for this session"
+          "description": "GitHub frontend URL for this session"
         },
         "remoteSteerable": {
           "type": "boolean",
@@ -4945,7 +5454,28 @@
         "remoteSteerable"
       ],
       "additionalProperties": false,
+      "description": "GitHub URL for the session and a flag indicating whether remote steering is enabled.",
       "title": "RemoteEnableResult"
+    },
+    "RemoteSessionConnectionResult": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "SDK session ID for the connected remote session."
+        },
+        "metadata": {
+          "$ref": "#/definitions/ConnectedRemoteSessionMetadata",
+          "description": "Metadata for a connected remote session."
+        }
+      },
+      "required": [
+        "sessionId",
+        "metadata"
+      ],
+      "additionalProperties": false,
+      "description": "Remote session connection result.",
+      "title": "RemoteSessionConnectionResult"
     },
     "RemoteSessionMode": {
       "type": "string",
@@ -4954,7 +5484,7 @@
         "export",
         "on"
       ],
-      "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to Mission Control without enabling remote steering, \"on\" enables both export and remote steering.",
+      "description": "Per-session remote mode. \"off\" disables remote, \"export\" exports session events to GitHub without enabling remote steering, \"on\" enables both export and remote steering.",
       "title": "RemoteSessionMode"
     },
     "ServerSkill": {
@@ -4997,7 +5527,8 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "title": "ServerSkill"
+      "title": "ServerSkill",
+      "description": "Schema for the `ServerSkill` type."
     },
     "ServerSkillList": {
       "type": "object",
@@ -5014,6 +5545,7 @@
         "skills"
       ],
       "additionalProperties": false,
+      "description": "Skills discovered across global and project sources.",
       "title": "ServerSkillList"
     },
     "SessionAuthStatus": {
@@ -5048,6 +5580,7 @@
         "isAuthenticated"
       ],
       "additionalProperties": false,
+      "description": "Authentication status and account metadata for the session.",
       "title": "SessionAuthStatus"
     },
     "SessionFsAppendFileRequest": {
@@ -5072,6 +5605,7 @@
         "content"
       ],
       "additionalProperties": false,
+      "description": "File path, content to append, and optional mode for the client-provided session filesystem.",
       "title": "SessionFsAppendFileRequest"
     },
     "SessionFsError": {
@@ -5114,6 +5648,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Path to test for existence in the client-provided session filesystem.",
       "title": "SessionFsExistsRequest"
     },
     "SessionFsExistsResult": {
@@ -5128,6 +5663,7 @@
         "exists"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the requested path exists in the client-provided session filesystem.",
       "title": "SessionFsExistsResult"
     },
     "SessionFsMkdirRequest": {
@@ -5151,6 +5687,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Directory path to create in the client-provided session filesystem, with options for recursive creation and POSIX mode.",
       "title": "SessionFsMkdirRequest"
     },
     "SessionFsReaddirRequest": {
@@ -5165,6 +5702,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Directory path whose entries should be listed from the client-provided session filesystem.",
       "title": "SessionFsReaddirRequest"
     },
     "SessionFsReaddirResult": {
@@ -5186,6 +5724,7 @@
         "entries"
       ],
       "additionalProperties": false,
+      "description": "Names of entries in the requested directory, or a filesystem error if the read failed.",
       "title": "SessionFsReaddirResult"
     },
     "SessionFsReaddirWithTypesEntry": {
@@ -5205,7 +5744,8 @@
         "type"
       ],
       "additionalProperties": false,
-      "title": "SessionFsReaddirWithTypesEntry"
+      "title": "SessionFsReaddirWithTypesEntry",
+      "description": "Schema for the `SessionFsReaddirWithTypesEntry` type."
     },
     "SessionFsReaddirWithTypesEntryType": {
       "type": "string",
@@ -5228,6 +5768,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Directory path whose entries (with type information) should be listed from the client-provided session filesystem.",
       "title": "SessionFsReaddirWithTypesRequest"
     },
     "SessionFsReaddirWithTypesResult": {
@@ -5249,6 +5790,7 @@
         "entries"
       ],
       "additionalProperties": false,
+      "description": "Entries in the requested directory paired with file/directory type information, or a filesystem error if the read failed.",
       "title": "SessionFsReaddirWithTypesResult"
     },
     "SessionFsReadFileRequest": {
@@ -5263,6 +5805,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Path of the file to read from the client-provided session filesystem.",
       "title": "SessionFsReadFileRequest"
     },
     "SessionFsReadFileResult": {
@@ -5281,6 +5824,7 @@
         "content"
       ],
       "additionalProperties": false,
+      "description": "File content as a UTF-8 string, or a filesystem error if the read failed.",
       "title": "SessionFsReadFileResult"
     },
     "SessionFsRenameRequest": {
@@ -5300,6 +5844,7 @@
         "dest"
       ],
       "additionalProperties": false,
+      "description": "Source and destination paths for renaming or moving an entry in the client-provided session filesystem.",
       "title": "SessionFsRenameRequest"
     },
     "SessionFsRmRequest": {
@@ -5322,6 +5867,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Path to remove from the client-provided session filesystem, with options for recursive removal and force.",
       "title": "SessionFsRmRequest"
     },
     "SessionFsSetProviderConventions": {
@@ -5355,6 +5901,7 @@
         "conventions"
       ],
       "additionalProperties": false,
+      "description": "Initial working directory, session-state path layout, and path conventions used to register the calling SDK client as the session filesystem provider.",
       "title": "SessionFsSetProviderRequest"
     },
     "SessionFsSetProviderResult": {
@@ -5369,6 +5916,7 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the calling client was registered as the session filesystem provider.",
       "title": "SessionFsSetProviderResult"
     },
     "SessionFsStatRequest": {
@@ -5383,6 +5931,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Path whose metadata should be returned from the client-provided session filesystem.",
       "title": "SessionFsStatRequest"
     },
     "SessionFsStatResult": {
@@ -5424,6 +5973,7 @@
         "birthtime"
       ],
       "additionalProperties": false,
+      "description": "Filesystem metadata for the requested path, or a filesystem error if the stat failed.",
       "title": "SessionFsStatResult"
     },
     "SessionFsWriteFileRequest": {
@@ -5448,6 +5998,7 @@
         "content"
       ],
       "additionalProperties": false,
+      "description": "File path, content to write, and optional mode for the client-provided session filesystem.",
       "title": "SessionFsWriteFileRequest"
     },
     "SessionLogLevel": {
@@ -5490,6 +6041,7 @@
         "sessionId"
       ],
       "additionalProperties": false,
+      "description": "Source session identifier to fork from, optional event-ID boundary, and optional friendly name for the new session.",
       "title": "SessionsForkRequest"
     },
     "SessionsForkResult": {
@@ -5508,6 +6060,7 @@
         "sessionId"
       ],
       "additionalProperties": false,
+      "description": "Identifier and optional friendly name assigned to the newly forked session.",
       "title": "SessionsForkResult"
     },
     "ShellExecRequest": {
@@ -5532,6 +6085,7 @@
         "command"
       ],
       "additionalProperties": false,
+      "description": "Shell command to run, with optional working directory and timeout in milliseconds.",
       "title": "ShellExecRequest"
     },
     "ShellExecResult": {
@@ -5546,6 +6100,7 @@
         "processId"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the spawned process, used to correlate streamed output and exit notifications.",
       "title": "ShellExecResult"
     },
     "ShellKillRequest": {
@@ -5564,6 +6119,7 @@
         "processId"
       ],
       "additionalProperties": false,
+      "description": "Identifier of a process previously returned by \"shell.exec\" and the signal to send.",
       "title": "ShellKillRequest"
     },
     "ShellKillResult": {
@@ -5578,6 +6134,7 @@
         "killed"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the signal was delivered; false if the process was unknown or already exited.",
       "title": "ShellKillResult"
     },
     "ShellKillSignal": {
@@ -5626,7 +6183,8 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "title": "Skill"
+      "title": "Skill",
+      "description": "Schema for the `Skill` type."
     },
     "SkillList": {
       "type": "object",
@@ -5643,6 +6201,7 @@
         "skills"
       ],
       "additionalProperties": false,
+      "description": "Skills available to the session, with their enabled state.",
       "title": "SkillList"
     },
     "SkillsConfigSetDisabledSkillsRequest": {
@@ -5660,6 +6219,7 @@
         "disabledSkills"
       ],
       "additionalProperties": false,
+      "description": "Skill names to mark as disabled in global configuration, replacing any previous list.",
       "title": "SkillsConfigSetDisabledSkillsRequest"
     },
     "SkillsDisableRequest": {
@@ -5674,6 +6234,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "Name of the skill to disable for the session.",
       "title": "SkillsDisableRequest"
     },
     "SkillsDiscoverRequest": {
@@ -5695,6 +6256,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "Optional project paths and additional skill directories to include in discovery.",
       "title": "SkillsDiscoverRequest"
     },
     "SkillsEnableRequest": {
@@ -5709,6 +6271,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "Name of the skill to enable for the session.",
       "title": "SkillsEnableRequest"
     },
     "SkillsLoadDiagnostics": {
@@ -5734,6 +6297,7 @@
         "errors"
       ],
       "additionalProperties": false,
+      "description": "Diagnostics from reloading skill definitions, with warnings and errors as separate lists.",
       "title": "SkillsLoadDiagnostics"
     },
     "SlashCommandAgentPromptMode": {
@@ -5777,7 +6341,8 @@
         "displayPrompt"
       ],
       "additionalProperties": false,
-      "title": "SlashCommandAgentPromptResult"
+      "title": "SlashCommandAgentPromptResult",
+      "description": "Schema for the `SlashCommandAgentPromptResult` type."
     },
     "SlashCommandCompletedResult": {
       "type": "object",
@@ -5800,7 +6365,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "SlashCommandCompletedResult"
+      "title": "SlashCommandCompletedResult",
+      "description": "Schema for the `SlashCommandCompletedResult` type."
     },
     "SlashCommandInfo": {
       "type": "object",
@@ -5844,7 +6410,8 @@
         "allowDuringAgentExecution"
       ],
       "additionalProperties": false,
-      "title": "SlashCommandInfo"
+      "title": "SlashCommandInfo",
+      "description": "Schema for the `SlashCommandInfo` type."
     },
     "SlashCommandInput": {
       "type": "object",
@@ -5893,6 +6460,7 @@
           "$ref": "#/definitions/SlashCommandCompletedResult"
         }
       ],
+      "description": "Result of invoking the slash command (text output, prompt to send to the agent, or completion).",
       "title": "SlashCommandInvocationResult"
     },
     "SlashCommandKind": {
@@ -5935,7 +6503,8 @@
         "text"
       ],
       "additionalProperties": false,
-      "title": "SlashCommandTextResult"
+      "title": "SlashCommandTextResult",
+      "description": "Schema for the `SlashCommandTextResult` type."
     },
     "TaskAgentInfo": {
       "type": "object",
@@ -6030,7 +6599,8 @@
         "prompt"
       ],
       "additionalProperties": false,
-      "title": "TaskAgentInfo"
+      "title": "TaskAgentInfo",
+      "description": "Schema for the `TaskAgentInfo` type."
     },
     "TaskAgentInfoExecutionMode": {
       "type": "string",
@@ -6062,7 +6632,8 @@
           "$ref": "#/definitions/TaskShellInfo"
         }
       ],
-      "title": "TaskInfo"
+      "title": "TaskInfo",
+      "description": "Schema for the `TaskInfo` type."
     },
     "TaskList": {
       "type": "object",
@@ -6079,6 +6650,7 @@
         "tasks"
       ],
       "additionalProperties": false,
+      "description": "Background tasks currently tracked by the session.",
       "title": "TaskList"
     },
     "TasksCancelRequest": {
@@ -6093,6 +6665,7 @@
         "id"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the background task to cancel.",
       "title": "TasksCancelRequest"
     },
     "TasksCancelResult": {
@@ -6107,6 +6680,7 @@
         "cancelled"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the background task was successfully cancelled.",
       "title": "TasksCancelResult"
     },
     "TaskShellInfo": {
@@ -6174,7 +6748,8 @@
         "attachmentMode"
       ],
       "additionalProperties": false,
-      "title": "TaskShellInfo"
+      "title": "TaskShellInfo",
+      "description": "Schema for the `TaskShellInfo` type."
     },
     "TaskShellInfoAttachmentMode": {
       "type": "string",
@@ -6218,6 +6793,7 @@
         "id"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the task to promote to background mode.",
       "title": "TasksPromoteToBackgroundRequest"
     },
     "TasksPromoteToBackgroundResult": {
@@ -6232,6 +6808,7 @@
         "promoted"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the task was successfully promoted to background mode.",
       "title": "TasksPromoteToBackgroundResult"
     },
     "TasksRemoveRequest": {
@@ -6246,6 +6823,7 @@
         "id"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the completed or cancelled task to remove from tracking.",
       "title": "TasksRemoveRequest"
     },
     "TasksRemoveResult": {
@@ -6260,6 +6838,7 @@
         "removed"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the task was removed. False when the task does not exist or is still running/idle.",
       "title": "TasksRemoveResult"
     },
     "TasksSendMessageRequest": {
@@ -6283,6 +6862,7 @@
         "message"
       ],
       "additionalProperties": false,
+      "description": "Identifier of the target agent task, message content, and optional sender agent ID.",
       "title": "TasksSendMessageRequest"
     },
     "TasksSendMessageResult": {
@@ -6301,6 +6881,7 @@
         "sent"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the message was delivered, with an error message when delivery failed.",
       "title": "TasksSendMessageResult"
     },
     "TasksStartAgentRequest": {
@@ -6333,6 +6914,7 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "Agent type, prompt, name, and optional description and model override for the new task.",
       "title": "TasksStartAgentRequest"
     },
     "TasksStartAgentResult": {
@@ -6347,6 +6929,7 @@
         "agentId"
       ],
       "additionalProperties": false,
+      "description": "Identifier assigned to the newly started background agent task.",
       "title": "TasksStartAgentResult"
     },
     "Tool": {
@@ -6379,7 +6962,8 @@
         "description"
       ],
       "additionalProperties": false,
-      "title": "Tool"
+      "title": "Tool",
+      "description": "Schema for the `Tool` type."
     },
     "ToolList": {
       "type": "object",
@@ -6396,6 +6980,7 @@
         "tools"
       ],
       "additionalProperties": false,
+      "description": "Built-in tools available for the requested model, with their parameters and instructions.",
       "title": "ToolList"
     },
     "ToolsListRequest": {
@@ -6407,6 +6992,7 @@
         }
       },
       "additionalProperties": false,
+      "description": "Optional model identifier whose tool overrides should be applied to the listing.",
       "title": "ToolsListRequest"
     },
     "UIElicitationArrayAnyOfField": {
@@ -6414,28 +7000,35 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "array"
+          "const": "array",
+          "description": "Type discriminator. Always \"array\"."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "minItems": {
-          "type": "number"
+          "type": "number",
+          "description": "Minimum number of items the user must select."
         },
         "maxItems": {
-          "type": "number"
+          "type": "number",
+          "description": "Maximum number of items the user may select."
         },
         "items": {
-          "$ref": "#/definitions/UIElicitationArrayAnyOfFieldItems"
+          "$ref": "#/definitions/UIElicitationArrayAnyOfFieldItems",
+          "description": "Schema applied to each item in the array."
         },
         "default": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Default values selected when the form is first shown."
         }
       },
       "required": [
@@ -6443,6 +7036,7 @@
         "items"
       ],
       "additionalProperties": false,
+      "description": "Multi-select string field where each option pairs a value with a display label.",
       "title": "UIElicitationArrayAnyOfField"
     },
     "UIElicitationArrayAnyOfFieldItems": {
@@ -6452,23 +7046,27 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/UIElicitationArrayAnyOfFieldItemsAnyOf"
-          }
+          },
+          "description": "Selectable options, each with a value and a display label."
         }
       },
       "required": [
         "anyOf"
       ],
       "additionalProperties": false,
+      "description": "Schema applied to each item in the array.",
       "title": "UIElicitationArrayAnyOfFieldItems"
     },
     "UIElicitationArrayAnyOfFieldItemsAnyOf": {
       "type": "object",
       "properties": {
         "const": {
-          "type": "string"
+          "type": "string",
+          "description": "Value submitted when this option is selected."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Display label for this option."
         }
       },
       "required": [
@@ -6476,35 +7074,43 @@
         "title"
       ],
       "additionalProperties": false,
-      "title": "UIElicitationArrayAnyOfFieldItemsAnyOf"
+      "title": "UIElicitationArrayAnyOfFieldItemsAnyOf",
+      "description": "Schema for the `UIElicitationArrayAnyOfFieldItemsAnyOf` type."
     },
     "UIElicitationArrayEnumField": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "array"
+          "const": "array",
+          "description": "Type discriminator. Always \"array\"."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "minItems": {
-          "type": "number"
+          "type": "number",
+          "description": "Minimum number of items the user must select."
         },
         "maxItems": {
-          "type": "number"
+          "type": "number",
+          "description": "Maximum number of items the user may select."
         },
         "items": {
-          "$ref": "#/definitions/UIElicitationArrayEnumFieldItems"
+          "$ref": "#/definitions/UIElicitationArrayEnumFieldItems",
+          "description": "Schema applied to each item in the array."
         },
         "default": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Default values selected when the form is first shown."
         }
       },
       "required": [
@@ -6512,6 +7118,7 @@
         "items"
       ],
       "additionalProperties": false,
+      "description": "Multi-select string field whose allowed values are defined inline.",
       "title": "UIElicitationArrayEnumField"
     },
     "UIElicitationArrayEnumFieldItems": {
@@ -6519,13 +7126,15 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "string"
+          "const": "string",
+          "description": "Type discriminator. Always \"string\"."
         },
         "enum": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Allowed string values for each selected item."
         }
       },
       "required": [
@@ -6533,6 +7142,7 @@
         "enum"
       ],
       "additionalProperties": false,
+      "description": "Schema applied to each item in the array.",
       "title": "UIElicitationArrayEnumFieldItems"
     },
     "UIElicitationFieldValue": {
@@ -6553,7 +7163,8 @@
           }
         }
       ],
-      "title": "UIElicitationFieldValue"
+      "title": "UIElicitationFieldValue",
+      "description": "Schema for the `UIElicitationFieldValue` type."
     },
     "UIElicitationRequest": {
       "type": "object",
@@ -6572,6 +7183,7 @@
         "requestedSchema"
       ],
       "additionalProperties": false,
+      "description": "Prompt message and JSON schema describing the form fields to elicit from the user.",
       "title": "UIElicitationRequest"
     },
     "UIElicitationResponse": {
@@ -6623,6 +7235,7 @@
         "success"
       ],
       "additionalProperties": false,
+      "description": "Indicates whether the elicitation response was accepted; false if it was already resolved by another client.",
       "title": "UIElicitationResult"
     },
     "UIElicitationSchema": {
@@ -6636,7 +7249,8 @@
         "properties": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/UIElicitationSchemaProperty"
+            "$ref": "#/definitions/UIElicitationSchemaProperty",
+            "description": "Definition for a single elicitation form field."
           },
           "description": "Form field definitions, keyed by field name"
         },
@@ -6659,27 +7273,35 @@
     "UIElicitationSchemaProperty": {
       "anyOf": [
         {
-          "$ref": "#/definitions/UIElicitationStringEnumField"
+          "$ref": "#/definitions/UIElicitationStringEnumField",
+          "description": "Single-select string field whose allowed values are defined inline."
         },
         {
-          "$ref": "#/definitions/UIElicitationStringOneOfField"
+          "$ref": "#/definitions/UIElicitationStringOneOfField",
+          "description": "Single-select string field where each option pairs a value with a display label."
         },
         {
-          "$ref": "#/definitions/UIElicitationArrayEnumField"
+          "$ref": "#/definitions/UIElicitationArrayEnumField",
+          "description": "Multi-select string field whose allowed values are defined inline."
         },
         {
-          "$ref": "#/definitions/UIElicitationArrayAnyOfField"
+          "$ref": "#/definitions/UIElicitationArrayAnyOfField",
+          "description": "Multi-select string field where each option pairs a value with a display label."
         },
         {
-          "$ref": "#/definitions/UIElicitationSchemaPropertyBoolean"
+          "$ref": "#/definitions/UIElicitationSchemaPropertyBoolean",
+          "description": "Boolean field rendered as a yes/no toggle."
         },
         {
-          "$ref": "#/definitions/UIElicitationSchemaPropertyString"
+          "$ref": "#/definitions/UIElicitationSchemaPropertyString",
+          "description": "Free-text string field with optional length and format constraints."
         },
         {
-          "$ref": "#/definitions/UIElicitationSchemaPropertyNumber"
+          "$ref": "#/definitions/UIElicitationSchemaPropertyNumber",
+          "description": "Numeric field accepting either a number or an integer."
         }
       ],
+      "description": "Definition for a single elicitation form field.",
       "title": "UIElicitationSchemaProperty"
     },
     "UIElicitationSchemaPropertyBoolean": {
@@ -6687,50 +7309,62 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "boolean"
+          "const": "boolean",
+          "description": "Type discriminator. Always \"boolean\"."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "default": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Default value selected when the form is first shown."
         }
       },
       "required": [
         "type"
       ],
       "additionalProperties": false,
+      "description": "Boolean field rendered as a yes/no toggle.",
       "title": "UIElicitationSchemaPropertyBoolean"
     },
     "UIElicitationSchemaPropertyNumber": {
       "type": "object",
       "properties": {
         "type": {
-          "$ref": "#/definitions/UIElicitationSchemaPropertyNumberType"
+          "$ref": "#/definitions/UIElicitationSchemaPropertyNumberType",
+          "description": "Numeric type accepted by the field."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "minimum": {
-          "type": "number"
+          "type": "number",
+          "description": "Minimum allowed value (inclusive)."
         },
         "maximum": {
-          "type": "number"
+          "type": "number",
+          "description": "Maximum allowed value (inclusive)."
         },
         "default": {
-          "type": "number"
+          "type": "number",
+          "description": "Default value populated in the input when the form is first shown."
         }
       },
       "required": [
         "type"
       ],
       "additionalProperties": false,
+      "description": "Numeric field accepting either a number or an integer.",
       "title": "UIElicitationSchemaPropertyNumber"
     },
     "UIElicitationSchemaPropertyNumberType": {
@@ -6739,6 +7373,7 @@
         "number",
         "integer"
       ],
+      "description": "Numeric type accepted by the field.",
       "title": "UIElicitationSchemaPropertyNumberType"
     },
     "UIElicitationSchemaPropertyString": {
@@ -6746,31 +7381,39 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "string"
+          "const": "string",
+          "description": "Type discriminator. Always \"string\"."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "minLength": {
-          "type": "number"
+          "type": "number",
+          "description": "Minimum number of characters required."
         },
         "maxLength": {
-          "type": "number"
+          "type": "number",
+          "description": "Maximum number of characters allowed."
         },
         "format": {
-          "$ref": "#/definitions/UIElicitationSchemaPropertyStringFormat"
+          "$ref": "#/definitions/UIElicitationSchemaPropertyStringFormat",
+          "description": "Optional format hint that constrains the accepted input."
         },
         "default": {
-          "type": "string"
+          "type": "string",
+          "description": "Default value populated in the input when the form is first shown."
         }
       },
       "required": [
         "type"
       ],
       "additionalProperties": false,
+      "description": "Free-text string field with optional length and format constraints.",
       "title": "UIElicitationSchemaPropertyString"
     },
     "UIElicitationSchemaPropertyStringFormat": {
@@ -6781,6 +7424,7 @@
         "date",
         "date-time"
       ],
+      "description": "Optional format hint that constrains the accepted input.",
       "title": "UIElicitationSchemaPropertyStringFormat"
     },
     "UIElicitationStringEnumField": {
@@ -6788,28 +7432,34 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "string"
+          "const": "string",
+          "description": "Type discriminator. Always \"string\"."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "enum": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Allowed string values."
         },
         "enumNames": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Optional display labels for each enum value, in the same order as `enum`."
         },
         "default": {
-          "type": "string"
+          "type": "string",
+          "description": "Default value selected when the form is first shown."
         }
       },
       "required": [
@@ -6817,6 +7467,7 @@
         "enum"
       ],
       "additionalProperties": false,
+      "description": "Single-select string field whose allowed values are defined inline.",
       "title": "UIElicitationStringEnumField"
     },
     "UIElicitationStringOneOfField": {
@@ -6824,22 +7475,27 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "string"
+          "const": "string",
+          "description": "Type discriminator. Always \"string\"."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Human-readable label for the field."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Help text describing the field."
         },
         "oneOf": {
           "type": "array",
           "items": {
             "$ref": "#/definitions/UIElicitationStringOneOfFieldOneOf"
-          }
+          },
+          "description": "Selectable options, each with a value and a display label."
         },
         "default": {
-          "type": "string"
+          "type": "string",
+          "description": "Default value selected when the form is first shown."
         }
       },
       "required": [
@@ -6847,16 +7503,19 @@
         "oneOf"
       ],
       "additionalProperties": false,
+      "description": "Single-select string field where each option pairs a value with a display label.",
       "title": "UIElicitationStringOneOfField"
     },
     "UIElicitationStringOneOfFieldOneOf": {
       "type": "object",
       "properties": {
         "const": {
-          "type": "string"
+          "type": "string",
+          "description": "Value submitted when this option is selected."
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Display label for this option."
         }
       },
       "required": [
@@ -6864,7 +7523,8 @@
         "title"
       ],
       "additionalProperties": false,
-      "title": "UIElicitationStringOneOfFieldOneOf"
+      "title": "UIElicitationStringOneOfFieldOneOf",
+      "description": "Schema for the `UIElicitationStringOneOfFieldOneOf` type."
     },
     "UIHandlePendingElicitationRequest": {
       "type": "object",
@@ -6883,6 +7543,7 @@
         "result"
       ],
       "additionalProperties": false,
+      "description": "Pending elicitation request ID and the user's response (accept/decline/cancel + form values).",
       "title": "UIHandlePendingElicitationRequest"
     },
     "UsageGetMetricsResult": {
@@ -6956,6 +7617,7 @@
         "lastCallOutputTokens"
       ],
       "additionalProperties": false,
+      "description": "Accumulated session usage metrics, including premium request cost, token counts, model breakdown, and code-change totals.",
       "title": "UsageGetMetricsResult"
     },
     "UsageMetricsCodeChanges": {
@@ -7012,7 +7674,8 @@
         "usage"
       ],
       "additionalProperties": false,
-      "title": "UsageMetricsModelMetric"
+      "title": "UsageMetricsModelMetric",
+      "description": "Schema for the `UsageMetricsModelMetric` type."
     },
     "UsageMetricsModelMetricRequests": {
       "type": "object",
@@ -7047,7 +7710,8 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "title": "UsageMetricsModelMetricTokenDetail"
+      "title": "UsageMetricsModelMetricTokenDetail",
+      "description": "Schema for the `UsageMetricsModelMetricTokenDetail` type."
     },
     "UsageMetricsModelMetricUsage": {
       "type": "object",
@@ -7101,7 +7765,8 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "title": "UsageMetricsTokenDetail"
+      "title": "UsageMetricsTokenDetail",
+      "description": "Schema for the `UsageMetricsTokenDetail` type."
     },
     "WorkspacesCreateFileRequest": {
       "type": "object",
@@ -7120,6 +7785,7 @@
         "content"
       ],
       "additionalProperties": false,
+      "description": "Relative path and UTF-8 content for the workspace file to create or overwrite.",
       "title": "WorkspacesCreateFileRequest"
     },
     "WorkspacesGetWorkspaceResult": {
@@ -7204,6 +7870,7 @@
         "workspace"
       ],
       "additionalProperties": false,
+      "description": "Current workspace metadata for the session, or null when not available.",
       "title": "WorkspacesGetWorkspaceResult"
     },
     "WorkspacesListFilesResult": {
@@ -7221,6 +7888,7 @@
         "files"
       ],
       "additionalProperties": false,
+      "description": "Relative paths of files stored in the session workspace files directory.",
       "title": "WorkspacesListFilesResult"
     },
     "WorkspacesReadFileRequest": {
@@ -7235,6 +7903,7 @@
         "path"
       ],
       "additionalProperties": false,
+      "description": "Relative path of the workspace file to read.",
       "title": "WorkspacesReadFileRequest"
     },
     "WorkspacesReadFileResult": {
@@ -7249,6 +7918,7 @@
         "content"
       ],
       "additionalProperties": false,
+      "description": "Contents of the requested workspace file as a UTF-8 string.",
       "title": "WorkspacesReadFileResult"
     }
   }
