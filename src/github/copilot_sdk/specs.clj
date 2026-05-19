@@ -564,7 +564,6 @@
     :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
     :enable-session-telemetry?
     :remote-session
-    :cloud
     :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
@@ -583,7 +582,6 @@
                     ::continue-pending-work?
                     ::enable-session-telemetry?
                     ::remote-session
-                    ::cloud
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -604,7 +602,6 @@
                     ::continue-pending-work?
                     ::enable-session-telemetry?
                     ::remote-session
-                    ::cloud
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 

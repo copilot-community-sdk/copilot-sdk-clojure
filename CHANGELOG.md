@@ -9,11 +9,13 @@ All notable changes to this project will be documented in this file. This change
   a `sessionId` (sub-agent hooks), the wire-provided value is preserved;
   otherwise the SDK fills in the parent session id as a convenience.
   (upstream PR #1290)
-- **`:cloud` session config option** — `create-session` and `resume-session`
-  accept an optional `:cloud` map for binding the session to a cloud repository.
-  Shape: `{:repository {:owner "user-or-org" :repository "repo-name"}}`. Both
-  `:owner` and `:repository` are required non-blank strings. Forwarded on the
-  wire as `cloud.repository.owner` / `cloud.repository.repository`.
+- **`:cloud` session config option (create only)** — `create-session` accepts
+  an optional `:cloud` map for creating a remote cloud session. Shape:
+  `{:repository {:owner "octocat" :name "hello-world" :branch "main"}}` — `:owner`
+  and `:name` are required non-blank strings; `:branch` is optional. Forwarded on
+  the wire as `cloud.repository.*`. Matches upstream's `CloudSessionOptions` /
+  `CloudSessionRepository`. Not accepted on `resume-session` / `join-session`,
+  matching upstream `ResumeSessionConfig` (Pick excludes `cloud`).
   (upstream PR #1306)
 - **Optional permission and tool callbacks (manual pending RPCs)** — Following
   upstream PR #1308, `:on-permission-request` is now **optional** on

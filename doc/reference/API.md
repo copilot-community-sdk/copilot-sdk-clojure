@@ -266,7 +266,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
 | `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
-| `:cloud` | map | Bind the session to a cloud repository. Shape: `{:repository {:owner "octocat" :repository "hello"}}`. Both `:owner` and `:repository` are required non-blank strings. Forwarded as `cloud.repository.*` on `session.create` and `session.resume`. (upstream PR #1306) |
+| `:cloud` | map | (create-session only) Creates a remote cloud session. Shape: `{:repository {:owner "octocat" :name "hello-world" :branch "main"}}` — `:owner` and `:name` are required non-blank strings; `:branch` is optional. Forwarded as `cloud.repository.*` on `session.create`. Not accepted on `resume-session` (matches upstream `ResumeSessionConfig`). (upstream PR #1306) |
 
 #### `resume-session`
 

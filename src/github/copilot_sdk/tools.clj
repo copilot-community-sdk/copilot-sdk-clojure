@@ -82,13 +82,17 @@
   ;; The handler should validate using the spec
   (cond-> {:tool-name name
            :tool-description description
-           :tool-parameters nil  ; User should provide JSON schema if needed
-           :tool-handler (fn [args invocation]
+           :tool-parameters nil}  ; User should provide JSON schema if needed
+    ;; Upstream PR #1308: handler is optional. Declaration-only tools (no
+    ;; handler) are surfaced as external_tool.requested events; consumers
+    ;; resolve them via handle-pending-tool-call!.
+    (some? handler)
+    (assoc :tool-handler (fn [args invocation]
                            (if (and spec (not (s/valid? spec args)))
                              {:text-result-for-llm (str "Invalid arguments: " (s/explain-str spec args))
                               :result-type "failure"
                               :error "spec validation failed"}
-                             (handler args invocation)))}
+                             (handler args invocation))))
     (some? overrides-built-in-tool)
     (assoc :overrides-built-in-tool overrides-built-in-tool)))
 

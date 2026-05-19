@@ -4198,6 +4198,14 @@
       (is (not (contains? tool :tool-handler))
           "tool map must NOT contain :tool-handler key when handler omitted")
       ;; Must pass tool spec validation (handler now optional)
+      (is (s/valid? :github.copilot-sdk.specs/tool tool))))
+
+  (testing "define-tool-from-spec accepts omission of :handler (upstream PR #1308)"
+    (let [tool (tools/define-tool-from-spec "manual_spec_tool"
+                 {:description "Declaration-only spec tool"})]
+      (is (= "manual_spec_tool" (:tool-name tool)))
+      (is (not (contains? tool :tool-handler))
+          "define-tool-from-spec must NOT install a wrapper handler when :handler omitted")
       (is (s/valid? :github.copilot-sdk.specs/tool tool)))))
 
 (deftest test-declaration-only-tool-not-stored-in-handler-map

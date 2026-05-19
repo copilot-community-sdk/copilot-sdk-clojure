@@ -1590,8 +1590,6 @@
       (assoc :enable-session-telemetry (:enable-session-telemetry? config))
       (:remote-session config)
       (assoc :remote-session (name (:remote-session config)))
-      (:cloud config)
-      (assoc :cloud (util/clj->wire (:cloud config)))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :include-sub-agent-streaming-events
