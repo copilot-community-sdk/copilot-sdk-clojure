@@ -19,8 +19,8 @@
                                   whenever the LLM calls it. Applications
                                   resolve the pending call by reading the
                                   `:request-id` from the event data and
-                                  calling `session/handle-pending-tool-call!`
-                                  (or the async `<handle-pending-tool-call!`).
+                                  calling `copilot/handle-pending-tool-call!`
+                                  (or the async ``copilot/<handle-pending-tool-call!``).
      - :overrides-built-in-tool - When true, explicitly overrides a built-in tool of the same name.
                                   Without this flag, name clashes with built-in tools cause an error.
    
@@ -52,7 +52,7 @@
       :parameters {:type \"object\"
                    :properties {:location {:type \"string\"}}}})
    ;; Listen for :copilot/external_tool.requested events and resolve via
-   ;; (session/handle-pending-tool-call! session {:request-id ... :result ...})
+   ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
   [name {:keys [description parameters handler overrides-built-in-tool]}]
   (cond-> {:tool-name name
@@ -86,8 +86,8 @@
                                   runtime emits a
                                   `:copilot/external_tool.requested` event
                                   on call; applications resolve it via
-                                  `session/handle-pending-tool-call!`
-                                  (or `<handle-pending-tool-call!`).
+                                  `copilot/handle-pending-tool-call!`
+                                  (or ``copilot/<handle-pending-tool-call!``).
                                   Note: when `:handler` is omitted, the
                                   `:spec` is also not used (no automatic
                                   validation occurs in the declaration-only
@@ -115,7 +115,7 @@
      {:description \"Get weather for a location\"
       :spec ::get-weather-args})
    ;; Resolve pending calls via
-   ;; (session/handle-pending-tool-call! session {:request-id ... :result ...})
+   ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
   [name {:keys [description spec handler overrides-built-in-tool]}]
   ;; For now, we don't auto-convert spec to JSON schema

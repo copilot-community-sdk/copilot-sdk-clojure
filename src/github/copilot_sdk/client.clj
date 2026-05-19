@@ -1620,7 +1620,7 @@
    
    Config options (`:on-permission-request` is **optional** since upstream
    PR #1308 — omit it to leave permission requests pending for manual
-   resolution via `session/handle-pending-permission-request!`):
+   resolution via `copilot/handle-pending-permission-request!`):
    - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
                               When omitted, permission requests are surfaced as
                               `:copilot/permission.requested` events and remain
@@ -1715,7 +1715,7 @@
    
    Config options (`:on-permission-request` is **optional** since upstream
    PR #1308 — omit it to leave permission requests pending for manual
-   resolution via `session/handle-pending-permission-request!`):
+   resolution via `copilot/handle-pending-permission-request!`):
    - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
                               When omitted, permission requests are surfaced as
                               `:copilot/permission.requested` events and remain
