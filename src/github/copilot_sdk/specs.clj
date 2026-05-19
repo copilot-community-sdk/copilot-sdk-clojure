@@ -921,9 +921,14 @@
 ;; Validate :repository against ::cloud-repository here via s/and, avoiding
 ;; a name collision in s/keys :opt-un.
 (s/def ::owner ::non-blank-string)
+;; The :name key inside ::cloud-repository must be non-blank. The shared
+;; ::name spec is just `string?` (it is reused by many event/data shapes
+;; where blanks are valid), so we enforce non-blankness here with a
+;; predicate rather than redefining ::name globally.
 (s/def ::cloud-repository
-  (s/keys :req-un [::owner ::name]
-          :opt-un [::branch]))
+  (s/and (s/keys :req-un [::owner ::name]
+                 :opt-un [::branch])
+         #(not (clojure.string/blank? (:name %)))))
 (s/def ::cloud
   (s/and map?
          (fn [m]

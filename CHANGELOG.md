@@ -42,6 +42,17 @@ All notable changes to this project will be documented in this file. This change
   event fields include `:display-prompt`, `:reasoning-summary`,
   `:previous-reasoning-summary`. (upstream PRs #1305, #1307)
 
+### Fixed (post-v1.0.0-beta.4 sync, review iteration)
+- `::cloud-repository` spec now enforces non-blank `:name` (was just `string?`
+  via the shared `::name` spec, allowing blanks despite docs).
+- `handle-pending-tool-call!` and `<handle-pending-tool-call!` now throw when
+  neither `:result` nor `:error` is supplied (previously fell through to a
+  default "tool returned no result" payload).
+- `handle-pending-tool-call!` / `<handle-pending-tool-call!` validate that
+  `:error`, when supplied, is a string.
+- `tools/define-tool-from-spec` mirrors `tools/define-tool`: when `:handler`
+  is omitted, no `:tool-handler` wrapper is installed (declaration-only tool).
+
 ### Notes (v1.0.0-beta.4 sync)
 Upstream `v1.0.0-beta.4` shipped no new Node.js SDK API surface relative to
 `v1.0.0-beta.3` — every SDK-visible change in the upstream diff

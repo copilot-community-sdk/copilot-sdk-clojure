@@ -4306,4 +4306,18 @@
       (is (thrown-with-msg? Exception #":error must be a string"
                             (sdk/handle-pending-tool-call!
                              session
-                             {:request-id "x" :error 42}))))))
+                             {:request-id "x" :error 42})))))
+
+  (testing "handle-pending-tool-call! requires :result or :error"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #"exactly one of :result or :error"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "x"})))))
+
+  (testing "<handle-pending-tool-call! requires :result or :error"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #"exactly one of :result or :error"
+                            (sdk/<handle-pending-tool-call!
+                             session
+                             {:request-id "x"}))))))
