@@ -73,9 +73,9 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/compaction-tokens-used clojure.core/map?)
 
-(s/def :github.copilot-sdk.generated.event-specs/content (s/spec (fn [v941] (or (s/valid? clojure.core/string? v941) (s/valid? clojure.core/map? v941)))))
+(s/def :github.copilot-sdk.generated.event-specs/content (s/spec (fn [v943] (or (s/valid? clojure.core/string? v943) (s/valid? clojure.core/map? v943)))))
 
-(s/def :github.copilot-sdk.generated.event-specs/context (s/spec (fn [v939] (or (s/valid? clojure.core/map? v939) (s/valid? clojure.core/string? v939)))))
+(s/def :github.copilot-sdk.generated.event-specs/context (s/spec (fn [v941] (or (s/valid? clojure.core/map? v941) (s/valid? clojure.core/string? v941)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/continue-pending-work clojure.core/boolean?)
 
@@ -101,6 +101,8 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/detached-from-spawning-parent-session-id clojure.core/string?)
 
+(s/def :github.copilot-sdk.generated.event-specs/display-prompt clojure.core/string?)
+
 (s/def :github.copilot-sdk.generated.event-specs/duration clojure.core/number?)
 
 (s/def :github.copilot-sdk.generated.event-specs/duration-ms clojure.core/number?)
@@ -113,7 +115,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/ephemeral clojure.core/boolean?)
 
-(s/def :github.copilot-sdk.generated.event-specs/error (s/spec (fn [v937] (or (s/valid? clojure.core/string? v937) (s/valid? clojure.core/map? v937)))))
+(s/def :github.copilot-sdk.generated.event-specs/error (s/spec (fn [v938] (or (s/valid? clojure.core/string? v938) (s/valid? clojure.core/map? v938)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/error-code clojure.core/string?)
 
@@ -147,7 +149,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/host-type #{"github" "ado"})
 
-(s/def :github.copilot-sdk.generated.event-specs/id (s/spec (fn [v938] (or (s/valid? clojure.core/string? v938) (s/valid? clojure.core/integer? v938)))))
+(s/def :github.copilot-sdk.generated.event-specs/id (s/spec (fn [v939] (or (s/valid? clojure.core/string? v939) (s/valid? clojure.core/integer? v939)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/info-type clojure.core/string?)
 
@@ -205,7 +207,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/new-model clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/operation (s/spec (fn [v940] (or (s/valid? #{"delete" "update" "create"} v940) (s/valid? #{"update" "create"} v940)))))
+(s/def :github.copilot-sdk.generated.event-specs/operation (s/spec (fn [v942] (or (s/valid? #{"delete" "update" "create"} v942) (s/valid? #{"update" "create"} v942)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/output clojure.core/any?)
 
@@ -255,6 +257,8 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/previous-reasoning-effort clojure.core/string?)
 
+(s/def :github.copilot-sdk.generated.event-specs/previous-reasoning-summary #{"detailed" "none" "concise"})
+
 (s/def :github.copilot-sdk.generated.event-specs/producer clojure.core/string?)
 
 (s/def :github.copilot-sdk.generated.event-specs/progress-message clojure.core/string?)
@@ -271,11 +275,13 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/reason #{"user_abort" "remote_command" "user_initiated"})
 
-(s/def :github.copilot-sdk.generated.event-specs/reasoning-effort clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/reasoning-effort (s/spec (fn [v940] (or (s/valid? clojure.core/string? v940) (s/valid? clojure.core/any? v940)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-id clojure.core/string?)
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-opaque clojure.core/string?)
+
+(s/def :github.copilot-sdk.generated.event-specs/reasoning-summary #{"detailed" "none" "concise"})
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-text clojure.core/string?)
 
@@ -289,7 +295,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/remote-steerable clojure.core/boolean?)
 
-(s/def :github.copilot-sdk.generated.event-specs/repository (s/spec (fn [v936] (or (s/valid? clojure.core/map? v936) (s/valid? clojure.core/string? v936)))))
+(s/def :github.copilot-sdk.generated.event-specs/repository (s/spec (fn [v937] (or (s/valid? clojure.core/map? v937) (s/valid? clojure.core/string? v937)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/repository-host clojure.core/string?)
 
@@ -301,7 +307,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/response clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/result (s/spec (fn [v945] (or (s/valid? clojure.core/map? v945) (s/valid? (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map?) v945)))))
+(s/def :github.copilot-sdk.generated.event-specs/result (s/spec (fn [v947] (or (s/valid? clojure.core/map? v947) (s/valid? (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map?) v947)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/resume-time clojure.core/string?)
 
@@ -329,7 +335,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/skills (s/coll-of clojure.core/map?))
 
-(s/def :github.copilot-sdk.generated.event-specs/source (s/spec (fn [v942] (or (s/valid? clojure.core/string? v942) (s/valid? #{"top_level" "subagent" "mcp_sampling"} v942)))))
+(s/def :github.copilot-sdk.generated.event-specs/source (s/spec (fn [v944] (or (s/valid? clojure.core/string? v944) (s/valid? #{"top_level" "subagent" "mcp_sampling"} v944)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/source-type #{"remote" "local"})
 
@@ -403,7 +409,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/turn-id clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/type (s/spec (fn [v943] (or (s/valid? #{"session.start"} v943) (s/valid? #{"session.resume"} v943) (s/valid? #{"session.remote_steerable_changed"} v943) (s/valid? #{"session.error"} v943) (s/valid? #{"session.idle"} v943) (s/valid? #{"session.title_changed"} v943) (s/valid? #{"session.schedule_created"} v943) (s/valid? #{"session.schedule_cancelled"} v943) (s/valid? #{"session.info"} v943) (s/valid? #{"session.warning"} v943) (s/valid? #{"session.model_change"} v943) (s/valid? #{"session.mode_changed"} v943) (s/valid? #{"session.plan_changed"} v943) (s/valid? #{"session.workspace_file_changed"} v943) (s/valid? #{"session.handoff"} v943) (s/valid? #{"session.truncation"} v943) (s/valid? #{"session.snapshot_rewind"} v943) (s/valid? #{"session.shutdown"} v943) (s/valid? #{"session.context_changed"} v943) (s/valid? #{"session.usage_info"} v943) (s/valid? #{"session.compaction_start"} v943) (s/valid? #{"session.compaction_complete"} v943) (s/valid? #{"session.task_complete"} v943) (s/valid? #{"user.message"} v943) (s/valid? #{"pending_messages.modified"} v943) (s/valid? #{"assistant.turn_start"} v943) (s/valid? #{"assistant.intent"} v943) (s/valid? #{"assistant.reasoning"} v943) (s/valid? #{"assistant.reasoning_delta"} v943) (s/valid? #{"assistant.streaming_delta"} v943) (s/valid? #{"assistant.message"} v943) (s/valid? #{"assistant.message_start"} v943) (s/valid? #{"assistant.message_delta"} v943) (s/valid? #{"assistant.turn_end"} v943) (s/valid? #{"assistant.usage"} v943) (s/valid? #{"model.call_failure"} v943) (s/valid? #{"abort"} v943) (s/valid? #{"tool.user_requested"} v943) (s/valid? #{"tool.execution_start"} v943) (s/valid? #{"tool.execution_partial_result"} v943) (s/valid? #{"tool.execution_progress"} v943) (s/valid? #{"tool.execution_complete"} v943) (s/valid? #{"skill.invoked"} v943) (s/valid? #{"subagent.started"} v943) (s/valid? #{"subagent.completed"} v943) (s/valid? #{"subagent.failed"} v943) (s/valid? #{"subagent.selected"} v943) (s/valid? #{"subagent.deselected"} v943) (s/valid? #{"hook.start"} v943) (s/valid? #{"hook.end"} v943) (s/valid? #{"system.message"} v943) (s/valid? #{"system.notification"} v943) (s/valid? #{"permission.requested"} v943) (s/valid? #{"permission.completed"} v943) (s/valid? #{"user_input.requested"} v943) (s/valid? #{"user_input.completed"} v943) (s/valid? #{"elicitation.requested"} v943) (s/valid? #{"elicitation.completed"} v943) (s/valid? #{"sampling.requested"} v943) (s/valid? #{"sampling.completed"} v943) (s/valid? #{"mcp.oauth_required"} v943) (s/valid? #{"mcp.oauth_completed"} v943) (s/valid? #{"session.custom_notification"} v943) (s/valid? #{"external_tool.requested"} v943) (s/valid? #{"external_tool.completed"} v943) (s/valid? #{"command.queued"} v943) (s/valid? #{"command.execute"} v943) (s/valid? #{"command.completed"} v943) (s/valid? #{"auto_mode_switch.requested"} v943) (s/valid? #{"auto_mode_switch.completed"} v943) (s/valid? #{"commands.changed"} v943) (s/valid? #{"capabilities.changed"} v943) (s/valid? #{"exit_plan_mode.requested"} v943) (s/valid? #{"exit_plan_mode.completed"} v943) (s/valid? #{"session.tools_updated"} v943) (s/valid? #{"session.background_tasks_changed"} v943) (s/valid? #{"session.skills_loaded"} v943) (s/valid? #{"session.custom_agents_updated"} v943) (s/valid? #{"session.mcp_servers_loaded"} v943) (s/valid? #{"session.mcp_server_status_changed"} v943) (s/valid? #{"session.extensions_loaded"} v943)))))
+(s/def :github.copilot-sdk.generated.event-specs/type (s/spec (fn [v945] (or (s/valid? #{"session.start"} v945) (s/valid? #{"session.resume"} v945) (s/valid? #{"session.remote_steerable_changed"} v945) (s/valid? #{"session.error"} v945) (s/valid? #{"session.idle"} v945) (s/valid? #{"session.title_changed"} v945) (s/valid? #{"session.schedule_created"} v945) (s/valid? #{"session.schedule_cancelled"} v945) (s/valid? #{"session.info"} v945) (s/valid? #{"session.warning"} v945) (s/valid? #{"session.model_change"} v945) (s/valid? #{"session.mode_changed"} v945) (s/valid? #{"session.plan_changed"} v945) (s/valid? #{"session.workspace_file_changed"} v945) (s/valid? #{"session.handoff"} v945) (s/valid? #{"session.truncation"} v945) (s/valid? #{"session.snapshot_rewind"} v945) (s/valid? #{"session.shutdown"} v945) (s/valid? #{"session.context_changed"} v945) (s/valid? #{"session.usage_info"} v945) (s/valid? #{"session.compaction_start"} v945) (s/valid? #{"session.compaction_complete"} v945) (s/valid? #{"session.task_complete"} v945) (s/valid? #{"user.message"} v945) (s/valid? #{"pending_messages.modified"} v945) (s/valid? #{"assistant.turn_start"} v945) (s/valid? #{"assistant.intent"} v945) (s/valid? #{"assistant.reasoning"} v945) (s/valid? #{"assistant.reasoning_delta"} v945) (s/valid? #{"assistant.streaming_delta"} v945) (s/valid? #{"assistant.message"} v945) (s/valid? #{"assistant.message_start"} v945) (s/valid? #{"assistant.message_delta"} v945) (s/valid? #{"assistant.turn_end"} v945) (s/valid? #{"assistant.usage"} v945) (s/valid? #{"model.call_failure"} v945) (s/valid? #{"abort"} v945) (s/valid? #{"tool.user_requested"} v945) (s/valid? #{"tool.execution_start"} v945) (s/valid? #{"tool.execution_partial_result"} v945) (s/valid? #{"tool.execution_progress"} v945) (s/valid? #{"tool.execution_complete"} v945) (s/valid? #{"skill.invoked"} v945) (s/valid? #{"subagent.started"} v945) (s/valid? #{"subagent.completed"} v945) (s/valid? #{"subagent.failed"} v945) (s/valid? #{"subagent.selected"} v945) (s/valid? #{"subagent.deselected"} v945) (s/valid? #{"hook.start"} v945) (s/valid? #{"hook.end"} v945) (s/valid? #{"system.message"} v945) (s/valid? #{"system.notification"} v945) (s/valid? #{"permission.requested"} v945) (s/valid? #{"permission.completed"} v945) (s/valid? #{"user_input.requested"} v945) (s/valid? #{"user_input.completed"} v945) (s/valid? #{"elicitation.requested"} v945) (s/valid? #{"elicitation.completed"} v945) (s/valid? #{"sampling.requested"} v945) (s/valid? #{"sampling.completed"} v945) (s/valid? #{"mcp.oauth_required"} v945) (s/valid? #{"mcp.oauth_completed"} v945) (s/valid? #{"session.custom_notification"} v945) (s/valid? #{"external_tool.requested"} v945) (s/valid? #{"external_tool.completed"} v945) (s/valid? #{"command.queued"} v945) (s/valid? #{"command.execute"} v945) (s/valid? #{"command.completed"} v945) (s/valid? #{"auto_mode_switch.requested"} v945) (s/valid? #{"auto_mode_switch.completed"} v945) (s/valid? #{"commands.changed"} v945) (s/valid? #{"capabilities.changed"} v945) (s/valid? #{"exit_plan_mode.requested"} v945) (s/valid? #{"exit_plan_mode.completed"} v945) (s/valid? #{"session.tools_updated"} v945) (s/valid? #{"session.background_tasks_changed"} v945) (s/valid? #{"session.skills_loaded"} v945) (s/valid? #{"session.custom_agents_updated"} v945) (s/valid? #{"session.mcp_servers_loaded"} v945) (s/valid? #{"session.mcp_server_status_changed"} v945) (s/valid? #{"session.extensions_loaded"} v945)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/ui clojure.core/map?)
 
@@ -411,7 +417,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/url clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/version (s/spec (fn [v944] (or (s/valid? clojure.core/number? v944) (s/valid? clojure.core/integer? v944)))))
+(s/def :github.copilot-sdk.generated.event-specs/version (s/spec (fn [v946] (or (s/valid? clojure.core/number? v946) (s/valid? clojure.core/integer? v946)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/warning-type clojure.core/string?)
 
@@ -515,17 +521,17 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/session.mode_changed-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/new-mode :github.copilot-sdk.generated.event-specs/previous-mode]))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.model_change-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/new-model] :opt-un [:github.copilot-sdk.generated.event-specs/cause :github.copilot-sdk.generated.event-specs/previous-model :github.copilot-sdk.generated.event-specs/previous-reasoning-effort :github.copilot-sdk.generated.event-specs/reasoning-effort]))
+(s/def :github.copilot-sdk.generated.event-specs/session.model_change-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/new-model] :opt-un [:github.copilot-sdk.generated.event-specs/cause :github.copilot-sdk.generated.event-specs/previous-model :github.copilot-sdk.generated.event-specs/previous-reasoning-effort :github.copilot-sdk.generated.event-specs/previous-reasoning-summary :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/reasoning-summary]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.plan_changed-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/operation]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.remote_steerable_changed-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/remote-steerable]))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.resume-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/event-count :github.copilot-sdk.generated.event-specs/resume-time] :opt-un [:github.copilot-sdk.generated.event-specs/already-in-use :github.copilot-sdk.generated.event-specs/context :github.copilot-sdk.generated.event-specs/continue-pending-work :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/remote-steerable :github.copilot-sdk.generated.event-specs/selected-model :github.copilot-sdk.generated.event-specs/session-was-active]))
+(s/def :github.copilot-sdk.generated.event-specs/session.resume-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/event-count :github.copilot-sdk.generated.event-specs/resume-time] :opt-un [:github.copilot-sdk.generated.event-specs/already-in-use :github.copilot-sdk.generated.event-specs/context :github.copilot-sdk.generated.event-specs/continue-pending-work :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/reasoning-summary :github.copilot-sdk.generated.event-specs/remote-steerable :github.copilot-sdk.generated.event-specs/selected-model :github.copilot-sdk.generated.event-specs/session-was-active]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.schedule_cancelled-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/id]) (fn [data] (s/valid? clojure.core/integer? (:id data)))))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.schedule_created-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/id :github.copilot-sdk.generated.event-specs/interval-ms :github.copilot-sdk.generated.event-specs/prompt] :opt-un [:github.copilot-sdk.generated.event-specs/recurring]) (fn [data] (s/valid? clojure.core/integer? (:id data)))))
+(s/def :github.copilot-sdk.generated.event-specs/session.schedule_created-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/id :github.copilot-sdk.generated.event-specs/interval-ms :github.copilot-sdk.generated.event-specs/prompt] :opt-un [:github.copilot-sdk.generated.event-specs/display-prompt :github.copilot-sdk.generated.event-specs/recurring]) (fn [data] (s/valid? clojure.core/integer? (:id data)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.shutdown-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/code-changes :github.copilot-sdk.generated.event-specs/model-metrics :github.copilot-sdk.generated.event-specs/session-start-time :github.copilot-sdk.generated.event-specs/shutdown-type :github.copilot-sdk.generated.event-specs/total-api-duration-ms :github.copilot-sdk.generated.event-specs/total-premium-requests] :opt-un [:github.copilot-sdk.generated.event-specs/conversation-tokens :github.copilot-sdk.generated.event-specs/current-model :github.copilot-sdk.generated.event-specs/current-tokens :github.copilot-sdk.generated.event-specs/error-reason :github.copilot-sdk.generated.event-specs/system-tokens :github.copilot-sdk.generated.event-specs/token-details :github.copilot-sdk.generated.event-specs/tool-definitions-tokens :github.copilot-sdk.generated.event-specs/total-nano-aiu]))
 
@@ -533,7 +539,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/session.snapshot_rewind-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/events-removed :github.copilot-sdk.generated.event-specs/up-to-event-id]))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.start-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/copilot-version :github.copilot-sdk.generated.event-specs/producer :github.copilot-sdk.generated.event-specs/session-id :github.copilot-sdk.generated.event-specs/start-time :github.copilot-sdk.generated.event-specs/version] :opt-un [:github.copilot-sdk.generated.event-specs/already-in-use :github.copilot-sdk.generated.event-specs/context :github.copilot-sdk.generated.event-specs/detached-from-spawning-parent-session-id :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/remote-steerable :github.copilot-sdk.generated.event-specs/selected-model]))
+(s/def :github.copilot-sdk.generated.event-specs/session.start-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/copilot-version :github.copilot-sdk.generated.event-specs/producer :github.copilot-sdk.generated.event-specs/session-id :github.copilot-sdk.generated.event-specs/start-time :github.copilot-sdk.generated.event-specs/version] :opt-un [:github.copilot-sdk.generated.event-specs/already-in-use :github.copilot-sdk.generated.event-specs/context :github.copilot-sdk.generated.event-specs/detached-from-spawning-parent-session-id :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/reasoning-summary :github.copilot-sdk.generated.event-specs/remote-steerable :github.copilot-sdk.generated.event-specs/selected-model]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.task_complete-data (s/keys :opt-un [:github.copilot-sdk.generated.event-specs/success :github.copilot-sdk.generated.event-specs/summary]))
 

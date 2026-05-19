@@ -51,7 +51,8 @@
         },
         "type": {
           "type": "string",
-          "const": "abort"
+          "const": "abort",
+          "description": "Type discriminator. Always \"abort\"."
         },
         "data": {
           "$ref": "#/definitions/AbortData",
@@ -66,6 +67,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"abort\". Turn abort information including the reason for termination",
       "title": "AbortEvent"
     },
     "AbortReason": {
@@ -120,7 +122,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -128,7 +131,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.intent"
+          "const": "assistant.intent",
+          "description": "Type discriminator. Always \"assistant.intent\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantIntentData",
@@ -144,6 +148,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.intent\". Agent intent description for current activity or plan",
       "title": "AssistantIntentEvent"
     },
     "AssistantMessageData": {
@@ -276,7 +281,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -284,7 +290,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.message_delta"
+          "const": "assistant.message_delta",
+          "description": "Type discriminator. Always \"assistant.message_delta\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantMessageDeltaData",
@@ -300,6 +307,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.message_delta\". Streaming assistant message delta for incremental response updates",
       "title": "AssistantMessageDeltaEvent"
     },
     "AssistantMessageEvent": {
@@ -337,7 +345,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.message"
+          "const": "assistant.message",
+          "description": "Type discriminator. Always \"assistant.message\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantMessageData",
@@ -352,6 +361,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.message\". Assistant response containing text content, optional tool requests, and interaction metadata",
       "title": "AssistantMessageEvent"
     },
     "AssistantMessageStartData": {
@@ -400,7 +410,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -408,7 +419,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.message_start"
+          "const": "assistant.message_start",
+          "description": "Type discriminator. Always \"assistant.message_start\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantMessageStartData",
@@ -424,6 +436,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.message_start\". Streaming assistant message start metadata",
       "title": "AssistantMessageStartEvent"
     },
     "AssistantMessageToolRequest": {
@@ -548,7 +561,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -556,7 +570,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.reasoning_delta"
+          "const": "assistant.reasoning_delta",
+          "description": "Type discriminator. Always \"assistant.reasoning_delta\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantReasoningDeltaData",
@@ -572,6 +587,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.reasoning_delta\". Streaming reasoning delta for incremental extended thinking updates",
       "title": "AssistantReasoningDeltaEvent"
     },
     "AssistantReasoningEvent": {
@@ -609,7 +625,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.reasoning"
+          "const": "assistant.reasoning",
+          "description": "Type discriminator. Always \"assistant.reasoning\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantReasoningData",
@@ -624,6 +641,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.reasoning\". Assistant reasoning content for timeline display with complete thinking text",
       "title": "AssistantReasoningEvent"
     },
     "AssistantStreamingDeltaData": {
@@ -668,7 +686,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -676,7 +695,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.streaming_delta"
+          "const": "assistant.streaming_delta",
+          "description": "Type discriminator. Always \"assistant.streaming_delta\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantStreamingDeltaData",
@@ -692,6 +712,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.streaming_delta\". Streaming response progress with cumulative byte count",
       "title": "AssistantStreamingDeltaEvent"
     },
     "AssistantTurnEndData": {
@@ -744,7 +765,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.turn_end"
+          "const": "assistant.turn_end",
+          "description": "Type discriminator. Always \"assistant.turn_end\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantTurnEndData",
@@ -759,6 +781,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.turn_end\". Turn completion metadata including the turn identifier",
       "title": "AssistantTurnEndEvent"
     },
     "AssistantTurnStartData": {
@@ -815,7 +838,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.turn_start"
+          "const": "assistant.turn_start",
+          "description": "Type discriminator. Always \"assistant.turn_start\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantTurnStartData",
@@ -830,6 +854,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.turn_start\". Turn initialization metadata including identifier and interaction tracking",
       "title": "AssistantTurnStartEvent"
     },
     "AssistantUsageApiEndpoint": {
@@ -974,7 +999,7 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"low\", \"medium\", \"high\", \"xhigh\")"
+          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\")"
         }
       },
       "required": [
@@ -1011,7 +1036,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1019,7 +1045,8 @@
         },
         "type": {
           "type": "string",
-          "const": "assistant.usage"
+          "const": "assistant.usage",
+          "description": "Type discriminator. Always \"assistant.usage\"."
         },
         "data": {
           "$ref": "#/definitions/AssistantUsageData",
@@ -1035,6 +1062,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"assistant.usage\". LLM API call usage metrics including tokens, costs, quotas, and billing information",
       "title": "AssistantUsageEvent"
     },
     "AssistantUsageQuotaSnapshot": {
@@ -1084,7 +1112,8 @@
         "remainingPercentage"
       ],
       "additionalProperties": false,
-      "title": "AssistantUsageQuotaSnapshot"
+      "title": "AssistantUsageQuotaSnapshot",
+      "description": "Schema for the `AssistantUsageQuotaSnapshot` type."
     },
     "AutoModeSwitchCompletedData": {
       "type": "object",
@@ -1133,7 +1162,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1141,7 +1171,8 @@
         },
         "type": {
           "type": "string",
-          "const": "auto_mode_switch.completed"
+          "const": "auto_mode_switch.completed",
+          "description": "Type discriminator. Always \"auto_mode_switch.completed\"."
         },
         "data": {
           "$ref": "#/definitions/AutoModeSwitchCompletedData",
@@ -1157,6 +1188,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"auto_mode_switch.completed\". Auto mode switch completion notification",
       "title": "AutoModeSwitchCompletedEvent"
     },
     "AutoModeSwitchRequestedData": {
@@ -1209,7 +1241,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1217,7 +1250,8 @@
         },
         "type": {
           "type": "string",
-          "const": "auto_mode_switch.requested"
+          "const": "auto_mode_switch.requested",
+          "description": "Type discriminator. Always \"auto_mode_switch.requested\"."
         },
         "data": {
           "$ref": "#/definitions/AutoModeSwitchRequestedData",
@@ -1233,13 +1267,15 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"auto_mode_switch.requested\". Auto mode switch request notification requiring user approval",
       "title": "AutoModeSwitchRequestedEvent"
     },
     "BackgroundTasksChangedData": {
       "type": "object",
       "properties": {},
       "additionalProperties": false,
-      "title": "BackgroundTasksChangedData"
+      "title": "BackgroundTasksChangedData",
+      "description": "Schema for the `BackgroundTasksChangedData` type."
     },
     "BackgroundTasksChangedEvent": {
       "type": "object",
@@ -1268,7 +1304,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1276,10 +1313,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.background_tasks_changed"
+          "const": "session.background_tasks_changed",
+          "description": "Type discriminator. Always \"session.background_tasks_changed\"."
         },
         "data": {
-          "$ref": "#/definitions/BackgroundTasksChangedData"
+          "$ref": "#/definitions/BackgroundTasksChangedData",
+          "description": "Schema for the `BackgroundTasksChangedData` type."
         }
       },
       "required": [
@@ -1291,6 +1330,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.background_tasks_changed\".",
       "title": "BackgroundTasksChangedEvent"
     },
     "CapabilitiesChangedData": {
@@ -1332,7 +1372,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1340,7 +1381,8 @@
         },
         "type": {
           "type": "string",
-          "const": "capabilities.changed"
+          "const": "capabilities.changed",
+          "description": "Type discriminator. Always \"capabilities.changed\"."
         },
         "data": {
           "$ref": "#/definitions/CapabilitiesChangedData",
@@ -1356,6 +1398,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"capabilities.changed\". Session capability change notification",
       "title": "CapabilitiesChangedEvent"
     },
     "CapabilitiesChangedUI": {
@@ -1412,7 +1455,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1420,7 +1464,8 @@
         },
         "type": {
           "type": "string",
-          "const": "command.completed"
+          "const": "command.completed",
+          "description": "Type discriminator. Always \"command.completed\"."
         },
         "data": {
           "$ref": "#/definitions/CommandCompletedData",
@@ -1436,6 +1481,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"command.completed\". Queued command completion notification signaling UI dismissal",
       "title": "CommandCompletedEvent"
     },
     "CommandExecuteData": {
@@ -1495,7 +1541,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1503,7 +1550,8 @@
         },
         "type": {
           "type": "string",
-          "const": "command.execute"
+          "const": "command.execute",
+          "description": "Type discriminator. Always \"command.execute\"."
         },
         "data": {
           "$ref": "#/definitions/CommandExecuteData",
@@ -1519,6 +1567,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"command.execute\". Registered command dispatch request routed to the owning client",
       "title": "CommandExecuteEvent"
     },
     "CommandQueuedData": {
@@ -1568,7 +1617,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1576,7 +1626,8 @@
         },
         "type": {
           "type": "string",
-          "const": "command.queued"
+          "const": "command.queued",
+          "description": "Type discriminator. Always \"command.queued\"."
         },
         "data": {
           "$ref": "#/definitions/CommandQueuedData",
@@ -1592,23 +1643,27 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"command.queued\". Queued slash command dispatch request for client execution",
       "title": "CommandQueuedEvent"
     },
     "CommandsChangedCommand": {
       "type": "object",
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Slash command name without the leading slash."
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Optional human-readable command description."
         }
       },
       "required": [
         "name"
       ],
       "additionalProperties": false,
-      "title": "CommandsChangedCommand"
+      "title": "CommandsChangedCommand",
+      "description": "Schema for the `CommandsChangedCommand` type."
     },
     "CommandsChangedData": {
       "type": "object",
@@ -1655,7 +1710,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -1663,7 +1719,8 @@
         },
         "type": {
           "type": "string",
-          "const": "commands.changed"
+          "const": "commands.changed",
+          "description": "Type discriminator. Always \"commands.changed\"."
         },
         "data": {
           "$ref": "#/definitions/CommandsChangedData",
@@ -1679,6 +1736,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"commands.changed\". SDK command registration change notification",
       "title": "CommandsChangedEvent"
     },
     "CompactionCompleteCompactionTokensUsed": {
@@ -1877,7 +1935,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.compaction_complete"
+          "const": "session.compaction_complete",
+          "description": "Type discriminator. Always \"session.compaction_complete\"."
         },
         "data": {
           "$ref": "#/definitions/CompactionCompleteData",
@@ -1892,6 +1951,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.compaction_complete\". Conversation compaction results including success status, metrics, and optional error details",
       "title": "CompactionCompleteEvent"
     },
     "CompactionStartData": {
@@ -1949,7 +2009,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.compaction_start"
+          "const": "session.compaction_start",
+          "description": "Type discriminator. Always \"session.compaction_start\"."
         },
         "data": {
           "$ref": "#/definitions/CompactionStartData",
@@ -1964,6 +2025,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.compaction_start\". Context window breakdown at the start of LLM-powered conversation compaction",
       "title": "CompactionStartEvent"
     },
     "ContextChangedEvent": {
@@ -2001,7 +2063,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.context_changed"
+          "const": "session.context_changed",
+          "description": "Type discriminator. Always \"session.context_changed\"."
         },
         "data": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -2016,6 +2079,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.context_changed\". Updated working directory and git context after the change",
       "title": "ContextChangedEvent"
     },
     "CustomAgentsUpdatedAgent": {
@@ -2074,7 +2138,8 @@
         "userInvocable"
       ],
       "additionalProperties": false,
-      "title": "CustomAgentsUpdatedAgent"
+      "title": "CustomAgentsUpdatedAgent",
+      "description": "Schema for the `CustomAgentsUpdatedAgent` type."
     },
     "CustomAgentsUpdatedData": {
       "type": "object",
@@ -2107,7 +2172,8 @@
         "errors"
       ],
       "additionalProperties": false,
-      "title": "CustomAgentsUpdatedData"
+      "title": "CustomAgentsUpdatedData",
+      "description": "Schema for the `CustomAgentsUpdatedData` type."
     },
     "CustomAgentsUpdatedEvent": {
       "type": "object",
@@ -2136,7 +2202,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2144,10 +2211,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.custom_agents_updated"
+          "const": "session.custom_agents_updated",
+          "description": "Type discriminator. Always \"session.custom_agents_updated\"."
         },
         "data": {
-          "$ref": "#/definitions/CustomAgentsUpdatedData"
+          "$ref": "#/definitions/CustomAgentsUpdatedData",
+          "description": "Schema for the `CustomAgentsUpdatedData` type."
         }
       },
       "required": [
@@ -2159,6 +2228,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.custom_agents_updated\".",
       "title": "CustomAgentsUpdatedEvent"
     },
     "CustomNotificationData": {
@@ -2224,7 +2294,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2232,7 +2303,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.custom_notification"
+          "const": "session.custom_notification",
+          "description": "Type discriminator. Always \"session.custom_notification\"."
         },
         "data": {
           "$ref": "#/definitions/CustomNotificationData",
@@ -2248,6 +2320,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.custom_notification\". Opaque custom notification data. Consumers may branch on source and name, but payload semantics are source-defined.",
       "title": "CustomNotificationEvent"
     },
     "CustomNotificationPayload": {
@@ -2312,7 +2385,8 @@
           }
         }
       ],
-      "title": "ElicitationCompletedContent"
+      "title": "ElicitationCompletedContent",
+      "description": "Schema for the `ElicitationCompletedContent` type."
     },
     "ElicitationCompletedData": {
       "type": "object",
@@ -2367,7 +2441,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2375,7 +2450,8 @@
         },
         "type": {
           "type": "string",
-          "const": "elicitation.completed"
+          "const": "elicitation.completed",
+          "description": "Type discriminator. Always \"elicitation.completed\"."
         },
         "data": {
           "$ref": "#/definitions/ElicitationCompletedData",
@@ -2391,6 +2467,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"elicitation.completed\". Elicitation request completion with the user's response",
       "title": "ElicitationCompletedEvent"
     },
     "ElicitationRequestedData": {
@@ -2460,7 +2537,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2468,7 +2546,8 @@
         },
         "type": {
           "type": "string",
-          "const": "elicitation.requested"
+          "const": "elicitation.requested",
+          "description": "Type discriminator. Always \"elicitation.requested\"."
         },
         "data": {
           "$ref": "#/definitions/ElicitationRequestedData",
@@ -2484,6 +2563,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"elicitation.requested\". Elicitation request; may be form-based (structured input) or URL-based (browser redirect)",
       "title": "ElicitationRequestedEvent"
     },
     "ElicitationRequestedMode": {
@@ -2546,7 +2626,8 @@
         "blob"
       ],
       "additionalProperties": false,
-      "title": "EmbeddedBlobResourceContents"
+      "title": "EmbeddedBlobResourceContents",
+      "description": "Schema for the `EmbeddedBlobResourceContents` type."
     },
     "EmbeddedTextResourceContents": {
       "type": "object",
@@ -2569,7 +2650,8 @@
         "text"
       ],
       "additionalProperties": false,
-      "title": "EmbeddedTextResourceContents"
+      "title": "EmbeddedTextResourceContents",
+      "description": "Schema for the `EmbeddedTextResourceContents` type."
     },
     "ErrorData": {
       "type": "object",
@@ -2651,7 +2733,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.error"
+          "const": "session.error",
+          "description": "Type discriminator. Always \"session.error\"."
         },
         "data": {
           "$ref": "#/definitions/ErrorData",
@@ -2666,6 +2749,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.error\". Error details for timeline display including message and optional diagnostic information",
       "title": "ErrorEvent"
     },
     "ExitPlanModeCompletedData": {
@@ -2726,7 +2810,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2734,7 +2819,8 @@
         },
         "type": {
           "type": "string",
-          "const": "exit_plan_mode.completed"
+          "const": "exit_plan_mode.completed",
+          "description": "Type discriminator. Always \"exit_plan_mode.completed\"."
         },
         "data": {
           "$ref": "#/definitions/ExitPlanModeCompletedData",
@@ -2750,6 +2836,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"exit_plan_mode.completed\". Plan mode exit completion with the user's approval decision and optional feedback",
       "title": "ExitPlanModeCompletedEvent"
     },
     "ExitPlanModeRequestedData": {
@@ -2817,7 +2904,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2825,7 +2913,8 @@
         },
         "type": {
           "type": "string",
-          "const": "exit_plan_mode.requested"
+          "const": "exit_plan_mode.requested",
+          "description": "Type discriminator. Always \"exit_plan_mode.requested\"."
         },
         "data": {
           "$ref": "#/definitions/ExitPlanModeRequestedData",
@@ -2841,6 +2930,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"exit_plan_mode.requested\". Plan approval request with plan content and available user actions",
       "title": "ExitPlanModeRequestedEvent"
     },
     "ExtensionsLoadedData": {
@@ -2858,7 +2948,8 @@
         "extensions"
       ],
       "additionalProperties": false,
-      "title": "ExtensionsLoadedData"
+      "title": "ExtensionsLoadedData",
+      "description": "Schema for the `ExtensionsLoadedData` type."
     },
     "ExtensionsLoadedEvent": {
       "type": "object",
@@ -2887,7 +2978,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -2895,10 +2987,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.extensions_loaded"
+          "const": "session.extensions_loaded",
+          "description": "Type discriminator. Always \"session.extensions_loaded\"."
         },
         "data": {
-          "$ref": "#/definitions/ExtensionsLoadedData"
+          "$ref": "#/definitions/ExtensionsLoadedData",
+          "description": "Schema for the `ExtensionsLoadedData` type."
         }
       },
       "required": [
@@ -2910,6 +3004,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.extensions_loaded\".",
       "title": "ExtensionsLoadedEvent"
     },
     "ExtensionsLoadedExtension": {
@@ -2939,7 +3034,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "ExtensionsLoadedExtension"
+      "title": "ExtensionsLoadedExtension",
+      "description": "Schema for the `ExtensionsLoadedExtension` type."
     },
     "ExtensionsLoadedExtensionSource": {
       "type": "string",
@@ -3003,7 +3099,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -3011,7 +3108,8 @@
         },
         "type": {
           "type": "string",
-          "const": "external_tool.completed"
+          "const": "external_tool.completed",
+          "description": "Type discriminator. Always \"external_tool.completed\"."
         },
         "data": {
           "$ref": "#/definitions/ExternalToolCompletedData",
@@ -3026,6 +3124,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"external_tool.completed\". External tool completion notification signaling UI dismissal",
       "title": "ExternalToolCompletedEvent"
     },
     "ExternalToolRequestedData": {
@@ -3104,7 +3203,8 @@
         },
         "type": {
           "type": "string",
-          "const": "external_tool.requested"
+          "const": "external_tool.requested",
+          "description": "Type discriminator. Always \"external_tool.requested\"."
         },
         "data": {
           "$ref": "#/definitions/ExternalToolRequestedData",
@@ -3119,6 +3219,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"external_tool.requested\". External tool invocation request for client-side tool execution",
       "title": "ExternalToolRequestedEvent"
     },
     "HandoffData": {
@@ -3197,7 +3298,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.handoff"
+          "const": "session.handoff",
+          "description": "Type discriminator. Always \"session.handoff\"."
         },
         "data": {
           "$ref": "#/definitions/HandoffData",
@@ -3212,6 +3314,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.handoff\". Session handoff metadata including source, context, and repository information",
       "title": "HandoffEvent"
     },
     "HandoffRepository": {
@@ -3333,7 +3436,8 @@
         },
         "type": {
           "type": "string",
-          "const": "hook.end"
+          "const": "hook.end",
+          "description": "Type discriminator. Always \"hook.end\"."
         },
         "data": {
           "$ref": "#/definitions/HookEndData",
@@ -3348,6 +3452,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"hook.end\". Hook invocation completion details including output, success status, and error information",
       "title": "HookEndEvent"
     },
     "HookStartData": {
@@ -3408,7 +3513,8 @@
         },
         "type": {
           "type": "string",
-          "const": "hook.start"
+          "const": "hook.start",
+          "description": "Type discriminator. Always \"hook.start\"."
         },
         "data": {
           "$ref": "#/definitions/HookStartData",
@@ -3423,6 +3529,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"hook.start\". Hook invocation start details including type and input data",
       "title": "HookStartEvent"
     },
     "IdleData": {
@@ -3464,7 +3571,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -3472,7 +3580,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.idle"
+          "const": "session.idle",
+          "description": "Type discriminator. Always \"session.idle\"."
         },
         "data": {
           "$ref": "#/definitions/IdleData",
@@ -3488,6 +3597,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents in flight",
       "title": "IdleEvent"
     },
     "InfoData": {
@@ -3554,7 +3664,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.info"
+          "const": "session.info",
+          "description": "Type discriminator. Always \"session.info\"."
         },
         "data": {
           "$ref": "#/definitions/InfoData",
@@ -3569,6 +3680,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.info\". Informational message for timeline display with categorization",
       "title": "InfoEvent"
     },
     "McpOauthCompletedData": {
@@ -3613,7 +3725,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -3621,7 +3734,8 @@
         },
         "type": {
           "type": "string",
-          "const": "mcp.oauth_completed"
+          "const": "mcp.oauth_completed",
+          "description": "Type discriminator. Always \"mcp.oauth_completed\"."
         },
         "data": {
           "$ref": "#/definitions/McpOauthCompletedData",
@@ -3637,6 +3751,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"mcp.oauth_completed\". MCP OAuth request completion notification",
       "title": "McpOauthCompletedEvent"
     },
     "McpOauthRequiredData": {
@@ -3695,7 +3810,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -3703,7 +3819,8 @@
         },
         "type": {
           "type": "string",
-          "const": "mcp.oauth_required"
+          "const": "mcp.oauth_required",
+          "description": "Type discriminator. Always \"mcp.oauth_required\"."
         },
         "data": {
           "$ref": "#/definitions/McpOauthRequiredData",
@@ -3719,6 +3836,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"mcp.oauth_required\". OAuth authentication request for an MCP server",
       "title": "McpOauthRequiredEvent"
     },
     "McpOauthRequiredStaticClientConfig": {
@@ -3760,7 +3878,8 @@
         "servers"
       ],
       "additionalProperties": false,
-      "title": "McpServersLoadedData"
+      "title": "McpServersLoadedData",
+      "description": "Schema for the `McpServersLoadedData` type."
     },
     "McpServersLoadedEvent": {
       "type": "object",
@@ -3789,7 +3908,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -3797,10 +3917,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.mcp_servers_loaded"
+          "const": "session.mcp_servers_loaded",
+          "description": "Type discriminator. Always \"session.mcp_servers_loaded\"."
         },
         "data": {
-          "$ref": "#/definitions/McpServersLoadedData"
+          "$ref": "#/definitions/McpServersLoadedData",
+          "description": "Schema for the `McpServersLoadedData` type."
         }
       },
       "required": [
@@ -3812,6 +3934,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.mcp_servers_loaded\".",
       "title": "McpServersLoadedEvent"
     },
     "McpServersLoadedServer": {
@@ -3839,7 +3962,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "McpServersLoadedServer"
+      "title": "McpServersLoadedServer",
+      "description": "Schema for the `McpServersLoadedServer` type."
     },
     "McpServersLoadedServerStatus": {
       "type": "string",
@@ -3871,7 +3995,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "McpServerStatusChangedData"
+      "title": "McpServerStatusChangedData",
+      "description": "Schema for the `McpServerStatusChangedData` type."
     },
     "McpServerStatusChangedEvent": {
       "type": "object",
@@ -3900,7 +4025,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -3908,10 +4034,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.mcp_server_status_changed"
+          "const": "session.mcp_server_status_changed",
+          "description": "Type discriminator. Always \"session.mcp_server_status_changed\"."
         },
         "data": {
-          "$ref": "#/definitions/McpServerStatusChangedData"
+          "$ref": "#/definitions/McpServerStatusChangedData",
+          "description": "Schema for the `McpServerStatusChangedData` type."
         }
       },
       "required": [
@@ -3923,6 +4051,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.mcp_server_status_changed\".",
       "title": "McpServerStatusChangedEvent"
     },
     "McpServerStatusChangedStatus": {
@@ -3993,7 +4122,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.mode_changed"
+          "const": "session.mode_changed",
+          "description": "Type discriminator. Always \"session.mode_changed\"."
         },
         "data": {
           "$ref": "#/definitions/ModeChangedData",
@@ -4008,6 +4138,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.mode_changed\". Agent mode change details including previous and new modes",
       "title": "ModeChangedEvent"
     },
     "ModelCallFailureData": {
@@ -4080,7 +4211,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -4088,7 +4220,8 @@
         },
         "type": {
           "type": "string",
-          "const": "model.call_failure"
+          "const": "model.call_failure",
+          "description": "Type discriminator. Always \"model.call_failure\"."
         },
         "data": {
           "$ref": "#/definitions/ModelCallFailureData",
@@ -4104,6 +4237,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry",
       "title": "ModelCallFailureEvent"
     },
     "ModelCallFailureSource": {
@@ -4132,8 +4266,19 @@
           "description": "Reasoning effort level before the model change, if applicable"
         },
         "reasoningEffort": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Reasoning effort level after the model change, if applicable"
+        },
+        "previousReasoningSummary": {
+          "$ref": "#/definitions/ReasoningSummary",
+          "description": "Reasoning summary mode before the model change, if applicable"
+        },
+        "reasoningSummary": {
+          "$ref": "#/definitions/ReasoningSummary",
+          "description": "Reasoning summary mode after the model change, if applicable"
         },
         "cause": {
           "type": "string",
@@ -4182,7 +4327,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.model_change"
+          "const": "session.model_change",
+          "description": "Type discriminator. Always \"session.model_change\"."
         },
         "data": {
           "$ref": "#/definitions/ModelChangeData",
@@ -4197,6 +4343,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.model_change\". Model change details including previous and new model identifiers",
       "title": "ModelChangeEvent"
     },
     "PendingMessagesModifiedData": {
@@ -4233,7 +4380,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -4241,7 +4389,8 @@
         },
         "type": {
           "type": "string",
-          "const": "pending_messages.modified"
+          "const": "pending_messages.modified",
+          "description": "Type discriminator. Always \"pending_messages.modified\"."
         },
         "data": {
           "$ref": "#/definitions/PendingMessagesModifiedData",
@@ -4257,6 +4406,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"pending_messages.modified\". Empty payload; the event signals that the pending message queue has changed",
       "title": "PendingMessagesModifiedEvent"
     },
     "PermissionApproved": {
@@ -4272,7 +4422,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionApproved"
+      "title": "PermissionApproved",
+      "description": "Schema for the `PermissionApproved` type."
     },
     "PermissionApprovedForLocation": {
       "type": "object",
@@ -4297,7 +4448,8 @@
         "locationKey"
       ],
       "additionalProperties": false,
-      "title": "PermissionApprovedForLocation"
+      "title": "PermissionApprovedForLocation",
+      "description": "Schema for the `PermissionApprovedForLocation` type."
     },
     "PermissionApprovedForSession": {
       "type": "object",
@@ -4317,7 +4469,8 @@
         "approval"
       ],
       "additionalProperties": false,
-      "title": "PermissionApprovedForSession"
+      "title": "PermissionApprovedForSession",
+      "description": "Schema for the `PermissionApprovedForSession` type."
     },
     "PermissionCancelled": {
       "type": "object",
@@ -4336,7 +4489,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionCancelled"
+      "title": "PermissionCancelled",
+      "description": "Schema for the `PermissionCancelled` type."
     },
     "PermissionCompletedData": {
       "type": "object",
@@ -4397,7 +4551,8 @@
         },
         "type": {
           "type": "string",
-          "const": "permission.completed"
+          "const": "permission.completed",
+          "description": "Type discriminator. Always \"permission.completed\"."
         },
         "data": {
           "$ref": "#/definitions/PermissionCompletedData",
@@ -4412,6 +4567,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"permission.completed\". Permission request completion notification signaling UI dismissal",
       "title": "PermissionCompletedEvent"
     },
     "PermissionDeniedByContentExclusionPolicy": {
@@ -4437,7 +4593,8 @@
         "message"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedByContentExclusionPolicy"
+      "title": "PermissionDeniedByContentExclusionPolicy",
+      "description": "Schema for the `PermissionDeniedByContentExclusionPolicy` type."
     },
     "PermissionDeniedByPermissionRequestHook": {
       "type": "object",
@@ -4460,7 +4617,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedByPermissionRequestHook"
+      "title": "PermissionDeniedByPermissionRequestHook",
+      "description": "Schema for the `PermissionDeniedByPermissionRequestHook` type."
     },
     "PermissionDeniedByRules": {
       "type": "object",
@@ -4483,7 +4641,8 @@
         "rules"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedByRules"
+      "title": "PermissionDeniedByRules",
+      "description": "Schema for the `PermissionDeniedByRules` type."
     },
     "PermissionDeniedInteractivelyByUser": {
       "type": "object",
@@ -4506,7 +4665,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedInteractivelyByUser"
+      "title": "PermissionDeniedInteractivelyByUser",
+      "description": "Schema for the `PermissionDeniedInteractivelyByUser` type."
     },
     "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser": {
       "type": "object",
@@ -4521,7 +4681,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser"
+      "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser",
+      "description": "Schema for the `PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser` type."
     },
     "PermissionPromptRequest": {
       "anyOf": [
@@ -5144,7 +5305,8 @@
         },
         "type": {
           "type": "string",
-          "const": "permission.requested"
+          "const": "permission.requested",
+          "description": "Type discriminator. Always \"permission.requested\"."
         },
         "data": {
           "$ref": "#/definitions/PermissionRequestedData",
@@ -5159,6 +5321,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"permission.requested\". Permission request notification requiring client approval with request details",
       "title": "PermissionRequestedEvent"
     },
     "PermissionRequestExtensionManagement": {
@@ -5477,7 +5640,8 @@
         "readOnly"
       ],
       "additionalProperties": false,
-      "title": "PermissionRequestShellCommand"
+      "title": "PermissionRequestShellCommand",
+      "description": "Schema for the `PermissionRequestShellCommand` type."
     },
     "PermissionRequestShellPossibleUrl": {
       "type": "object",
@@ -5491,7 +5655,8 @@
         "url"
       ],
       "additionalProperties": false,
-      "title": "PermissionRequestShellPossibleUrl"
+      "title": "PermissionRequestShellPossibleUrl",
+      "description": "Schema for the `PermissionRequestShellPossibleUrl` type."
     },
     "PermissionRequestUrl": {
       "type": "object",
@@ -5620,7 +5785,8 @@
         "argument"
       ],
       "additionalProperties": false,
-      "title": "PermissionRule"
+      "title": "PermissionRule",
+      "description": "Schema for the `PermissionRule` type."
     },
     "PlanChangedData": {
       "type": "object",
@@ -5672,7 +5838,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.plan_changed"
+          "const": "session.plan_changed",
+          "description": "Type discriminator. Always \"session.plan_changed\"."
         },
         "data": {
           "$ref": "#/definitions/PlanChangedData",
@@ -5687,6 +5854,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.plan_changed\". Plan file operation details indicating what changed",
       "title": "PlanChangedEvent"
     },
     "PlanChangedOperation": {
@@ -5699,19 +5867,29 @@
       "description": "The type of operation performed on the plan file",
       "title": "PlanChangedOperation"
     },
+    "ReasoningSummary": {
+      "type": "string",
+      "enum": [
+        "none",
+        "concise",
+        "detailed"
+      ],
+      "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")",
+      "title": "ReasoningSummary"
+    },
     "RemoteSteerableChangedData": {
       "type": "object",
       "properties": {
         "remoteSteerable": {
           "type": "boolean",
-          "description": "Whether this session now supports remote steering via Mission Control"
+          "description": "Whether this session now supports remote steering via GitHub"
         }
       },
       "required": [
         "remoteSteerable"
       ],
       "additionalProperties": false,
-      "description": "Notifies Mission Control that the session's remote steering capability has changed",
+      "description": "Notifies that the session's remote steering capability has changed",
       "title": "RemoteSteerableChangedData"
     },
     "RemoteSteerableChangedEvent": {
@@ -5749,11 +5927,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.remote_steerable_changed"
+          "const": "session.remote_steerable_changed",
+          "description": "Type discriminator. Always \"session.remote_steerable_changed\"."
         },
         "data": {
           "$ref": "#/definitions/RemoteSteerableChangedData",
-          "description": "Notifies Mission Control that the session's remote steering capability has changed"
+          "description": "Notifies that the session's remote steering capability has changed"
         }
       },
       "required": [
@@ -5764,6 +5943,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.remote_steerable_changed\". Notifies that the session's remote steering capability has changed",
       "title": "RemoteSteerableChangedEvent"
     },
     "ResumeData": {
@@ -5784,7 +5964,11 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"low\", \"medium\", \"high\", \"xhigh\")"
+          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\")"
+        },
+        "reasoningSummary": {
+          "$ref": "#/definitions/ReasoningSummary",
+          "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -5800,7 +5984,7 @@
         },
         "remoteSteerable": {
           "type": "boolean",
-          "description": "Whether this session supports remote steering via Mission Control"
+          "description": "Whether this session supports remote steering via GitHub"
         },
         "continuePendingWork": {
           "type": "boolean",
@@ -5850,7 +6034,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.resume"
+          "const": "session.resume",
+          "description": "Type discriminator. Always \"session.resume\"."
         },
         "data": {
           "$ref": "#/definitions/ResumeData",
@@ -5865,6 +6050,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.resume\". Session resume metadata including current context and event count",
       "title": "ResumeEvent"
     },
     "SamplingCompletedData": {
@@ -5909,7 +6095,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -5917,7 +6104,8 @@
         },
         "type": {
           "type": "string",
-          "const": "sampling.completed"
+          "const": "sampling.completed",
+          "description": "Type discriminator. Always \"sampling.completed\"."
         },
         "data": {
           "$ref": "#/definitions/SamplingCompletedData",
@@ -5933,6 +6121,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"sampling.completed\". Sampling request completion notification signaling UI dismissal",
       "title": "SamplingCompletedEvent"
     },
     "SamplingRequestedData": {
@@ -5990,7 +6179,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -5998,7 +6188,8 @@
         },
         "type": {
           "type": "string",
-          "const": "sampling.requested"
+          "const": "sampling.requested",
+          "description": "Type discriminator. Always \"sampling.requested\"."
         },
         "data": {
           "$ref": "#/definitions/SamplingRequestedData",
@@ -6014,6 +6205,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"sampling.requested\". Sampling request from an MCP server; contains the server name and a requestId for correlation",
       "title": "SamplingRequestedEvent"
     },
     "ScheduleCancelledData": {
@@ -6067,7 +6259,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.schedule_cancelled"
+          "const": "session.schedule_cancelled",
+          "description": "Type discriminator. Always \"session.schedule_cancelled\"."
         },
         "data": {
           "$ref": "#/definitions/ScheduleCancelledData",
@@ -6082,6 +6275,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.schedule_cancelled\". Scheduled prompt cancelled from the schedule manager dialog",
       "title": "ScheduleCancelledEvent"
     },
     "ScheduleCreatedData": {
@@ -6104,6 +6298,10 @@
         "recurring": {
           "type": "boolean",
           "description": "Whether the schedule re-arms after each tick (`/every`) or fires once (`/after`)"
+        },
+        "displayPrompt": {
+          "type": "string",
+          "description": "Optional user-facing label shown in the timeline instead of the actual prompt (e.g. `/skill-name args` when the prompt is a skill invocation expansion)"
         }
       },
       "required": [
@@ -6150,7 +6348,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.schedule_created"
+          "const": "session.schedule_created",
+          "description": "Type discriminator. Always \"session.schedule_created\"."
         },
         "data": {
           "$ref": "#/definitions/ScheduleCreatedData",
@@ -6165,254 +6364,337 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.schedule_created\". Scheduled prompt registered via /every or /after",
       "title": "ScheduleCreatedEvent"
     },
     "SessionEvent": {
       "anyOf": [
         {
-          "$ref": "#/definitions/StartEvent"
+          "$ref": "#/definitions/StartEvent",
+          "description": "Session event \"session.start\". Session initialization metadata including context and configuration"
         },
         {
-          "$ref": "#/definitions/ResumeEvent"
+          "$ref": "#/definitions/ResumeEvent",
+          "description": "Session event \"session.resume\". Session resume metadata including current context and event count"
         },
         {
-          "$ref": "#/definitions/RemoteSteerableChangedEvent"
+          "$ref": "#/definitions/RemoteSteerableChangedEvent",
+          "description": "Session event \"session.remote_steerable_changed\". Notifies that the session's remote steering capability has changed"
         },
         {
-          "$ref": "#/definitions/ErrorEvent"
+          "$ref": "#/definitions/ErrorEvent",
+          "description": "Session event \"session.error\". Error details for timeline display including message and optional diagnostic information"
         },
         {
-          "$ref": "#/definitions/IdleEvent"
+          "$ref": "#/definitions/IdleEvent",
+          "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents in flight"
         },
         {
-          "$ref": "#/definitions/TitleChangedEvent"
+          "$ref": "#/definitions/TitleChangedEvent",
+          "description": "Session event \"session.title_changed\". Session title change payload containing the new display title"
         },
         {
-          "$ref": "#/definitions/ScheduleCreatedEvent"
+          "$ref": "#/definitions/ScheduleCreatedEvent",
+          "description": "Session event \"session.schedule_created\". Scheduled prompt registered via /every or /after"
         },
         {
-          "$ref": "#/definitions/ScheduleCancelledEvent"
+          "$ref": "#/definitions/ScheduleCancelledEvent",
+          "description": "Session event \"session.schedule_cancelled\". Scheduled prompt cancelled from the schedule manager dialog"
         },
         {
-          "$ref": "#/definitions/InfoEvent"
+          "$ref": "#/definitions/InfoEvent",
+          "description": "Session event \"session.info\". Informational message for timeline display with categorization"
         },
         {
-          "$ref": "#/definitions/WarningEvent"
+          "$ref": "#/definitions/WarningEvent",
+          "description": "Session event \"session.warning\". Warning message for timeline display with categorization"
         },
         {
-          "$ref": "#/definitions/ModelChangeEvent"
+          "$ref": "#/definitions/ModelChangeEvent",
+          "description": "Session event \"session.model_change\". Model change details including previous and new model identifiers"
         },
         {
-          "$ref": "#/definitions/ModeChangedEvent"
+          "$ref": "#/definitions/ModeChangedEvent",
+          "description": "Session event \"session.mode_changed\". Agent mode change details including previous and new modes"
         },
         {
-          "$ref": "#/definitions/PlanChangedEvent"
+          "$ref": "#/definitions/PlanChangedEvent",
+          "description": "Session event \"session.plan_changed\". Plan file operation details indicating what changed"
         },
         {
-          "$ref": "#/definitions/WorkspaceFileChangedEvent"
+          "$ref": "#/definitions/WorkspaceFileChangedEvent",
+          "description": "Session event \"session.workspace_file_changed\". Workspace file change details including path and operation type"
         },
         {
-          "$ref": "#/definitions/HandoffEvent"
+          "$ref": "#/definitions/HandoffEvent",
+          "description": "Session event \"session.handoff\". Session handoff metadata including source, context, and repository information"
         },
         {
-          "$ref": "#/definitions/TruncationEvent"
+          "$ref": "#/definitions/TruncationEvent",
+          "description": "Session event \"session.truncation\". Conversation truncation statistics including token counts and removed content metrics"
         },
         {
-          "$ref": "#/definitions/SnapshotRewindEvent"
+          "$ref": "#/definitions/SnapshotRewindEvent",
+          "description": "Session event \"session.snapshot_rewind\". Session rewind details including target event and count of removed events"
         },
         {
-          "$ref": "#/definitions/ShutdownEvent"
+          "$ref": "#/definitions/ShutdownEvent",
+          "description": "Session event \"session.shutdown\". Session termination metrics including usage statistics, code changes, and shutdown reason"
         },
         {
-          "$ref": "#/definitions/ContextChangedEvent"
+          "$ref": "#/definitions/ContextChangedEvent",
+          "description": "Session event \"session.context_changed\". Updated working directory and git context after the change"
         },
         {
-          "$ref": "#/definitions/UsageInfoEvent"
+          "$ref": "#/definitions/UsageInfoEvent",
+          "description": "Session event \"session.usage_info\". Current context window usage statistics including token and message counts"
         },
         {
-          "$ref": "#/definitions/CompactionStartEvent"
+          "$ref": "#/definitions/CompactionStartEvent",
+          "description": "Session event \"session.compaction_start\". Context window breakdown at the start of LLM-powered conversation compaction"
         },
         {
-          "$ref": "#/definitions/CompactionCompleteEvent"
+          "$ref": "#/definitions/CompactionCompleteEvent",
+          "description": "Session event \"session.compaction_complete\". Conversation compaction results including success status, metrics, and optional error details"
         },
         {
-          "$ref": "#/definitions/TaskCompleteEvent"
+          "$ref": "#/definitions/TaskCompleteEvent",
+          "description": "Session event \"session.task_complete\". Task completion notification with summary from the agent"
         },
         {
-          "$ref": "#/definitions/UserMessageEvent"
+          "$ref": "#/definitions/UserMessageEvent",
+          "description": "Session event \"user.message\"."
         },
         {
-          "$ref": "#/definitions/PendingMessagesModifiedEvent"
+          "$ref": "#/definitions/PendingMessagesModifiedEvent",
+          "description": "Session event \"pending_messages.modified\". Empty payload; the event signals that the pending message queue has changed"
         },
         {
-          "$ref": "#/definitions/AssistantTurnStartEvent"
+          "$ref": "#/definitions/AssistantTurnStartEvent",
+          "description": "Session event \"assistant.turn_start\". Turn initialization metadata including identifier and interaction tracking"
         },
         {
-          "$ref": "#/definitions/AssistantIntentEvent"
+          "$ref": "#/definitions/AssistantIntentEvent",
+          "description": "Session event \"assistant.intent\". Agent intent description for current activity or plan"
         },
         {
-          "$ref": "#/definitions/AssistantReasoningEvent"
+          "$ref": "#/definitions/AssistantReasoningEvent",
+          "description": "Session event \"assistant.reasoning\". Assistant reasoning content for timeline display with complete thinking text"
         },
         {
-          "$ref": "#/definitions/AssistantReasoningDeltaEvent"
+          "$ref": "#/definitions/AssistantReasoningDeltaEvent",
+          "description": "Session event \"assistant.reasoning_delta\". Streaming reasoning delta for incremental extended thinking updates"
         },
         {
-          "$ref": "#/definitions/AssistantStreamingDeltaEvent"
+          "$ref": "#/definitions/AssistantStreamingDeltaEvent",
+          "description": "Session event \"assistant.streaming_delta\". Streaming response progress with cumulative byte count"
         },
         {
-          "$ref": "#/definitions/AssistantMessageEvent"
+          "$ref": "#/definitions/AssistantMessageEvent",
+          "description": "Session event \"assistant.message\". Assistant response containing text content, optional tool requests, and interaction metadata"
         },
         {
-          "$ref": "#/definitions/AssistantMessageStartEvent"
+          "$ref": "#/definitions/AssistantMessageStartEvent",
+          "description": "Session event \"assistant.message_start\". Streaming assistant message start metadata"
         },
         {
-          "$ref": "#/definitions/AssistantMessageDeltaEvent"
+          "$ref": "#/definitions/AssistantMessageDeltaEvent",
+          "description": "Session event \"assistant.message_delta\". Streaming assistant message delta for incremental response updates"
         },
         {
-          "$ref": "#/definitions/AssistantTurnEndEvent"
+          "$ref": "#/definitions/AssistantTurnEndEvent",
+          "description": "Session event \"assistant.turn_end\". Turn completion metadata including the turn identifier"
         },
         {
-          "$ref": "#/definitions/AssistantUsageEvent"
+          "$ref": "#/definitions/AssistantUsageEvent",
+          "description": "Session event \"assistant.usage\". LLM API call usage metrics including tokens, costs, quotas, and billing information"
         },
         {
-          "$ref": "#/definitions/ModelCallFailureEvent"
+          "$ref": "#/definitions/ModelCallFailureEvent",
+          "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry"
         },
         {
-          "$ref": "#/definitions/AbortEvent"
+          "$ref": "#/definitions/AbortEvent",
+          "description": "Session event \"abort\". Turn abort information including the reason for termination"
         },
         {
-          "$ref": "#/definitions/ToolUserRequestedEvent"
+          "$ref": "#/definitions/ToolUserRequestedEvent",
+          "description": "Session event \"tool.user_requested\". User-initiated tool invocation request with tool name and arguments"
         },
         {
-          "$ref": "#/definitions/ToolExecutionStartEvent"
+          "$ref": "#/definitions/ToolExecutionStartEvent",
+          "description": "Session event \"tool.execution_start\". Tool execution startup details including MCP server information when applicable"
         },
         {
-          "$ref": "#/definitions/ToolExecutionPartialResultEvent"
+          "$ref": "#/definitions/ToolExecutionPartialResultEvent",
+          "description": "Session event \"tool.execution_partial_result\". Streaming tool execution output for incremental result display"
         },
         {
-          "$ref": "#/definitions/ToolExecutionProgressEvent"
+          "$ref": "#/definitions/ToolExecutionProgressEvent",
+          "description": "Session event \"tool.execution_progress\". Tool execution progress notification with status message"
         },
         {
-          "$ref": "#/definitions/ToolExecutionCompleteEvent"
+          "$ref": "#/definitions/ToolExecutionCompleteEvent",
+          "description": "Session event \"tool.execution_complete\". Tool execution completion results including success status, detailed output, and error information"
         },
         {
-          "$ref": "#/definitions/SkillInvokedEvent"
+          "$ref": "#/definitions/SkillInvokedEvent",
+          "description": "Session event \"skill.invoked\". Skill invocation details including content, allowed tools, and plugin metadata"
         },
         {
-          "$ref": "#/definitions/SubagentStartedEvent"
+          "$ref": "#/definitions/SubagentStartedEvent",
+          "description": "Session event \"subagent.started\". Sub-agent startup details including parent tool call and agent information"
         },
         {
-          "$ref": "#/definitions/SubagentCompletedEvent"
+          "$ref": "#/definitions/SubagentCompletedEvent",
+          "description": "Session event \"subagent.completed\". Sub-agent completion details for successful execution"
         },
         {
-          "$ref": "#/definitions/SubagentFailedEvent"
+          "$ref": "#/definitions/SubagentFailedEvent",
+          "description": "Session event \"subagent.failed\". Sub-agent failure details including error message and agent information"
         },
         {
-          "$ref": "#/definitions/SubagentSelectedEvent"
+          "$ref": "#/definitions/SubagentSelectedEvent",
+          "description": "Session event \"subagent.selected\". Custom agent selection details including name and available tools"
         },
         {
-          "$ref": "#/definitions/SubagentDeselectedEvent"
+          "$ref": "#/definitions/SubagentDeselectedEvent",
+          "description": "Session event \"subagent.deselected\". Empty payload; the event signals that the custom agent was deselected, returning to the default agent"
         },
         {
-          "$ref": "#/definitions/HookStartEvent"
+          "$ref": "#/definitions/HookStartEvent",
+          "description": "Session event \"hook.start\". Hook invocation start details including type and input data"
         },
         {
-          "$ref": "#/definitions/HookEndEvent"
+          "$ref": "#/definitions/HookEndEvent",
+          "description": "Session event \"hook.end\". Hook invocation completion details including output, success status, and error information"
         },
         {
-          "$ref": "#/definitions/SystemMessageEvent"
+          "$ref": "#/definitions/SystemMessageEvent",
+          "description": "Session event \"system.message\". System/developer instruction content with role and optional template metadata"
         },
         {
-          "$ref": "#/definitions/SystemNotificationEvent"
+          "$ref": "#/definitions/SystemNotificationEvent",
+          "description": "Session event \"system.notification\". System-generated notification for runtime events like background task completion"
         },
         {
-          "$ref": "#/definitions/PermissionRequestedEvent"
+          "$ref": "#/definitions/PermissionRequestedEvent",
+          "description": "Session event \"permission.requested\". Permission request notification requiring client approval with request details"
         },
         {
-          "$ref": "#/definitions/PermissionCompletedEvent"
+          "$ref": "#/definitions/PermissionCompletedEvent",
+          "description": "Session event \"permission.completed\". Permission request completion notification signaling UI dismissal"
         },
         {
-          "$ref": "#/definitions/UserInputRequestedEvent"
+          "$ref": "#/definitions/UserInputRequestedEvent",
+          "description": "Session event \"user_input.requested\". User input request notification with question and optional predefined choices"
         },
         {
-          "$ref": "#/definitions/UserInputCompletedEvent"
+          "$ref": "#/definitions/UserInputCompletedEvent",
+          "description": "Session event \"user_input.completed\". User input request completion with the user's response"
         },
         {
-          "$ref": "#/definitions/ElicitationRequestedEvent"
+          "$ref": "#/definitions/ElicitationRequestedEvent",
+          "description": "Session event \"elicitation.requested\". Elicitation request; may be form-based (structured input) or URL-based (browser redirect)"
         },
         {
-          "$ref": "#/definitions/ElicitationCompletedEvent"
+          "$ref": "#/definitions/ElicitationCompletedEvent",
+          "description": "Session event \"elicitation.completed\". Elicitation request completion with the user's response"
         },
         {
-          "$ref": "#/definitions/SamplingRequestedEvent"
+          "$ref": "#/definitions/SamplingRequestedEvent",
+          "description": "Session event \"sampling.requested\". Sampling request from an MCP server; contains the server name and a requestId for correlation"
         },
         {
-          "$ref": "#/definitions/SamplingCompletedEvent"
+          "$ref": "#/definitions/SamplingCompletedEvent",
+          "description": "Session event \"sampling.completed\". Sampling request completion notification signaling UI dismissal"
         },
         {
-          "$ref": "#/definitions/McpOauthRequiredEvent"
+          "$ref": "#/definitions/McpOauthRequiredEvent",
+          "description": "Session event \"mcp.oauth_required\". OAuth authentication request for an MCP server"
         },
         {
-          "$ref": "#/definitions/McpOauthCompletedEvent"
+          "$ref": "#/definitions/McpOauthCompletedEvent",
+          "description": "Session event \"mcp.oauth_completed\". MCP OAuth request completion notification"
         },
         {
-          "$ref": "#/definitions/CustomNotificationEvent"
+          "$ref": "#/definitions/CustomNotificationEvent",
+          "description": "Session event \"session.custom_notification\". Opaque custom notification data. Consumers may branch on source and name, but payload semantics are source-defined."
         },
         {
-          "$ref": "#/definitions/ExternalToolRequestedEvent"
+          "$ref": "#/definitions/ExternalToolRequestedEvent",
+          "description": "Session event \"external_tool.requested\". External tool invocation request for client-side tool execution"
         },
         {
-          "$ref": "#/definitions/ExternalToolCompletedEvent"
+          "$ref": "#/definitions/ExternalToolCompletedEvent",
+          "description": "Session event \"external_tool.completed\". External tool completion notification signaling UI dismissal"
         },
         {
-          "$ref": "#/definitions/CommandQueuedEvent"
+          "$ref": "#/definitions/CommandQueuedEvent",
+          "description": "Session event \"command.queued\". Queued slash command dispatch request for client execution"
         },
         {
-          "$ref": "#/definitions/CommandExecuteEvent"
+          "$ref": "#/definitions/CommandExecuteEvent",
+          "description": "Session event \"command.execute\". Registered command dispatch request routed to the owning client"
         },
         {
-          "$ref": "#/definitions/CommandCompletedEvent"
+          "$ref": "#/definitions/CommandCompletedEvent",
+          "description": "Session event \"command.completed\". Queued command completion notification signaling UI dismissal"
         },
         {
-          "$ref": "#/definitions/AutoModeSwitchRequestedEvent"
+          "$ref": "#/definitions/AutoModeSwitchRequestedEvent",
+          "description": "Session event \"auto_mode_switch.requested\". Auto mode switch request notification requiring user approval"
         },
         {
-          "$ref": "#/definitions/AutoModeSwitchCompletedEvent"
+          "$ref": "#/definitions/AutoModeSwitchCompletedEvent",
+          "description": "Session event \"auto_mode_switch.completed\". Auto mode switch completion notification"
         },
         {
-          "$ref": "#/definitions/CommandsChangedEvent"
+          "$ref": "#/definitions/CommandsChangedEvent",
+          "description": "Session event \"commands.changed\". SDK command registration change notification"
         },
         {
-          "$ref": "#/definitions/CapabilitiesChangedEvent"
+          "$ref": "#/definitions/CapabilitiesChangedEvent",
+          "description": "Session event \"capabilities.changed\". Session capability change notification"
         },
         {
-          "$ref": "#/definitions/ExitPlanModeRequestedEvent"
+          "$ref": "#/definitions/ExitPlanModeRequestedEvent",
+          "description": "Session event \"exit_plan_mode.requested\". Plan approval request with plan content and available user actions"
         },
         {
-          "$ref": "#/definitions/ExitPlanModeCompletedEvent"
+          "$ref": "#/definitions/ExitPlanModeCompletedEvent",
+          "description": "Session event \"exit_plan_mode.completed\". Plan mode exit completion with the user's approval decision and optional feedback"
         },
         {
-          "$ref": "#/definitions/ToolsUpdatedEvent"
+          "$ref": "#/definitions/ToolsUpdatedEvent",
+          "description": "Session event \"session.tools_updated\"."
         },
         {
-          "$ref": "#/definitions/BackgroundTasksChangedEvent"
+          "$ref": "#/definitions/BackgroundTasksChangedEvent",
+          "description": "Session event \"session.background_tasks_changed\"."
         },
         {
-          "$ref": "#/definitions/SkillsLoadedEvent"
+          "$ref": "#/definitions/SkillsLoadedEvent",
+          "description": "Session event \"session.skills_loaded\"."
         },
         {
-          "$ref": "#/definitions/CustomAgentsUpdatedEvent"
+          "$ref": "#/definitions/CustomAgentsUpdatedEvent",
+          "description": "Session event \"session.custom_agents_updated\"."
         },
         {
-          "$ref": "#/definitions/McpServersLoadedEvent"
+          "$ref": "#/definitions/McpServersLoadedEvent",
+          "description": "Session event \"session.mcp_servers_loaded\"."
         },
         {
-          "$ref": "#/definitions/McpServerStatusChangedEvent"
+          "$ref": "#/definitions/McpServerStatusChangedEvent",
+          "description": "Session event \"session.mcp_server_status_changed\"."
         },
         {
-          "$ref": "#/definitions/ExtensionsLoadedEvent"
+          "$ref": "#/definitions/ExtensionsLoadedEvent",
+          "description": "Session event \"session.extensions_loaded\"."
         }
-      ]
+      ],
+      "description": "Union of all session event variants emitted by the Copilot CLI runtime."
     },
     "ShutdownCodeChanges": {
       "type": "object",
@@ -6555,7 +6837,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.shutdown"
+          "const": "session.shutdown",
+          "description": "Type discriminator. Always \"session.shutdown\"."
         },
         "data": {
           "$ref": "#/definitions/ShutdownData",
@@ -6570,6 +6853,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.shutdown\". Session termination metrics including usage statistics, code changes, and shutdown reason",
       "title": "ShutdownEvent"
     },
     "ShutdownModelMetric": {
@@ -6600,7 +6884,8 @@
         "usage"
       ],
       "additionalProperties": false,
-      "title": "ShutdownModelMetric"
+      "title": "ShutdownModelMetric",
+      "description": "Schema for the `ShutdownModelMetric` type."
     },
     "ShutdownModelMetricRequests": {
       "type": "object",
@@ -6634,7 +6919,8 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "title": "ShutdownModelMetricTokenDetail"
+      "title": "ShutdownModelMetricTokenDetail",
+      "description": "Schema for the `ShutdownModelMetricTokenDetail` type."
     },
     "ShutdownModelMetricUsage": {
       "type": "object",
@@ -6682,7 +6968,8 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "title": "ShutdownTokenDetail"
+      "title": "ShutdownTokenDetail",
+      "description": "Schema for the `ShutdownTokenDetail` type."
     },
     "ShutdownType": {
       "type": "string",
@@ -6772,7 +7059,8 @@
         },
         "type": {
           "type": "string",
-          "const": "skill.invoked"
+          "const": "skill.invoked",
+          "description": "Type discriminator. Always \"skill.invoked\"."
         },
         "data": {
           "$ref": "#/definitions/SkillInvokedData",
@@ -6787,6 +7075,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"skill.invoked\". Skill invocation details including content, allowed tools, and plugin metadata",
       "title": "SkillInvokedEvent"
     },
     "SkillsLoadedData": {
@@ -6804,7 +7093,8 @@
         "skills"
       ],
       "additionalProperties": false,
-      "title": "SkillsLoadedData"
+      "title": "SkillsLoadedData",
+      "description": "Schema for the `SkillsLoadedData` type."
     },
     "SkillsLoadedEvent": {
       "type": "object",
@@ -6833,7 +7123,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -6841,10 +7132,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.skills_loaded"
+          "const": "session.skills_loaded",
+          "description": "Type discriminator. Always \"session.skills_loaded\"."
         },
         "data": {
-          "$ref": "#/definitions/SkillsLoadedData"
+          "$ref": "#/definitions/SkillsLoadedData",
+          "description": "Schema for the `SkillsLoadedData` type."
         }
       },
       "required": [
@@ -6856,6 +7149,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.skills_loaded\".",
       "title": "SkillsLoadedEvent"
     },
     "SkillsLoadedSkill": {
@@ -6894,7 +7188,8 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "title": "SkillsLoadedSkill"
+      "title": "SkillsLoadedSkill",
+      "description": "Schema for the `SkillsLoadedSkill` type."
     },
     "SnapshotRewindData": {
       "type": "object",
@@ -6943,7 +7238,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -6951,7 +7247,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.snapshot_rewind"
+          "const": "session.snapshot_rewind",
+          "description": "Type discriminator. Always \"session.snapshot_rewind\"."
         },
         "data": {
           "$ref": "#/definitions/SnapshotRewindData",
@@ -6967,6 +7264,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.snapshot_rewind\". Session rewind details including target event and count of removed events",
       "title": "SnapshotRewindEvent"
     },
     "StartData": {
@@ -6999,7 +7297,11 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"low\", \"medium\", \"high\", \"xhigh\")"
+          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\")"
+        },
+        "reasoningSummary": {
+          "$ref": "#/definitions/ReasoningSummary",
+          "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -7011,7 +7313,7 @@
         },
         "remoteSteerable": {
           "type": "boolean",
-          "description": "Whether this session supports remote steering via Mission Control"
+          "description": "Whether this session supports remote steering via GitHub"
         },
         "detachedFromSpawningParentSessionId": {
           "type": "string",
@@ -7064,7 +7366,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.start"
+          "const": "session.start",
+          "description": "Type discriminator. Always \"session.start\"."
         },
         "data": {
           "$ref": "#/definitions/StartData",
@@ -7079,6 +7382,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.start\". Session initialization metadata including context and configuration",
       "title": "StartEvent"
     },
     "SubagentCompletedData": {
@@ -7157,7 +7461,8 @@
         },
         "type": {
           "type": "string",
-          "const": "subagent.completed"
+          "const": "subagent.completed",
+          "description": "Type discriminator. Always \"subagent.completed\"."
         },
         "data": {
           "$ref": "#/definitions/SubagentCompletedData",
@@ -7172,6 +7477,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"subagent.completed\". Sub-agent completion details for successful execution",
       "title": "SubagentCompletedEvent"
     },
     "SubagentDeselectedData": {
@@ -7216,7 +7522,8 @@
         },
         "type": {
           "type": "string",
-          "const": "subagent.deselected"
+          "const": "subagent.deselected",
+          "description": "Type discriminator. Always \"subagent.deselected\"."
         },
         "data": {
           "$ref": "#/definitions/SubagentDeselectedData",
@@ -7231,6 +7538,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"subagent.deselected\". Empty payload; the event signals that the custom agent was deselected, returning to the default agent",
       "title": "SubagentDeselectedEvent"
     },
     "SubagentFailedData": {
@@ -7314,7 +7622,8 @@
         },
         "type": {
           "type": "string",
-          "const": "subagent.failed"
+          "const": "subagent.failed",
+          "description": "Type discriminator. Always \"subagent.failed\"."
         },
         "data": {
           "$ref": "#/definitions/SubagentFailedData",
@@ -7329,6 +7638,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"subagent.failed\". Sub-agent failure details including error message and agent information",
       "title": "SubagentFailedEvent"
     },
     "SubagentSelectedData": {
@@ -7401,7 +7711,8 @@
         },
         "type": {
           "type": "string",
-          "const": "subagent.selected"
+          "const": "subagent.selected",
+          "description": "Type discriminator. Always \"subagent.selected\"."
         },
         "data": {
           "$ref": "#/definitions/SubagentSelectedData",
@@ -7416,6 +7727,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"subagent.selected\". Custom agent selection details including name and available tools",
       "title": "SubagentSelectedEvent"
     },
     "SubagentStartedData": {
@@ -7487,7 +7799,8 @@
         },
         "type": {
           "type": "string",
-          "const": "subagent.started"
+          "const": "subagent.started",
+          "description": "Type discriminator. Always \"subagent.started\"."
         },
         "data": {
           "$ref": "#/definitions/SubagentStartedData",
@@ -7502,6 +7815,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"subagent.started\". Sub-agent startup details including parent tool call and agent information",
       "title": "SubagentStartedEvent"
     },
     "SystemMessageData": {
@@ -7567,7 +7881,8 @@
         },
         "type": {
           "type": "string",
-          "const": "system.message"
+          "const": "system.message",
+          "description": "Type discriminator. Always \"system.message\"."
         },
         "data": {
           "$ref": "#/definitions/SystemMessageData",
@@ -7582,6 +7897,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"system.message\". System/developer instruction content with role and optional template metadata",
       "title": "SystemMessageEvent"
     },
     "SystemMessageMetadata": {
@@ -7639,7 +7955,8 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "agent_completed"
+          "const": "agent_completed",
+          "description": "Type discriminator. Always \"agent_completed\"."
         },
         "agentId": {
           "type": "string",
@@ -7669,7 +7986,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationAgentCompleted"
+      "title": "SystemNotificationAgentCompleted",
+      "description": "Schema for the `SystemNotificationAgentCompleted` type."
     },
     "SystemNotificationAgentCompletedStatus": {
       "type": "string",
@@ -7685,7 +8003,8 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "agent_idle"
+          "const": "agent_idle",
+          "description": "Type discriminator. Always \"agent_idle\"."
         },
         "agentId": {
           "type": "string",
@@ -7706,7 +8025,8 @@
         "agentType"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationAgentIdle"
+      "title": "SystemNotificationAgentIdle",
+      "description": "Schema for the `SystemNotificationAgentIdle` type."
     },
     "SystemNotificationData": {
       "type": "object",
@@ -7763,7 +8083,8 @@
         },
         "type": {
           "type": "string",
-          "const": "system.notification"
+          "const": "system.notification",
+          "description": "Type discriminator. Always \"system.notification\"."
         },
         "data": {
           "$ref": "#/definitions/SystemNotificationData",
@@ -7778,6 +8099,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"system.notification\". System-generated notification for runtime events like background task completion",
       "title": "SystemNotificationEvent"
     },
     "SystemNotificationInstructionDiscovered": {
@@ -7785,7 +8107,8 @@
       "properties": {
         "type": {
           "type": "string",
-          "const": "instruction_discovered"
+          "const": "instruction_discovered",
+          "description": "Type discriminator. Always \"instruction_discovered\"."
         },
         "sourcePath": {
           "type": "string",
@@ -7811,14 +8134,16 @@
         "triggerTool"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationInstructionDiscovered"
+      "title": "SystemNotificationInstructionDiscovered",
+      "description": "Schema for the `SystemNotificationInstructionDiscovered` type."
     },
     "SystemNotificationNewInboxMessage": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "new_inbox_message"
+          "const": "new_inbox_message",
+          "description": "Type discriminator. Always \"new_inbox_message\"."
         },
         "entryId": {
           "type": "string",
@@ -7845,14 +8170,16 @@
         "summary"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationNewInboxMessage"
+      "title": "SystemNotificationNewInboxMessage",
+      "description": "Schema for the `SystemNotificationNewInboxMessage` type."
     },
     "SystemNotificationShellCompleted": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "shell_completed"
+          "const": "shell_completed",
+          "description": "Type discriminator. Always \"shell_completed\"."
         },
         "shellId": {
           "type": "string",
@@ -7872,14 +8199,16 @@
         "shellId"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationShellCompleted"
+      "title": "SystemNotificationShellCompleted",
+      "description": "Schema for the `SystemNotificationShellCompleted` type."
     },
     "SystemNotificationShellDetachedCompleted": {
       "type": "object",
       "properties": {
         "type": {
           "type": "string",
-          "const": "shell_detached_completed"
+          "const": "shell_detached_completed",
+          "description": "Type discriminator. Always \"shell_detached_completed\"."
         },
         "shellId": {
           "type": "string",
@@ -7895,7 +8224,8 @@
         "shellId"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationShellDetachedCompleted"
+      "title": "SystemNotificationShellDetachedCompleted",
+      "description": "Schema for the `SystemNotificationShellDetachedCompleted` type."
     },
     "TaskCompleteData": {
       "type": "object",
@@ -7949,7 +8279,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.task_complete"
+          "const": "session.task_complete",
+          "description": "Type discriminator. Always \"session.task_complete\"."
         },
         "data": {
           "$ref": "#/definitions/TaskCompleteData",
@@ -7964,6 +8295,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.task_complete\". Task completion notification with summary from the agent",
       "title": "TaskCompleteEvent"
     },
     "TitleChangedData": {
@@ -8008,7 +8340,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -8016,7 +8349,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.title_changed"
+          "const": "session.title_changed",
+          "description": "Type discriminator. Always \"session.title_changed\"."
         },
         "data": {
           "$ref": "#/definitions/TitleChangedData",
@@ -8032,6 +8366,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.title_changed\". Session title change payload containing the new display title",
       "title": "TitleChangedEvent"
     },
     "ToolExecutionCompleteContent": {
@@ -8398,7 +8733,8 @@
         },
         "type": {
           "type": "string",
-          "const": "tool.execution_complete"
+          "const": "tool.execution_complete",
+          "description": "Type discriminator. Always \"tool.execution_complete\"."
         },
         "data": {
           "$ref": "#/definitions/ToolExecutionCompleteData",
@@ -8413,6 +8749,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"tool.execution_complete\". Tool execution completion results including success status, detailed output, and error information",
       "title": "ToolExecutionCompleteEvent"
     },
     "ToolExecutionCompleteResult": {
@@ -8489,7 +8826,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -8497,7 +8835,8 @@
         },
         "type": {
           "type": "string",
-          "const": "tool.execution_partial_result"
+          "const": "tool.execution_partial_result",
+          "description": "Type discriminator. Always \"tool.execution_partial_result\"."
         },
         "data": {
           "$ref": "#/definitions/ToolExecutionPartialData",
@@ -8513,6 +8852,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"tool.execution_partial_result\". Streaming tool execution output for incremental result display",
       "title": "ToolExecutionPartialResultEvent"
     },
     "ToolExecutionProgressData": {
@@ -8562,7 +8902,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -8570,7 +8911,8 @@
         },
         "type": {
           "type": "string",
-          "const": "tool.execution_progress"
+          "const": "tool.execution_progress",
+          "description": "Type discriminator. Always \"tool.execution_progress\"."
         },
         "data": {
           "$ref": "#/definitions/ToolExecutionProgressData",
@@ -8586,6 +8928,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"tool.execution_progress\". Tool execution progress notification with status message",
       "title": "ToolExecutionProgressEvent"
     },
     "ToolExecutionStartData": {
@@ -8663,7 +9006,8 @@
         },
         "type": {
           "type": "string",
-          "const": "tool.execution_start"
+          "const": "tool.execution_start",
+          "description": "Type discriminator. Always \"tool.execution_start\"."
         },
         "data": {
           "$ref": "#/definitions/ToolExecutionStartData",
@@ -8678,20 +9022,23 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"tool.execution_start\". Tool execution startup details including MCP server information when applicable",
       "title": "ToolExecutionStartEvent"
     },
     "ToolsUpdatedData": {
       "type": "object",
       "properties": {
         "model": {
-          "type": "string"
+          "type": "string",
+          "description": "Identifier of the model the resolved tools apply to."
         }
       },
       "required": [
         "model"
       ],
       "additionalProperties": false,
-      "title": "ToolsUpdatedData"
+      "title": "ToolsUpdatedData",
+      "description": "Schema for the `ToolsUpdatedData` type."
     },
     "ToolsUpdatedEvent": {
       "type": "object",
@@ -8720,7 +9067,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -8728,10 +9076,12 @@
         },
         "type": {
           "type": "string",
-          "const": "session.tools_updated"
+          "const": "session.tools_updated",
+          "description": "Type discriminator. Always \"session.tools_updated\"."
         },
         "data": {
-          "$ref": "#/definitions/ToolsUpdatedData"
+          "$ref": "#/definitions/ToolsUpdatedData",
+          "description": "Schema for the `ToolsUpdatedData` type."
         }
       },
       "required": [
@@ -8743,6 +9093,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.tools_updated\".",
       "title": "ToolsUpdatedEvent"
     },
     "ToolUserRequestedData": {
@@ -8803,7 +9154,8 @@
         },
         "type": {
           "type": "string",
-          "const": "tool.user_requested"
+          "const": "tool.user_requested",
+          "description": "Type discriminator. Always \"tool.user_requested\"."
         },
         "data": {
           "$ref": "#/definitions/ToolUserRequestedData",
@@ -8818,6 +9170,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"tool.user_requested\". User-initiated tool invocation request with tool name and arguments",
       "title": "ToolUserRequestedEvent"
     },
     "TruncationData": {
@@ -8905,7 +9258,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.truncation"
+          "const": "session.truncation",
+          "description": "Type discriminator. Always \"session.truncation\"."
         },
         "data": {
           "$ref": "#/definitions/TruncationData",
@@ -8920,6 +9274,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.truncation\". Conversation truncation statistics including token counts and removed content metrics",
       "title": "TruncationEvent"
     },
     "UsageInfoData": {
@@ -8990,7 +9345,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -8998,7 +9354,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.usage_info"
+          "const": "session.usage_info",
+          "description": "Type discriminator. Always \"session.usage_info\"."
         },
         "data": {
           "$ref": "#/definitions/UsageInfoData",
@@ -9014,6 +9371,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.usage_info\". Current context window usage statistics including token and message counts",
       "title": "UsageInfoEvent"
     },
     "UserInputCompletedData": {
@@ -9066,7 +9424,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -9074,7 +9433,8 @@
         },
         "type": {
           "type": "string",
-          "const": "user_input.completed"
+          "const": "user_input.completed",
+          "description": "Type discriminator. Always \"user_input.completed\"."
         },
         "data": {
           "$ref": "#/definitions/UserInputCompletedData",
@@ -9090,6 +9450,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"user_input.completed\". User input request completion with the user's response",
       "title": "UserInputCompletedEvent"
     },
     "UserInputRequestedData": {
@@ -9154,7 +9515,8 @@
         },
         "ephemeral": {
           "type": "boolean",
-          "const": true
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
         },
         "agentId": {
           "type": "string",
@@ -9162,7 +9524,8 @@
         },
         "type": {
           "type": "string",
-          "const": "user_input.requested"
+          "const": "user_input.requested",
+          "description": "Type discriminator. Always \"user_input.requested\"."
         },
         "data": {
           "$ref": "#/definitions/UserInputRequestedData",
@@ -9178,6 +9541,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"user_input.requested\". User input request notification with question and optional predefined choices",
       "title": "UserInputRequestedEvent"
     },
     "UserMessageAgentMode": {
@@ -9529,7 +9893,8 @@
         "content"
       ],
       "additionalProperties": false,
-      "title": "UserMessageData"
+      "title": "UserMessageData",
+      "description": "Schema for the `UserMessageData` type."
     },
     "UserMessageEvent": {
       "type": "object",
@@ -9566,10 +9931,12 @@
         },
         "type": {
           "type": "string",
-          "const": "user.message"
+          "const": "user.message",
+          "description": "Type discriminator. Always \"user.message\"."
         },
         "data": {
-          "$ref": "#/definitions/UserMessageData"
+          "$ref": "#/definitions/UserMessageData",
+          "description": "Schema for the `UserMessageData` type."
         }
       },
       "required": [
@@ -9580,6 +9947,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"user.message\".",
       "title": "UserMessageEvent"
     },
     "UserToolSessionApproval": {
@@ -9633,7 +10001,8 @@
         "commandIdentifiers"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalCommands"
+      "title": "UserToolSessionApprovalCommands",
+      "description": "Schema for the `UserToolSessionApprovalCommands` type."
     },
     "UserToolSessionApprovalCustomTool": {
       "type": "object",
@@ -9653,7 +10022,8 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalCustomTool"
+      "title": "UserToolSessionApprovalCustomTool",
+      "description": "Schema for the `UserToolSessionApprovalCustomTool` type."
     },
     "UserToolSessionApprovalExtensionManagement": {
       "type": "object",
@@ -9672,7 +10042,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalExtensionManagement"
+      "title": "UserToolSessionApprovalExtensionManagement",
+      "description": "Schema for the `UserToolSessionApprovalExtensionManagement` type."
     },
     "UserToolSessionApprovalExtensionPermissionAccess": {
       "type": "object",
@@ -9692,7 +10063,8 @@
         "extensionName"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalExtensionPermissionAccess"
+      "title": "UserToolSessionApprovalExtensionPermissionAccess",
+      "description": "Schema for the `UserToolSessionApprovalExtensionPermissionAccess` type."
     },
     "UserToolSessionApprovalMcp": {
       "type": "object",
@@ -9720,7 +10092,8 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalMcp"
+      "title": "UserToolSessionApprovalMcp",
+      "description": "Schema for the `UserToolSessionApprovalMcp` type."
     },
     "UserToolSessionApprovalMemory": {
       "type": "object",
@@ -9735,7 +10108,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalMemory"
+      "title": "UserToolSessionApprovalMemory",
+      "description": "Schema for the `UserToolSessionApprovalMemory` type."
     },
     "UserToolSessionApprovalRead": {
       "type": "object",
@@ -9750,7 +10124,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalRead"
+      "title": "UserToolSessionApprovalRead",
+      "description": "Schema for the `UserToolSessionApprovalRead` type."
     },
     "UserToolSessionApprovalWrite": {
       "type": "object",
@@ -9765,7 +10140,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalWrite"
+      "title": "UserToolSessionApprovalWrite",
+      "description": "Schema for the `UserToolSessionApprovalWrite` type."
     },
     "WarningData": {
       "type": "object",
@@ -9827,7 +10203,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.warning"
+          "const": "session.warning",
+          "description": "Type discriminator. Always \"session.warning\"."
         },
         "data": {
           "$ref": "#/definitions/WarningData",
@@ -9842,6 +10219,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.warning\". Warning message for timeline display with categorization",
       "title": "WarningEvent"
     },
     "WorkingDirectoryContext": {
@@ -9951,7 +10329,8 @@
         },
         "type": {
           "type": "string",
-          "const": "session.workspace_file_changed"
+          "const": "session.workspace_file_changed",
+          "description": "Type discriminator. Always \"session.workspace_file_changed\"."
         },
         "data": {
           "$ref": "#/definitions/WorkspaceFileChangedData",
@@ -9966,6 +10345,7 @@
         "data"
       ],
       "additionalProperties": false,
+      "description": "Session event \"session.workspace_file_changed\". Workspace file change details including path and operation type",
       "title": "WorkspaceFileChangedEvent"
     },
     "WorkspaceFileChangedOperation": {
@@ -9978,5 +10358,6 @@
       "title": "WorkspaceFileChangedOperation"
     }
   },
-  "$schema": "http://json-schema.org/draft-07/schema#"
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "JSON Schema for session events emitted by the Copilot CLI runtime."
 }

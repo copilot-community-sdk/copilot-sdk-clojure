@@ -267,8 +267,11 @@
 
 (defn- handle-v3-tool-requested!
   "Handle v3 external_tool.requested broadcast event.
-   Calls the session's tool handler and responds via the
-   session.tools.handlePendingToolCall RPC method."
+   When a tool handler is registered for `tool-name`, calls it and
+   responds via `session.tools.handlePendingToolCall`.
+   When no handler is registered (upstream PR #1308 — declaration-only tool),
+   leaves the call PENDING — the consumer is expected to resolve it via
+   `handle-pending-tool-call!`."
   [client session-id event]
   (let [data (:data event)
         request-id (:request-id data)
@@ -276,8 +279,11 @@
         tool-call-id (:tool-call-id data)
         arguments (:arguments data)
         traceparent (:traceparent data)
-        tracestate (:tracestate data)]
-    (when (and request-id tool-name)
+        tracestate (:tracestate data)
+        ;; Upstream PR #1308: skip auto-resolution for declaration-only tools.
+        handler-registered? (some? (get-in @(:state client)
+                                           [:sessions session-id :tool-handlers tool-name]))]
+    (when (and request-id tool-name handler-registered?)
       (go
         (try
           (let [tool-response (<! (session/handle-tool-call!
@@ -307,18 +313,24 @@
 
 (defn- handle-v3-permission-requested!
   "Handle v3 permission.requested broadcast event.
-   Calls the session's permission handler and responds via the
-   session.permissions.handlePendingPermissionRequest RPC method.
-   When the handler returns :no-result, the RPC call is skipped
-   so the extension does not answer this permission request.
+   When a permission handler is registered, calls it and responds via
+   `session.permissions.handlePendingPermissionRequest`. When no handler is
+   registered (upstream PR #1308 — optional callbacks), leaves the request
+   PENDING for the consumer to resolve via `handle-pending-permission-request!`.
+   When the handler returns :no-result, the RPC call is skipped so the
+   extension does not answer this permission request.
    When :resolved-by-hook is true, the runtime already resolved
    this permission via a permissionRequest hook — skip the handler
    entirely (the event is still published to subscribers)."
   [client session-id event]
   (let [data (:data event)
         request-id (:request-id data)
-        permission-request (:permission-request data)]
+        permission-request (:permission-request data)
+        ;; Upstream PR #1308: skip auto-resolution when no permission handler.
+        handler-registered? (some? (get-in @(:state client)
+                                           [:sessions session-id :permission-handler]))]
     (when (and request-id permission-request
+               handler-registered?
                (not (:resolved-by-hook data)))
       (go
         (try
@@ -1346,11 +1358,6 @@
 (defn- validate-session-config!
   "Validate session config, throwing on invalid input."
   [config]
-  (when-not (:on-permission-request config)
-    (throw (ex-info (str "An :on-permission-request handler is required when creating a session. "
-                         "For example, to allow all permissions, use "
-                         "{:on-permission-request copilot/approve-all}.")
-                    {:config config})))
   (when-not (s/valid? ::specs/session-config config)
     (let [unknown (specs/unknown-keys config specs/session-config-keys)
           explain (s/explain-data ::specs/session-config config)
@@ -1501,6 +1508,8 @@
       (assoc :enable-session-telemetry (:enable-session-telemetry? config))
       (:remote-session config)
       (assoc :remote-session (name (:remote-session config)))
+      (:cloud config)
+      (assoc :cloud (util/clj->wire (:cloud config)))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
       true (assoc :include-sub-agent-streaming-events
@@ -1609,8 +1618,13 @@
 (defn create-session
   "Create a new conversation session.
    
-   Config options (`:on-permission-request` is **required**):
-   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
+   Config options (`:on-permission-request` is **optional** since upstream
+   PR #1308 — omit it to leave permission requests pending for manual
+   resolution via `copilot/handle-pending-permission-request!`):
+   - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
+                              When omitted, permission requests are surfaced as
+                              `:copilot/permission.requested` events and remain
+                              pending until resolved by the application.
    - :session-id         - Custom session ID
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.4\")
@@ -1658,6 +1672,11 @@
    - :remote-session     - Keyword. Per-session Mission Control remote mode: :off, :export, or :on.
                            Forwarded as `remoteSession` on session.create. When omitted, the CLI
                            applies its default. (upstream PR #1295, CLI 1.0.48)
+   - :cloud              - Map. Creates a remote session in the cloud instead of a local session.
+                           Optional `:repository` associates the cloud session with a GitHub
+                           repository: `{:repository {:owner \"...\" :name \"...\" :branch \"...\"}}`.
+                           `:branch` is optional. Forwarded as `cloud` on session.create.
+                           (upstream PR #1306)
    
    Returns a CopilotSession."
   [client config]
@@ -1694,8 +1713,13 @@
 (defn resume-session
   "Resume an existing session by ID.
    
-   Config options (`:on-permission-request` is **required**):
-   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
+   Config options (`:on-permission-request` is **optional** since upstream
+   PR #1308 — omit it to leave permission requests pending for manual
+   resolution via `copilot/handle-pending-permission-request!`):
+   - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
+                              When omitted, permission requests are surfaced as
+                              `:copilot/permission.requested` events and remain
+                              pending until resolved by the application.
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Change the model for the resumed session
    - :tools              - Tools exposed to the CLI server
@@ -1734,11 +1758,6 @@
    
    Returns a CopilotSession."
   [client session-id config]
-  (when-not (:on-permission-request config)
-    (throw (ex-info (str "An :on-permission-request handler is required when resuming a session. "
-                         "For example, to allow all permissions, use "
-                         "{:on-permission-request copilot/approve-all}.")
-                    {:config config})))
   (when-not (s/valid? ::specs/resume-session-config config)
     (throw (ex-info "Invalid resume session config"
                     {:config config
@@ -1775,7 +1794,8 @@
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
 
-   Same config options as create-session (`:on-permission-request` is **required**).
+   Same config options as create-session (`:on-permission-request` is **optional**
+   since upstream PR #1308).
    Validation is performed synchronously (throws immediately on invalid config).
    The RPC call parks instead of blocking, making this safe to use inside go blocks.
 
@@ -1834,7 +1854,8 @@
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
-   Same config options as resume-session (`:on-permission-request` is **required**).
+   Same config options as resume-session (`:on-permission-request` is **optional**
+   since upstream PR #1308).
    Validation is performed synchronously (throws immediately on invalid config).
    The RPC call parks instead of blocking, making this safe to use inside go blocks.
 
@@ -1851,11 +1872,6 @@
            ;; use result as session
            )))"
   [client session-id config]
-  (when-not (:on-permission-request config)
-    (throw (ex-info (str "An :on-permission-request handler is required when resuming a session. "
-                         "For example, to allow all permissions, use "
-                         "{:on-permission-request copilot/approve-all}.")
-                    {:config config})))
   (when-not (s/valid? ::specs/resume-session-config config)
     (throw (ex-info "Invalid resume session config"
                     {:config config

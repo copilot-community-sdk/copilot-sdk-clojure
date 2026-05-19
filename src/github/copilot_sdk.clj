@@ -783,6 +783,45 @@
   [session]
   (session/get-messages session))
 
+(defn handle-pending-tool-call!
+  "Manually resolve a pending external tool call (upstream PR #1308).
+
+   Use this when a tool was declared without a `:handler` and the runtime
+   emitted a `:copilot/external_tool.requested` event. Read the `:request-id`
+   from `(:data event)` and supply either `:result` or `:error`.
+
+   Options:
+   - :request-id - String request id from the event (required)
+   - :result     - Tool result (string, map, or other; normalized for the wire)
+   - :error      - Error message (string). Mutually exclusive with :result."
+  [session opts]
+  (session/handle-pending-tool-call! session opts))
+
+(defn <handle-pending-tool-call!
+  "core.async variant of `handle-pending-tool-call!`. Returns a channel."
+  [session opts]
+  (session/<handle-pending-tool-call! session opts))
+
+(defn handle-pending-permission-request!
+  "Manually resolve a pending permission request (upstream PR #1308).
+
+   Use this when no `:on-permission-request` handler was registered and the
+   runtime emitted a `:copilot/permission.requested` event. Read the
+   `:request-id` from `(:data event)` and supply a decision in `:result`.
+
+   Options:
+   - :request-id - String request id from the event (required)
+   - :result     - Permission decision map `{:kind k ...}`. `:no-result` is
+                   not allowed for the pending RPC — to decline answering,
+                   simply don't call this function."
+  [session opts]
+  (session/handle-pending-permission-request! session opts))
+
+(defn <handle-pending-permission-request!
+  "core.async variant of `handle-pending-permission-request!`. Returns a channel."
+  [session opts]
+  (session/<handle-pending-permission-request! session opts))
+
 (defn disconnect!
   "Disconnects the session and releases in-memory resources (event handlers,
    tool handlers, permission handler). Session data on disk is preserved for

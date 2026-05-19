@@ -1192,6 +1192,65 @@
                                      {:on-permission-request sdk/approve-all
                                       :remote-session :bogus})))))
 
+(deftest test-cloud-session-config-forwarded-on-wire
+  (testing "cloud {:repository {...}} is forwarded as cloud.repository on session.create (upstream PR #1306)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :cloud {:repository {:owner "octocat"
+                                                      :name "hello-world"
+                                                      :branch "main"}}})
+          create-params (get @seen "session.create")]
+      (is (= {:owner "octocat" :name "hello-world" :branch "main"}
+             (get-in create-params [:cloud :repository])))
+      (is (not (contains? create-params :cloud-repository)))))
+
+  (testing "cloud :repository may omit :branch"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :cloud {:repository {:owner "octocat"
+                                                      :name "hello-world"}}})
+          create-params (get @seen "session.create")]
+      (is (= {:owner "octocat" :name "hello-world"}
+             (get-in create-params [:cloud :repository])))))
+
+  (testing "cloud {} (empty options) is forwarded as empty map"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :cloud {}})
+          create-params (get @seen "session.create")]
+      (is (= {} (:cloud create-params)))))
+
+  (testing "cloud is omitted from wire when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :cloud)))))
+
+  (testing "cloud config with invalid :repository shape is rejected by spec"
+    (is (thrown? Exception
+                 (sdk/create-session *test-client*
+                                     {:on-permission-request sdk/approve-all
+                                      :cloud {:repository {:branch "main"}}}))) ; missing :owner and :name
+    (is (thrown? Exception
+                 (sdk/create-session *test-client*
+                                     {:on-permission-request sdk/approve-all
+                                      :cloud {:repository "octocat/hello-world"}})))))
+
 (deftest test-agent-forwarded-on-wire
   (testing "agent is forwarded in session.create when set (upstream PR #722)"
     (let [seen (atom {})
@@ -1304,23 +1363,16 @@
       (is (= {:kind :approve-once}
              (sdk/approve-all {:permission-kind kind} {:session-id "s1"}))))))
 
-(deftest test-permission-handler-required
-  (testing "create-session throws without :on-permission-request"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"on-permission-request handler is required"
-                          (sdk/create-session *test-client* {}))))
+(deftest test-permission-handler-now-optional
+  ;; Upstream PR #1308 made :on-permission-request optional. Previously this
+  ;; test asserted that create-session/resume-session threw without it.
+  (testing "create-session succeeds without :on-permission-request"
+    (is (some? (sdk/create-session *test-client* {}))))
 
-  (testing "create-session throws with nil handler"
-    (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                          #"on-permission-request handler is required"
-                          (sdk/create-session *test-client* {:on-permission-request nil}))))
-
-  (testing "resume-session throws without :on-permission-request"
-    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      (is (thrown-with-msg? clojure.lang.ExceptionInfo
-                            #"on-permission-request handler is required"
-                            (sdk/resume-session *test-client* session-id {}))))))
+  (testing "resume-session succeeds without :on-permission-request"
+    (let [_ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/get-last-session-id *test-client*)]
+      (is (some? (sdk/resume-session *test-client* session-id {}))))))
 
 (deftest test-permission-denied-with-deny-handler
   (testing "Permission requests are denied when handler denies"
@@ -2702,6 +2754,70 @@
                                                     :cwd "/workspace"}})]
       (is (nil? (:result response))))))
 
+(deftest test-hooks-input-exposes-session-id
+  (testing "hook input includes :session-id (upstream PR #1290 — BaseHookInput.sessionId)"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-tool-use
+                                               (fn [input _ctx]
+                                                 (reset! handler-called input)
+                                                 nil)}})
+          session-id (sdk/session-id session)
+          _ (mock/send-rpc-request! *mock-server*
+                                    "hooks.invoke"
+                                    {:sessionId session-id
+                                     :hookType "preToolUse"
+                                     :input {:toolName "bash"
+                                             :toolArgs {}
+                                             :sessionId session-id
+                                             :timestamp 12345
+                                             :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      (is (= session-id (:session-id @handler-called)))))
+
+  (testing "hook input :session-id preserves wire-provided value (sub-agent case)"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-tool-use
+                                               (fn [input _ctx]
+                                                 (reset! handler-called input)
+                                                 nil)}})
+          parent-session-id (sdk/session-id session)
+          sub-agent-session-id "sub-agent-session-xyz"
+          _ (mock/send-rpc-request! *mock-server*
+                                    "hooks.invoke"
+                                    {:sessionId parent-session-id
+                                     :hookType "preToolUse"
+                                     :input {:toolName "bash"
+                                             :toolArgs {}
+                                             :sessionId sub-agent-session-id
+                                             :timestamp 12345
+                                             :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      (is (= sub-agent-session-id (:session-id @handler-called)))))
+
+  (testing "hook input :session-id falls back to outer session-id when wire omits it"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-tool-use
+                                               (fn [input _ctx]
+                                                 (reset! handler-called input)
+                                                 nil)}})
+          session-id (sdk/session-id session)
+          _ (mock/send-rpc-request! *mock-server*
+                                    "hooks.invoke"
+                                    {:sessionId session-id
+                                     :hookType "preToolUse"
+                                     :input {:toolName "bash"
+                                             :toolArgs {}
+                                             :timestamp 12345
+                                             :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      (is (= session-id (:session-id @handler-called))))))
+
 ;; -----------------------------------------------------------------------------
 ;; User Input Handler Tests (server→client RPC)
 ;; -----------------------------------------------------------------------------
@@ -4042,3 +4158,238 @@
                   {:tool-call-id "tc-1"
                    :agent-name "rubber-duck"
                    :agent-display-name "Rubber Duck"}))))
+
+;; -----------------------------------------------------------------------------
+;; Optional callbacks (upstream PR #1308)
+;; -----------------------------------------------------------------------------
+
+(deftest test-create-session-without-permission-handler
+  (testing "create-session accepts omission of :on-permission-request (upstream PR #1308)"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})
+          create-rpcs (filter #(= "session.create" (:method %)) @requests)]
+      (is (= 1 (count create-rpcs)) "session.create still issued")
+      (is (some? (sdk/session-id session))))))
+
+(deftest test-resume-session-without-permission-handler
+  (testing "resume-session accepts omission of :on-permission-request"
+    (let [requests (atom [])
+          _ (sdk/create-session *test-client* {})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          resumed (sdk/resume-session *test-client* session-id {})
+          resume-rpcs (filter #(= "session.resume" (:method %)) @requests)]
+      (is (= 1 (count resume-rpcs)))
+      (is (some? (sdk/session-id resumed))))))
+
+(deftest test-define-tool-without-handler
+  (testing "define-tool accepts omission of :handler (declaration-only tool, upstream PR #1308)"
+    (let [tool (tools/define-tool "manual_lookup"
+                 {:description "Look up status manually"
+                  :parameters {:type "object"
+                               :properties {:id {:type "string"}}
+                               :required ["id"]}})]
+      (is (= "manual_lookup" (:tool-name tool)))
+      (is (not (contains? tool :tool-handler))
+          "tool map must NOT contain :tool-handler key when handler omitted")
+      ;; Must pass tool spec validation (handler now optional)
+      (is (s/valid? :github.copilot-sdk.specs/tool tool))))
+
+  (testing "define-tool-from-spec accepts omission of :handler (upstream PR #1308)"
+    (let [tool (tools/define-tool-from-spec "manual_spec_tool"
+                 {:description "Declaration-only spec tool"})]
+      (is (= "manual_spec_tool" (:tool-name tool)))
+      (is (not (contains? tool :tool-handler))
+          "define-tool-from-spec must NOT install a wrapper handler when :handler omitted")
+      (is (s/valid? :github.copilot-sdk.specs/tool tool)))))
+
+(deftest test-declaration-only-tool-not-stored-in-handler-map
+  (testing "declaration-only tools don't populate :tool-handlers"
+    (let [decl-tool (tools/define-tool "decl_only" {:description "decl-only"})
+          handled-tool (tools/define-tool "with_handler"
+                         {:description "has handler"
+                          :handler (fn [_ _] "ok")})
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :tools [decl-tool handled-tool]})
+          session-id (sdk/session-id session)
+          tool-handlers (get-in @(:state *test-client*)
+                                [:sessions session-id :tool-handlers])]
+      (is (not (contains? tool-handlers "decl_only"))
+          "declaration-only tools must not be in :tool-handlers")
+      (is (contains? tool-handlers "with_handler")
+          "tools with handlers must remain in :tool-handlers"))))
+
+(deftest test-handle-pending-permission-request!-sends-rpc
+  (testing "handle-pending-permission-request! issues session.permissions.handlePendingPermissionRequest"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-permission-request! session
+                                              {:request-id "req-42"
+                                               :result {:kind :approve-once}})
+      (let [pending-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                     (:method %))
+                                 @requests)]
+        (is (= 1 (count pending-rpcs)))
+        (is (= "req-42" (get-in (first pending-rpcs) [:params :requestId])))
+        ;; Result is wire-serialized via clj->wire: keyword :kind → "approve-once"
+        (is (= "approve-once" (get-in (first pending-rpcs)
+                                      [:params :result :kind]))))))
+
+  (testing "handle-pending-permission-request! accepts :user-not-available"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-permission-request! session
+                                              {:request-id "req-una"
+                                               :result {:kind :user-not-available}})
+      (let [pending-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                     (:method %))
+                                 @requests)]
+        (is (= 1 (count pending-rpcs)))
+        (is (= "user-not-available" (get-in (first pending-rpcs)
+                                            [:params :result :kind]))))))
+
+  (testing "handle-pending-permission-request! accepts :approve-permanently"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-permission-request! session
+                                              {:request-id "req-perm"
+                                               :result {:kind :approve-permanently}})
+      (let [pending-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                     (:method %))
+                                 @requests)]
+        (is (= 1 (count pending-rpcs)))
+        (is (= "approve-permanently" (get-in (first pending-rpcs)
+                                             [:params :result :kind]))))))
+
+  (testing "handle-pending-permission-request! rejects :no-result"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown? Exception
+                   (sdk/handle-pending-permission-request!
+                    session
+                    {:request-id "req-1" :result {:kind :no-result}})))))
+
+  (testing "handle-pending-permission-request! rejects malformed result"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown? Exception
+                   (sdk/handle-pending-permission-request!
+                    session
+                    {:request-id "req-1" :result "not-a-map"})))))
+
+  (testing "handle-pending-permission-request! rejects blank :request-id"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "" :result {:kind :approve-once}})))
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "   " :result {:kind :approve-once}})))))
+
+  (testing "handle-pending-permission-request! rejects non-keyword :kind"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":kind must be a keyword"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "req-1" :result {:kind "approve-once"}})))
+      (is (thrown-with-msg? Exception #":kind must be a keyword"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "req-1" :result {:kind 42}})))))
+
+  (testing "handle-pending-permission-request! rejects unsupported :kind"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #"not a supported permission decision"
+                            (sdk/handle-pending-permission-request!
+                             session
+                             {:request-id "req-1" :result {:kind :totally-made-up}}))))))
+
+(deftest test-handle-pending-tool-call!-sends-rpc
+  (testing "handle-pending-tool-call! with :result issues session.tools.handlePendingToolCall"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-tool-call! session
+                                     {:request-id "tool-req-7"
+                                      :result "MANUAL_STATUS_OK"})
+      (let [pending (filter #(= "session.tools.handlePendingToolCall" (:method %))
+                            @requests)]
+        (is (= 1 (count pending)))
+        (is (= "tool-req-7" (get-in (first pending) [:params :requestId])))
+        ;; String result is normalized through normalize-tool-result
+        (is (= "MANUAL_STATUS_OK"
+               (get-in (first pending) [:params :result :textResultForLlm]))))))
+
+  (testing "handle-pending-tool-call! with :error forwards error string"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-tool-call! session
+                                     {:request-id "tool-req-8"
+                                      :error "manual failure"})
+      (let [pending (first (filter #(= "session.tools.handlePendingToolCall" (:method %))
+                                   @requests))]
+        (is (= "manual failure" (get-in pending [:params :error])))
+        (is (not (contains? (:params pending) :result))))))
+
+  (testing "handle-pending-tool-call! rejects :result and :error together"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown? Exception
+                   (sdk/handle-pending-tool-call!
+                    session
+                    {:request-id "x" :result "a" :error "b"})))))
+
+  (testing "handle-pending-tool-call! rejects non-string :error"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":error must be a string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "x" :error {:code 1}})))
+      (is (thrown-with-msg? Exception #":error must be a string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "x" :error 42})))))
+
+  (testing "handle-pending-tool-call! requires :result or :error"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #"exactly one of :result or :error"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "x"})))))
+
+  (testing "<handle-pending-tool-call! requires :result or :error"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #"exactly one of :result or :error"
+                            (sdk/<handle-pending-tool-call!
+                             session
+                             {:request-id "x"})))))
+
+  (testing "handle-pending-tool-call! rejects blank :request-id"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "" :result "ok"})))
+      (is (thrown-with-msg? Exception #":request-id must be a non-blank string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "   " :result "ok"}))))))

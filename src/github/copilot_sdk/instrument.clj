@@ -220,6 +220,31 @@
   :args (s/cat :session ::specs/session)
   :ret (s/coll-of map?))
 
+;; Upstream PR #1308: manual resolution of pending tool calls and permission
+;; requests. Inner functions perform more thorough validation (e.g. permission
+;; :kind enum, mutual exclusivity of :result/:error). The fdef only enforces
+;; the universally-required :request-id; the rest is checked at call time so
+;; the spec doesn't have to mirror the full result/decision shape here.
+(register-fdef! github.copilot-sdk.session/handle-pending-tool-call!
+  :args (s/cat :session ::specs/session
+               :opts (s/keys :req-un [::specs/request-id]))
+  :ret any?)
+
+(register-fdef! github.copilot-sdk.session/<handle-pending-tool-call!
+  :args (s/cat :session ::specs/session
+               :opts (s/keys :req-un [::specs/request-id]))
+  :ret any?)
+
+(register-fdef! github.copilot-sdk.session/handle-pending-permission-request!
+  :args (s/cat :session ::specs/session
+               :opts (s/keys :req-un [::specs/request-id]))
+  :ret any?)
+
+(register-fdef! github.copilot-sdk.session/<handle-pending-permission-request!
+  :args (s/cat :session ::specs/session
+               :opts (s/keys :req-un [::specs/request-id]))
+  :ret any?)
+
 (register-fdef! github.copilot-sdk.session/destroy!
   :args (s/alt :handle (s/cat :session ::specs/session)
                :explicit (s/cat :client ::specs/client

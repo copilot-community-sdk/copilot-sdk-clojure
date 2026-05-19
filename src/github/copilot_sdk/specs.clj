@@ -172,8 +172,12 @@
 (s/def ::skip-permission? boolean?)
 
 (s/def ::tool
-  (s/keys :req-un [::tool-name ::tool-handler]
-          :opt-un [::tool-description ::tool-parameters ::overrides-built-in-tool ::skip-permission?]))
+  ;; Upstream PR #1308: handler is now optional. Tools without a handler are
+  ;; declaration-only — they're surfaced as `external_tool.requested` events
+  ;; and the consumer resolves them via `handle-pending-tool-call!`.
+  (s/keys :req-un [::tool-name]
+          :opt-un [::tool-handler ::tool-description ::tool-parameters
+                   ::overrides-built-in-tool ::skip-permission?]))
 
 (s/def ::tools (s/coll-of ::tool))
 
@@ -523,12 +527,16 @@
     :enable-config-discovery :model-capabilities :github-token
     :enable-session-telemetry?
     :remote-session
+    :cloud
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
   (closed-keys
-   (s/keys :req-un [::on-permission-request]
-           :opt-un [::session-id ::client-name ::model ::tools ::commands ::system-message
+   ;; Upstream PR #1308: :on-permission-request is now optional. When omitted,
+   ;; permission requests are surfaced as events and left pending for the
+   ;; consumer to resolve via `handle-pending-permission-request!`.
+   (s/keys :opt-un [::on-permission-request
+                    ::session-id ::client-name ::model ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::default-agent ::config-dir ::skill-directories
@@ -540,6 +548,7 @@
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::enable-session-telemetry?
                     ::remote-session
+                    ::cloud
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
@@ -559,8 +568,9 @@
 
 (s/def ::resume-session-config
   (closed-keys
-   (s/keys :req-un [::on-permission-request]
-           :opt-un [::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
+   ;; Upstream PR #1308: :on-permission-request is now optional.
+   (s/keys :opt-un [::on-permission-request
+                    ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
                     ::instruction-directories
@@ -901,6 +911,29 @@
                (s/valid? ::remote-session-mode (:mode m))))))
 
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
+
+;; Cloud session config (upstream PR #1306). When supplied to create-session,
+;; creates a remote session in the cloud instead of a local session. Optional
+;; :repository associates the cloud session with a GitHub repository.
+;;
+;; The literal :repository key inside cloud is a MAP — different from the
+;; existing top-level ::repository spec which is a string used elsewhere.
+;; Validate :repository against ::cloud-repository here via s/and, avoiding
+;; a name collision in s/keys :opt-un.
+(s/def ::owner ::non-blank-string)
+;; The :name key inside ::cloud-repository must be non-blank. The shared
+;; ::name spec is just `string?` (it is reused by many event/data shapes
+;; where blanks are valid), so we enforce non-blankness here with a
+;; predicate rather than redefining ::name globally.
+(s/def ::cloud-repository
+  (s/and (s/keys :req-un [::owner ::name]
+                 :opt-un [::branch])
+         #(not (clojure.string/blank? (:name %)))))
+(s/def ::cloud
+  (s/and map?
+         (fn [m]
+           (or (not (contains? m :repository))
+               (s/valid? ::cloud-repository (:repository m))))))
 (s/def ::interaction-id string?)
 (s/def ::source string?)
 
