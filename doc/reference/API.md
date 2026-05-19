@@ -245,7 +245,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
 | `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:mcp-servers` |
 | `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
-| `:on-permission-request` | fn | **Required.** Permission handler function. Use `copilot/approve-all` to approve everything. |
+| `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). When omitted, permission requests are not auto-resolved; resolve them manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
@@ -266,6 +266,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
 | `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
+| `:cloud` | map | Bind the session to a cloud repository. Shape: `{:repository {:owner "octocat" :repository "hello"}}`. Both `:owner` and `:repository` are required non-blank strings. Forwarded as `cloud.repository.*` on `session.create` and `session.resume`. (upstream PR #1306) |
 
 #### `resume-session`
 
@@ -852,6 +853,35 @@ Abort the currently processing message.
 ```
 
 Get all events/messages from this session.
+
+#### `handle-pending-tool-call!` / `<handle-pending-tool-call!`
+
+```clojure
+(copilot/handle-pending-tool-call! session
+                                   {:request-id "tool-req-7"
+                                    :result "STATUS_OK"})
+;; or async:
+(copilot/<handle-pending-tool-call! session {:request-id "tool-req-7"
+                                             :error "lookup failed"})
+```
+
+Resolve a tool call that was not auto-handled (because `:handler` was omitted
+from `define-tool`). The args map accepts `:request-id` plus either `:result`
+(string or full result map) or `:error` (string). Sent on the wire as
+`session.tools.handlePendingToolCall`. (upstream PR #1308)
+
+#### `handle-pending-permission-request!` / `<handle-pending-permission-request!`
+
+```clojure
+(copilot/handle-pending-permission-request! session
+                                            {:request-id "perm-req-3"
+                                             :result {:kind :approve-once}})
+```
+
+Resolve a permission request that was not auto-handled (because
+`:on-permission-request` was omitted from the session config). The result map
+must contain a `:kind` other than `:no-result`. Sent on the wire as
+`session.permissions.handlePendingPermissionRequest`. (upstream PR #1308)
 
 #### `get-current-model`
 
@@ -1520,6 +1550,23 @@ Let the CLI call back into your process when the model needs capabilities you pr
 
 When Copilot invokes `lookup_issue`, the SDK automatically runs your handler and responds to the CLI.
 
+**Declaration-only tools (manual resolution):**
+
+The `:handler` key is **optional** (upstream PR #1308). When omitted, the SDK does not auto-respond to tool calls — the call surfaces as a `:copilot/session.tool_call` event with a pending request id, and the application resolves it later via `handle-pending-tool-call!`. Useful for human-in-the-loop UIs or out-of-process tool execution.
+
+```clojure
+(def manual-tool
+  (copilot/define-tool "manual_lookup"
+    {:description "Look up status manually"
+     :parameters {:type "object"
+                  :properties {:id {:type "string"}}
+                  :required ["id"]}}))
+;; …later, after a human reviews the request:
+(copilot/handle-pending-tool-call! session
+                                   {:request-id "tool-req-7"
+                                    :result "STATUS_OK"})
+```
+
 **Overriding built-in tools:**
 
 Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `edit_file`). Without this flag, defining a tool whose name clashes with a built-in tool causes an error.
@@ -1857,9 +1904,12 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
 
 The SDK uses a **deny-by-default** permission model. All permission requests
 (file writes, shell commands, URL fetches, custom tool execution, etc.) are denied unless your
-session config provides an `:on-permission-request` handler (required for
-`create-session` and `resume-session`; optional for `join-session` which
-defaults to `{:kind :no-result}`).
+session config provides an `:on-permission-request` handler. The handler is
+optional on `create-session`, `resume-session`, and `join-session` (upstream
+PR #1308): when omitted, permission requests are not auto-resolved and
+applications must resolve them via `handle-pending-permission-request!`.
+`join-session` historically defaulted to `{:kind :no-result}` and continues to
+behave that way.
 
 Use `approve-all` to opt into approving everything:
 

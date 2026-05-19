@@ -4,12 +4,41 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.0-beta.4 sync)
+- **`:session-id` on hook input maps** — `:on-hook-invoke` handlers now receive
+  a `:session-id` key on the input map. When the upstream wire payload includes
+  a `sessionId` (sub-agent hooks), the wire-provided value is preserved;
+  otherwise the SDK fills in the parent session id as a convenience.
+  (upstream PR #1290)
+- **`:cloud` session config option** — `create-session` and `resume-session`
+  accept an optional `:cloud` map for binding the session to a cloud repository.
+  Shape: `{:repository {:owner "user-or-org" :repository "repo-name"}}`. Both
+  `:owner` and `:repository` are required non-blank strings. Forwarded on the
+  wire as `cloud.repository.owner` / `cloud.repository.repository`.
+  (upstream PR #1306)
+- **Optional permission and tool callbacks (manual pending RPCs)** — Following
+  upstream PR #1308, `:on-permission-request` is now **optional** on
+  `create-session` and `resume-session`, and `:handler` is optional on tools
+  built via `tools/define-tool`. When omitted, the runtime no longer
+  auto-responds to permission requests or tool calls. Applications can resolve
+  these requests asynchronously via the new public functions:
+  - `sdk/handle-pending-tool-call!` / `sdk/<handle-pending-tool-call!`
+  - `sdk/handle-pending-permission-request!` / `sdk/<handle-pending-permission-request!`
+
+  Useful for human-in-the-loop UIs that surface pending tool/permission
+  requests through `sdk/get-messages` and resolve them later.
+  **Note:** This is a behavioural change — previously the SDK threw if
+  `:on-permission-request` was missing; now it's accepted and the request is
+  treated as pending until the application resolves it. (upstream PR #1308)
 - **`:agent-model` on custom-agent configs** — Custom agent maps in
   `:custom-agents` now accept an optional `:agent-model` string (e.g.
   `"claude-haiku-4.5"`). When set, the runtime attempts to use that model
   for the agent, falling back to the parent session model if unavailable.
   Forwarded on the wire as `agentModel` on each entry in `customAgents`
   for both `session.create` and `session.resume`. (upstream PR #1309)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.48` to
+  `1.0.49-1`. Generated wire specs and coercions regenerated; new pass-through
+  event fields include `:display-prompt`, `:reasoning-summary`,
+  `:previous-reasoning-summary`. (upstream PRs #1305, #1307)
 
 ### Notes (v1.0.0-beta.4 sync)
 Upstream `v1.0.0-beta.4` shipped no new Node.js SDK API surface relative to

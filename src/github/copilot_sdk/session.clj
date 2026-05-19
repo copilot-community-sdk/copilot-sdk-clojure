@@ -58,7 +58,14 @@
   (let [event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
         send-lock (doto (chan 1) (>!! :token))
-        tool-handlers (into {} (map (fn [t] [(:tool-name t) (:tool-handler t)]) tools))
+        ;; Upstream PR #1308: declaration-only tools (no :tool-handler) are
+        ;; left out of the handler map — they're distinguished from tools with
+        ;; handlers, and unhandled invocations are left pending for manual
+        ;; resolution via handle-pending-tool-call!.
+        tool-handlers (into {} (keep (fn [t]
+                                       (when-let [h (:tool-handler t)]
+                                         [(:tool-name t) h]))
+                                     tools))
         command-handlers (into {} (map (fn [c] [(:name c) (:command-handler c)]) commands))]
     ;; Store session state and IO in client's atom
     (swap! (:state client)
@@ -631,11 +638,18 @@
                              "sessionEnd" :on-session-end
                              "errorOccurred" :on-error-occurred
                              nil)
-               handler (when handler-key (get hooks handler-key))]
-           (if-not handler
-             {:result nil}
-             (try
-               (let [result (handler input {:session-id session-id})
+           handler (when handler-key (get hooks handler-key))]
+       (if-not handler
+         {:result nil}
+         (try
+           (let [;; Upstream PR #1290: BaseHookInput.sessionId. Preserve the
+                 ;; wire-provided :session-id when present (it may identify a
+                 ;; sub-agent session distinct from the outer session-id);
+                 ;; otherwise fall back to the outer session-id.
+                 input (cond-> input
+                         (not (contains? input :session-id))
+                         (assoc :session-id session-id))
+                 result (handler input {:session-id session-id})
                      ;; If handler returns a channel, await it
                      result (if (channel? result)
                               (<!! result)
@@ -1202,6 +1216,111 @@
     (let [conn (connection-io client)
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
       (mapv coerce+normalize-event (:events result)))))
+
+(defn handle-pending-tool-call!
+  "Manually resolve a pending external tool call (upstream PR #1308).
+
+   Use this when a tool was declared without a `:handler` and the runtime has
+   emitted a `:copilot/external_tool.requested` event. The consumer reads the
+   `:request-id` from `(:data event)` and supplies either `:result` (the tool
+   result string or map) or `:error` (a string message).
+
+   Options map keys:
+   - :request-id - The `:request-id` from the external_tool.requested event (required)
+   - :result     - Tool result (string, map, or anything `normalize-tool-result` accepts)
+   - :error      - Error message (string). Mutually exclusive with `:result`.
+
+   Returns the RPC result map (sync). Use `<handle-pending-tool-call!` for the
+   core.async variant."
+  [session {:keys [request-id result error] :as opts}]
+  (let [{:keys [session-id client]} session]
+    (when (:destroyed? (session-state client session-id))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+    (when-not (string? request-id)
+      (throw (ex-info ":request-id is required" {:opts opts})))
+    (when (and (contains? opts :result) (contains? opts :error))
+      (throw (ex-info ":result and :error are mutually exclusive" {:opts opts})))
+    (let [conn (connection-io client)
+          base {:session-id session-id :request-id request-id}
+          params (cond
+                   (some? error) (assoc base :error error)
+                   :else (assoc base :result (normalize-tool-result result)))]
+      (proto/send-request! conn "session.tools.handlePendingToolCall" params))))
+
+(defn <handle-pending-tool-call!
+  "core.async variant of `handle-pending-tool-call!`. Returns a channel."
+  [session opts]
+  (let [{:keys [session-id client]} session
+        {:keys [request-id result error]} opts]
+    (when (:destroyed? (session-state client session-id))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+    (when-not (string? request-id)
+      (throw (ex-info ":request-id is required" {:opts opts})))
+    (when (and (contains? opts :result) (contains? opts :error))
+      (throw (ex-info ":result and :error are mutually exclusive" {:opts opts})))
+    (let [conn (connection-io client)
+          base {:session-id session-id :request-id request-id}
+          params (cond
+                   (some? error) (assoc base :error error)
+                   :else (assoc base :result (normalize-tool-result result)))]
+      (proto/send-request conn "session.tools.handlePendingToolCall" params))))
+
+(defn handle-pending-permission-request!
+  "Manually resolve a pending permission request (upstream PR #1308).
+
+   Use this when no `:on-permission-request` handler was registered and the
+   runtime has emitted a `:copilot/permission.requested` event. The consumer
+   reads the `:request-id` from `(:data event)` and supplies a permission
+   decision in `:result`.
+
+   Options map keys:
+   - :request-id - The `:request-id` from the permission.requested event (required)
+   - :result     - Permission decision map with `:kind` (one of `:approve-once`,
+                   `:approve-for-session`, `:approve-for-location`,
+                   `:approve-permanently`, `:reject`). `:no-result` is not
+                   supported here — to decline answering, simply don't call
+                   this function.
+
+   Returns the RPC result map (sync). Use `<handle-pending-permission-request!`
+   for the core.async variant."
+  [session {:keys [request-id result] :as opts}]
+  (let [{:keys [session-id client]} session]
+    (when (:destroyed? (session-state client session-id))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+    (when-not (string? request-id)
+      (throw (ex-info ":request-id is required" {:opts opts})))
+    (when-not (and (map? result) (contains? result :kind))
+      (throw (ex-info ":result must be a map with a :kind key" {:opts opts})))
+    (when (= :no-result (:kind result))
+      (throw (ex-info ":no-result is not a valid decision for the pending RPC"
+                      {:opts opts})))
+    (let [conn (connection-io client)
+          normalized (normalize-permission-result result)]
+      (proto/send-request! conn "session.permissions.handlePendingPermissionRequest"
+                           {:session-id session-id
+                            :request-id request-id
+                            :result normalized}))))
+
+(defn <handle-pending-permission-request!
+  "core.async variant of `handle-pending-permission-request!`. Returns a channel."
+  [session opts]
+  (let [{:keys [session-id client]} session
+        {:keys [request-id result]} opts]
+    (when (:destroyed? (session-state client session-id))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+    (when-not (string? request-id)
+      (throw (ex-info ":request-id is required" {:opts opts})))
+    (when-not (and (map? result) (contains? result :kind))
+      (throw (ex-info ":result must be a map with a :kind key" {:opts opts})))
+    (when (= :no-result (:kind result))
+      (throw (ex-info ":no-result is not a valid decision for the pending RPC"
+                      {:opts opts})))
+    (let [conn (connection-io client)
+          normalized (normalize-permission-result result)]
+      (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
+                          {:session-id session-id
+                           :request-id request-id
+                           :result normalized}))))
 
 (defn disconnect!
   "Disconnects the session and releases in-memory resources (event handlers,

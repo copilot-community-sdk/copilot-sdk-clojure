@@ -38,8 +38,12 @@
   [name {:keys [description parameters handler overrides-built-in-tool]}]
   (cond-> {:tool-name name
            :tool-description description
-           :tool-parameters parameters
-           :tool-handler handler}
+           :tool-parameters parameters}
+    ;; Upstream PR #1308: handler is optional. Declaration-only tools (no
+    ;; handler) are surfaced as external_tool.requested events; consumers
+    ;; resolve them via handle-pending-tool-call!.
+    (some? handler)
+    (assoc :tool-handler handler)
     (some? overrides-built-in-tool)
     (assoc :overrides-built-in-tool overrides-built-in-tool)))
 
