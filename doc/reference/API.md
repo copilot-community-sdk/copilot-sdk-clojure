@@ -1552,7 +1552,7 @@ When Copilot invokes `lookup_issue`, the SDK automatically runs your handler and
 
 **Declaration-only tools (manual resolution):**
 
-The `:handler` key is **optional** (upstream PR #1308). When omitted, the SDK does not auto-respond to tool calls — the call surfaces as a `:copilot/session.tool_call` event with a pending request id, and the application resolves it later via `handle-pending-tool-call!`. Useful for human-in-the-loop UIs or out-of-process tool execution.
+The `:handler` key is **optional** (upstream PR #1308). When omitted, the SDK does not auto-respond to tool calls — the call surfaces as a `:copilot/external_tool.requested` event with a pending request id, and the application resolves it later via `handle-pending-tool-call!`. Useful for human-in-the-loop UIs or out-of-process tool execution.
 
 ```clojure
 (def manual-tool

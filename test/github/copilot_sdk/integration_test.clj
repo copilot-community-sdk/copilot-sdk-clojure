@@ -4295,4 +4295,15 @@
       (is (thrown? Exception
                    (sdk/handle-pending-tool-call!
                     session
-                    {:request-id "x" :result "a" :error "b"}))))))
+                    {:request-id "x" :result "a" :error "b"})))))
+
+  (testing "handle-pending-tool-call! rejects non-string :error"
+    (let [session (sdk/create-session *test-client* {})]
+      (is (thrown-with-msg? Exception #":error must be a string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "x" :error {:code 1}})))
+      (is (thrown-with-msg? Exception #":error must be a string"
+                            (sdk/handle-pending-tool-call!
+                             session
+                             {:request-id "x" :error 42}))))))

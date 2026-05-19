@@ -1240,6 +1240,8 @@
       (throw (ex-info ":request-id is required" {:opts opts})))
     (when (and (contains? opts :result) (contains? opts :error))
       (throw (ex-info ":result and :error are mutually exclusive" {:opts opts})))
+    (when (and (contains? opts :error) (not (string? error)))
+      (throw (ex-info ":error must be a string when provided" {:opts opts})))
     (let [conn (connection-io client)
           base {:session-id session-id :request-id request-id}
           params (cond
@@ -1258,6 +1260,8 @@
       (throw (ex-info ":request-id is required" {:opts opts})))
     (when (and (contains? opts :result) (contains? opts :error))
       (throw (ex-info ":result and :error are mutually exclusive" {:opts opts})))
+    (when (and (contains? opts :error) (not (string? error)))
+      (throw (ex-info ":error must be a string when provided" {:opts opts})))
     (let [conn (connection-io client)
           base {:session-id session-id :request-id request-id}
           params (cond
