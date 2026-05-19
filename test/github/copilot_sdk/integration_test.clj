@@ -4244,6 +4244,38 @@
         (is (= "approve-once" (get-in (first pending-rpcs)
                                       [:params :result :kind]))))))
 
+  (testing "handle-pending-permission-request! accepts :user-not-available"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-permission-request! session
+                                              {:request-id "req-una"
+                                               :result {:kind :user-not-available}})
+      (let [pending-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                     (:method %))
+                                 @requests)]
+        (is (= 1 (count pending-rpcs)))
+        (is (= "user-not-available" (get-in (first pending-rpcs)
+                                            [:params :result :kind]))))))
+
+  (testing "handle-pending-permission-request! accepts :approve-permanently"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client* {})]
+      (sdk/handle-pending-permission-request! session
+                                              {:request-id "req-perm"
+                                               :result {:kind :approve-permanently}})
+      (let [pending-rpcs (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                     (:method %))
+                                 @requests)]
+        (is (= 1 (count pending-rpcs)))
+        (is (= "approve-permanently" (get-in (first pending-rpcs)
+                                             [:params :result :kind]))))))
+
   (testing "handle-pending-permission-request! rejects :no-result"
     (let [session (sdk/create-session *test-client* {})]
       (is (thrown? Exception

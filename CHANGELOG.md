@@ -55,11 +55,12 @@ All notable changes to this project will be documented in this file. This change
   `<handle-pending-permission-request!`) now require `:request-id` to be a
   non-blank string.
 - `handle-pending-permission-request!` and async variant validate that
-  `:result :kind` is a keyword in the documented decision set
-  (`:approve-once`, `:approve-for-session`, `:approve-for-location`,
-  `:approve-permanently`, `:reject`); previously unsupported values
-  (e.g. `{:kind 42}`) would be sent on the wire and surface as opaque
-  server-side errors.
+  `:result :kind` is a keyword in the documented decision set — matches
+  the upstream `PermissionDecision` schema:
+  `:approve-once`, `:approve-for-session`, `:approve-for-location`,
+  `:approve-permanently`, `:reject`, `:user-not-available`. Previously
+  unsupported values (e.g. `{:kind 42}`) would be sent on the wire and
+  surface as opaque server-side errors.
 - `tools/define-tool-from-spec` mirrors `tools/define-tool`: when `:handler`
   is omitted, no `:tool-handler` wrapper is installed (declaration-only tool).
 

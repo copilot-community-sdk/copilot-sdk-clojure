@@ -1220,14 +1220,20 @@
 
 (def ^:private supported-permission-decision-kinds
   "Accepted `:kind` values when manually resolving a pending permission
-   request via `handle-pending-permission-request!`. Matches the documented
-   PermissionDecision shape. `:no-result` is deliberately excluded — to
-   decline answering, do not call the resolver."
+   request via `handle-pending-permission-request!`. Matches the upstream
+   `PermissionDecision` schema (api.schema.json `$defs/PermissionDecision`),
+   which is the union of six variants:
+   `PermissionDecisionApproveOnce`, `PermissionDecisionApproveForSession`,
+   `PermissionDecisionApproveForLocation`, `PermissionDecisionApprovePermanently`,
+   `PermissionDecisionReject`, `PermissionDecisionUserNotAvailable`.
+   `:no-result` is deliberately excluded — to decline answering, do not call
+   the resolver."
   #{:approve-once
     :approve-for-session
     :approve-for-location
     :approve-permanently
-    :reject})
+    :reject
+    :user-not-available})
 
 (defn- check-pending-request-id!
   "Validate the :request-id supplied to a pending-RPC resolver. Must be a
@@ -1318,13 +1324,15 @@
 
    Options map keys:
    - :request-id - The `:request-id` from the permission.requested event (required)
-   - :result     - Permission decision map with `:kind` (one of `:approve-once`,
-                   `:approve-for-session`, `:approve-for-location`,
-                   `:approve-permanently`, `:reject`). `:no-result` is not
+   - :result     - Permission decision map with `:kind`, matching the upstream
+                   `PermissionDecision` union. Allowed kinds:
+                   `:approve-once`, `:approve-for-session`,
+                   `:approve-for-location`, `:approve-permanently`,
+                   `:reject`, `:user-not-available`. `:no-result` is not
                    supported here — to decline answering, simply don't call
                    this function.
 
-   Returns the RPC result map (sync). Use `<handle-pending-permission-request!`
+   Returns the RPC result map (sync). Use ``copilot/<handle-pending-permission-request!``
    for the core.async variant."
   [session {:keys [request-id result] :as opts}]
   (let [{:keys [session-id client]} session]
