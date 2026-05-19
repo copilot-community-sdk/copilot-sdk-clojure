@@ -1618,8 +1618,13 @@
 (defn create-session
   "Create a new conversation session.
    
-   Config options (`:on-permission-request` is **required**):
-   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
+   Config options (`:on-permission-request` is **optional** since upstream
+   PR #1308 — omit it to leave permission requests pending for manual
+   resolution via `session/handle-pending-permission-request!`):
+   - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
+                              When omitted, permission requests are surfaced as
+                              `:copilot/permission.requested` events and remain
+                              pending until resolved by the application.
    - :session-id         - Custom session ID
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.4\")
@@ -1708,8 +1713,13 @@
 (defn resume-session
   "Resume an existing session by ID.
    
-   Config options (`:on-permission-request` is **required**):
-   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
+   Config options (`:on-permission-request` is **optional** since upstream
+   PR #1308 — omit it to leave permission requests pending for manual
+   resolution via `session/handle-pending-permission-request!`):
+   - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
+                              When omitted, permission requests are surfaced as
+                              `:copilot/permission.requested` events and remain
+                              pending until resolved by the application.
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Change the model for the resumed session
    - :tools              - Tools exposed to the CLI server
@@ -1784,7 +1794,8 @@
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
 
-   Same config options as create-session (`:on-permission-request` is **required**).
+   Same config options as create-session (`:on-permission-request` is **optional**
+   since upstream PR #1308).
    Validation is performed synchronously (throws immediately on invalid config).
    The RPC call parks instead of blocking, making this safe to use inside go blocks.
 
@@ -1843,7 +1854,8 @@
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
-   Same config options as resume-session (`:on-permission-request` is **required**).
+   Same config options as resume-session (`:on-permission-request` is **optional**
+   since upstream PR #1308).
    Validation is performed synchronously (throws immediately on invalid config).
    The RPC call parks instead of blocking, making this safe to use inside go blocks.
 

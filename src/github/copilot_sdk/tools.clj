@@ -4,18 +4,27 @@
             [clojure.string :as str]))
 
 (defn define-tool
-  "Define a tool with a handler function.
+  "Define a tool the CLI server can call during a session.
    
    Arguments:
    - name        - Tool name (string)
    - opts map:
      - :description             - Tool description
      - :parameters              - JSON schema for parameters (or nil)
-     - :handler                 - Function (fn [args invocation] -> result)
+     - :handler                 - Function (fn [args invocation] -> result).
+                                  **Optional** since upstream PR #1308: when
+                                  omitted, the tool is declaration-only and
+                                  the runtime emits a
+                                  `:copilot/external_tool.requested` event
+                                  whenever the LLM calls it. Applications
+                                  resolve the pending call by reading the
+                                  `:request-id` from the event data and
+                                  calling `session/handle-pending-tool-call!`
+                                  (or the async `<handle-pending-tool-call!`).
      - :overrides-built-in-tool - When true, explicitly overrides a built-in tool of the same name.
                                   Without this flag, name clashes with built-in tools cause an error.
    
-   The handler receives:
+   The handler (when provided) receives:
    - args       - The parsed arguments from the LLM (no key conversion)
    - invocation - Map with :session-id, :tool-call-id, :tool-name, :arguments
    
@@ -25,7 +34,7 @@
    - Any other value (JSON-encoded as success)
    - A core.async channel that will yield one of the above
    
-   Example:
+   Example (with handler):
    ```clojure
    (define-tool \"get_weather\"
      {:description \"Get weather for a location\"
@@ -34,6 +43,16 @@
                    :required [\"location\"]}
       :handler (fn [args _]
                  (str \"Weather in \" (:location args) \": Sunny, 72°F\"))})
+   ```
+
+   Example (declaration-only, manual resolution):
+   ```clojure
+   (define-tool \"get_weather\"
+     {:description \"Get weather for a location\"
+      :parameters {:type \"object\"
+                   :properties {:location {:type \"string\"}}}})
+   ;; Listen for :copilot/external_tool.requested events and resolve via
+   ;; (session/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
   [name {:keys [description parameters handler overrides-built-in-tool]}]
   (cond-> {:tool-name name
@@ -60,10 +79,22 @@
    - opts map:
      - :description             - Tool description
      - :spec                    - A clojure.spec for the arguments
-     - :handler                 - Function (fn [args invocation] -> result)
+     - :handler                 - Function (fn [args invocation] -> result).
+                                  **Optional** since upstream PR #1308: when
+                                  omitted, no `:tool-handler` is installed
+                                  and the tool is declaration-only. The
+                                  runtime emits a
+                                  `:copilot/external_tool.requested` event
+                                  on call; applications resolve it via
+                                  `session/handle-pending-tool-call!`
+                                  (or `<handle-pending-tool-call!`).
+                                  Note: when `:handler` is omitted, the
+                                  `:spec` is also not used (no automatic
+                                  validation occurs in the declaration-only
+                                  path).
      - :overrides-built-in-tool - When true, overrides a built-in tool of the same name
    
-   Example:
+   Example (with handler):
    ```clojure
    (s/def ::location string?)
    (s/def ::get-weather-args (s/keys :req-un [::location]))
@@ -76,6 +107,15 @@
                    (str \"Weather: Sunny\")
                    {:text-result-for-llm (str \"Invalid args: \" (s/explain-str ::get-weather-args args))
                     :result-type \"failure\"}))})
+   ```
+
+   Example (declaration-only, manual resolution):
+   ```clojure
+   (define-tool-from-spec \"get_weather\"
+     {:description \"Get weather for a location\"
+      :spec ::get-weather-args})
+   ;; Resolve pending calls via
+   ;; (session/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
   [name {:keys [description spec handler overrides-built-in-tool]}]
   ;; For now, we don't auto-convert spec to JSON schema
