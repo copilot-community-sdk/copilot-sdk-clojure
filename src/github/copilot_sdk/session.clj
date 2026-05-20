@@ -153,10 +153,25 @@
 
 (defn set-session-fs-handler!
   "Store a sessionFs handler map on a session. Called by client during create/resume
-   when :session-fs is enabled. Handler is a map of keyword→fn for FS operations."
+   when :session-fs is enabled. Handler is a map of keyword→fn for FS operations.
+
+   Upstream PR #1299: when the client's :session-fs config declares
+   `:capabilities {:sqlite true}` the per-session handler must expose BOTH
+   :sqlite-query and :sqlite-exists. Otherwise the runtime would route
+   sessionFs.sqliteExists (or sessionFs.sqliteQuery) to a missing handler key
+   and surface an opaque \"Unknown sessionFs method\" error at runtime."
   [client session-id handler]
-  (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler]
-         (validate-session-fs-handler! handler {:session-id session-id})))
+  (let [validated (validate-session-fs-handler! handler {:session-id session-id})
+        sqlite-declared? (boolean (get-in client [:session-fs :capabilities :sqlite]))
+        missing (when sqlite-declared?
+                  (remove #(contains? validated %) [:sqlite-query :sqlite-exists]))]
+    (when (seq missing)
+      (throw (ex-info
+              "SessionFs config declares capabilities.sqlite but the provider does not implement sqlite."
+              {:session-id session-id
+               :capabilities (get-in client [:session-fs :capabilities])
+               :missing-handlers (vec missing)})))
+    (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] validated)))
 
 (defn- channel?
   "Check if x is a core.async channel."
@@ -235,86 +250,105 @@
    preserved by the client registration path; this helper is for provider-style
    maps."
   [provider]
-  (let [provider (validate-session-fs-provider! provider {:contract :session-fs-provider})]
-    {:read-file
-     (fn [{:keys [path]}]
-       (try
-         (let [result (await-session-fs-result ((:read-file provider) path))]
-           (if (and (map? result)
-                    (or (contains? result :content)
-                        (contains? result :error)))
-             result
-             {:content result}))
-         (catch Throwable t
-           {:content "" :error (session-fs-error t)})))
+  (let [provider (validate-session-fs-provider! provider {:contract :session-fs-provider})
+        base-handler
+        {:read-file
+         (fn [{:keys [path]}]
+           (try
+             (let [result (await-session-fs-result ((:read-file provider) path))]
+               (if (and (map? result)
+                        (or (contains? result :content)
+                            (contains? result :error)))
+                 result
+                 {:content result}))
+             (catch Throwable t
+               {:content "" :error (session-fs-error t)})))
 
-     :write-file
-     (fn [{:keys [path content mode] :as params}]
-       (session-fs-void-result (:write-file provider) [path content mode] params))
+         :write-file
+         (fn [{:keys [path content mode] :as params}]
+           (session-fs-void-result (:write-file provider) [path content mode] params))
 
-     :append-file
-     (fn [{:keys [path content mode] :as params}]
-       (session-fs-void-result (:append-file provider) [path content mode] params))
+         :append-file
+         (fn [{:keys [path content mode] :as params}]
+           (session-fs-void-result (:append-file provider) [path content mode] params))
 
-     :exists
-     (fn [{:keys [path]}]
-       (try
-         (let [result (await-session-fs-result ((:exists provider) path))]
-           (if (and (map? result)
-                    (or (contains? result :exists)
-                        (contains? result :error)))
-             result
-             {:exists (boolean result)}))
-         (catch Throwable _
-           {:exists false})))
+         :exists
+         (fn [{:keys [path]}]
+           (try
+             (let [result (await-session-fs-result ((:exists provider) path))]
+               (if (and (map? result)
+                        (or (contains? result :exists)
+                            (contains? result :error)))
+                 result
+                 {:exists (boolean result)}))
+             (catch Throwable _
+               {:exists false})))
 
-     :stat
-     (fn [{:keys [path]}]
-       (try
-         (await-session-fs-result ((:stat provider) path))
-         (catch Throwable t
-           {:is-file false
-            :is-directory false
-            :size 0
-            :mtime (.toString (java.time.Instant/now))
-            :birthtime (.toString (java.time.Instant/now))
-            :error (session-fs-error t)})))
+         :stat
+         (fn [{:keys [path]}]
+           (try
+             (await-session-fs-result ((:stat provider) path))
+             (catch Throwable t
+               {:is-file false
+                :is-directory false
+                :size 0
+                :mtime (.toString (java.time.Instant/now))
+                :birthtime (.toString (java.time.Instant/now))
+                :error (session-fs-error t)})))
 
-     :mkdir
-     (fn [{:keys [path recursive mode] :as params}]
-       (session-fs-void-result (:mkdir provider) [path (boolean recursive) mode] params))
+         :mkdir
+         (fn [{:keys [path recursive mode] :as params}]
+           (session-fs-void-result (:mkdir provider) [path (boolean recursive) mode] params))
 
-     :readdir
-     (fn [{:keys [path]}]
-       (try
-         (let [result (await-session-fs-result ((:readdir provider) path))]
-           (if (and (map? result)
-                    (or (contains? result :entries)
-                        (contains? result :error)))
-             result
-             {:entries result}))
-         (catch Throwable t
-           {:entries [] :error (session-fs-error t)})))
+         :readdir
+         (fn [{:keys [path]}]
+           (try
+             (let [result (await-session-fs-result ((:readdir provider) path))]
+               (if (and (map? result)
+                        (or (contains? result :entries)
+                            (contains? result :error)))
+                 result
+                 {:entries result}))
+             (catch Throwable t
+               {:entries [] :error (session-fs-error t)})))
 
-     :readdir-with-types
-     (fn [{:keys [path]}]
-       (try
-         (let [result (await-session-fs-result ((:readdir-with-types provider) path))]
-           (if (and (map? result)
-                    (or (contains? result :entries)
-                        (contains? result :error)))
-             result
-             {:entries result}))
-         (catch Throwable t
-           {:entries [] :error (session-fs-error t)})))
+         :readdir-with-types
+         (fn [{:keys [path]}]
+           (try
+             (let [result (await-session-fs-result ((:readdir-with-types provider) path))]
+               (if (and (map? result)
+                        (or (contains? result :entries)
+                            (contains? result :error)))
+                 result
+                 {:entries result}))
+             (catch Throwable t
+               {:entries [] :error (session-fs-error t)})))
 
-     :rm
-     (fn [{:keys [path recursive force] :as params}]
-       (session-fs-void-result (:rm provider) [path (boolean recursive) (boolean force)] params))
+         :rm
+         (fn [{:keys [path recursive force] :as params}]
+           (session-fs-void-result (:rm provider) [path (boolean recursive) (boolean force)] params))
 
-     :rename
-     (fn [{:keys [src dest] :as params}]
-       (session-fs-void-result (:rename provider) [src dest] params))}))
+         :rename
+         (fn [{:keys [src dest] :as params}]
+           (session-fs-void-result (:rename provider) [src dest] params))}]
+    ;; Upstream PR #1299: optional SQLite sub-provider. Adapter exposes flat
+    ;; :sqlite-query and :sqlite-exists handler keys that the RPC dispatch
+    ;; layer wires to the per-session handler map.
+    ;;
+    ;; Unlike the FS methods, SQLite handlers let provider exceptions propagate
+    ;; (matching upstream Node behavior). The dispatch layer in
+    ;; handle-session-fs-request! converts these into JSON-RPC errors.
+    (if-let [sql (:sqlite provider)]
+      (assoc base-handler
+             :sqlite-query
+             (fn [{:keys [query-type query params]}]
+               (let [result (await-session-fs-result ((:query sql) query-type query params))]
+                 (or result {:rows [] :columns [] :rows-affected 0})))
+
+             :sqlite-exists
+             (fn [_params]
+               {:exists (boolean (await-session-fs-result ((:exists sql))))}))
+      base-handler)))
 
 (defn adapt-session-fs-handler
   "Return an RPC-shaped sessionFs handler for either supported factory contract.
@@ -328,7 +362,13 @@
           (accepts-arity? (:append-file handler-or-provider) 3)
           (accepts-arity? (:mkdir handler-or-provider) 3)
           (accepts-arity? (:rm handler-or-provider) 3)
-          (accepts-arity? (:rename handler-or-provider) 2))
+          (accepts-arity? (:rename handler-or-provider) 2)
+          ;; PR #1299: presence of nested :sqlite provider also indicates
+          ;; provider-style (low-level handlers expose flat :sqlite-query /
+          ;; :sqlite-exists keys instead).
+          (and (map? (:sqlite handler-or-provider))
+               (or (contains? (:sqlite handler-or-provider) :query)
+                   (contains? (:sqlite handler-or-provider) :exists))))
     (create-session-fs-adapter handler-or-provider)
     handler-or-provider))
 
@@ -425,16 +465,36 @@
    "sessionFs.readdir"         :readdir
    "sessionFs.readdirWithTypes" :readdir-with-types
    "sessionFs.rm"              :rm
-   "sessionFs.rename"          :rename})
+   "sessionFs.rename"          :rename
+   ;; Upstream PR #1299: SQLite operations. Handlers are optional — provider
+   ;; opts in by exposing a nested :sqlite {:query :exists} sub-provider.
+   "sessionFs.sqliteQuery"     :sqlite-query
+   "sessionFs.sqliteExists"    :sqlite-exists})
+
+(defn- coerce-sqlite-params
+  "For sessionFs.sqliteQuery: coerce the wire-format params into the shape
+   expected by adapted handlers. The wire `queryType` is a literal string —
+   convert to keyword so handlers receive `:exec`, `:query`, or `:run`."
+  [method params]
+  (if (= method "sessionFs.sqliteQuery")
+    (cond-> params
+      (string? (:query-type params))
+      (update :query-type keyword))
+    params))
 
 (defn handle-session-fs-request!
   "Handle an incoming sessionFs.* RPC request. Dispatches to the session's
-   FS handler and returns a channel with {:result ...} or {:error ...}."
+   FS handler and returns a channel with {:result ...} or {:error ...}.
+
+   For sessionFs.sqliteQuery / sqliteExists (upstream PR #1299), exceptions
+   from the provider propagate as JSON-RPC errors rather than being wrapped
+   in a SessionFsError result map, matching upstream Node behavior."
   [client session-id method params]
   (async/thread-call
    (fn []
      (let [handler-map (:session-fs-handler (session-state client session-id))
-           handler-key (session-fs-method->handler-key method)]
+           handler-key (session-fs-method->handler-key method)
+           params (coerce-sqlite-params method params)]
        (if-not handler-map
          {:error {:code -32001 :message (str "No sessionFs handler for session: " session-id)}}
          (if-let [handler-fn (get handler-map handler-key)]
