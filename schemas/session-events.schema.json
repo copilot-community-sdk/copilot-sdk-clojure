@@ -955,15 +955,18 @@
         },
         "duration": {
           "type": "number",
-          "description": "Duration of the API call in milliseconds"
+          "description": "Duration of the API call in milliseconds",
+          "format": "duration"
         },
         "ttftMs": {
           "type": "number",
-          "description": "Time to first token in milliseconds. Only available for streaming requests"
+          "description": "Time to first token in milliseconds. Only available for streaming requests",
+          "format": "duration"
         },
         "interTokenLatencyMs": {
           "type": "number",
-          "description": "Average inter-token latency in milliseconds. Only available for streaming requests"
+          "description": "Average inter-token latency in milliseconds. Only available for streaming requests",
+          "format": "duration"
         },
         "initiator": {
           "type": "string",
@@ -999,7 +1002,7 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\")"
+          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
         }
       },
       "required": [
@@ -1123,8 +1126,8 @@
           "description": "Request ID of the resolved request; clients should dismiss any UI for this request"
         },
         "response": {
-          "type": "string",
-          "description": "The user's choice: 'yes', 'yes_always', or 'no'"
+          "$ref": "#/definitions/AutoModeSwitchResponse",
+          "description": "The user's auto-mode-switch choice"
         }
       },
       "required": [
@@ -1269,6 +1272,16 @@
       "additionalProperties": false,
       "description": "Session event \"auto_mode_switch.requested\". Auto mode switch request notification requiring user approval",
       "title": "AutoModeSwitchRequestedEvent"
+    },
+    "AutoModeSwitchResponse": {
+      "type": "string",
+      "enum": [
+        "yes",
+        "yes_always",
+        "no"
+      ],
+      "description": "The user's auto-mode-switch choice",
+      "title": "AutoModeSwitchResponse"
     },
     "BackgroundTasksChangedData": {
       "type": "object",
@@ -1764,7 +1777,8 @@
         },
         "duration": {
           "type": "number",
-          "description": "Duration of the compaction LLM call in milliseconds"
+          "description": "Duration of the compaction LLM call in milliseconds",
+          "format": "duration"
         },
         "model": {
           "type": "string",
@@ -2752,6 +2766,17 @@
       "description": "Session event \"session.error\". Error details for timeline display including message and optional diagnostic information",
       "title": "ErrorEvent"
     },
+    "ExitPlanModeAction": {
+      "type": "string",
+      "enum": [
+        "exit_only",
+        "interactive",
+        "autopilot",
+        "autopilot_fleet"
+      ],
+      "description": "Exit plan mode action",
+      "title": "ExitPlanModeAction"
+    },
     "ExitPlanModeCompletedData": {
       "type": "object",
       "properties": {
@@ -2764,8 +2789,8 @@
           "description": "Whether the plan was approved by the user"
         },
         "selectedAction": {
-          "type": "string",
-          "description": "Which action the user selected (e.g. 'autopilot', 'interactive', 'exit_only')"
+          "$ref": "#/definitions/ExitPlanModeAction",
+          "description": "Action selected by the user"
         },
         "autoApproveEdits": {
           "type": "boolean",
@@ -2857,13 +2882,14 @@
         "actions": {
           "type": "array",
           "items": {
-            "type": "string"
+            "$ref": "#/definitions/ExitPlanModeAction",
+            "description": "Exit plan mode action"
           },
-          "description": "Available actions the user can take (e.g., approve, edit, reject)"
+          "description": "Available actions the user can take"
         },
         "recommendedAction": {
-          "type": "string",
-          "description": "The recommended action for the user to take"
+          "$ref": "#/definitions/ExitPlanModeAction",
+          "description": "Recommended action to preselect for the user"
         }
       },
       "required": [
@@ -3252,6 +3278,7 @@
         },
         "host": {
           "type": "string",
+          "format": "uri",
           "description": "GitHub host URL for the source session (e.g., https://github.com or https://tenant.ghe.com)"
         }
       },
@@ -3767,6 +3794,7 @@
         },
         "serverUrl": {
           "type": "string",
+          "format": "uri",
           "description": "URL of the MCP server that requires OAuth"
         },
         "staticClientConfig": {
@@ -3945,11 +3973,11 @@
           "description": "Server name (config key)"
         },
         "status": {
-          "$ref": "#/definitions/McpServersLoadedServerStatus",
+          "$ref": "#/definitions/McpServerStatus",
           "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured"
         },
         "source": {
-          "type": "string",
+          "$ref": "#/definitions/McpServerSource",
           "description": "Configuration source: user, workspace, plugin, or builtin"
         },
         "error": {
@@ -3965,7 +3993,18 @@
       "title": "McpServersLoadedServer",
       "description": "Schema for the `McpServersLoadedServer` type."
     },
-    "McpServersLoadedServerStatus": {
+    "McpServerSource": {
+      "type": "string",
+      "enum": [
+        "user",
+        "workspace",
+        "plugin",
+        "builtin"
+      ],
+      "description": "Configuration source: user, workspace, plugin, or builtin",
+      "title": "McpServerSource"
+    },
+    "McpServerStatus": {
       "type": "string",
       "enum": [
         "connected",
@@ -3976,7 +4015,7 @@
         "not_configured"
       ],
       "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured",
-      "title": "McpServersLoadedServerStatus"
+      "title": "McpServerStatus"
     },
     "McpServerStatusChangedData": {
       "type": "object",
@@ -3986,8 +4025,8 @@
           "description": "Name of the MCP server whose status changed"
         },
         "status": {
-          "$ref": "#/definitions/McpServerStatusChangedStatus",
-          "description": "New connection status: connected, failed, needs-auth, pending, disabled, or not_configured"
+          "$ref": "#/definitions/McpServerStatus",
+          "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured"
         }
       },
       "required": [
@@ -4054,29 +4093,16 @@
       "description": "Session event \"session.mcp_server_status_changed\".",
       "title": "McpServerStatusChangedEvent"
     },
-    "McpServerStatusChangedStatus": {
-      "type": "string",
-      "enum": [
-        "connected",
-        "failed",
-        "needs-auth",
-        "pending",
-        "disabled",
-        "not_configured"
-      ],
-      "description": "New connection status: connected, failed, needs-auth, pending, disabled, or not_configured",
-      "title": "McpServerStatusChangedStatus"
-    },
     "ModeChangedData": {
       "type": "object",
       "properties": {
         "previousMode": {
-          "type": "string",
-          "description": "Agent mode before the change (e.g., \"interactive\", \"plan\", \"autopilot\")"
+          "$ref": "#/definitions/SessionMode",
+          "description": "The session mode the agent is operating in"
         },
         "newMode": {
-          "type": "string",
-          "description": "Agent mode after the change (e.g., \"interactive\", \"plan\", \"autopilot\")"
+          "$ref": "#/definitions/SessionMode",
+          "description": "The session mode the agent is operating in"
         }
       },
       "required": [
@@ -4166,7 +4192,8 @@
         },
         "durationMs": {
           "type": "number",
-          "description": "Duration of the failed API call in milliseconds"
+          "description": "Duration of the failed API call in milliseconds",
+          "format": "duration"
         },
         "source": {
           "$ref": "#/definitions/ModelCallFailureSource",
@@ -4965,7 +4992,7 @@
           "description": "Tool call ID that triggered this permission request"
         },
         "action": {
-          "$ref": "#/definitions/PermissionPromptRequestMemoryAction",
+          "$ref": "#/definitions/PermissionRequestMemoryAction",
           "description": "Whether this is a store or vote memory operation"
         },
         "subject": {
@@ -4981,7 +5008,7 @@
           "description": "Source references for the stored fact (store only)"
         },
         "direction": {
-          "$ref": "#/definitions/PermissionPromptRequestMemoryDirection",
+          "$ref": "#/definitions/PermissionRequestMemoryDirection",
           "description": "Vote direction (vote only)"
         },
         "reason": {
@@ -4996,25 +5023,6 @@
       "additionalProperties": false,
       "description": "Memory operation permission prompt",
       "title": "PermissionPromptRequestMemory"
-    },
-    "PermissionPromptRequestMemoryAction": {
-      "type": "string",
-      "enum": [
-        "store",
-        "vote"
-      ],
-      "default": "store",
-      "description": "Whether this is a store or vote memory operation",
-      "title": "PermissionPromptRequestMemoryAction"
-    },
-    "PermissionPromptRequestMemoryDirection": {
-      "type": "string",
-      "enum": [
-        "upvote",
-        "downvote"
-      ],
-      "description": "Vote direction (vote only)",
-      "title": "PermissionPromptRequestMemoryDirection"
     },
     "PermissionPromptRequestPath": {
       "type": "object",
@@ -5107,6 +5115,7 @@
         },
         "url": {
           "type": "string",
+          "format": "uri",
           "description": "URL to be fetched"
         }
       },
@@ -5512,8 +5521,8 @@
         "store",
         "vote"
       ],
-      "default": "store",
       "description": "Whether this is a store or vote memory operation",
+      "default": "store",
       "title": "PermissionRequestMemoryAction"
     },
     "PermissionRequestMemoryDirection": {
@@ -5648,6 +5657,7 @@
       "properties": {
         "url": {
           "type": "string",
+          "format": "uri",
           "description": "URL that may be accessed by the command"
         }
       },
@@ -5676,6 +5686,7 @@
         },
         "url": {
           "type": "string",
+          "format": "uri",
           "description": "URL to be fetched"
         }
       },
@@ -5964,7 +5975,7 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\")"
+          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
         },
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -6289,7 +6300,8 @@
         "intervalMs": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "description": "Interval between ticks in milliseconds"
+          "description": "Interval between ticks in milliseconds",
+          "format": "duration"
         },
         "prompt": {
           "type": "string",
@@ -6696,6 +6708,16 @@
       ],
       "description": "Union of all session event variants emitted by the Copilot CLI runtime."
     },
+    "SessionMode": {
+      "type": "string",
+      "enum": [
+        "interactive",
+        "plan",
+        "autopilot"
+      ],
+      "description": "The session mode the agent is operating in",
+      "title": "SessionMode"
+    },
     "ShutdownCodeChanges": {
       "type": "object",
       "properties": {
@@ -6752,7 +6774,8 @@
         },
         "totalApiDurationMs": {
           "type": "number",
-          "description": "Cumulative time spent in API calls during the session, in milliseconds"
+          "description": "Cumulative time spent in API calls during the session, in milliseconds",
+          "format": "duration"
         },
         "sessionStartTime": {
           "type": "number",
@@ -7164,8 +7187,8 @@
           "description": "Description of what the skill does"
         },
         "source": {
-          "type": "string",
-          "description": "Source location type of the skill (e.g., project, personal, plugin)"
+          "$ref": "#/definitions/SkillSource",
+          "description": "Source location type (e.g., project, personal-copilot, plugin, builtin)"
         },
         "userInvocable": {
           "type": "boolean",
@@ -7190,6 +7213,20 @@
       "additionalProperties": false,
       "title": "SkillsLoadedSkill",
       "description": "Schema for the `SkillsLoadedSkill` type."
+    },
+    "SkillSource": {
+      "type": "string",
+      "enum": [
+        "project",
+        "inherited",
+        "personal-copilot",
+        "personal-agents",
+        "plugin",
+        "custom",
+        "builtin"
+      ],
+      "description": "Source location type (e.g., project, personal-copilot, plugin, builtin)",
+      "title": "SkillSource"
     },
     "SnapshotRewindData": {
       "type": "object",
@@ -7297,7 +7334,7 @@
         },
         "reasoningEffort": {
           "type": "string",
-          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\")"
+          "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
         },
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -7414,7 +7451,8 @@
         },
         "durationMs": {
           "type": "number",
-          "description": "Wall-clock duration of the sub-agent execution in milliseconds"
+          "description": "Wall-clock duration of the sub-agent execution in milliseconds",
+          "format": "duration"
         }
       },
       "required": [
@@ -7574,7 +7612,8 @@
         },
         "durationMs": {
           "type": "number",
-          "description": "Wall-clock duration of the sub-agent execution in milliseconds"
+          "description": "Wall-clock duration of the sub-agent execution in milliseconds",
+          "format": "duration"
         }
       },
       "required": [
@@ -9714,6 +9753,7 @@
         },
         "url": {
           "type": "string",
+          "format": "uri",
           "description": "URL to the referenced item on GitHub"
         }
       },

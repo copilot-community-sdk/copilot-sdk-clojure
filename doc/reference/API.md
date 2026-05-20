@@ -2179,8 +2179,49 @@ The low-level handler map requires all 10 operations:
 | `:readdir-with-types` | `{:session-id :path}` | `{:entries [...]}` |
 | `:rm` | `{:session-id :path :recursive :force}` | nil |
 | `:rename` | `{:session-id :src :dest}` | nil |
+| `:sqlite-query` | `{:session-id :query-type :query :params}` | `{:rows [...] :columns [...] :rows-affected n}` (optional) |
+| `:sqlite-exists` | `{:session-id}` | `{:exists true/false}` (optional) |
 
 Handler functions may return values directly or via core.async channels.
+
+#### SQLite support (optional)
+
+To handle `sessionFs.sqliteQuery` and `sessionFs.sqliteExists` (upstream PR #1299),
+add a nested `:sqlite` map to the provider and advertise the capability on the
+client config:
+
+```clojure
+(def client
+  (copilot/client {:session-fs {:initial-cwd "/home/user/project"
+                                :session-state-path "/sessions"
+                                :conventions "posix"
+                                :capabilities {:sqlite true}}}))
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :create-session-fs-handler
+     (fn [_session]
+       {;; ... all 10 fs operations above ...
+        :sqlite {:query (fn [query-type sql params]
+                          ;; query-type is one of :exec, :query, :run
+                          ;; params is the raw bind-parameter map (keys preserved verbatim, e.g. :$userId)
+                          {:rows [{:n 1}] :columns ["n"] :rows-affected 0})
+                 :exists (fn [] true)}})}))
+```
+
+Notes:
+
+- `:capabilities {:sqlite true}` is required when sqlite is advertised; declaring
+  it without supplying `:sqlite` in the provider throws at session creation.
+- SQL bind-parameter map keys (e.g. `$userId`) bypass kebab-case conversion and
+  arrive at the handler verbatim.
+- Result row column-name keys (e.g. `:user_id`, `:created_at`) round-trip
+  verbatim on the outgoing wire path — they are not converted to camelCase,
+  matching upstream Node.js semantics where provider rows are forwarded
+  untouched.
+- SQLite handler exceptions propagate as JSON-RPC errors (not wrapped as
+  `SessionFsError`).
 
 ### Session Hooks
 

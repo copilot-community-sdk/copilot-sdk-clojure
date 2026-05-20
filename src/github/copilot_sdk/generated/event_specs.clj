@@ -7,7 +7,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/action #{"cancel" "accept" "decline"})
 
-(s/def :github.copilot-sdk.generated.event-specs/actions (s/coll-of clojure.core/string?))
+(s/def :github.copilot-sdk.generated.event-specs/actions (s/coll-of #{"interactive" "autopilot_fleet" "exit_only" "autopilot"}))
 
 (s/def :github.copilot-sdk.generated.event-specs/agent-description clojure.core/string?)
 
@@ -203,7 +203,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/native-document-path-fallback-paths (s/coll-of clojure.core/string?))
 
-(s/def :github.copilot-sdk.generated.event-specs/new-mode clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/new-mode #{"interactive" "autopilot" "plan"})
 
 (s/def :github.copilot-sdk.generated.event-specs/new-model clojure.core/string?)
 
@@ -251,7 +251,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/pre-truncation-tokens-in-messages clojure.core/number?)
 
-(s/def :github.copilot-sdk.generated.event-specs/previous-mode clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/previous-mode #{"interactive" "autopilot" "plan"})
 
 (s/def :github.copilot-sdk.generated.event-specs/previous-model clojure.core/string?)
 
@@ -287,7 +287,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-tokens clojure.core/number?)
 
-(s/def :github.copilot-sdk.generated.event-specs/recommended-action clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/recommended-action #{"interactive" "autopilot_fleet" "exit_only" "autopilot"})
 
 (s/def :github.copilot-sdk.generated.event-specs/recurring clojure.core/boolean?)
 
@@ -305,7 +305,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/resolved-by-hook clojure.core/boolean?)
 
-(s/def :github.copilot-sdk.generated.event-specs/response clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/response #{"yes_always" "yes" "no"})
 
 (s/def :github.copilot-sdk.generated.event-specs/result (s/spec (fn [v947] (or (s/valid? clojure.core/map? v947) (s/valid? (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map?) v947)))))
 
@@ -315,7 +315,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/role #{"developer" "system"})
 
-(s/def :github.copilot-sdk.generated.event-specs/selected-action clojure.core/string?)
+(s/def :github.copilot-sdk.generated.event-specs/selected-action #{"interactive" "autopilot_fleet" "exit_only" "autopilot"})
 
 (s/def :github.copilot-sdk.generated.event-specs/selected-model clojure.core/string?)
 

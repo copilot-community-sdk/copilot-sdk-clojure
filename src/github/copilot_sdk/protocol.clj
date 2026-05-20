@@ -144,6 +144,26 @@
           (put! ch {:result (:result msg)})
           (close! ch))))))
 
+(defn- preserve-outgoing-opaque-fields
+  "Per-method outgoing escape hatch: after recursive kebab→camelCase
+   conversion via `util/clj->wire`, restore opaque user-supplied values
+   that must round-trip verbatim (e.g. SQL column names in
+   `sessionFs.sqliteQuery` result rows). Without this, a provider
+   returning `{:rows [{:user_id 1}]}` would be serialized as
+   `{:userId 1}`, producing rows that no longer match the `columns`
+   array."
+  [method raw-result wire-result]
+  (cond
+    ;; Upstream PR #1299: SQL row column names are opaque identifiers.
+    ;; Preserve the original :rows vector verbatim while keeping the
+    ;; sibling SDK fields (rows-affected → rowsAffected, etc.) converted.
+    (and (= "sessionFs.sqliteQuery" method)
+         (map? raw-result)
+         (contains? raw-result :rows))
+    (assoc wire-result :rows (:rows raw-result))
+
+    :else wire-result))
+
 (defn- handle-request!
   "Handle an incoming request message (e.g., tool.call). Sends response via outgoing-ch."
   [state-atom outgoing-ch msg]
@@ -163,7 +183,11 @@
               (>! outgoing-ch {:jsonrpc "2.0" :id id :error (util/clj->wire (:error result))}))
             (do
               (log/debug "Request success response for id=" id)
-              (>! outgoing-ch {:jsonrpc "2.0" :id id :result (util/clj->wire (:result result))}))))
+              (>! outgoing-ch {:jsonrpc "2.0" :id id
+                               :result (preserve-outgoing-opaque-fields
+                                        method
+                                        (:result result)
+                                        (util/clj->wire (:result result)))}))))
         (catch Exception e
           (log/error "Request handler exception: " (ex-message e))
           (>! outgoing-ch {:jsonrpc "2.0"
@@ -211,6 +235,12 @@
       ;; v2: preserve raw arguments for tool.call RPC
       (and (= "tool.call" method) (map? params) (contains? params :arguments))
       (assoc-in converted [:params :arguments] (:arguments params))
+
+      ;; Upstream PR #1299: SQL bind parameters are opaque keyed values
+      ;; (e.g. `$user_id`). Preserve the raw map so kebab-case conversion
+      ;; doesn't mangle placeholder names before the handler binds them.
+      (and (= "sessionFs.sqliteQuery" method) (map? params) (contains? params :params))
+      (assoc-in converted [:params :params] (:params params))
 
       ;; v3: preserve raw arguments / subject / payload in broadcast events
       (and (= "session.event" method)

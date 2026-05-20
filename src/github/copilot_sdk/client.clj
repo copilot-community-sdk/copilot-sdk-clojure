@@ -702,11 +702,12 @@
                                           {:result (session/handle-system-message-transform
                                                     client session-id sections)}))
 
-                                      ;; SessionFs operations (upstream PR #917)
+                                      ;; SessionFs operations (upstream PR #917, sqlite added in #1299)
                                       ("sessionFs.readFile" "sessionFs.writeFile" "sessionFs.appendFile"
                                                             "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
                                                             "sessionFs.readdir" "sessionFs.readdirWithTypes"
-                                                            "sessionFs.rm" "sessionFs.rename")
+                                                            "sessionFs.rm" "sessionFs.rename"
+                                                            "sessionFs.sqliteQuery" "sessionFs.sqliteExists")
                                       (let [{:keys [session-id]} params]
                                         (if-not (get-in @(:state client) [:sessions session-id])
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
@@ -962,9 +963,12 @@
       (when-let [sf-config (:session-fs client)]
         (let [{:keys [connection-io]} @(:state client)]
           (proto/send-request! connection-io "sessionFs.setProvider"
-                               {:initial-cwd (:initial-cwd sf-config)
-                                :session-state-path (:session-state-path sf-config)
-                                :conventions (:conventions sf-config)})))
+                               (cond-> {:initial-cwd (:initial-cwd sf-config)
+                                        :session-state-path (:session-state-path sf-config)
+                                        :conventions (:conventions sf-config)}
+                                 ;; Upstream PR #1299: forward provider capabilities (e.g., {:sqlite true}).
+                                 (:capabilities sf-config)
+                                 (assoc :capabilities (:capabilities sf-config))))))
 
       ;; Set up notification routing and request handling
       (start-notification-router! client)
@@ -2079,9 +2083,11 @@
       (when-let [sf-config (:session-fs client)]
         (let [{:keys [connection-io]} @(:state client)]
           (proto/send-request! connection-io "sessionFs.setProvider"
-                               {:initial-cwd (:initial-cwd sf-config)
-                                :session-state-path (:session-state-path sf-config)
-                                :conventions (:conventions sf-config)})))
+                               (cond-> {:initial-cwd (:initial-cwd sf-config)
+                                        :session-state-path (:session-state-path sf-config)
+                                        :conventions (:conventions sf-config)}
+                                 (:capabilities sf-config)
+                                 (assoc :capabilities (:capabilities sf-config))))))
       (start-notification-router! client)
       (setup-request-handler! client)
       (swap! (:state client) assoc :status :connected)

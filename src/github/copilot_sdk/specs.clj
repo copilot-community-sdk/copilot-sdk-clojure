@@ -79,8 +79,23 @@
 (s/def ::initial-cwd ::non-blank-string)
 (s/def ::session-state-path ::non-blank-string)
 (s/def ::conventions #{"windows" "posix"})
+
+;; Optional sessionFs provider capabilities advertised on sessionFs.setProvider.
+;; Upstream PR #1299 (Node.js SDK v1.0.0-beta.4+): clients with sqlite-capable
+;; providers set {:sqlite true} to advertise SQL query/exists support.
+;; Kept as an open map so future capability flags pass through automatically.
+;; We intentionally do NOT register a global ::capabilities spec since
+;; ":capabilities" is reused in several unrelated contexts (session capabilities,
+;; model capabilities); locally enforced via the predicate below.
+(s/def ::session-fs-capabilities
+  (s/and map?
+         #(or (not (contains? % :sqlite)) (boolean? (:sqlite %)))))
+
 (s/def ::session-fs
-  (s/keys :req-un [::initial-cwd ::session-state-path ::conventions]))
+  (s/and map?
+         #(let [caps (:capabilities %)]
+            (or (nil? caps) (s/valid? ::session-fs-capabilities caps)))
+         (s/keys :req-un [::initial-cwd ::session-state-path ::conventions])))
 
 ;; SessionFs handler — map of keyword→fn for each FS operation.
 ;; Each fn receives a params map (with :session-id, :path, etc.) and returns a result map (or nil for void ops).
@@ -95,9 +110,15 @@
 (s/def ::rm fn?)
 (s/def ::rename fn?)
 
+;; SQLite handler keys (upstream PR #1299). Optional — present only when the
+;; provider opts in to SQLite support via nested :sqlite {:query :exists}.
+(s/def ::sqlite-query fn?)
+(s/def ::sqlite-exists fn?)
+
 (s/def ::session-fs-handler
   (s/keys :req-un [::read-file ::write-file ::append-file ::exists ::stat
-                   ::mkdir ::readdir ::readdir-with-types ::rm ::rename]))
+                   ::mkdir ::readdir ::readdir-with-types ::rm ::rename]
+          :opt-un [::sqlite-query ::sqlite-exists]))
 
 (defn- fn-accepts-arity?
   [f n]
@@ -130,11 +151,30 @@
   (and (map? provider)
        (every? (fn [[operation arity]]
                  (fn-accepts-arity? (get provider operation) arity))
-               session-fs-provider-arities)))
+               session-fs-provider-arities)
+       ;; Optional :sqlite sub-provider (upstream PR #1299) — when present must
+       ;; be a map of {:query 3-arg-fn :exists 0-arg-fn}.
+       (let [sql (:sqlite provider)]
+         (or (nil? sql)
+             (and (map? sql)
+                  (fn-accepts-arity? (:query sql) 3)
+                  (fn-accepts-arity? (:exists sql) 0))))))
+
+;; SQLite query type passed to the sqlite provider's :query function.
+;; Wire form is the literal string; we expose idiomatic keywords to handlers.
+(s/def ::sqlite-query-type #{:exec :query :run})
+
+;; Shape returned by an adapted sqlite-query handler (and the wire shape after
+;; clj->wire conversion). Mirrors generated SessionFsSqliteQueryResult.
+(s/def ::sqlite-rows (s/coll-of map?))
+(s/def ::sqlite-columns (s/coll-of string?))
+(s/def ::rows-affected (s/and integer? #(<= 0 %)))
+(s/def ::last-insert-rowid (s/or :number number? :string string?))
 
 ;; Provider-style session filesystem implementation. Same operation keys as
 ;; ::session-fs-handler, but functions take direct positional arguments and
 ;; throw on errors instead of returning RPC-shaped success/error maps.
+;; May optionally provide a :sqlite sub-provider for SQLite support.
 (s/def ::session-fs-provider
   (s/and ::session-fs-handler session-fs-provider?))
 

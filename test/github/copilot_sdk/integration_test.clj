@@ -2633,6 +2633,244 @@
         (is (nil? (get-in @(:state client-with-fs) [:sessions session-id])))))))
 
 ;; -----------------------------------------------------------------------------
+;; SessionFs SQLite Tests (upstream PR #1299)
+;; -----------------------------------------------------------------------------
+
+(deftest test-create-session-fs-adapter-sqlite
+  (testing "provider with nested :sqlite map is adapted to flat :sqlite-query and :sqlite-exists handler keys"
+    (let [provider {:read-file (fn [_] "x")
+                    :write-file (fn [_ _ _] nil)
+                    :append-file (fn [_ _ _] nil)
+                    :exists (fn [_] true)
+                    :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "2026-01-01T00:00:00Z" :birthtime "2026-01-01T00:00:00Z"})
+                    :mkdir (fn [_ _ _] nil)
+                    :readdir (fn [_] [])
+                    :readdir-with-types (fn [_] [])
+                    :rm (fn [_ _ _] nil)
+                    :rename (fn [_ _] nil)
+                    :sqlite {:query (fn [query-type sql params]
+                                      (is (= :query query-type))
+                                      (is (= "SELECT 1" sql))
+                                      (is (= {:$id 7} params))
+                                      {:rows [{:n 1}] :columns ["n"] :rows-affected 0})
+                             :exists (fn [] true)}}
+          handler (session/create-session-fs-adapter provider)]
+      (is (fn? (:sqlite-query handler)))
+      (is (fn? (:sqlite-exists handler)))
+      (is (= {:rows [{:n 1}] :columns ["n"] :rows-affected 0}
+             ((:sqlite-query handler) {:query-type :query :query "SELECT 1" :params {:$id 7}})))
+      (is (= {:exists true} ((:sqlite-exists handler) {})))))
+
+  (testing "provider without :sqlite gets no sqlite handlers"
+    (let [provider {:read-file (fn [_] "x")
+                    :write-file (fn [_ _ _] nil)
+                    :append-file (fn [_ _ _] nil)
+                    :exists (fn [_] true)
+                    :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                    :mkdir (fn [_ _ _] nil)
+                    :readdir (fn [_] [])
+                    :readdir-with-types (fn [_] [])
+                    :rm (fn [_ _ _] nil)
+                    :rename (fn [_ _] nil)}
+          handler (session/create-session-fs-adapter provider)]
+      (is (not (contains? handler :sqlite-query)))
+      (is (not (contains? handler :sqlite-exists)))))
+
+  (testing "sqlite.query returning nil defaults to {:rows [] :columns [] :rows-affected 0}"
+    (let [provider {:read-file (fn [_] "x")
+                    :write-file (fn [_ _ _] nil)
+                    :append-file (fn [_ _ _] nil)
+                    :exists (fn [_] true)
+                    :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                    :mkdir (fn [_ _ _] nil)
+                    :readdir (fn [_] [])
+                    :readdir-with-types (fn [_] [])
+                    :rm (fn [_ _ _] nil)
+                    :rename (fn [_ _] nil)
+                    :sqlite {:query (fn [_ _ _] nil)
+                             :exists (fn [] false)}}
+          handler (session/create-session-fs-adapter provider)]
+      (is (= {:rows [] :columns [] :rows-affected 0}
+             ((:sqlite-query handler) {:query-type :exec :query "CREATE TABLE t (x INT)"}))))))
+
+(deftest test-session-fs-sqlite-rpc-dispatch
+  (testing "sessionFs.sqliteQuery RPC dispatches to handler with :query-type coerced to keyword"
+    (let [received (atom nil)
+          client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})
+          session (sdk/create-session client-with-fs
+                                      {:on-permission-request sdk/approve-all
+                                       :create-session-fs-handler
+                                       (fn [_session]
+                                         {:read-file (fn [_] "x")
+                                          :write-file (fn [_ _ _] nil)
+                                          :append-file (fn [_ _ _] nil)
+                                          :exists (fn [_] true)
+                                          :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                                          :mkdir (fn [_ _ _] nil)
+                                          :readdir (fn [_] [])
+                                          :readdir-with-types (fn [_] [])
+                                          :rm (fn [_ _ _] nil)
+                                          :rename (fn [_ _] nil)
+                                          :sqlite {:query (fn [qtype sql params]
+                                                            (reset! received {:query-type qtype :query sql :params params})
+                                                            {:rows [{:c 42}] :columns ["c"] :rows-affected 0})
+                                                   :exists (fn [] true)}})})
+          response (mock/send-rpc-request! *mock-server*
+                                           "sessionFs.sqliteQuery"
+                                           {:sessionId (sdk/session-id session)
+                                            :query "SELECT c FROM t WHERE id = $userId"
+                                            :queryType "query"
+                                            :params {:$userId "abc"}})]
+      (is (= :query (:query-type @received)))
+      (is (= "SELECT c FROM t WHERE id = $userId" (:query @received)))
+      ;; Opaque bind params preserved verbatim (no kebab-case mangling)
+      (is (= {:$userId "abc"} (:params @received)))
+      (is (= {:rows [{:c 42}] :columns ["c"] :rowsAffected 0}
+             (:result response)))))
+
+  (testing "sessionFs.sqliteQuery preserves snake_case column-name keys in result rows (review feedback)"
+    ;; Without an outgoing escape hatch, `util/clj->wire` would convert
+    ;; `:user_id` → `:userId`, producing rows whose keys no longer match
+    ;; the `columns` array. Upstream Node forwards row maps verbatim.
+    (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})
+          session (sdk/create-session client-with-fs
+                                      {:on-permission-request sdk/approve-all
+                                       :create-session-fs-handler
+                                       (fn [_session]
+                                         {:read-file (fn [_] "x")
+                                          :write-file (fn [_ _ _] nil)
+                                          :append-file (fn [_ _ _] nil)
+                                          :exists (fn [_] true)
+                                          :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                                          :mkdir (fn [_ _ _] nil)
+                                          :readdir (fn [_] [])
+                                          :readdir-with-types (fn [_] [])
+                                          :rm (fn [_ _ _] nil)
+                                          :rename (fn [_ _] nil)
+                                          :sqlite {:query (fn [_ _ _]
+                                                            {:rows [{:user_id 1 :created_at "2026-01-01"}
+                                                                    {:user_id 2 :created_at "2026-01-02"}]
+                                                             :columns ["user_id" "created_at"]
+                                                             :rows-affected 0})
+                                                   :exists (fn [] true)}})})
+          response (mock/send-rpc-request! *mock-server*
+                                           "sessionFs.sqliteQuery"
+                                           {:sessionId (sdk/session-id session)
+                                            :query "SELECT user_id, created_at FROM users"
+                                            :queryType "query"})
+          result (:result response)]
+      ;; Row keys must round-trip verbatim
+      (is (= [{:user_id 1 :created_at "2026-01-01"}
+              {:user_id 2 :created_at "2026-01-02"}]
+             (:rows result)))
+      ;; Columns array (strings) is unchanged
+      (is (= ["user_id" "created_at"] (:columns result)))
+      ;; Sibling SDK fields still get kebab→camelCase converted
+      (is (= 0 (:rowsAffected result)))))
+
+  (testing "sessionFs.sqliteExists RPC dispatches to handler"
+    (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})
+          session (sdk/create-session client-with-fs
+                                      {:on-permission-request sdk/approve-all
+                                       :create-session-fs-handler
+                                       (fn [_session]
+                                         {:read-file (fn [_] "x")
+                                          :write-file (fn [_ _ _] nil)
+                                          :append-file (fn [_ _ _] nil)
+                                          :exists (fn [_] true)
+                                          :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                                          :mkdir (fn [_ _ _] nil)
+                                          :readdir (fn [_] [])
+                                          :readdir-with-types (fn [_] [])
+                                          :rm (fn [_ _ _] nil)
+                                          :rename (fn [_ _] nil)
+                                          :sqlite {:query (fn [_ _ _] {:rows [] :columns [] :rows-affected 0})
+                                                   :exists (fn [] true)}})})
+          response (mock/send-rpc-request! *mock-server*
+                                           "sessionFs.sqliteExists"
+                                           {:sessionId (sdk/session-id session)})]
+      (is (= {:exists true} (:result response))))))
+
+(deftest test-session-fs-capabilities-forwarded-on-wire
+  (testing ":capabilities is forwarded on sessionFs.setProvider when configured (upstream PR #1299)"
+    ;; Build a fresh server + client so we can intercept the setProvider call sent during connect.
+    (let [server (mock/create-mock-server)
+          _ (mock/start-mock-server! server)
+          seen (atom {})
+          _ (mock/set-request-hook! server (fn [method params]
+                                             (when (= "sessionFs.setProvider" method)
+                                               (swap! seen assoc method params))))
+          client (sdk/client {:auto-start? false
+                              :session-fs {:initial-cwd "/workspace"
+                                           :session-state-path "/state"
+                                           :conventions "posix"
+                                           :capabilities {:sqlite true}}})
+          [in out] (mock/client-streams server)]
+      (try
+        (client/connect-with-streams! client in out)
+        (let [params (get @seen "sessionFs.setProvider")]
+          (is (= {:sqlite true} (:capabilities params)))
+          (is (= "/workspace" (:initialCwd params))))
+        (finally
+          (try (sdk/stop! client) (catch Exception _))
+          (Thread/sleep 50)
+          (mock/stop-mock-server! server)))))
+
+  (testing ":capabilities is omitted when not configured"
+    (let [server (mock/create-mock-server)
+          _ (mock/start-mock-server! server)
+          seen (atom {})
+          _ (mock/set-request-hook! server (fn [method params]
+                                             (when (= "sessionFs.setProvider" method)
+                                               (swap! seen assoc method params))))
+          client (sdk/client {:auto-start? false
+                              :session-fs {:initial-cwd "/workspace"
+                                           :session-state-path "/state"
+                                           :conventions "posix"}})
+          [in out] (mock/client-streams server)]
+      (try
+        (client/connect-with-streams! client in out)
+        (let [params (get @seen "sessionFs.setProvider")]
+          (is (not (contains? params :capabilities))))
+        (finally
+          (try (sdk/stop! client) (catch Exception _))
+          (Thread/sleep 50)
+          (mock/stop-mock-server! server))))))
+
+(deftest test-session-fs-sqlite-capability-validation
+  (testing "create-session throws when capabilities.sqlite is declared but provider lacks :sqlite"
+    (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"capabilities\.sqlite"
+           (sdk/create-session client-with-fs
+                               {:on-permission-request sdk/approve-all
+                                :create-session-fs-handler
+                                (fn [_session]
+                                  {:read-file (fn [_] "x")
+                                   :write-file (fn [_ _ _] nil)
+                                   :append-file (fn [_ _ _] nil)
+                                   :exists (fn [_] true)
+                                   :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                                   :mkdir (fn [_ _ _] nil)
+                                   :readdir (fn [_] [])
+                                   :readdir-with-types (fn [_] [])
+                                   :rm (fn [_ _ _] nil)
+                                   :rename (fn [_ _] nil)})}))))))
+
+;; -----------------------------------------------------------------------------
 ;; Hooks Tests (server→client RPC)
 ;; -----------------------------------------------------------------------------
 

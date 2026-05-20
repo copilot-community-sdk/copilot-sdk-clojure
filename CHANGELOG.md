@@ -3,6 +3,34 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.0-beta.4 sync, round 2)
+- **SessionFs SQLite support** — `sessionFs.sqliteQuery` and `sessionFs.sqliteExists`
+  RPCs are now dispatched to a user-supplied provider. The provider-style handler
+  accepts an optional nested `:sqlite {:query (fn [query-type sql params]) :exists (fn [])}`
+  map, alongside the existing filesystem keys. The low-level handler shape uses
+  flat `:sqlite-query` / `:sqlite-exists` keys (the adapter translates between
+  them). Clients advertise support via `:capabilities {:sqlite true}` under
+  `:session-fs`; the value is forwarded on `sessionFs.setProvider` and validated
+  at session creation (declaring `capabilities.sqlite` without providing a
+  `:sqlite` handler now throws). `query-type` is automatically coerced from the
+  wire string to a keyword (`#{:exec :query :run}`). SQL bind-parameter keys
+  (e.g. `$userId`) are preserved verbatim through wire normalization, and
+  result row column-name keys (e.g. `:user_id`, `:created_at`) round-trip
+  verbatim on the outgoing wire path — they are no longer mangled by
+  recursive kebab→camelCase conversion. SQLite errors propagate as JSON-RPC
+  errors (not wrapped as SessionFsError). (upstream PR #1299)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.49-1` to `1.0.49`.
+  Additive changes only: new named enum types (`AutoModeSwitchResponse`,
+  `ExitPlanModeAction`, `McpServerSource`, `McpServerStatus`, `SessionMode`,
+  `SkillSource`, renamed `PermissionRequestMemoryAction/Direction`),
+  `format: "duration"`/`"uri"` annotations, `"max"` value in reasoning-effort
+  description, plus the new `sessionFs.sqliteQuery` / `sessionFs.sqliteExists`
+  RPC methods. (upstream PRs #1305, #1307, #1327, #1333)
+
+### Fixed (post-v1.0.0-beta.4 sync, round 2)
+- **`examples/permission_bash.clj`** — Updated permission decision kind from the
+  deprecated `:approved` to the current `:approve-once`. (carried from upstream PR #1315)
+
 ### Added (post-v1.0.0-beta.4 sync)
 - **`:session-id` on hook input maps** — `:on-hook-invoke` handlers now receive
   a `:session-id` key on the input map. When the upstream wire payload includes

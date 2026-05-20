@@ -27,7 +27,7 @@
                                            :on-permission-request (fn [request _ctx]
                                                                     (pprint/pprint request)
                                                                     (if (contains? allowed-commands (:full-command-text request))
-                                                                      {:kind :approved}
+                                                                      {:kind :approve-once}
                                                                       {:kind :denied-by-rules
                                                                        :rules [{:kind "shell"
                                                                                 :argument (:full-command-text request)}]}))}]

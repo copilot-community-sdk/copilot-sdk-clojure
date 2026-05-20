@@ -350,7 +350,7 @@
         },
         "result": {
           "$ref": "#/definitions/SessionMode",
-          "description": "The agent mode. Valid values: \"interactive\", \"plan\", \"autopilot\"."
+          "description": "The session mode the agent is operating in"
         }
       },
       "set": {
@@ -365,7 +365,7 @@
             },
             "mode": {
               "$ref": "#/definitions/SessionMode",
-              "description": "The agent mode. Valid values: \"interactive\", \"plan\", \"autopilot\"."
+              "description": "The session mode the agent is operating in"
             }
           },
           "required": [
@@ -2312,6 +2312,72 @@
           ],
           "description": "Describes a filesystem error."
         }
+      },
+      "sqliteQuery": {
+        "rpcMethod": "sessionFs.sqliteQuery",
+        "description": "Executes a SQLite query against the per-session database.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "query": {
+              "type": "string",
+              "description": "SQL query to execute"
+            },
+            "queryType": {
+              "$ref": "#/definitions/SessionFsSqliteQueryType",
+              "description": "How to execute the query: 'exec' for DDL/multi-statement (no results), 'query' for SELECT (returns rows), 'run' for INSERT/UPDATE/DELETE (returns rowsAffected)"
+            },
+            "params": {
+              "type": "object",
+              "additionalProperties": {
+                "type": [
+                  "string",
+                  "number",
+                  "null"
+                ]
+              },
+              "description": "Optional named bind parameters"
+            }
+          },
+          "required": [
+            "sessionId",
+            "query",
+            "queryType"
+          ],
+          "additionalProperties": false,
+          "description": "SQL query, query type, and optional bind parameters for executing a SQLite query against the per-session database.",
+          "title": "SessionFsSqliteQueryRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/SessionFsSqliteQueryResult",
+          "description": "Query results including rows, columns, and rows affected, or a filesystem error if execution failed."
+        }
+      },
+      "sqliteExists": {
+        "rpcMethod": "sessionFs.sqliteExists",
+        "description": "Checks whether the per-session SQLite database already exists, without creating it.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/SessionFsSqliteExistsResult",
+          "description": "Indicates whether the per-session SQLite database already exists."
+        }
       }
     }
   },
@@ -2362,7 +2428,7 @@
         },
         "entitlementRequests": {
           "type": "integer",
-          "description": "Number of requests included in the entitlement"
+          "description": "Number of requests included in the entitlement, or -1 for unlimited entitlements"
         },
         "usedRequests": {
           "type": "integer",
@@ -2388,6 +2454,7 @@
         },
         "resetDate": {
           "type": "string",
+          "format": "date-time",
           "description": "Date when the quota resets (ISO 8601 string)"
         }
       },
@@ -2678,10 +2745,12 @@
         },
         "startTime": {
           "type": "string",
+          "format": "date-time",
           "description": "Session start time as an ISO 8601 string."
         },
         "modifiedTime": {
           "type": "string",
+          "format": "date-time",
           "description": "Last session update time as an ISO 8601 string."
         },
         "repository": {
@@ -2702,6 +2771,7 @@
         },
         "staleAt": {
           "type": "string",
+          "format": "date-time",
           "description": "Remote session staleness deadline as an ISO 8601 string."
         },
         "state": {
@@ -2809,6 +2879,16 @@
       "title": "ConnectResult",
       "visibility": "internal"
     },
+    "ContentFilterMode": {
+      "type": "string",
+      "enum": [
+        "none",
+        "markdown",
+        "hidden_characters"
+      ],
+      "description": "Controls how MCP tool result content is filtered: none leaves content unchanged, markdown sanitizes HTML while preserving Markdown-friendly output, and hidden_characters removes characters that can hide directives.",
+      "title": "ContentFilterMode"
+    },
     "CurrentModel": {
       "type": "object",
       "properties": {
@@ -2832,11 +2912,11 @@
         },
         "type": {
           "$ref": "#/definitions/DiscoveredMcpServerType",
-          "description": "Server transport type: stdio, http, sse, or memory (local configs are normalized to stdio)"
+          "description": "Server transport type: stdio, http, sse, or memory"
         },
         "source": {
-          "$ref": "#/definitions/DiscoveredMcpServerSource",
-          "description": "Configuration source"
+          "$ref": "#/definitions/McpServerSource",
+          "description": "Configuration source: user, workspace, plugin, or builtin"
         },
         "enabled": {
           "type": "boolean",
@@ -2852,17 +2932,6 @@
       "title": "DiscoveredMcpServer",
       "description": "Schema for the `DiscoveredMcpServer` type."
     },
-    "DiscoveredMcpServerSource": {
-      "type": "string",
-      "enum": [
-        "user",
-        "workspace",
-        "plugin",
-        "builtin"
-      ],
-      "description": "Configuration source",
-      "title": "DiscoveredMcpServerSource"
-    },
     "DiscoveredMcpServerType": {
       "type": "string",
       "enum": [
@@ -2871,7 +2940,7 @@
         "sse",
         "memory"
       ],
-      "description": "Server transport type: stdio, http, sse, or memory (local configs are normalized to stdio)",
+      "description": "Server transport type: stdio, http, sse, or memory",
       "title": "DiscoveredMcpServerType"
     },
     "EmbeddedBlobResourceContents": {
@@ -3063,6 +3132,14 @@
           "additionalProperties": {},
           "description": "Optional tool-specific telemetry"
         },
+        "binaryResultsForLlm": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ExternalToolTextResultForLlmBinaryResultsForLlm",
+            "description": "Binary result returned by a tool for the model"
+          },
+          "description": "Base64-encoded binary results returned to the model"
+        },
         "contents": {
           "type": "array",
           "items": {
@@ -3078,6 +3155,45 @@
       "additionalProperties": true,
       "description": "Expanded external tool result payload",
       "title": "ExternalToolTextResultForLlm"
+    },
+    "ExternalToolTextResultForLlmBinaryResultsForLlm": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/ExternalToolTextResultForLlmBinaryResultsForLlmType",
+          "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data."
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64-encoded binary data",
+          "contentEncoding": "base64"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the binary data"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the binary data"
+        }
+      },
+      "required": [
+        "type",
+        "data",
+        "mimeType"
+      ],
+      "additionalProperties": false,
+      "description": "Binary result returned by a tool for the model",
+      "title": "ExternalToolTextResultForLlmBinaryResultsForLlm"
+    },
+    "ExternalToolTextResultForLlmBinaryResultsForLlmType": {
+      "type": "string",
+      "enum": [
+        "image",
+        "resource"
+      ],
+      "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data.",
+      "title": "ExternalToolTextResultForLlmBinaryResultsForLlmType"
     },
     "ExternalToolTextResultForLlmContent": {
       "anyOf": [
@@ -3340,35 +3456,17 @@
         {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/FilterMappingValue"
+            "$ref": "#/definitions/ContentFilterMode",
+            "description": "Controls how MCP tool result content is filtered: none leaves content unchanged, markdown sanitizes HTML while preserving Markdown-friendly output, and hidden_characters removes characters that can hide directives."
           }
         },
         {
-          "$ref": "#/definitions/FilterMappingString"
+          "$ref": "#/definitions/ContentFilterMode",
+          "description": "Controls how MCP tool result content is filtered: none leaves content unchanged, markdown sanitizes HTML while preserving Markdown-friendly output, and hidden_characters removes characters that can hide directives."
         }
       ],
       "description": "Content filtering mode to apply to all tools, or a map of tool name to content filtering mode.",
       "title": "FilterMapping"
-    },
-    "FilterMappingString": {
-      "type": "string",
-      "enum": [
-        "none",
-        "markdown",
-        "hidden_characters"
-      ],
-      "title": "FilterMappingString",
-      "description": "Allowed values for the `FilterMappingString` enumeration."
-    },
-    "FilterMappingValue": {
-      "type": "string",
-      "enum": [
-        "none",
-        "markdown",
-        "hidden_characters"
-      ],
-      "title": "FilterMappingValue",
-      "description": "Allowed values for the `FilterMappingValue` enumeration."
     },
     "FleetStartRequest": {
       "type": "object",
@@ -3684,7 +3782,7 @@
         },
         "config": {
           "$ref": "#/definitions/McpServerConfig",
-          "description": "MCP server configuration (local/stdio or remote/http)"
+          "description": "MCP server configuration (stdio process or remote HTTP/SSE)"
         }
       },
       "required": [
@@ -3744,7 +3842,7 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/McpServerConfig",
-            "description": "MCP server configuration (local/stdio or remote/http)"
+            "description": "MCP server configuration (stdio process or remote HTTP/SSE)"
           },
           "propertyNames": {
             "minLength": 1,
@@ -3788,7 +3886,7 @@
         },
         "config": {
           "$ref": "#/definitions/McpServerConfig",
-          "description": "MCP server configuration (local/stdio or remote/http)"
+          "description": "MCP server configuration (stdio process or remote HTTP/SSE)"
         }
       },
       "required": [
@@ -3897,6 +3995,7 @@
       "properties": {
         "authorizationUrl": {
           "type": "string",
+          "format": "uri",
           "description": "URL the caller should open in a browser to complete OAuth. Omitted when cached tokens were still valid and no browser interaction was needed — the server is already reconnected in that case. When present, the runtime starts the callback listener before returning and continues the flow in the background; completion is signaled via session.mcp_server_status_changed."
         }
       },
@@ -3937,15 +4036,15 @@
     "McpServerConfig": {
       "anyOf": [
         {
-          "$ref": "#/definitions/McpServerConfigLocal",
-          "description": "Local MCP server configuration launched as a child process."
+          "$ref": "#/definitions/McpServerConfigStdio",
+          "description": "Stdio MCP server configuration launched as a child process."
         },
         {
           "$ref": "#/definitions/McpServerConfigHttp",
           "description": "Remote MCP server configuration accessed over HTTP or SSE."
         }
       ],
-      "description": "MCP server configuration (local/stdio or remote/http)",
+      "description": "MCP server configuration (stdio process or remote HTTP/SSE)",
       "title": "McpServerConfig"
     },
     "McpServerConfigHttp": {
@@ -4000,6 +4099,10 @@
         "oauthGrantType": {
           "$ref": "#/definitions/McpServerConfigHttpOauthGrantType",
           "description": "OAuth grant type to use when authenticating to the remote MCP server."
+        },
+        "auth": {
+          "$ref": "#/definitions/McpServerConfigHttpAuth",
+          "description": "Additional authentication configuration for this server."
         }
       },
       "required": [
@@ -4008,6 +4111,20 @@
       "additionalProperties": false,
       "description": "Remote MCP server configuration accessed over HTTP or SSE.",
       "title": "McpServerConfigHttp"
+    },
+    "McpServerConfigHttpAuth": {
+      "type": "object",
+      "properties": {
+        "redirectPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Fixed port for the OAuth redirect callback server."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Additional authentication configuration for this server.",
+      "title": "McpServerConfigHttpAuth"
     },
     "McpServerConfigHttpOauthGrantType": {
       "type": "string",
@@ -4028,7 +4145,7 @@
       "description": "Remote transport type. Defaults to \"http\" when omitted.",
       "title": "McpServerConfigHttpType"
     },
-    "McpServerConfigLocal": {
+    "McpServerConfigStdio": {
       "type": "object",
       "properties": {
         "tools": {
@@ -4037,10 +4154,6 @@
             "type": "string"
           },
           "description": "Tools to include. Defaults to all tools if not specified."
-        },
-        "type": {
-          "$ref": "#/definitions/McpServerConfigLocalType",
-          "description": "Local transport type. Defaults to \"local\"."
         },
         "isDefaultServer": {
           "type": "boolean",
@@ -4059,43 +4172,34 @@
         },
         "command": {
           "type": "string",
-          "description": "Executable command used to start the local MCP server process."
+          "description": "Executable command used to start the Stdio MCP server process."
         },
         "args": {
           "type": "array",
           "items": {
             "type": "string"
           },
-          "description": "Command-line arguments passed to the local MCP server process."
+          "default": [],
+          "description": "Command-line arguments passed to the Stdio MCP server process."
         },
         "cwd": {
           "type": "string",
-          "description": "Working directory for the local MCP server process."
+          "description": "Working directory for the Stdio MCP server process."
         },
         "env": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Environment variables to pass to the local MCP server process."
+          "description": "Environment variables to pass to the Stdio MCP server process."
         }
       },
       "required": [
-        "command",
-        "args"
+        "command"
       ],
       "additionalProperties": false,
-      "description": "Local MCP server configuration launched as a child process.",
-      "title": "McpServerConfigLocal"
-    },
-    "McpServerConfigLocalType": {
-      "type": "string",
-      "enum": [
-        "local",
-        "stdio"
-      ],
-      "description": "Local transport type. Defaults to \"local\".",
-      "title": "McpServerConfigLocalType"
+      "description": "Stdio MCP server configuration launched as a child process.",
+      "title": "McpServerConfigStdio"
     },
     "McpServerList": {
       "type": "object",
@@ -4447,7 +4551,7 @@
       "type": "object",
       "properties": {
         "state": {
-          "type": "string",
+          "$ref": "#/definitions/ModelPolicyState",
           "description": "Current policy state for this model"
         },
         "terms": {
@@ -4461,6 +4565,16 @@
       "additionalProperties": false,
       "description": "Policy state (if applicable)",
       "title": "ModelPolicy"
+    },
+    "ModelPolicyState": {
+      "type": "string",
+      "enum": [
+        "enabled",
+        "disabled",
+        "unconfigured"
+      ],
+      "description": "Current policy state for this model",
+      "title": "ModelPolicyState"
     },
     "ModelsListRequest": {
       "anyOf": [
@@ -4525,7 +4639,7 @@
       "properties": {
         "mode": {
           "$ref": "#/definitions/SessionMode",
-          "description": "The agent mode. Valid values: \"interactive\", \"plan\", \"autopilot\"."
+          "description": "The session mode the agent is operating in"
         }
       },
       "required": [
@@ -5443,6 +5557,7 @@
       "properties": {
         "url": {
           "type": "string",
+          "format": "uri",
           "description": "GitHub frontend URL for this session"
         },
         "remoteSteerable": {
@@ -5499,7 +5614,7 @@
           "description": "Description of what the skill does"
         },
         "source": {
-          "type": "string",
+          "$ref": "#/definitions/SkillSource",
           "description": "Source location type (e.g., project, personal-copilot, plugin, builtin)"
         },
         "userInvocable": {
@@ -5561,6 +5676,7 @@
         },
         "host": {
           "type": "string",
+          "format": "uri",
           "description": "Authentication host URL"
         },
         "login": {
@@ -5870,6 +5986,18 @@
       "description": "Path to remove from the client-provided session filesystem, with options for recursive removal and force.",
       "title": "SessionFsRmRequest"
     },
+    "SessionFsSetProviderCapabilities": {
+      "type": "object",
+      "properties": {
+        "sqlite": {
+          "type": "boolean",
+          "description": "Whether the provider supports SQLite query/exists operations"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional capabilities declared by the provider",
+      "title": "SessionFsSetProviderCapabilities"
+    },
     "SessionFsSetProviderConventions": {
       "type": "string",
       "enum": [
@@ -5893,6 +6021,10 @@
         "conventions": {
           "$ref": "#/definitions/SessionFsSetProviderConventions",
           "description": "Path conventions used by this filesystem"
+        },
+        "capabilities": {
+          "$ref": "#/definitions/SessionFsSetProviderCapabilities",
+          "description": "Optional capabilities declared by the provider"
         }
       },
       "required": [
@@ -5918,6 +6050,103 @@
       "additionalProperties": false,
       "description": "Indicates whether the calling client was registered as the session filesystem provider.",
       "title": "SessionFsSetProviderResult"
+    },
+    "SessionFsSqliteExistsResult": {
+      "type": "object",
+      "properties": {
+        "exists": {
+          "type": "boolean",
+          "description": "Whether the session database already exists"
+        }
+      },
+      "required": [
+        "exists"
+      ],
+      "additionalProperties": false,
+      "description": "Indicates whether the per-session SQLite database already exists.",
+      "title": "SessionFsSqliteExistsResult"
+    },
+    "SessionFsSqliteQueryRequest": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "SQL query to execute"
+        },
+        "queryType": {
+          "$ref": "#/definitions/SessionFsSqliteQueryType",
+          "description": "How to execute the query: 'exec' for DDL/multi-statement (no results), 'query' for SELECT (returns rows), 'run' for INSERT/UPDATE/DELETE (returns rowsAffected)"
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "null"
+            ]
+          },
+          "description": "Optional named bind parameters"
+        }
+      },
+      "required": [
+        "query",
+        "queryType"
+      ],
+      "additionalProperties": false,
+      "description": "SQL query, query type, and optional bind parameters for executing a SQLite query against the per-session database.",
+      "title": "SessionFsSqliteQueryRequest"
+    },
+    "SessionFsSqliteQueryResult": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "description": "For SELECT: array of row objects. For others: empty array."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Column names from the result set"
+        },
+        "rowsAffected": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rows affected (for INSERT/UPDATE/DELETE)"
+        },
+        "lastInsertRowid": {
+          "type": "number",
+          "description": "Last inserted row ID (for INSERT)"
+        },
+        "error": {
+          "$ref": "#/definitions/SessionFsError",
+          "description": "Describes a filesystem error."
+        }
+      },
+      "required": [
+        "rows",
+        "columns",
+        "rowsAffected"
+      ],
+      "additionalProperties": false,
+      "description": "Query results including rows, columns, and rows affected, or a filesystem error if execution failed.",
+      "title": "SessionFsSqliteQueryResult"
+    },
+    "SessionFsSqliteQueryType": {
+      "type": "string",
+      "enum": [
+        "exec",
+        "query",
+        "run"
+      ],
+      "description": "How to execute the query: 'exec' for DDL/multi-statement (no results), 'query' for SELECT (returns rows), 'run' for INSERT/UPDATE/DELETE (returns rowsAffected)",
+      "title": "SessionFsSqliteQueryType"
     },
     "SessionFsStatRequest": {
       "type": "object",
@@ -6018,7 +6247,7 @@
         "plan",
         "autopilot"
       ],
-      "description": "The agent mode. Valid values: \"interactive\", \"plan\", \"autopilot\".",
+      "description": "The session mode the agent is operating in",
       "title": "SessionMode"
     },
     "SessionsForkRequest": {
@@ -6159,8 +6388,8 @@
           "description": "Description of what the skill does"
         },
         "source": {
-          "type": "string",
-          "description": "Source location type (e.g., project, personal, plugin)"
+          "$ref": "#/definitions/SkillSource",
+          "description": "Source location type (e.g., project, personal-copilot, plugin, builtin)"
         },
         "userInvocable": {
           "type": "boolean",
@@ -6300,15 +6529,19 @@
       "description": "Diagnostics from reloading skill definitions, with warnings and errors as separate lists.",
       "title": "SkillsLoadDiagnostics"
     },
-    "SlashCommandAgentPromptMode": {
+    "SkillSource": {
       "type": "string",
       "enum": [
-        "interactive",
-        "plan",
-        "autopilot"
+        "project",
+        "inherited",
+        "personal-copilot",
+        "personal-agents",
+        "plugin",
+        "custom",
+        "builtin"
       ],
-      "description": "Optional target session mode",
-      "title": "SlashCommandAgentPromptMode"
+      "description": "Source location type (e.g., project, personal-copilot, plugin, builtin)",
+      "title": "SkillSource"
     },
     "SlashCommandAgentPromptResult": {
       "type": "object",
@@ -6327,8 +6560,8 @@
           "description": "Prompt text to display to the user"
         },
         "mode": {
-          "$ref": "#/definitions/SlashCommandAgentPromptMode",
-          "description": "Optional target session mode"
+          "$ref": "#/definitions/SessionMode",
+          "description": "Optional target session mode for the agent prompt"
         },
         "runtimeSettingsChanged": {
           "type": "boolean",
@@ -6527,7 +6760,7 @@
           "description": "Short description of the task"
         },
         "status": {
-          "$ref": "#/definitions/TaskAgentInfoStatus",
+          "$ref": "#/definitions/TaskStatus",
           "description": "Current lifecycle status of the task"
         },
         "startedAt": {
@@ -6571,8 +6804,8 @@
           "description": "Model used for the task when specified"
         },
         "executionMode": {
-          "$ref": "#/definitions/TaskAgentInfoExecutionMode",
-          "description": "How the agent is currently being managed by the runtime"
+          "$ref": "#/definitions/TaskExecutionMode",
+          "description": "Whether task execution is synchronously awaited or managed in the background"
         },
         "canPromoteToBackground": {
           "type": "boolean",
@@ -6602,26 +6835,14 @@
       "title": "TaskAgentInfo",
       "description": "Schema for the `TaskAgentInfo` type."
     },
-    "TaskAgentInfoExecutionMode": {
+    "TaskExecutionMode": {
       "type": "string",
       "enum": [
         "sync",
         "background"
       ],
-      "description": "How the agent is currently being managed by the runtime",
-      "title": "TaskAgentInfoExecutionMode"
-    },
-    "TaskAgentInfoStatus": {
-      "type": "string",
-      "enum": [
-        "running",
-        "idle",
-        "completed",
-        "failed",
-        "cancelled"
-      ],
-      "description": "Current lifecycle status of the task",
-      "title": "TaskAgentInfoStatus"
+      "description": "Whether task execution is synchronously awaited or managed in the background",
+      "title": "TaskExecutionMode"
     },
     "TaskInfo": {
       "anyOf": [
@@ -6700,7 +6921,7 @@
           "description": "Short description of the task"
         },
         "status": {
-          "$ref": "#/definitions/TaskShellInfoStatus",
+          "$ref": "#/definitions/TaskStatus",
           "description": "Current lifecycle status of the task"
         },
         "startedAt": {
@@ -6722,8 +6943,8 @@
           "description": "Whether the shell runs inside a managed PTY session or as an independent background process"
         },
         "executionMode": {
-          "$ref": "#/definitions/TaskShellInfoExecutionMode",
-          "description": "Whether the shell command is currently sync-waited or background-managed"
+          "$ref": "#/definitions/TaskExecutionMode",
+          "description": "Whether task execution is synchronously awaited or managed in the background"
         },
         "canPromoteToBackground": {
           "type": "boolean",
@@ -6759,27 +6980,6 @@
       ],
       "description": "Whether the shell runs inside a managed PTY session or as an independent background process",
       "title": "TaskShellInfoAttachmentMode"
-    },
-    "TaskShellInfoExecutionMode": {
-      "type": "string",
-      "enum": [
-        "sync",
-        "background"
-      ],
-      "description": "Whether the shell command is currently sync-waited or background-managed",
-      "title": "TaskShellInfoExecutionMode"
-    },
-    "TaskShellInfoStatus": {
-      "type": "string",
-      "enum": [
-        "running",
-        "idle",
-        "completed",
-        "failed",
-        "cancelled"
-      ],
-      "description": "Current lifecycle status of the task",
-      "title": "TaskShellInfoStatus"
     },
     "TasksPromoteToBackgroundRequest": {
       "type": "object",
@@ -6931,6 +7131,18 @@
       "additionalProperties": false,
       "description": "Identifier assigned to the newly started background agent task.",
       "title": "TasksStartAgentResult"
+    },
+    "TaskStatus": {
+      "type": "string",
+      "enum": [
+        "running",
+        "idle",
+        "completed",
+        "failed",
+        "cancelled"
+      ],
+      "description": "Current lifecycle status of the task",
+      "title": "TaskStatus"
     },
     "Tool": {
       "type": "object",
