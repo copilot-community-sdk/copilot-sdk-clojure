@@ -156,17 +156,21 @@
    when :session-fs is enabled. Handler is a map of keyword→fn for FS operations.
 
    Upstream PR #1299: when the client's :session-fs config declares
-   `:capabilities {:sqlite true}` but the per-session handler does not expose
-   :sqlite-query, throw to prevent silent SQL dispatch failures at runtime."
+   `:capabilities {:sqlite true}` the per-session handler must expose BOTH
+   :sqlite-query and :sqlite-exists. Otherwise the runtime would route
+   sessionFs.sqliteExists (or sessionFs.sqliteQuery) to a missing handler key
+   and surface an opaque \"Unknown sessionFs method\" error at runtime."
   [client session-id handler]
   (let [validated (validate-session-fs-handler! handler {:session-id session-id})
         sqlite-declared? (boolean (get-in client [:session-fs :capabilities :sqlite]))
-        handler-has-sqlite? (boolean (:sqlite-query validated))]
-    (when (and sqlite-declared? (not handler-has-sqlite?))
+        missing (when sqlite-declared?
+                  (remove #(contains? validated %) [:sqlite-query :sqlite-exists]))]
+    (when (seq missing)
       (throw (ex-info
               "SessionFs config declares capabilities.sqlite but the provider does not implement sqlite."
               {:session-id session-id
-               :capabilities (get-in client [:session-fs :capabilities])})))
+               :capabilities (get-in client [:session-fs :capabilities])
+               :missing-handlers (vec missing)})))
     (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] validated)))
 
 (defn- channel?

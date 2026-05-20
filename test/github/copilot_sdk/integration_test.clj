@@ -2868,7 +2868,35 @@
                                    :readdir (fn [_] [])
                                    :readdir-with-types (fn [_] [])
                                    :rm (fn [_ _ _] nil)
-                                   :rename (fn [_ _] nil)})}))))))
+                                   :rename (fn [_ _] nil)})})))))
+
+  (testing "create-session throws when capabilities.sqlite is declared with only :sqlite-query (review feedback)"
+    ;; Low-level handler shape: presence of :sqlite-query alone must NOT pass
+    ;; validation, since sessionFs.sqliteExists would route to a missing key
+    ;; and surface as an opaque \"Unknown sessionFs method\" error at runtime.
+    (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"capabilities\.sqlite"
+           (sdk/create-session client-with-fs
+                               {:on-permission-request sdk/approve-all
+                                :create-session-fs-handler
+                                (fn [_session]
+                                  {:read-file (fn [_] "x")
+                                   :write-file (fn [_ _ _] nil)
+                                   :append-file (fn [_ _ _] nil)
+                                   :exists (fn [_] true)
+                                   :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+                                   :mkdir (fn [_ _ _] nil)
+                                   :readdir (fn [_] [])
+                                   :readdir-with-types (fn [_] [])
+                                   :rm (fn [_ _ _] nil)
+                                   :rename (fn [_ _] nil)
+                                   ;; only :sqlite-query, missing :sqlite-exists
+                                   :sqlite-query (fn [_] {:rows [] :columns [] :rows-affected 0})})}))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Hooks Tests (server→client RPC)

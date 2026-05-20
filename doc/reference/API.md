@@ -2165,7 +2165,10 @@ Use `create-session-fs-adapter` when you need the low-level handler map explicit
   (copilot/create-session-fs-adapter provider))
 ```
 
-The low-level handler map requires all 10 operations:
+The low-level handler map requires the 10 core FS operations below. The two
+`:sqlite-*` keys are optional and only required when the client advertises
+`:capabilities {:sqlite true}` on its `:session-fs` config (see
+[SQLite support](#sqlite-support-optional)).
 
 | Key | Params | Returns |
 |-----|--------|---------|
@@ -2179,8 +2182,8 @@ The low-level handler map requires all 10 operations:
 | `:readdir-with-types` | `{:session-id :path}` | `{:entries [...]}` |
 | `:rm` | `{:session-id :path :recursive :force}` | nil |
 | `:rename` | `{:session-id :src :dest}` | nil |
-| `:sqlite-query` | `{:session-id :query-type :query :params}` | `{:rows [...] :columns [...] :rows-affected n}` (optional) |
-| `:sqlite-exists` | `{:session-id}` | `{:exists true/false}` (optional) |
+| `:sqlite-query` _(optional)_ | `{:session-id :query-type :query :params}` | `{:rows [...] :columns [...] :rows-affected n}` |
+| `:sqlite-exists` _(optional)_ | `{:session-id}` | `{:exists true/false}` |
 
 Handler functions may return values directly or via core.async channels.
 
