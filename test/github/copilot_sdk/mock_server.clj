@@ -95,7 +95,7 @@
 
 (defn- handle-ping [server params]
   {:message (:message params)
-   :timestamp (System/currentTimeMillis)
+   :timestamp (.toString (java.time.Instant/now))
    :protocolVersion PROTOCOL_VERSION})
 
 (defn- handle-connect

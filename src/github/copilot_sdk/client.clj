@@ -1112,7 +1112,11 @@
 
 (defn ping
   "Ping the server to check connectivity.
-   Returns {:message :timestamp :protocol-version}."
+   Returns {:message :timestamp :protocol-version}.
+
+   `:timestamp` is an ISO 8601 date-time string (e.g. \"2026-05-21T08:00:00Z\")
+   on CLI ≥ 1.0.51 (upstream PR #1340). Earlier CLI versions returned a
+   numeric epoch-millis value; the SDK forwards whatever the server sends."
   ([client]
    (ping client nil))
   ([client message]

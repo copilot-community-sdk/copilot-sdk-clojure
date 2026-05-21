@@ -68,7 +68,8 @@
      (is (= :connected (sdk/state *e2e-client*)))
      (let [result (sdk/ping *e2e-client*)]
        (is (number? (:protocol-version result)))
-       (is (number? (:timestamp result)))))))
+       ;; Upstream PR #1340 / CLI 1.0.51 changed timestamp to ISO 8601 string.
+       (is (string? (:timestamp result)))))))
 
 (deftest ^:e2e test-e2e-create-session
   (when-e2e
