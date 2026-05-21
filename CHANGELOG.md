@@ -3,6 +3,50 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (post-v1.0.0-beta.4 sync, round 3)
+- **`ping` `:timestamp` is now an ISO 8601 string** — Upstream PR #1340
+  (CLI 1.0.51) changed the `ping` RPC result `timestamp` field from
+  epoch-millis number to an ISO 8601 date-time string (e.g.
+  `"2026-05-21T08:00:00.000Z"`). The SDK forwards the field verbatim, so
+  callers of `sdk/ping` now receive a string `:timestamp`. The mock test
+  server was updated to match. The ping docstring documents the change and
+  notes earlier CLI versions returned a number. (upstream PR #1340)
+
+### Added (post-v1.0.0-beta.4 sync, round 3)
+- **`:mcp-args` is now optional on MCP stdio server configs** — Following
+  upstream PR #1347 (`MCPStdioServerConfig.args` made optional across all
+  SDKs), the `::mcp-local-server` / `::mcp-stdio-server` spec moves
+  `::mcp-args` from `:req-un` to `:opt-un`. Stdio MCP servers declared with
+  just `{:mcp-command "..." :mcp-tools [...]}` (no `:mcp-args`) now validate
+  and forward correctly. (upstream PR #1347)
+- **`:time-to-first-token-ms` on `assistant.usage` event data** — The CLI
+  1.0.51 wire schema renamed the assistant-usage TTFT property from
+  `ttftMs` to `timeToFirstTokenMs`, which surfaces as the kebab-case key
+  `:time-to-first-token-ms` after wire normalization. The
+  `::assistant.usage-data` spec lists both keys in `:opt-un` so events from
+  older and newer CLIs both validate; the new key is the canonical name
+  going forward. The generated wire spec
+  (`generated/event_specs.clj`) only declares the new field, matching the
+  current schema. (upstream CLI 1.0.51 schema)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.49` to
+  `1.0.51`. Generated wire specs and coercions regenerated. Additive
+  changes only beyond the rename above: bounded-integer fields previously
+  typed as `number?` now generate as `integer?` (upstream PR #1329,
+  "Use 32-bit types for bounded schema integers").
+
+### Tracked-but-not-ported (post-v1.0.0-beta.4 sync, round 3)
+- **PR #1316** (re-export generated session-event types from `index.ts`) —
+  Node.js packaging concern only; the Clojure SDK already exposes generated
+  event specs via the `github.copilot-sdk.generated.event-specs` namespace.
+- **PR #1327 `ToolBinaryResult.type` tightened to `"image" | "resource"`** —
+  Our `::binary-results-for-llm` spec is intentionally permissive
+  (`(coll-of map?)`). Tightening would require adding a dedicated
+  `::tool-binary-result` spec with string-valued `:type`; deferred since
+  the runtime helpers already emit valid values.
+- Upstream test stabilization (#1346, #1317, #1314), other-language /
+  documentation / codegen-only PRs (#1336, #1291, #1331, #1338, #1339,
+  #1304, #1289, #1313) — no Clojure SDK action required.
+
 ### Added (post-v1.0.0-beta.4 sync, round 2)
 - **SessionFs SQLite support** — `sessionFs.sqliteQuery` and `sessionFs.sqliteExists`
   RPCs are now dispatched to a user-supplied provider. The provider-style handler
