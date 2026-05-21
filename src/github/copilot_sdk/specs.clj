@@ -25,8 +25,9 @@
 (s/def ::non-blank-string (s/and string? (complement clojure.string/blank?)))
 ;; ::timestamp accepts both ISO 8601 strings (CLI ≥ 1.0.51, upstream PR #1340)
 ;; and numeric epoch-millis (older CLIs). Used by event timestamps and ping
-;; results; the SDK forwards the server value verbatim. Event consumers that
-;; need a java.time.Instant should parse the string form themselves.
+;; results; the SDK forwards the server value verbatim. Consumers needing a
+;; java.time.Instant should branch on the form: parse the string with
+;; Instant/parse, or convert the number with Instant/ofEpochMilli.
 (s/def ::timestamp (s/or :iso-string string? :epoch-ms nat-int?))
 (s/def ::session-id ::non-blank-string)
 (s/def ::workspace-path (s/nilable ::non-blank-string))

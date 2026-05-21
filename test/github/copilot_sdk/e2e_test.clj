@@ -69,7 +69,9 @@
      (let [result (sdk/ping *e2e-client*)]
        (is (number? (:protocol-version result)))
        ;; Upstream PR #1340 / CLI 1.0.51 changed timestamp to ISO 8601 string.
-       (is (string? (:timestamp result)))))))
+       (is (string? (:timestamp result)))
+       (is (some? (java.time.Instant/parse (:timestamp result)))
+           ":timestamp parses as ISO 8601 instant on real CLI ≥ 1.0.51")))))
 
 (deftest ^:e2e test-e2e-create-session
   (when-e2e
