@@ -14,13 +14,21 @@ Sync the copilot-sdk-clojure project with upstream [github/copilot-sdk](https://
 
 ### Phase 1: Discovery
 
-1. Run `./update.sh` from the repo root to pull the latest upstream and list releases.
-2. Check the current Clojure SDK version in `build.clj` (format: `UPSTREAM.CLJ_PATCH` — see AGENTS.md § Version Management).
-3. List upstream commits since our last synced version:
+1. **Sync local `main` first.** Recently-merged PRs may have already
+   ported some upstream changes, and your feature branch should sit on
+   top of the latest `main` to avoid duplicate work and rebase conflicts
+   later:
+   ```
+   git checkout main && git pull --ff-only origin main
+   ```
+   If `main` cannot fast-forward, stop and let the maintainer resolve.
+2. Run `./update.sh` from the repo root to pull the latest upstream and list releases.
+3. Check the current Clojure SDK version in `build.clj` (format: `UPSTREAM.CLJ_PATCH` — see AGENTS.md § Version Management).
+4. List upstream commits since our last synced version:
    ```
    cd ../copilot-sdk && git log --oneline <last-tag>..HEAD -- nodejs/
    ```
-4. For each commit, classify:
+5. For each commit, classify:
    - **Port** — Code changes to `nodejs/src/` (types, client, session, generated)
    - **Skip** — CI/tooling, language-specific (Python/Go/.NET only)
 
@@ -103,10 +111,21 @@ At minimum:
 
 ### Phase 8: PR Creation
 
-1. Create a feature branch: `git checkout -b upstream-sync/v<version>`
-2. Commit changes in logical commits to make them easy to review commit by commit and with descriptive message and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
-3. Push and create PR with `gh pr create`
-4. PR body should include: summary, changes list, validation results, review findings table
+1. **Confirm `main` is current before branching.** Run
+   `git fetch origin main && git checkout main && git pull --ff-only` if
+   you haven't refreshed since Phase 1. A stale local `main` causes
+   rebase conflicts later, especially when prior sync PRs squash-merge.
+2. Create a feature branch: `git checkout -b upstream-sync/v<version>`
+3. Commit changes in logical commits to make them easy to review commit by commit and with descriptive message and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+4. Push and create PR with `gh pr create`
+5. PR body should include: summary, changes list, validation results, review findings table
+
+If the maintainer asks you to rebase a stale branch onto fresh `main`,
+expect that previous round-N sync commits on your branch may already be
+present in `origin/main` under squash-merge SHAs. Use `git rebase --skip`
+for any commit whose patch is already upstream — Git will print
+"patch contents already upstream" for the others and drop them
+automatically.
 
 ### Phase 9: Reflecing on code review feedback.
 
