@@ -293,8 +293,8 @@
 (s/def ::mcp-headers (s/map-of string? string?))
 
 (s/def ::mcp-local-server
-  (s/keys :req-un [::mcp-command ::mcp-args ::mcp-tools]
-          :opt-un [::mcp-server-type ::mcp-timeout ::env ::cwd]))
+  (s/keys :req-un [::mcp-command ::mcp-tools]
+          :opt-un [::mcp-args ::mcp-server-type ::mcp-timeout ::env ::cwd]))
 
 (s/def ::mcp-remote-server
   (s/keys :req-un [::mcp-server-type ::mcp-url ::mcp-tools]
@@ -1036,6 +1036,10 @@
 (s/def ::input-tokens nat-int?)
 (s/def ::inter-token-latency-ms nat-int?)
 (s/def ::quota-snapshots map?)
+;; :time-to-first-token-ms — schema renamed from :ttft-ms in CLI 1.0.51 wire schema
+;; (property "ttftMs" → "timeToFirstTokenMs"). Both keys remain listed as :opt-un so
+;; events from older CLI versions still validate; the new wire field is preferred.
+(s/def ::time-to-first-token-ms nat-int?)
 (s/def ::ttft-ms nat-int?)
 (s/def ::copilot-usage map?)
 
@@ -1054,7 +1058,7 @@
                    ::initiator ::input-tokens ::inter-token-latency-ms
                    ::output-tokens ::parent-tool-call-id ::provider-call-id
                    ::quota-snapshots ::reasoning-effort ::reasoning-tokens
-                   ::ttft-ms]))
+                   ::time-to-first-token-ms ::ttft-ms]))
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)

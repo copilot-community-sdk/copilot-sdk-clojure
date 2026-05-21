@@ -107,7 +107,7 @@ Here's a complete working example using the official [`@modelcontextprotocol/ser
 | Key | Type | Required | Description |
 |-----|------|----------|-------------|
 | `:mcp-command` | string | Yes | Command to execute |
-| `:mcp-args` | vector | Yes | Command arguments |
+| `:mcp-args` | vector | No | Command arguments (optional since CLI 1.0.51; omit for argument-less commands like `true`) |
 | `:mcp-tools` | vector | Yes | Tools to enable (`["*"]` for all, `[]` for none, or specific tool names) |
 | `:mcp-server-type` | keyword | No | `:local` or `:stdio` (defaults to local) |
 | `:mcp-timeout` | number | No | Timeout in milliseconds |
