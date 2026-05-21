@@ -51,13 +51,13 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/branch clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/cache-read-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/cache-read-tokens clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/cache-write-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/cache-write-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/cause clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/checkpoint-number clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/checkpoint-number clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/checkpoint-path clojure.core/string?)
 
@@ -73,13 +73,13 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/compaction-tokens-used clojure.core/map?)
 
-(s/def :github.copilot-sdk.generated.event-specs/content (s/spec (fn [v943] (or (s/valid? clojure.core/string? v943) (s/valid? clojure.core/map? v943)))))
+(s/def :github.copilot-sdk.generated.event-specs/content (s/spec (fn [v942] (or (s/valid? clojure.core/string? v942) (s/valid? clojure.core/map? v942)))))
 
-(s/def :github.copilot-sdk.generated.event-specs/context (s/spec (fn [v941] (or (s/valid? clojure.core/map? v941) (s/valid? clojure.core/string? v941)))))
+(s/def :github.copilot-sdk.generated.event-specs/context (s/spec (fn [v940] (or (s/valid? clojure.core/map? v940) (s/valid? clojure.core/string? v940)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/continue-pending-work clojure.core/boolean?)
 
-(s/def :github.copilot-sdk.generated.event-specs/conversation-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/conversation-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/copilot-usage clojure.core/map?)
 
@@ -89,7 +89,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/current-model clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/current-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/current-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/cwd clojure.core/string?)
 
@@ -103,9 +103,9 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/display-prompt clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/duration clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/duration clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/duration-ms clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/duration-ms clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/elicitation-source clojure.core/string?)
 
@@ -115,7 +115,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/ephemeral clojure.core/boolean?)
 
-(s/def :github.copilot-sdk.generated.event-specs/error (s/spec (fn [v938] (or (s/valid? clojure.core/string? v938) (s/valid? clojure.core/map? v938)))))
+(s/def :github.copilot-sdk.generated.event-specs/error (s/spec (fn [v937] (or (s/valid? clojure.core/string? v937) (s/valid? clojure.core/map? v937)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/error-code clojure.core/string?)
 
@@ -127,9 +127,9 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/errors (s/coll-of clojure.core/string?))
 
-(s/def :github.copilot-sdk.generated.event-specs/event-count clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/event-count clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/events-removed clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/events-removed clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/extensions (s/coll-of clojure.core/map?))
 
@@ -149,7 +149,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/host-type #{"github" "ado"})
 
-(s/def :github.copilot-sdk.generated.event-specs/id (s/spec (fn [v939] (or (s/valid? clojure.core/string? v939) (s/valid? clojure.core/integer? v939)))))
+(s/def :github.copilot-sdk.generated.event-specs/id (s/spec (fn [v938] (or (s/valid? clojure.core/string? v938) (s/valid? clojure.core/integer? v938)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/info-type clojure.core/string?)
 
@@ -157,7 +157,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/input clojure.core/any?)
 
-(s/def :github.copilot-sdk.generated.event-specs/input-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/input-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/intent clojure.core/string?)
 
@@ -185,11 +185,11 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/message-id clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/messages-length clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/messages-length clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/messages-removed clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/messages-removed clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/messages-removed-during-truncation clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/messages-removed-during-truncation clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/metadata clojure.core/map?)
 
@@ -207,11 +207,11 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/new-model clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/operation (s/spec (fn [v942] (or (s/valid? #{"delete" "update" "create"} v942) (s/valid? #{"update" "create"} v942)))))
+(s/def :github.copilot-sdk.generated.event-specs/operation (s/spec (fn [v941] (or (s/valid? #{"delete" "update" "create"} v941) (s/valid? #{"update" "create"} v941)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/output clojure.core/any?)
 
-(s/def :github.copilot-sdk.generated.event-specs/output-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/output-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/parent-agent-task-id clojure.core/string?)
 
@@ -237,19 +237,19 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/plugin-version clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/post-compaction-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/post-compaction-tokens clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/post-truncation-messages-length clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/post-truncation-messages-length clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/post-truncation-tokens-in-messages clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/post-truncation-tokens-in-messages clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/pre-compaction-messages-length clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/pre-compaction-messages-length clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/pre-compaction-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/pre-compaction-tokens clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/pre-truncation-messages-length clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/pre-truncation-messages-length clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/pre-truncation-tokens-in-messages clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/pre-truncation-tokens-in-messages clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/previous-mode #{"interactive" "autopilot" "plan"})
 
@@ -275,7 +275,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/reason #{"user_abort" "remote_command" "user_initiated"})
 
-(s/def :github.copilot-sdk.generated.event-specs/reasoning-effort (s/spec (fn [v940] (or (s/valid? clojure.core/string? v940) (s/valid? clojure.core/any? v940)))))
+(s/def :github.copilot-sdk.generated.event-specs/reasoning-effort (s/spec (fn [v939] (or (s/valid? clojure.core/string? v939) (s/valid? clojure.core/any? v939)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-id clojure.core/string?)
 
@@ -285,7 +285,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/reasoning-text clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/reasoning-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/reasoning-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/recommended-action #{"interactive" "autopilot_fleet" "exit_only" "autopilot"})
 
@@ -295,7 +295,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/remote-steerable clojure.core/boolean?)
 
-(s/def :github.copilot-sdk.generated.event-specs/repository (s/spec (fn [v937] (or (s/valid? clojure.core/map? v937) (s/valid? clojure.core/string? v937)))))
+(s/def :github.copilot-sdk.generated.event-specs/repository (s/spec (fn [v936] (or (s/valid? clojure.core/map? v936) (s/valid? clojure.core/string? v936)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/repository-host clojure.core/string?)
 
@@ -307,11 +307,11 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/response #{"yes_always" "yes" "no"})
 
-(s/def :github.copilot-sdk.generated.event-specs/result (s/spec (fn [v947] (or (s/valid? clojure.core/map? v947) (s/valid? (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map?) v947)))))
+(s/def :github.copilot-sdk.generated.event-specs/result (s/spec (fn [v945] (or (s/valid? clojure.core/map? v945) (s/valid? (s/or :branch-0 clojure.core/map? :branch-1 clojure.core/map? :branch-2 clojure.core/map? :branch-3 clojure.core/map? :branch-4 clojure.core/map? :branch-5 clojure.core/map? :branch-6 clojure.core/map? :branch-7 clojure.core/map? :branch-8 clojure.core/map?) v945)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/resume-time clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/retry-after-seconds clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/retry-after-seconds clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/role #{"developer" "system"})
 
@@ -327,7 +327,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/session-id clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/session-start-time clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/session-start-time clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/session-was-active clojure.core/boolean?)
 
@@ -335,7 +335,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/skills (s/coll-of clojure.core/map?))
 
-(s/def :github.copilot-sdk.generated.event-specs/source (s/spec (fn [v944] (or (s/valid? clojure.core/string? v944) (s/valid? #{"top_level" "subagent" "mcp_sampling"} v944)))))
+(s/def :github.copilot-sdk.generated.event-specs/source (s/spec (fn [v943] (or (s/valid? clojure.core/string? v943) (s/valid? #{"top_level" "subagent" "mcp_sampling"} v943)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/source-type #{"remote" "local"})
 
@@ -359,7 +359,9 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/supported-native-document-mime-types (s/coll-of clojure.core/string?))
 
-(s/def :github.copilot-sdk.generated.event-specs/system-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/system-tokens clojure.core/integer?)
+
+(s/def :github.copilot-sdk.generated.event-specs/time-to-first-token-ms clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/timestamp clojure.core/string?)
 
@@ -369,15 +371,15 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/token-details clojure.core/map?)
 
-(s/def :github.copilot-sdk.generated.event-specs/token-limit clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/token-limit clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/tokens-removed clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/tokens-removed clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/tokens-removed-during-truncation clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/tokens-removed-during-truncation clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/tool-call-id clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/tool-definitions-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/tool-definitions-tokens clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/tool-name clojure.core/string?)
 
@@ -387,17 +389,17 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/tools (s/nilable (s/coll-of clojure.core/string?)))
 
-(s/def :github.copilot-sdk.generated.event-specs/total-api-duration-ms clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/total-api-duration-ms clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/total-nano-aiu clojure.core/number?)
 
 (s/def :github.copilot-sdk.generated.event-specs/total-premium-requests clojure.core/number?)
 
-(s/def :github.copilot-sdk.generated.event-specs/total-response-size-bytes clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/total-response-size-bytes clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/total-tokens clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/total-tokens clojure.core/integer?)
 
-(s/def :github.copilot-sdk.generated.event-specs/total-tool-calls clojure.core/number?)
+(s/def :github.copilot-sdk.generated.event-specs/total-tool-calls clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/traceparent clojure.core/string?)
 
@@ -405,11 +407,9 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/transformed-content clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/ttft-ms clojure.core/number?)
-
 (s/def :github.copilot-sdk.generated.event-specs/turn-id clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/type (s/spec (fn [v945] (or (s/valid? #{"session.start"} v945) (s/valid? #{"session.resume"} v945) (s/valid? #{"session.remote_steerable_changed"} v945) (s/valid? #{"session.error"} v945) (s/valid? #{"session.idle"} v945) (s/valid? #{"session.title_changed"} v945) (s/valid? #{"session.schedule_created"} v945) (s/valid? #{"session.schedule_cancelled"} v945) (s/valid? #{"session.info"} v945) (s/valid? #{"session.warning"} v945) (s/valid? #{"session.model_change"} v945) (s/valid? #{"session.mode_changed"} v945) (s/valid? #{"session.plan_changed"} v945) (s/valid? #{"session.workspace_file_changed"} v945) (s/valid? #{"session.handoff"} v945) (s/valid? #{"session.truncation"} v945) (s/valid? #{"session.snapshot_rewind"} v945) (s/valid? #{"session.shutdown"} v945) (s/valid? #{"session.context_changed"} v945) (s/valid? #{"session.usage_info"} v945) (s/valid? #{"session.compaction_start"} v945) (s/valid? #{"session.compaction_complete"} v945) (s/valid? #{"session.task_complete"} v945) (s/valid? #{"user.message"} v945) (s/valid? #{"pending_messages.modified"} v945) (s/valid? #{"assistant.turn_start"} v945) (s/valid? #{"assistant.intent"} v945) (s/valid? #{"assistant.reasoning"} v945) (s/valid? #{"assistant.reasoning_delta"} v945) (s/valid? #{"assistant.streaming_delta"} v945) (s/valid? #{"assistant.message"} v945) (s/valid? #{"assistant.message_start"} v945) (s/valid? #{"assistant.message_delta"} v945) (s/valid? #{"assistant.turn_end"} v945) (s/valid? #{"assistant.usage"} v945) (s/valid? #{"model.call_failure"} v945) (s/valid? #{"abort"} v945) (s/valid? #{"tool.user_requested"} v945) (s/valid? #{"tool.execution_start"} v945) (s/valid? #{"tool.execution_partial_result"} v945) (s/valid? #{"tool.execution_progress"} v945) (s/valid? #{"tool.execution_complete"} v945) (s/valid? #{"skill.invoked"} v945) (s/valid? #{"subagent.started"} v945) (s/valid? #{"subagent.completed"} v945) (s/valid? #{"subagent.failed"} v945) (s/valid? #{"subagent.selected"} v945) (s/valid? #{"subagent.deselected"} v945) (s/valid? #{"hook.start"} v945) (s/valid? #{"hook.end"} v945) (s/valid? #{"system.message"} v945) (s/valid? #{"system.notification"} v945) (s/valid? #{"permission.requested"} v945) (s/valid? #{"permission.completed"} v945) (s/valid? #{"user_input.requested"} v945) (s/valid? #{"user_input.completed"} v945) (s/valid? #{"elicitation.requested"} v945) (s/valid? #{"elicitation.completed"} v945) (s/valid? #{"sampling.requested"} v945) (s/valid? #{"sampling.completed"} v945) (s/valid? #{"mcp.oauth_required"} v945) (s/valid? #{"mcp.oauth_completed"} v945) (s/valid? #{"session.custom_notification"} v945) (s/valid? #{"external_tool.requested"} v945) (s/valid? #{"external_tool.completed"} v945) (s/valid? #{"command.queued"} v945) (s/valid? #{"command.execute"} v945) (s/valid? #{"command.completed"} v945) (s/valid? #{"auto_mode_switch.requested"} v945) (s/valid? #{"auto_mode_switch.completed"} v945) (s/valid? #{"commands.changed"} v945) (s/valid? #{"capabilities.changed"} v945) (s/valid? #{"exit_plan_mode.requested"} v945) (s/valid? #{"exit_plan_mode.completed"} v945) (s/valid? #{"session.tools_updated"} v945) (s/valid? #{"session.background_tasks_changed"} v945) (s/valid? #{"session.skills_loaded"} v945) (s/valid? #{"session.custom_agents_updated"} v945) (s/valid? #{"session.mcp_servers_loaded"} v945) (s/valid? #{"session.mcp_server_status_changed"} v945) (s/valid? #{"session.extensions_loaded"} v945)))))
+(s/def :github.copilot-sdk.generated.event-specs/type (s/spec (fn [v944] (or (s/valid? #{"session.start"} v944) (s/valid? #{"session.resume"} v944) (s/valid? #{"session.remote_steerable_changed"} v944) (s/valid? #{"session.error"} v944) (s/valid? #{"session.idle"} v944) (s/valid? #{"session.title_changed"} v944) (s/valid? #{"session.schedule_created"} v944) (s/valid? #{"session.schedule_cancelled"} v944) (s/valid? #{"session.info"} v944) (s/valid? #{"session.warning"} v944) (s/valid? #{"session.model_change"} v944) (s/valid? #{"session.mode_changed"} v944) (s/valid? #{"session.plan_changed"} v944) (s/valid? #{"session.workspace_file_changed"} v944) (s/valid? #{"session.handoff"} v944) (s/valid? #{"session.truncation"} v944) (s/valid? #{"session.snapshot_rewind"} v944) (s/valid? #{"session.shutdown"} v944) (s/valid? #{"session.context_changed"} v944) (s/valid? #{"session.usage_info"} v944) (s/valid? #{"session.compaction_start"} v944) (s/valid? #{"session.compaction_complete"} v944) (s/valid? #{"session.task_complete"} v944) (s/valid? #{"user.message"} v944) (s/valid? #{"pending_messages.modified"} v944) (s/valid? #{"assistant.turn_start"} v944) (s/valid? #{"assistant.intent"} v944) (s/valid? #{"assistant.reasoning"} v944) (s/valid? #{"assistant.reasoning_delta"} v944) (s/valid? #{"assistant.streaming_delta"} v944) (s/valid? #{"assistant.message"} v944) (s/valid? #{"assistant.message_start"} v944) (s/valid? #{"assistant.message_delta"} v944) (s/valid? #{"assistant.turn_end"} v944) (s/valid? #{"assistant.usage"} v944) (s/valid? #{"model.call_failure"} v944) (s/valid? #{"abort"} v944) (s/valid? #{"tool.user_requested"} v944) (s/valid? #{"tool.execution_start"} v944) (s/valid? #{"tool.execution_partial_result"} v944) (s/valid? #{"tool.execution_progress"} v944) (s/valid? #{"tool.execution_complete"} v944) (s/valid? #{"skill.invoked"} v944) (s/valid? #{"subagent.started"} v944) (s/valid? #{"subagent.completed"} v944) (s/valid? #{"subagent.failed"} v944) (s/valid? #{"subagent.selected"} v944) (s/valid? #{"subagent.deselected"} v944) (s/valid? #{"hook.start"} v944) (s/valid? #{"hook.end"} v944) (s/valid? #{"system.message"} v944) (s/valid? #{"system.notification"} v944) (s/valid? #{"permission.requested"} v944) (s/valid? #{"permission.completed"} v944) (s/valid? #{"user_input.requested"} v944) (s/valid? #{"user_input.completed"} v944) (s/valid? #{"elicitation.requested"} v944) (s/valid? #{"elicitation.completed"} v944) (s/valid? #{"sampling.requested"} v944) (s/valid? #{"sampling.completed"} v944) (s/valid? #{"mcp.oauth_required"} v944) (s/valid? #{"mcp.oauth_completed"} v944) (s/valid? #{"session.custom_notification"} v944) (s/valid? #{"external_tool.requested"} v944) (s/valid? #{"external_tool.completed"} v944) (s/valid? #{"command.queued"} v944) (s/valid? #{"command.execute"} v944) (s/valid? #{"command.completed"} v944) (s/valid? #{"auto_mode_switch.requested"} v944) (s/valid? #{"auto_mode_switch.completed"} v944) (s/valid? #{"commands.changed"} v944) (s/valid? #{"capabilities.changed"} v944) (s/valid? #{"exit_plan_mode.requested"} v944) (s/valid? #{"exit_plan_mode.completed"} v944) (s/valid? #{"session.tools_updated"} v944) (s/valid? #{"session.background_tasks_changed"} v944) (s/valid? #{"session.skills_loaded"} v944) (s/valid? #{"session.custom_agents_updated"} v944) (s/valid? #{"session.mcp_servers_loaded"} v944) (s/valid? #{"session.mcp_server_status_changed"} v944) (s/valid? #{"session.extensions_loaded"} v944)))))
 
 (s/def :github.copilot-sdk.generated.event-specs/ui clojure.core/map?)
 
@@ -417,7 +417,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/url clojure.core/string?)
 
-(s/def :github.copilot-sdk.generated.event-specs/version (s/spec (fn [v946] (or (s/valid? clojure.core/number? v946) (s/valid? clojure.core/integer? v946)))))
+(s/def :github.copilot-sdk.generated.event-specs/version clojure.core/integer?)
 
 (s/def :github.copilot-sdk.generated.event-specs/warning-type clojure.core/string?)
 
@@ -445,7 +445,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/assistant.turn_start-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/turn-id] :opt-un [:github.copilot-sdk.generated.event-specs/interaction-id]))
 
-(s/def :github.copilot-sdk.generated.event-specs/assistant.usage-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/model] :opt-un [:github.copilot-sdk.generated.event-specs/api-call-id :github.copilot-sdk.generated.event-specs/api-endpoint :github.copilot-sdk.generated.event-specs/cache-read-tokens :github.copilot-sdk.generated.event-specs/cache-write-tokens :github.copilot-sdk.generated.event-specs/copilot-usage :github.copilot-sdk.generated.event-specs/cost :github.copilot-sdk.generated.event-specs/duration :github.copilot-sdk.generated.event-specs/initiator :github.copilot-sdk.generated.event-specs/input-tokens :github.copilot-sdk.generated.event-specs/inter-token-latency-ms :github.copilot-sdk.generated.event-specs/output-tokens :github.copilot-sdk.generated.event-specs/parent-tool-call-id :github.copilot-sdk.generated.event-specs/provider-call-id :github.copilot-sdk.generated.event-specs/quota-snapshots :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/reasoning-tokens :github.copilot-sdk.generated.event-specs/ttft-ms]))
+(s/def :github.copilot-sdk.generated.event-specs/assistant.usage-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/model] :opt-un [:github.copilot-sdk.generated.event-specs/api-call-id :github.copilot-sdk.generated.event-specs/api-endpoint :github.copilot-sdk.generated.event-specs/cache-read-tokens :github.copilot-sdk.generated.event-specs/cache-write-tokens :github.copilot-sdk.generated.event-specs/copilot-usage :github.copilot-sdk.generated.event-specs/cost :github.copilot-sdk.generated.event-specs/duration :github.copilot-sdk.generated.event-specs/initiator :github.copilot-sdk.generated.event-specs/input-tokens :github.copilot-sdk.generated.event-specs/inter-token-latency-ms :github.copilot-sdk.generated.event-specs/output-tokens :github.copilot-sdk.generated.event-specs/parent-tool-call-id :github.copilot-sdk.generated.event-specs/provider-call-id :github.copilot-sdk.generated.event-specs/quota-snapshots :github.copilot-sdk.generated.event-specs/reasoning-effort :github.copilot-sdk.generated.event-specs/reasoning-tokens :github.copilot-sdk.generated.event-specs/time-to-first-token-ms]))
 
 (s/def :github.copilot-sdk.generated.event-specs/auto_mode_switch.completed-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/request-id :github.copilot-sdk.generated.event-specs/response]))
 
