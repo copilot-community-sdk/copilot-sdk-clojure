@@ -165,7 +165,17 @@
       ;; to ISO 8601 string (`timestamp: string, format: date-time`).
       (is (string? (:timestamp result)))
       (is (some? (java.time.Instant/parse (:timestamp result)))
-          ":timestamp parses as ISO 8601 instant"))))
+          ":timestamp parses as ISO 8601 instant")))
+  (testing "::specs/timestamp accepts both ISO string (CLI ≥ 1.0.51) and epoch-millis number (older CLIs)"
+    (is (s/valid? :github.copilot-sdk.specs/timestamp "2026-05-21T08:00:00.000Z"))
+    (is (s/valid? :github.copilot-sdk.specs/timestamp (System/currentTimeMillis))
+        "System/currentTimeMillis-sized long validates as epoch-ms")
+    (is (s/valid? :github.copilot-sdk.specs/timestamp 1700000000000)
+        "representative epoch-ms long validates")
+    (is (not (s/valid? :github.copilot-sdk.specs/timestamp -1))
+        "epoch-ms must be non-negative")
+    (is (not (s/valid? :github.copilot-sdk.specs/timestamp 1.5))
+        "epoch-ms must be an integer, not arbitrary number")))
 
 (deftest test-get-status
   (testing "Get CLI status returns version and protocol"
