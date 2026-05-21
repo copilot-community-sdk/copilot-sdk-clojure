@@ -4,13 +4,16 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Changed (post-v1.0.0-beta.4 sync, round 3)
-- **`ping` `:timestamp` is now an ISO 8601 string** — Upstream PR #1340
-  (CLI 1.0.51) changed the `ping` RPC result `timestamp` field from
-  epoch-millis number to an ISO 8601 date-time string (e.g.
-  `"2026-05-21T08:00:00.000Z"`). The SDK forwards the field verbatim, so
-  callers of `sdk/ping` now receive a string `:timestamp`. The mock test
-  server was updated to match. The ping docstring documents the change and
-  notes earlier CLI versions returned a number. (upstream PR #1340)
+- **`ping` `:timestamp` field type changed in CLI 1.0.51** — Upstream PR #1340
+  changed the `ping` RPC result `timestamp` field from epoch-millis number to
+  an ISO 8601 date-time string (e.g. `"2026-05-21T08:00:00.000Z"`). The SDK
+  forwards the server value verbatim, so callers of `sdk/ping` will see a
+  string `:timestamp` against CLI ≥ 1.0.51 and a numeric epoch-millis value
+  against older CLIs. The `::specs/timestamp` spec accepts both shapes
+  (`(s/or :iso-string string? :epoch-ms nat-int?)`) so spec instrumentation
+  passes against either CLI version. The mock test server was updated to
+  emit the ISO string form, and the ping docstring documents both shapes.
+  (upstream PR #1340)
 
 ### Added (post-v1.0.0-beta.4 sync, round 3)
 - **`:mcp-args` is now optional on MCP stdio server configs** — Following
