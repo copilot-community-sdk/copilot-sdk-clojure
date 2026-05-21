@@ -127,7 +127,7 @@ for any commit whose patch is already upstream — Git will print
 "patch contents already upstream" for the others and drop them
 automatically.
 
-### Phase 9: Reflecing on code review feedback.
+### Phase 9: Reflecting on code review feedback.
 
 Once the PR is created, Copilot Code Review (and possibly humans) will provide code review feedback.
 

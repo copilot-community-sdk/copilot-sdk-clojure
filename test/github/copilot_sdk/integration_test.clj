@@ -4081,7 +4081,13 @@
         ":time-to-first-token-ms must be a non-negative integer")
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :time-to-first-token-ms "fast"}))
-        ":time-to-first-token-ms must be an integer")))
+        ":time-to-first-token-ms must be an integer")
+    (testing "legacy :ttft-ms key still accepted for backward compatibility (older CLIs)"
+      (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                    {:model "gpt-5" :ttft-ms 250}))
+      (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                    {:model "gpt-5" :ttft-ms 250 :time-to-first-token-ms 250})
+          "both keys may coexist during CLI version transition"))))
 
 ;; --- Memory permission event data specs (CLI 1.0.22) -----------------------
 
