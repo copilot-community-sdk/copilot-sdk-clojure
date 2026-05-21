@@ -346,7 +346,11 @@
 
 (defn ping
   "Ping the server to check connectivity.
-   Returns {:message :timestamp :protocol-version}"
+   Returns {:message :timestamp :protocol-version}.
+
+   `:timestamp` is an ISO 8601 date-time string on CLI ≥ 1.0.51
+   (upstream PR #1340). Earlier CLI versions returned a numeric
+   epoch-millis value."
   ([client]
    (client/ping client))
   ([client message]

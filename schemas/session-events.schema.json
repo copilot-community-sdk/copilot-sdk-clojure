@@ -78,7 +78,12 @@
         "user_abort"
       ],
       "description": "Finite reason code describing why the current turn was aborted",
-      "title": "AbortReason"
+      "title": "AbortReason",
+      "x-enumDescriptions": {
+        "user_initiated": "The local user requested the abort, for example by pressing Ctrl+C in the CLI.",
+        "remote_command": "A remote command requested the abort.",
+        "user_abort": "An MCP server delivered a user.abort notification."
+      }
     },
     "AssistantIntentData": {
       "type": "object",
@@ -191,7 +196,8 @@
           "description": "Generation phase for phased-output models (e.g., thinking vs. response phases)"
         },
         "outputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Actual output token count from the API response (completion_tokens), used for accurate token accounting"
         },
         "interactionId": {
@@ -209,7 +215,8 @@
         },
         "anthropicAdvisorModel": {
           "type": "string",
-          "description": "Anthropic advisor model ID used for this response, for timeline display on replay"
+          "description": "Anthropic advisor model ID used for this response, for timeline display on replay",
+          "stability": "experimental"
         },
         "turnId": {
           "type": "string",
@@ -492,7 +499,11 @@
         "custom"
       ],
       "description": "Tool call type: \"function\" for standard tool calls, \"custom\" for grammar-based tool calls. Defaults to \"function\" when absent.",
-      "title": "AssistantMessageToolRequestType"
+      "title": "AssistantMessageToolRequestType",
+      "x-enumDescriptions": {
+        "function": "Standard function-style tool call.",
+        "custom": "Custom grammar-based tool call."
+      }
     },
     "AssistantReasoningData": {
       "type": "object",
@@ -648,7 +659,8 @@
       "type": "object",
       "properties": {
         "totalResponseSizeBytes": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Cumulative total bytes received from the streaming response so far"
         }
       },
@@ -866,7 +878,13 @@
         "ws:/responses"
       ],
       "description": "API endpoint used for this model call, matching CAPI supported_endpoints vocabulary",
-      "title": "AssistantUsageApiEndpoint"
+      "title": "AssistantUsageApiEndpoint",
+      "x-enumDescriptions": {
+        "/chat/completions": "Chat Completions API endpoint.",
+        "/v1/messages": "Anthropic Messages API endpoint.",
+        "/responses": "Responses API endpoint.",
+        "ws:/responses": "WebSocket Responses API endpoint."
+      }
     },
     "AssistantUsageCopilotUsage": {
       "type": "object",
@@ -881,6 +899,7 @@
         },
         "totalNanoAiu": {
           "type": "number",
+          "minimum": 0,
           "description": "Total cost in nano-AI units for this request"
         }
       },
@@ -890,21 +909,25 @@
       ],
       "additionalProperties": false,
       "description": "Per-request cost and usage data from the CAPI copilot_usage response field",
-      "title": "AssistantUsageCopilotUsage"
+      "title": "AssistantUsageCopilotUsage",
+      "visibility": "internal"
     },
     "AssistantUsageCopilotUsageTokenDetail": {
       "type": "object",
       "properties": {
         "batchSize": {
-          "type": "number",
+          "type": "integer",
+          "exclusiveMinimum": 0,
           "description": "Number of tokens in this billing batch"
         },
         "costPerBatch": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Cost per batch of tokens"
         },
         "tokenCount": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total token count for this entry"
         },
         "tokenType": {
@@ -930,41 +953,50 @@
           "description": "Model identifier used for this API call"
         },
         "inputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of input tokens consumed"
         },
         "outputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of output tokens produced"
         },
         "cacheReadTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of tokens read from prompt cache"
         },
         "cacheWriteTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of tokens written to prompt cache"
         },
         "reasoningTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of output tokens used for reasoning (e.g., chain-of-thought)"
         },
         "cost": {
           "type": "number",
-          "description": "Model multiplier cost for billing purposes"
+          "description": "Model multiplier cost for billing purposes",
+          "stability": "experimental"
         },
         "duration": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Duration of the API call in milliseconds",
           "format": "duration"
         },
-        "ttftMs": {
-          "type": "number",
+        "timeToFirstTokenMs": {
+          "type": "integer",
+          "minimum": 0,
           "description": "Time to first token in milliseconds. Only available for streaming requests",
           "format": "duration"
         },
         "interTokenLatencyMs": {
           "type": "number",
+          "minimum": 0,
           "description": "Average inter-token latency in milliseconds. Only available for streaming requests",
           "format": "duration"
         },
@@ -994,7 +1026,8 @@
           "additionalProperties": {
             "$ref": "#/definitions/AssistantUsageQuotaSnapshot"
           },
-          "description": "Per-quota resource usage snapshots, keyed by quota identifier"
+          "description": "Per-quota resource usage snapshots, keyed by quota identifier",
+          "visibility": "internal"
         },
         "copilotUsage": {
           "$ref": "#/definitions/AssistantUsageCopilotUsage",
@@ -1073,36 +1106,49 @@
       "properties": {
         "isUnlimitedEntitlement": {
           "type": "boolean",
-          "description": "Whether the user has an unlimited usage entitlement"
+          "description": "Whether the user has an unlimited usage entitlement",
+          "visibility": "internal"
         },
         "entitlementRequests": {
-          "type": "number",
-          "description": "Total requests allowed by the entitlement"
+          "type": "integer",
+          "minimum": -1,
+          "description": "Total requests allowed by the entitlement",
+          "visibility": "internal"
         },
         "usedRequests": {
-          "type": "number",
-          "description": "Number of requests already consumed"
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of requests already consumed",
+          "visibility": "internal"
         },
         "usageAllowedWithExhaustedQuota": {
           "type": "boolean",
-          "description": "Whether usage is still permitted after quota exhaustion"
+          "description": "Whether usage is still permitted after quota exhaustion",
+          "visibility": "internal"
         },
         "overage": {
           "type": "number",
-          "description": "Number of requests over the entitlement limit"
+          "minimum": 0,
+          "description": "Number of requests over the entitlement limit",
+          "visibility": "internal"
         },
         "overageAllowedWithExhaustedQuota": {
           "type": "boolean",
-          "description": "Whether overage is allowed when quota is exhausted"
+          "description": "Whether overage is allowed when quota is exhausted",
+          "visibility": "internal"
         },
         "remainingPercentage": {
           "type": "number",
-          "description": "Percentage of quota remaining (0.0 to 1.0)"
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Percentage of quota remaining (0 to 100)",
+          "visibility": "internal"
         },
         "resetDate": {
           "type": "string",
           "format": "date-time",
-          "description": "Date when the quota resets"
+          "description": "Date when the quota resets",
+          "visibility": "internal"
         }
       },
       "required": [
@@ -1206,8 +1252,10 @@
           "description": "The rate limit error code that triggered this request"
         },
         "retryAfterSeconds": {
-          "type": "number",
-          "description": "Seconds until the rate limit resets, when known. Lets clients render a humanized reset time alongside the prompt."
+          "type": "integer",
+          "minimum": 0,
+          "description": "Seconds until the rate limit resets, when known. Lets clients render a humanized reset time alongside the prompt.",
+          "format": "duration"
         }
       },
       "required": [
@@ -1281,7 +1329,12 @@
         "no"
       ],
       "description": "The user's auto-mode-switch choice",
-      "title": "AutoModeSwitchResponse"
+      "title": "AutoModeSwitchResponse",
+      "x-enumDescriptions": {
+        "yes": "Switch models for this request.",
+        "yes_always": "Switch models now and keep using the replacement automatically.",
+        "no": "Do not switch models."
+      }
     },
     "BackgroundTasksChangedData": {
       "type": "object",
@@ -1756,19 +1809,23 @@
       "type": "object",
       "properties": {
         "inputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Input tokens consumed by the compaction LLM call"
         },
         "outputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Output tokens produced by the compaction LLM call"
         },
         "cacheReadTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Cached input tokens reused in the compaction LLM call"
         },
         "cacheWriteTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Tokens written to prompt cache in the compaction LLM call"
         },
         "copilotUsage": {
@@ -1776,7 +1833,8 @@
           "description": "Per-request cost and usage data from the CAPI copilot_usage response field"
         },
         "duration": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Duration of the compaction LLM call in milliseconds",
           "format": "duration"
         },
@@ -1802,6 +1860,7 @@
         },
         "totalNanoAiu": {
           "type": "number",
+          "minimum": 0,
           "description": "Total cost in nano-AI units for this request"
         }
       },
@@ -1811,21 +1870,25 @@
       ],
       "additionalProperties": false,
       "description": "Per-request cost and usage data from the CAPI copilot_usage response field",
-      "title": "CompactionCompleteCompactionTokensUsedCopilotUsage"
+      "title": "CompactionCompleteCompactionTokensUsedCopilotUsage",
+      "visibility": "internal"
     },
     "CompactionCompleteCompactionTokensUsedCopilotUsageTokenDetail": {
       "type": "object",
       "properties": {
         "batchSize": {
-          "type": "number",
+          "type": "integer",
+          "exclusiveMinimum": 0,
           "description": "Number of tokens in this billing batch"
         },
         "costPerBatch": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Cost per batch of tokens"
         },
         "tokenCount": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total token count for this entry"
         },
         "tokenType": {
@@ -1855,23 +1918,28 @@
           "description": "Error message if compaction failed"
         },
         "preCompactionTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens in conversation before compaction"
         },
         "postCompactionTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens in conversation after compaction"
         },
         "preCompactionMessagesLength": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of messages before compaction"
         },
         "messagesRemoved": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of messages removed during compaction"
         },
         "tokensRemoved": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of tokens removed during compaction"
         },
         "summaryContent": {
@@ -1879,7 +1947,8 @@
           "description": "LLM-generated summary of the compacted conversation history"
         },
         "checkpointNumber": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Checkpoint snapshot number created for recovery"
         },
         "checkpointPath": {
@@ -1895,15 +1964,18 @@
           "description": "GitHub request tracing ID (x-github-request-id header) for the compaction LLM call"
         },
         "systemTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from system message(s) after compaction"
         },
         "conversationTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from non-system messages (user, assistant, tool) after compaction"
         },
         "toolDefinitionsTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from tool definitions after compaction"
         }
       },
@@ -1972,15 +2044,18 @@
       "type": "object",
       "properties": {
         "systemTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from system message(s) at compaction start"
         },
         "conversationTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from non-system messages (user, assistant, tool) at compaction start"
         },
         "toolDefinitionsTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from tool definitions at compaction start"
         }
       },
@@ -2379,7 +2454,12 @@
         "cancel"
       ],
       "description": "The user action: \"accept\" (submitted form), \"decline\" (explicitly refused), or \"cancel\" (dismissed)",
-      "title": "ElicitationCompletedAction"
+      "title": "ElicitationCompletedAction",
+      "x-enumDescriptions": {
+        "accept": "The user submitted the requested form.",
+        "decline": "The user explicitly declined the request.",
+        "cancel": "The user dismissed the request."
+      }
     },
     "ElicitationCompletedContent": {
       "anyOf": [
@@ -2587,7 +2667,11 @@
         "url"
       ],
       "description": "Elicitation mode; \"form\" for structured input, \"url\" for browser-based. Defaults to \"form\" when absent.",
-      "title": "ElicitationRequestedMode"
+      "title": "ElicitationRequestedMode",
+      "x-enumDescriptions": {
+        "form": "Structured form-based elicitation.",
+        "url": "Browser URL-based elicitation."
+      }
     },
     "ElicitationRequestedSchema": {
       "type": "object",
@@ -2623,6 +2707,7 @@
       "properties": {
         "uri": {
           "type": "string",
+          "format": "uri",
           "description": "URI identifying the resource"
         },
         "mimeType": {
@@ -2648,6 +2733,7 @@
       "properties": {
         "uri": {
           "type": "string",
+          "format": "uri",
           "description": "URI identifying the resource"
         },
         "mimeType": {
@@ -2692,6 +2778,8 @@
         },
         "statusCode": {
           "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
           "description": "HTTP status code from the upstream request, if applicable"
         },
         "providerCallId": {
@@ -2775,7 +2863,13 @@
         "autopilot_fleet"
       ],
       "description": "Exit plan mode action",
-      "title": "ExitPlanModeAction"
+      "title": "ExitPlanModeAction",
+      "x-enumDescriptions": {
+        "exit_only": "Exit plan mode without starting implementation.",
+        "interactive": "Exit plan mode and continue in interactive mode.",
+        "autopilot": "Exit plan mode and continue autonomously.",
+        "autopilot_fleet": "Exit plan mode and continue with parallel autonomous workers."
+      }
     },
     "ExitPlanModeCompletedData": {
       "type": "object",
@@ -3070,7 +3164,11 @@
         "user"
       ],
       "description": "Discovery source",
-      "title": "ExtensionsLoadedExtensionSource"
+      "title": "ExtensionsLoadedExtensionSource",
+      "x-enumDescriptions": {
+        "project": "Extension discovered from the current project.",
+        "user": "Extension discovered from the user's extension directory."
+      }
     },
     "ExtensionsLoadedExtensionStatus": {
       "type": "string",
@@ -3081,7 +3179,13 @@
         "starting"
       ],
       "description": "Current status: running, disabled, failed, or starting",
-      "title": "ExtensionsLoadedExtensionStatus"
+      "title": "ExtensionsLoadedExtensionStatus",
+      "x-enumDescriptions": {
+        "running": "The extension process is running.",
+        "disabled": "The extension is installed but disabled.",
+        "failed": "The extension failed to start or crashed.",
+        "starting": "The extension process is starting."
+      }
     },
     "ExternalToolCompletedData": {
       "type": "object",
@@ -3375,7 +3479,11 @@
         "local"
       ],
       "description": "Origin type of the session being handed off",
-      "title": "HandoffSourceType"
+      "title": "HandoffSourceType",
+      "x-enumDescriptions": {
+        "remote": "The handoff originated from a remote session.",
+        "local": "The handoff originated from a local session."
+      }
     },
     "HookEndData": {
       "type": "object",
@@ -4002,7 +4110,13 @@
         "builtin"
       ],
       "description": "Configuration source: user, workspace, plugin, or builtin",
-      "title": "McpServerSource"
+      "title": "McpServerSource",
+      "x-enumDescriptions": {
+        "user": "Server configured in the user's global MCP configuration.",
+        "workspace": "Server configured by the current workspace.",
+        "plugin": "Server contributed by an installed plugin.",
+        "builtin": "Server bundled with the runtime."
+      }
     },
     "McpServerStatus": {
       "type": "string",
@@ -4015,7 +4129,15 @@
         "not_configured"
       ],
       "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured",
-      "title": "McpServerStatus"
+      "title": "McpServerStatus",
+      "x-enumDescriptions": {
+        "connected": "The server is connected and available.",
+        "failed": "The server failed to connect or initialize.",
+        "needs-auth": "The server requires authentication before it can connect.",
+        "pending": "The server connection is still being established.",
+        "disabled": "The server is configured but disabled.",
+        "not_configured": "The server is not configured for this session."
+      }
     },
     "McpServerStatusChangedData": {
       "type": "object",
@@ -4188,10 +4310,13 @@
         },
         "statusCode": {
           "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
           "description": "HTTP status code from the failed request"
         },
         "durationMs": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Duration of the failed API call in milliseconds",
           "format": "duration"
         },
@@ -4275,7 +4400,12 @@
         "mcp_sampling"
       ],
       "description": "Where the failed model call originated",
-      "title": "ModelCallFailureSource"
+      "title": "ModelCallFailureSource",
+      "x-enumDescriptions": {
+        "top_level": "Model call from the top-level agent.",
+        "subagent": "Model call from a sub-agent.",
+        "mcp_sampling": "Model call from MCP sampling."
+      }
     },
     "ModelChangeData": {
       "type": "object",
@@ -5065,7 +5195,12 @@
         "write"
       ],
       "description": "Underlying permission kind that needs path approval",
-      "title": "PermissionPromptRequestPathAccessKind"
+      "title": "PermissionPromptRequestPathAccessKind",
+      "x-enumDescriptions": {
+        "read": "Read access to a filesystem path.",
+        "shell": "Shell command access involving a filesystem path.",
+        "write": "Write access to a filesystem path."
+      }
     },
     "PermissionPromptRequestRead": {
       "type": "object",
@@ -5523,7 +5658,11 @@
       ],
       "description": "Whether this is a store or vote memory operation",
       "default": "store",
-      "title": "PermissionRequestMemoryAction"
+      "title": "PermissionRequestMemoryAction",
+      "x-enumDescriptions": {
+        "store": "Store a new memory.",
+        "vote": "Vote on an existing memory."
+      }
     },
     "PermissionRequestMemoryDirection": {
       "type": "string",
@@ -5532,7 +5671,11 @@
         "downvote"
       ],
       "description": "Vote direction (vote only)",
-      "title": "PermissionRequestMemoryDirection"
+      "title": "PermissionRequestMemoryDirection",
+      "x-enumDescriptions": {
+        "upvote": "Vote that the memory is useful or accurate.",
+        "downvote": "Vote that the memory is incorrect or outdated."
+      }
     },
     "PermissionRequestRead": {
       "type": "object",
@@ -5788,7 +5931,7 @@
             "string",
             "null"
           ],
-          "description": "Optional rule argument matched against the request"
+          "description": "Argument value matched against the request, or null when the rule kind has no argument (e.g. 'read', 'write', 'memory')."
         }
       },
       "required": [
@@ -5876,7 +6019,12 @@
         "delete"
       ],
       "description": "The type of operation performed on the plan file",
-      "title": "PlanChangedOperation"
+      "title": "PlanChangedOperation",
+      "x-enumDescriptions": {
+        "create": "The plan file was created.",
+        "update": "The plan file was updated.",
+        "delete": "The plan file was deleted."
+      }
     },
     "ReasoningSummary": {
       "type": "string",
@@ -5886,7 +6034,12 @@
         "detailed"
       ],
       "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")",
-      "title": "ReasoningSummary"
+      "title": "ReasoningSummary",
+      "x-enumDescriptions": {
+        "none": "Do not request reasoning summaries from the model.",
+        "concise": "Request a concise summary of the model's reasoning.",
+        "detailed": "Request a detailed summary of the model's reasoning."
+      }
     },
     "RemoteSteerableChangedData": {
       "type": "object",
@@ -5966,7 +6119,8 @@
           "description": "ISO 8601 timestamp when the session was resumed"
         },
         "eventCount": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total number of persisted events in the session at the time of resume"
         },
         "selectedModel": {
@@ -6716,17 +6870,24 @@
         "autopilot"
       ],
       "description": "The session mode the agent is operating in",
-      "title": "SessionMode"
+      "title": "SessionMode",
+      "x-enumDescriptions": {
+        "interactive": "The agent is responding interactively to the user.",
+        "plan": "The agent is preparing a plan before making changes.",
+        "autopilot": "The agent is working autonomously toward task completion."
+      }
     },
     "ShutdownCodeChanges": {
       "type": "object",
       "properties": {
         "linesAdded": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total number of lines added during the session"
         },
         "linesRemoved": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total number of lines removed during the session"
         },
         "filesModified": {
@@ -6759,11 +6920,15 @@
         },
         "totalPremiumRequests": {
           "type": "number",
-          "description": "Total number of premium API requests used during the session"
+          "minimum": 0,
+          "description": "Total number of premium API requests used during the session",
+          "visibility": "internal"
         },
         "totalNanoAiu": {
           "type": "number",
-          "description": "Session-wide accumulated nano-AI units cost"
+          "minimum": 0,
+          "description": "Session-wide accumulated nano-AI units cost",
+          "stability": "experimental"
         },
         "tokenDetails": {
           "type": "object",
@@ -6773,12 +6938,14 @@
           "description": "Session-wide per-token-type accumulated token counts"
         },
         "totalApiDurationMs": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Cumulative time spent in API calls during the session, in milliseconds",
           "format": "duration"
         },
         "sessionStartTime": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Unix timestamp (milliseconds) when the session started"
         },
         "codeChanges": {
@@ -6797,19 +6964,23 @@
           "description": "Model that was selected at the time of shutdown"
         },
         "currentTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens in context window at shutdown"
         },
         "systemTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "System message token count at shutdown"
         },
         "conversationTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Non-system message token count at shutdown"
         },
         "toolDefinitionsTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Tool definitions token count at shutdown"
         }
       },
@@ -6892,7 +7063,9 @@
         },
         "totalNanoAiu": {
           "type": "number",
-          "description": "Accumulated nano-AI units cost for this model"
+          "minimum": 0,
+          "description": "Accumulated nano-AI units cost for this model",
+          "stability": "experimental"
         },
         "tokenDetails": {
           "type": "object",
@@ -6914,12 +7087,15 @@
       "type": "object",
       "properties": {
         "count": {
-          "type": "number",
-          "description": "Total number of API requests made to this model"
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of API requests made to this model",
+          "stability": "experimental"
         },
         "cost": {
           "type": "number",
-          "description": "Cumulative cost multiplier for requests to this model"
+          "description": "Cumulative cost multiplier for requests to this model",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -6934,7 +7110,8 @@
       "type": "object",
       "properties": {
         "tokenCount": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Accumulated token count for this token type"
         }
       },
@@ -6949,23 +7126,28 @@
       "type": "object",
       "properties": {
         "inputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total input tokens consumed across all requests to this model"
         },
         "outputTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total output tokens produced across all requests to this model"
         },
         "cacheReadTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens read from prompt cache across all requests"
         },
         "cacheWriteTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens written to prompt cache across all requests"
         },
         "reasoningTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total reasoning tokens produced across all requests to this model"
         }
       },
@@ -6983,7 +7165,8 @@
       "type": "object",
       "properties": {
         "tokenCount": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Accumulated token count for this token type"
         }
       },
@@ -7001,7 +7184,11 @@
         "error"
       ],
       "description": "Whether the session ended normally (\"routine\") or due to a crash/fatal error (\"error\")",
-      "title": "ShutdownType"
+      "title": "ShutdownType",
+      "x-enumDescriptions": {
+        "routine": "The session ended normally.",
+        "error": "The session ended because of a crash or fatal error."
+      }
     },
     "SkillInvokedData": {
       "type": "object",
@@ -7226,7 +7413,16 @@
         "builtin"
       ],
       "description": "Source location type (e.g., project, personal-copilot, plugin, builtin)",
-      "title": "SkillSource"
+      "title": "SkillSource",
+      "x-enumDescriptions": {
+        "project": "Skill defined in the current project's skill directories.",
+        "inherited": "Skill discovered from a parent directory in the current workspace tree.",
+        "personal-copilot": "Skill defined in the user's Copilot skill directory.",
+        "personal-agents": "Skill defined in the user's personal agents skill directory.",
+        "plugin": "Skill provided by an installed plugin.",
+        "custom": "Skill loaded from a configured custom skill directory.",
+        "builtin": "Skill bundled with the runtime."
+      }
     },
     "SnapshotRewindData": {
       "type": "object",
@@ -7236,7 +7432,8 @@
           "description": "Event ID that was rewound to; this event and all after it were removed"
         },
         "eventsRemoved": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of events that were removed by the rewind"
         }
       },
@@ -7312,7 +7509,8 @@
           "description": "Unique identifier for the session"
         },
         "version": {
-          "type": "number",
+          "type": "integer",
+          "exclusiveMinimum": 0,
           "description": "Schema version number for the session event format"
         },
         "producer": {
@@ -7442,15 +7640,18 @@
           "description": "Model used by the sub-agent"
         },
         "totalToolCalls": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total number of tool calls made by the sub-agent"
         },
         "totalTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens (input + output) consumed by the sub-agent"
         },
         "durationMs": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Wall-clock duration of the sub-agent execution in milliseconds",
           "format": "duration"
         }
@@ -7603,15 +7804,18 @@
           "description": "Model used by the sub-agent (if any model calls succeeded before failure)"
         },
         "totalToolCalls": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total number of tool calls made before the sub-agent failed"
         },
         "totalTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens (input + output) consumed before the sub-agent failed"
         },
         "durationMs": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Wall-clock duration of the sub-agent execution in milliseconds",
           "format": "duration"
         }
@@ -7963,7 +8167,11 @@
         "developer"
       ],
       "description": "Message role: \"system\" for system prompts, \"developer\" for developer-injected instructions",
-      "title": "SystemMessageRole"
+      "title": "SystemMessageRole",
+      "x-enumDescriptions": {
+        "system": "System prompt message.",
+        "developer": "Developer instruction message."
+      }
     },
     "SystemNotification": {
       "anyOf": [
@@ -8035,7 +8243,11 @@
         "failed"
       ],
       "description": "Whether the agent completed successfully or failed",
-      "title": "SystemNotificationAgentCompletedStatus"
+      "title": "SystemNotificationAgentCompletedStatus",
+      "x-enumDescriptions": {
+        "completed": "The agent completed successfully.",
+        "failed": "The agent failed."
+      }
     },
     "SystemNotificationAgentIdle": {
       "type": "object",
@@ -8225,7 +8437,9 @@
           "description": "Unique identifier of the shell session"
         },
         "exitCode": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
           "description": "Exit code of the shell command, if available"
         },
         "description": {
@@ -8546,6 +8760,7 @@
         },
         "uri": {
           "type": "string",
+          "format": "uri",
           "description": "URI identifying the resource"
         },
         "description": {
@@ -8557,7 +8772,8 @@
           "description": "MIME type of the resource content"
         },
         "size": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Size of the resource in bytes"
         },
         "type": {
@@ -8612,7 +8828,11 @@
         "dark"
       ],
       "description": "Theme variant this icon is intended for",
-      "title": "ToolExecutionCompleteContentResourceLinkIconTheme"
+      "title": "ToolExecutionCompleteContentResourceLinkIconTheme",
+      "x-enumDescriptions": {
+        "light": "Icon intended for light themes.",
+        "dark": "Icon intended for dark themes."
+      }
     },
     "ToolExecutionCompleteContentTerminal": {
       "type": "object",
@@ -8627,7 +8847,9 @@
           "description": "Terminal/shell output text"
         },
         "exitCode": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
           "description": "Process exit code, if the command has completed"
         },
         "cwd": {
@@ -9216,31 +9438,38 @@
       "type": "object",
       "properties": {
         "tokenLimit": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Maximum token count for the model's context window"
         },
         "preTruncationTokensInMessages": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens in conversation messages before truncation"
         },
         "preTruncationMessagesLength": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of conversation messages before truncation"
         },
         "postTruncationTokensInMessages": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Total tokens in conversation messages after truncation"
         },
         "postTruncationMessagesLength": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of conversation messages after truncation"
         },
         "tokensRemovedDuringTruncation": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of tokens removed by truncation"
         },
         "messagesRemovedDuringTruncation": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Number of messages removed by truncation"
         },
         "performedBy": {
@@ -9320,27 +9549,33 @@
       "type": "object",
       "properties": {
         "tokenLimit": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Maximum token count for the model's context window"
         },
         "currentTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Current number of tokens in the context window"
         },
         "messagesLength": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Current number of messages in the conversation"
         },
         "systemTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from system message(s)"
         },
         "conversationTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from non-system messages (user, assistant, tool)"
         },
         "toolDefinitionsTokens": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Token count from tool definitions"
         },
         "isInitial": {
@@ -9592,7 +9827,13 @@
         "shell"
       ],
       "description": "The agent mode that was active when this message was sent",
-      "title": "UserMessageAgentMode"
+      "title": "UserMessageAgentMode",
+      "x-enumDescriptions": {
+        "interactive": "The agent is responding interactively to the user.",
+        "plan": "The agent is preparing a plan before making changes.",
+        "autopilot": "The agent is working autonomously toward task completion.",
+        "shell": "The agent is in shell-focused UI mode."
+      }
     },
     "UserMessageAttachment": {
       "anyOf": [
@@ -9711,11 +9952,13 @@
       "type": "object",
       "properties": {
         "start": {
-          "type": "number",
+          "type": "integer",
+          "exclusiveMinimum": 0,
           "description": "Start line number (1-based)"
         },
         "end": {
-          "type": "number",
+          "type": "integer",
+          "exclusiveMinimum": 0,
           "description": "End line number (1-based, inclusive)"
         }
       },
@@ -9736,7 +9979,8 @@
           "description": "Attachment type discriminator"
         },
         "number": {
-          "type": "number",
+          "type": "integer",
+          "exclusiveMinimum": 0,
           "description": "Issue, pull request, or discussion number"
         },
         "title": {
@@ -9777,7 +10021,12 @@
         "discussion"
       ],
       "description": "Type of GitHub reference",
-      "title": "UserMessageAttachmentGithubReferenceType"
+      "title": "UserMessageAttachmentGithubReferenceType",
+      "x-enumDescriptions": {
+        "issue": "GitHub issue reference.",
+        "pr": "GitHub pull request reference.",
+        "discussion": "GitHub discussion reference."
+      }
     },
     "UserMessageAttachmentSelection": {
       "type": "object",
@@ -9839,11 +10088,13 @@
       "type": "object",
       "properties": {
         "line": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "End line number (0-based)"
         },
         "character": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "End character offset within the line (0-based)"
         }
       },
@@ -9859,11 +10110,13 @@
       "type": "object",
       "properties": {
         "line": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Start line number (0-based)"
         },
         "character": {
-          "type": "number",
+          "type": "integer",
+          "minimum": 0,
           "description": "Start character offset within the line (0-based)"
         }
       },
@@ -9906,7 +10159,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Path-backed native document attachments that stayed on the tagged_files path flow because native upload would exceed the request size limit"
+          "description": "Path-backed native document attachments that stayed on the tagged_files path flow because native upload could not read them or would exceed the request size limit"
         },
         "source": {
           "type": "string",
@@ -10312,7 +10565,11 @@
         "ado"
       ],
       "description": "Hosting platform type of the repository (github or ado)",
-      "title": "WorkingDirectoryContextHostType"
+      "title": "WorkingDirectoryContextHostType",
+      "x-enumDescriptions": {
+        "github": "Repository is hosted on GitHub.",
+        "ado": "Repository is hosted on Azure DevOps."
+      }
     },
     "WorkspaceFileChangedData": {
       "type": "object",
@@ -10395,7 +10652,11 @@
         "update"
       ],
       "description": "Whether the file was newly created or updated",
-      "title": "WorkspaceFileChangedOperation"
+      "title": "WorkspaceFileChangedOperation",
+      "x-enumDescriptions": {
+        "create": "The workspace file was created.",
+        "update": "The workspace file was updated."
+      }
     }
   },
   "$schema": "http://json-schema.org/draft-07/schema#",

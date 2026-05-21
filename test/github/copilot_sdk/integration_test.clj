@@ -161,7 +161,21 @@
   (testing "Ping returns protocol version"
     (let [result (sdk/ping *test-client*)]
       (is (= 2 (:protocol-version result)))
-      (is (number? (:timestamp result))))))
+      ;; Upstream PR #1340 / CLI 1.0.51 changed timestamp from epoch number
+      ;; to ISO 8601 string (`timestamp: string, format: date-time`).
+      (is (string? (:timestamp result)))
+      (is (some? (java.time.Instant/parse (:timestamp result)))
+          ":timestamp parses as ISO 8601 instant")))
+  (testing "::specs/timestamp accepts both ISO string (CLI ≥ 1.0.51) and epoch-millis number (older CLIs)"
+    (is (s/valid? :github.copilot-sdk.specs/timestamp "2026-05-21T08:00:00.000Z"))
+    (is (s/valid? :github.copilot-sdk.specs/timestamp (System/currentTimeMillis))
+        "System/currentTimeMillis-sized long validates as epoch-ms")
+    (is (s/valid? :github.copilot-sdk.specs/timestamp 1700000000000)
+        "representative epoch-ms long validates")
+    (is (not (s/valid? :github.copilot-sdk.specs/timestamp -1))
+        "epoch-ms must be non-negative")
+    (is (not (s/valid? :github.copilot-sdk.specs/timestamp 1.5))
+        "epoch-ms must be an integer, not arbitrary number")))
 
 (deftest test-get-status
   (testing "Get CLI status returns version and protocol"
@@ -3704,7 +3718,14 @@
                   {:mcp-command "node" :mcp-args ["server.js"] :mcp-tools ["read"]}))
     (is (s/valid? :github.copilot-sdk.specs/mcp-stdio-server
                   {:mcp-command "node" :mcp-args ["server.js"] :mcp-tools ["read"]
-                   :mcp-server-type :stdio}))))
+                   :mcp-server-type :stdio}))
+    (testing "upstream PR #1347: :mcp-args is optional"
+      (is (s/valid? :github.copilot-sdk.specs/mcp-stdio-server
+                    {:mcp-command "true" :mcp-tools ["read"]})
+          ":mcp-args may be omitted (upstream PR #1347)")
+      (is (s/valid? :github.copilot-sdk.specs/mcp-stdio-server
+                    {:mcp-command "node" :mcp-tools ["read"] :mcp-server-type :stdio})
+          ":mcp-args optional with explicit :stdio type"))))
 
 (deftest test-mcp-http-server-spec
   (testing "::mcp-http-server spec validates remote/http configs"
@@ -4058,6 +4079,25 @@
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :api-endpoint 42}))
         ":api-endpoint must be a string if present")))
+
+;; --- assistant.usage :time-to-first-token-ms (upstream CLI 1.0.51 schema) --
+
+(deftest test-assistant-usage-time-to-first-token-ms
+  (testing "assistant.usage-data accepts :time-to-first-token-ms (renamed from :ttft-ms)"
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :time-to-first-token-ms 250}))
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5" :time-to-first-token-ms -1}))
+        ":time-to-first-token-ms must be a non-negative integer")
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5" :time-to-first-token-ms "fast"}))
+        ":time-to-first-token-ms must be an integer")
+    (testing "legacy :ttft-ms key still accepted for backward compatibility (older CLIs)"
+      (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                    {:model "gpt-5" :ttft-ms 250}))
+      (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                    {:model "gpt-5" :ttft-ms 250 :time-to-first-token-ms 250})
+          "both keys may coexist during CLI version transition"))))
 
 ;; --- Memory permission event data specs (CLI 1.0.22) -----------------------
 
