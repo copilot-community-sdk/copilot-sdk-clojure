@@ -70,6 +70,20 @@
         }
       }
     },
+    "secrets": {
+      "addFilterValues": {
+        "rpcMethod": "secrets.addFilterValues",
+        "description": "Registers secret values for redaction in session logs and exports. The SDK calls this to inject dynamically generated secret values (e.g., OIDC tokens).",
+        "params": {
+          "$ref": "#/definitions/SecretsAddFilterValuesRequest",
+          "description": "Secret values to add to the redaction filter."
+        },
+        "result": {
+          "$ref": "#/definitions/SecretsAddFilterValuesResult",
+          "description": "Confirmation that the secret values were registered."
+        }
+      }
+    },
     "mcp": {
       "config": {
         "list": {
@@ -504,7 +518,9 @@
             "description": "If set, the request will fail if the named tool is not available when this message is among the user messages at the start of the current exchange"
           },
           "source": {
-            "description": "Optional provenance tag copied to the resulting user.message event. Supported values are `system`, `command-*`, and `schedule-*`."
+            "description": "Optional provenance tag copied to the resulting user.message event. Supported values are `system`, `command-*`, and `schedule-*`.",
+            "visibility": "internal",
+            "x-opaque-json": true
           },
           "agentMode": {
             "$ref": "#/definitions/SendAgentMode",
@@ -1928,7 +1944,8 @@
                 "string",
                 "number"
               ],
-              "description": "The original MCP JSON-RPC request ID (string or number). Used by the runtime to correlate the inference with the originating MCP request for telemetry; this is distinct from `requestId` (which is the schema-level cancellation handle)."
+              "description": "The original MCP JSON-RPC request ID (string or number). Used by the runtime to correlate the inference with the originating MCP request for telemetry; this is distinct from `requestId` (which is the schema-level cancellation handle).",
+              "x-opaque-json": true
             },
             "request": {
               "$ref": "#/definitions/McpExecuteSamplingRequest",
@@ -2147,7 +2164,9 @@
               "description": "Whether experimental capabilities are enabled."
             },
             "provider": {
-              "description": "Custom model-provider configuration (BYOK). Opaque shape; see `ProviderConfig` in the runtime."
+              "description": "Custom model-provider configuration (BYOK). Opaque shape; see `ProviderConfig` in the runtime.",
+              "x-opaque-json": true,
+              "stability": "experimental"
             },
             "workingDirectory": {
               "type": "string",
@@ -2183,7 +2202,9 @@
               "description": "Per-shell process flags (e.g., `pwsh` arguments)."
             },
             "sandboxConfig": {
-              "description": "Sandbox configuration shape; opaque to SDK consumers. See `SandboxConfig` in the runtime."
+              "description": "Sandbox configuration shape; opaque to SDK consumers. See `SandboxConfig` in the runtime.",
+              "x-opaque-json": true,
+              "stability": "experimental"
             },
             "logInteractiveShells": {
               "type": "boolean",
@@ -2275,8 +2296,11 @@
             },
             "additionalContentExclusionPolicies": {
               "type": "array",
-              "items": {},
-              "description": "Additional content-exclusion policies to merge into the session's policy set. Opaque shape; see `ContentExclusionApiResponse` in the runtime."
+              "items": {
+                "x-opaque-json": true
+              },
+              "description": "Additional content-exclusion policies to merge into the session's policy set. Opaque shape; see `ContentExclusionApiResponse` in the runtime.",
+              "stability": "experimental"
             },
             "manageScheduleEnabled": {
               "type": "boolean",
@@ -3903,8 +3927,24 @@
         "rpcMethod": "session.history.compact",
         "description": "Compacts the session history to reduce context usage.",
         "params": {
-          "type": "object",
-          "description": "Identifies the target session.",
+          "anyOf": [
+            {
+              "not": {}
+            },
+            {
+              "type": "object",
+              "properties": {
+                "customInstructions": {
+                  "type": "string",
+                  "maxLength": 4000,
+                  "description": "Optional user-provided instructions to focus the compaction summary"
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "Optional compaction parameters.",
+          "title": "HistoryCompactRequest",
           "properties": {
             "sessionId": {
               "type": "string",
@@ -3913,8 +3953,7 @@
           },
           "required": [
             "sessionId"
-          ],
-          "additionalProperties": false
+          ]
         },
         "result": {
           "$ref": "#/definitions/HistoryCompactResult",
@@ -4776,7 +4815,8 @@
                   "string",
                   "number",
                   "null"
-                ]
+                ],
+                "x-opaque-json": true
               },
               "description": "Optional named bind parameters"
             }
@@ -4931,11 +4971,11 @@
         "overage": {
           "type": "number",
           "minimum": 0,
-          "description": "Number of overage requests made this period"
+          "description": "Number of additional usage requests made this period"
         },
         "overageAllowedWithExhaustedQuota": {
           "type": "boolean",
-          "description": "Whether overage is allowed when quota is exhausted"
+          "description": "Whether additional usage is allowed when quota is exhausted"
         },
         "resetDate": {
           "type": "string",
@@ -5015,8 +5055,11 @@
         },
         "mcpServers": {
           "type": "object",
-          "additionalProperties": {},
-          "description": "MCP server configurations attached to this agent, keyed by server name. Server config shape mirrors the MCP `mcpServers` schema."
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "MCP server configurations attached to this agent, keyed by server name. Server config shape mirrors the MCP `mcpServers` schema.",
+          "stability": "experimental"
         },
         "skills": {
           "type": "array",
@@ -5799,6 +5842,7 @@
         ]
       },
       "title": "CopilotUserResponseQuotaSnapshots",
+      "x-opaque-json": true,
       "description": "Schema for the `CopilotUserResponseQuotaSnapshots` type."
     },
     "CopilotUserResponseQuotaSnapshotsChat": {
@@ -6002,7 +6046,6 @@
       "properties": {
         "uri": {
           "type": "string",
-          "format": "uri",
           "description": "URI identifying the resource"
         },
         "mimeType": {
@@ -6028,7 +6071,6 @@
       "properties": {
         "uri": {
           "type": "string",
-          "format": "uri",
           "description": "URI identifying the resource"
         },
         "mimeType": {
@@ -6196,7 +6238,8 @@
         }
       ],
       "description": "Either '*' to receive all event types, or a non-empty list of event types to receive",
-      "title": "EventLogTypes"
+      "title": "EventLogTypes",
+      "x-opaque-json": true
     },
     "EventsAgentScope": {
       "type": "string",
@@ -6416,7 +6459,8 @@
         }
       ],
       "description": "Tool call result (string or expanded result object)",
-      "title": "ExternalToolResult"
+      "title": "ExternalToolResult",
+      "x-opaque-json": true
     },
     "ExternalToolTextResultForLlm": {
       "type": "object",
@@ -6439,7 +6483,9 @@
         },
         "toolTelemetry": {
           "type": "object",
-          "additionalProperties": {},
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
           "description": "Optional tool-specific telemetry"
         },
         "binaryResultsForLlm": {
@@ -6647,7 +6693,6 @@
         },
         "uri": {
           "type": "string",
-          "format": "uri",
           "description": "URI identifying the resource"
         },
         "description": {
@@ -6735,8 +6780,6 @@
         },
         "exitCode": {
           "type": "integer",
-          "minimum": 0,
-          "maximum": 4294967295,
           "description": "Process exit code, if the command has completed"
         },
         "cwd": {
@@ -6788,7 +6831,8 @@
         }
       ],
       "description": "Content filtering mode to apply to all tools, or a map of tool name to content filtering mode.",
-      "title": "FilterMapping"
+      "title": "FilterMapping",
+      "x-opaque-json": true
     },
     "FleetStartRequest": {
       "type": "object",
@@ -7008,6 +7052,26 @@
       "description": "Post-compaction context window usage breakdown",
       "title": "HistoryCompactContextWindow"
     },
+    "HistoryCompactRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "customInstructions": {
+              "type": "string",
+              "maxLength": 4000,
+              "description": "Optional user-provided instructions to focus the compaction summary"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Optional compaction parameters.",
+      "title": "HistoryCompactRequest"
+    },
     "HistoryCompactResult": {
       "type": "object",
       "properties": {
@@ -7179,7 +7243,9 @@
         }
       ],
       "description": "Source for direct repo installs (when marketplace is empty)",
-      "title": "InstalledPluginSource"
+      "title": "InstalledPluginSource",
+      "x-opaque-json": true,
+      "stability": "experimental"
     },
     "InstalledPluginSourceGithub": {
       "type": "object",
@@ -7676,7 +7742,8 @@
             "string",
             "number"
           ],
-          "description": "The original MCP JSON-RPC request ID (string or number). Used by the runtime to correlate the inference with the originating MCP request for telemetry; this is distinct from `requestId` (which is the schema-level cancellation handle)."
+          "description": "The original MCP JSON-RPC request ID (string or number). Used by the runtime to correlate the inference with the originating MCP request for telemetry; this is distinct from `requestId` (which is the schema-level cancellation handle).",
+          "x-opaque-json": true
         },
         "request": {
           "$ref": "#/definitions/McpExecuteSamplingRequest",
@@ -7698,14 +7765,17 @@
       "properties": {},
       "additionalProperties": true,
       "description": "Raw MCP CreateMessageRequest params, as received in the `sampling.requested` event. Treated as opaque at the schema layer; the runtime converts the embedded MCP messages into the OpenAI chat-completion shape internally.",
-      "title": "McpExecuteSamplingRequest"
+      "title": "McpExecuteSamplingRequest",
+      "x-opaque-json": true
     },
     "McpExecuteSamplingResult": {
       "type": "object",
       "properties": {},
       "additionalProperties": true,
       "description": "MCP CreateMessageResult payload (with optional 'tools' extension), present when action='success'. Treated as opaque at the schema layer; consumers should construct/consume it per the MCP CreateMessageResult shape.",
-      "title": "McpExecuteSamplingResult"
+      "title": "McpExecuteSamplingResult",
+      "x-opaque-json": true,
+      "stability": "experimental"
     },
     "McpOauthLoginRequest": {
       "type": "object",
@@ -7844,7 +7914,8 @@
         }
       ],
       "description": "MCP server configuration (stdio process or remote HTTP/SSE)",
-      "title": "McpServerConfig"
+      "title": "McpServerConfig",
+      "x-opaque-json": true
     },
     "McpServerConfigHttp": {
       "type": "object",
@@ -10098,7 +10169,8 @@
           "type": [
             "string",
             "number"
-          ]
+          ],
+          "x-opaque-json": true
         },
         "scope": {
           "$ref": "#/definitions/PermissionsConfigureAdditionalContentExclusionPolicyScope",
@@ -11244,6 +11316,40 @@
       "description": "Remove a scheduled prompt by id. The result entry is omitted if the id was unknown.",
       "title": "ScheduleStopResult"
     },
+    "SecretsAddFilterValuesRequest": {
+      "type": "object",
+      "properties": {
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Raw secret values to register for redaction"
+        }
+      },
+      "required": [
+        "values"
+      ],
+      "additionalProperties": false,
+      "description": "Secret values to add to the redaction filter.",
+      "title": "SecretsAddFilterValuesRequest"
+    },
+    "SecretsAddFilterValuesResult": {
+      "type": "object",
+      "properties": {
+        "ok": {
+          "type": "boolean",
+          "const": true,
+          "description": "Whether the values were successfully registered"
+        }
+      },
+      "required": [
+        "ok"
+      ],
+      "additionalProperties": false,
+      "description": "Confirmation that the secret values were registered.",
+      "title": "SecretsAddFilterValuesResult"
+    },
     "SendAgentMode": {
       "type": "string",
       "enum": [
@@ -11426,7 +11532,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "URL to the referenced item on GitHub"
         }
       },
@@ -11606,7 +11711,9 @@
           "description": "If set, the request will fail if the named tool is not available when this message is among the user messages at the start of the current exchange"
         },
         "source": {
-          "description": "Optional provenance tag copied to the resulting user.message event. Supported values are `system`, `command-*`, and `schedule-*`."
+          "description": "Optional provenance tag copied to the resulting user.message event. Supported values are `system`, `command-*`, and `schedule-*`.",
+          "visibility": "internal",
+          "x-opaque-json": true
         },
         "agentMode": {
           "$ref": "#/definitions/SendAgentMode",
@@ -12300,7 +12407,8 @@
               "string",
               "number",
               "null"
-            ]
+            ],
+            "x-opaque-json": true
           },
           "description": "Optional named bind parameters"
         }
@@ -12320,7 +12428,9 @@
           "type": "array",
           "items": {
             "type": "object",
-            "additionalProperties": {}
+            "additionalProperties": {
+              "x-opaque-json": true
+            }
           },
           "description": "For SELECT: array of row objects. For others: empty array."
         },
@@ -12510,7 +12620,9 @@
         }
       ],
       "description": "Source descriptor for direct repo installs (when marketplace is empty)",
-      "title": "SessionInstalledPluginSource"
+      "title": "SessionInstalledPluginSource",
+      "x-opaque-json": true,
+      "stability": "experimental"
     },
     "SessionInstalledPluginSourceGithub": {
       "type": "object",
@@ -13367,7 +13479,9 @@
           "description": "Whether experimental capabilities are enabled."
         },
         "provider": {
-          "description": "Custom model-provider configuration (BYOK). Opaque shape; see `ProviderConfig` in the runtime."
+          "description": "Custom model-provider configuration (BYOK). Opaque shape; see `ProviderConfig` in the runtime.",
+          "x-opaque-json": true,
+          "stability": "experimental"
         },
         "workingDirectory": {
           "type": "string",
@@ -13403,7 +13517,9 @@
           "description": "Per-shell process flags (e.g., `pwsh` arguments)."
         },
         "sandboxConfig": {
-          "description": "Sandbox configuration shape; opaque to SDK consumers. See `SandboxConfig` in the runtime."
+          "description": "Sandbox configuration shape; opaque to SDK consumers. See `SandboxConfig` in the runtime.",
+          "x-opaque-json": true,
+          "stability": "experimental"
         },
         "logInteractiveShells": {
           "type": "boolean",
@@ -13495,8 +13611,11 @@
         },
         "additionalContentExclusionPolicies": {
           "type": "array",
-          "items": {},
-          "description": "Additional content-exclusion policies to merge into the session's policy set. Opaque shape; see `ContentExclusionApiResponse` in the runtime."
+          "items": {
+            "x-opaque-json": true
+          },
+          "description": "Additional content-exclusion policies to merge into the session's policy set. Opaque shape; see `ContentExclusionApiResponse` in the runtime.",
+          "stability": "experimental"
         },
         "manageScheduleEnabled": {
           "type": "boolean",
@@ -14854,7 +14973,9 @@
         },
         "parameters": {
           "type": "object",
-          "additionalProperties": {},
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
           "description": "JSON Schema for the tool's input parameters"
         },
         "instructions": {
@@ -15095,6 +15216,7 @@
         }
       ],
       "title": "UIElicitationFieldValue",
+      "x-opaque-json": true,
       "description": "Schema for the `UIElicitationFieldValue` type."
     },
     "UIElicitationRequest": {
@@ -15238,7 +15360,8 @@
         }
       ],
       "description": "Definition for a single elicitation form field.",
-      "title": "UIElicitationSchemaProperty"
+      "title": "UIElicitationSchemaProperty",
+      "x-opaque-json": true
     },
     "UIElicitationSchemaPropertyBoolean": {
       "type": "object",
@@ -15617,7 +15740,8 @@
       "properties": {},
       "additionalProperties": true,
       "description": "Optional sampling result payload. Omit to reject/cancel the sampling request without providing a result.",
-      "title": "UIHandlePendingSamplingResponse"
+      "title": "UIHandlePendingSamplingResponse",
+      "x-opaque-json": true
     },
     "UIHandlePendingUserInputRequest": {
       "type": "object",
