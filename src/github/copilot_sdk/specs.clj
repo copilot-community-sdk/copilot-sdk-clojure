@@ -1100,9 +1100,9 @@
 (s/def ::current-model string?)
 
 (s/def ::session.shutdown-data
-  (s/keys :req-un [::shutdown-type ::total-premium-requests ::total-api-duration-ms
+  (s/keys :req-un [::shutdown-type ::total-api-duration-ms
                    ::session-start-time ::code-changes ::model-metrics]
-          :opt-un [::error-reason ::current-model]))
+          :opt-un [::error-reason ::current-model ::total-premium-requests]))
 
 ;; Session title changed event
 (s/def ::title string?)

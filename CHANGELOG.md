@@ -20,13 +20,21 @@ All notable changes to this project will be documented in this file. This change
     keys are preserved opaquely — not camelCased)
   - `{:meta-to-use nil}`: serialize as JSON `null`, removing `_meta`.
 
+  Note: PR #1366 also renamed hook-input `cwd` to `workingDirectory` in
+  the Node.js public API. Existing Clojure hook handlers (`:on-pre-tool-use`,
+  `:on-post-tool-use`, etc.) currently receive the field as `:cwd`. For
+  internal consistency, `:on-pre-mcp-tool-call` also exposes `:cwd`; the
+  coordinated `:cwd` → `:working-directory` rename across all hooks is
+  tracked with the deferred PR #1357 work below.
+
   (upstream PR #1366)
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.51` to
   `1.0.52-1`. Additive changes only:
   - `session.compaction_complete-data` gains optional `:custom-instructions`.
   - `tool.execution_complete-data` gains optional `:sandboxed`.
   - `session.shutdown-data` relaxes `:total-premium-requests` from
-    required to optional.
+    required to optional. The hand-curated idiom spec
+    `::specs/session.shutdown-data` matches.
 
   Most of the remaining schema diff is `x-opaque-json` / description
   annotations that do not affect the generated specs.
