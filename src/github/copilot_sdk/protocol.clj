@@ -162,6 +162,18 @@
          (contains? raw-result :rows))
     (assoc wire-result :rows (:rows raw-result))
 
+    ;; Upstream PR #1366: preMcpToolCall hook output `:meta-to-use` is
+    ;; opaque MCP metadata. The inner map's keys are source-defined and
+    ;; must NOT be camelCased. `contains?` (not truthiness) is used so
+    ;; that an explicit `nil` value survives as JSON `null` (the
+    ;; tri-state contract: absent = preserve, null = remove, object =
+    ;; replace). Only preMcpToolCall hooks use this key, so unconditional
+    ;; preservation for any `hooks.invoke` response is safe.
+    (and (= "hooks.invoke" method)
+         (map? raw-result)
+         (contains? raw-result :meta-to-use))
+    (assoc wire-result :metaToUse (:meta-to-use raw-result))
+
     :else wire-result))
 
 (defn- handle-request!
@@ -241,6 +253,24 @@
       ;; doesn't mangle placeholder names before the handler binds them.
       (and (= "sessionFs.sqliteQuery" method) (map? params) (contains? params :params))
       (assoc-in converted [:params :params] (:params params))
+
+      ;; Upstream PR #1366: preMcpToolCall hook input has two opaque
+      ;; fields that must NOT be recursively kebab-cased:
+      ;; - `:arguments`: MCP tool call arguments (source-defined keys)
+      ;; - `:_meta`: MCP metadata. csk would also collapse the key
+      ;;   `:_meta` to `:meta`, so we re-key explicitly.
+      (and (= "hooks.invoke" method)
+           (map? params)
+           (= "preMcpToolCall" (:hookType params))
+           (map? (:input params)))
+      (let [raw-input (:input params)]
+        (cond-> converted
+          (contains? raw-input :arguments)
+          (assoc-in [:params :input :arguments] (:arguments raw-input))
+
+          (contains? raw-input :_meta)
+          (-> (update-in [:params :input] dissoc :meta)
+              (assoc-in [:params :input :_meta] (:_meta raw-input)))))
 
       ;; v3: preserve raw arguments / subject / payload in broadcast events
       (and (= "session.event" method)

@@ -91,6 +91,8 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/current-tokens clojure.core/integer?)
 
+(s/def :github.copilot-sdk.generated.event-specs/custom-instructions clojure.core/string?)
+
 (s/def :github.copilot-sdk.generated.event-specs/cwd clojure.core/string?)
 
 (s/def :github.copilot-sdk.generated.event-specs/data clojure.core/map?)
@@ -315,6 +317,8 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/role #{"developer" "system"})
 
+(s/def :github.copilot-sdk.generated.event-specs/sandboxed clojure.core/boolean?)
+
 (s/def :github.copilot-sdk.generated.event-specs/selected-action #{"interactive" "autopilot_fleet" "exit_only" "autopilot"})
 
 (s/def :github.copilot-sdk.generated.event-specs/selected-model clojure.core/string?)
@@ -495,7 +499,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/session.background_tasks_changed-data (s/keys))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.compaction_complete-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/success] :opt-un [:github.copilot-sdk.generated.event-specs/checkpoint-number :github.copilot-sdk.generated.event-specs/checkpoint-path :github.copilot-sdk.generated.event-specs/compaction-tokens-used :github.copilot-sdk.generated.event-specs/conversation-tokens :github.copilot-sdk.generated.event-specs/error :github.copilot-sdk.generated.event-specs/messages-removed :github.copilot-sdk.generated.event-specs/post-compaction-tokens :github.copilot-sdk.generated.event-specs/pre-compaction-messages-length :github.copilot-sdk.generated.event-specs/pre-compaction-tokens :github.copilot-sdk.generated.event-specs/request-id :github.copilot-sdk.generated.event-specs/summary-content :github.copilot-sdk.generated.event-specs/system-tokens :github.copilot-sdk.generated.event-specs/tokens-removed :github.copilot-sdk.generated.event-specs/tool-definitions-tokens]))
+(s/def :github.copilot-sdk.generated.event-specs/session.compaction_complete-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/success] :opt-un [:github.copilot-sdk.generated.event-specs/checkpoint-number :github.copilot-sdk.generated.event-specs/checkpoint-path :github.copilot-sdk.generated.event-specs/compaction-tokens-used :github.copilot-sdk.generated.event-specs/conversation-tokens :github.copilot-sdk.generated.event-specs/custom-instructions :github.copilot-sdk.generated.event-specs/error :github.copilot-sdk.generated.event-specs/messages-removed :github.copilot-sdk.generated.event-specs/post-compaction-tokens :github.copilot-sdk.generated.event-specs/pre-compaction-messages-length :github.copilot-sdk.generated.event-specs/pre-compaction-tokens :github.copilot-sdk.generated.event-specs/request-id :github.copilot-sdk.generated.event-specs/summary-content :github.copilot-sdk.generated.event-specs/system-tokens :github.copilot-sdk.generated.event-specs/tokens-removed :github.copilot-sdk.generated.event-specs/tool-definitions-tokens]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.compaction_start-data (s/keys :opt-un [:github.copilot-sdk.generated.event-specs/conversation-tokens :github.copilot-sdk.generated.event-specs/system-tokens :github.copilot-sdk.generated.event-specs/tool-definitions-tokens]))
 
@@ -533,7 +537,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/session.schedule_created-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/id :github.copilot-sdk.generated.event-specs/interval-ms :github.copilot-sdk.generated.event-specs/prompt] :opt-un [:github.copilot-sdk.generated.event-specs/display-prompt :github.copilot-sdk.generated.event-specs/recurring]) (fn [data] (s/valid? clojure.core/integer? (:id data)))))
 
-(s/def :github.copilot-sdk.generated.event-specs/session.shutdown-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/code-changes :github.copilot-sdk.generated.event-specs/model-metrics :github.copilot-sdk.generated.event-specs/session-start-time :github.copilot-sdk.generated.event-specs/shutdown-type :github.copilot-sdk.generated.event-specs/total-api-duration-ms :github.copilot-sdk.generated.event-specs/total-premium-requests] :opt-un [:github.copilot-sdk.generated.event-specs/conversation-tokens :github.copilot-sdk.generated.event-specs/current-model :github.copilot-sdk.generated.event-specs/current-tokens :github.copilot-sdk.generated.event-specs/error-reason :github.copilot-sdk.generated.event-specs/system-tokens :github.copilot-sdk.generated.event-specs/token-details :github.copilot-sdk.generated.event-specs/tool-definitions-tokens :github.copilot-sdk.generated.event-specs/total-nano-aiu]))
+(s/def :github.copilot-sdk.generated.event-specs/session.shutdown-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/code-changes :github.copilot-sdk.generated.event-specs/model-metrics :github.copilot-sdk.generated.event-specs/session-start-time :github.copilot-sdk.generated.event-specs/shutdown-type :github.copilot-sdk.generated.event-specs/total-api-duration-ms] :opt-un [:github.copilot-sdk.generated.event-specs/conversation-tokens :github.copilot-sdk.generated.event-specs/current-model :github.copilot-sdk.generated.event-specs/current-tokens :github.copilot-sdk.generated.event-specs/error-reason :github.copilot-sdk.generated.event-specs/system-tokens :github.copilot-sdk.generated.event-specs/token-details :github.copilot-sdk.generated.event-specs/tool-definitions-tokens :github.copilot-sdk.generated.event-specs/total-nano-aiu :github.copilot-sdk.generated.event-specs/total-premium-requests]))
 
 (s/def :github.copilot-sdk.generated.event-specs/session.skills_loaded-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/skills]))
 
@@ -571,7 +575,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/system.notification-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/content :github.copilot-sdk.generated.event-specs/kind]))
 
-(s/def :github.copilot-sdk.generated.event-specs/tool.execution_complete-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/success :github.copilot-sdk.generated.event-specs/tool-call-id] :opt-un [:github.copilot-sdk.generated.event-specs/error :github.copilot-sdk.generated.event-specs/interaction-id :github.copilot-sdk.generated.event-specs/is-user-requested :github.copilot-sdk.generated.event-specs/model :github.copilot-sdk.generated.event-specs/parent-tool-call-id :github.copilot-sdk.generated.event-specs/result :github.copilot-sdk.generated.event-specs/tool-telemetry :github.copilot-sdk.generated.event-specs/turn-id]))
+(s/def :github.copilot-sdk.generated.event-specs/tool.execution_complete-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/success :github.copilot-sdk.generated.event-specs/tool-call-id] :opt-un [:github.copilot-sdk.generated.event-specs/error :github.copilot-sdk.generated.event-specs/interaction-id :github.copilot-sdk.generated.event-specs/is-user-requested :github.copilot-sdk.generated.event-specs/model :github.copilot-sdk.generated.event-specs/parent-tool-call-id :github.copilot-sdk.generated.event-specs/result :github.copilot-sdk.generated.event-specs/sandboxed :github.copilot-sdk.generated.event-specs/tool-telemetry :github.copilot-sdk.generated.event-specs/turn-id]))
 
 (s/def :github.copilot-sdk.generated.event-specs/tool.execution_partial_result-data (s/keys :req-un [:github.copilot-sdk.generated.event-specs/partial-output :github.copilot-sdk.generated.event-specs/tool-call-id]))
 

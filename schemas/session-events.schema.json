@@ -210,8 +210,11 @@
         },
         "anthropicAdvisorBlocks": {
           "type": "array",
-          "items": {},
-          "description": "Raw Anthropic content array with advisor blocks (server_tool_use, advisor_tool_result) for verbatim round-tripping"
+          "items": {
+            "x-opaque-json": true
+          },
+          "description": "Raw Anthropic content array with advisor blocks (server_tool_use, advisor_tool_result) for verbatim round-tripping",
+          "stability": "experimental"
         },
         "anthropicAdvisorModel": {
           "type": "string",
@@ -458,7 +461,8 @@
           "description": "Name of the tool being invoked"
         },
         "arguments": {
-          "description": "Arguments to pass to the tool, format depends on the tool"
+          "description": "Arguments to pass to the tool, format depends on the tool",
+          "x-opaque-json": true
         },
         "type": {
           "$ref": "#/definitions/AssistantMessageToolRequestType",
@@ -1129,12 +1133,12 @@
         "overage": {
           "type": "number",
           "minimum": 0,
-          "description": "Number of requests over the entitlement limit",
+          "description": "Number of additional usage requests made this period",
           "visibility": "internal"
         },
         "overageAllowedWithExhaustedQuota": {
           "type": "boolean",
-          "description": "Whether overage is allowed when quota is exhausted",
+          "description": "Whether additional usage is allowed when quota is exhausted",
           "visibility": "internal"
         },
         "remainingPercentage": {
@@ -1162,6 +1166,7 @@
       ],
       "additionalProperties": false,
       "title": "AssistantUsageQuotaSnapshot",
+      "visibility": "internal",
       "description": "Schema for the `AssistantUsageQuotaSnapshot` type."
     },
     "AutoModeSwitchCompletedData": {
@@ -1942,6 +1947,10 @@
           "minimum": 0,
           "description": "Number of tokens removed during compaction"
         },
+        "customInstructions": {
+          "type": "string",
+          "description": "User-supplied focus instructions provided to a manual `/compact` invocation. Omitted for automatic compaction and for manual compaction with no focus text."
+        },
         "summaryContent": {
           "type": "string",
           "description": "LLM-generated summary of the compacted conversation history"
@@ -2436,7 +2445,8 @@
         }
       ],
       "description": "Source-defined JSON payload for the custom notification",
-      "title": "CustomNotificationPayload"
+      "title": "CustomNotificationPayload",
+      "x-opaque-json": true
     },
     "CustomNotificationSubject": {
       "type": "object",
@@ -2480,6 +2490,7 @@
         }
       ],
       "title": "ElicitationCompletedContent",
+      "x-opaque-json": true,
       "description": "Schema for the `ElicitationCompletedContent` type."
     },
     "ElicitationCompletedData": {
@@ -2683,7 +2694,9 @@
         },
         "properties": {
           "type": "object",
-          "additionalProperties": {},
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
           "description": "Form field definitions, keyed by field name"
         },
         "required": {
@@ -2707,7 +2720,6 @@
       "properties": {
         "uri": {
           "type": "string",
-          "format": "uri",
           "description": "URI identifying the resource"
         },
         "mimeType": {
@@ -2733,7 +2745,6 @@
       "properties": {
         "uri": {
           "type": "string",
-          "format": "uri",
           "description": "URI identifying the resource"
         },
         "mimeType": {
@@ -2788,7 +2799,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "Optional URL associated with this error that the user can open in a browser"
         }
       },
@@ -3277,7 +3287,8 @@
           "description": "Name of the external tool to invoke"
         },
         "arguments": {
-          "description": "Arguments to pass to the external tool"
+          "description": "Arguments to pass to the external tool",
+          "x-opaque-json": true
         },
         "traceparent": {
           "type": "string",
@@ -3382,7 +3393,6 @@
         },
         "host": {
           "type": "string",
-          "format": "uri",
           "description": "GitHub host URL for the source session (e.g., https://github.com or https://tenant.ghe.com)"
         }
       },
@@ -3497,7 +3507,8 @@
           "description": "Type of hook that was invoked (e.g., \"preToolUse\", \"postToolUse\", \"sessionStart\")"
         },
         "output": {
-          "description": "Output data produced by the hook"
+          "description": "Output data produced by the hook",
+          "x-opaque-json": true
         },
         "success": {
           "type": "boolean",
@@ -3602,7 +3613,8 @@
           "description": "Type of hook being invoked (e.g., \"preToolUse\", \"postToolUse\", \"sessionStart\")"
         },
         "input": {
-          "description": "Input data passed to the hook"
+          "description": "Input data passed to the hook",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -3748,7 +3760,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "Optional URL associated with this message that the user can open in a browser"
         },
         "tip": {
@@ -3902,7 +3913,6 @@
         },
         "serverUrl": {
           "type": "string",
-          "format": "uri",
           "description": "URL of the MCP server that requires OAuth"
         },
         "staticClientConfig": {
@@ -4959,7 +4969,8 @@
           "description": "Description of what the custom tool does"
         },
         "args": {
-          "description": "Arguments to pass to the custom tool"
+          "description": "Arguments to pass to the custom tool",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -5050,7 +5061,8 @@
           "description": "Name of the tool the hook is gating"
         },
         "toolArgs": {
-          "description": "Arguments of the tool call being gated"
+          "description": "Arguments of the tool call being gated",
+          "x-opaque-json": true
         },
         "hookMessage": {
           "type": "string",
@@ -5096,7 +5108,8 @@
               "type": "null"
             }
           ],
-          "description": "Arguments to pass to the MCP tool"
+          "description": "Arguments to pass to the MCP tool",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -5250,7 +5263,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "URL to be fetched"
         }
       },
@@ -5374,7 +5386,8 @@
           "description": "Description of what the custom tool does"
         },
         "args": {
-          "description": "Arguments to pass to the custom tool"
+          "description": "Arguments to pass to the custom tool",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -5547,7 +5560,8 @@
           "description": "Name of the tool the hook is gating"
         },
         "toolArgs": {
-          "description": "Arguments of the tool call being gated"
+          "description": "Arguments of the tool call being gated",
+          "x-opaque-json": true
         },
         "hookMessage": {
           "type": "string",
@@ -5587,7 +5601,8 @@
           "description": "Human-readable title of the MCP tool"
         },
         "args": {
-          "description": "Arguments to pass to the MCP tool"
+          "description": "Arguments to pass to the MCP tool",
+          "x-opaque-json": true
         },
         "readOnly": {
           "type": "boolean",
@@ -5800,7 +5815,6 @@
       "properties": {
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "URL that may be accessed by the command"
         }
       },
@@ -5829,7 +5843,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "URL to be fetched"
         }
       },
@@ -6305,7 +6318,8 @@
             "string",
             "number"
           ],
-          "description": "The JSON-RPC request ID from the MCP protocol"
+          "description": "The JSON-RPC request ID from the MCP protocol",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -6986,7 +7000,6 @@
       },
       "required": [
         "shutdownType",
-        "totalPremiumRequests",
         "totalApiDurationMs",
         "sessionStartTime",
         "codeChanges",
@@ -7098,10 +7111,6 @@
           "stability": "experimental"
         }
       },
-      "required": [
-        "count",
-        "cost"
-      ],
       "additionalProperties": false,
       "description": "Request count and cost metrics",
       "title": "ShutdownModelMetricRequests"
@@ -8152,7 +8161,9 @@
         },
         "variables": {
           "type": "object",
-          "additionalProperties": {},
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
           "description": "Template variables used when constructing the prompt"
         }
       },
@@ -8438,8 +8449,6 @@
         },
         "exitCode": {
           "type": "integer",
-          "minimum": 0,
-          "maximum": 4294967295,
           "description": "Exit code of the shell command, if available"
         },
         "description": {
@@ -8760,7 +8769,6 @@
         },
         "uri": {
           "type": "string",
-          "format": "uri",
           "description": "URI identifying the resource"
         },
         "description": {
@@ -8848,8 +8856,6 @@
         },
         "exitCode": {
           "type": "integer",
-          "minimum": 0,
-          "maximum": 4294967295,
           "description": "Process exit code, if the command has completed"
         },
         "cwd": {
@@ -8919,12 +8925,18 @@
         },
         "toolTelemetry": {
           "type": "object",
-          "additionalProperties": {},
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
           "description": "Tool-specific telemetry data (e.g., CodeQL check counts, grep match counts)"
         },
         "turnId": {
           "type": "string",
           "description": "Identifier for the agent loop turn this tool was invoked in, matching the corresponding assistant.turn_start event"
+        },
+        "sandboxed": {
+          "type": "boolean",
+          "description": "Whether this tool execution ran inside a sandbox container"
         },
         "parentToolCallId": {
           "type": "string",
@@ -9204,7 +9216,8 @@
           "description": "Name of the tool being executed"
         },
         "arguments": {
-          "description": "Arguments passed to the tool"
+          "description": "Arguments passed to the tool",
+          "x-opaque-json": true
         },
         "mcpServerName": {
           "type": "string",
@@ -9369,7 +9382,8 @@
           "description": "Name of the tool the user wants to invoke"
         },
         "arguments": {
-          "description": "Arguments for the tool invocation"
+          "description": "Arguments for the tool invocation",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -9997,7 +10011,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "URL to the referenced item on GitHub"
         }
       },
@@ -10449,7 +10462,6 @@
         },
         "url": {
           "type": "string",
-          "format": "uri",
           "description": "Optional URL associated with this warning that the user can open in a browser"
         }
       },

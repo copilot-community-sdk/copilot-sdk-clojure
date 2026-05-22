@@ -439,14 +439,16 @@
 ;; Hooks and user input handlers (PR #269)
 (s/def ::on-user-input-request fn?)
 (s/def ::on-pre-tool-use fn?)
+(s/def ::on-pre-mcp-tool-call fn?)
 (s/def ::on-post-tool-use fn?)
 (s/def ::on-user-prompt-submitted fn?)
 (s/def ::on-session-start fn?)
 (s/def ::on-session-end fn?)
 (s/def ::on-error-occurred fn?)
 (s/def ::hooks
-  (s/keys :opt-un [::on-pre-tool-use ::on-post-tool-use ::on-user-prompt-submitted
-                   ::on-session-start ::on-session-end ::on-error-occurred]))
+  (s/keys :opt-un [::on-pre-tool-use ::on-pre-mcp-tool-call ::on-post-tool-use
+                   ::on-user-prompt-submitted ::on-session-start ::on-session-end
+                   ::on-error-occurred]))
 
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
@@ -1098,9 +1100,9 @@
 (s/def ::current-model string?)
 
 (s/def ::session.shutdown-data
-  (s/keys :req-un [::shutdown-type ::total-premium-requests ::total-api-duration-ms
+  (s/keys :req-un [::shutdown-type ::total-api-duration-ms
                    ::session-start-time ::code-changes ::model-metrics]
-          :opt-un [::error-reason ::current-model]))
+          :opt-un [::error-reason ::current-model ::total-premium-requests]))
 
 ;; Session title changed event
 (s/def ::title string?)
