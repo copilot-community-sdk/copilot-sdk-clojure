@@ -3099,6 +3099,114 @@
       (is (= session-id (:session-id @handler-called))))))
 
 ;; -----------------------------------------------------------------------------
+;; preMcpToolCall hook (upstream PR #1366)
+;; -----------------------------------------------------------------------------
+
+(deftest test-hooks-pre-mcp-tool-call-input-shape
+  (testing "preMcpToolCall: handler receives kebab-cased base fields + opaque arguments/_meta"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-mcp-tool-call
+                                               (fn [input ctx]
+                                                 (reset! handler-called {:input input :ctx ctx})
+                                                 nil)}})
+          session-id (sdk/session-id session)
+          opaque-args {:filePath "/tmp/foo.txt"
+                       :user_id 42
+                       :nested {:keepCamelCase true}}
+          opaque-meta {:traceId "abc-123" :foo_bar "ok"}
+          _ (mock/send-rpc-request! *mock-server*
+                                    "hooks.invoke"
+                                    {:sessionId session-id
+                                     :hookType "preMcpToolCall"
+                                     :input {:serverName "my-mcp"
+                                             :toolName "fetch"
+                                             :toolCallId "call-42"
+                                             :arguments opaque-args
+                                             :_meta opaque-meta
+                                             :timestamp 12345
+                                             :cwd "/workspace"
+                                             :sessionId session-id}})]
+      (is (some? @handler-called))
+      ;; Base fields are kebab-cased
+      (is (= "my-mcp" (get-in @handler-called [:input :server-name])))
+      (is (= "fetch" (get-in @handler-called [:input :tool-name])))
+      (is (= "call-42" (get-in @handler-called [:input :tool-call-id])))
+      (is (= session-id (get-in @handler-called [:input :session-id])))
+      (is (= 12345 (get-in @handler-called [:input :timestamp])))
+      ;; Opaque arguments preserved verbatim (wire-keyword shape, NOT kebab-cased)
+      (is (= opaque-args (get-in @handler-called [:input :arguments])))
+      ;; _meta key preserved verbatim (kebab conversion would strip leading _)
+      (is (= opaque-meta (get-in @handler-called [:input :_meta]))))))
+
+(deftest test-hooks-pre-mcp-tool-call-output-meta-to-use-object
+  (testing "preMcpToolCall: :meta-to-use map becomes metaToUse on wire with opaque inner contents"
+    (let [opaque-replacement {:newTraceId "xyz-789" :keep_snake "yes"}
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-mcp-tool-call
+                                               (fn [_ _]
+                                                 {:meta-to-use opaque-replacement})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "preMcpToolCall"
+                                            :input {:serverName "my-mcp"
+                                                    :toolName "fetch"
+                                                    :arguments {}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"
+                                                    :sessionId session-id}})]
+      ;; The wire field name is metaToUse, NOT meta-to-use
+      (is (contains? (:result response) :metaToUse))
+      (is (not (contains? (:result response) :meta-to-use)))
+      ;; Inner map preserved verbatim — inner keys NOT camelCased
+      (is (= opaque-replacement (get-in response [:result :metaToUse]))))))
+
+(deftest test-hooks-pre-mcp-tool-call-output-meta-to-use-null
+  (testing "preMcpToolCall: :meta-to-use nil serializes as JSON null (key present with null value)"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-mcp-tool-call
+                                               (fn [_ _]
+                                                 {:meta-to-use nil})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "preMcpToolCall"
+                                            :input {:serverName "my-mcp"
+                                                    :toolName "fetch"
+                                                    :arguments {}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"
+                                                    :sessionId session-id}})]
+      ;; The metaToUse key MUST be present (not absent) and its value MUST be null.
+      (is (contains? (:result response) :metaToUse))
+      (is (nil? (get-in response [:result :metaToUse]))))))
+
+(deftest test-hooks-pre-mcp-tool-call-output-no-meta-to-use
+  (testing "preMcpToolCall: handler returning {} or nil omits metaToUse field"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-pre-mcp-tool-call
+                                               (fn [_ _] {})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "preMcpToolCall"
+                                            :input {:serverName "my-mcp"
+                                                    :toolName "fetch"
+                                                    :arguments {}
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"
+                                                    :sessionId session-id}})]
+      (is (not (contains? (:result response) :metaToUse))))))
+
+;; -----------------------------------------------------------------------------
 ;; User Input Handler Tests (server→client RPC)
 ;; -----------------------------------------------------------------------------
 

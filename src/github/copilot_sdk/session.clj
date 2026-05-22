@@ -693,6 +693,7 @@
          (let [;; Map hook type strings to handler keywords
                handler-key (case hook-type
                              "preToolUse" :on-pre-tool-use
+                             "preMcpToolCall" :on-pre-mcp-tool-call
                              "postToolUse" :on-post-tool-use
                              "userPromptSubmitted" :on-user-prompt-submitted
                              "sessionStart" :on-session-start

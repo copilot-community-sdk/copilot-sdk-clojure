@@ -3,6 +3,55 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.0-beta.4 sync, round 4)
+- **`:on-pre-mcp-tool-call` hook** — New lifecycle hook in the `:hooks` map
+  that fires before an MCP tool call is dispatched to its server (upstream
+  PR #1366, wire `hookType: "preMcpToolCall"`). The handler receives an
+  input map with kebab-cased base fields (`:server-name`, `:tool-name`,
+  `:tool-call-id`, `:session-id`, `:timestamp`) plus two opaque,
+  source-defined fields that are preserved verbatim through wire
+  normalization: `:arguments` (the MCP tool arguments) and `:_meta` (the
+  MCP request metadata; the leading underscore is preserved — not
+  collapsed by kebab-case conversion). The handler return value supports
+  a tri-state `:meta-to-use` field controlling the outgoing MCP request
+  `_meta`:
+  - absent (`nil` / `{}`): preserve the existing `_meta`
+  - `{:meta-to-use {...}}`: replace `_meta` with the given map (inner
+    keys are preserved opaquely — not camelCased)
+  - `{:meta-to-use nil}`: serialize as JSON `null`, removing `_meta`.
+
+  (upstream PR #1366)
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.51` to
+  `1.0.52-1`. Additive changes only:
+  - `session.compaction_complete-data` gains optional `:custom-instructions`.
+  - `tool.execution_complete-data` gains optional `:sandboxed`.
+  - `session.shutdown-data` relaxes `:total-premium-requests` from
+    required to optional.
+
+  Most of the remaining schema diff is `x-opaque-json` / description
+  annotations that do not affect the generated specs.
+
+### Tracked-but-not-ported (post-v1.0.0-beta.4 sync, round 4)
+- **PR #1357 (TypeScript SDK API review fixes)** — Pure naming/API-shape
+  changes in the JS public API: `onExitPlanMode → onExitPlanModeRequest`,
+  `onAutoModeSwitch → onAutoModeSwitchRequest`,
+  `ResumeSessionConfig.disableResume → suppressResumeEvent`,
+  `cwd → workingDirectory` across config types, `getMessages → getEvents`,
+  `InputOptions → UiInputOptions`, `maxInputTokens → maxPromptTokens`
+  (drops wire shim), and removal of `autoStart` / `autoRestart` from
+  `CopilotClientOptions`. The Clojure SDK already uses idiomatic kebab-case
+  names that are independent of upstream's JS naming, and the
+  `:max-input-tokens` → `maxPromptTokens` wire shim was explicit in
+  Clojure from the start (mirrors upstream's pre-#1357 behavior), so
+  dropping the JS shim has no effect on Clojure. The remaining renames
+  (`:cwd` → `:working-directory` on hook inputs, `:disable-resume?` →
+  `:suppress-resume-event?`, etc.) are breaking and are deferred to a
+  separate PR that can introduce deprecation aliases.
+- **PRs #1370 / #1371 (1.0.52-x schema bumps)** — Picked up by the
+  schema regen in this PR.
+
+
+
 ### Changed (post-v1.0.0-beta.4 sync, round 3)
 - **`ping` `:timestamp` field type changed in CLI 1.0.51** — Upstream PR #1340
   changed the `ping` RPC result `timestamp` field from epoch-millis number to

@@ -2250,6 +2250,21 @@ Lifecycle hooks allow custom logic at various points during the session:
                    (println "Tool completed:" (:tool-name input))
                    nil)
 
+                 :on-pre-mcp-tool-call
+                 (fn [input invocation]
+                   ;; Called before each MCP tool call is dispatched (upstream PR #1366).
+                   ;; input contains
+                   ;;   {:server-name "..." :tool-name "..." :arguments {...}
+                   ;;    :tool-call-id "..." :_meta {...} :session-id "..."
+                   ;;    :timestamp 12345}
+                   ;; :arguments and :_meta are opaque MCP payloads and are
+                   ;; passed through verbatim (NOT kebab-cased recursively).
+                   ;; Return nil/{} to preserve the existing _meta on the
+                   ;; outgoing MCP request, {:meta-to-use {...}} to replace
+                   ;; it, or {:meta-to-use nil} to remove it.
+                   (println "Pre-MCP call:" (:server-name input) (:tool-name input))
+                   {:meta-to-use {:traceId "my-trace-id"}})
+
                  :on-user-prompt-submitted
                  (fn [input invocation]
                    ;; Called when user sends a prompt
