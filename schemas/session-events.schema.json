@@ -208,6 +208,10 @@
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for correlating with server-side logs"
         },
+        "serviceRequestId": {
+          "type": "string",
+          "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
+        },
         "anthropicAdvisorBlocks": {
           "type": "array",
           "items": {
@@ -1016,6 +1020,10 @@
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for server-side log correlation"
         },
+        "serviceRequestId": {
+          "type": "string",
+          "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
+        },
         "apiEndpoint": {
           "$ref": "#/definitions/AssistantUsageApiEndpoint",
           "description": "API endpoint used for this model call, matching CAPI supported_endpoints vocabulary"
@@ -1478,6 +1486,10 @@
         "elicitation": {
           "type": "boolean",
           "description": "Whether elicitation is now supported"
+        },
+        "mcpApps": {
+          "type": "boolean",
+          "description": "Whether MCP Apps (SEP-1865) UI passthrough is now supported"
         }
       },
       "additionalProperties": false,
@@ -1971,6 +1983,10 @@
         "requestId": {
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for the compaction LLM call"
+        },
+        "serviceRequestId": {
+          "type": "string",
+          "description": "Copilot service request ID (x-copilot-service-request-id header) for the compaction LLM call"
         },
         "systemTokens": {
           "type": "integer",
@@ -2796,6 +2812,10 @@
         "providerCallId": {
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for correlating with server-side logs"
+        },
+        "serviceRequestId": {
+          "type": "string",
+          "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
         "url": {
           "type": "string",
@@ -3829,6 +3849,160 @@
       "description": "Session event \"session.info\". Informational message for timeline display with categorization",
       "title": "InfoEvent"
     },
+    "McpAppToolCallCompleteData": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server hosting the tool"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "MCP tool name that was invoked"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Arguments passed to the tool by the app view, if any"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "True when the call completed without throwing AND the MCP CallToolResult did not set isError"
+        },
+        "durationMs": {
+          "type": "number",
+          "description": "Wall-clock duration of the underlying tools/call in milliseconds"
+        },
+        "result": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Standard MCP CallToolResult returned by the server. Present whether or not the call set isError."
+        },
+        "error": {
+          "$ref": "#/definitions/McpAppToolCallCompleteError",
+          "description": "Set when the underlying tools/call threw an error before returning a CallToolResult"
+        },
+        "toolMeta": {
+          "$ref": "#/definitions/McpAppToolCallCompleteToolMeta",
+          "description": "The tool's `_meta.ui` block at the time of the call, so consumers can decide whether to forward the result to the model without re-listing tools."
+        }
+      },
+      "required": [
+        "serverName",
+        "toolName",
+        "success",
+        "durationMs"
+      ],
+      "additionalProperties": false,
+      "description": "MCP App view called a tool on a connected MCP server (SEP-1865)",
+      "title": "McpAppToolCallCompleteData"
+    },
+    "McpAppToolCallCompleteError": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "Set when the underlying tools/call threw an error before returning a CallToolResult",
+      "title": "McpAppToolCallCompleteError"
+    },
+    "McpAppToolCallCompleteEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp_app.tool_call_complete",
+          "description": "Type discriminator. Always \"mcp_app.tool_call_complete\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpAppToolCallCompleteData",
+          "description": "MCP App view called a tool on a connected MCP server (SEP-1865)"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp_app.tool_call_complete\". MCP App view called a tool on a connected MCP server (SEP-1865)",
+      "title": "McpAppToolCallCompleteEvent"
+    },
+    "McpAppToolCallCompleteToolMeta": {
+      "type": "object",
+      "properties": {
+        "ui": {
+          "$ref": "#/definitions/McpAppToolCallCompleteToolMetaUI",
+          "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type."
+        }
+      },
+      "additionalProperties": true,
+      "description": "The tool's `_meta.ui` block at the time of the call, so consumers can decide whether to forward the result to the model without re-listing tools.",
+      "title": "McpAppToolCallCompleteToolMeta"
+    },
+    "McpAppToolCallCompleteToolMetaUI": {
+      "type": "object",
+      "properties": {
+        "resourceUri": {
+          "type": "string",
+          "description": "`ui://` URI declared by the tool's `_meta.ui.resourceUri`"
+        },
+        "visibility": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tool visibility per SEP-1865 (typically a subset of `[\"model\",\"app\"]`)"
+        }
+      },
+      "additionalProperties": true,
+      "title": "McpAppToolCallCompleteToolMetaUI",
+      "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type."
+    },
     "McpOauthCompletedData": {
       "type": "object",
       "properties": {
@@ -4101,6 +4275,18 @@
         "error": {
           "type": "string",
           "description": "Error message if the server failed to connect"
+        },
+        "transport": {
+          "$ref": "#/definitions/McpServerTransport",
+          "description": "Transport mechanism: stdio, http, sse (deprecated), or memory (in-process MCP server)"
+        },
+        "pluginName": {
+          "type": "string",
+          "description": "Name of the plugin that supplied the effective MCP server config, only when source is plugin"
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "Version of the plugin that supplied the effective MCP server config, only when source is plugin"
         }
       },
       "required": [
@@ -4159,6 +4345,10 @@
         "status": {
           "$ref": "#/definitions/McpServerStatus",
           "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message if the server entered a failed state"
         }
       },
       "required": [
@@ -4224,6 +4414,23 @@
       "additionalProperties": false,
       "description": "Session event \"session.mcp_server_status_changed\".",
       "title": "McpServerStatusChangedEvent"
+    },
+    "McpServerTransport": {
+      "type": "string",
+      "enum": [
+        "stdio",
+        "http",
+        "sse",
+        "memory"
+      ],
+      "description": "Transport mechanism: stdio, http, sse (deprecated), or memory (in-process MCP server)",
+      "title": "McpServerTransport",
+      "x-enumDescriptions": {
+        "stdio": "Server communicates over stdio with a local child process.",
+        "http": "Server communicates over streamable HTTP.",
+        "sse": "Server communicates over Server-Sent Events (deprecated).",
+        "memory": "Server is backed by an in-memory runtime implementation."
+      }
     },
     "ModeChangedData": {
       "type": "object",
@@ -4317,6 +4524,10 @@
         "providerCallId": {
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for server-side log correlation"
+        },
+        "serviceRequestId": {
+          "type": "string",
+          "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
         "statusCode": {
           "type": "integer",
@@ -4446,6 +4657,25 @@
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode after the model change, if applicable"
+        },
+        "contextTier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "default",
+                "long_context"
+              ],
+              "x-enumDescriptions": {
+                "default": "Default context tier with standard context window size.",
+                "long_context": "Extended context tier with a larger context window."
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Context tier after the model change; null explicitly clears a previously selected tier"
         },
         "cause": {
           "type": "string",
@@ -6872,6 +7102,10 @@
         {
           "$ref": "#/definitions/ExtensionsLoadedEvent",
           "description": "Session event \"session.extensions_loaded\"."
+        },
+        {
+          "$ref": "#/definitions/McpAppToolCallCompleteEvent",
+          "description": "Session event \"mcp_app.tool_call_complete\". MCP App view called a tool on a connected MCP server (SEP-1865)"
         }
       ],
       "description": "Union of all session event variants emitted by the Copilot CLI runtime."
@@ -7221,6 +7455,10 @@
           },
           "description": "Tool names that should be auto-approved when this skill is active"
         },
+        "source": {
+          "type": "string",
+          "description": "Source identifier for where the skill was discovered. Known values include: project (workspace skill), inherited (parent-directory skill), personal-copilot (~/.copilot/skills), personal-agents (~/.agents/skills), personal-claude (~/.claude/skills), custom (configured directory), plugin (installed plugin), builtin (bundled runtime skill), and remote (org/enterprise skill)"
+        },
         "pluginName": {
           "type": "string",
           "description": "Name of the plugin this skill originated from, when applicable"
@@ -7232,6 +7470,10 @@
         "description": {
           "type": "string",
           "description": "Description of the skill from its SKILL.md frontmatter"
+        },
+        "trigger": {
+          "$ref": "#/definitions/SkillInvokedTrigger",
+          "description": "What triggered the skill invocation: `user-invoked` (explicit user action, such as via a slash command or UI affordance), `agent-invoked` (agent requested the skill), or `context-load` (loaded as part of another context, such as preloading skills configured on a custom agent or subagent)"
         }
       },
       "required": [
@@ -7296,6 +7538,21 @@
       "additionalProperties": false,
       "description": "Session event \"skill.invoked\". Skill invocation details including content, allowed tools, and plugin metadata",
       "title": "SkillInvokedEvent"
+    },
+    "SkillInvokedTrigger": {
+      "type": "string",
+      "enum": [
+        "user-invoked",
+        "agent-invoked",
+        "context-load"
+      ],
+      "description": "What triggered the skill invocation: `user-invoked` (explicit user action, such as via a slash command or UI affordance), `agent-invoked` (agent requested the skill), or `context-load` (loaded as part of another context, such as preloading skills configured on a custom agent or subagent)",
+      "title": "SkillInvokedTrigger",
+      "x-enumDescriptions": {
+        "user-invoked": "Skill invocation requested explicitly by the user, such as via a slash command or UI affordance.",
+        "agent-invoked": "Skill invocation requested by the agent.",
+        "context-load": "Skill content loaded as part of another context, such as a configured custom agent or subagent."
+      }
     },
     "SkillsLoadedData": {
       "type": "object",
@@ -8934,6 +9191,10 @@
           "type": "string",
           "description": "Identifier for the agent loop turn this tool was invoked in, matching the corresponding assistant.turn_start event"
         },
+        "toolDescription": {
+          "$ref": "#/definitions/ToolExecutionCompleteToolDescription",
+          "description": "Tool definition metadata, present for MCP tools with MCP Apps support"
+        },
         "sandboxed": {
           "type": "boolean",
           "description": "Whether this tool execution ran inside a sandbox container"
@@ -9043,6 +9304,10 @@
             "description": "A content block within a tool result, which may be text, terminal output, image, audio, or a resource"
           },
           "description": "Structured content blocks (text, images, audio, resources) returned by the tool in their native format"
+        },
+        "uiResource": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResource",
+          "description": "MCP Apps UI resource content for rendering in a sandboxed iframe"
         }
       },
       "required": [
@@ -9051,6 +9316,223 @@
       "additionalProperties": false,
       "description": "Tool execution result on success",
       "title": "ToolExecutionCompleteResult"
+    },
+    "ToolExecutionCompleteToolDescription": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Tool description"
+        },
+        "_meta": {
+          "$ref": "#/definitions/ToolExecutionCompleteToolDescriptionMeta",
+          "description": "MCP Apps metadata for UI resource association"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Tool definition metadata, present for MCP tools with MCP Apps support",
+      "title": "ToolExecutionCompleteToolDescription"
+    },
+    "ToolExecutionCompleteToolDescriptionMeta": {
+      "type": "object",
+      "properties": {
+        "ui": {
+          "$ref": "#/definitions/ToolExecutionCompleteToolDescriptionMetaUI",
+          "description": "Schema for the `ToolExecutionCompleteToolDescriptionMetaUI` type."
+        }
+      },
+      "additionalProperties": false,
+      "description": "MCP Apps metadata for UI resource association",
+      "title": "ToolExecutionCompleteToolDescriptionMeta"
+    },
+    "ToolExecutionCompleteToolDescriptionMetaUI": {
+      "type": "object",
+      "properties": {
+        "resourceUri": {
+          "type": "string",
+          "description": "URI of the UI resource"
+        },
+        "visibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ToolExecutionCompleteToolDescriptionMetaUIVisibility"
+          },
+          "description": "Who can access this tool"
+        }
+      },
+      "additionalProperties": false,
+      "title": "ToolExecutionCompleteToolDescriptionMetaUI",
+      "description": "Schema for the `ToolExecutionCompleteToolDescriptionMetaUI` type."
+    },
+    "ToolExecutionCompleteToolDescriptionMetaUIVisibility": {
+      "type": "string",
+      "enum": [
+        "model",
+        "app"
+      ],
+      "title": "ToolExecutionCompleteToolDescriptionMetaUIVisibility",
+      "x-enumDescriptions": {
+        "model": "Tool is callable by the model (LLM tool surface)",
+        "app": "Tool is callable by the MCP App view (iframe) via session.mcp.apps.callTool"
+      },
+      "description": "Allowed values for the `ToolExecutionCompleteToolDescriptionMetaUIVisibility` enumeration."
+    },
+    "ToolExecutionCompleteUIResource": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "The ui:// URI of the resource"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the content"
+        },
+        "text": {
+          "type": "string",
+          "description": "HTML content as a string"
+        },
+        "blob": {
+          "type": "string",
+          "description": "Base64-encoded HTML content"
+        },
+        "_meta": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMeta",
+          "description": "Resource-level UI metadata (CSP, permissions, visual preferences)"
+        }
+      },
+      "required": [
+        "uri",
+        "mimeType"
+      ],
+      "additionalProperties": false,
+      "description": "MCP Apps UI resource content for rendering in a sandboxed iframe",
+      "title": "ToolExecutionCompleteUIResource"
+    },
+    "ToolExecutionCompleteUIResourceMeta": {
+      "type": "object",
+      "properties": {
+        "ui": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUI",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUI` type."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Resource-level UI metadata (CSP, permissions, visual preferences)",
+      "title": "ToolExecutionCompleteUIResourceMeta"
+    },
+    "ToolExecutionCompleteUIResourceMetaUI": {
+      "type": "object",
+      "properties": {
+        "csp": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUICsp",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUICsp` type."
+        },
+        "permissions": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissions",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissions` type."
+        },
+        "domain": {
+          "type": "string"
+        },
+        "prefersBorder": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "title": "ToolExecutionCompleteUIResourceMetaUI",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUI` type."
+    },
+    "ToolExecutionCompleteUIResourceMetaUICsp": {
+      "type": "object",
+      "properties": {
+        "connectDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "resourceDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "frameDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "baseUriDomains": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "additionalProperties": false,
+      "title": "ToolExecutionCompleteUIResourceMetaUICsp",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUICsp` type."
+    },
+    "ToolExecutionCompleteUIResourceMetaUIPermissions": {
+      "type": "object",
+      "properties": {
+        "camera": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsCamera",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsCamera` type."
+        },
+        "microphone": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone` type."
+        },
+        "geolocation": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation` type."
+        },
+        "clipboardWrite": {
+          "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite",
+          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite` type."
+        }
+      },
+      "additionalProperties": false,
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissions",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissions` type."
+    },
+    "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsCamera` type."
+    },
+    "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite` type."
+    },
+    "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation` type."
+    },
+    "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true,
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone",
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone` type."
     },
     "ToolExecutionPartialData": {
       "type": "object",

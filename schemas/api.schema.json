@@ -2094,6 +2094,217 @@
           },
           "stability": "experimental"
         }
+      },
+      "apps": {
+        "readResource": {
+          "rpcMethod": "session.mcp.apps.readResource",
+          "description": "Fetch an MCP resource (typically a `ui://` MCP App bundle, per SEP-1865) from a connected server. Requires the `mcp-apps` session capability.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "Name of the MCP server hosting the resource"
+              },
+              "uri": {
+                "type": "string",
+                "description": "Resource URI (typically ui://...)"
+              }
+            },
+            "required": [
+              "sessionId",
+              "serverName",
+              "uri"
+            ],
+            "additionalProperties": false,
+            "description": "MCP server and resource URI to fetch.",
+            "title": "McpAppsReadResourceRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/McpAppsReadResourceResult",
+            "description": "Resource contents returned by the MCP server."
+          },
+          "stability": "experimental"
+        },
+        "listTools": {
+          "rpcMethod": "session.mcp.apps.listTools",
+          "description": "List tools that an MCP App view is allowed to call (SEP-1865 visibility filter). Returns tools whose `_meta.ui.visibility` is unset (default `[\"model\",\"app\"]`) or includes `\"app\"`.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "MCP server hosting the app"
+              },
+              "originServerName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "**Required.** Server whose ui:// view issued the request. Per SEP-1865 ('callable by the app from this server only'), the call is rejected when this differs from `serverName`, and rejected outright when missing."
+              }
+            },
+            "required": [
+              "sessionId",
+              "serverName",
+              "originServerName"
+            ],
+            "additionalProperties": false,
+            "description": "MCP server to list app-callable tools for.",
+            "title": "McpAppsListToolsRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/McpAppsListToolsResult",
+            "description": "App-callable tools from the named MCP server."
+          },
+          "stability": "experimental"
+        },
+        "callTool": {
+          "rpcMethod": "session.mcp.apps.callTool",
+          "description": "Call an MCP tool from an MCP App view (SEP-1865). Enforces the visibility check that prevents an app iframe from invoking model-only tools. Returns the standard MCP `CallToolResult`.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "MCP server hosting the tool"
+              },
+              "toolName": {
+                "type": "string",
+                "description": "MCP tool name"
+              },
+              "arguments": {
+                "type": "object",
+                "additionalProperties": {
+                  "x-opaque-json": true
+                },
+                "description": "Tool arguments"
+              },
+              "originServerName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "**Required.** Server whose ui:// view issued the request. Per SEP-1865 ('callable by the app from this server only'), the call is rejected when this differs from `serverName`, and rejected outright when missing."
+              }
+            },
+            "required": [
+              "sessionId",
+              "serverName",
+              "toolName",
+              "originServerName"
+            ],
+            "additionalProperties": false,
+            "description": "MCP server, tool name, and arguments to invoke from an MCP App view.",
+            "title": "McpAppsCallToolRequest"
+          },
+          "result": {
+            "type": "object",
+            "additionalProperties": {
+              "x-opaque-json": true
+            },
+            "description": "Standard MCP CallToolResult"
+          },
+          "stability": "experimental"
+        },
+        "setHostContext": {
+          "rpcMethod": "session.mcp.apps.setHostContext",
+          "description": "Replace the host context returned to MCP App guests on `ui/initialize`. Hosts use this to advertise theme, locale, or other metadata to the guest UI.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "context": {
+                "$ref": "#/definitions/McpAppsSetHostContextDetails",
+                "description": "Host context advertised to MCP App guests"
+              }
+            },
+            "required": [
+              "sessionId",
+              "context"
+            ],
+            "additionalProperties": false,
+            "description": "Host context to advertise to MCP App guests.",
+            "title": "McpAppsSetHostContextRequest"
+          },
+          "result": {
+            "type": "null"
+          },
+          "stability": "experimental"
+        },
+        "getHostContext": {
+          "rpcMethod": "session.mcp.apps.getHostContext",
+          "description": "Read the current host context advertised to MCP App guests.",
+          "params": {
+            "type": "object",
+            "description": "Identifies the target session.",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              }
+            },
+            "required": [
+              "sessionId"
+            ],
+            "additionalProperties": false
+          },
+          "result": {
+            "$ref": "#/definitions/McpAppsHostContext",
+            "description": "Current host context advertised to MCP App guests."
+          },
+          "stability": "experimental"
+        },
+        "diagnose": {
+          "rpcMethod": "session.mcp.apps.diagnose",
+          "description": "Diagnose MCP Apps wiring for a specific MCP server. Reports the session capability, feature-flag state, advertised extension, and how many tools have `_meta.ui` populated.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "MCP server to probe"
+              }
+            },
+            "required": [
+              "sessionId",
+              "serverName"
+            ],
+            "additionalProperties": false,
+            "description": "MCP server to diagnose MCP Apps wiring for.",
+            "title": "McpAppsDiagnoseRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/McpAppsDiagnoseResult",
+            "description": "Diagnostic snapshot of MCP Apps wiring for the named server."
+          },
+          "stability": "experimental"
+        }
       }
     },
     "plugins": {
@@ -6004,7 +6215,7 @@
         },
         "type": {
           "$ref": "#/definitions/DiscoveredMcpServerType",
-          "description": "Server transport type: stdio, http, sse, or memory"
+          "description": "Server transport type: stdio, http, sse (deprecated), or memory"
         },
         "source": {
           "$ref": "#/definitions/McpServerSource",
@@ -6032,12 +6243,12 @@
         "sse",
         "memory"
       ],
-      "description": "Server transport type: stdio, http, sse, or memory",
+      "description": "Server transport type: stdio, http, sse (deprecated), or memory",
       "title": "DiscoveredMcpServerType",
       "x-enumDescriptions": {
         "stdio": "Server communicates over stdio with a local child process.",
         "http": "Server communicates over streamable HTTP.",
-        "sse": "Server communicates over Server-Sent Events.",
+        "sse": "Server communicates over Server-Sent Events (deprecated).",
         "memory": "Server is backed by an in-memory runtime implementation."
       }
     },
@@ -6531,6 +6742,13 @@
         "description": {
           "type": "string",
           "description": "Human-readable description of the binary data"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Optional metadata from the producing tool."
         }
       },
       "required": [
@@ -7505,6 +7723,480 @@
       "additionalProperties": false,
       "description": "Parameters for (re)loading the merged LSP configuration set.",
       "title": "LspInitializeRequest"
+    },
+    "McpAppsCallToolRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "MCP server hosting the tool"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "MCP tool name"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Tool arguments"
+        },
+        "originServerName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "**Required.** Server whose ui:// view issued the request. Per SEP-1865 ('callable by the app from this server only'), the call is rejected when this differs from `serverName`, and rejected outright when missing."
+        }
+      },
+      "required": [
+        "serverName",
+        "toolName",
+        "originServerName"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server, tool name, and arguments to invoke from an MCP App view.",
+      "title": "McpAppsCallToolRequest"
+    },
+    "McpAppsDiagnoseCapability": {
+      "type": "object",
+      "properties": {
+        "sessionHasMcpApps": {
+          "type": "boolean",
+          "description": "Whether the session has the `mcp-apps` capability"
+        },
+        "featureFlagEnabled": {
+          "type": "boolean",
+          "description": "Whether the MCP_APPS feature flag (or COPILOT_MCP_APPS env override) is on"
+        },
+        "advertised": {
+          "type": "boolean",
+          "description": "Whether the runtime advertises `extensions.io.modelcontextprotocol/ui` to MCP servers"
+        }
+      },
+      "required": [
+        "sessionHasMcpApps",
+        "featureFlagEnabled",
+        "advertised"
+      ],
+      "additionalProperties": false,
+      "description": "Capability negotiation snapshot",
+      "title": "McpAppsDiagnoseCapability"
+    },
+    "McpAppsDiagnoseRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "MCP server to probe"
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server to diagnose MCP Apps wiring for.",
+      "title": "McpAppsDiagnoseRequest"
+    },
+    "McpAppsDiagnoseResult": {
+      "type": "object",
+      "properties": {
+        "capability": {
+          "$ref": "#/definitions/McpAppsDiagnoseCapability",
+          "description": "Capability negotiation snapshot"
+        },
+        "server": {
+          "$ref": "#/definitions/McpAppsDiagnoseServer",
+          "description": "What the server returned for this session"
+        }
+      },
+      "required": [
+        "capability",
+        "server"
+      ],
+      "additionalProperties": false,
+      "description": "Diagnostic snapshot of MCP Apps wiring for the named server.",
+      "title": "McpAppsDiagnoseResult"
+    },
+    "McpAppsDiagnoseServer": {
+      "type": "object",
+      "properties": {
+        "connected": {
+          "type": "boolean",
+          "description": "Whether the named server is currently connected"
+        },
+        "toolCount": {
+          "type": "number",
+          "description": "Total tools returned by the server's tools/list"
+        },
+        "toolsWithUiMeta": {
+          "type": "number",
+          "description": "Tools whose `_meta.ui` is populated (resourceUri and/or visibility set)"
+        },
+        "sampleToolNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Up to 5 tool names with `_meta.ui` for quick inspection"
+        }
+      },
+      "required": [
+        "connected",
+        "toolCount",
+        "toolsWithUiMeta",
+        "sampleToolNames"
+      ],
+      "additionalProperties": false,
+      "description": "What the server returned for this session",
+      "title": "McpAppsDiagnoseServer"
+    },
+    "McpAppsHostContext": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "$ref": "#/definitions/McpAppsHostContextDetails",
+          "description": "Current host context"
+        }
+      },
+      "required": [
+        "context"
+      ],
+      "additionalProperties": false,
+      "description": "Current host context advertised to MCP App guests.",
+      "title": "McpAppsHostContext"
+    },
+    "McpAppsHostContextDetails": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "$ref": "#/definitions/McpAppsHostContextDetailsTheme",
+          "description": "UI theme preference per SEP-1865"
+        },
+        "locale": {
+          "type": "string",
+          "description": "BCP-47 locale, e.g. 'en-US'"
+        },
+        "timeZone": {
+          "type": "string",
+          "description": "IANA timezone, e.g. 'America/New_York'"
+        },
+        "displayMode": {
+          "$ref": "#/definitions/McpAppsHostContextDetailsDisplayMode",
+          "description": "Current display mode (SEP-1865)"
+        },
+        "availableDisplayModes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpAppsHostContextDetailsAvailableDisplayMode"
+          },
+          "description": "Display modes the host supports"
+        },
+        "platform": {
+          "$ref": "#/definitions/McpAppsHostContextDetailsPlatform",
+          "description": "Platform type for responsive design"
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "Host application identifier"
+        }
+      },
+      "additionalProperties": {},
+      "description": "Current host context",
+      "title": "McpAppsHostContextDetails"
+    },
+    "McpAppsHostContextDetailsAvailableDisplayMode": {
+      "type": "string",
+      "enum": [
+        "inline",
+        "fullscreen",
+        "pip"
+      ],
+      "title": "McpAppsHostContextDetailsAvailableDisplayMode",
+      "x-enumDescriptions": {
+        "inline": "Rendered inline within the host conversation surface",
+        "fullscreen": "Rendered as a fullscreen overlay",
+        "pip": "Rendered as a picture-in-picture floating panel"
+      },
+      "description": "Allowed values for the `McpAppsHostContextDetailsAvailableDisplayMode` enumeration."
+    },
+    "McpAppsHostContextDetailsDisplayMode": {
+      "type": "string",
+      "enum": [
+        "inline",
+        "fullscreen",
+        "pip"
+      ],
+      "description": "Current display mode (SEP-1865)",
+      "title": "McpAppsHostContextDetailsDisplayMode",
+      "x-enumDescriptions": {
+        "inline": "Rendered inline within the host conversation surface",
+        "fullscreen": "Rendered as a fullscreen overlay",
+        "pip": "Rendered as a picture-in-picture floating panel"
+      }
+    },
+    "McpAppsHostContextDetailsPlatform": {
+      "type": "string",
+      "enum": [
+        "web",
+        "desktop",
+        "mobile"
+      ],
+      "description": "Platform type for responsive design",
+      "title": "McpAppsHostContextDetailsPlatform",
+      "x-enumDescriptions": {
+        "web": "Host runs in a web browser",
+        "desktop": "Host runs as a desktop application",
+        "mobile": "Host runs on a mobile device"
+      }
+    },
+    "McpAppsHostContextDetailsTheme": {
+      "type": "string",
+      "enum": [
+        "light",
+        "dark"
+      ],
+      "description": "UI theme preference per SEP-1865",
+      "title": "McpAppsHostContextDetailsTheme",
+      "x-enumDescriptions": {
+        "light": "Light UI theme",
+        "dark": "Dark UI theme"
+      }
+    },
+    "McpAppsListToolsRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "MCP server hosting the app"
+        },
+        "originServerName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "**Required.** Server whose ui:// view issued the request. Per SEP-1865 ('callable by the app from this server only'), the call is rejected when this differs from `serverName`, and rejected outright when missing."
+        }
+      },
+      "required": [
+        "serverName",
+        "originServerName"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server to list app-callable tools for.",
+      "title": "McpAppsListToolsRequest"
+    },
+    "McpAppsListToolsResult": {
+      "type": "object",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": {
+              "x-opaque-json": true
+            }
+          },
+          "description": "App-callable tools from the server"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "additionalProperties": false,
+      "description": "App-callable tools from the named MCP server.",
+      "title": "McpAppsListToolsResult"
+    },
+    "McpAppsReadResourceRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "Name of the MCP server hosting the resource"
+        },
+        "uri": {
+          "type": "string",
+          "description": "Resource URI (typically ui://...)"
+        }
+      },
+      "required": [
+        "serverName",
+        "uri"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server and resource URI to fetch.",
+      "title": "McpAppsReadResourceRequest"
+    },
+    "McpAppsReadResourceResult": {
+      "type": "object",
+      "properties": {
+        "contents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpAppsResourceContent"
+          },
+          "description": "Resource contents returned by the server"
+        }
+      },
+      "required": [
+        "contents"
+      ],
+      "additionalProperties": false,
+      "description": "Resource contents returned by the MCP server.",
+      "title": "McpAppsReadResourceResult"
+    },
+    "McpAppsResourceContent": {
+      "type": "object",
+      "properties": {
+        "uri": {
+          "type": "string",
+          "description": "The resource URI (typically ui://...)"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the content"
+        },
+        "text": {
+          "type": "string",
+          "description": "Text content (e.g. HTML)"
+        },
+        "blob": {
+          "type": "string",
+          "description": "Base64-encoded binary content"
+        },
+        "_meta": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Resource-level metadata (CSP, permissions, etc.)"
+        }
+      },
+      "required": [
+        "uri"
+      ],
+      "additionalProperties": false,
+      "title": "McpAppsResourceContent",
+      "description": "Schema for the `McpAppsResourceContent` type."
+    },
+    "McpAppsSetHostContextDetails": {
+      "type": "object",
+      "properties": {
+        "theme": {
+          "$ref": "#/definitions/McpAppsSetHostContextDetailsTheme",
+          "description": "UI theme preference per SEP-1865"
+        },
+        "locale": {
+          "type": "string",
+          "description": "BCP-47 locale, e.g. 'en-US'"
+        },
+        "timeZone": {
+          "type": "string",
+          "description": "IANA timezone, e.g. 'America/New_York'"
+        },
+        "displayMode": {
+          "$ref": "#/definitions/McpAppsSetHostContextDetailsDisplayMode",
+          "description": "Current display mode (SEP-1865)"
+        },
+        "availableDisplayModes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpAppsSetHostContextDetailsAvailableDisplayMode"
+          },
+          "description": "Display modes the host supports"
+        },
+        "platform": {
+          "$ref": "#/definitions/McpAppsSetHostContextDetailsPlatform",
+          "description": "Platform type for responsive design"
+        },
+        "userAgent": {
+          "type": "string",
+          "description": "Host application identifier"
+        }
+      },
+      "additionalProperties": {},
+      "description": "Host context advertised to MCP App guests",
+      "title": "McpAppsSetHostContextDetails"
+    },
+    "McpAppsSetHostContextDetailsAvailableDisplayMode": {
+      "type": "string",
+      "enum": [
+        "inline",
+        "fullscreen",
+        "pip"
+      ],
+      "title": "McpAppsSetHostContextDetailsAvailableDisplayMode",
+      "x-enumDescriptions": {
+        "inline": "Rendered inline within the host conversation surface",
+        "fullscreen": "Rendered as a fullscreen overlay",
+        "pip": "Rendered as a picture-in-picture floating panel"
+      },
+      "description": "Allowed values for the `McpAppsSetHostContextDetailsAvailableDisplayMode` enumeration."
+    },
+    "McpAppsSetHostContextDetailsDisplayMode": {
+      "type": "string",
+      "enum": [
+        "inline",
+        "fullscreen",
+        "pip"
+      ],
+      "description": "Current display mode (SEP-1865)",
+      "title": "McpAppsSetHostContextDetailsDisplayMode",
+      "x-enumDescriptions": {
+        "inline": "Rendered inline within the host conversation surface",
+        "fullscreen": "Rendered as a fullscreen overlay",
+        "pip": "Rendered as a picture-in-picture floating panel"
+      }
+    },
+    "McpAppsSetHostContextDetailsPlatform": {
+      "type": "string",
+      "enum": [
+        "web",
+        "desktop",
+        "mobile"
+      ],
+      "description": "Platform type for responsive design",
+      "title": "McpAppsSetHostContextDetailsPlatform",
+      "x-enumDescriptions": {
+        "web": "Host runs in a web browser",
+        "desktop": "Host runs as a desktop application",
+        "mobile": "Host runs on a mobile device"
+      }
+    },
+    "McpAppsSetHostContextDetailsTheme": {
+      "type": "string",
+      "enum": [
+        "light",
+        "dark"
+      ],
+      "description": "UI theme preference per SEP-1865",
+      "title": "McpAppsSetHostContextDetailsTheme",
+      "x-enumDescriptions": {
+        "light": "Light UI theme",
+        "dark": "Dark UI theme"
+      }
+    },
+    "McpAppsSetHostContextRequest": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "$ref": "#/definitions/McpAppsSetHostContextDetails",
+          "description": "Host context advertised to MCP App guests"
+        }
+      },
+      "required": [
+        "context"
+      ],
+      "additionalProperties": false,
+      "description": "Host context to advertise to MCP App guests.",
+      "title": "McpAppsSetHostContextRequest"
     },
     "McpCancelSamplingExecutionParams": {
       "type": "object",
@@ -8483,30 +9175,65 @@
       "type": "object",
       "properties": {
         "inputPrice": {
-          "type": "integer",
+          "type": "number",
           "minimum": 0,
-          "description": "Price per billing batch of input tokens in nano-AIUs (1 nano-AIU = 0.000000001 AIU, 1 AIU = $0.01 USD)"
+          "description": "AI Credits cost per billing batch of input tokens"
         },
         "outputPrice": {
-          "type": "integer",
+          "type": "number",
           "minimum": 0,
-          "description": "Price per billing batch of output tokens in nano-AIUs (1 nano-AIU = 0.000000001 AIU, 1 AIU = $0.01 USD)"
+          "description": "AI Credits cost per billing batch of output tokens"
         },
         "cachePrice": {
-          "type": "integer",
+          "type": "number",
           "minimum": 0,
-          "description": "Price per billing batch of cached tokens in nano-AIUs (1 nano-AIU = 0.000000001 AIU, 1 AIU = $0.01 USD)"
+          "description": "AI Credits cost per billing batch of cached tokens"
         },
         "batchSize": {
           "type": "integer",
           "exclusiveMinimum": true,
           "minimum": 0,
           "description": "Number of tokens per standard billing batch"
+        },
+        "contextMax": {
+          "type": "integer",
+          "description": "Maximum context window tokens for the default tier"
+        },
+        "longContext": {
+          "$ref": "#/definitions/ModelBillingTokenPricesLongContext",
+          "description": "Long context tier pricing (available for models with extended context windows)"
         }
       },
       "additionalProperties": false,
       "description": "Token-level pricing information for this model",
       "title": "ModelBillingTokenPrices"
+    },
+    "ModelBillingTokenPricesLongContext": {
+      "type": "object",
+      "properties": {
+        "inputPrice": {
+          "type": "number",
+          "minimum": 0,
+          "description": "AI Credits cost per billing batch of input tokens"
+        },
+        "outputPrice": {
+          "type": "number",
+          "minimum": 0,
+          "description": "AI Credits cost per billing batch of output tokens"
+        },
+        "cachePrice": {
+          "type": "number",
+          "minimum": 0,
+          "description": "AI Credits cost per billing batch of cached tokens"
+        },
+        "contextMax": {
+          "type": "integer",
+          "description": "Maximum context window tokens for the long context tier"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Long context tier pricing (available for models with extended context windows)",
+      "title": "ModelBillingTokenPricesLongContext"
     },
     "ModelCapabilities": {
       "type": "object",
