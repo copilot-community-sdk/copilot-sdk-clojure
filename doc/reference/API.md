@@ -1435,6 +1435,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/sampling.completed` | MCP sampling request completed; ephemeral |
 | `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |
 | `:copilot/capabilities.changed` | Session capabilities dynamically changed (e.g., elicitation support); ephemeral. Data: `{:ui {:elicitation true/false}}` |
+| `:copilot/mcp_app.tool_call_complete` | An MCP App tool call completed (upstream schema 1.0.52-4, SEP-1865); ephemeral. Data: `{:server-name ... :tool-name ... :duration-ms ... :success bool :arguments {...} :result {...}}` — `:arguments` and `:result` are opaque source-defined maps whose keys are preserved verbatim (not kebab-cased). |
 
 ### Example: Handling Events
 
@@ -1756,8 +1757,18 @@ Inspect available sections with the `system-prompt-sections` constant:
 ```clojure
 copilot/system-prompt-sections
 ;; => {:identity {:description "Agent identity preamble and mode statement"}
-;;     :tone {:description "Response style, conciseness rules, ..."} ...}
+;;     :tone {:description "Response style, conciseness rules, ..."}
+;;     :runtime-instructions {:description "Runtime instructions injected ..."} ...}
 ```
+
+Available section keys: `:identity`, `:tone`, `:proactiveness`, `:formatting`,
+`:tools`, `:context-collection`, `:task-management`, `:safety`, `:agent-mode`,
+`:additional-instructions`, `:runtime-instructions` (added in upstream PR #1377).
+
+> **Naming note** — Upstream renamed `SystemPromptSection` →
+> `SystemMessageSection` in the TypeScript SDK. The Clojure SDK keeps
+> `system-prompt-sections` as the canonical name (for back-compat) and
+> exposes `system-message-sections` as an alias.
 
 Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.
 

@@ -227,27 +227,37 @@
       (contains? (:data raw-event) :payload)
       (assoc-in [:data :payload] (get-in raw-event [:data :payload])))
 
+    ;; Upstream schema 1.0.52-4 (SEP-1865): MCP App invoked a tool on an MCP
+    ;; server. Both the supplied `:arguments` map and the returned `:result`
+    ;; (standard MCP CallToolResult) are source-defined opaque payloads —
+    ;; preserve their raw keys so consumers can forward them verbatim.
+    "mcp_app.tool_call_complete"
+    (cond-> converted-event
+      (contains? (:data raw-event) :arguments)
+      (assoc-in [:data :arguments] (get-in raw-event [:data :arguments]))
+      (contains? (:data raw-event) :result)
+      (assoc-in [:data :result] (get-in raw-event [:data :result])))
+
     converted-event))
 
 (defn- normalize-incoming
   "Convert wire-format keys to Clojure keys, preserving opaque user data.
-   For v2 tool.call RPC and v3 external_tool.requested broadcast events,
-   tool arguments are kept in their original wire format so user-defined
-   tool handlers receive the keys the server sent. For v3
-   session.custom_notification events, the source-defined `:subject` and
-   opaque `:payload` are also preserved verbatim. The same preservation
-   applies to historical events returned in `session.getMessages` responses
-   so live and historical event shapes agree."
+
+   For v3 `external_tool.requested` broadcast events, tool arguments are
+   kept in their original wire format so user-defined tool handlers receive
+   the keys the server sent. For v3 `session.custom_notification` events,
+   the source-defined `:subject` and opaque `:payload` are also preserved
+   verbatim. For v3 `mcp_app.tool_call_complete` events (schema 1.0.52-4,
+   SEP-1865), the `:arguments` and `:result` payloads are similarly
+   preserved. The same preservation applies to historical events returned
+   in `session.getMessages` responses so live and historical event shapes
+   agree."
   [msg]
   (let [method (:method msg)
         params (:params msg)
         converted (util/wire->clj msg)
         raw-events (get-in msg [:result :events])]
     (cond
-      ;; v2: preserve raw arguments for tool.call RPC
-      (and (= "tool.call" method) (map? params) (contains? params :arguments))
-      (assoc-in converted [:params :arguments] (:arguments params))
-
       ;; Upstream PR #1299: SQL bind parameters are opaque keyed values
       ;; (e.g. `$user_id`). Preserve the raw map so kebab-case conversion
       ;; doesn't mangle placeholder names before the handler binds them.

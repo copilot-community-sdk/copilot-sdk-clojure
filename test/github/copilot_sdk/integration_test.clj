@@ -8,6 +8,7 @@
             [github.copilot-sdk.client :as client]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.session :as session]
+            [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.tools :as tools]
             [github.copilot-sdk.util :as util]
             [github.copilot-sdk.generated.event-specs]
@@ -160,7 +161,7 @@
 (deftest test-ping
   (testing "Ping returns protocol version"
     (let [result (sdk/ping *test-client*)]
-      (is (= 2 (:protocol-version result)))
+      (is (= 3 (:protocol-version result)))
       ;; Upstream PR #1340 / CLI 1.0.51 changed timestamp from epoch number
       ;; to ISO 8601 string (`timestamp: string, format: date-time`).
       (is (string? (:timestamp result)))
@@ -181,7 +182,7 @@
   (testing "Get CLI status returns version and protocol"
     (let [result (sdk/get-status *test-client*)]
       (is (string? (:version result)))
-      (is (= 2 (:protocol-version result))))))
+      (is (= 3 (:protocol-version result))))))
 
 (deftest test-get-auth-status
   (testing "Get auth status returns authentication info"
@@ -685,40 +686,12 @@
                                                   :handler (fn [_args _invocation] "result")})]})]
       (is (some? session)))))
 
-(deftest test-tool-call-response-shape
-  (testing "tool.call handler returns a nested result wrapper"
-    (let [tool (sdk/define-tool "echo"
-                 {:handler (fn [args _] args)})
-          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
-          handler (get-in @(:state *test-client*) [:connection :request-handler])
-          response (<!! (handler "tool.call" {:session-id (sdk/session-id session)
-                                              :tool-call-id "tc-1"
-                                              :tool-name "echo"
-                                              :arguments {:x 1}}))]
-      (is (map? response))
-      (is (contains? response :result))
-      (is (map? (:result response)))
-      (is (contains? (:result response) :result))
-      (is (map? (get-in response [:result :result])))
-      (is (contains? (get-in response [:result :result]) :text-result-for-llm))
-      (is (not (contains? (get-in response [:result :result]) :result))))))
-
-(deftest test-tool-handler-runs-on-blocking-thread
-  (testing "tool handler executes on a blocking thread"
-    (let [thread-name (atom nil)
-          tool (sdk/define-tool "thread_check"
-                 {:handler (fn [_ _]
-                             (reset! thread-name (.getName (Thread/currentThread)))
-                             "ok")})
-          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
-          handler (get-in @(:state *test-client*) [:connection :request-handler])]
-      (<!! (handler "tool.call" {:session-id (sdk/session-id session)
-                                 :tool-call-id "tc-2"
-                                 :tool-name "thread_check"
-                                 :arguments {}}))
-      (is (string? @thread-name))
-      (is (re-find #"async-(thread|mixed)" @thread-name))
-      (is (not (clojure.string/starts-with? @thread-name "async-dispatch"))))))
+;; v2 `tool.call` / `permission.request` RPC dispatcher tests were removed
+;; alongside upstream PR #1378, which raised the minimum protocol version to
+;; 3 and deleted the v2 server→client RPC adapters. The v3 broadcast event
+;; equivalents (`external_tool.requested`, `permission.requested`) are
+;; covered by `test-permission-no-result-v3` and the broadcast event tests
+;; further down in this file.
 
 (deftest test-session-config-wire-keys
   (testing "session config maps are converted to wire keys"
@@ -910,7 +883,7 @@
     ;; Source-defined identifiers (subject) and opaque JSON (payload) must
     ;; survive normalize-incoming without key transformation, matching the
     ;; existing escape hatch for external_tool.requested arguments.
-    (let [normalize @#'github.copilot-sdk.protocol/normalize-incoming
+    (let [normalize @#'protocol/normalize-incoming
           raw-msg {:jsonrpc "2.0"
                    :method "session.event"
                    :params {:sessionId "abc"
@@ -938,7 +911,7 @@
     ;; Response messages (id, no :method) carrying :result :events collections
     ;; must apply the same preservation rules per-event, so live and
     ;; historical custom_notification events have the same shape.
-    (let [normalize @#'github.copilot-sdk.protocol/normalize-incoming
+    (let [normalize @#'protocol/normalize-incoming
           raw-response {:jsonrpc "2.0"
                         :id 42
                         :result {:events [{:type "session.start"
@@ -1388,97 +1361,6 @@
           session-id (sdk/get-last-session-id *test-client*)]
       (is (some? (sdk/resume-session *test-client* session-id {}))))))
 
-(deftest test-permission-denied-with-deny-handler
-  (testing "Permission requests are denied when handler denies"
-    (let [session (sdk/create-session *test-client*
-                                      {:on-permission-request
-                                       (fn [_request _ctx]
-                                         {:kind :denied-no-approval-rule-and-could-not-request-from-user})})
-          session-id (sdk/session-id session)
-          handler (get-in @(:state *test-client*) [:connection :request-handler])
-          response (<!! (handler "permission.request"
-                                 {:session-id session-id
-                                  :permission-request {:permission-kind "shell"
-                                                       :full-command-text "echo test"}}))]
-      (is (= :user-not-available
-             (get-in response [:result :result :kind]))))))
-
-(deftest test-permission-approved-with-handler
-  (testing "Permission requests use configured handler"
-    (let [session (sdk/create-session *test-client*
-                                       {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)
-          handler (get-in @(:state *test-client*) [:connection :request-handler])
-          response (<!! (handler "permission.request"
-                                 {:session-id session-id
-                                  :permission-request {:permission-kind "shell"
-                                                       :full-command-text "echo test"}}))]
-      (is (= :approve-once (get-in response [:result :result :kind]))))))
-
-(deftest test-permission-unknown-session-response-shape
-  (testing "unknown-session permission requests use the same nested result shape as handled requests"
-    (let [handler (get-in @(:state *test-client*) [:connection :request-handler])
-          response (<!! (handler "permission.request"
-                                 {:session-id "missing-session"
-                                  :permission-request {:permission-kind "shell"
-                                                       :full-command-text "echo test"}}))]
-      (is (= :user-not-available
-             (get-in response [:result :result :kind])))
-      (is (nil? (get-in response [:result :kind]))))))
-
-(deftest test-permission-custom-handler
-  (testing "Custom permission handler can selectively deny"
-    (let [session (sdk/create-session *test-client*
-                                      {:on-permission-request
-                                       (fn [request _ctx]
-                                         (if (= "safe-cmd" (:full-command-text request))
-                                           {:kind :approve-once}
-                                           {:kind :denied-by-rules
-                                            :rules [{:kind "shell"
-                                                     :argument (:full-command-text request)}]}))})
-          session-id (sdk/session-id session)
-          handler (get-in @(:state *test-client*) [:connection :request-handler])
-          approved (<!! (handler "permission.request"
-                                 {:session-id session-id
-                                  :permission-request {:permission-kind "shell"
-                                                       :full-command-text "safe-cmd"}}))
-          denied (<!! (handler "permission.request"
-                               {:session-id session-id
-                                :permission-request {:permission-kind "shell"
-                                                     :full-command-text "dangerous-cmd"}}))]
-      (is (= :approve-once (get-in approved [:result :result :kind])))
-      (is (= :reject (get-in denied [:result :result :kind]))))))
-
-(deftest test-permission-no-result-v2
-  (testing "no-result permission handler returns error on v2 protocol"
-    (let [session (sdk/create-session *test-client*
-                                      {:on-permission-request
-                                       (fn [_request _ctx]
-                                         {:kind :no-result})})
-          session-id (sdk/session-id session)
-          handler (get-in @(:state *test-client*) [:connection :request-handler])
-          response (<!! (handler "permission.request"
-                                 {:session-id session-id
-                                  :permission-request {:permission-kind "shell"
-                                                       :full-command-text "echo test"}}))]
-      ;; v2: no-result should propagate as a JSON-RPC internal error
-      (is (= -32603 (get-in response [:error :code]))
-          "no-result on v2 should produce a -32603 internal error")))
-
-  (testing "wrapped no-result permission handler returns error on v2 protocol"
-    (let [session (sdk/create-session *test-client*
-                                      {:on-permission-request
-                                       (fn [_request _ctx]
-                                         {:result {:kind :no-result}})})
-          session-id (sdk/session-id session)
-          handler (get-in @(:state *test-client*) [:connection :request-handler])
-          response (<!! (handler "permission.request"
-                                 {:session-id session-id
-                                  :permission-request {:permission-kind "shell"
-                                                       :full-command-text "echo test"}}))]
-      (is (= -32603 (get-in response [:error :code]))
-          "wrapped no-result on v2 should also produce a -32603 error"))))
-
 (deftest test-permission-no-result-v3
   (testing "v3 no-result skips handlePendingPermissionRequest RPC"
     (let [requests (atom [])
@@ -1804,6 +1686,155 @@
                                       :name "ext-a"
                                       :source "project"
                                       :status "enabled"}]})))))
+
+;; -----------------------------------------------------------------------------
+;; Upstream schema 1.0.52-4 sync (post-v1.0.0-beta.4 round 5)
+;; -----------------------------------------------------------------------------
+
+(deftest test-schema-1-0-52-4-mcp-app-tool-call-complete-event-type
+  (testing "mcp_app.tool_call_complete is part of the public ::sdk/event-types set (SEP-1865)"
+    (is (contains? sdk/event-types :copilot/mcp_app.tool_call_complete)))
+  (testing "mcp_app.tool_call_complete is accepted by the idiom ::specs/event-type spec"
+    (is (s/valid? :github.copilot-sdk.specs/event-type :copilot/mcp_app.tool_call_complete))))
+
+(deftest test-schema-1-0-52-4-mcp-app-tool-call-complete-opaque-fields
+  (testing "mcp_app.tool_call_complete :arguments and :result preserve source-defined keys verbatim"
+    ;; Per upstream schema 1.0.52-4, the MCP App view supplies opaque
+    ;; tool arguments and the MCP server returns a standard CallToolResult.
+    ;; Both must survive normalize-incoming without csk kebab-casing.
+    (let [normalize @#'protocol/normalize-incoming
+          raw-msg {:jsonrpc "2.0"
+                   :method "session.event"
+                   :params {:sessionId "abc"
+                            :event {:type "mcp_app.tool_call_complete"
+                                    :id "evt-1"
+                                    :timestamp "2026-05-23T08:00:00.000Z"
+                                    :parentId nil
+                                    :ephemeral true
+                                    :data {:serverName "demo"
+                                           :toolName "doThing"
+                                           :durationMs 42
+                                           :success true
+                                           :arguments {:firstName "Foo"
+                                                       :nested {:userId 42}}
+                                           :result {:isError false
+                                                    :content [{:type "text"
+                                                               :text "ok"}]
+                                                    :customField "preserve"}}}}}
+          normalized (normalize raw-msg)
+          data (get-in normalized [:params :event :data])]
+      (is (= "mcp_app.tool_call_complete" (get-in normalized [:params :event :type])))
+      (is (= "demo" (:server-name data))
+          "non-opaque fields are kebab-cased")
+      (is (= 42 (:duration-ms data)))
+      (is (contains? (:arguments data) :firstName)
+          ":arguments must preserve camelCase keys verbatim")
+      (is (= 42 (get-in data [:arguments :nested :userId]))
+          ":arguments nested keys must survive csk")
+      (is (contains? (:result data) :isError)
+          ":result must preserve camelCase keys verbatim")
+      (is (= "preserve" (get-in data [:result :customField]))
+          ":result must preserve user-defined keys"))))
+
+(deftest test-schema-1-0-52-4-service-request-id
+  (testing "::service-request-id field is propagated through wire->clj on relevant event data specs"
+    ;; Upstream schema 1.0.52-4 adds optional `serviceRequestId` (the
+    ;; Copilot CAPI x-copilot-service-request-id header) to several
+    ;; event-data shapes for correlation with CAPI logs. The generated
+    ;; specs accept it via `:opt-un`; we verify roundtrip through
+    ;; normalize-incoming.
+    (doseq [spec-key [:github.copilot-sdk.generated.event-specs/assistant.message-data
+                      :github.copilot-sdk.generated.event-specs/assistant.usage-data
+                      :github.copilot-sdk.generated.event-specs/model.call_failure-data
+                      :github.copilot-sdk.generated.event-specs/session.compaction_complete-data
+                      :github.copilot-sdk.generated.event-specs/session.error-data]]
+      (is (some? (s/get-spec spec-key)) (str spec-key " should exist")))
+    (let [normalize @#'protocol/normalize-incoming
+          raw-msg {:jsonrpc "2.0"
+                   :method "session.event"
+                   :params {:sessionId "abc"
+                            :event {:type "assistant.usage"
+                                    :id "evt-2"
+                                    :timestamp "2026-05-23T08:00:00.000Z"
+                                    :parentId nil
+                                    :data {:model "gpt-5"
+                                           :serviceRequestId "svc-req-abc"}}}}
+          data (get-in (normalize raw-msg) [:params :event :data])]
+      (is (= "svc-req-abc" (:service-request-id data))
+          "serviceRequestId must arrive as :service-request-id"))))
+
+(deftest test-schema-1-0-52-4-model-change-context-tier
+  (testing "session.model_change accepts :context-tier (default | long_context | nil)"
+    ;; Upstream schema 1.0.52-4 adds optional :context-tier to ModelChangeData.
+    ;; A literal `null` explicitly clears a previously-selected tier.
+    (let [spec :github.copilot-sdk.generated.event-specs/session.model_change-data]
+      (is (s/valid? spec {:new-model "gpt-5" :context-tier "default"}))
+      (is (s/valid? spec {:new-model "gpt-5" :context-tier "long_context"}))
+      (is (s/valid? spec {:new-model "gpt-5" :context-tier nil}))
+      (is (s/valid? spec {:new-model "gpt-5"}))
+      (is (not (s/valid? spec {:new-model "gpt-5" :context-tier "tiny"}))))))
+
+(deftest test-schema-1-0-52-4-skill-invoked-source-trigger
+  (testing "skill.invoked accepts :source and :trigger"
+    (let [spec :github.copilot-sdk.generated.event-specs/skill.invoked-data]
+      (is (s/valid? spec {:name "foo" :path "/x" :content "..."}))
+      (is (s/valid? spec {:name "foo" :path "/x" :content "..."
+                          :source "project"
+                          :trigger "user-invoked"}))
+      (is (s/valid? spec {:name "foo" :path "/x" :content "..."
+                          :trigger "agent-invoked"}))
+      (is (s/valid? spec {:name "foo" :path "/x" :content "..."
+                          :trigger "context-load"}))
+      (is (not (s/valid? spec {:name "foo" :path "/x" :content "..."
+                               :trigger "bogus"}))))))
+
+(deftest test-schema-1-0-52-4-runtime-instructions-section
+  (testing ":runtime-instructions is a known system message section (upstream PR #1377)"
+    (is (contains? (set (keys specs/system-prompt-sections)) :runtime-instructions))
+    (is (= "runtime_instructions" (util/section-kw->wire-id :runtime-instructions))
+        ":runtime-instructions converts to the wire string \"runtime_instructions\"")
+    (is (s/valid? :github.copilot-sdk.specs/system-prompt-section :runtime-instructions))
+    (is (s/valid? :github.copilot-sdk.specs/system-message-section :runtime-instructions)
+        "::system-message-section alias also accepts it"))
+  (testing "system-message-sections alias points at the same map (upstream rename)"
+    (is (identical? specs/system-prompt-sections specs/system-message-sections))))
+
+(deftest test-schema-1-0-52-4-runtime-instructions-wire-roundtrip
+  (testing ":runtime-instructions section survives the create-session wire conversion"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :system-message {:mode :customize
+                                                  :sections
+                                                  {:runtime-instructions
+                                                   {:action :replace
+                                                    :content "runtime ctx"}}}})
+          wire (get-in @seen ["session.create" :systemMessage :sections])]
+      (is (contains? wire :runtime_instructions)
+          ":runtime-instructions must be sent as wire key :runtime_instructions")
+      (is (= "replace" (get-in wire [:runtime_instructions :action])))
+      (is (= "runtime ctx" (get-in wire [:runtime_instructions :content]))))))
+
+(deftest test-schema-1-0-52-4-min-protocol-version-3
+  (testing "client rejects servers reporting protocol version < 3 (upstream PR #1378)"
+    ;; The SDK no longer supports v2 servers after the cleanup PR removed
+    ;; the v2 `tool.call` / `permission.request` back-compat adapters.
+    (let [server (mock/create-mock-server)
+          _ (reset! (:protocol-version server) 2)
+          _ (mock/start-mock-server! server)
+          client (sdk/client {:auto-start? false})
+          [in out] (mock/client-streams server)]
+      (try
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"(?i)protocol.*version"
+                              (client/connect-with-streams! client in out)))
+        (finally
+          (try (sdk/disconnect! client) (catch Exception _))
+          (mock/stop-mock-server! server))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Last Session ID Tests
