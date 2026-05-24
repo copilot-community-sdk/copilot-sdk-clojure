@@ -32,7 +32,10 @@ All notable changes to this project will be documented in this file. This change
     on `:skill.invoked` data.
   - `:tool-description` and `:ui-resource` on `:tool.execution_complete` data.
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.52-1` to
-  `1.0.52-4`. (upstream PR #1393)
+  `1.0.52` (stable). Picked up the 1.0.52-4 pre-release (upstream PR #1393)
+  and then advanced to the 1.0.52 stable release (upstream PR #1405); the
+  shipped JSON Schemas are byte-identical between 1.0.52-4 and 1.0.52, so
+  no additional schema-driven changes were required.
 
 ### Changed (post-v1.0.0-beta.4 sync, round 5)
 - **BREAKING: Minimum supported protocol version raised from 2 to 3.** The

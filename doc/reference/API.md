@@ -1706,7 +1706,7 @@ For full control (removes all guardrails), use `:mode :replace`:
 
 #### Customize Mode
 
-The `:customize` mode enables section-level overrides of the system prompt. Ten sections are configurable:
+The `:customize` mode enables section-level overrides of the system prompt. Eleven sections are configurable:
 
 | Section | Description |
 |---------|-------------|
@@ -1719,6 +1719,7 @@ The `:customize` mode enables section-level overrides of the system prompt. Ten 
 | `:safety` | Environment limitations, prohibited actions, security |
 | `:tool-instructions` | Per-tool usage instructions |
 | `:custom-instructions` | Repository and organization custom instructions |
+| `:runtime-instructions` | Runtime-provided context (system notifications, memories, mode-specific instructions, content-exclusion policy) — added in upstream PR #1377 |
 | `:last-instructions` | End-of-prompt instructions |
 
 Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`) and transform callbacks (1-arity functions).
@@ -1761,9 +1762,10 @@ copilot/system-prompt-sections
 ;;     :runtime-instructions {:description "Runtime instructions injected ..."} ...}
 ```
 
-Available section keys: `:identity`, `:tone`, `:proactiveness`, `:formatting`,
-`:tools`, `:context-collection`, `:task-management`, `:safety`, `:agent-mode`,
-`:additional-instructions`, `:runtime-instructions` (added in upstream PR #1377).
+Available section keys: `:identity`, `:tone`, `:tool-efficiency`,
+`:environment-context`, `:code-change-rules`, `:guidelines`, `:safety`,
+`:tool-instructions`, `:custom-instructions`, `:runtime-instructions`
+(added in upstream PR #1377), `:last-instructions`.
 
 > **Naming note** — Upstream renamed `SystemPromptSection` →
 > `SystemMessageSection` in the TypeScript SDK. The Clojure SDK keeps
