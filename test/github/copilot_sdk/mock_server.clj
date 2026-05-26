@@ -9,7 +9,7 @@
             PipedInputStream PipedOutputStream]
            [java.util.concurrent.atomic AtomicLong]))
 
-(def ^:private PROTOCOL_VERSION 2)
+(def ^:private DEFAULT_PROTOCOL_VERSION 3)
 
 (defn- write-message
   "Write a JSON-RPC message with Content-Length framing."
@@ -69,7 +69,8 @@
             expected-token     ; atom string-or-nil - when set, `connect` validates token
             supports-connect?  ; atom boolean - when false, `connect` returns -32601 (legacy fallback)
             pending-events     ; atom - events to send on next opportunity
-            pending-responses]) ; atom {id -> chan} - responses to server→client RPCs
+            pending-responses  ; atom {id -> chan} - responses to server→client RPCs
+            protocol-version]) ; atom Long - protocol version reported by ping/connect/status
 
 (defn- generate-id [^AtomicLong counter]
   (str "evt-" (.incrementAndGet counter)))
@@ -96,7 +97,7 @@
 (defn- handle-ping [server params]
   {:message (:message params)
    :timestamp (.toString (java.time.Instant/now))
-   :protocolVersion PROTOCOL_VERSION})
+   :protocolVersion (or (some-> server :protocol-version deref) DEFAULT_PROTOCOL_VERSION)})
 
 (defn- handle-connect
   "Handle the `connect` handshake (upstream PR #1176). When :expected-token is
@@ -109,12 +110,12 @@
       (throw (ex-info "Invalid connection token"
                       {:code -32603 :method "connect"})))
     {:ok true
-     :protocolVersion PROTOCOL_VERSION
+     :protocolVersion (or (some-> server :protocol-version deref) DEFAULT_PROTOCOL_VERSION)
      :version "0.0.389-mock"}))
 
 (defn- handle-status-get [server params]
   {:version "0.0.389-mock"
-   :protocolVersion PROTOCOL_VERSION})
+   :protocolVersion (or (some-> server :protocol-version deref) DEFAULT_PROTOCOL_VERSION)})
 
 (defn- handle-auth-get-status [server params]
   {:isAuthenticated true
@@ -460,7 +461,8 @@
       :expected-token (atom nil)
       :supports-connect? (atom true)
       :pending-events (atom [])
-      :pending-responses (atom {})})))
+      :pending-responses (atom {})
+      :protocol-version (atom DEFAULT_PROTOCOL_VERSION)})))
 
 (defn start-mock-server!
   "Start the mock server in a background thread."

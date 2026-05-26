@@ -1435,6 +1435,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/sampling.completed` | MCP sampling request completed; ephemeral |
 | `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |
 | `:copilot/capabilities.changed` | Session capabilities dynamically changed (e.g., elicitation support); ephemeral. Data: `{:ui {:elicitation true/false}}` |
+| `:copilot/mcp_app.tool_call_complete` | An MCP App tool call completed (upstream schema 1.0.52-4, SEP-1865); ephemeral. Data: `{:server-name ... :tool-name ... :duration-ms ... :success bool :arguments {...} :result {...}}` — `:arguments` and `:result` are opaque source-defined maps whose keys are preserved verbatim (not kebab-cased). |
 
 ### Example: Handling Events
 
@@ -1705,7 +1706,7 @@ For full control (removes all guardrails), use `:mode :replace`:
 
 #### Customize Mode
 
-The `:customize` mode enables section-level overrides of the system prompt. Ten sections are configurable:
+The `:customize` mode enables section-level overrides of the system prompt. Eleven sections are configurable:
 
 | Section | Description |
 |---------|-------------|
@@ -1718,6 +1719,7 @@ The `:customize` mode enables section-level overrides of the system prompt. Ten 
 | `:safety` | Environment limitations, prohibited actions, security |
 | `:tool-instructions` | Per-tool usage instructions |
 | `:custom-instructions` | Repository and organization custom instructions |
+| `:runtime-instructions` | Runtime-provided context (system notifications, memories, mode-specific instructions, content-exclusion policy) — added in upstream PR #1377 |
 | `:last-instructions` | End-of-prompt instructions |
 
 Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`) and transform callbacks (1-arity functions).
@@ -1756,8 +1758,19 @@ Inspect available sections with the `system-prompt-sections` constant:
 ```clojure
 copilot/system-prompt-sections
 ;; => {:identity {:description "Agent identity preamble and mode statement"}
-;;     :tone {:description "Response style, conciseness rules, ..."} ...}
+;;     :tone {:description "Response style, conciseness rules, ..."}
+;;     :runtime-instructions {:description "Runtime instructions injected ..."} ...}
 ```
+
+Available section keys: `:identity`, `:tone`, `:tool-efficiency`,
+`:environment-context`, `:code-change-rules`, `:guidelines`, `:safety`,
+`:tool-instructions`, `:custom-instructions`, `:runtime-instructions`
+(added in upstream PR #1377), `:last-instructions`.
+
+> **Naming note** — Upstream renamed `SystemPromptSection` →
+> `SystemMessageSection` in the TypeScript SDK. The Clojure SDK keeps
+> `system-prompt-sections` as the canonical name (for back-compat) and
+> exposes `system-message-sections` as an alias.
 
 Unknown section keywords are allowed — they gracefully fall back to appending content to additional instructions.
 

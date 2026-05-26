@@ -54,17 +54,18 @@
 ;; -----------------------------------------------------------------------------
 
 (def section-key->wire
-  "Map from Clojure keyword to wire string for system prompt sections."
-  {:identity            "identity"
-   :tone                "tone"
-   :tool-efficiency     "tool_efficiency"
-   :environment-context "environment_context"
-   :code-change-rules   "code_change_rules"
-   :guidelines          "guidelines"
-   :safety              "safety"
-   :tool-instructions   "tool_instructions"
-   :custom-instructions "custom_instructions"
-   :last-instructions   "last_instructions"})
+  "Map from Clojure keyword to wire string for system message sections."
+  {:identity             "identity"
+   :tone                 "tone"
+   :tool-efficiency      "tool_efficiency"
+   :environment-context  "environment_context"
+   :code-change-rules    "code_change_rules"
+   :guidelines           "guidelines"
+   :safety               "safety"
+   :tool-instructions    "tool_instructions"
+   :custom-instructions  "custom_instructions"
+   :runtime-instructions "runtime_instructions"
+   :last-instructions    "last_instructions"})
 
 (def wire->section-key
   "Map from wire string to Clojure keyword for system prompt sections."

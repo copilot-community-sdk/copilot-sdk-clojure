@@ -233,22 +233,34 @@
 (s/def ::system-message-mode #{:append :replace :customize})
 (s/def ::system-message-content string?)
 
-;; System prompt sections for customize mode (upstream PR #816)
+;; System message sections for customize mode (upstream PR #816)
+;; Upstream PR #1377 renamed `SystemPromptSection` to `SystemMessageSection`
+;; and added the `runtime_instructions` section. The Clojure SDK keeps the
+;; historical `system-prompt-sections` var as the canonical name and exposes
+;; `system-message-sections` as an alias to match the upstream naming.
 (def system-prompt-sections
-  "Known system prompt section identifiers for the customize mode.
-   Each section corresponds to a distinct part of the system prompt."
-  {:identity            {:description "Agent identity preamble and mode statement"}
-   :tone                {:description "Response style, conciseness rules, output formatting preferences"}
-   :tool-efficiency     {:description "Tool usage patterns, parallel calling, batching guidelines"}
-   :environment-context {:description "CWD, OS, git root, directory listing, available tools"}
-   :code-change-rules   {:description "Coding rules, linting/testing, ecosystem tools, style"}
-   :guidelines          {:description "Tips, behavioral best practices, behavioral guidelines"}
-   :safety              {:description "Environment limitations, prohibited actions, security policies"}
-   :tool-instructions   {:description "Per-tool usage instructions"}
-   :custom-instructions {:description "Repository and organization custom instructions"}
-   :last-instructions   {:description "End-of-prompt instructions: parallel tool calling, persistence, task completion"}})
+  "Known system message section identifiers for the customize mode.
+   Each section corresponds to a distinct part of the system message.
+   Upstream alias: `SystemMessageSection`."
+  {:identity             {:description "Agent identity preamble and mode statement"}
+   :tone                 {:description "Response style, conciseness rules, output formatting preferences"}
+   :tool-efficiency      {:description "Tool usage patterns, parallel calling, batching guidelines"}
+   :environment-context  {:description "CWD, OS, git root, directory listing, available tools"}
+   :code-change-rules    {:description "Coding rules, linting/testing, ecosystem tools, style"}
+   :guidelines           {:description "Tips, behavioral best practices, behavioral guidelines"}
+   :safety               {:description "Environment limitations, prohibited actions, security policies"}
+   :tool-instructions    {:description "Per-tool usage instructions"}
+   :custom-instructions  {:description "Repository and organization custom instructions"}
+   :runtime-instructions {:description "Runtime-provided context and instructions (e.g. system notifications, memories, workspace context, mode-specific instructions, content-exclusion policy)"}
+   :last-instructions    {:description "End-of-prompt instructions: parallel tool calling, persistence, task completion"}})
+
+(def system-message-sections
+  "Alias for [[system-prompt-sections]] matching the upstream
+   `SYSTEM_MESSAGE_SECTIONS` name (upstream PR #1377)."
+  system-prompt-sections)
 
 (s/def ::system-prompt-section (set (keys system-prompt-sections)))
+(s/def ::system-message-section ::system-prompt-section)
 
 ;; Section override: action can be a keyword for static overrides, or a fn for transforms
 (s/def ::section-action
@@ -888,7 +900,9 @@
     ;; Capabilities changed (upstream PR #908)
     :copilot/capabilities.changed
     ;; Schedule events (upstream schema 1.0.42)
-    :copilot/session.schedule_created :copilot/session.schedule_cancelled})
+    :copilot/session.schedule_created :copilot/session.schedule_cancelled
+    ;; MCP Apps tool-call complete (upstream schema 1.0.52-4, SEP-1865)
+    :copilot/mcp_app.tool_call_complete})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)

@@ -15,7 +15,10 @@
            [java.util.concurrent LinkedBlockingQueue]))
 
 (def ^:private sdk-protocol-version-max 3)
-(def ^:private sdk-protocol-version-min 2)
+;; Upstream PR #1378 raised the minimum protocol version to 3 by removing
+;; the v2 back-compat shims (the `tool.call` and `permission.request`
+;; server→client RPCs). Servers reporting a version below 3 are now rejected.
+(def ^:private sdk-protocol-version-min 3)
 
 (defn- get-trace-context
   "Call the user-provided trace context provider. Returns {} when no provider
@@ -632,34 +635,20 @@
         (str/join "\n" lines)))))
 
 (defn- setup-request-handler!
-  "Set up handler for incoming requests (tool calls, permission requests, hooks, user input, sessionFs)."
+  "Set up handler for incoming requests (hooks, user input, sessionFs, etc.).
+
+   Protocol v3 (the only supported version, see [[sdk-protocol-version-min]])
+   delivers tool calls and permission requests as broadcast events on
+   `session.event` — see [[handle-v3-tool-requested!]] and
+   [[handle-v3-permission-requested!]] — not as server→client RPCs. The v2
+   `tool.call` / `permission.request` dispatcher cases were removed
+   alongside upstream PR #1378."
   [client]
   (let [{:keys [connection-io]} @(:state client)]
     (proto/set-request-handler! connection-io
                                 (fn [method params]
                                   (go
                                     (case method
-                                      "tool.call"
-                                      (let [{:keys [session-id tool-call-id tool-name arguments]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          {:result (<! (session/handle-tool-call! client session-id tool-call-id tool-name arguments))}))
-
-                                       "permission.request"
-                                       (let [{:keys [session-id permission-request]} params]
-                                         (if-not (get-in @(:state client) [:sessions session-id])
-                                           {:result {:result {:kind :user-not-available}}}
-                                           (let [perm-response (<! (session/handle-permission-request! client session-id permission-request))
-                                                 result (:result perm-response)]
-                                            (if (= :no-result result)
-                                              ;; no-result must propagate as an error on v2 protocol
-                                              ;; so the CLI knows no answer was given (matches upstream -32603)
-                                              {:error {:code -32603
-                                                       :message "Permission handler returned no-result on protocol v2"}}
-                                              (do
-                                                (log/debug "Permission response for session " session-id ": " result)
-                                                {:result perm-response})))))
-
                                       ;; Exit Plan Mode request (upstream PR #1228)
                                       "exitPlanMode.request"
                                       (let [{:keys [session-id]} params

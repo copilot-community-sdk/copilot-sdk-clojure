@@ -120,7 +120,9 @@
     :copilot/sampling.requested
     :copilot/sampling.completed
     :copilot/session.remote_steerable_changed
-    :copilot/capabilities.changed})
+    :copilot/capabilities.changed
+    ;; MCP Apps tool-call complete (upstream schema 1.0.52-4, SEP-1865)
+    :copilot/mcp_app.tool_call_complete})
 
 (def session-events
   "Session lifecycle and state management events."

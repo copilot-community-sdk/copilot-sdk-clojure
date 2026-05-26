@@ -3,6 +3,60 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.0-beta.4 sync, round 5)
+- **`:runtime-instructions` system message section** — New section recognized
+  by the SDK's `:system-message` `:customize` mode. Wire-encoded as
+  `"runtime_instructions"` and accepted by `::specs/system-prompt-section`.
+  Upstream PR #1377 also renamed `SystemPromptSection` → `SystemMessageSection`
+  in TypeScript; for source compatibility the Clojure side keeps
+  `specs/system-prompt-sections` as the canonical name and exposes
+  `specs/system-message-sections` (and `::specs/system-message-section`) as
+  aliases pointing at the same data. (upstream PR #1377)
+- **`:copilot/mcp_app.tool_call_complete` event** — New session event emitted
+  when a tool call from an MCP App completes (upstream schema 1.0.52-4,
+  SEP-1865). Added to the public `event-types` set. The `:arguments` and
+  `:result` fields are preserved opaquely by `protocol/preserve-event-opaque-fields`
+  (they survive `normalize-incoming` without kebab-case rewriting so
+  source-defined keys round-trip verbatim).
+- **Additional event-data fields (passive, via schema regen)** — All optional;
+  generated `:opt-un` specs pick them up automatically:
+  - `:service-request-id` on `:error`, `:assistant.message`, `:assistant.usage`,
+    `:model.call_failure`, `:session.compaction_complete` event data
+    (Copilot CAPI service-request-id for correlation with CAPI logs).
+  - `:context-tier` (`"long_context" | "default" | nil`) on
+    `:session.model_change` data.
+  - `:transport`, `:plugin-name`, `:plugin-version` on the loaded MCP server
+    spec inside `:session.mcp_servers_loaded` data.
+  - `:error` on `:session.mcp_server_status_changed` data.
+  - `:source` and `:trigger` (`"user-invoked" | "agent-invoked" | "context-load"`)
+    on `:skill.invoked` data.
+  - `:tool-description` and `:ui-resource` on `:tool.execution_complete` data.
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.52-1` to
+  `1.0.52` (stable). Picked up the 1.0.52-4 pre-release (upstream PR #1393)
+  and then advanced to the 1.0.52 stable release (upstream PR #1405); the
+  shipped JSON Schemas are byte-identical between 1.0.52-4 and 1.0.52, so
+  no additional schema-driven changes were required.
+
+### Changed (post-v1.0.0-beta.4 sync, round 5)
+- **BREAKING: Minimum supported protocol version raised from 2 to 3.** The
+  SDK will now reject CLI servers that report protocol version 2. The
+  back-compat shims that adapted v2 `tool.call` / `permission.request`
+  JSON-RPC requests into v3 broadcast-event flows have been removed from
+  `set-request-handler!` and from `protocol/normalize-incoming`. Clients
+  must use a Copilot CLI that supports protocol v3 (CLI 1.0.46 or later).
+  (upstream PR #1378)
+
+### Removed (post-v1.0.0-beta.4 sync, round 5)
+- **v2 protocol RPC dispatcher cases** — `tool.call` and `permission.request`
+  request handlers (and their associated tests
+  `test-tool-call-response-shape`, `test-tool-handler-runs-on-blocking-thread`,
+  `test-permission-denied-with-deny-handler`,
+  `test-permission-approved-with-handler`,
+  `test-permission-unknown-session-response-shape`,
+  `test-permission-custom-handler`, `test-permission-no-result-v2`). v3
+  broadcast handlers `handle-v3-tool-requested!` / `handle-v3-permission-requested!`
+  cover the same behaviour. (upstream PR #1378)
+
 ### Added (post-v1.0.0-beta.4 sync, round 4)
 - **`:on-pre-mcp-tool-call` hook** — New lifecycle hook in the `:hooks` map
   that fires before an MCP tool call is dispatched to its server (upstream
