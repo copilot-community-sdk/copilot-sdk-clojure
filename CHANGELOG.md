@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.0-beta.4 sync, round 5)
+- **`:on-post-tool-use-failure` hook** — New lifecycle hook in the
+  `:hooks` map. Fires after a tool execution whose result was `"failure"`;
+  `:on-post-tool-use` only fires for successful results, so register this
+  handler to observe or react to failed tool outcomes. Note: `"rejected"`,
+  `"denied"`, and `"timeout"` results do not currently trigger this hook —
+  only `"failure"` does. Handler input has `:tool-name`, `:tool-args`,
+  `:error` (string), plus the base hook fields (`:session-id`,
+  `:timestamp`, `:cwd`). Optional return value:
+  `{:additional-context "..."}` is appended as hidden guidance to the
+  model alongside the failed tool result. (upstream PR #1421)
 - **`:runtime-instructions` system message section** — New section recognized
   by the SDK's `:system-message` `:customize` mode. Wire-encoded as
   `"runtime_instructions"` and accepted by `::specs/system-prompt-section`.
@@ -32,10 +42,16 @@ All notable changes to this project will be documented in this file. This change
     on `:skill.invoked` data.
   - `:tool-description` and `:ui-resource` on `:tool.execution_complete` data.
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.52-1` to
-  `1.0.52` (stable). Picked up the 1.0.52-4 pre-release (upstream PR #1393)
-  and then advanced to the 1.0.52 stable release (upstream PR #1405); the
-  shipped JSON Schemas are byte-identical between 1.0.52-4 and 1.0.52, so
-  no additional schema-driven changes were required.
+  `1.0.55-1`. Picked up the 1.0.52-4 pre-release (upstream PR #1393), the
+  1.0.52 stable release (upstream PR #1405), and the 1.0.53 / 1.0.53-2 /
+  1.0.54 / 1.0.55-0 / 1.0.55-1 schema bumps (upstream PRs #1408, #1410,
+  #1411, #1412, #1432). Schema regen surfaces new wire-only canvas event
+  types (`session.canvas.opened`, `session.canvas.registry_changed`) and
+  the field set behind them. These events now appear in the public
+  `event-types` set for forward compatibility, but the canvas runtime
+  (extension manifests, `requestCanvasRenderer`, `openCanvases`, etc. —
+  upstream PRs #1401, #1413) is **not yet exposed** on the public Clojure
+  API. Canvas events will flow through as generic session events.
 
 ### Changed (post-v1.0.0-beta.4 sync, round 5)
 - **BREAKING: Minimum supported protocol version raised from 2 to 3.** The

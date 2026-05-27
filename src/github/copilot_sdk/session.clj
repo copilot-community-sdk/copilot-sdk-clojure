@@ -695,6 +695,7 @@
                              "preToolUse" :on-pre-tool-use
                              "preMcpToolCall" :on-pre-mcp-tool-call
                              "postToolUse" :on-post-tool-use
+                             "postToolUseFailure" :on-post-tool-use-failure
                              "userPromptSubmitted" :on-user-prompt-submitted
                              "sessionStart" :on-session-start
                              "sessionEnd" :on-session-end
