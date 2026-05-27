@@ -2999,6 +2999,50 @@
       ;; Handler returned nil, so result is nil
       (is (nil? (:result response))))))
 
+(deftest test-hooks-post-tool-use-failure
+  (testing "hooks.invoke postToolUseFailure calls registered handler (upstream PR #1421)"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-post-tool-use-failure
+                                               (fn [input ctx]
+                                                 (reset! handler-called {:input input :ctx ctx})
+                                                 {:additional-context "noted"})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "postToolUseFailure"
+                                            :input {:toolName "bash"
+                                                    :toolArgs {:command "false"}
+                                                    :error "command exited 1"
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
+      (is (some? @handler-called))
+      (is (= "bash" (get-in @handler-called [:input :tool-name])))
+      (is (= "command exited 1" (get-in @handler-called [:input :error])))
+      (is (= session-id (get-in @handler-called [:input :session-id])))
+      (is (= "noted" (get-in response [:result :additionalContext]))))))
+
+(deftest test-hooks-post-tool-use-failure-no-handler
+  (testing "hooks.invoke postToolUseFailure with no handler returns nil result"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       ;; Only success hook registered; failure should pass through as nil.
+                                       :hooks {:on-post-tool-use
+                                               (fn [_ _] nil)}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "postToolUseFailure"
+                                            :input {:toolName "bash"
+                                                    :toolArgs {}
+                                                    :error "boom"
+                                                    :timestamp 12345
+                                                    :cwd "/workspace"}})]
+      (is (nil? (:result response))))))
+
 (deftest test-hooks-session-start
   (testing "hooks.invoke sessionStart calls registered handler"
     (let [handler-called (atom nil)

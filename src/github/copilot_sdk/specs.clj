@@ -453,12 +453,14 @@
 (s/def ::on-pre-tool-use fn?)
 (s/def ::on-pre-mcp-tool-call fn?)
 (s/def ::on-post-tool-use fn?)
+(s/def ::on-post-tool-use-failure fn?)
 (s/def ::on-user-prompt-submitted fn?)
 (s/def ::on-session-start fn?)
 (s/def ::on-session-end fn?)
 (s/def ::on-error-occurred fn?)
 (s/def ::hooks
   (s/keys :opt-un [::on-pre-tool-use ::on-pre-mcp-tool-call ::on-post-tool-use
+                   ::on-post-tool-use-failure
                    ::on-user-prompt-submitted ::on-session-start ::on-session-end
                    ::on-error-occurred]))
 

@@ -2258,10 +2258,29 @@ Lifecycle hooks allow custom logic at various points during the session:
 
                  :on-post-tool-use
                  (fn [input invocation]
-                   ;; Called after each tool execution
-                   ;; input contains {:tool-name "..." :result {...}}
+                   ;; Called after each *successful* tool execution
+                   ;; input contains {:tool-name "..." :tool-args {...} :tool-result {...}}
+                   ;; For failed tool calls, register :on-post-tool-use-failure below.
                    (println "Tool completed:" (:tool-name input))
                    nil)
+
+                 :on-post-tool-use-failure
+                 (fn [input invocation]
+                   ;; Called after a tool execution whose result was `"failure"`
+                   ;; (upstream PR #1421). :on-post-tool-use only fires for
+                   ;; successful results, so register this handler to observe
+                   ;; failed tool outcomes. Note: `"rejected"`, `"denied"`, and
+                   ;; `"timeout"` results do NOT currently trigger this hook —
+                   ;; only `"failure"` does.
+                   ;; input contains {:tool-name "..." :tool-args {...}
+                   ;;                 :error "failure message string"
+                   ;;                 :session-id "..." :timestamp 12345}
+                   ;; Optional return: {:additional-context "..."} is appended as
+                   ;; hidden guidance to the model alongside the failed result.
+                   ;; Other fields (e.g. :modified-result, :suppress-output) are
+                   ;; not honored for failure hooks.
+                   (println "Tool failed:" (:tool-name input) (:error input))
+                   {:additional-context "Tip: try `ls` first to see available files."})
 
                  :on-pre-mcp-tool-call
                  (fn [input invocation]

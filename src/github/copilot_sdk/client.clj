@@ -1655,7 +1655,8 @@
                                :elicitation-source, :url. Returns an ElicitationResult map.
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-pre-mcp-tool-call,
-                            :on-post-tool-use, :on-user-prompt-submitted,
+                            :on-post-tool-use, :on-post-tool-use-failure,
+                            :on-user-prompt-submitted,
                             :on-session-start, :on-session-end, :on-error-occurred}
                            See `doc/reference/API.md` for hook input/output shapes.
                            `:on-pre-mcp-tool-call` (upstream PR #1366) fires before
@@ -1663,6 +1664,12 @@
                            `{:meta-to-use {...}}` replaces the request `_meta`,
                            `{:meta-to-use nil}` removes it, and an empty / missing
                            `:meta-to-use` preserves the existing `_meta`.
+                           `:on-post-tool-use-failure` (upstream PR #1421) fires
+                           after a tool execution whose `:result-type` was
+                           `\"failure\"`; `:on-post-tool-use` only fires for
+                           successful results. Handler input has `:tool-name`,
+                           `:tool-args`, `:error` (string), plus base hook fields.
+                           Optional output: `{:additional-context \"...\"}`.
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
    - :enable-config-discovery - Boolean. Auto-discover .mcp.json, .vscode/mcp.json, skills, etc.

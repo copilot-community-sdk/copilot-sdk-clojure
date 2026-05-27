@@ -407,7 +407,7 @@
         },
         "result": {
           "$ref": "#/definitions/SessionEnrichMetadataResult",
-          "description": "The same metadata records, with summary and context fields backfilled where available."
+          "description": "The enriched metadata records, with summary and context fields backfilled where available. Sessions confirmed empty and unnamed are omitted."
         },
         "stability": "experimental"
       },
@@ -668,6 +668,162 @@
         "result": {
           "$ref": "#/definitions/SessionSetCredentialsResult",
           "description": "Indicates whether the credential update succeeded."
+        },
+        "stability": "experimental"
+      }
+    },
+    "canvas": {
+      "list": {
+        "rpcMethod": "session.canvas.list",
+        "description": "Lists canvases declared for the session.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/CanvasList",
+          "description": "Declared canvases available in this session."
+        },
+        "stability": "experimental"
+      },
+      "listOpen": {
+        "rpcMethod": "session.canvas.listOpen",
+        "description": "Lists currently open canvas instances for the live session.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/CanvasListOpenResult",
+          "description": "Live open-canvas snapshot."
+        },
+        "stability": "experimental"
+      },
+      "open": {
+        "rpcMethod": "session.canvas.open",
+        "description": "Opens or focuses a canvas instance.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "extensionId": {
+              "type": "string",
+              "description": "Owning provider identifier. Optional when the canvasId is unique across providers; required to disambiguate when multiple providers register the same canvasId."
+            },
+            "canvasId": {
+              "type": "string",
+              "description": "Provider-local canvas identifier"
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Caller-supplied stable instance identifier"
+            },
+            "input": {
+              "description": "Canvas open input",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "canvasId",
+            "instanceId"
+          ],
+          "additionalProperties": false,
+          "description": "Canvas open parameters.",
+          "title": "CanvasOpenRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/OpenCanvasInstance",
+          "description": "Open canvas instance snapshot."
+        },
+        "stability": "experimental"
+      },
+      "close": {
+        "rpcMethod": "session.canvas.close",
+        "description": "Closes an open canvas instance.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Open canvas instance identifier"
+            }
+          },
+          "required": [
+            "sessionId",
+            "instanceId"
+          ],
+          "additionalProperties": false,
+          "description": "Canvas close parameters.",
+          "title": "CanvasCloseRequest"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "invokeAction": {
+        "rpcMethod": "session.canvas.invokeAction",
+        "description": "Invokes an action on an open canvas instance.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Open canvas instance identifier"
+            },
+            "actionName": {
+              "type": "string",
+              "description": "Action name to invoke"
+            },
+            "input": {
+              "description": "Action input",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "instanceId",
+            "actionName"
+          ],
+          "additionalProperties": false,
+          "description": "Canvas action invocation parameters.",
+          "title": "CanvasInvokeActionRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/CanvasInvokeActionResult",
+          "description": "Canvas action invocation result."
         },
         "stability": "experimental"
       }
@@ -1167,6 +1323,35 @@
         "result": {
           "$ref": "#/definitions/WorkspacesSaveLargePasteResult",
           "description": "Descriptor for the saved paste file, or null when the workspace is unavailable."
+        },
+        "stability": "experimental"
+      },
+      "diff": {
+        "rpcMethod": "session.workspaces.diff",
+        "description": "Computes a diff for the session workspace.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "mode": {
+              "$ref": "#/definitions/WorkspaceDiffMode",
+              "description": "Diff mode requested by the client."
+            }
+          },
+          "required": [
+            "sessionId",
+            "mode"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for computing a workspace diff.",
+          "title": "WorkspacesDiffRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkspaceDiffResult",
+          "description": "Workspace diff result for the requested mode."
         },
         "stability": "experimental"
       }
@@ -4665,7 +4850,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsReadFileResult",
           "description": "File content as a UTF-8 string, or a filesystem error if the read failed."
-        }
+        },
+        "stability": "experimental"
       },
       "writeFile": {
         "rpcMethod": "sessionFs.writeFile",
@@ -4711,7 +4897,8 @@
             }
           ],
           "description": "Describes a filesystem error."
-        }
+        },
+        "stability": "experimental"
       },
       "appendFile": {
         "rpcMethod": "sessionFs.appendFile",
@@ -4757,7 +4944,8 @@
             }
           ],
           "description": "Describes a filesystem error."
-        }
+        },
+        "stability": "experimental"
       },
       "exists": {
         "rpcMethod": "sessionFs.exists",
@@ -4785,7 +4973,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsExistsResult",
           "description": "Indicates whether the requested path exists in the client-provided session filesystem."
-        }
+        },
+        "stability": "experimental"
       },
       "stat": {
         "rpcMethod": "sessionFs.stat",
@@ -4813,7 +5002,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsStatResult",
           "description": "Filesystem metadata for the requested path, or a filesystem error if the stat failed."
-        }
+        },
+        "stability": "experimental"
       },
       "mkdir": {
         "rpcMethod": "sessionFs.mkdir",
@@ -4858,7 +5048,8 @@
             }
           ],
           "description": "Describes a filesystem error."
-        }
+        },
+        "stability": "experimental"
       },
       "readdir": {
         "rpcMethod": "sessionFs.readdir",
@@ -4886,7 +5077,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsReaddirResult",
           "description": "Names of entries in the requested directory, or a filesystem error if the read failed."
-        }
+        },
+        "stability": "experimental"
       },
       "readdirWithTypes": {
         "rpcMethod": "sessionFs.readdirWithTypes",
@@ -4914,7 +5106,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsReaddirWithTypesResult",
           "description": "Entries in the requested directory paired with file/directory type information, or a filesystem error if the read failed."
-        }
+        },
+        "stability": "experimental"
       },
       "rm": {
         "rpcMethod": "sessionFs.rm",
@@ -4958,7 +5151,8 @@
             }
           ],
           "description": "Describes a filesystem error."
-        }
+        },
+        "stability": "experimental"
       },
       "rename": {
         "rpcMethod": "sessionFs.rename",
@@ -4999,7 +5193,8 @@
             }
           ],
           "description": "Describes a filesystem error."
-        }
+        },
+        "stability": "experimental"
       },
       "sqliteQuery": {
         "rpcMethod": "sessionFs.sqliteQuery",
@@ -5044,7 +5239,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsSqliteQueryResult",
           "description": "Query results including rows, columns, and rows affected, or a filesystem error if execution failed."
-        }
+        },
+        "stability": "experimental"
       },
       "sqliteExists": {
         "rpcMethod": "sessionFs.sqliteExists",
@@ -5066,7 +5262,151 @@
         "result": {
           "$ref": "#/definitions/SessionFsSqliteExistsResult",
           "description": "Indicates whether the per-session SQLite database already exists."
-        }
+        },
+        "stability": "experimental"
+      }
+    },
+    "canvas": {
+      "open": {
+        "rpcMethod": "canvas.open",
+        "description": "Opens a canvas instance on the provider.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "extensionId": {
+              "type": "string",
+              "description": "Owning provider identifier"
+            },
+            "canvasId": {
+              "type": "string",
+              "description": "Provider-local canvas identifier"
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Stable caller-supplied canvas instance identifier"
+            },
+            "input": {
+              "description": "Canvas open input",
+              "x-opaque-json": true
+            },
+            "host": {
+              "$ref": "#/definitions/CanvasHostContext",
+              "description": "Host context supplied by the runtime."
+            }
+          },
+          "required": [
+            "sessionId",
+            "extensionId",
+            "canvasId",
+            "instanceId"
+          ],
+          "additionalProperties": false,
+          "description": "Canvas open parameters sent to the provider.",
+          "title": "CanvasProviderOpenRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/CanvasProviderOpenResult",
+          "description": "Canvas open result returned by the provider."
+        },
+        "stability": "experimental"
+      },
+      "close": {
+        "rpcMethod": "canvas.close",
+        "description": "Closes a canvas instance on the provider.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "extensionId": {
+              "type": "string",
+              "description": "Owning provider identifier"
+            },
+            "canvasId": {
+              "type": "string",
+              "description": "Provider-local canvas identifier"
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Canvas instance identifier"
+            },
+            "host": {
+              "$ref": "#/definitions/CanvasHostContext",
+              "description": "Host context supplied by the runtime."
+            }
+          },
+          "required": [
+            "sessionId",
+            "extensionId",
+            "canvasId",
+            "instanceId"
+          ],
+          "additionalProperties": false,
+          "description": "Canvas close parameters sent to the provider.",
+          "title": "CanvasProviderCloseRequest"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "invokeAction": {
+        "rpcMethod": "canvas.invokeAction",
+        "description": "Invokes an action on an open canvas instance via the provider.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "extensionId": {
+              "type": "string",
+              "description": "Owning provider identifier"
+            },
+            "canvasId": {
+              "type": "string",
+              "description": "Provider-local canvas identifier"
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Canvas instance identifier"
+            },
+            "actionName": {
+              "type": "string",
+              "description": "Action name to invoke"
+            },
+            "input": {
+              "description": "Action input",
+              "x-opaque-json": true
+            },
+            "host": {
+              "$ref": "#/definitions/CanvasHostContext",
+              "description": "Host context supplied by the runtime."
+            }
+          },
+          "required": [
+            "sessionId",
+            "extensionId",
+            "canvasId",
+            "instanceId",
+            "actionName"
+          ],
+          "additionalProperties": false,
+          "description": "Canvas action invocation parameters sent to the provider.",
+          "title": "CanvasProviderInvokeActionRequest"
+        },
+        "result": {
+          "description": "Provider-supplied action result.",
+          "x-opaque-json": true
+        },
+        "stability": "experimental"
       }
     }
   },
@@ -5456,6 +5796,308 @@
         "token": "Authentication from a GitHub token.",
         "copilot-api-token": "Authentication from a Copilot API token."
       }
+    },
+    "CanvasAction": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Action name exposed by the canvas provider"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the action"
+        },
+        "inputSchema": {
+          "$ref": "#/definitions/CanvasJsonSchema",
+          "description": "JSON Schema for the action input"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas action that the agent or host can invoke. To discover the input schema for a particular action, call the list_canvas_capabilities tool.",
+      "title": "CanvasAction"
+    },
+    "CanvasCloseRequest": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "description": "Open canvas instance identifier"
+        }
+      },
+      "required": [
+        "instanceId"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas close parameters.",
+      "title": "CanvasCloseRequest"
+    },
+    "CanvasHostContext": {
+      "type": "object",
+      "properties": {
+        "capabilities": {
+          "$ref": "#/definitions/CanvasHostContextCapabilities",
+          "description": "Host capabilities"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Host context supplied by the runtime.",
+      "title": "CanvasHostContext"
+    },
+    "CanvasHostContextCapabilities": {
+      "type": "object",
+      "properties": {
+        "canvases": {
+          "type": "boolean",
+          "description": "Whether canvas rendering is supported"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Host capabilities",
+      "title": "CanvasHostContextCapabilities"
+    },
+    "CanvasInstanceAvailability": {
+      "type": "string",
+      "enum": [
+        "ready",
+        "stale"
+      ],
+      "description": "Runtime-controlled routing state for an open canvas instance.",
+      "title": "CanvasInstanceAvailability",
+      "x-enumDescriptions": {
+        "ready": "The owning provider is currently connected and routing calls will be dispatched normally.",
+        "stale": "The owning provider is not currently connected. Routing calls fail with canvas_provider_unavailable until the agent re-issues open_canvas (which rehydrates via a fresh canvas.open) or the provider reconnects."
+      }
+    },
+    "CanvasInvokeActionRequest": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "description": "Open canvas instance identifier"
+        },
+        "actionName": {
+          "type": "string",
+          "description": "Action name to invoke"
+        },
+        "input": {
+          "description": "Action input",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "instanceId",
+        "actionName"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas action invocation parameters.",
+      "title": "CanvasInvokeActionRequest"
+    },
+    "CanvasInvokeActionResult": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Provider-supplied action result",
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Canvas action invocation result.",
+      "title": "CanvasInvokeActionResult"
+    },
+    "CanvasJsonSchema": {
+      "description": "JSON Schema for canvas open input",
+      "title": "CanvasJsonSchema",
+      "x-opaque-json": true
+    },
+    "CanvasList": {
+      "type": "object",
+      "properties": {
+        "canvases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DiscoveredCanvas",
+            "description": "Canvas available in the current session."
+          },
+          "description": "Declared canvases available in this session"
+        }
+      },
+      "required": [
+        "canvases"
+      ],
+      "additionalProperties": false,
+      "description": "Declared canvases available in this session.",
+      "title": "CanvasList"
+    },
+    "CanvasListOpenResult": {
+      "type": "object",
+      "properties": {
+        "openCanvases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OpenCanvasInstance",
+            "description": "Open canvas instance snapshot."
+          },
+          "description": "Currently open canvas instances"
+        }
+      },
+      "required": [
+        "openCanvases"
+      ],
+      "additionalProperties": false,
+      "description": "Live open-canvas snapshot.",
+      "title": "CanvasListOpenResult"
+    },
+    "CanvasOpenRequest": {
+      "type": "object",
+      "properties": {
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier. Optional when the canvasId is unique across providers; required to disambiguate when multiple providers register the same canvasId."
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "Caller-supplied stable instance identifier"
+        },
+        "input": {
+          "description": "Canvas open input",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "canvasId",
+        "instanceId"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas open parameters.",
+      "title": "CanvasOpenRequest"
+    },
+    "CanvasProviderCloseRequest": {
+      "type": "object",
+      "properties": {
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "Canvas instance identifier"
+        },
+        "host": {
+          "$ref": "#/definitions/CanvasHostContext",
+          "description": "Host context supplied by the runtime."
+        }
+      },
+      "required": [
+        "extensionId",
+        "canvasId",
+        "instanceId"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas close parameters sent to the provider.",
+      "title": "CanvasProviderCloseRequest"
+    },
+    "CanvasProviderInvokeActionRequest": {
+      "type": "object",
+      "properties": {
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "Canvas instance identifier"
+        },
+        "actionName": {
+          "type": "string",
+          "description": "Action name to invoke"
+        },
+        "input": {
+          "description": "Action input",
+          "x-opaque-json": true
+        },
+        "host": {
+          "$ref": "#/definitions/CanvasHostContext",
+          "description": "Host context supplied by the runtime."
+        }
+      },
+      "required": [
+        "extensionId",
+        "canvasId",
+        "instanceId",
+        "actionName"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas action invocation parameters sent to the provider.",
+      "title": "CanvasProviderInvokeActionRequest"
+    },
+    "CanvasProviderOpenRequest": {
+      "type": "object",
+      "properties": {
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "Stable caller-supplied canvas instance identifier"
+        },
+        "input": {
+          "description": "Canvas open input",
+          "x-opaque-json": true
+        },
+        "host": {
+          "$ref": "#/definitions/CanvasHostContext",
+          "description": "Host context supplied by the runtime."
+        }
+      },
+      "required": [
+        "extensionId",
+        "canvasId",
+        "instanceId"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas open parameters sent to the provider.",
+      "title": "CanvasProviderOpenRequest"
+    },
+    "CanvasProviderOpenResult": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "URL for web-rendered canvases"
+        },
+        "title": {
+          "type": "string",
+          "description": "Provider-supplied title"
+        },
+        "status": {
+          "type": "string",
+          "description": "Provider-supplied status text"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Canvas open result returned by the provider.",
+      "title": "CanvasProviderOpenResult"
     },
     "CommandList": {
       "type": "object",
@@ -6203,6 +6845,53 @@
       "additionalProperties": false,
       "description": "The currently selected model and reasoning effort for the session.",
       "title": "CurrentModel"
+    },
+    "DiscoveredCanvas": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable canvas name"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Short, single-sentence description shown to the agent in canvas catalogs."
+        },
+        "inputSchema": {
+          "$ref": "#/definitions/CanvasJsonSchema",
+          "description": "JSON Schema for canvas open input"
+        },
+        "actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CanvasAction",
+            "description": "Canvas action that the agent or host can invoke. To discover the input schema for a particular action, call the list_canvas_capabilities tool."
+          },
+          "description": "Actions the agent or host may invoke on an open instance"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Owning extension display name, when available"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        }
+      },
+      "required": [
+        "displayName",
+        "description",
+        "extensionId",
+        "canvasId"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas available in the current session.",
+      "title": "DiscoveredCanvas"
     },
     "DiscoveredMcpServer": {
       "type": "object",
@@ -8638,6 +9327,14 @@
           "description": "Timeout in milliseconds for tool calls to this server.",
           "format": "duration"
         },
+        "oidc": {
+          "$ref": "#/definitions/McpServerConfigHttpOidc",
+          "description": "OIDC token configuration. When truthy, a token is automatically gathered."
+        },
+        "auth": {
+          "$ref": "#/definitions/McpServerConfigHttpAuth",
+          "description": "Additional authentication configuration for this server."
+        },
         "url": {
           "type": "string",
           "format": "uri",
@@ -8661,10 +9358,6 @@
         "oauthGrantType": {
           "$ref": "#/definitions/McpServerConfigHttpOauthGrantType",
           "description": "OAuth grant type to use when authenticating to the remote MCP server."
-        },
-        "auth": {
-          "$ref": "#/definitions/McpServerConfigHttpAuth",
-          "description": "Additional authentication configuration for this server."
         }
       },
       "required": [
@@ -8684,7 +9377,7 @@
           "description": "Fixed port for the OAuth redirect callback server."
         }
       },
-      "additionalProperties": false,
+      "additionalProperties": true,
       "description": "Additional authentication configuration for this server.",
       "title": "McpServerConfigHttpAuth"
     },
@@ -8700,6 +9393,20 @@
         "authorization_code": "Interactive browser-based authorization code flow with PKCE.",
         "client_credentials": "Headless client credentials flow using the configured OAuth client."
       }
+    },
+    "McpServerConfigHttpOidc": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      ],
+      "description": "OIDC token configuration. When truthy, a token is automatically gathered.",
+      "title": "McpServerConfigHttpOidc",
+      "x-opaque-json": true
     },
     "McpServerConfigHttpType": {
       "type": "string",
@@ -8740,6 +9447,14 @@
           "description": "Timeout in milliseconds for tool calls to this server.",
           "format": "duration"
         },
+        "oidc": {
+          "$ref": "#/definitions/McpServerConfigStdioOidc",
+          "description": "OIDC token configuration. When truthy, a token is automatically gathered."
+        },
+        "auth": {
+          "$ref": "#/definitions/McpServerConfigStdioAuth",
+          "description": "Authentication configuration for this server."
+        },
         "command": {
           "type": "string",
           "description": "Executable command used to start the Stdio MCP server process."
@@ -8770,6 +9485,34 @@
       "additionalProperties": false,
       "description": "Stdio MCP server configuration launched as a child process.",
       "title": "McpServerConfigStdio"
+    },
+    "McpServerConfigStdioAuth": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      ],
+      "description": "Authentication configuration for this server.",
+      "title": "McpServerConfigStdioAuth",
+      "x-opaque-json": true
+    },
+    "McpServerConfigStdioOidc": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "object",
+          "additionalProperties": {}
+        }
+      ],
+      "description": "OIDC token configuration. When truthy, a token is automatically gathered.",
+      "title": "McpServerConfigStdioOidc",
+      "x-opaque-json": true
     },
     "McpServerList": {
       "type": "object",
@@ -9659,6 +10402,61 @@
       "additionalProperties": false,
       "description": "New friendly name to apply to the session.",
       "title": "NameSetRequest"
+    },
+    "OpenCanvasInstance": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "description": "Stable caller-supplied canvas instance identifier"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Owning extension display name, when available"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Rendered title"
+        },
+        "status": {
+          "type": "string",
+          "description": "Provider-supplied status text"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL for web-rendered canvases"
+        },
+        "input": {
+          "description": "Input supplied when the instance was opened",
+          "x-opaque-json": true
+        },
+        "reopen": {
+          "type": "boolean",
+          "description": "Whether this snapshot came from an idempotent reopen"
+        },
+        "availability": {
+          "$ref": "#/definitions/CanvasInstanceAvailability",
+          "description": "Runtime-controlled routing state for an open canvas instance."
+        }
+      },
+      "required": [
+        "instanceId",
+        "extensionId",
+        "canvasId",
+        "reopen",
+        "availability"
+      ],
+      "additionalProperties": false,
+      "description": "Open canvas instance snapshot.",
+      "title": "OpenCanvasInstance"
     },
     "OptionsUpdateEnvValueMode": {
       "type": "string",
@@ -12727,14 +13525,14 @@
           "items": {
             "$ref": "#/definitions/SessionMetadata"
           },
-          "description": "Same records, with summary and context backfilled"
+          "description": "Enriched records, with summary and context backfilled. Sessions confirmed empty and unnamed may be omitted."
         }
       },
       "required": [
         "sessions"
       ],
       "additionalProperties": false,
-      "description": "The same metadata records, with summary and context fields backfilled where available.",
+      "description": "The enriched metadata records, with summary and context fields backfilled where available. Sessions confirmed empty and unnamed are omitted.",
       "title": "SessionEnrichMetadataResult"
     },
     "SessionFsAppendFileRequest": {
@@ -17013,6 +17811,107 @@
       "title": "UserToolSessionApprovalWrite",
       "description": "Schema for the `UserToolSessionApprovalWrite` type."
     },
+    "WorkspaceDiffFileChange": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to the changed file, relative to the workspace root."
+        },
+        "diff": {
+          "type": "string",
+          "description": "Unified diff content for the file. Empty when the diff was truncated."
+        },
+        "changeType": {
+          "$ref": "#/definitions/WorkspaceDiffFileChangeType",
+          "description": "Type of change represented by this file diff."
+        },
+        "oldPath": {
+          "type": "string",
+          "description": "Original file path for renamed files."
+        },
+        "isTruncated": {
+          "type": "boolean",
+          "description": "Whether the diff content was omitted because it exceeded the per-file size limit."
+        }
+      },
+      "required": [
+        "path",
+        "diff",
+        "changeType"
+      ],
+      "additionalProperties": false,
+      "description": "A single changed file and its unified diff.",
+      "title": "WorkspaceDiffFileChange"
+    },
+    "WorkspaceDiffFileChangeType": {
+      "type": "string",
+      "enum": [
+        "added",
+        "modified",
+        "deleted",
+        "renamed"
+      ],
+      "description": "Type of change represented by this file diff.",
+      "title": "WorkspaceDiffFileChangeType",
+      "x-enumDescriptions": {
+        "added": "The file was added.",
+        "modified": "The file was modified.",
+        "deleted": "The file was deleted.",
+        "renamed": "The file was renamed."
+      }
+    },
+    "WorkspaceDiffMode": {
+      "type": "string",
+      "enum": [
+        "unstaged",
+        "branch"
+      ],
+      "description": "Diff mode requested by the client.",
+      "title": "WorkspaceDiffMode",
+      "x-enumDescriptions": {
+        "unstaged": "Return staged, unstaged, and untracked working tree changes.",
+        "branch": "Return changes compared with the default branch."
+      }
+    },
+    "WorkspaceDiffResult": {
+      "type": "object",
+      "properties": {
+        "requestedMode": {
+          "$ref": "#/definitions/WorkspaceDiffMode",
+          "description": "Diff mode requested by the client."
+        },
+        "mode": {
+          "$ref": "#/definitions/WorkspaceDiffMode",
+          "description": "Effective mode used for the returned changes."
+        },
+        "changes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkspaceDiffFileChange",
+            "description": "A single changed file and its unified diff."
+          },
+          "description": "Changed files and their unified diffs."
+        },
+        "baseBranch": {
+          "type": "string",
+          "description": "Default branch used for a branch diff, when branch mode was requested."
+        },
+        "isFallback": {
+          "type": "boolean",
+          "description": "Whether a requested branch diff fell back to unstaged changes because branch diff failed."
+        }
+      },
+      "required": [
+        "requestedMode",
+        "mode",
+        "changes",
+        "isFallback"
+      ],
+      "additionalProperties": false,
+      "description": "Workspace diff result for the requested mode.",
+      "title": "WorkspaceDiffResult"
+    },
     "WorkspacesCheckpoints": {
       "type": "object",
       "properties": {
@@ -17058,6 +17957,21 @@
       "additionalProperties": false,
       "description": "Relative path and UTF-8 content for the workspace file to create or overwrite.",
       "title": "WorkspacesCreateFileRequest"
+    },
+    "WorkspacesDiffRequest": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/WorkspaceDiffMode",
+          "description": "Diff mode requested by the client."
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for computing a workspace diff.",
+      "title": "WorkspacesDiffRequest"
     },
     "WorkspacesGetWorkspaceResult": {
       "type": "object",
