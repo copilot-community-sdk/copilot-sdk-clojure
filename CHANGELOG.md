@@ -43,15 +43,18 @@ All notable changes to this project will be documented in this file. This change
   - `:tool-description` and `:ui-resource` on `:tool.execution_complete` data.
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.52-1` to
   `1.0.55-1`. Picked up the 1.0.52-4 pre-release (upstream PR #1393), the
-  1.0.52 stable release (upstream PR #1405), and the 1.0.53 / 1.0.53-2 /
-  1.0.54 / 1.0.55-0 / 1.0.55-1 schema bumps (upstream PRs #1408, #1410,
-  #1411, #1412, #1432). Schema regen surfaces new wire-only canvas event
-  types (`session.canvas.opened`, `session.canvas.registry_changed`) and
-  the field set behind them. These events now appear in the public
-  `event-types` set for forward compatibility, but the canvas runtime
-  (extension manifests, `requestCanvasRenderer`, `openCanvases`, etc. —
-  upstream PRs #1401, #1413) is **not yet exposed** on the public Clojure
-  API. Canvas events will flow through as generic session events.
+  1.0.52 stable release (upstream PR #1405), the 1.0.53-2 pre-release
+  (upstream PR #1408), and the 1.0.53 / 1.0.54 / 1.0.55-0 / 1.0.55-1
+  schema bumps (upstream PRs #1410, #1411, #1412, #1432). Schema regen
+  surfaces new wire-only canvas event types (`session.canvas.opened`,
+  `session.canvas.registry_changed`) and their field set in the
+  generated `event-specs` namespace. The canvas runtime (extension
+  manifests, `requestCanvasRenderer`, `openCanvases`, etc. — upstream
+  PRs #1401, #1413) is **not yet exposed** on the public Clojure API,
+  including the curated `event-types` set. Canvas runtime support
+  (including opaque-field preservation for `data.input` and nested
+  `inputSchema` payloads on canvas events) will land in a dedicated
+  future sync round.
 
 ### Changed (post-v1.0.0-beta.4 sync, round 5)
 - **BREAKING: Minimum supported protocol version raised from 2 to 3.** The

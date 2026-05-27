@@ -904,11 +904,7 @@
     ;; Schedule events (upstream schema 1.0.42)
     :copilot/session.schedule_created :copilot/session.schedule_cancelled
     ;; MCP Apps tool-call complete (upstream schema 1.0.52-4, SEP-1865)
-    :copilot/mcp_app.tool_call_complete
-    ;; Canvas events (upstream PR #1401, schema 1.0.53+). Canvas runtime
-    ;; support itself is not yet exposed on the public Clojure API; these
-    ;; events flow through as generic session events for forward compat.
-    :copilot/session.canvas.opened :copilot/session.canvas.registry_changed})
+    :copilot/mcp_app.tool_call_complete})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
