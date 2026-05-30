@@ -925,7 +925,7 @@
       "properties": {
         "batchSize": {
           "type": "integer",
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "description": "Number of tokens in this billing batch"
         },
         "costPerBatch": {
@@ -1347,6 +1347,116 @@
         "yes": "Switch models for this request.",
         "yes_always": "Switch models now and keep using the replacement automatically.",
         "no": "Do not switch models."
+      }
+    },
+    "AutopilotObjectiveChangedData": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "$ref": "#/definitions/AutopilotObjectiveChangedOperation",
+          "description": "The type of operation performed on the autopilot objective state file"
+        },
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Current autopilot objective id, if one exists"
+        },
+        "status": {
+          "$ref": "#/definitions/AutopilotObjectiveChangedStatus",
+          "description": "Current autopilot objective status, if one exists"
+        }
+      },
+      "required": [
+        "operation"
+      ],
+      "additionalProperties": false,
+      "description": "Autopilot objective state file operation details indicating what changed",
+      "title": "AutopilotObjectiveChangedData"
+    },
+    "AutopilotObjectiveChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.autopilot_objective_changed",
+          "description": "Type discriminator. Always \"session.autopilot_objective_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AutopilotObjectiveChangedData",
+          "description": "Autopilot objective state file operation details indicating what changed"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.autopilot_objective_changed\". Autopilot objective state file operation details indicating what changed",
+      "title": "AutopilotObjectiveChangedEvent"
+    },
+    "AutopilotObjectiveChangedOperation": {
+      "type": "string",
+      "enum": [
+        "create",
+        "update",
+        "delete"
+      ],
+      "description": "The type of operation performed on the autopilot objective state file",
+      "title": "AutopilotObjectiveChangedOperation",
+      "x-enumDescriptions": {
+        "create": "Autopilot objective state file was created for a new objective.",
+        "update": "Autopilot objective state file was updated for an existing objective.",
+        "delete": "Autopilot objective state file was deleted or cleared."
+      }
+    },
+    "AutopilotObjectiveChangedStatus": {
+      "type": "string",
+      "enum": [
+        "active",
+        "paused",
+        "cap_reached",
+        "completed"
+      ],
+      "description": "Current autopilot objective status, if one exists",
+      "title": "AutopilotObjectiveChangedStatus",
+      "x-enumDescriptions": {
+        "active": "Objective is active and can drive autopilot continuations.",
+        "paused": "Objective is paused and will not drive autopilot continuations.",
+        "cap_reached": "Legacy objective state indicating the previous continuation cap was reached.",
+        "completed": "Objective was completed by the agent."
       }
     },
     "BackgroundTasksChangedData": {
@@ -2170,7 +2280,7 @@
       "properties": {
         "batchSize": {
           "type": "integer",
-          "exclusiveMinimum": 0,
+          "minimum": 0,
           "description": "Number of tokens in this billing batch"
         },
         "costPerBatch": {
@@ -3585,6 +3695,10 @@
           "description": "Arguments to pass to the external tool",
           "x-opaque-json": true
         },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Active session working directory, when known."
+        },
         "traceparent": {
           "type": "string",
           "description": "W3C Trace Context traceparent header for the execute_tool span"
@@ -3895,6 +4009,77 @@
       "additionalProperties": false,
       "description": "Session event \"hook.end\". Hook invocation completion details including output, success status, and error information",
       "title": "HookEndEvent"
+    },
+    "HookProgressData": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Human-readable progress message from the hook process"
+        }
+      },
+      "required": [
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral progress update from a running hook process",
+      "title": "HookProgressData"
+    },
+    "HookProgressEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "hook.progress",
+          "description": "Type discriminator. Always \"hook.progress\"."
+        },
+        "data": {
+          "$ref": "#/definitions/HookProgressData",
+          "description": "Ephemeral progress update from a running hook process"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"hook.progress\". Ephemeral progress update from a running hook process",
+      "title": "HookProgressEvent"
     },
     "HookStartData": {
       "type": "object",
@@ -6460,6 +6645,80 @@
       "title": "PermissionRule",
       "description": "Schema for the `PermissionRule` type."
     },
+    "PermissionsChangedData": {
+      "type": "object",
+      "properties": {
+        "previousAllowAllPermissions": {
+          "type": "boolean",
+          "description": "Aggregate allow-all flag before the change"
+        },
+        "allowAllPermissions": {
+          "type": "boolean",
+          "description": "Aggregate allow-all flag after the change"
+        }
+      },
+      "required": [
+        "previousAllowAllPermissions",
+        "allowAllPermissions"
+      ],
+      "additionalProperties": false,
+      "description": "Permissions change details carrying the aggregate allow-all boolean transition.",
+      "title": "PermissionsChangedData"
+    },
+    "PermissionsChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.permissions_changed",
+          "description": "Type discriminator. Always \"session.permissions_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PermissionsChangedData",
+          "description": "Permissions change details carrying the aggregate allow-all boolean transition."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all boolean transition.",
+      "title": "PermissionsChangedEvent"
+    },
     "PlanChangedData": {
       "type": "object",
       "properties": {
@@ -6652,6 +6911,25 @@
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
+        },
+        "contextTier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "default",
+                "long_context"
+              ],
+              "x-enumDescriptions": {
+                "default": "Default context tier with standard context window size.",
+                "long_context": "Extended context tier with a larger context window."
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Context tier currently selected at resume time; null when no tier is active"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -7087,6 +7365,10 @@
           "description": "Session event \"session.schedule_cancelled\". Scheduled prompt cancelled from the schedule manager dialog"
         },
         {
+          "$ref": "#/definitions/AutopilotObjectiveChangedEvent",
+          "description": "Session event \"session.autopilot_objective_changed\". Autopilot objective state file operation details indicating what changed"
+        },
+        {
           "$ref": "#/definitions/InfoEvent",
           "description": "Session event \"session.info\". Informational message for timeline display with categorization"
         },
@@ -7101,6 +7383,10 @@
         {
           "$ref": "#/definitions/ModeChangedEvent",
           "description": "Session event \"session.mode_changed\". Agent mode change details including previous and new modes"
+        },
+        {
+          "$ref": "#/definitions/PermissionsChangedEvent",
+          "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all boolean transition."
         },
         {
           "$ref": "#/definitions/PlanChangedEvent",
@@ -7253,6 +7539,10 @@
         {
           "$ref": "#/definitions/HookEndEvent",
           "description": "Session event \"hook.end\". Hook invocation completion details including output, success status, and error information"
+        },
+        {
+          "$ref": "#/definitions/HookProgressEvent",
+          "description": "Session event \"hook.progress\". Ephemeral progress update from a running hook process"
         },
         {
           "$ref": "#/definitions/SystemMessageEvent",
@@ -8086,6 +8376,25 @@
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
+        },
+        "contextTier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "default",
+                "long_context"
+              ],
+              "x-enumDescriptions": {
+                "default": "Default context tier with standard context window size.",
+                "long_context": "Extended context tier with a larger context window."
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Context tier selected at session creation time for models with tiered context pricing; null when no tier is selected (e.g., non-tiered model)"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -9995,6 +10304,10 @@
         "turnId": {
           "type": "string",
           "description": "Identifier for the agent loop turn this tool was invoked in, matching the corresponding assistant.turn_start event"
+        },
+        "displayVerbatim": {
+          "type": "boolean",
+          "description": "When true, the tool output should be displayed expanded (verbatim) in the CLI timeline"
         },
         "parentToolCallId": {
           "type": "string",

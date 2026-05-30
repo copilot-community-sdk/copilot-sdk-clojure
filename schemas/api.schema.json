@@ -149,6 +149,14 @@
           "result": {
             "type": "null"
           }
+        },
+        "reload": {
+          "rpcMethod": "mcp.config.reload",
+          "description": "Drops this runtime process's in-memory MCP server-definition cache so the next MCP config read observes disk.",
+          "params": null,
+          "result": {
+            "type": "null"
+          }
         }
       },
       "discover": {
@@ -188,6 +196,18 @@
         "result": {
           "$ref": "#/definitions/ServerSkillList",
           "description": "Skills discovered across global and project sources."
+        }
+      }
+    },
+    "user": {
+      "settings": {
+        "reload": {
+          "rpcMethod": "user.settings.reload",
+          "description": "Drops this runtime process's in-memory user settings cache so the next settings read observes disk.",
+          "params": null,
+          "result": {
+            "type": "null"
+          }
         }
       }
     },
@@ -237,7 +257,7 @@
         "description": "Lists persisted sessions, optionally filtered by working-directory context.",
         "params": {
           "$ref": "#/definitions/SessionsListRequest",
-          "description": "Optional metadata-load limit and context filter applied to the returned sessions."
+          "description": "Optional metadata-load limit and filters applied to the returned sessions."
         },
         "result": {
           "$ref": "#/definitions/SessionList",
@@ -447,6 +467,21 @@
         "result": {
           "$ref": "#/definitions/SessionsSetAdditionalPluginsResult",
           "description": "Replace the manager-wide additional plugins. New session creations and subsequent hook reloads see the new set; already-running sessions keep their existing hook installation until the next reload."
+        },
+        "stability": "experimental"
+      }
+    },
+    "agentRegistry": {
+      "spawn": {
+        "rpcMethod": "agentRegistry.spawn",
+        "description": "Spawns a managed-server child with the supplied configuration and returns a discriminated-union result. The caller (typically the CLI controller) is responsible for attaching to the spawned child and sending any follow-up prompt. When the controller-local spawn gate is closed the server returns JSON-RPC MethodNotFound.",
+        "params": {
+          "$ref": "#/definitions/AgentRegistrySpawnRequest",
+          "description": "Inputs to spawn a managed-server child via the controller's spawn delegate."
+        },
+        "result": {
+          "$ref": "#/definitions/AgentRegistrySpawnResult",
+          "description": "Outcome of an agentRegistry.spawn call."
         },
         "stability": "experimental"
       }
@@ -789,43 +824,45 @@
         },
         "stability": "experimental"
       },
-      "invokeAction": {
-        "rpcMethod": "session.canvas.invokeAction",
-        "description": "Invokes an action on an open canvas instance.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "sessionId": {
-              "type": "string",
-              "description": "Target session identifier"
+      "action": {
+        "invoke": {
+          "rpcMethod": "session.canvas.action.invoke",
+          "description": "Invokes an action on an open canvas instance.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "instanceId": {
+                "type": "string",
+                "description": "Open canvas instance identifier"
+              },
+              "actionName": {
+                "type": "string",
+                "description": "Action name to invoke"
+              },
+              "input": {
+                "description": "Action input",
+                "x-opaque-json": true
+              }
             },
-            "instanceId": {
-              "type": "string",
-              "description": "Open canvas instance identifier"
-            },
-            "actionName": {
-              "type": "string",
-              "description": "Action name to invoke"
-            },
-            "input": {
-              "description": "Action input",
-              "x-opaque-json": true
-            }
+            "required": [
+              "sessionId",
+              "instanceId",
+              "actionName"
+            ],
+            "additionalProperties": false,
+            "description": "Canvas action invocation parameters.",
+            "title": "CanvasActionInvokeRequest"
           },
-          "required": [
-            "sessionId",
-            "instanceId",
-            "actionName"
-          ],
-          "additionalProperties": false,
-          "description": "Canvas action invocation parameters.",
-          "title": "CanvasInvokeActionRequest"
-        },
-        "result": {
-          "$ref": "#/definitions/CanvasInvokeActionResult",
-          "description": "Canvas action invocation result."
-        },
-        "stability": "experimental"
+          "result": {
+            "$ref": "#/definitions/CanvasActionInvokeResult",
+            "description": "Canvas action invocation result."
+          },
+          "stability": "experimental"
+        }
       }
     },
     "model": {
@@ -877,6 +914,25 @@
             "modelCapabilities": {
               "$ref": "#/definitions/ModelCapabilitiesOverride",
               "description": "Override individual model capabilities resolved by the runtime"
+            },
+            "contextTier": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "default",
+                    "long_context"
+                  ],
+                  "x-enumDescriptions": {
+                    "default": "Use the model's default context window.",
+                    "long_context": "Pin the session to the long-context tier when supported."
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Explicit context tier for the selected model. `\"default\"` / `\"long_context\"` pin the tier; `null` clears any previous explicit choice; `undefined` leaves the existing tier untouched."
             }
           },
           "required": [
@@ -884,7 +940,7 @@
             "modelId"
           ],
           "additionalProperties": false,
-          "description": "Target model identifier and optional reasoning effort, summary, and capability overrides.",
+          "description": "Target model identifier and optional reasoning effort, summary, capability overrides, and context tier.",
           "title": "ModelSwitchToRequest"
         },
         "result": {
@@ -919,6 +975,43 @@
         "result": {
           "$ref": "#/definitions/ModelSetReasoningEffortResult",
           "description": "Update the session's reasoning effort without changing the selected model. Use `switchTo` instead when you also need to change the model. The runtime stores the effort on the session and applies it to subsequent turns."
+        },
+        "stability": "experimental"
+      },
+      "list": {
+        "rpcMethod": "session.model.list",
+        "description": "Lists models available to this session using its own auth and integration context. Connected hosts (CLI TUI, GitHub App) should call this through the session client so remote sessions return the remote CLI's available models rather than the caller's.",
+        "params": {
+          "anyOf": [
+            {
+              "not": {}
+            },
+            {
+              "type": "object",
+              "properties": {
+                "skipCache": {
+                  "type": "boolean",
+                  "description": "If true, bypasses the per-session model list cache and re-fetches from CAPI."
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "Optional listing options.",
+          "title": "ModelListRequest",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        },
+        "result": {
+          "$ref": "#/definitions/SessionModelList",
+          "description": "The list of models available to this session."
         },
         "stability": "experimental"
       }
@@ -2582,6 +2675,10 @@
               },
               "description": "Denylist of tool names for this session."
             },
+            "toolFilterPrecedence": {
+              "$ref": "#/definitions/OptionsUpdateToolFilterPrecedence",
+              "description": "Controls how availableTools (allowlist) and excludedTools (denylist) combine when both are set."
+            },
             "enableScriptSafety": {
               "type": "boolean",
               "description": "Whether shell-script safety heuristics are enabled."
@@ -2701,6 +2798,30 @@
             "manageScheduleEnabled": {
               "type": "boolean",
               "description": "Whether to expose the `manage_schedule` tool to the agent. The runtime always owns the per-session schedule registry; this flag only controls tool exposure (typically gated to staff users)."
+            },
+            "skipEmbeddingRetrieval": {
+              "type": "boolean",
+              "description": "Whether to skip embedding retrieval pipeline initialization and execution."
+            },
+            "organizationCustomInstructions": {
+              "type": "string",
+              "description": "Organization-level custom instructions to inject into the system prompt."
+            },
+            "enableFileHooks": {
+              "type": "boolean",
+              "description": "Whether to enable loading of `.github/hooks/` filesystem hooks. Separate from the SDK callback hook mechanism."
+            },
+            "enableHostGitOperations": {
+              "type": "boolean",
+              "description": "Whether to enable host git operations (context resolution, child repo scanning, git info in system prompt)."
+            },
+            "enableSessionStore": {
+              "type": "boolean",
+              "description": "Whether to enable cross-session store writes and reads."
+            },
+            "enableSkills": {
+              "type": "boolean",
+              "description": "Whether to enable skill directory scanning and loading. Falls back to enableConfigDiscovery when unset."
             }
           },
           "additionalProperties": false,
@@ -2915,6 +3036,29 @@
         "result": {
           "$ref": "#/definitions/ToolsInitializeAndValidateResult",
           "description": "Resolve, build, and validate the runtime tool list for this session. Subagent sessions and consumer flows that need an initialized tool set before `send` invoke this. Default base-class implementation is a no-op for sessions that don't support tool validation."
+        },
+        "stability": "experimental"
+      },
+      "getCurrentMetadata": {
+        "rpcMethod": "session.tools.getCurrentMetadata",
+        "description": "Returns lightweight metadata for the session's currently initialized tools.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/ToolsGetCurrentMetadataResult",
+          "description": "Current lightweight tool metadata snapshot for the session."
         },
         "stability": "experimental"
       }
@@ -3559,6 +3703,63 @@
         "result": {
           "$ref": "#/definitions/PermissionsSetApproveAllResult",
           "description": "Indicates whether the operation succeeded."
+        },
+        "stability": "experimental"
+      },
+      "setAllowAll": {
+        "rpcMethod": "session.permissions.setAllowAll",
+        "description": "Enables or disables full allow-all permissions (tools, paths, and URLs) for the session. Used by attach-mode clients (e.g. LocalRpcSession's `/allow-all` forwarder) to flip the target session's permission state. Unlike `setApproveAll`, this swaps in the unrestricted path and URL managers and emits `session.permissions_changed` on transition. The result returns the authoritative post-mutation state so callers can update their local mirrors without racing the `session.permissions_changed` notification on the same wire.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether to enable full allow-all permissions"
+            },
+            "source": {
+              "$ref": "#/definitions/PermissionsSetAllowAllSource",
+              "description": "Optional source for allow-all telemetry. Defaults to `rpc` when omitted for SDK callers."
+            }
+          },
+          "required": [
+            "sessionId",
+            "enabled"
+          ],
+          "additionalProperties": false,
+          "description": "Whether to enable full allow-all permissions for the session.",
+          "title": "PermissionsSetAllowAllRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/AllowAllPermissionSetResult",
+          "description": "Indicates whether the operation succeeded and reports the post-mutation state."
+        },
+        "stability": "experimental"
+      },
+      "getAllowAll": {
+        "rpcMethod": "session.permissions.getAllowAll",
+        "description": "Returns whether full allow-all permissions are currently active for the session.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "additionalProperties": false,
+          "description": "No parameters.",
+          "title": "PermissionsGetAllowAllRequest",
+          "required": [
+            "sessionId"
+          ]
+        },
+        "result": {
+          "$ref": "#/definitions/AllowAllPermissionState",
+          "description": "Current full allow-all permission state."
         },
         "stability": "experimental"
       },
@@ -5296,6 +5497,10 @@
             "host": {
               "$ref": "#/definitions/CanvasHostContext",
               "description": "Host context supplied by the runtime."
+            },
+            "session": {
+              "$ref": "#/definitions/CanvasSessionContext",
+              "description": "Session context supplied by the runtime."
             }
           },
           "required": [
@@ -5339,6 +5544,10 @@
             "host": {
               "$ref": "#/definitions/CanvasHostContext",
               "description": "Host context supplied by the runtime."
+            },
+            "session": {
+              "$ref": "#/definitions/CanvasSessionContext",
+              "description": "Session context supplied by the runtime."
             }
           },
           "required": [
@@ -5356,57 +5565,63 @@
         },
         "stability": "experimental"
       },
-      "invokeAction": {
-        "rpcMethod": "canvas.invokeAction",
-        "description": "Invokes an action on an open canvas instance via the provider.",
-        "params": {
-          "type": "object",
-          "properties": {
-            "sessionId": {
-              "type": "string",
-              "description": "Target session identifier"
+      "action": {
+        "invoke": {
+          "rpcMethod": "canvas.action.invoke",
+          "description": "Invokes an action on an open canvas instance via the provider.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "extensionId": {
+                "type": "string",
+                "description": "Owning provider identifier"
+              },
+              "canvasId": {
+                "type": "string",
+                "description": "Provider-local canvas identifier"
+              },
+              "instanceId": {
+                "type": "string",
+                "description": "Canvas instance identifier"
+              },
+              "actionName": {
+                "type": "string",
+                "description": "Action name to invoke"
+              },
+              "input": {
+                "description": "Action input",
+                "x-opaque-json": true
+              },
+              "host": {
+                "$ref": "#/definitions/CanvasHostContext",
+                "description": "Host context supplied by the runtime."
+              },
+              "session": {
+                "$ref": "#/definitions/CanvasSessionContext",
+                "description": "Session context supplied by the runtime."
+              }
             },
-            "extensionId": {
-              "type": "string",
-              "description": "Owning provider identifier"
-            },
-            "canvasId": {
-              "type": "string",
-              "description": "Provider-local canvas identifier"
-            },
-            "instanceId": {
-              "type": "string",
-              "description": "Canvas instance identifier"
-            },
-            "actionName": {
-              "type": "string",
-              "description": "Action name to invoke"
-            },
-            "input": {
-              "description": "Action input",
-              "x-opaque-json": true
-            },
-            "host": {
-              "$ref": "#/definitions/CanvasHostContext",
-              "description": "Host context supplied by the runtime."
-            }
+            "required": [
+              "sessionId",
+              "extensionId",
+              "canvasId",
+              "instanceId",
+              "actionName"
+            ],
+            "additionalProperties": false,
+            "description": "Canvas action invocation parameters sent to the provider.",
+            "title": "CanvasProviderInvokeActionRequest"
           },
-          "required": [
-            "sessionId",
-            "extensionId",
-            "canvasId",
-            "instanceId",
-            "actionName"
-          ],
-          "additionalProperties": false,
-          "description": "Canvas action invocation parameters sent to the provider.",
-          "title": "CanvasProviderInvokeActionRequest"
-        },
-        "result": {
-          "description": "Provider-supplied action result.",
-          "x-opaque-json": true
-        },
-        "stability": "experimental"
+          "result": {
+            "description": "Provider-supplied action result.",
+            "x-opaque-json": true
+          },
+          "stability": "experimental"
+        }
       }
     }
   },
@@ -5669,6 +5884,428 @@
       "description": "Custom agents available to the session.",
       "title": "AgentList"
     },
+    "AgentRegistryLiveTargetEntry": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "type": "integer",
+          "description": "Registry entry schema version (1 = ui-server, 2 = managed-server)"
+        },
+        "kind": {
+          "$ref": "#/definitions/AgentRegistryLiveTargetEntryKind",
+          "description": "Process kind tag for the registry entry"
+        },
+        "pid": {
+          "type": "integer",
+          "description": "Operating-system pid of the process owning this entry"
+        },
+        "host": {
+          "type": "string",
+          "description": "Bind host for the entry's JSON-RPC server"
+        },
+        "port": {
+          "type": "integer",
+          "description": "TCP port the entry's JSON-RPC server is listening on"
+        },
+        "token": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Connection token (null when the target is unauthenticated)",
+          "visibility": "internal"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID of the foreground session for this entry"
+        },
+        "sessionName": {
+          "type": "string",
+          "description": "Friendly session name (when set)"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory of the session (when known)"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Git branch of the session (when known)"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier currently selected for the session"
+        },
+        "status": {
+          "$ref": "#/definitions/AgentRegistryLiveTargetEntryStatus",
+          "description": "Coarse lifecycle status of the foreground session"
+        },
+        "attentionKind": {
+          "$ref": "#/definitions/AgentRegistryLiveTargetEntryAttentionKind",
+          "description": "Kind of attention required when status === \"attention\". Meaningful only when status === \"attention\"."
+        },
+        "statusRevision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic per-publisher revision counter incremented on every status update. Lets watchers detect transient flips."
+        },
+        "lastTerminalEvent": {
+          "$ref": "#/definitions/AgentRegistryLiveTargetEntryLastTerminalEvent",
+          "description": "How the most recent turn ended (clean vs aborted). Lets the renderer distinguish done from done_cancelled."
+        },
+        "startedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp captured at registration"
+        },
+        "copilotVersion": {
+          "type": "string",
+          "description": "Copilot CLI version that wrote the entry"
+        },
+        "lastSeenMs": {
+          "type": "integer",
+          "description": "Wall-clock milliseconds since the watcher last observed this entry (heartbeat freshness)"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "pid",
+        "host",
+        "port",
+        "startedAt",
+        "copilotVersion",
+        "lastSeenMs"
+      ],
+      "additionalProperties": false,
+      "description": "Full registry entry for the spawned child. Lets the controller call `handleLiveTargetSelected(entry)` directly without re-reading the registry (avoids a TOCTOU window).",
+      "title": "AgentRegistryLiveTargetEntry"
+    },
+    "AgentRegistryLiveTargetEntryAttentionKind": {
+      "type": "string",
+      "enum": [
+        "error",
+        "permission",
+        "exit_plan",
+        "elicitation",
+        "user_input"
+      ],
+      "description": "Kind of attention required when status === \"attention\". Meaningful only when status === \"attention\".",
+      "title": "AgentRegistryLiveTargetEntryAttentionKind",
+      "x-enumDescriptions": {
+        "error": "Session is blocked on an unrecoverable error",
+        "permission": "Session is waiting for a tool-permission decision",
+        "exit_plan": "Session is waiting for the user to approve or reject a plan",
+        "elicitation": "Session is waiting on an elicitation prompt",
+        "user_input": "Session is waiting for free-form user input"
+      }
+    },
+    "AgentRegistryLiveTargetEntryKind": {
+      "type": "string",
+      "enum": [
+        "ui-server",
+        "managed-server"
+      ],
+      "description": "Process kind tag for the registry entry",
+      "title": "AgentRegistryLiveTargetEntryKind",
+      "x-enumDescriptions": {
+        "ui-server": "Interactive Copilot CLI exposing a UI server (legacy/normal CLI process)",
+        "managed-server": "Headless `--server --managed-server` child spawned by a controller"
+      }
+    },
+    "AgentRegistryLiveTargetEntryLastTerminalEvent": {
+      "type": "string",
+      "enum": [
+        "turn_end",
+        "abort"
+      ],
+      "description": "How the most recent turn ended (clean vs aborted). Lets the renderer distinguish done from done_cancelled.",
+      "title": "AgentRegistryLiveTargetEntryLastTerminalEvent",
+      "x-enumDescriptions": {
+        "turn_end": "Last turn ended cleanly (model returned a final assistant message)",
+        "abort": "Last turn was aborted (e.g. user interrupted)"
+      }
+    },
+    "AgentRegistryLiveTargetEntryStatus": {
+      "type": "string",
+      "enum": [
+        "working",
+        "waiting",
+        "done",
+        "attention"
+      ],
+      "description": "Coarse lifecycle status of the foreground session",
+      "title": "AgentRegistryLiveTargetEntryStatus",
+      "x-enumDescriptions": {
+        "working": "Session is actively processing a turn",
+        "waiting": "Session is idle, waiting for input",
+        "done": "Last turn completed successfully",
+        "attention": "Session needs user attention (see attentionKind for the specific reason)"
+      }
+    },
+    "AgentRegistryLogCapture": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether per-spawn log capture is on (false when env-disabled or open failed)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute path to the per-spawn log file (only set when enabled)"
+        },
+        "openError": {
+          "type": "string",
+          "description": "Human-readable open failure message (only set when enabled === false AND the env-disable opt-out was NOT used)"
+        },
+        "openErrorReason": {
+          "$ref": "#/definitions/AgentRegistryLogCaptureOpenErrorReason",
+          "description": "Categorized reason for log-open failure"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Per-spawn log-capture outcome; populated from spawnLiveTarget.",
+      "title": "AgentRegistryLogCapture"
+    },
+    "AgentRegistryLogCaptureOpenErrorReason": {
+      "type": "string",
+      "enum": [
+        "permission",
+        "disk_full",
+        "other"
+      ],
+      "description": "Categorized reason for log-open failure",
+      "title": "AgentRegistryLogCaptureOpenErrorReason",
+      "x-enumDescriptions": {
+        "permission": "Filesystem permission denied opening the log file",
+        "disk_full": "No space left on device",
+        "other": "Other / uncategorized open failure"
+      }
+    },
+    "AgentRegistrySpawnError": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "spawn-error",
+          "description": "Discriminator: child_process.spawn itself failed"
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable error message"
+        },
+        "code": {
+          "type": "string",
+          "description": "Underlying errno code (e.g. ENOENT, EACCES) when available"
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "`child_process.spawn` itself failed before the child entered the registry.",
+      "title": "AgentRegistrySpawnError"
+    },
+    "AgentRegistrySpawnPermissionMode": {
+      "type": "string",
+      "enum": [
+        "default",
+        "yolo"
+      ],
+      "description": "Permission posture for the new session. 'yolo' requires the controller-local session to currently be in allow-all mode.",
+      "title": "AgentRegistrySpawnPermissionMode",
+      "x-enumDescriptions": {
+        "default": "Standard permission posture (prompts for each request)",
+        "yolo": "Full allow-all (requires the controller-local session to currently be in allow-all mode)"
+      }
+    },
+    "AgentRegistrySpawnRegistryTimeout": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "registry-timeout",
+          "description": "Discriminator: spawn succeeded but child never registered"
+        },
+        "childPid": {
+          "type": "integer",
+          "description": "Process ID of the orphaned child (so the caller can offer 'kill the pid' guidance)"
+        },
+        "logCapture": {
+          "$ref": "#/definitions/AgentRegistryLogCapture",
+          "description": "Per-spawn log-capture outcome; populated from spawnLiveTarget."
+        }
+      },
+      "required": [
+        "kind",
+        "childPid"
+      ],
+      "additionalProperties": false,
+      "description": "Spawn succeeded but the child did not publish a matching managed-server entry within the timeout.",
+      "title": "AgentRegistrySpawnRegistryTimeout"
+    },
+    "AgentRegistrySpawnRequest": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for the spawned child (must be an existing directory)"
+        },
+        "agentName": {
+          "type": "string",
+          "description": "Custom or built-in agent name (e.g. 'explore'). When omitted, the child uses its own default."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier to apply to the new session"
+        },
+        "name": {
+          "type": "string",
+          "description": "Friendly session name. Must satisfy validateSessionName: non-empty, no leading/trailing whitespace, <=100 chars, no control chars, no double quotes."
+        },
+        "permissionMode": {
+          "$ref": "#/definitions/AgentRegistrySpawnPermissionMode",
+          "description": "Permission posture for the new session. 'yolo' requires the controller-local session to currently be in allow-all mode."
+        },
+        "initialPrompt": {
+          "type": "string",
+          "description": "Optional first user message. Forwarded to the caller (the CLI's spawn wrapper sends it post-attach via the standard LocalRpcSession.send path)."
+        }
+      },
+      "required": [
+        "cwd"
+      ],
+      "additionalProperties": false,
+      "description": "Inputs to spawn a managed-server child via the controller's spawn delegate.",
+      "title": "AgentRegistrySpawnRequest"
+    },
+    "AgentRegistrySpawnResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AgentRegistrySpawnSpawned",
+          "description": "Managed-server child was spawned and registered successfully."
+        },
+        {
+          "$ref": "#/definitions/AgentRegistrySpawnError",
+          "description": "`child_process.spawn` itself failed before the child entered the registry."
+        },
+        {
+          "$ref": "#/definitions/AgentRegistrySpawnRegistryTimeout",
+          "description": "Spawn succeeded but the child did not publish a matching managed-server entry within the timeout."
+        },
+        {
+          "$ref": "#/definitions/AgentRegistrySpawnValidationError",
+          "description": "Synchronous pre-validation rejected the spawn request."
+        }
+      ],
+      "description": "Outcome of an agentRegistry.spawn call.",
+      "title": "AgentRegistrySpawnResult"
+    },
+    "AgentRegistrySpawnSpawned": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "spawned",
+          "description": "Discriminator: managed-server child spawned successfully"
+        },
+        "entry": {
+          "$ref": "#/definitions/AgentRegistryLiveTargetEntry",
+          "description": "Full registry entry for the spawned child. Lets the controller call `handleLiveTargetSelected(entry)` directly without re-reading the registry (avoids a TOCTOU window)."
+        },
+        "initialPromptSent": {
+          "type": "boolean",
+          "description": "Whether the delegate already sent the initial prompt. Always omitted in the current wiring: the controller sends the prompt post-attach via the standard LocalRpcSession.send path."
+        },
+        "initialPromptError": {
+          "type": "string",
+          "description": "If the delegate attempted to send the initial prompt and failed, the categorized error message."
+        },
+        "logCapture": {
+          "$ref": "#/definitions/AgentRegistryLogCapture",
+          "description": "Per-spawn log-capture outcome; populated from spawnLiveTarget."
+        }
+      },
+      "required": [
+        "kind",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "Managed-server child was spawned and registered successfully.",
+      "title": "AgentRegistrySpawnSpawned"
+    },
+    "AgentRegistrySpawnValidationError": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "validation-error",
+          "description": "Discriminator: synchronous pre-validation rejected the request"
+        },
+        "reason": {
+          "$ref": "#/definitions/AgentRegistrySpawnValidationErrorReason",
+          "description": "Categorized reason for the rejection. Low-cardinality enum so telemetry can aggregate by reason without leaking raw paths or agent/model names."
+        },
+        "field": {
+          "$ref": "#/definitions/AgentRegistrySpawnValidationErrorField",
+          "description": "Which parameter field was invalid. Omitted when the rejection is not field-specific."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable explanation; safe to surface in the UI banner. Never logged to unrestricted telemetry."
+        }
+      },
+      "required": [
+        "kind",
+        "reason",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "Synchronous pre-validation rejected the spawn request.",
+      "title": "AgentRegistrySpawnValidationError"
+    },
+    "AgentRegistrySpawnValidationErrorField": {
+      "type": "string",
+      "enum": [
+        "cwd",
+        "name",
+        "agentName",
+        "model",
+        "permissionMode"
+      ],
+      "description": "Which parameter field was invalid. Omitted when the rejection is not field-specific.",
+      "title": "AgentRegistrySpawnValidationErrorField",
+      "x-enumDescriptions": {
+        "cwd": "The cwd parameter",
+        "name": "The session name parameter",
+        "agentName": "The agentName parameter",
+        "model": "The model parameter",
+        "permissionMode": "The permissionMode parameter"
+      }
+    },
+    "AgentRegistrySpawnValidationErrorReason": {
+      "type": "string",
+      "enum": [
+        "cwd-not-found",
+        "cwd-not-directory",
+        "invalid-name",
+        "unknown-agent",
+        "unknown-model",
+        "yolo-not-allowed"
+      ],
+      "description": "Categorized reason for the rejection. Low-cardinality enum so telemetry can aggregate by reason without leaking raw paths or agent/model names.",
+      "title": "AgentRegistrySpawnValidationErrorReason",
+      "x-enumDescriptions": {
+        "cwd-not-found": "Provided cwd does not exist on disk",
+        "cwd-not-directory": "Provided cwd exists but is not a directory",
+        "invalid-name": "Session name failed validateSessionName",
+        "unknown-agent": "Requested agent name was not found in builtin or custom agents",
+        "unknown-model": "Requested model is not available to this session",
+        "yolo-not-allowed": "Caller asked for permissionMode='yolo' but the controller is not currently in allow-all mode"
+      }
+    },
     "AgentReloadResult": {
       "type": "object",
       "properties": {
@@ -5716,6 +6353,41 @@
       "additionalProperties": false,
       "description": "The newly selected custom agent.",
       "title": "AgentSelectResult"
+    },
+    "AllowAllPermissionSetResult": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "Whether the operation succeeded"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Authoritative allow-all state after the mutation"
+        }
+      },
+      "required": [
+        "success",
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Indicates whether the operation succeeded and reports the post-mutation state.",
+      "title": "AllowAllPermissionSetResult"
+    },
+    "AllowAllPermissionState": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether full allow-all permissions are currently active"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Current full allow-all permission state.",
+      "title": "AllowAllPermissionState"
     },
     "ApiKeyAuthInfo": {
       "type": "object",
@@ -5820,6 +6492,42 @@
       "description": "Canvas action that the agent or host can invoke. To discover the input schema for a particular action, call the list_canvas_capabilities tool.",
       "title": "CanvasAction"
     },
+    "CanvasActionInvokeRequest": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "description": "Open canvas instance identifier"
+        },
+        "actionName": {
+          "type": "string",
+          "description": "Action name to invoke"
+        },
+        "input": {
+          "description": "Action input",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "instanceId",
+        "actionName"
+      ],
+      "additionalProperties": false,
+      "description": "Canvas action invocation parameters.",
+      "title": "CanvasActionInvokeRequest"
+    },
+    "CanvasActionInvokeResult": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Provider-supplied action result",
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Canvas action invocation result.",
+      "title": "CanvasActionInvokeResult"
+    },
     "CanvasCloseRequest": {
       "type": "object",
       "properties": {
@@ -5871,42 +6579,6 @@
         "ready": "The owning provider is currently connected and routing calls will be dispatched normally.",
         "stale": "The owning provider is not currently connected. Routing calls fail with canvas_provider_unavailable until the agent re-issues open_canvas (which rehydrates via a fresh canvas.open) or the provider reconnects."
       }
-    },
-    "CanvasInvokeActionRequest": {
-      "type": "object",
-      "properties": {
-        "instanceId": {
-          "type": "string",
-          "description": "Open canvas instance identifier"
-        },
-        "actionName": {
-          "type": "string",
-          "description": "Action name to invoke"
-        },
-        "input": {
-          "description": "Action input",
-          "x-opaque-json": true
-        }
-      },
-      "required": [
-        "instanceId",
-        "actionName"
-      ],
-      "additionalProperties": false,
-      "description": "Canvas action invocation parameters.",
-      "title": "CanvasInvokeActionRequest"
-    },
-    "CanvasInvokeActionResult": {
-      "type": "object",
-      "properties": {
-        "result": {
-          "description": "Provider-supplied action result",
-          "x-opaque-json": true
-        }
-      },
-      "additionalProperties": false,
-      "description": "Canvas action invocation result.",
-      "title": "CanvasInvokeActionResult"
     },
     "CanvasJsonSchema": {
       "description": "JSON Schema for canvas open input",
@@ -5997,6 +6669,10 @@
         "host": {
           "$ref": "#/definitions/CanvasHostContext",
           "description": "Host context supplied by the runtime."
+        },
+        "session": {
+          "$ref": "#/definitions/CanvasSessionContext",
+          "description": "Session context supplied by the runtime."
         }
       },
       "required": [
@@ -6034,6 +6710,10 @@
         "host": {
           "$ref": "#/definitions/CanvasHostContext",
           "description": "Host context supplied by the runtime."
+        },
+        "session": {
+          "$ref": "#/definitions/CanvasSessionContext",
+          "description": "Session context supplied by the runtime."
         }
       },
       "required": [
@@ -6068,6 +6748,10 @@
         "host": {
           "$ref": "#/definitions/CanvasHostContext",
           "description": "Host context supplied by the runtime."
+        },
+        "session": {
+          "$ref": "#/definitions/CanvasSessionContext",
+          "description": "Session context supplied by the runtime."
         }
       },
       "required": [
@@ -6098,6 +6782,18 @@
       "additionalProperties": false,
       "description": "Canvas open result returned by the provider.",
       "title": "CanvasProviderOpenResult"
+    },
+    "CanvasSessionContext": {
+      "type": "object",
+      "properties": {
+        "workingDirectory": {
+          "type": "string",
+          "description": "Active session working directory, when known."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Session context supplied by the runtime.",
+      "title": "CanvasSessionContext"
     },
     "CommandList": {
       "type": "object",
@@ -6845,6 +7541,49 @@
       "additionalProperties": false,
       "description": "The currently selected model and reasoning effort for the session.",
       "title": "CurrentModel"
+    },
+    "CurrentToolMetadata": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Model-facing tool name"
+        },
+        "namespacedName": {
+          "type": "string",
+          "description": "Optional MCP/config namespaced tool name"
+        },
+        "mcpServerName": {
+          "type": "string",
+          "description": "MCP server name for MCP-backed tools"
+        },
+        "mcpToolName": {
+          "type": "string",
+          "description": "Raw MCP tool name for MCP-backed tools"
+        },
+        "description": {
+          "type": "string",
+          "description": "Tool description"
+        },
+        "input_schema": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "JSON Schema for tool input"
+        },
+        "deferLoading": {
+          "type": "boolean",
+          "description": "Whether the tool is loaded on demand via tool search"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "additionalProperties": false,
+      "description": "Lightweight metadata for a currently initialized session tool",
+      "title": "CurrentToolMetadata"
     },
     "DiscoveredCanvas": {
       "type": "object",
@@ -9283,6 +10022,34 @@
       "title": "McpServer",
       "description": "Schema for the `McpServer` type."
     },
+    "McpServerAuthConfig": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/definitions/McpServerAuthConfigRedirectPort",
+          "description": "Authentication settings with optional redirect port configuration."
+        }
+      ],
+      "description": "Set to `true` to use defaults, or provide an object with additional auth or OIDC settings.",
+      "title": "McpServerAuthConfig",
+      "x-opaque-json": true
+    },
+    "McpServerAuthConfigRedirectPort": {
+      "type": "object",
+      "properties": {
+        "redirectPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "Fixed port for the OAuth redirect callback server."
+        }
+      },
+      "additionalProperties": true,
+      "description": "Authentication settings with optional redirect port configuration.",
+      "title": "McpServerAuthConfigRedirectPort"
+    },
     "McpServerConfig": {
       "anyOf": [
         {
@@ -9328,12 +10095,12 @@
           "format": "duration"
         },
         "oidc": {
-          "$ref": "#/definitions/McpServerConfigHttpOidc",
-          "description": "OIDC token configuration. When truthy, a token is automatically gathered."
+          "$ref": "#/definitions/McpServerAuthConfig",
+          "description": "Set to `true` to use defaults, or provide an object with additional auth or OIDC settings."
         },
         "auth": {
-          "$ref": "#/definitions/McpServerConfigHttpAuth",
-          "description": "Additional authentication configuration for this server."
+          "$ref": "#/definitions/McpServerAuthConfig",
+          "description": "Set to `true` to use defaults, or provide an object with additional auth or OIDC settings."
         },
         "url": {
           "type": "string",
@@ -9367,20 +10134,6 @@
       "description": "Remote MCP server configuration accessed over HTTP or SSE.",
       "title": "McpServerConfigHttp"
     },
-    "McpServerConfigHttpAuth": {
-      "type": "object",
-      "properties": {
-        "redirectPort": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 65535,
-          "description": "Fixed port for the OAuth redirect callback server."
-        }
-      },
-      "additionalProperties": true,
-      "description": "Additional authentication configuration for this server.",
-      "title": "McpServerConfigHttpAuth"
-    },
     "McpServerConfigHttpOauthGrantType": {
       "type": "string",
       "enum": [
@@ -9393,20 +10146,6 @@
         "authorization_code": "Interactive browser-based authorization code flow with PKCE.",
         "client_credentials": "Headless client credentials flow using the configured OAuth client."
       }
-    },
-    "McpServerConfigHttpOidc": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "object",
-          "additionalProperties": {}
-        }
-      ],
-      "description": "OIDC token configuration. When truthy, a token is automatically gathered.",
-      "title": "McpServerConfigHttpOidc",
-      "x-opaque-json": true
     },
     "McpServerConfigHttpType": {
       "type": "string",
@@ -9448,12 +10187,12 @@
           "format": "duration"
         },
         "oidc": {
-          "$ref": "#/definitions/McpServerConfigStdioOidc",
-          "description": "OIDC token configuration. When truthy, a token is automatically gathered."
+          "$ref": "#/definitions/McpServerAuthConfig",
+          "description": "Set to `true` to use defaults, or provide an object with additional auth or OIDC settings."
         },
         "auth": {
-          "$ref": "#/definitions/McpServerConfigStdioAuth",
-          "description": "Authentication configuration for this server."
+          "$ref": "#/definitions/McpServerAuthConfig",
+          "description": "Set to `true` to use defaults, or provide an object with additional auth or OIDC settings."
         },
         "command": {
           "type": "string",
@@ -9485,34 +10224,6 @@
       "additionalProperties": false,
       "description": "Stdio MCP server configuration launched as a child process.",
       "title": "McpServerConfigStdio"
-    },
-    "McpServerConfigStdioAuth": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "object",
-          "additionalProperties": {}
-        }
-      ],
-      "description": "Authentication configuration for this server.",
-      "title": "McpServerConfigStdioAuth",
-      "x-opaque-json": true
-    },
-    "McpServerConfigStdioOidc": {
-      "anyOf": [
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "object",
-          "additionalProperties": {}
-        }
-      ],
-      "description": "OIDC token configuration. When truthy, a token is automatically gathered.",
-      "title": "McpServerConfigStdioOidc",
-      "x-opaque-json": true
     },
     "McpServerList": {
       "type": "object",
@@ -10169,6 +10880,25 @@
       "description": "List of Copilot models available to the resolved user, including capabilities and billing metadata.",
       "title": "ModelList"
     },
+    "ModelListRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "skipCache": {
+              "type": "boolean",
+              "description": "If true, bypasses the per-session model list cache and re-fetches from CAPI."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Optional listing options.",
+      "title": "ModelListRequest"
+    },
     "ModelPickerCategory": {
       "type": "string",
       "enum": [
@@ -10302,13 +11032,32 @@
         "modelCapabilities": {
           "$ref": "#/definitions/ModelCapabilitiesOverride",
           "description": "Override individual model capabilities resolved by the runtime"
+        },
+        "contextTier": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "default",
+                "long_context"
+              ],
+              "x-enumDescriptions": {
+                "default": "Use the model's default context window.",
+                "long_context": "Pin the session to the long-context tier when supported."
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit context tier for the selected model. `\"default\"` / `\"long_context\"` pin the tier; `null` clears any previous explicit choice; `undefined` leaves the existing tier untouched."
         }
       },
       "required": [
         "modelId"
       ],
       "additionalProperties": false,
-      "description": "Target model identifier and optional reasoning effort, summary, and capability overrides.",
+      "description": "Target model identifier and optional reasoning effort, summary, capability overrides, and context tier.",
       "title": "ModelSwitchToRequest"
     },
     "ModelSwitchToResult": {
@@ -10469,6 +11218,19 @@
       "x-enumDescriptions": {
         "direct": "Pass MCP server environment values as literal strings.",
         "indirect": "Resolve MCP server environment values from host-side references."
+      }
+    },
+    "OptionsUpdateToolFilterPrecedence": {
+      "type": "string",
+      "enum": [
+        "available",
+        "excluded"
+      ],
+      "description": "Controls how availableTools (allowlist) and excludedTools (denylist) combine when both are set.",
+      "title": "OptionsUpdateToolFilterPrecedence",
+      "x-enumDescriptions": {
+        "available": "If availableTools is set, it is the only constraint that applies (excludedTools is ignored). Preserves CLI / pre-existing client behavior. Default.",
+        "excluded": "A tool is enabled if and only if it matches the allowlist (or the allowlist is unset) AND it does not match the denylist. Makes 'all except X' expressible by combining the two lists."
       }
     },
     "PendingPermissionRequest": {
@@ -11841,6 +12603,13 @@
       "description": "Indicates whether the operation succeeded.",
       "title": "PermissionsFolderTrustAddTrustedResult"
     },
+    "PermissionsGetAllowAllRequest": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "No parameters.",
+      "title": "PermissionsGetAllowAllRequest"
+    },
     "PermissionsLocationsAddToolApprovalDetails": {
       "anyOf": [
         {
@@ -12214,6 +12983,42 @@
       "additionalProperties": false,
       "description": "Indicates whether the operation succeeded.",
       "title": "PermissionsResetSessionApprovalsResult"
+    },
+    "PermissionsSetAllowAllRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether to enable full allow-all permissions"
+        },
+        "source": {
+          "$ref": "#/definitions/PermissionsSetAllowAllSource",
+          "description": "Optional source for allow-all telemetry. Defaults to `rpc` when omitted for SDK callers."
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Whether to enable full allow-all permissions for the session.",
+      "title": "PermissionsSetAllowAllRequest"
+    },
+    "PermissionsSetAllowAllSource": {
+      "type": "string",
+      "enum": [
+        "cli_flag",
+        "slash_command",
+        "autopilot_confirmation",
+        "rpc"
+      ],
+      "description": "Optional source for allow-all telemetry. Defaults to `rpc` when omitted for SDK callers.",
+      "title": "PermissionsSetAllowAllSource",
+      "x-enumDescriptions": {
+        "cli_flag": "Allow-all was enabled from a CLI command-line flag.",
+        "slash_command": "Allow-all was enabled by a slash command.",
+        "autopilot_confirmation": "Allow-all was enabled by confirming autopilot behavior.",
+        "rpc": "Allow-all was enabled through an RPC caller."
+      }
     },
     "PermissionsSetApproveAllRequest": {
       "type": "object",
@@ -13470,6 +14275,11 @@
               "minimum": 0,
               "description": "Tokens consumed by tool definitions sent to the model (excludes deferred tools)"
             },
+            "mcpToolsTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Tokens consumed by MCP tool definitions (subset of toolDefinitionsTokens, excludes deferred tools)"
+            },
             "totalTokens": {
               "type": "integer",
               "minimum": 0,
@@ -13501,6 +14311,7 @@
             "systemTokens",
             "conversationTokens",
             "toolDefinitionsTokens",
+            "mcpToolsTokens",
             "totalTokens",
             "promptTokenLimit",
             "compactionThreshold",
@@ -14327,9 +15138,17 @@
           "type": "string",
           "description": "Optional human-friendly name set via /rename"
         },
+        "clientName": {
+          "type": "string",
+          "description": "Runtime client name that created/last resumed this session"
+        },
         "isRemote": {
           "type": "boolean",
           "description": "True for remote (GitHub) sessions; false for local"
+        },
+        "isDetached": {
+          "type": "boolean",
+          "description": "True for detached maintenance sessions that should be hidden from normal resume lists."
         },
         "context": {
           "$ref": "#/definitions/SessionContext",
@@ -14386,6 +15205,10 @@
           "type": "string",
           "description": "User-provided name supplied at session construction (via `--name`), if any. Immutable after construction."
         },
+        "clientName": {
+          "type": "string",
+          "description": "Runtime client name associated with the session (telemetry identifier)."
+        },
         "remoteMetadata": {
           "$ref": "#/definitions/MetadataSnapshotRemoteMetadata",
           "description": "Remote-session-specific metadata. Populated only when `isRemote` is true. Fields are immutable for the lifetime of the session."
@@ -14440,6 +15263,31 @@
         "plan": "The agent is preparing a plan before making changes.",
         "autopilot": "The agent is working autonomously toward task completion."
       }
+    },
+    "SessionModelList": {
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "array",
+          "items": {
+            "x-opaque-json": true
+          },
+          "description": "Available models, ordered with the most preferred default first."
+        },
+        "quotaSnapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Per-quota snapshots returned alongside the model list, keyed by quota type."
+        }
+      },
+      "required": [
+        "list"
+      ],
+      "additionalProperties": false,
+      "description": "The list of models available to this session.",
+      "title": "SessionModelList"
     },
     "SessionPruneResult": {
       "type": "object",
@@ -14819,13 +15667,17 @@
             "filter": {
               "$ref": "#/definitions/SessionListFilter",
               "description": "Optional filter applied to the returned sessions"
+            },
+            "includeDetached": {
+              "type": "boolean",
+              "description": "When true, include detached maintenance sessions. Defaults to false for user-facing session lists."
             }
           },
           "additionalProperties": false,
-          "description": "Optional metadata-load limit and context filter applied to the returned sessions."
+          "description": "Optional metadata-load limit and filters applied to the returned sessions."
         }
       ],
-      "description": "Optional metadata-load limit and context filter applied to the returned sessions.",
+      "description": "Optional metadata-load limit and filters applied to the returned sessions.",
       "title": "SessionsListRequest"
     },
     "SessionsLoadDeferredRepoHooksRequest": {
@@ -15026,6 +15878,10 @@
           },
           "description": "Denylist of tool names for this session."
         },
+        "toolFilterPrecedence": {
+          "$ref": "#/definitions/OptionsUpdateToolFilterPrecedence",
+          "description": "Controls how availableTools (allowlist) and excludedTools (denylist) combine when both are set."
+        },
         "enableScriptSafety": {
           "type": "boolean",
           "description": "Whether shell-script safety heuristics are enabled."
@@ -15145,6 +16001,30 @@
         "manageScheduleEnabled": {
           "type": "boolean",
           "description": "Whether to expose the `manage_schedule` tool to the agent. The runtime always owns the per-session schedule registry; this flag only controls tool exposure (typically gated to staff users)."
+        },
+        "skipEmbeddingRetrieval": {
+          "type": "boolean",
+          "description": "Whether to skip embedding retrieval pipeline initialization and execution."
+        },
+        "organizationCustomInstructions": {
+          "type": "string",
+          "description": "Organization-level custom instructions to inject into the system prompt."
+        },
+        "enableFileHooks": {
+          "type": "boolean",
+          "description": "Whether to enable loading of `.github/hooks/` filesystem hooks. Separate from the SDK callback hook mechanism."
+        },
+        "enableHostGitOperations": {
+          "type": "boolean",
+          "description": "Whether to enable host git operations (context resolution, child repo scanning, git info in system prompt)."
+        },
+        "enableSessionStore": {
+          "type": "boolean",
+          "description": "Whether to enable cross-session store writes and reads."
+        },
+        "enableSkills": {
+          "type": "boolean",
+          "description": "Whether to enable skill directory scanning and loading. Falls back to enableConfigDiscovery when unset."
         }
       },
       "additionalProperties": false,
@@ -16533,6 +17413,32 @@
       "additionalProperties": false,
       "description": "Built-in tools available for the requested model, with their parameters and instructions.",
       "title": "ToolList"
+    },
+    "ToolsGetCurrentMetadataResult": {
+      "type": "object",
+      "properties": {
+        "tools": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/CurrentToolMetadata",
+                "description": "Lightweight metadata for a currently initialized session tool"
+              }
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current tool metadata, or null when tools have not been initialized yet"
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "additionalProperties": false,
+      "description": "Current lightweight tool metadata snapshot for the session.",
+      "title": "ToolsGetCurrentMetadataResult"
     },
     "ToolsInitializeAndValidateResult": {
       "type": "object",
@@ -18002,6 +18908,9 @@
                   "type": "string"
                 },
                 "name": {
+                  "type": "string"
+                },
+                "client_name": {
                   "type": "string"
                 },
                 "user_named": {
