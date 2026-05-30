@@ -865,9 +865,10 @@
 ;; Map of header name → value, merged with any provider-level headers.
 (s/def ::request-headers (s/map-of string? string?))
 
-;; UI agent mode for this turn (upstream PR #1438, post-v1.0.0-beta.4).
-;; Wire enum: "interactive" | "plan" | "autopilot" | "shell". Defaults to the
-;; session's current mode when omitted.
+;; UI agent mode (upstream PR #1438, post-v1.0.0-beta.4).
+;; Wire enum: "interactive" | "plan" | "autopilot" | "shell". Used for both
+;; per-turn ::send-options (defaults to the session's current mode when
+;; omitted on send) and inbound ::user.message-data echoes.
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 
 ;; Display-only prompt shown in the timeline instead of the model :prompt
@@ -1098,8 +1099,6 @@
          (fn [m]
            (or (not (contains? m :mode))
                (s/valid? ::remote-session-mode (:mode m))))))
-
-(s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 
 ;; Cloud session config (upstream PR #1306). When supplied to create-session,
 ;; creates a remote session in the cloud instead of a local session. Optional
