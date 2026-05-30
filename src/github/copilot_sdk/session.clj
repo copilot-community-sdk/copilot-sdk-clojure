@@ -908,6 +908,13 @@
    - :prompt          - The message text (required)
    - :attachments     - Vector of attachments (file/directory/selection)
    - :mode            - :enqueue (default) or :immediate
+   - :agent-mode      - **Optional**. One of :interactive (default), :plan,
+                        :autopilot, or :shell. Selects the agent mode for
+                        this turn (upstream PR #1438).
+   - :display-prompt  - **Optional**. String shown in the session timeline
+                        instead of the model `:prompt` (e.g., when the model
+                        prompt is augmented with internal context that should
+                        not be shown to end users). (upstream PR #1470)
    - :request-headers - Optional map of HTTP headers forwarded to the
                         upstream LLM on this send (upstream PR #1094).
                         Keys and values must both be strings (do not use
@@ -935,6 +942,8 @@
                    trace-ctx (merge trace-ctx)
                    wire-attachments (assoc :attachments wire-attachments)
                    (:mode opts) (assoc :mode (name (:mode opts)))
+                   (:agent-mode opts) (assoc :agent-mode (name (:agent-mode opts)))
+                   (some? (:display-prompt opts)) (assoc :display-prompt (:display-prompt opts))
                    (:request-headers opts) (assoc :request-headers (:request-headers opts)))
           result (proto/send-request! conn "session.send" params)
           msg-id (:message-id result)]
@@ -1142,6 +1151,8 @@
                            trace-ctx (merge trace-ctx)
                            wire-attachments (assoc :attachments wire-attachments)
                            (:mode opts) (assoc :mode (name (:mode opts)))
+                           (:agent-mode opts) (assoc :agent-mode (name (:agent-mode opts)))
+                           (some? (:display-prompt opts)) (assoc :display-prompt (:display-prompt opts))
                            (:request-headers opts) (assoc :request-headers (:request-headers opts)))
                   response-ch (proto/send-request conn "session.send" params)
                   [result port] (if deadline-ch
