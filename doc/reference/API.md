@@ -278,7 +278,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:enable-skills` | boolean | Enable skills discovery and loading. (upstream PR #1474) |
 | `:plugin-directories` | vector | Extra plugin directories loaded even when `:enable-config-discovery` is `false`. Wire-encoded as `pluginDirectories`. (upstream PR #1482) |
 | `:reasoning-summary` | string | `"none"` / `"concise"` / `"detailed"`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. String-valued for consistency with `:reasoning-effort`. |
-| `:context-tier` | keyword | `#{:default :long-context}`. Selects the long-context model variant. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
+| `:context-tier` | keyword \| `nil` | `#{:default :long-context}` selects the long-context model variant; `nil` explicitly clears any prior tier (wire-encoded as JSON `null`). Omit the key entirely to leave the current setting untouched. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
 
 #### `resume-session`
 

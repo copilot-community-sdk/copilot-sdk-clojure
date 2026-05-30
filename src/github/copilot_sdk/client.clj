@@ -1891,7 +1891,7 @@
             (when (and (string? returned-id)
                        (not (str/blank? returned-id))
                        (not= returned-id session-id))
-              (throw (ex-info "session.create returned a sessionId that differs from the caller-supplied id"
+              (throw (ex-info "session.create returned a sessionId that differs from the requested id"
                               {:requested session-id :returned returned-id})))
             (session/set-workspace-path! client session-id (:workspace-path result))
             (session/set-capabilities! client session-id (:capabilities result))
@@ -2079,7 +2079,7 @@
                            (not (str/blank? returned-id))
                            (not= returned-id session-id))
                     (do (session/remove-session! client session-id)
-                        (ex-info "session.create returned a sessionId that differs from the caller-supplied id"
+                        (ex-info "session.create returned a sessionId that differs from the requested id"
                                  {:requested session-id :returned returned-id}))
                     (do
                       (session/set-workspace-path! client session-id (:workspace-path result))
