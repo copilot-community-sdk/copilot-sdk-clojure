@@ -240,7 +240,15 @@
     :name "doc.opened"
     :payload {:path "/tmp/x"}
     :subject {:doc "foo"}
-    :version 1}})
+    :version 1}
+
+   ;; Round 6 additions (upstream schema 1.0.56-1).
+   "session.permissions_changed"
+   {:allow-all-permissions true
+    :previous-allow-all-permissions false}
+
+   "hook.progress"
+   {:message "extracting..."}})
 
 (defn- envelope
   "Wrap a data payload in a minimal valid envelope of the given type. Honours
