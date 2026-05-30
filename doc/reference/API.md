@@ -266,7 +266,19 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
 | `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
-| `:cloud` | map | (create-session only) Creates a remote cloud session. Shape: `{:repository {:owner "octocat" :name "hello-world" :branch "main"}}` — `:owner` and `:name` are required non-blank strings; `:branch` is optional. Forwarded as `cloud.repository.*` on `session.create`. Not accepted on `resume-session` (matches upstream `ResumeSessionConfig`). (upstream PR #1306) |
+| `:cloud` | map | (create-session only) Creates a remote cloud session. Shape: `{:repository {:owner "octocat" :name "hello-world" :branch "main"}}` — `:owner` and `:name` are required non-blank strings; `:branch` is optional. Forwarded as `cloud.repository.*` on `session.create`. Not accepted on `resume-session` (matches upstream `ResumeSessionConfig`). When `:cloud` is set and `:session-id` is omitted, the SDK defers id assignment to the server and registers the session under the server-returned id (upstream PR #1479). (upstream PR #1306) |
+| `:mcp-oauth-token-storage` | keyword | Controls where MCP OAuth tokens are persisted. `#{:persistent :in-memory}`. Default is server-side (persistent). Set to `:in-memory` in multi-tenant hosts that must not leak tokens to disk. Wire-encoded as `mcpOAuthTokenStorage`. (upstream PR #1326) |
+| `:embedding-cache-storage` | keyword | `#{:persistent :in-memory}`. Controls where the embedding cache lives. Wire-encoded as `embeddingCacheStorage`. (upstream PR #1474) |
+| `:skip-embedding-retrieval` | boolean | Skip embedding-based context retrieval. (upstream PR #1474) |
+| `:organization-custom-instructions` | string | Organization-wide instructions injected by the host. (upstream PR #1474) |
+| `:enable-on-demand-instruction-discovery` | boolean | Auto-discover instruction files on demand. (upstream PR #1474) |
+| `:enable-file-hooks` | boolean | Enable file-watcher-style lifecycle hooks. (upstream PR #1474) |
+| `:enable-host-git-operations` | boolean | Allow the CLI to run git operations through the host. (upstream PR #1474) |
+| `:enable-session-store` | boolean | Enable the disk-backed session store. (upstream PR #1474) |
+| `:enable-skills` | boolean | Enable skills discovery and loading. (upstream PR #1474) |
+| `:plugin-directories` | vector | Extra plugin directories loaded even when `:enable-config-discovery` is `false`. Wire-encoded as `pluginDirectories`. (upstream PR #1482) |
+| `:reasoning-summary` | keyword | `#{:none :concise :detailed}`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. |
+| `:context-tier` | keyword | `#{:default :long-context}`. Selects the long-context model variant. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
 
 #### `resume-session`
 
@@ -280,6 +292,7 @@ Resume an existing session by ID. The `config` map accepts the same options as `
 |---|---|---|
 | `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false) |
 | `:continue-pending-work?` | boolean | When true, the runtime re-emits any pending `permission.requested` and external tool calls so handlers can re-respond on resume; default false treats pending work as interrupted. Forwarded as `continuePendingWork` on `session.resume`. |
+| `:large-output` | map | (Experimental) Tool output handling config. Now also forwarded on `session.resume` (matching upstream `client.ts:1308`). |
 
 When `:on-permission-request` is set to `default-join-session-permission-handler`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends `requestPermission: true`.
 
@@ -696,6 +709,8 @@ Send a message to the session. Returns immediately with the message ID.
 | `:prompt` | string | The message/prompt to send |
 | `:attachments` | vector | File attachments (see below) |
 | `:mode` | keyword | `:enqueue` or `:immediate` |
+| `:agent-mode` | keyword | `#{:interactive :plan :autopilot :shell}`. Per-message agent mode. Wire-encoded as `agentMode`. (upstream PR #1438) |
+| `:display-prompt` | string | Alternate prompt shown in the timeline UI instead of `:prompt`. Useful when the model-facing prompt contains machinery or context that should not be surfaced to the end user. Wire-encoded as `displayPrompt`. (upstream PR #1470) |
 | `:request-headers` | map | Extra HTTP headers (string→string) forwarded to the model provider for this request. Merged with provider-level `:headers`. (upstream PR #1094) |
 
 **Attachment types:**
@@ -1380,6 +1395,8 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..." :aborted? false}` (both optional) |
 | `:copilot/session.schedule_created` | Scheduled prompt registered via `/every`; data: `{:id <pos-int> :interval-ms <pos-int> :prompt "..."}` (upstream schema 1.0.42) |
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
+| `:copilot/session.autopilot_objective_changed` | Autopilot objective added/updated/removed; data: `{:operation "..." :objective {...}}` (upstream schema 1.0.56). The `:status` enum for autopilot objectives is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
+| `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :disable-permissions boolean}` (upstream schema 1.0.56). |
 | `:copilot/skill.invoked` | Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
@@ -1404,6 +1421,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/subagent.selected` | Subagent selected |
 | `:copilot/subagent.deselected` | Subagent deselected |
 | `:copilot/hook.start` | Hook invocation started |
+| `:copilot/hook.progress` | Ephemeral progress update from a long-running hook; data: `{:message "..."}` (upstream schema 1.0.56). |
 | `:copilot/hook.end` | Hook invocation finished |
 | `:copilot/system.message` | System message emitted |
 | `:copilot/system.notification` | System notification with structured `:kind` discriminator (e.g. `agent_completed`, `shell_completed`, `shell_detached_completed`) |

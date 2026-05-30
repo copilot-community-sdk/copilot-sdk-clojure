@@ -3,6 +3,98 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.0-beta.4 sync, round 6)
+- **`:agent-mode` and `:display-prompt` send options** — `session/send!`
+  (and async/streaming variants) now accept:
+  - `:agent-mode` — keyword in `#{:interactive :plan :autopilot :shell}`,
+    wire-encoded as `agentMode`. Lets the model run with different agent
+    behaviours per message. (upstream PR #1438)
+  - `:display-prompt` — string shown in the timeline UI instead of the
+    model-facing `:prompt`. Useful when the model prompt contains
+    machinery or context that should not be surfaced to the end user.
+    Wire-encoded as `displayPrompt`. (upstream PR #1470)
+- **`:mcp-oauth-token-storage` config option** — Controls where MCP OAuth
+  tokens are persisted. Enum `#{:persistent :in-memory}`, defaulting to
+  the server's default (persistent disk-backed). Set to `:in-memory` in
+  multi-tenant hosts that must not leak tokens to disk. Wire-encoded as
+  `mcpOAuthTokenStorage` (the wire key is set directly to bypass the
+  default kebab-camel converter which would mangle `OAuth`). Accepted on
+  both create and resume. (upstream PR #1326)
+- **Multitenancy per-session granular flags** — All optional, accepted on
+  both `create-session` and `resume-session`:
+  - `:embedding-cache-storage` (`#{:persistent :in-memory}`, wire
+    `embeddingCacheStorage`)
+  - `:skip-embedding-retrieval` (boolean)
+  - `:organization-custom-instructions` (string)
+  - `:enable-on-demand-instruction-discovery` (boolean)
+  - `:enable-file-hooks` (boolean)
+  - `:enable-host-git-operations` (boolean)
+  - `:enable-session-store` (boolean)
+  - `:enable-skills` (boolean)
+
+  Lets multi-tenant hosts opt individual sessions out of disk-backed
+  caches, host git, hooks, sessions store, and skills discovery without
+  switching to a separate client. (upstream PR #1474)
+- **`:plugin-directories` config option** — `[string]` of extra plugin
+  directories. Wire-encoded as `pluginDirectories`. Loaded even when
+  `:enable-config-discovery` is `false`, so multi-tenant hosts can
+  inject a curated plugin set without enabling general discovery.
+  Accepted on both create and resume. (upstream PR #1482)
+- **Cloud sessions can defer `sessionId` to the server** — When
+  `:cloud` is set and `:session-id` is omitted from `create-session` /
+  `<create-session`, the SDK now omits `sessionId` from the
+  `session.create` request and captures the server-assigned id from the
+  response. A new inline-response callback (registered with
+  `protocol/send-request`'s `{:on-response-inline}` option) runs
+  synchronously in the JSON-RPC reader thread before the next inbound
+  message is processed, so any session-scoped notification arriving
+  immediately after the response is correctly routed to the
+  newly-registered session. Callers may still supply `:session-id`
+  explicitly; if both caller and server provide an id, they must agree.
+  (upstream PR #1479)
+- **Config parity additions** — Existed in upstream `SessionConfigBase`
+  prior to this window; added to close pre-existing parity gaps. All
+  optional, accepted on both create and resume:
+  - `:reasoning-summary` (`#{:none :concise :detailed}`, wire
+    `reasoningSummary`) — controls inclusion/granularity of reasoning
+    summaries in assistant turns.
+  - `:context-tier` (`#{:default :long-context}`, wire `contextTier` as
+    `"default"` / `"long_context"`) — selects long-context model variants.
+  - `:large-output` on `resume-session` — already accepted on create;
+    now also forwarded on resume (wire `largeOutput`).
+- **New event types** — Added to the public `event-types` set and
+  picked up automatically by the generated wire spec:
+  - `:copilot/hook.progress` — ephemeral progress updates from
+    long-running hooks. Curated `::hook.progress-data` spec exposes
+    `:message` (string) plus the standard `:session-id`/`:timestamp`.
+  - `:copilot/session.autopilot_objective_changed` — autopilot
+    objective updates. Generated spec carries `:operation` and
+    `:objective` data; the `:status` enum is widened to include
+    `"active"`, `"paused"`, `"cap_reached"`, `"completed"`.
+  - `:copilot/session.permissions_changed` — emitted when per-session
+    permission flags change. Curated `::session.permissions_changed-data`
+    spec exposes `:allow-all-permissions` and `:disable-permissions`
+    booleans.
+- **Schema bump** — `.copilot-schema-version` advanced from `1.0.55-1`
+  to `1.0.56-1`, covering upstream tags `v1.0.0-beta.9` and
+  `v1.0.0-beta.10`. Schema regen picks up several new optional event
+  fields (`working-directory` on `external_tool.requested-data`,
+  `context-tier` on `session.resume-data`, autopilot status values) and
+  the three new event types above.
+
+### Deferred (round 6)
+- **Multitenancy Client Mode (upstream PR #1428)** — Substantial new
+  public API surface (`mode = "empty" | "copilot-cli"`, `ToolSet`,
+  `toolFilterPrecedence`, ambient flags via `session.options.update`).
+  Tracked for a dedicated future sync round with its own plan.
+- **`configDir` → `configDirectory` and `outputDir` → `outputDirectory`
+  rename (upstream PR #1482)** — Wire keys stay `configDir`/`outputDir`.
+  Renaming the Clojure-side option keys would be breaking; tracked
+  alongside the other rename PRs (#1357 etc.) for a coordinated
+  breaking-rename release.
+- **Canvas runtime, MCP Apps `enableMcpApps`** — Continue to defer as
+  experimental coupled surfaces.
+
 ### Added (post-v1.0.0-beta.4 sync, round 5)
 - **`:on-post-tool-use-failure` hook** — New lifecycle hook in the
   `:hooks` map. Fires after a tool execution whose result was `"failure"`;
