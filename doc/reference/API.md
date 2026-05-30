@@ -277,7 +277,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:enable-session-store` | boolean | Enable the disk-backed session store. (upstream PR #1474) |
 | `:enable-skills` | boolean | Enable skills discovery and loading. (upstream PR #1474) |
 | `:plugin-directories` | vector | Extra plugin directories loaded even when `:enable-config-discovery` is `false`. Wire-encoded as `pluginDirectories`. (upstream PR #1482) |
-| `:reasoning-summary` | keyword | `#{:none :concise :detailed}`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. |
+| `:reasoning-summary` | string | `"none"` / `"concise"` / `"detailed"`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. String-valued for consistency with `:reasoning-effort`. |
 | `:context-tier` | keyword | `#{:default :long-context}`. Selects the long-context model variant. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
 
 #### `resume-session`
@@ -1395,8 +1395,8 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..." :aborted? false}` (both optional) |
 | `:copilot/session.schedule_created` | Scheduled prompt registered via `/every`; data: `{:id <pos-int> :interval-ms <pos-int> :prompt "..."}` (upstream schema 1.0.42) |
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
-| `:copilot/session.autopilot_objective_changed` | Autopilot objective added/updated/removed; data: `{:operation "..." :objective {...}}` (upstream schema 1.0.56). The `:status` enum for autopilot objectives is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
-| `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :disable-permissions boolean}` (upstream schema 1.0.56). |
+| `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
+| `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :previous-allow-all-permissions boolean}` (upstream schema 1.0.56). |
 | `:copilot/skill.invoked` | Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |

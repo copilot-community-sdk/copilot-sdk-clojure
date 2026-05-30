@@ -5260,12 +5260,29 @@
     (is (not (s/valid? :github.copilot-sdk.specs/hook.progress-data
                        {:message 42})))))
 
-(deftest test-spec-session-resume-data-context-tier
-  (testing "::session.resume-data accepts :context-tier (round-5 consistency)"
-    (is (s/valid? :github.copilot-sdk.specs/session.resume-data
-                  {:resume-time (java.time.Instant/parse "2026-05-01T00:00:00Z")
-                   :event-count 0
-                   :context-tier :long-context}))))
+(deftest test-generated-session-resume-data-context-tier
+  (testing "generated session.resume-data accepts wire :context-tier values"
+    ;; The curated ::specs/session.resume-data deliberately does NOT lift
+    ;; :context-tier into the idiom layer (matches the round-5 pattern for
+    ;; ::session.model_change-data: event payloads carry the wire string).
+    ;; The generated wire spec is the source of truth for the field shape.
+    (let [spec :github.copilot-sdk.generated.event-specs/session.resume-data]
+      (is (s/valid? spec
+                    {:resume-time "2026-05-01T00:00:00Z"
+                     :event-count 0
+                     :context-tier "long_context"}))
+      (is (s/valid? spec
+                    {:resume-time "2026-05-01T00:00:00Z"
+                     :event-count 0
+                     :context-tier "default"}))
+      (is (s/valid? spec
+                    {:resume-time "2026-05-01T00:00:00Z"
+                     :event-count 0
+                     :context-tier nil}))
+      (is (not (s/valid? spec
+                         {:resume-time "2026-05-01T00:00:00Z"
+                          :event-count 0
+                          :context-tier "bogus"}))))))
 
 ;; --- Cloud session: defer sessionId to server (PR #1479) -------------------
 

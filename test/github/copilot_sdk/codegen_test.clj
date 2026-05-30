@@ -247,6 +247,11 @@
    {:allow-all-permissions true
     :previous-allow-all-permissions false}
 
+   "session.autopilot_objective_changed"
+   {:operation "create"
+    :id 7
+    :status "active"}
+
    "hook.progress"
    {:message "extracting..."}})
 

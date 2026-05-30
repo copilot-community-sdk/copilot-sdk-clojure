@@ -55,26 +55,35 @@ All notable changes to this project will be documented in this file. This change
 - **Config parity additions** — Existed in upstream `SessionConfigBase`
   prior to this window; added to close pre-existing parity gaps. All
   optional, accepted on both create and resume:
-  - `:reasoning-summary` (`#{:none :concise :detailed}`, wire
+  - `:reasoning-summary` (`#{"none" "concise" "detailed"}`, wire
     `reasoningSummary`) — controls inclusion/granularity of reasoning
-    summaries in assistant turns.
+    summaries in assistant turns. String-valued for consistency with
+    the existing `:reasoning-effort` option.
   - `:context-tier` (`#{:default :long-context}`, wire `contextTier` as
     `"default"` / `"long_context"`) — selects long-context model variants.
   - `:large-output` on `resume-session` — already accepted on create;
     now also forwarded on resume (wire `largeOutput`).
+- **`:config-directory` and `:output-directory` option aliases** —
+  Non-breaking aliases for `:config-dir` and `:output-dir`
+  (`:output-directory` is inside the `:large-output` map). Wire keys
+  stay `configDir` / `outputDir`. When both old and new keys are
+  supplied, the new key wins. (upstream PR #1482 source-side rename)
 - **New event types** — Added to the public `event-types` set and
   picked up automatically by the generated wire spec:
   - `:copilot/hook.progress` — ephemeral progress updates from
     long-running hooks. Curated `::hook.progress-data` spec exposes
-    `:message` (string) plus the standard `:session-id`/`:timestamp`.
+    `:message` (non-blank string); `:session-id` / `:timestamp` live on
+    the envelope.
   - `:copilot/session.autopilot_objective_changed` — autopilot
-    objective updates. Generated spec carries `:operation` and
-    `:objective` data; the `:status` enum is widened to include
-    `"active"`, `"paused"`, `"cap_reached"`, `"completed"`.
+    objective lifecycle events. Generated wire spec carries
+    `:operation` (required, one of `"create"` / `"update"` /
+    `"delete"`), with optional `:id` (integer) and `:status`. The
+    `:status` enum is widened to include `"active"`, `"paused"`,
+    `"cap_reached"`, `"completed"`.
   - `:copilot/session.permissions_changed` — emitted when per-session
     permission flags change. Curated `::session.permissions_changed-data`
-    spec exposes `:allow-all-permissions` and `:disable-permissions`
-    booleans.
+    spec requires `:allow-all-permissions` and
+    `:previous-allow-all-permissions` (both booleans).
 - **Schema bump** — `.copilot-schema-version` advanced from `1.0.55-1`
   to `1.0.56-1`, covering upstream tags `v1.0.0-beta.9` and
   `v1.0.0-beta.10`. Schema regen picks up several new optional event
@@ -87,11 +96,11 @@ All notable changes to this project will be documented in this file. This change
   public API surface (`mode = "empty" | "copilot-cli"`, `ToolSet`,
   `toolFilterPrecedence`, ambient flags via `session.options.update`).
   Tracked for a dedicated future sync round with its own plan.
-- **`configDir` → `configDirectory` and `outputDir` → `outputDirectory`
-  rename (upstream PR #1482)** — Wire keys stay `configDir`/`outputDir`.
-  Renaming the Clojure-side option keys would be breaking; tracked
-  alongside the other rename PRs (#1357 etc.) for a coordinated
-  breaking-rename release.
+- **Removal of the legacy `:config-dir` / `:output-dir` option keys
+  (upstream PR #1482 follow-up)** — The new `:config-directory` /
+  `:output-directory` aliases ship in this release (see Added). The
+  breaking removal of the older spellings is tracked alongside the
+  other rename PRs (#1357 etc.) for a coordinated rename release.
 - **Canvas runtime, MCP Apps `enableMcpApps`** — Continue to defer as
   experimental coupled surfaces.
 
