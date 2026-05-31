@@ -5351,3 +5351,51 @@
                       (:sessionId create-params)))
       (is (= (:sessionId create-params) (sdk/session-id session))))))
 
+(deftest test-async-cloud-session-omits-session-id-on-wire
+  (testing "<create-session cloud-no-id path omits sessionId and adopts server-assigned id (PR #1479)"
+    ;; Async branch has separate promise/cleanup logic and uses the 4-arity
+    ;; proto/send-request options path, so the sync cloud-no-id coverage does
+    ;; not exercise it. Mirror test-cloud-session-omits-session-id-on-wire for
+    ;; <create-session.
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= "session.create" method)
+                                        (swap! seen assoc method params))))
+          result-ch (sdk/<create-session *test-client*
+                                         {:on-permission-request sdk/approve-all
+                                          :cloud {:repository {:owner "octocat"
+                                                               :name "hello"
+                                                               :branch "main"}}})
+          [session _] (alts!! [result-ch (timeout 5000)])
+          create-params (get @seen "session.create")]
+      (is (some? session) "<create-session should deliver a session")
+      (is (not (instance? Throwable session))
+          (str "<create-session cloud-no-id should not return an error: " session))
+      (is (not (contains? create-params :sessionId))
+          "Async cloud-no-id path must omit sessionId; server assigns one")
+      (is (string? (sdk/session-id session)))
+      (is (.startsWith ^String (sdk/session-id session) "session-")
+          "Session id should come from mock server (prefix 'session-'), not a UUID")
+      (sdk/destroy! session))))
+
+(deftest test-async-cloud-session-with-caller-supplied-id-is-sent
+  (testing "<create-session WITH :session-id sends sessionId on wire (PR #1479)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= "session.create" method)
+                                        (swap! seen assoc method params))))
+          custom-id "async-caller-supplied-id-xyz"
+          result-ch (sdk/<create-session *test-client*
+                                         {:on-permission-request sdk/approve-all
+                                          :cloud {}
+                                          :session-id custom-id})
+          [session _] (alts!! [result-ch (timeout 5000)])
+          create-params (get @seen "session.create")]
+      (is (not (instance? Throwable session))
+          (str "<create-session with caller-supplied id should not return an error: " session))
+      (is (= custom-id (:sessionId create-params)))
+      (is (= custom-id (sdk/session-id session)))
+      (sdk/destroy! session))))
+

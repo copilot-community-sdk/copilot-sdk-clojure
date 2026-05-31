@@ -1836,6 +1836,18 @@
                            assigns a sessionId and the SDK registers the session under that
                            id; the session is registered synchronously before any subsequent
                            server-initiated requests can be dispatched (upstream PR #1479).
+
+                           **Important — sessionFs + cloud-no-id contract:** when the client
+                           is constructed with `:session-fs` enabled AND this call defers the
+                           session id to the server (cloud + no `:session-id`), the
+                           `:create-session-fs-handler` factory is invoked **on the JSON-RPC
+                           reader thread** inside an inline-response callback (so the session
+                           is registered before subsequent notifications). The factory MUST be
+                           a fast, non-blocking constructor and MUST NOT call back into the
+                           SDK (no further RPCs, no waiting on session events) — doing so
+                           deadlocks the reader thread. The factory call is unconstrained on
+                           every other path (standard local sessions, cloud-with-caller-id,
+                           and resume), where it runs on the caller's thread.
    
    Returns a CopilotSession."
   [client config]
@@ -1986,6 +1998,12 @@
 
    On RPC error, delivers an ExceptionInfo to the channel (not nil).
    Callers should check the result with (instance? Throwable result).
+
+   Note: the sessionFs + cloud-no-id constraint described on `create-session`
+   applies symmetrically here — when `:cloud` is set without a `:session-id`
+   and the client has `:session-fs` enabled, the `:create-session-fs-handler`
+   factory runs on the reader thread inside an inline-response callback and
+   must be non-blocking (no further RPCs / no session-event waits).
 
    Usage:
      (go
