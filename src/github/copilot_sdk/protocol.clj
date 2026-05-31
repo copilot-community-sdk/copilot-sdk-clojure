@@ -585,8 +585,9 @@
   "Send a JSON-RPC request and block for the response.
    Returns result or throws on error.
 
-   The 4- and 5-arity forms accept an `opts` map forwarded to
-   `send-request` (see its docstring for supported keys)."
+   The 5-arity form accepts an `opts` map forwarded to `send-request`
+   (see its docstring for supported keys, e.g. `:on-response-inline`).
+   The 3- and 4-arity forms apply the default empty opts."
   ([conn method params]
    (send-request! conn method params 60000 {}))
   ([conn method params timeout-ms]
