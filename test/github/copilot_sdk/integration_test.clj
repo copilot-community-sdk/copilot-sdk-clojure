@@ -4240,7 +4240,19 @@
       (is (= true (:is-autopilot-continuation clj-data))
           "wire->clj must produce :is-autopilot-continuation (no `?` suffix)")
       (is (s/valid? :github.copilot-sdk.specs/user.message-data clj-data)
-          "post-wire->clj event data must validate against the idiom spec"))))
+          "post-wire->clj event data must validate against the idiom spec")))
+  (testing "inbound user.message echoing wire-string :agent-mode validates"
+    ;; Server echoes agentMode as the wire string ("interactive", "plan",
+    ;; "autopilot", "shell"). wire->clj keeps the value as a string;
+    ;; ::user.message-data must accept that without rejecting on the
+    ;; caller-side keyword set.
+    (doseq [mode ["interactive" "plan" "autopilot" "shell"]]
+      (let [wire-data {:content "hi" :agentMode mode}
+            clj-data (util/wire->clj wire-data)]
+        (is (= mode (:agent-mode clj-data))
+            (str "wire->clj preserves wire-string for :agent-mode " mode))
+        (is (s/valid? :github.copilot-sdk.specs/user.message-data clj-data)
+            (str "inbound user.message-data accepts wire-string :agent-mode " mode))))))
 
 ;; --- assistant.usage :api-endpoint (upstream CLI 1.0.47) -------------------
 

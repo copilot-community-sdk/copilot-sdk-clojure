@@ -865,10 +865,15 @@
 ;; Map of header name → value, merged with any provider-level headers.
 (s/def ::request-headers (s/map-of string? string?))
 
-;; UI agent mode (upstream PR #1438, post-v1.0.0-beta.4).
-;; Wire enum: "interactive" | "plan" | "autopilot" | "shell". Used for both
-;; per-turn ::send-options (defaults to the session's current mode when
-;; omitted on send) and inbound ::user.message-data echoes.
+;; Caller-side agent mode for ::send-options (upstream PR #1438,
+;; post-v1.0.0-beta.4). Wire enum: "interactive" | "plan" | "autopilot" |
+;; "shell". The SDK API accepts the keyword and session/send! coerces it
+;; to the wire string via (name kw). Defaults to the session's current
+;; mode when omitted.
+;;
+;; Note: this is the CALLER-side spec only. Inbound user.message events
+;; echo agentMode as the wire string post wire->clj; that's validated by
+;; the generated wire spec, not by curated ::user.message-data here.
 (s/def ::agent-mode #{:interactive :plan :autopilot :shell})
 
 ;; Display-only prompt shown in the timeline instead of the model :prompt
@@ -1132,10 +1137,15 @@
 ;; converts wire `isAutopilotContinuation` to `:is-autopilot-continuation`
 ;; (csk does not append `?` for booleans). See `::remote-steerable` for the
 ;; same precedent.
+;;
+;; :agent-mode is intentionally NOT in :opt-un here: wire->clj keeps the
+;; value as the wire string ("interactive", "plan", ...) on inbound events,
+;; while caller-side ::agent-mode is a keyword set used for ::send-options.
+;; Enum validation of the wire string is handled by the generated wire spec.
 (s/def ::is-autopilot-continuation boolean?)
 (s/def ::user.message-data
   (s/and (s/keys :req-un [::content]
-                 :opt-un [::transformed-content ::source ::agent-mode
+                 :opt-un [::transformed-content ::source
                           ::interaction-id ::is-autopilot-continuation])
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
