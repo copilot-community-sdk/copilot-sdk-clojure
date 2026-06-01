@@ -85,6 +85,9 @@ clojure -A:examples -X lifecycle-hooks/run
 
 # Reasoning effort
 clojure -A:examples -X reasoning-effort/run
+
+# Empty (multitenancy) mode
+clojure -A:examples -X empty-mode/run
 ```
 
 Or run all examples:
@@ -93,7 +96,7 @@ Or run all examples:
 ```
 
 > **Note:** `run-all-examples.sh` runs 16 examples that need only the Copilot CLI (examples 1–9, 12–16, 18, and 19).
-> Examples 10 (BYOK) and 11 (MCP) require external dependencies (API keys, Node.js), and example 17 (ask-user-failure) is excluded for reliability. Run these manually.
+> Examples 10 (BYOK), 11 (MCP), and 20 (empty-mode — uses BYOK) require external dependencies (API keys, Node.js), and example 17 (ask-user-failure) is excluded for reliability. Run these manually.
 
 With a custom CLI path:
 ```bash
@@ -876,6 +879,39 @@ Commands are registered by passing them in the session config:
                :command-handler handle-status}]
    :on-permission-request copilot/approve-all})
 ```
+
+---
+
+## Example 20: Empty (Multitenancy) Mode (`empty_mode.clj`)
+
+**Description**: Run a session under `:mode :empty` — the hardened
+posture for SaaS hosts that run sessions on behalf of multiple users.
+
+**Features**: `:mode :empty`, `:copilot-home`, `:session-fs` with an
+in-memory provider, `tool-set/isolated`, BYOK provider.
+
+Demonstrates the multitenancy hardening introduced in upstream PR #1428.
+The example creates fresh temp directories for `:copilot-home`, the
+session's `cwd`, and the session state path, supplies an in-memory
+`:session-fs` provider, and runs a single query through a BYOK provider
+(empty mode disables the local keychain, so the host must bring its own
+auth). In `:empty` mode the SDK forces `COPILOT_DISABLE_KEYTAR=1` on the
+spawned CLI, spreads safe session defaults (telemetry off, embeddings
+in-memory, host-git off, skills off, ...), strips `environment_context`
+from the system message, and sends a follow-up `session.options.update`
+RPC turning off coauthor / manage-schedule and forcing
+`installedPlugins []`.
+
+**Prerequisites**: Set `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`. Excluded
+from `run-all-examples.sh` because it requires an external API key.
+
+```bash
+OPENAI_API_KEY=sk-... clojure -A:examples -X empty-mode/run
+OPENAI_API_KEY=sk-... clojure -A:examples -X empty-mode/run :prompt '"What is Clojure?"'
+```
+
+See [`doc/reference/API.md`](../doc/reference/API.md#client-mode-empty)
+for the full Client Mode reference.
 
 ---
 

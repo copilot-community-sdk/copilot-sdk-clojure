@@ -3,6 +3,64 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (Client Mode Empty — upstream PR #1428)
+- **`:mode` client option** — `#{:copilot-cli :empty}`, default
+  `:copilot-cli`. Selects between historical CLI behavior and a hardened
+  multitenancy posture for SaaS hosts that must isolate sessions from
+  the local machine. Validated on `copilot/client`.
+- **`:empty` mode constructor enforcement** — In `:empty` mode the
+  client requires at least one tenant-scoped storage root
+  (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`)
+  so the CLI never falls back to the user's home directory, and forces
+  `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI so the headless server
+  never touches the host keychain.
+- **Required `:available-tools` in `:empty` mode** —
+  `create-session` / `resume-session` (sync and async) now reject
+  empty-mode sessions that don't supply a tool allow-list. An empty
+  vector `[]` is legitimate (it means "no tools") — the key just has
+  to be present so silently-empty filters can't happen.
+- **9 mode-default session config fields** — In `:empty` mode the SDK
+  spreads safe defaults UNDER the caller's session config (caller
+  always wins): `:enable-session-telemetry? false`,
+  `:mcp-oauth-token-storage :in-memory`, `:skip-embedding-retrieval true`,
+  `:embedding-cache-storage :in-memory`,
+  `:enable-on-demand-instruction-discovery false`,
+  `:enable-file-hooks false`, `:enable-host-git-operations false`,
+  `:enable-session-store false`, `:enable-skills false`.
+- **`session.options.update` plumbing** — After a successful
+  `session.create` / `session.resume`, the SDK now issues a follow-up
+  `session.options.update` RPC carrying the four overridable feature
+  flags (and, in `:empty` mode, `installedPlugins: []`):
+  - `:skip-custom-instructions` (default `true` in `:empty`)
+  - `:custom-agents-local-only` (default `true` in `:empty`)
+  - `:coauthor-enabled` (default `false` in `:empty`)
+  - `:manage-schedule-enabled` (default `false` in `:empty`)
+  In `:copilot-cli` mode only flags the caller explicitly set are
+  forwarded; if the patch ends up empty the RPC is skipped. On failure
+  the SDK disconnects and removes the half-configured session before
+  rethrowing. Wired into all four entry points (`create-session`,
+  `resume-session`, `<create-session`, `<resume-session`).
+- **System message normalization in `:empty` mode** — Mirrors upstream
+  `getSystemMessageConfigForMode`: if the caller did not provide a
+  `:system-message`, the SDK emits `{:mode "customize" :sections
+  {:environment_context {:action "remove"}}}`. If the caller provided
+  `:append`, the SDK promotes it to `:customize` (preserving the
+  content) and adds the env-context removal. If the caller used
+  `:customize` and supplied their own `:environment-context` section,
+  the SDK leaves it untouched. `:replace` mode is passed through
+  unchanged. `:copilot-cli` mode keeps the legacy behavior — no
+  normalization.
+- **Always-emit `:tool-filter-precedence "excluded"`** — Both modes now
+  always send `toolFilterPrecedence: "excluded"` on `session.create`
+  and `session.resume`. Makes the ordering between
+  `:available-tools` and `:excluded-tools` deterministic regardless of
+  CLI version.
+- **`github.copilot-sdk.tool-set` namespace** — Source-qualified tool
+  filter constructors (`builtin`, `mcp`, `custom`, `builtins`) plus
+  `isolated-builtins` / `isolated` — the parity equivalents of
+  upstream `BuiltInTools.Isolated`. Bare `"*"` (no source) is rejected
+  at the SDK boundary and at construction time.
+
 ### Added (post-v1.0.0-beta.4 sync, round 6)
 - **`:agent-mode` and `:display-prompt` send options** — `session/send!`
   (and async/streaming variants) now accept:
@@ -92,10 +150,6 @@ All notable changes to this project will be documented in this file. This change
   the three new event types above.
 
 ### Deferred (round 6)
-- **Multitenancy Client Mode (upstream PR #1428)** — Substantial new
-  public API surface (`mode = "empty" | "copilot-cli"`, `ToolSet`,
-  `toolFilterPrecedence`, ambient flags via `session.options.update`).
-  Tracked for a dedicated future sync round with its own plan.
 - **Removal of the legacy `:config-dir` / `:output-dir` option keys
   (upstream PR #1482 follow-up)** — The new `:config-directory` /
   `:output-directory` aliases ship in this release (see Added). The
