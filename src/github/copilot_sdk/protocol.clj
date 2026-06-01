@@ -127,21 +127,34 @@
 ;; -----------------------------------------------------------------------------
 
 (defn- handle-response!
-  "Handle an incoming response message. Delivers to pending channel."
+  "Handle an incoming response message. Delivers to pending channel.
+
+   If the original `send-request` call supplied an `:on-response-inline`
+   callback, invoke it synchronously **before** delivering the result to
+   the response channel. This callback runs in the reader thread, so any
+   work it performs (e.g. session registration after a server-assigned
+   sessionId) is guaranteed to complete before the next inbound message
+   is dispatched. Used by `client/create-session` for the cloud-no-id
+   flow (upstream PR #1479)."
   [state-atom msg]
   (let [id (:id msg)
         pending-requests (:pending-requests (conn-state state-atom))]
     (log/debug "Received response for id=" id)
-    (when-let [{:keys [ch]} (get pending-requests id)]
+    (when-let [{:keys [ch on-response-inline]} (get pending-requests id)]
       (update-conn! state-atom update :pending-requests dissoc id)
       (if-let [error (:error msg)]
         (do
           (log/debug "Response error: " error)
           (put! ch {:error error})
           (close! ch))
-        (do
+        (let [result (:result msg)]
           (log/debug "Response success for id=" id)
-          (put! ch {:result (:result msg)})
+          (when on-response-inline
+            (try
+              (on-response-inline result)
+              (catch Throwable t
+                (log/error t "on-response-inline callback threw for id=" id))))
+          (put! ch {:result result})
           (close! ch))))))
 
 (defn- preserve-outgoing-opaque-fields
@@ -530,20 +543,31 @@
 
 (defn send-request
   "Send a JSON-RPC request and return a channel for the response.
-   The channel delivers a single {:result ...} or {:error ...} map, then closes."
-  [conn method params]
-  (let [state-atom (:state-atom conn)
-        id (str (java.util.UUID/randomUUID))
-        ch (chan 1)
-        wire-params (when params (util/clj->wire params))
-        msg {:jsonrpc "2.0"
-             :id id
-             :method method
-             :params wire-params}]
-    (log/debug "Sending request: method=" method " id=" id)
-    (swap! state-atom assoc-in [:connection :pending-requests id] {:ch ch :method method})
-    (put! (:outgoing-ch conn) msg)
-    ch))
+   The channel delivers a single {:result ...} or {:error ...} map, then closes.
+
+   Optional `opts` map:
+   - `:on-response-inline` — 1-arg fn `(fn [result])` invoked synchronously
+     in the read thread, **before** the result is delivered to the response
+     channel, on success only. Use this when you need to mutate shared
+     state (e.g. register a session under a server-assigned id) before
+     any later inbound message can be dispatched. See upstream PR #1479."
+  ([conn method params]
+   (send-request conn method params {}))
+  ([conn method params {:keys [on-response-inline] :as _opts}]
+   (let [state-atom (:state-atom conn)
+         id (str (java.util.UUID/randomUUID))
+         ch (chan 1)
+         wire-params (when params (util/clj->wire params))
+         msg {:jsonrpc "2.0"
+              :id id
+              :method method
+              :params wire-params}
+         entry (cond-> {:ch ch :method method}
+                 on-response-inline (assoc :on-response-inline on-response-inline))]
+     (log/debug "Sending request: method=" method " id=" id)
+     (swap! state-atom assoc-in [:connection :pending-requests id] entry)
+     (put! (:outgoing-ch conn) msg)
+     ch)))
 
 (defn- remove-pending-by-chan!
   "Remove a pending request entry by channel identity."
@@ -559,12 +583,18 @@
 
 (defn send-request!
   "Send a JSON-RPC request and block for the response.
-   Returns result or throws on error."
+   Returns result or throws on error.
+
+   The 5-arity form accepts an `opts` map forwarded to `send-request`
+   (see its docstring for supported keys, e.g. `:on-response-inline`).
+   The 3- and 4-arity forms apply the default empty opts."
   ([conn method params]
-   (send-request! conn method params 60000))
+   (send-request! conn method params 60000 {}))
   ([conn method params timeout-ms]
+   (send-request! conn method params timeout-ms {}))
+  ([conn method params timeout-ms opts]
    (let [state-atom (:state-atom conn)
-         response-ch (send-request conn method params)
+         response-ch (send-request conn method params opts)
          timeout-ch (async/timeout timeout-ms)
          [result port] (async/alts!! [response-ch timeout-ch])]
      (cond

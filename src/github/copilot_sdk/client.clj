@@ -1436,6 +1436,27 @@
           (assoc :maxPromptTokens (:maxInputTokens wire)))
       wire)))
 
+(defn- context-tier->wire
+  "Convert a Clojure :context-tier keyword to the wire string value.
+   The CLI expects \"default\" / \"long_context\" (underscore), so csk
+   camelCasing would produce the wrong value — we map explicitly."
+  [tier]
+  (case tier
+    :default "default"
+    :long-context "long_context"
+    nil nil
+    (throw (ex-info "Invalid :context-tier value (expected :default or :long-context)"
+                    {:context-tier tier}))))
+
+(defn- large-output->wire
+  "Convert a :large-output config map to wire shape, accepting both the
+   pre-existing `:output-dir` key and the upstream-aligned alias
+   `:output-directory` (the wire field stays `outputDir`)."
+  [lo]
+  (let [dir (or (:output-directory lo) (:output-dir lo))]
+    (cond-> (dissoc lo :output-directory)
+      dir (assoc :output-dir dir))))
+
 (defn- build-create-session-params
   "Build wire params for session.create from config."
   [config]
@@ -1468,7 +1489,9 @@
                                 (cond-> {:name (:name c)}
                                   (some? (:description c))
                                   (assoc :description (:description c))))
-                              cmds))]
+                              cmds))
+        config-dir (or (:config-directory config) (:config-dir config))
+        wire-large-output (some-> (:large-output config) large-output->wire)]
     (cond-> {}
       (:session-id config) (assoc :session-id (:session-id config))
       (:client-name config) (assoc :client-name (:client-name config))
@@ -1485,14 +1508,18 @@
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
       wire-default-agent (assoc :default-agent wire-default-agent)
-      (:config-dir config) (assoc :config-dir (:config-dir config))
+      config-dir (assoc :config-dir config-dir)
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
       (:instruction-directories config) (assoc :instruction-directories (:instruction-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
-      (:large-output config) (assoc :large-output (:large-output config))
+      (:plugin-directories config) (assoc :plugin-directories (:plugin-directories config))
+      wire-large-output (assoc :large-output wire-large-output)
       (:working-directory config) (assoc :working-directory (:working-directory config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      (:reasoning-summary config) (assoc :reasoning-summary (:reasoning-summary config))
+      (contains? config :context-tier)
+      (assoc :context-tier (context-tier->wire (:context-tier config)))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
@@ -1509,6 +1536,32 @@
       (assoc :cloud (util/clj->wire (:cloud config)))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      ;; Round 6 (upstream schema 1.0.56-1): MCP OAuth token storage mode and
+      ;; embedding cache storage mode are hyphen-preserving string enums
+      ;; (`"persistent"` / `"in-memory"`). The wire key for the first is
+      ;; `mcpOAuthTokenStorage` (capital `OA` in `OAuth`) — csk on
+      ;; `:mcp-oauth-token-storage` would emit `mcpOauthTokenStorage` instead,
+      ;; so we forward via a string key to bypass key conversion. The value
+      ;; uses `(name kw)` so `:in-memory` survives as `"in-memory"`
+      ;; (csk would mangle it to `"inMemory"`).
+      (:mcp-oauth-token-storage config)
+      (assoc "mcpOAuthTokenStorage" (name (:mcp-oauth-token-storage config)))
+      (:embedding-cache-storage config)
+      (assoc :embedding-cache-storage (name (:embedding-cache-storage config)))
+      (some? (:skip-embedding-retrieval config))
+      (assoc :skip-embedding-retrieval (:skip-embedding-retrieval config))
+      (:organization-custom-instructions config)
+      (assoc :organization-custom-instructions (:organization-custom-instructions config))
+      (some? (:enable-on-demand-instruction-discovery config))
+      (assoc :enable-on-demand-instruction-discovery (:enable-on-demand-instruction-discovery config))
+      (some? (:enable-file-hooks config))
+      (assoc :enable-file-hooks (:enable-file-hooks config))
+      (some? (:enable-host-git-operations config))
+      (assoc :enable-host-git-operations (:enable-host-git-operations config))
+      (some? (:enable-session-store config))
+      (assoc :enable-session-store (:enable-session-store config))
+      (some? (:enable-skills config))
+      (assoc :enable-skills (:enable-skills config))
       true (assoc :include-sub-agent-streaming-events
                   (if (some? (:include-sub-agent-streaming-events? config))
                     (:include-sub-agent-streaming-events? config)
@@ -1547,7 +1600,9 @@
                                 (cond-> {:name (:name c)}
                                   (some? (:description c))
                                   (assoc :description (:description c))))
-                              cmds))]
+                              cmds))
+        config-dir (or (:config-directory config) (:config-dir config))
+        wire-large-output (some-> (:large-output config) large-output->wire)]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
@@ -1565,12 +1620,17 @@
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
       wire-default-agent (assoc :default-agent wire-default-agent)
-      (:config-dir config) (assoc :config-dir (:config-dir config))
+      config-dir (assoc :config-dir config-dir)
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
       (:instruction-directories config) (assoc :instruction-directories (:instruction-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
+      (:plugin-directories config) (assoc :plugin-directories (:plugin-directories config))
+      wire-large-output (assoc :large-output wire-large-output)
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
+      (:reasoning-summary config) (assoc :reasoning-summary (:reasoning-summary config))
+      (contains? config :context-tier)
+      (assoc :context-tier (context-tier->wire (:context-tier config)))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
@@ -1589,6 +1649,28 @@
       (assoc :remote-session (name (:remote-session config)))
       (:model-capabilities config)
       (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      ;; Round 6 (upstream schema 1.0.56-1) per-session multitenancy /
+      ;; storage knobs — mirror the set forwarded on session.create. The
+      ;; `mcpOAuthTokenStorage` wire key (capital `OA`) bypasses csk via
+      ;; a string key (see `build-create-session-params` for rationale).
+      (:mcp-oauth-token-storage config)
+      (assoc "mcpOAuthTokenStorage" (name (:mcp-oauth-token-storage config)))
+      (:embedding-cache-storage config)
+      (assoc :embedding-cache-storage (name (:embedding-cache-storage config)))
+      (some? (:skip-embedding-retrieval config))
+      (assoc :skip-embedding-retrieval (:skip-embedding-retrieval config))
+      (:organization-custom-instructions config)
+      (assoc :organization-custom-instructions (:organization-custom-instructions config))
+      (some? (:enable-on-demand-instruction-discovery config))
+      (assoc :enable-on-demand-instruction-discovery (:enable-on-demand-instruction-discovery config))
+      (some? (:enable-file-hooks config))
+      (assoc :enable-file-hooks (:enable-file-hooks config))
+      (some? (:enable-host-git-operations config))
+      (assoc :enable-host-git-operations (:enable-host-git-operations config))
+      (some? (:enable-session-store config))
+      (assoc :enable-session-store (:enable-session-store config))
+      (some? (:enable-skills config))
+      (assoc :enable-skills (:enable-skills config))
       true (assoc :include-sub-agent-streaming-events
                   (if (some? (:include-sub-agent-streaming-events? config))
                     (:include-sub-agent-streaming-events? config)
@@ -1611,6 +1693,67 @@
                            :hooks (:hooks config)
                            :on-event (:on-event config)
                            :config config}))
+
+(defn- ensure-session-fs-handler-factory!
+  "When the client has sessionFs enabled, validate that the config provides
+   `:create-session-fs-handler` (which builds the per-session handler).
+   Throws fail-fast with a clear message; allows the cloud-no-id flow to
+   bail out BEFORE issuing the RPC instead of inside the reader-thread
+   callback."
+  [client config]
+  (when (:session-fs client)
+    (when-not (:create-session-fs-handler config)
+      (throw (ex-info (str ":create-session-fs-handler is required in session config "
+                           "when :session-fs is enabled in client options.")
+                      {:config config})))))
+
+(defn- install-session-fs-handler!
+  "Construct and install the per-session sessionFs handler. Caller is
+   responsible for sessionFs validation (use `ensure-session-fs-handler-factory!`
+   before calling). No-op when sessionFs is disabled on the client."
+  [client session-id session config]
+  (when (:session-fs client)
+    (when-let [factory (:create-session-fs-handler config)]
+      (session/set-session-fs-handler! client session-id
+                                       (session/adapt-session-fs-handler (factory session))))))
+
+(defn- make-create-session-inline-callback
+  "Build the inline-response callback used by the cloud-no-id session
+   creation path. The callback runs in the JSON-RPC reader thread; keep
+   it minimal and non-blocking. On any failure it removes any partially
+   registered session and delivers the error to `result-promise`; on
+   success it delivers the live session.
+
+   Note: `install-session-fs-handler!` invokes a user-supplied
+   `:create-session-fs-handler` factory. Document and rely on the
+   convention that the factory is a fast, non-blocking constructor —
+   if it issues another RPC it will deadlock the reader thread.
+   `ensure-session-fs-handler-factory!` is called BEFORE the RPC so a
+   missing factory cannot reach the callback."
+  [client config transform-callbacks result-promise]
+  (let [registered-id (atom nil)
+        deliver-error!
+        (fn [ex]
+          (when-let [sid @registered-id]
+            (try
+              (session/remove-session! client sid)
+              (catch Throwable cleanup-t
+                (log/warn cleanup-t "Failed to remove partially registered session " sid))))
+          (deliver result-promise ex))]
+    (fn [result]
+      (try
+        (let [assigned-id (:session-id result)]
+          (if (or (not (string? assigned-id)) (str/blank? assigned-id))
+            (deliver-error!
+             (ex-info "session.create response did not include a sessionId for cloud session"
+                      {:result result}))
+            (let [session (pre-register-session client assigned-id config)]
+              (reset! registered-id assigned-id)
+              (session/register-transform-callbacks! client assigned-id transform-callbacks)
+              (install-session-fs-handler! client assigned-id session config)
+              (deliver result-promise session))))
+        (catch Throwable t
+          (deliver-error! t))))))
 
 (defn create-session
   "Create a new conversation session.
@@ -1688,38 +1831,87 @@
                            repository: `{:repository {:owner \"...\" :name \"...\" :branch \"...\"}}`.
                            `:branch` is optional. Forwarded as `cloud` on session.create.
                            (upstream PR #1306)
+
+                           When `:cloud` is set and no `:session-id` is provided, the server
+                           assigns a sessionId and the SDK registers the session under that
+                           id; the session is registered synchronously before any subsequent
+                           server-initiated requests can be dispatched (upstream PR #1479).
+
+                           **Important — sessionFs + cloud-no-id contract:** when the client
+                           is constructed with `:session-fs` enabled AND this call defers the
+                           session id to the server (cloud + no `:session-id`), the
+                           `:create-session-fs-handler` factory is invoked **on the JSON-RPC
+                           reader thread** inside an inline-response callback (so the session
+                           is registered before subsequent notifications). The factory MUST be
+                           a fast, non-blocking constructor and MUST NOT call back into the
+                           SDK (no further RPCs, no waiting on session events) — doing so
+                           deadlocks the reader thread. The factory call is unconstrained on
+                           every other path (standard local sessions, cloud-with-caller-id,
+                           and resume), where it runs on the caller's thread.
    
    Returns a CopilotSession."
   [client config]
   (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
   (validate-session-config! config)
   (ensure-connected! client)
+  (ensure-session-fs-handler-factory! client config)
   (let [{:keys [connection-io]} @(:state client)
-        session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
-        params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
-        ;; Pre-register session before RPC so early events are captured
-        session (pre-register-session client session-id config)]
-    ;; Register transform callbacks on session before RPC
-    (session/register-transform-callbacks! client session-id transform-callbacks)
-    (try
-      ;; Attach sessionFs handler if sessionFs is configured
-      (when (:session-fs client)
-        (if-let [factory (:create-session-fs-handler config)]
-          (session/set-session-fs-handler! client session-id
-                                           (session/adapt-session-fs-handler (factory session)))
-          (throw (ex-info (str ":create-session-fs-handler is required in session config "
-                               "when :session-fs is enabled in client options.")
-                          {:config config}))))
-      (let [result (proto/send-request! connection-io "session.create" params)]
-        (session/set-workspace-path! client session-id (:workspace-path result))
-        (session/set-capabilities! client session-id (:capabilities result))
-        (log/info "Session created: " session-id)
-        session)
-      (catch Throwable t
-        (session/remove-session! client session-id)
-        (throw t)))))
+        cloud? (some? (:cloud config))
+        caller-session-id (:session-id config)
+        defer-session-id? (and cloud? (not caller-session-id))]
+    (if defer-session-id?
+      ;; Cloud session without a caller-supplied id (upstream PR #1479): omit
+      ;; `sessionId` from the wire params and let the server assign one. The
+      ;; SDK registers the session under the server-returned id inside an
+      ;; inline-response callback so any session-scoped notifications that
+      ;; arrive after the response are routed to the correct session.
+      (let [params (merge trace-ctx (build-create-session-params config))
+            session-promise (promise)
+            on-inline (make-create-session-inline-callback
+                       client config transform-callbacks session-promise)
+            result (proto/send-request! connection-io "session.create" params 60000
+                                        {:on-response-inline on-inline})
+            registered (deref session-promise 0 :not-delivered)]
+        (cond
+          (= registered :not-delivered)
+          (throw (ex-info "Internal error: inline-response callback did not run for session.create"
+                          {:result result}))
+
+          (instance? Throwable registered)
+          (throw registered)
+
+          :else
+          (let [session registered
+                session-id (:session-id session)]
+            (session/set-workspace-path! client session-id (:workspace-path result))
+            (session/set-capabilities! client session-id (:capabilities result))
+            (log/info "Session created (cloud, server-assigned id): " session-id)
+            session)))
+      ;; Standard path: client supplies (or generates) the sessionId up front.
+      (let [session-id (or caller-session-id (str (java.util.UUID/randomUUID)))
+            params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
+            ;; Pre-register session before RPC so early events are captured
+            session (pre-register-session client session-id config)]
+        ;; Register transform callbacks on session before RPC
+        (session/register-transform-callbacks! client session-id transform-callbacks)
+        (try
+          (install-session-fs-handler! client session-id session config)
+          (let [result (proto/send-request! connection-io "session.create" params)
+                returned-id (:session-id result)]
+            (when (and (string? returned-id)
+                       (not (str/blank? returned-id))
+                       (not= returned-id session-id))
+              (throw (ex-info "session.create returned a sessionId that differs from the requested id"
+                              {:requested session-id :returned returned-id})))
+            (session/set-workspace-path! client session-id (:workspace-path result))
+            (session/set-capabilities! client session-id (:capabilities result))
+            (log/info "Session created: " session-id)
+            session)
+          (catch Throwable t
+            (session/remove-session! client session-id)
+            (throw t)))))))
 
 (defn resume-session
   "Resume an existing session by ID.
@@ -1777,6 +1969,7 @@
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config config})))
   (ensure-connected! client)
+  (ensure-session-fs-handler-factory! client config)
   (let [{:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
@@ -1786,14 +1979,7 @@
     ;; Register transform callbacks on session before RPC
     (session/register-transform-callbacks! client session-id transform-callbacks)
     (try
-      ;; Attach sessionFs handler if sessionFs is configured
-      (when (:session-fs client)
-        (if-let [factory (:create-session-fs-handler config)]
-          (session/set-session-fs-handler! client session-id
-                                           (session/adapt-session-fs-handler (factory session)))
-          (throw (ex-info (str ":create-session-fs-handler is required in session config "
-                               "when :session-fs is enabled in client options.")
-                          {:config config}))))
+      (install-session-fs-handler! client session-id session config)
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
@@ -1813,6 +1999,12 @@
    On RPC error, delivers an ExceptionInfo to the channel (not nil).
    Callers should check the result with (instance? Throwable result).
 
+   Note: the sessionFs + cloud-no-id constraint described on `create-session`
+   applies symmetrically here — when `:cloud` is set without a `:session-id`
+   and the client has `:session-fs` enabled, the `:create-session-fs-handler`
+   factory runs on the reader thread inside an inline-response callback and
+   must be non-blocking (no further RPCs / no session-event waits).
+
    Usage:
      (go
        (let [result (<! (<create-session client {:on-permission-request copilot/approve-all
@@ -1825,43 +2017,93 @@
   (log/debug "Creating session (async) with config: " (select-keys config [:model :session-id]))
   (validate-session-config! config)
   (ensure-connected! client)
+  (ensure-session-fs-handler-factory! client config)
   (let [{:keys [connection-io]} @(:state client)
-        session-id (or (:session-id config) (str (java.util.UUID/randomUUID)))
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
-        params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
-        ;; Pre-register session before RPC so early events are captured
-        session (pre-register-session client session-id config)
-        _ (session/register-transform-callbacks! client session-id transform-callbacks)
-        ;; Attach sessionFs handler if sessionFs is configured (synchronously, before RPC)
-        _ (try
-            (when (:session-fs client)
-              (if-let [factory (:create-session-fs-handler config)]
-                (session/set-session-fs-handler! client session-id
-                                                 (session/adapt-session-fs-handler (factory session)))
-                (throw (ex-info (str ":create-session-fs-handler is required in session config "
-                                     "when :session-fs is enabled in client options.")
-                                {:config config}))))
-            (catch Throwable t
-              (session/remove-session! client session-id)
-              (throw t)))
-        rpc-ch (proto/send-request connection-io "session.create" params)]
-    (go
-      (let [response (<! rpc-ch)]
-        (if (nil? response)
-          ;; Channel closed without response — clean up pre-registered session
-          (do (session/remove-session! client session-id)
-              (ex-info "Session creation failed: RPC channel closed" {:session-id session-id}))
-          (if-let [err (:error response)]
-            (do (log/error "<create-session RPC error: " err)
-                (session/remove-session! client session-id)
-                (ex-info (str "Failed to create session: " (:message err))
-                         {:error err}))
-            (let [result (:result response)]
-              (session/set-workspace-path! client session-id (:workspace-path result))
-              (session/set-capabilities! client session-id (:capabilities result))
-              (log/info "Session created (async): " session-id)
-              session)))))))
+        cloud? (some? (:cloud config))
+        caller-session-id (:session-id config)
+        defer-session-id? (and cloud? (not caller-session-id))]
+    (if defer-session-id?
+      ;; Cloud session, server-assigned id (upstream PR #1479). Register the
+      ;; session inside an inline-response callback so the registration is
+      ;; ordered before any subsequent session-scoped notifications.
+      (let [params (merge trace-ctx (build-create-session-params config))
+            session-promise (promise)
+            on-inline (make-create-session-inline-callback
+                       client config transform-callbacks session-promise)
+            rpc-ch (proto/send-request connection-io "session.create" params
+                                       {:on-response-inline on-inline})]
+        (go
+          (let [response (<! rpc-ch)
+                cleanup-partial!
+                (fn []
+                  (when (and (realized? session-promise)
+                             (not (instance? Throwable @session-promise)))
+                    (session/remove-session! client (:session-id @session-promise))))]
+            (cond
+              (nil? response)
+              (do (cleanup-partial!)
+                  (ex-info "Session creation failed: RPC channel closed (cloud)" {}))
+
+              (:error response)
+              (let [err (:error response)]
+                (log/error "<create-session RPC error: " err)
+                (cleanup-partial!)
+                (ex-info (str "Failed to create session: " (:message err)) {:error err}))
+
+              :else
+              (let [registered (deref session-promise 0 :not-delivered)
+                    result (:result response)]
+                (cond
+                  (= registered :not-delivered)
+                  (ex-info "Internal error: inline-response callback did not run for session.create"
+                           {:result result})
+
+                  (instance? Throwable registered)
+                  registered
+
+                  :else
+                  (let [session registered
+                        session-id (:session-id session)]
+                    (session/set-workspace-path! client session-id (:workspace-path result))
+                    (session/set-capabilities! client session-id (:capabilities result))
+                    (log/info "Session created (async, cloud, server-assigned id): " session-id)
+                    session)))))))
+      ;; Standard path: client supplies (or generates) the sessionId up front.
+      (let [session-id (or caller-session-id (str (java.util.UUID/randomUUID)))
+            params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
+            session (pre-register-session client session-id config)
+            _ (session/register-transform-callbacks! client session-id transform-callbacks)
+            _ (try
+                (install-session-fs-handler! client session-id session config)
+                (catch Throwable t
+                  (session/remove-session! client session-id)
+                  (throw t)))
+            rpc-ch (proto/send-request connection-io "session.create" params)]
+        (go
+          (let [response (<! rpc-ch)]
+            (if (nil? response)
+              (do (session/remove-session! client session-id)
+                  (ex-info "Session creation failed: RPC channel closed" {:session-id session-id}))
+              (if-let [err (:error response)]
+                (do (log/error "<create-session RPC error: " err)
+                    (session/remove-session! client session-id)
+                    (ex-info (str "Failed to create session: " (:message err))
+                             {:error err}))
+                (let [result (:result response)
+                      returned-id (:session-id result)]
+                  (if (and (string? returned-id)
+                           (not (str/blank? returned-id))
+                           (not= returned-id session-id))
+                    (do (session/remove-session! client session-id)
+                        (ex-info "session.create returned a sessionId that differs from the requested id"
+                                 {:requested session-id :returned returned-id}))
+                    (do
+                      (session/set-workspace-path! client session-id (:workspace-path result))
+                      (session/set-capabilities! client session-id (:capabilities result))
+                      (log/info "Session created (async): " session-id)
+                      session)))))))))))
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
@@ -1891,6 +2133,7 @@
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config config})))
   (ensure-connected! client)
+  (ensure-session-fs-handler-factory! client config)
   (let [{:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
@@ -1898,15 +2141,8 @@
         ;; Pre-register session before RPC so early events are captured
         session (pre-register-session client session-id config)
         _ (session/register-transform-callbacks! client session-id transform-callbacks)
-        ;; Attach sessionFs handler if sessionFs is configured (synchronously, before RPC)
         _ (try
-            (when (:session-fs client)
-              (if-let [factory (:create-session-fs-handler config)]
-                (session/set-session-fs-handler! client session-id
-                                                 (session/adapt-session-fs-handler (factory session)))
-                (throw (ex-info (str ":create-session-fs-handler is required in session config "
-                                     "when :session-fs is enabled in client options.")
-                                {:config config}))))
+            (install-session-fs-handler! client session-id session config)
             (catch Throwable t
               (session/remove-session! client session-id)
               (throw t)))

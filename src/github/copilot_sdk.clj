@@ -122,7 +122,13 @@
     :copilot/session.remote_steerable_changed
     :copilot/capabilities.changed
     ;; MCP Apps tool-call complete (upstream schema 1.0.52-4, SEP-1865)
-    :copilot/mcp_app.tool_call_complete})
+    :copilot/mcp_app.tool_call_complete
+    ;; Round 6 (upstream schema 1.0.56-1, post-v1.0.0-beta.4): autopilot
+    ;; objective lifecycle, allow-all-permissions mode toggles, and an
+    ;; ephemeral hook-progress event.
+    :copilot/session.autopilot_objective_changed
+    :copilot/session.permissions_changed
+    :copilot/hook.progress})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -157,7 +163,10 @@
     :copilot/session.custom_agents_updated
     :copilot/session.custom_notification
     :copilot/session.remote_steerable_changed
-    :copilot/capabilities.changed})
+    :copilot/capabilities.changed
+    ;; Round 6 additions (upstream schema 1.0.56-1).
+    :copilot/session.autopilot_objective_changed
+    :copilot/session.permissions_changed})
 
 (def assistant-events
   "Assistant response events."

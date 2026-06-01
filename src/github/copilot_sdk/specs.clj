@@ -425,16 +425,28 @@
 (s/def ::streaming? boolean?)
 (s/def ::on-permission-request fn?)
 (s/def ::config-dir ::non-blank-string)
+;; Upstream PR #1482 (post-v1.0.0-beta.4): `configDir` was renamed to
+;; `configDirectory` in the official TypeScript SDK API. The wire stays
+;; `configDir`; only the idiom-layer key changed. `:config-directory` is the
+;; new spelling; `:config-dir` remains accepted as a deprecated alias.
+(s/def ::config-directory ::non-blank-string)
 (s/def ::skill-directories (s/coll-of ::non-blank-string))
 ;; instructionDirectories — additional directories to search for custom
 ;; instruction files. Upstream PR #1190 (@github/copilot-sdk).
 (s/def ::instruction-directories (s/coll-of ::non-blank-string))
+;; pluginDirectories — extra directories to load plugins from, loaded even
+;; when `enableConfigDiscovery` is false (upstream PR #1482).
+(s/def ::plugin-directories (s/coll-of ::non-blank-string))
 (s/def ::disabled-skills (s/coll-of ::non-blank-string))
 (s/def ::enabled boolean?)
 (s/def ::max-size-bytes pos-int?)
 (s/def ::output-dir ::non-blank-string)
+;; Upstream PR #1482: `outputDir` renamed to `outputDirectory` in the official
+;; TS SDK. Wire stays `outputDir`; `:output-directory` is the new idiom key
+;; and `:output-dir` remains an accepted deprecated alias.
+(s/def ::output-directory ::non-blank-string)
 (s/def ::large-output
-  (s/keys :opt-un [::enabled ::max-size-bytes ::output-dir]))
+  (s/keys :opt-un [::enabled ::max-size-bytes ::output-dir ::output-directory]))
 
 ;; Working directory
 (s/def ::working-directory ::non-blank-string)
@@ -575,20 +587,67 @@
 ;; modelCapabilities override for session config / setModel (upstream PR #1029).
 ;; DeepPartial<ModelCapabilities> — same shape as ::model-capabilities since all fields are already optional.
 
+;; -----------------------------------------------------------------------------
+;; Round 6 (post-v1.0.0-beta.4) SessionConfigBase additions
+;; -----------------------------------------------------------------------------
+
+;; mcpOAuthTokenStorage (PR #1326): controls where MCP OAuth tokens are stored
+;; on disk vs in process memory. Idiom uses keywords; wire emits the original
+;; hyphenated string (NOT camel-cased — csk would wrongly produce "inMemory").
+;; embeddingCacheStorage (PR #1474) shares the same enum.
+(s/def ::storage-mode #{:persistent :in-memory})
+(s/def ::mcp-oauth-token-storage ::storage-mode)
+(s/def ::embedding-cache-storage ::storage-mode)
+
+;; Multitenancy hardening flags (upstream PR #1474). All optional, plain
+;; booleans/strings. Application-mode behavior is driven by Client Mode
+;; (upstream PR #1428), which has been deferred to a dedicated future round.
+(s/def ::skip-embedding-retrieval boolean?)
+(s/def ::organization-custom-instructions string?)
+(s/def ::enable-on-demand-instruction-discovery boolean?)
+(s/def ::enable-file-hooks boolean?)
+(s/def ::enable-host-git-operations boolean?)
+(s/def ::enable-session-store boolean?)
+(s/def ::enable-skills boolean?)
+
+;; Reasoning summary mode (upstream PR #813 - pre-existing parity gap).
+;; Wire enum: "none" | "concise" | "detailed". Mirrors upstream's ReasoningSummary type.
+(s/def ::reasoning-summary #{"none" "concise" "detailed"})
+
+;; Explicit context tier for the selected model (upstream — pre-existing parity gap).
+;; Idiom uses keywords; wire emits the underscored enum: "default" | "long_context".
+;; nil clears the previous explicit choice; missing leaves it untouched.
+(s/def ::context-tier (s/nilable #{:default :long-context}))
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
-    :custom-agents :default-agent :config-dir :skill-directories
+    :custom-agents :default-agent
+    ;; Directory rename (PR #1482): :config-directory is the new spelling;
+    ;; :config-dir is accepted as a deprecated alias.
+    :config-dir :config-directory
+    :skill-directories
     :instruction-directories
+    :plugin-directories
     :disabled-skills :large-output :infinite-sessions
-    :reasoning-effort :on-user-input-request :on-elicitation-request :hooks
+    :reasoning-effort :reasoning-summary :context-tier
+    :on-user-input-request :on-elicitation-request :hooks
     :on-exit-plan-mode :on-auto-mode-switch
     :working-directory :agent :on-event :create-session-fs-handler
     :enable-config-discovery :model-capabilities :github-token
     :enable-session-telemetry?
     :remote-session
     :cloud
+    :mcp-oauth-token-storage
+    :embedding-cache-storage
+    :skip-embedding-retrieval
+    :organization-custom-instructions
+    :enable-on-demand-instruction-discovery
+    :enable-file-hooks
+    :enable-host-git-operations
+    :enable-session-store
+    :enable-skills
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
@@ -600,31 +659,57 @@
                     ::session-id ::client-name ::model ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
-                    ::custom-agents ::default-agent ::config-dir ::skill-directories
+                    ::custom-agents ::default-agent
+                    ::config-dir ::config-directory
+                    ::skill-directories
                     ::instruction-directories
+                    ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
-                    ::reasoning-effort ::on-user-input-request ::on-elicitation-request ::hooks
+                    ::reasoning-effort ::reasoning-summary ::context-tier
+                    ::on-user-input-request ::on-elicitation-request ::hooks
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::model-capabilities ::github-token
                     ::enable-session-telemetry?
                     ::remote-session
                     ::cloud
+                    ::mcp-oauth-token-storage
+                    ::embedding-cache-storage
+                    ::skip-embedding-retrieval
+                    ::organization-custom-instructions
+                    ::enable-on-demand-instruction-discovery
+                    ::enable-file-hooks
+                    ::enable-host-git-operations
+                    ::enable-session-store
+                    ::enable-skills
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
   #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
     :provider :streaming? :on-permission-request
-    :mcp-servers :custom-agents :default-agent :config-dir :skill-directories
+    :mcp-servers :custom-agents :default-agent
+    :config-dir :config-directory
+    :skill-directories
     :instruction-directories
-    :disabled-skills :infinite-sessions :reasoning-effort
+    :plugin-directories
+    :disabled-skills :large-output :infinite-sessions
+    :reasoning-effort :reasoning-summary :context-tier
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
     :on-exit-plan-mode :on-auto-mode-switch
     :continue-pending-work?
     :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
     :enable-session-telemetry?
     :remote-session
+    :mcp-oauth-token-storage
+    :embedding-cache-storage
+    :skip-embedding-retrieval
+    :organization-custom-instructions
+    :enable-on-demand-instruction-discovery
+    :enable-file-hooks
+    :enable-host-git-operations
+    :enable-session-store
+    :enable-skills
     :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
@@ -633,9 +718,13 @@
    (s/keys :opt-un [::on-permission-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
-                    ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
+                    ::mcp-servers ::custom-agents ::default-agent
+                    ::config-dir ::config-directory
+                    ::skill-directories
                     ::instruction-directories
-                    ::disabled-skills ::infinite-sessions ::reasoning-effort
+                    ::plugin-directories
+                    ::disabled-skills ::large-output ::infinite-sessions
+                    ::reasoning-effort ::reasoning-summary ::context-tier
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::on-event ::create-session-fs-handler
@@ -643,6 +732,15 @@
                     ::continue-pending-work?
                     ::enable-session-telemetry?
                     ::remote-session
+                    ::mcp-oauth-token-storage
+                    ::embedding-cache-storage
+                    ::skip-embedding-retrieval
+                    ::organization-custom-instructions
+                    ::enable-on-demand-instruction-discovery
+                    ::enable-file-hooks
+                    ::enable-host-git-operations
+                    ::enable-session-store
+                    ::enable-skills
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -653,9 +751,13 @@
    (s/keys :opt-un [::on-permission-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
-                    ::mcp-servers ::custom-agents ::default-agent ::config-dir ::skill-directories
+                    ::mcp-servers ::custom-agents ::default-agent
+                    ::config-dir ::config-directory
+                    ::skill-directories
                     ::instruction-directories
-                    ::disabled-skills ::infinite-sessions ::reasoning-effort
+                    ::plugin-directories
+                    ::disabled-skills ::large-output ::infinite-sessions
+                    ::reasoning-effort ::reasoning-summary ::context-tier
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::on-event ::create-session-fs-handler
@@ -663,6 +765,15 @@
                     ::continue-pending-work?
                     ::enable-session-telemetry?
                     ::remote-session
+                    ::mcp-oauth-token-storage
+                    ::embedding-cache-storage
+                    ::skip-embedding-retrieval
+                    ::organization-custom-instructions
+                    ::enable-on-demand-instruction-discovery
+                    ::enable-file-hooks
+                    ::enable-host-git-operations
+                    ::enable-session-store
+                    ::enable-skills
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -754,9 +865,25 @@
 ;; Map of header name → value, merged with any provider-level headers.
 (s/def ::request-headers (s/map-of string? string?))
 
+;; Caller-side agent mode for ::send-options (upstream PR #1438,
+;; post-v1.0.0-beta.4). Wire enum: "interactive" | "plan" | "autopilot" |
+;; "shell". The SDK API accepts the keyword and session/send! coerces it
+;; to the wire string via (name kw). Defaults to the session's current
+;; mode when omitted.
+;;
+;; Note: this is the CALLER-side spec only. Inbound user.message events
+;; echo agentMode as the wire string post wire->clj; that's validated by
+;; the generated wire spec, not by curated ::user.message-data here.
+(s/def ::agent-mode #{:interactive :plan :autopilot :shell})
+
+;; Display-only prompt shown in the timeline instead of the model :prompt
+;; (upstream PR #1470, post-v1.0.0-beta.4).
+(s/def ::display-prompt string?)
+
 (s/def ::send-options
   (s/keys :req-un [::prompt]
-          :opt-un [::attachments ::mode ::timeout-ms ::request-headers]))
+          :opt-un [::attachments ::mode ::timeout-ms ::request-headers
+                   ::agent-mode ::display-prompt]))
 
 ;; :timeout-ms as used in option maps for send-async / <send! /
 ;; send-async-with-id allows nil to "disable" the timeout per the docstrings.
@@ -904,7 +1031,12 @@
     ;; Schedule events (upstream schema 1.0.42)
     :copilot/session.schedule_created :copilot/session.schedule_cancelled
     ;; MCP Apps tool-call complete (upstream schema 1.0.52-4, SEP-1865)
-    :copilot/mcp_app.tool_call_complete})
+    :copilot/mcp_app.tool_call_complete
+    ;; Round 6 (upstream schema 1.0.56-1): autopilot lifecycle, permissions
+    ;; mode toggles, and an ephemeral hook-progress event.
+    :copilot/session.autopilot_objective_changed
+    :copilot/session.permissions_changed
+    :copilot/hook.progress})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
@@ -973,8 +1105,6 @@
            (or (not (contains? m :mode))
                (s/valid? ::remote-session-mode (:mode m))))))
 
-(s/def ::agent-mode #{:interactive :plan :autopilot :shell})
-
 ;; Cloud session config (upstream PR #1306). When supplied to create-session,
 ;; creates a remote session in the cloud instead of a local session. Optional
 ;; :repository associates the cloud session with a GitHub repository.
@@ -1007,10 +1137,15 @@
 ;; converts wire `isAutopilotContinuation` to `:is-autopilot-continuation`
 ;; (csk does not append `?` for booleans). See `::remote-steerable` for the
 ;; same precedent.
+;;
+;; :agent-mode is intentionally NOT in :opt-un here: wire->clj keeps the
+;; value as the wire string ("interactive", "plan", ...) on inbound events,
+;; while caller-side ::agent-mode is a keyword set used for ::send-options.
+;; Enum validation of the wire string is handled by the generated wire spec.
 (s/def ::is-autopilot-continuation boolean?)
 (s/def ::user.message-data
   (s/and (s/keys :req-un [::content]
-                 :opt-un [::transformed-content ::source ::agent-mode
+                 :opt-un [::transformed-content ::source
                           ::interaction-id ::is-autopilot-continuation])
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
@@ -1148,6 +1283,21 @@
 (s/def ::new-mode string?)
 (s/def ::session.mode_changed-data
   (s/keys :req-un [::previous-mode ::new-mode]))
+
+;; Session permissions changed event (upstream schema 1.0.56-1, round 6 sync).
+;; Reflects toggles of the "allow all permissions" mode. The wire fields are
+;; `allowAllPermissions` and `previousAllowAllPermissions`; no `?` suffix per
+;; the camel-snake-kebab convention (csk does not append `?` for booleans).
+(s/def ::allow-all-permissions boolean?)
+(s/def ::previous-allow-all-permissions boolean?)
+(s/def ::session.permissions_changed-data
+  (s/keys :req-un [::allow-all-permissions ::previous-allow-all-permissions]))
+
+;; Hook progress event (upstream schema 1.0.56-1, round 6 sync). Ephemeral
+;; event emitted by hooks during long-running work. Reuses the existing
+;; ::message non-blank-string spec.
+(s/def ::hook.progress-data
+  (s/keys :req-un [::message]))
 
 ;; Session plan changed event
 (s/def ::operation #{"create" "update" "delete"})
