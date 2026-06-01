@@ -144,7 +144,17 @@
     - :remote?       - **Experimental**. Enable remote session support (Mission Control). When true,
                        the SDK appends `--remote` to the spawned CLI; sessions in a GitHub repository
                        working directory become accessible from GitHub web and mobile. Ignored when
-                       `:cli-url` is set. (upstream PR #1192)"
+                       `:cli-url` is set. (upstream PR #1192)
+   - :mode          - Client mode (upstream PR #1428). One of:
+                       - `:copilot-cli` (default) — preserves historical CLI behavior.
+                       - `:empty` — multitenancy hardening for hosts running sessions on behalf of
+                         multiple users. Empty mode REQUIRES one of `:copilot-home`, `:session-fs`,
+                         `:cli-url`, or `:is-child-process?` so the runtime has a tenant-scoped
+                         storage root. It also forces `COPILOT_DISABLE_KEYTAR=1` on the spawned
+                         CLI, spreads safe defaults under each session's config (telemetry off,
+                         host-git operations disabled, ...), strips the `:environment-context`
+                         section from system messages unless the caller already controls it,
+                         and requires every session to specify `:available-tools`."
   ([]
    (client {}))
   ([opts]
@@ -171,6 +181,19 @@
    (when (and (some? (:tcp-connection-token opts)) (= true (:use-stdio? opts)))
      (throw (ex-info "tcp-connection-token cannot be used with use-stdio? true (stdio is pre-authenticated by transport)"
                      {:tcp-connection-token "***" :use-stdio? true})))
+   ;; Empty mode requires a tenant-scoped storage root (upstream PR #1428).
+   (when (and (= :empty (:mode opts))
+              (not (or (:copilot-home opts)
+                       (:session-fs opts)
+                       (:cli-url opts)
+                       (:is-child-process? opts))))
+     (throw (ex-info
+             (str "Mode :empty requires one of :copilot-home, :session-fs, "
+                  ":cli-url, or :is-child-process? so the spawned CLI has a "
+                  "tenant-scoped storage root.")
+             {:mode :empty
+              :provided-storage-keys (select-keys opts [:copilot-home :session-fs
+                                                        :cli-url :is-child-process?])})))
    (when-not (s/valid? ::specs/client-options opts)
      (let [unknown (specs/unknown-keys opts specs/client-options-keys)
            explain (s/explain-data ::specs/client-options opts)
@@ -1369,6 +1392,44 @@
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config config}))))
 
+(defn- validate-tool-filter-list!
+  "Reject bare `\"*\"` in a tool filter list (mirrors upstream
+   `validateToolFilterList`). The runtime treats a bare wildcard as a
+   literal name match for a tool whose name is the single character `*`,
+   which never matches anything — so a silent empty filter is worse than
+   an explicit error pointing the developer at the source-qualified
+   `tool-set/builtin`/`mcp`/`custom` helpers."
+  [field tools]
+  (when tools
+    (doseq [entry tools]
+      (when (= "*" entry)
+        (throw (ex-info
+                (format "Invalid %s entry '*': there is no bare wildcard. Use a source-qualified pattern like \"builtin:*\", \"mcp:*\", or \"custom:*\" (see github.copilot-sdk.tool-set)."
+                        field)
+                {:field field :entry entry :tools tools}))))))
+
+(defn- validate-tool-filters!
+  "Run [[validate-tool-filter-list!]] on both `:available-tools` and
+   `:excluded-tools`."
+  [config]
+  (validate-tool-filter-list! "availableTools" (:available-tools config))
+  (validate-tool-filter-list! "excludedTools" (:excluded-tools config)))
+
+(defn- validate-empty-mode-session-requirements!
+  "Empty mode requires every session to opt into its tools explicitly. The
+   caller may pass `:available-tools []` to mean \"no tools\", but the key
+   must be PRESENT — undefined is rejected so silently-empty filters can't
+   happen (upstream PR #1428, mirrors `resolveToolFilterOptions`)."
+  [client config]
+  (when (and (= :empty (:mode (options client)))
+             (not (contains? config :available-tools)))
+    (throw (ex-info
+            (str "Mode :empty requires every session to specify :available-tools. "
+                 "Pass an explicit list of source-qualified patterns (e.g. "
+                 "tool-set/isolated, or [\"builtin:*\"]) — or [] to opt into no tools.")
+            {:mode :empty
+             :session-config-keys (vec (keys config))}))))
+
 ;; Section keyword → wire string mapping for system message customize mode.
 ;; Delegates to shared mapping in util.clj.
 
@@ -1420,6 +1481,43 @@
     ;; default: append mode
     {:mode "append" :content (:content sm)}))
 
+(defn- apply-empty-mode-system-message
+  "In :empty mode, normalize the session config's :system-message so the
+   `environment_context` section is always stripped (CWD/OS/git-root leak)
+   unless the app has already taken control of it. No-op in :copilot-cli
+   mode. Mirrors upstream `getSystemMessageConfigForMode` (PR #1428).
+
+   - No caller :system-message → emit `:customize` with
+     `:environment-context {:action :remove}`.
+   - Caller `:replace` → pass through (app fully replaces system message).
+   - Caller `:customize` → add `:environment-context {:action :remove}` to
+     :sections unless the app already specified an env-context override.
+   - Caller `:append` (or `:mode` absent) → promote to `:customize`,
+     preserve `:content` (still appended as additional instructions),
+     and strip `environment_context`."
+  [client config]
+  (if (not= :empty (:mode (options client)))
+    config
+    (let [sm (:system-message config)
+          ec-remove {:environment-context {:action :remove}}]
+      (cond
+        (nil? sm)
+        (assoc config :system-message {:mode :customize :sections ec-remove})
+
+        (= :replace (:mode sm))
+        config
+
+        (= :customize (:mode sm))
+        (if (contains? (:sections sm) :environment-context)
+          config
+          (update-in config [:system-message :sections]
+                     (fnil assoc {}) :environment-context {:action :remove}))
+
+        :else
+        (assoc config :system-message
+               (cond-> {:mode :customize :sections ec-remove}
+                 (:content sm) (assoc :content (:content sm))))))))
+
 (defn- provider->wire
   "Convert a Clojure ProviderConfig map to its JSON-RPC wire shape.
 
@@ -1456,6 +1554,123 @@
   (let [dir (or (:output-directory lo) (:output-dir lo))]
     (cond-> (dissoc lo :output-directory)
       dir (assoc :output-dir dir))))
+
+(defn- config-defaults-for-mode
+  "Mode-specific session config defaults spread UNDER the caller's config
+   (caller's values always win). Mirrors upstream `configDefaultsForMode`
+   in `client.ts` (upstream PR #1428).
+
+   In `:empty` mode this returns the 9 safe defaults that enable
+   multitenancy hardening (no telemetry, in-memory token + embedding
+   storage, no host filesystem / git / skills). In `:copilot-cli`
+   mode this returns `{}` so the historical behavior is preserved."
+  [mode]
+  (if (= mode :empty)
+    {:enable-session-telemetry? false
+     :mcp-oauth-token-storage :in-memory
+     :skip-embedding-retrieval true
+     :embedding-cache-storage :in-memory
+     :enable-on-demand-instruction-discovery false
+     :enable-file-hooks false
+     :enable-host-git-operations false
+     :enable-session-store false
+     :enable-skills false}
+    {}))
+
+(defn- normalize-config-for-mode
+  "Apply mode-specific normalizations to session config (upstream PR #1428):
+   1. Spread `config-defaults-for-mode` UNDER caller config (caller wins).
+   2. In `:empty` mode, normalize `:system-message` so the
+      `environment_context` section is stripped unless the app has taken
+      control of it (see `apply-empty-mode-system-message`).
+   No-op in `:copilot-cli` mode beyond returning the caller config as-is."
+  [client config]
+  (->> config
+       (merge (config-defaults-for-mode (-> client options :mode)))
+       (apply-empty-mode-system-message client)))
+
+(defn- build-session-options-update-patch
+  "Compute the params for session.options.update (upstream PR #1428).
+
+   In `:empty` mode, defaults the 4 overridable feature flags to safe values
+   (caller wins) and forces `installedPlugins: []` — apps that need custom
+   plugins must switch modes. In `:copilot-cli` mode, only forwards the 4
+   flags that the caller explicitly set.
+
+   Returns nil if the resulting patch is empty (no RPC needed)."
+  [client config]
+  (let [mode (-> client options :mode)
+        with-flag (fn [patch wire-key kw default-empty]
+                    (cond
+                      (contains? config kw) (assoc patch wire-key (get config kw))
+                      (= mode :empty) (assoc patch wire-key default-empty)
+                      :else patch))
+        patch (-> {}
+                  (with-flag :skip-custom-instructions :skip-custom-instructions true)
+                  (with-flag :custom-agents-local-only :custom-agents-local-only true)
+                  (with-flag :coauthor-enabled :coauthor-enabled false)
+                  (with-flag :manage-schedule-enabled :manage-schedule-enabled false))
+        patch (cond-> patch
+                (= mode :empty) (assoc :installed-plugins []))]
+    (when (seq patch) patch)))
+
+(defn- cleanup-failed-options-update!
+  "Best-effort cleanup after a failed session.options.update. Disconnects
+   the runtime session (`session.destroy` RPC) and removes it from the
+   in-memory registry so the SDK doesn't leak a half-configured session."
+  [client session-id]
+  (try (session/disconnect! client session-id)
+       (catch Throwable t (log/debug "disconnect! during options.update cleanup failed: " (.getMessage t))))
+  (try (session/remove-session! client session-id)
+       (catch Throwable t (log/debug "remove-session! during options.update cleanup failed: " (.getMessage t)))))
+
+(defn- apply-session-options-update!
+  "Sync: issue session.options.update with the mode-derived patch. No-op
+   when the patch is empty. On RPC failure, cleans up the half-configured
+   session and rethrows."
+  [client session config]
+  (when-let [patch (build-session-options-update-patch client config)]
+    (let [session-id (:session-id session)
+          {:keys [connection-io]} @(:state client)
+          params (assoc patch :session-id session-id)]
+      (try
+        (proto/send-request! connection-io "session.options.update" params 30000)
+        (catch Throwable t
+          (log/warn "session.options.update failed; cleaning up session " session-id)
+          (cleanup-failed-options-update! client session-id)
+          (throw t))))))
+
+(defn- <apply-session-options-update!
+  "Async variant of `apply-session-options-update!`. Returns a channel that
+   yields `:ok` on success (including the no-op case) or a Throwable on
+   failure (after cleanup). The channel always closes after one value."
+  [client session config]
+  (let [out (async/chan 1)]
+    (if-let [patch (build-session-options-update-patch client config)]
+      (let [session-id (:session-id session)
+            {:keys [connection-io]} @(:state client)
+            params (assoc patch :session-id session-id)
+            rpc-ch (proto/send-request connection-io "session.options.update" params)]
+        (go
+          (let [response (<! rpc-ch)
+                err (cond
+                      (nil? response)
+                      (ex-info "session.options.update failed: RPC channel closed"
+                               {:session-id session-id})
+                      (:error response)
+                      (ex-info (str "session.options.update failed: "
+                                    (get-in response [:error :message] "RPC error"))
+                               {:session-id session-id :error (:error response)}))]
+            (if err
+              (do
+                (log/warn "session.options.update failed; cleaning up session " session-id)
+                (cleanup-failed-options-update! client session-id)
+                (>! out err))
+              (>! out :ok))
+            (close! out))))
+      (do (async/put! out :ok)
+          (close! out)))
+    out))
 
 (defn- build-create-session-params
   "Build wire params for session.create from config."
@@ -1502,6 +1717,12 @@
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
+      ;; SDK always sends `toolFilterPrecedence: "excluded"` so callers can
+      ;; compose include + exclude lists naturally (upstream PR #1428).
+      ;; Behavioral change for CLI mode: prior to PR #1428 the CLI default
+      ;; precedence was forwarded as-is. Allowlist-precedence is not exposed
+      ;; on the SDK boundary by design (mirrors upstream `resolveToolFilterOptions`).
+      true (assoc :tool-filter-precedence "excluded")
       wire-provider (assoc :provider wire-provider)
       true (assoc :request-permission true)
       (:streaming? config) (assoc :streaming (:streaming? config))
@@ -1612,6 +1833,9 @@
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
+      ;; SDK always sends `toolFilterPrecedence: "excluded"` (upstream PR #1428).
+      ;; See `build-create-session-params` for rationale.
+      true (assoc :tool-filter-precedence "excluded")
       wire-provider (assoc :provider wire-provider)
       true (assoc :request-permission
                   (not (identical? (:on-permission-request config)
@@ -1853,9 +2077,12 @@
   [client config]
   (log/debug "Creating session with config: " (select-keys config [:model :session-id]))
   (validate-session-config! config)
+  (validate-tool-filters! config)
+  (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
   (ensure-session-fs-handler-factory! client config)
-  (let [{:keys [connection-io]} @(:state client)
+  (let [config (normalize-config-for-mode client config)
+        {:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         cloud? (some? (:cloud config))
@@ -1887,6 +2114,8 @@
                 session-id (:session-id session)]
             (session/set-workspace-path! client session-id (:workspace-path result))
             (session/set-capabilities! client session-id (:capabilities result))
+            ;; Mode-specific post-create options patch (upstream PR #1428).
+            (apply-session-options-update! client session config)
             (log/info "Session created (cloud, server-assigned id): " session-id)
             session)))
       ;; Standard path: client supplies (or generates) the sessionId up front.
@@ -1907,6 +2136,11 @@
                               {:requested session-id :returned returned-id})))
             (session/set-workspace-path! client session-id (:workspace-path result))
             (session/set-capabilities! client session-id (:capabilities result))
+            ;; Mode-specific post-create options patch (upstream PR #1428).
+            ;; Helper handles its own cleanup on failure (disconnect! +
+            ;; remove-session!) before rethrowing; the outer catch's
+            ;; remove-session! is then a safe no-op.
+            (apply-session-options-update! client session config)
             (log/info "Session created: " session-id)
             session)
           (catch Throwable t
@@ -1968,9 +2202,12 @@
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config config})))
+  (validate-tool-filters! config)
+  (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
   (ensure-session-fs-handler-factory! client config)
-  (let [{:keys [connection-io]} @(:state client)
+  (let [config (normalize-config-for-mode client config)
+        {:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         params (merge trace-ctx (build-resume-session-params session-id config))
@@ -1983,6 +2220,8 @@
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
+        ;; Mode-specific post-resume options patch (upstream PR #1428).
+        (apply-session-options-update! client session config)
         session)
       (catch Throwable t
         (session/remove-session! client session-id)
@@ -2016,9 +2255,12 @@
   [client config]
   (log/debug "Creating session (async) with config: " (select-keys config [:model :session-id]))
   (validate-session-config! config)
+  (validate-tool-filters! config)
+  (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
   (ensure-session-fs-handler-factory! client config)
-  (let [{:keys [connection-io]} @(:state client)
+  (let [config (normalize-config-for-mode client config)
+        {:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         cloud? (some? (:cloud config))
@@ -2068,8 +2310,11 @@
                         session-id (:session-id session)]
                     (session/set-workspace-path! client session-id (:workspace-path result))
                     (session/set-capabilities! client session-id (:capabilities result))
-                    (log/info "Session created (async, cloud, server-assigned id): " session-id)
-                    session)))))))
+                    (let [r (<! (<apply-session-options-update! client session config))]
+                      (if (instance? Throwable r)
+                        r
+                        (do (log/info "Session created (async, cloud, server-assigned id): " session-id)
+                            session))))))))))
       ;; Standard path: client supplies (or generates) the sessionId up front.
       (let [session-id (or caller-session-id (str (java.util.UUID/randomUUID)))
             params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
@@ -2102,8 +2347,11 @@
                     (do
                       (session/set-workspace-path! client session-id (:workspace-path result))
                       (session/set-capabilities! client session-id (:capabilities result))
-                      (log/info "Session created (async): " session-id)
-                      session)))))))))))
+                      (let [r (<! (<apply-session-options-update! client session config))]
+                        (if (instance? Throwable r)
+                          r
+                          (do (log/info "Session created (async): " session-id)
+                              session))))))))))))))
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
@@ -2132,9 +2380,12 @@
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config config})))
+  (validate-tool-filters! config)
+  (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
   (ensure-session-fs-handler-factory! client config)
-  (let [{:keys [connection-io]} @(:state client)
+  (let [config (normalize-config-for-mode client config)
+        {:keys [connection-io]} @(:state client)
         trace-ctx (get-trace-context (:on-get-trace-context client))
         {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
         params (merge trace-ctx (build-resume-session-params session-id config))
@@ -2162,7 +2413,10 @@
             (let [result (:result response)]
               (session/set-workspace-path! client session-id (:workspace-path result))
               (session/set-capabilities! client session-id (:capabilities result))
-              session)))))))
+              (let [r (<! (<apply-session-options-update! client session config))]
+                (if (instance? Throwable r)
+                  r
+                  session)))))))))
 (defn join-session
   "Join the current foreground session from an extension running as a child process.
 

@@ -372,6 +372,7 @@
                  "session.extensions.disable" {:success true}
                  "session.extensions.reload" {:success true}
                  "session.plugins.list" {:plugins []}
+                 "session.options.update" {:ok true}
                  "session.compaction.compact" {:success true}
                  "session.history.compact" {:success true}
                  "session.history.truncate" {:success true}
