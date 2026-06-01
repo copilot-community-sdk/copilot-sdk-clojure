@@ -14,7 +14,11 @@
      (stest/unstrument)"
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
-            [github.copilot-sdk.specs :as specs]))
+            [github.copilot-sdk.specs :as specs]
+            ;; Ensure namespaces hosting public fns referenced by `register-fdef!`
+            ;; are loaded before `stest/instrument` runs (otherwise the missing
+            ;; var would be silently skipped, leaving an instrumentation gap).
+            [github.copilot-sdk.tool-set]))
 
 ;; -----------------------------------------------------------------------------
 ;; Single-source registry for fdefs
@@ -565,6 +569,30 @@
 (register-fdef! github.copilot-sdk.client/mcp-config-remove!
   :args (s/cat :client ::specs/client :params map?)
   :ret map?)
+
+;; -----------------------------------------------------------------------------
+;; Tool filter helpers (upstream PR #1428)
+;; -----------------------------------------------------------------------------
+
+(register-fdef! github.copilot-sdk.tool-set/valid-name?
+  :args (s/cat :name any?)
+  :ret boolean?)
+
+(register-fdef! github.copilot-sdk.tool-set/builtin
+  :args (s/cat :name string?)
+  :ret string?)
+
+(register-fdef! github.copilot-sdk.tool-set/mcp
+  :args (s/cat :name string?)
+  :ret string?)
+
+(register-fdef! github.copilot-sdk.tool-set/custom
+  :args (s/cat :name string?)
+  :ret string?)
+
+(register-fdef! github.copilot-sdk.tool-set/builtins
+  :args (s/cat :names (s/coll-of string?))
+  :ret (s/coll-of string? :kind vector?))
 
 ;; -----------------------------------------------------------------------------
 ;; Instrument all public API functions
