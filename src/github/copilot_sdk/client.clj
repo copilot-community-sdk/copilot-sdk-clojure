@@ -1664,7 +1664,10 @@
             (if err
               (do
                 (log/warn "session.options.update failed; cleaning up session " session-id)
-                (cleanup-failed-options-update! client session-id)
+                ;; cleanup-failed-options-update! calls blocking session.destroy
+                ;; via proto/send-request! — offload to async/thread so it does
+                ;; not starve the core.async dispatch threadpool.
+                (<! (async/thread (cleanup-failed-options-update! client session-id)))
                 (>! out err))
               (>! out :ok))
             (close! out))))

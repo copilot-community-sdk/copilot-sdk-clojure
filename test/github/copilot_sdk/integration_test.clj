@@ -5720,6 +5720,13 @@
       (is (some? (get-in sm [:sections :tone]))
           "caller's :tone section must be preserved"))))
 
+(deftest test-empty-mode-system-message-customize-no-sections-key
+  (testing ":customize with NO :sections key at all → SDK adds :sections with env-context remove"
+    (let [sm (empty-mode-create-with-system-message {:mode :customize})]
+      (is (= "customize" (:mode sm)))
+      (is (= {:action "remove"} (get-in sm [:sections :environment_context]))
+          "env-context section must be added even when caller omits :sections entirely"))))
+
 (deftest test-empty-mode-system-message-customize-respects-app-env-context
   (testing ":customize with explicit env-context override → SDK does NOT touch it"
     (let [sm (empty-mode-create-with-system-message
@@ -5893,6 +5900,36 @@
         ;; from its in-memory registry.
         (is (empty? (:sessions @(:state client)))
             "failed session must be removed from in-memory registry")
+        (finally
+          (try (sdk/stop! client) (catch Exception _))
+          (Thread/sleep 50)
+          (mock/stop-mock-server! server))))))
+
+(deftest test-empty-mode-options-update-async-failure-cleans-up-session
+  (testing "async <create-session: options.update failure cleans up session and yields Throwable"
+    (let [server (mock/create-mock-server)
+          _ (mock/start-mock-server! server)
+          _ (mock/set-request-hook! server
+                                    (fn [method _params]
+                                      (when (= "session.options.update" method)
+                                        (throw (ex-info "Simulated options.update failure"
+                                                        {:code -32603})))))
+          client (sdk/client {:mode :empty
+                              :copilot-home "/tmp/empty-mode-async-fail-test"
+                              :auto-start? false})
+          [in out] (mock/client-streams server)]
+      (try
+        (client/connect-with-streams! client in out)
+        (let [result-ch (sdk/<create-session client
+                                             {:on-permission-request sdk/approve-all
+                                              :available-tools []})
+              result (first (alts!! [result-ch (timeout 5000)]))]
+          (is (instance? Throwable result)
+              "async create-session must yield a Throwable on options.update failure")
+          (is (re-find #"options\.update" (.getMessage result))
+              "exception message should mention options.update"))
+        (is (empty? (:sessions @(:state client)))
+            "failed session must be removed from in-memory registry (async path)")
         (finally
           (try (sdk/stop! client) (catch Exception _))
           (Thread/sleep 50)
