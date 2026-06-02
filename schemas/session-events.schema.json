@@ -1177,6 +1177,347 @@
       "visibility": "internal",
       "description": "Schema for the `AssistantUsageQuotaSnapshot` type."
     },
+    "Attachment": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AttachmentFile",
+          "description": "File attachment"
+        },
+        {
+          "$ref": "#/definitions/AttachmentDirectory",
+          "description": "Directory attachment"
+        },
+        {
+          "$ref": "#/definitions/AttachmentSelection",
+          "description": "Code selection attachment from an editor"
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubReference",
+          "description": "GitHub issue, pull request, or discussion reference"
+        },
+        {
+          "$ref": "#/definitions/AttachmentBlob",
+          "description": "Blob attachment with inline base64-encoded data"
+        },
+        {
+          "$ref": "#/definitions/AttachmentExtensionContext",
+          "description": "Structured context contributed by an extension. Composer pills displayed in the host are forwarded back through session.send.attachments, then rendered into the model prompt as an <extension_context> XML block."
+        }
+      ],
+      "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload",
+      "title": "Attachment"
+    },
+    "AttachmentBlob": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "blob",
+          "description": "Attachment type discriminator"
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64-encoded content",
+          "contentEncoding": "base64"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the inline data"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User-facing display name for the attachment"
+        }
+      },
+      "required": [
+        "type",
+        "data",
+        "mimeType"
+      ],
+      "additionalProperties": false,
+      "description": "Blob attachment with inline base64-encoded data",
+      "title": "AttachmentBlob"
+    },
+    "AttachmentDirectory": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "directory",
+          "description": "Attachment type discriminator"
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute directory path"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User-facing display name for the attachment"
+        }
+      },
+      "required": [
+        "type",
+        "path",
+        "displayName"
+      ],
+      "additionalProperties": false,
+      "description": "Directory attachment",
+      "title": "AttachmentDirectory"
+    },
+    "AttachmentExtensionContext": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "extension_context",
+          "description": "Attachment type discriminator"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning extension identifier. Runtime-derived from the caller's connection when produced via session.extensions.sendAttachmentsToMessage; preserved verbatim on subsequent transports."
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier when the push was bound to a canvas instance"
+        },
+        "instanceId": {
+          "type": "string",
+          "description": "Open canvas instance identifier when the push was bound to a canvas instance"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable composer pill label"
+        },
+        "payload": {
+          "description": "Caller-supplied JSON payload",
+          "x-opaque-json": true
+        },
+        "capturedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp captured by the runtime when the push was accepted"
+        }
+      },
+      "required": [
+        "type",
+        "extensionId",
+        "title",
+        "capturedAt"
+      ],
+      "additionalProperties": false,
+      "description": "Structured context contributed by an extension. Composer pills displayed in the host are forwarded back through session.send.attachments, then rendered into the model prompt as an <extension_context> XML block.",
+      "title": "AttachmentExtensionContext"
+    },
+    "AttachmentFile": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "file",
+          "description": "Attachment type discriminator"
+        },
+        "path": {
+          "type": "string",
+          "description": "Absolute file path"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User-facing display name for the attachment"
+        },
+        "lineRange": {
+          "$ref": "#/definitions/AttachmentFileLineRange",
+          "description": "Optional line range to scope the attachment to a specific section of the file"
+        }
+      },
+      "required": [
+        "type",
+        "path",
+        "displayName"
+      ],
+      "additionalProperties": false,
+      "description": "File attachment",
+      "title": "AttachmentFile"
+    },
+    "AttachmentFileLineRange": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Start line number (1-based)"
+        },
+        "end": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "End line number (1-based, inclusive)"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false,
+      "description": "Optional line range to scope the attachment to a specific section of the file",
+      "title": "AttachmentFileLineRange"
+    },
+    "AttachmentGitHubReference": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_reference",
+          "description": "Attachment type discriminator"
+        },
+        "number": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Issue, pull request, or discussion number"
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the referenced item"
+        },
+        "referenceType": {
+          "$ref": "#/definitions/AttachmentGitHubReferenceType",
+          "description": "Type of GitHub reference"
+        },
+        "state": {
+          "type": "string",
+          "description": "Current state of the referenced item (e.g., open, closed, merged)"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the referenced item on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "number",
+        "title",
+        "referenceType",
+        "state",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "GitHub issue, pull request, or discussion reference",
+      "title": "AttachmentGitHubReference"
+    },
+    "AttachmentGitHubReferenceType": {
+      "type": "string",
+      "enum": [
+        "issue",
+        "pr",
+        "discussion"
+      ],
+      "description": "Type of GitHub reference",
+      "title": "AttachmentGitHubReferenceType",
+      "x-enumDescriptions": {
+        "issue": "GitHub issue reference.",
+        "pr": "GitHub pull request reference.",
+        "discussion": "GitHub discussion reference."
+      }
+    },
+    "AttachmentSelection": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "selection",
+          "description": "Attachment type discriminator"
+        },
+        "filePath": {
+          "type": "string",
+          "description": "Absolute path to the file containing the selection"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "User-facing display name for the selection"
+        },
+        "text": {
+          "type": "string",
+          "description": "The selected text content"
+        },
+        "selection": {
+          "$ref": "#/definitions/AttachmentSelectionDetails",
+          "description": "Position range of the selection within the file"
+        }
+      },
+      "required": [
+        "type",
+        "filePath",
+        "displayName",
+        "text",
+        "selection"
+      ],
+      "additionalProperties": false,
+      "description": "Code selection attachment from an editor",
+      "title": "AttachmentSelection"
+    },
+    "AttachmentSelectionDetails": {
+      "type": "object",
+      "properties": {
+        "start": {
+          "$ref": "#/definitions/AttachmentSelectionDetailsStart",
+          "description": "Start position of the selection"
+        },
+        "end": {
+          "$ref": "#/definitions/AttachmentSelectionDetailsEnd",
+          "description": "End position of the selection"
+        }
+      },
+      "required": [
+        "start",
+        "end"
+      ],
+      "additionalProperties": false,
+      "description": "Position range of the selection within the file",
+      "title": "AttachmentSelectionDetails"
+    },
+    "AttachmentSelectionDetailsEnd": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "End line number (0-based)"
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "End character offset within the line (0-based)"
+        }
+      },
+      "required": [
+        "line",
+        "character"
+      ],
+      "additionalProperties": false,
+      "description": "End position of the selection",
+      "title": "AttachmentSelectionDetailsEnd"
+    },
+    "AttachmentSelectionDetailsStart": {
+      "type": "object",
+      "properties": {
+        "line": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start line number (0-based)"
+        },
+        "character": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start character offset within the line (0-based)"
+        }
+      },
+      "required": [
+        "line",
+        "character"
+      ],
+      "additionalProperties": false,
+      "description": "Start position of the selection",
+      "title": "AttachmentSelectionDetailsStart"
+    },
     "AutoModeSwitchCompletedData": {
       "type": "object",
       "properties": {
@@ -2581,6 +2922,19 @@
       "description": "Session event \"session.context_changed\". Updated working directory and git context after the change",
       "title": "ContextChangedEvent"
     },
+    "ContextTier": {
+      "type": "string",
+      "enum": [
+        "default",
+        "long_context"
+      ],
+      "title": "ContextTier",
+      "x-enumDescriptions": {
+        "default": "Default context tier with standard context window size.",
+        "long_context": "Extended context tier with a larger context window."
+      },
+      "description": "Allowed values for the `ContextTier` enumeration."
+    },
     "CustomAgentsUpdatedAgent": {
       "type": "object",
       "properties": {
@@ -3467,6 +3821,81 @@
       "additionalProperties": false,
       "description": "Session event \"exit_plan_mode.requested\". Plan approval request with plan content and available user actions",
       "title": "ExitPlanModeRequestedEvent"
+    },
+    "ExtensionsAttachmentsPushedData": {
+      "type": "object",
+      "properties": {
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Attachment",
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload"
+          },
+          "description": "Attachments contributed by an extension; the host should surface these as composer pills and forward them via the next session.send call."
+        }
+      },
+      "required": [
+        "attachments"
+      ],
+      "additionalProperties": false,
+      "title": "ExtensionsAttachmentsPushedData",
+      "description": "Schema for the `ExtensionsAttachmentsPushedData` type."
+    },
+    "ExtensionsAttachmentsPushedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.extensions.attachments_pushed",
+          "description": "Type discriminator. Always \"session.extensions.attachments_pushed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ExtensionsAttachmentsPushedData",
+          "description": "Schema for the `ExtensionsAttachmentsPushedData` type."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.extensions.attachments_pushed\".",
+      "title": "ExtensionsAttachmentsPushedEvent"
     },
     "ExtensionsLoadedData": {
       "type": "object",
@@ -5121,15 +5550,7 @@
         "contextTier": {
           "anyOf": [
             {
-              "type": "string",
-              "enum": [
-                "default",
-                "long_context"
-              ],
-              "x-enumDescriptions": {
-                "default": "Default context tier with standard context window size.",
-                "long_context": "Extended context tier with a larger context window."
-              }
+              "$ref": "#/definitions/ContextTier"
             },
             {
               "type": "null"
@@ -6915,15 +7336,7 @@
         "contextTier": {
           "anyOf": [
             {
-              "type": "string",
-              "enum": [
-                "default",
-                "long_context"
-              ],
-              "x-enumDescriptions": {
-                "default": "Default context tier with standard context window size.",
-                "long_context": "Extended context tier with a larger context window."
-              }
+              "$ref": "#/definitions/ContextTier"
             },
             {
               "type": "null"
@@ -7677,6 +8090,10 @@
           "description": "Session event \"session.canvas.registry_changed\"."
         },
         {
+          "$ref": "#/definitions/ExtensionsAttachmentsPushedEvent",
+          "description": "Session event \"session.extensions.attachments_pushed\"."
+        },
+        {
           "$ref": "#/definitions/McpAppToolCallCompleteEvent",
           "description": "Session event \"mcp_app.tool_call_complete\". MCP App view called a tool on a connected MCP server (SEP-1865)"
         }
@@ -8380,15 +8797,7 @@
         "contextTier": {
           "anyOf": [
             {
-              "type": "string",
-              "enum": [
-                "default",
-                "long_context"
-              ],
-              "x-enumDescriptions": {
-                "default": "Default context tier with standard context window size.",
-                "long_context": "Extended context tier with a larger context window."
-              }
+              "$ref": "#/definitions/ContextTier"
             },
             {
               "type": "null"
@@ -10293,6 +10702,10 @@
           "description": "Arguments passed to the tool",
           "x-opaque-json": true
         },
+        "model": {
+          "type": "string",
+          "description": "Model identifier that generated this tool call"
+        },
         "mcpServerName": {
           "type": "string",
           "description": "Name of the MCP server hosting this tool, when the tool is an MCP tool"
@@ -10927,298 +11340,6 @@
         "shell": "The agent is in shell-focused UI mode."
       }
     },
-    "UserMessageAttachment": {
-      "anyOf": [
-        {
-          "$ref": "#/definitions/UserMessageAttachmentFile",
-          "description": "File attachment"
-        },
-        {
-          "$ref": "#/definitions/UserMessageAttachmentDirectory",
-          "description": "Directory attachment"
-        },
-        {
-          "$ref": "#/definitions/UserMessageAttachmentSelection",
-          "description": "Code selection attachment from an editor"
-        },
-        {
-          "$ref": "#/definitions/UserMessageAttachmentGithubReference",
-          "description": "GitHub issue, pull request, or discussion reference"
-        },
-        {
-          "$ref": "#/definitions/UserMessageAttachmentBlob",
-          "description": "Blob attachment with inline base64-encoded data"
-        }
-      ],
-      "description": "A user message attachment — a file, directory, code selection, blob, or GitHub reference",
-      "title": "UserMessageAttachment"
-    },
-    "UserMessageAttachmentBlob": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "blob",
-          "description": "Attachment type discriminator"
-        },
-        "data": {
-          "type": "string",
-          "description": "Base64-encoded content",
-          "contentEncoding": "base64"
-        },
-        "mimeType": {
-          "type": "string",
-          "description": "MIME type of the inline data"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User-facing display name for the attachment"
-        }
-      },
-      "required": [
-        "type",
-        "data",
-        "mimeType"
-      ],
-      "additionalProperties": false,
-      "description": "Blob attachment with inline base64-encoded data",
-      "title": "UserMessageAttachmentBlob"
-    },
-    "UserMessageAttachmentDirectory": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "directory",
-          "description": "Attachment type discriminator"
-        },
-        "path": {
-          "type": "string",
-          "description": "Absolute directory path"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User-facing display name for the attachment"
-        }
-      },
-      "required": [
-        "type",
-        "path",
-        "displayName"
-      ],
-      "additionalProperties": false,
-      "description": "Directory attachment",
-      "title": "UserMessageAttachmentDirectory"
-    },
-    "UserMessageAttachmentFile": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "file",
-          "description": "Attachment type discriminator"
-        },
-        "path": {
-          "type": "string",
-          "description": "Absolute file path"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User-facing display name for the attachment"
-        },
-        "lineRange": {
-          "$ref": "#/definitions/UserMessageAttachmentFileLineRange",
-          "description": "Optional line range to scope the attachment to a specific section of the file"
-        }
-      },
-      "required": [
-        "type",
-        "path",
-        "displayName"
-      ],
-      "additionalProperties": false,
-      "description": "File attachment",
-      "title": "UserMessageAttachmentFile"
-    },
-    "UserMessageAttachmentFileLineRange": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "description": "Start line number (1-based)"
-        },
-        "end": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "description": "End line number (1-based, inclusive)"
-        }
-      },
-      "required": [
-        "start",
-        "end"
-      ],
-      "additionalProperties": false,
-      "description": "Optional line range to scope the attachment to a specific section of the file",
-      "title": "UserMessageAttachmentFileLineRange"
-    },
-    "UserMessageAttachmentGithubReference": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "github_reference",
-          "description": "Attachment type discriminator"
-        },
-        "number": {
-          "type": "integer",
-          "exclusiveMinimum": 0,
-          "description": "Issue, pull request, or discussion number"
-        },
-        "title": {
-          "type": "string",
-          "description": "Title of the referenced item"
-        },
-        "referenceType": {
-          "$ref": "#/definitions/UserMessageAttachmentGithubReferenceType",
-          "description": "Type of GitHub reference"
-        },
-        "state": {
-          "type": "string",
-          "description": "Current state of the referenced item (e.g., open, closed, merged)"
-        },
-        "url": {
-          "type": "string",
-          "description": "URL to the referenced item on GitHub"
-        }
-      },
-      "required": [
-        "type",
-        "number",
-        "title",
-        "referenceType",
-        "state",
-        "url"
-      ],
-      "additionalProperties": false,
-      "description": "GitHub issue, pull request, or discussion reference",
-      "title": "UserMessageAttachmentGithubReference"
-    },
-    "UserMessageAttachmentGithubReferenceType": {
-      "type": "string",
-      "enum": [
-        "issue",
-        "pr",
-        "discussion"
-      ],
-      "description": "Type of GitHub reference",
-      "title": "UserMessageAttachmentGithubReferenceType",
-      "x-enumDescriptions": {
-        "issue": "GitHub issue reference.",
-        "pr": "GitHub pull request reference.",
-        "discussion": "GitHub discussion reference."
-      }
-    },
-    "UserMessageAttachmentSelection": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "selection",
-          "description": "Attachment type discriminator"
-        },
-        "filePath": {
-          "type": "string",
-          "description": "Absolute path to the file containing the selection"
-        },
-        "displayName": {
-          "type": "string",
-          "description": "User-facing display name for the selection"
-        },
-        "text": {
-          "type": "string",
-          "description": "The selected text content"
-        },
-        "selection": {
-          "$ref": "#/definitions/UserMessageAttachmentSelectionDetails",
-          "description": "Position range of the selection within the file"
-        }
-      },
-      "required": [
-        "type",
-        "filePath",
-        "displayName",
-        "text",
-        "selection"
-      ],
-      "additionalProperties": false,
-      "description": "Code selection attachment from an editor",
-      "title": "UserMessageAttachmentSelection"
-    },
-    "UserMessageAttachmentSelectionDetails": {
-      "type": "object",
-      "properties": {
-        "start": {
-          "$ref": "#/definitions/UserMessageAttachmentSelectionDetailsStart",
-          "description": "Start position of the selection"
-        },
-        "end": {
-          "$ref": "#/definitions/UserMessageAttachmentSelectionDetailsEnd",
-          "description": "End position of the selection"
-        }
-      },
-      "required": [
-        "start",
-        "end"
-      ],
-      "additionalProperties": false,
-      "description": "Position range of the selection within the file",
-      "title": "UserMessageAttachmentSelectionDetails"
-    },
-    "UserMessageAttachmentSelectionDetailsEnd": {
-      "type": "object",
-      "properties": {
-        "line": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "End line number (0-based)"
-        },
-        "character": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "End character offset within the line (0-based)"
-        }
-      },
-      "required": [
-        "line",
-        "character"
-      ],
-      "additionalProperties": false,
-      "description": "End position of the selection",
-      "title": "UserMessageAttachmentSelectionDetailsEnd"
-    },
-    "UserMessageAttachmentSelectionDetailsStart": {
-      "type": "object",
-      "properties": {
-        "line": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Start line number (0-based)"
-        },
-        "character": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Start character offset within the line (0-based)"
-        }
-      },
-      "required": [
-        "line",
-        "character"
-      ],
-      "additionalProperties": false,
-      "description": "Start position of the selection",
-      "title": "UserMessageAttachmentSelectionDetailsStart"
-    },
     "UserMessageData": {
       "type": "object",
       "properties": {
@@ -11233,8 +11354,8 @@
         "attachments": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/UserMessageAttachment",
-            "description": "A user message attachment — a file, directory, code selection, blob, or GitHub reference"
+            "$ref": "#/definitions/Attachment",
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload"
           },
           "description": "Files, selections, or GitHub references attached to the message"
         },
