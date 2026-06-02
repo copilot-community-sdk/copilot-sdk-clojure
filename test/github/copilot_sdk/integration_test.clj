@@ -830,6 +830,59 @@
       (is (not (contains? create-provider :maxPromptTokens)))
       (is (not (contains? create-provider :maxInputTokens))))))
 
+(deftest test-provider-config-type-and-azure-wire-keys
+  (testing "ProviderConfig :provider-type/:azure-options serialize with upstream wire keys
+            (type/azure/apiVersion), not camelCased SDK names (parity with nodejs ProviderConfig)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          provider {:provider-type :azure
+                    :wire-api :responses
+                    :base-url "https://my-resource.openai.azure.com"
+                    :api-key "key"
+                    :bearer-token "tok"
+                    :azure-options {:azure-api-version "2024-02-01"}}
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})]
+      (doseq [method ["session.create" "session.resume"]]
+        (let [p (get-in @seen [method :provider])]
+          (testing method
+            (is (= "azure" (:type p)) "wire key must be `type`")
+            (is (not (contains? p :providerType)) "SDK key `providerType` must NOT leak onto wire")
+            (is (= {:apiVersion "2024-02-01"} (:azure p)) "wire key must be `azure` with `apiVersion`")
+            (is (not (contains? p :azureOptions)) "SDK key `azureOptions` must NOT leak onto wire")
+            (is (not (contains? (:azure p) :azureApiVersion)) "nested `azureApiVersion` must NOT leak")
+            ;; Correctly-camelCased fields must still survive alongside the remaps.
+            (is (= "responses" (:wireApi p)))
+            (is (= "https://my-resource.openai.azure.com" (:baseUrl p)))
+            (is (= "tok" (:bearerToken p)))))))))
+
+(deftest test-provider-config-absent-azure-stays-absent
+  (testing "ProviderConfig without :azure-options must not emit a wire `azure` key"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= method "session.create")
+                                                      (reset! seen params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "gpt-5.4"
+                                 :provider {:provider-type :anthropic
+                                            :base-url "https://api.anthropic.com"
+                                            :api-key "key"}})
+          p (get-in @seen [:provider])]
+      (is (= "anthropic" (:type p)))
+      (is (not (contains? p :providerType)))
+      (is (not (contains? p :azure)))
+      (is (not (contains? p :azureOptions))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Schedule events (upstream schema 1.0.42 — adds session.schedule_created and
 ;; session.schedule_cancelled to the event types known by the SDK)

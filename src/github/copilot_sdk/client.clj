@@ -1518,21 +1518,34 @@
                (cond-> {:mode :customize :sections ec-remove}
                  (:content sm) (assoc :content (:content sm))))))))
 
+(defn- rename-keys-present
+  "Rename keys of `m` per the `old->new` map, only for keys actually present.
+   Leaves all other entries untouched."
+  [m old->new]
+  (reduce-kv (fn [acc old new]
+               (if (contains? acc old)
+                 (-> acc (dissoc old) (assoc new (get acc old)))
+                 acc))
+             m old->new))
+
 (defn- provider->wire
   "Convert a Clojure ProviderConfig map to its JSON-RPC wire shape.
 
-   `util/clj->wire` handles the camelCase conversion for most fields, but the
-   SDK property name `:max-input-tokens` (camelizes to `maxInputTokens`) does
-   NOT match the wire field name (`maxPromptTokens`). This helper renames the
-   field after the standard conversion. Mirrors upstream
-   `toWireProviderConfig` in `nodejs/src/client.ts` (PR #966)."
+   `util/clj->wire` camelCases keyword keys, but several SDK property names are
+   chosen for Clojure clarity and differ from the upstream `ProviderConfig` field
+   names, which the runtime reads verbatim (`provider: config.provider` in
+   nodejs/src/client.ts). This helper restores the upstream wire names so BYOK
+   works for every provider type: `providerType`->`type`, `azureOptions`->`azure`,
+   `maxInputTokens`->`maxPromptTokens`, and the nested `azureApiVersion`->`apiVersion`.
+   Mirrors the `ProviderConfig` shape in nodejs/src/types.ts."
   [provider]
-  (let [wire (util/clj->wire provider)]
-    (if (contains? wire :maxInputTokens)
-      (-> wire
-          (dissoc :maxInputTokens)
-          (assoc :maxPromptTokens (:maxInputTokens wire)))
-      wire)))
+  (let [wire (rename-keys-present (util/clj->wire provider)
+                                  {:providerType :type
+                                   :azureOptions :azure
+                                   :maxInputTokens :maxPromptTokens})]
+    (cond-> wire
+      (contains? wire :azure)
+      (update :azure rename-keys-present {:azureApiVersion :apiVersion}))))
 
 (defn- large-output->wire
   "Convert a :large-output config map to wire shape, accepting both the
