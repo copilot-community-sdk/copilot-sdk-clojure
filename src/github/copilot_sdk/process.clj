@@ -42,7 +42,7 @@
 
    This is a pure helper extracted so we can unit-test the env contract
    without spawning a real process."
-  [{:keys [github-token telemetry copilot-home tcp-connection-token] :as _opts}]
+  [{:keys [github-token telemetry copilot-home tcp-connection-token mode] :as _opts}]
   {:defaults {"NODE_DEBUG" nil}
    :overrides
    (cond-> {}
@@ -55,6 +55,11 @@
      ;; tcpConnectionToken (upstream PR #1176) — required when server enforces a token
      tcp-connection-token
      (assoc "COPILOT_CONNECTION_TOKEN" tcp-connection-token)
+     ;; Client mode :empty disables the system keychain (upstream PR #1428).
+     ;; Applied in :overrides so the caller's `:env` cannot accidentally
+     ;; re-enable it under multitenancy hardening.
+     (= mode :empty)
+     (assoc "COPILOT_DISABLE_KEYTAR" "1")
      ;; OpenTelemetry (upstream PR #785)
      telemetry
      (as-> m
@@ -88,6 +93,9 @@
    - :tcp-connection-token - Connection token sent via COPILOT_CONNECTION_TOKEN (upstream PR #1176)
    - :remote? - When true, append `--remote` so the CLI exposes its session
                 over a GitHub-hosted remote endpoint (upstream PR #1192)
+   - :mode - Client mode `:empty` or `:copilot-cli` (default). When `:empty`,
+             `COPILOT_DISABLE_KEYTAR=1` is forced into the spawned env so the
+             child CLI cannot reach the host keychain (upstream PR #1428).
 
    Returns a ManagedProcess record."
   [{:keys [cli-path cwd env use-stdio?]

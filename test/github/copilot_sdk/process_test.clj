@@ -98,3 +98,31 @@
           "--remote must NOT be present by default")
       (is (not (some #{"--remote"} (build-cli-args {:use-stdio? true :remote? false})))
           "--remote must NOT be present when :remote? is explicitly false"))))
+
+;; -----------------------------------------------------------------------------
+;; Client mode (upstream PR #1428)
+;; -----------------------------------------------------------------------------
+
+(deftest cli-env-overrides-empty-mode-disables-keytar
+  (testing ":mode :empty sets COPILOT_DISABLE_KEYTAR=1 as a strict override"
+    (let [{:keys [overrides]} (proc/cli-env-overrides {:mode :empty})]
+      (is (= "1" (get overrides "COPILOT_DISABLE_KEYTAR"))
+          "COPILOT_DISABLE_KEYTAR must be 1 in :empty mode")))
+  (testing ":mode :copilot-cli does NOT set COPILOT_DISABLE_KEYTAR"
+    (let [{:keys [overrides]} (proc/cli-env-overrides {:mode :copilot-cli})]
+      (is (not (contains? overrides "COPILOT_DISABLE_KEYTAR"))
+          "KEYTAR override must be absent in :copilot-cli mode")))
+  (testing "absent :mode does NOT set COPILOT_DISABLE_KEYTAR"
+    (let [{:keys [overrides]} (proc/cli-env-overrides {})]
+      (is (not (contains? overrides "COPILOT_DISABLE_KEYTAR"))
+          "KEYTAR override must be absent when :mode is unset"))))
+
+(deftest cli-env-overrides-empty-mode-user-env-cannot-override-keytar
+  (testing "KEYTAR override is in :overrides slot, so user :env cannot win"
+    ;; Lock in the precedence contract documented on cli-env-overrides:
+    ;; values returned in :overrides are applied AFTER user :env in spawn-cli,
+    ;; so an attempt to set COPILOT_DISABLE_KEYTAR=0 via :env would be clobbered.
+    (let [{:keys [defaults overrides]} (proc/cli-env-overrides {:mode :empty})]
+      (is (= "1" (get overrides "COPILOT_DISABLE_KEYTAR")))
+      (is (not (contains? defaults "COPILOT_DISABLE_KEYTAR"))
+          "KEYTAR must NOT be a default — defaults can be overridden by :env"))))

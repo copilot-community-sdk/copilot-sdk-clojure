@@ -42,6 +42,7 @@
     "github.copilot-sdk.specs"
     "github.copilot-sdk.instrument"
     "github.copilot-sdk.tools"
+    "github.copilot-sdk.tool-set"
     "github.copilot-sdk.generated.event-specs"
     "github.copilot-sdk.generated.coerce"})
 

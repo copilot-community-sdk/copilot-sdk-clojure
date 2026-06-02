@@ -134,6 +134,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
+| `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 9 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
 
 ### Methods
 
@@ -279,6 +280,10 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:plugin-directories` | vector | Extra plugin directories loaded even when `:enable-config-discovery` is `false`. Wire-encoded as `pluginDirectories`. (upstream PR #1482) |
 | `:reasoning-summary` | string | `"none"` / `"concise"` / `"detailed"`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. String-valued for consistency with `:reasoning-effort`. |
 | `:context-tier` | keyword \| `nil` | `#{:default :long-context}` selects the long-context model variant; `nil` explicitly clears any prior tier (wire-encoded as JSON `null`). Omit the key entirely to leave the current setting untouched. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
+| `:skip-custom-instructions` | boolean | Skip loading user-level custom instruction files. Forwarded via `session.options.update` (NOT `session.create`). Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
+| `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
+| `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
+| `:manage-schedule-enabled` | boolean | Enable the built-in schedule-management tools. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 
 #### `resume-session`
 
@@ -1544,6 +1549,101 @@ When `:streaming? true`:
 ;; Stop manually
 (copilot/stop! client)
 ```
+
+### Client Mode (Empty)
+
+`:mode :empty` configures the client for multi-tenant SaaS hosts that must
+isolate sessions from the local machine — no on-disk state from a
+specific user account leaks into a session. The default `:copilot-cli`
+mode preserves historical CLI behavior. (upstream PR #1428)
+
+```clojure
+(require '[github.copilot-sdk :as copilot]
+         '[github.copilot-sdk.tool-set :as tool-set])
+
+(def client
+  (copilot/client
+    {:mode :empty
+     ;; At least ONE of :copilot-home / :session-fs / :cli-url /
+     ;; :is-child-process? is required so the CLI has a tenant-scoped
+     ;; storage root. Using both is fine and common:
+     :copilot-home "/srv/tenants/acme/copilot-home"
+     :session-fs   {:initial-cwd "/srv/tenants/acme/cwd"
+                    :session-state-path "/srv/tenants/acme/state"
+                    :conventions "posix"}}))
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     ;; Required in :empty mode (use [] to allow nothing — the key must
+     ;; be present so silently-empty filters can't happen):
+     :available-tools tool-set/isolated
+     ;; Required when client has :session-fs:
+     :create-session-fs-handler (fn [_session] my-fs-handler)}))
+```
+
+What `:empty` mode enforces (vs `:copilot-cli`):
+
+- **Constructor validation**: at least one of `:copilot-home`,
+  `:session-fs`, `:cli-url`, or `:is-child-process?` must be supplied
+  (so the CLI never falls back to the user's home directory). The SDK
+  also forces `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI.
+- **Session validation**: every `create-session` / `resume-session` call
+  must provide `:available-tools` (an empty vector is legitimate). When
+  the client has `:session-fs`, `:create-session-fs-handler` is also
+  required (this applies to both modes).
+- **Safe session defaults** (spread UNDER caller config — caller always wins):
+  `:enable-session-telemetry? false`, `:mcp-oauth-token-storage :in-memory`,
+  `:skip-embedding-retrieval true`, `:embedding-cache-storage :in-memory`,
+  `:enable-on-demand-instruction-discovery false`, `:enable-file-hooks false`,
+  `:enable-host-git-operations false`, `:enable-session-store false`,
+  `:enable-skills false`.
+- **System message normalization**: the SDK strips the `environment_context`
+  section from the system message (or promotes `:append` to `:customize`) so
+  no host-environment context leaks. If the caller already provides their own
+  `environment_context` override in `:customize` mode, it is preserved verbatim.
+- **Post-create options**: a follow-up `session.options.update` RPC sets
+  `:skip-custom-instructions true`, `:custom-agents-local-only true`,
+  `:coauthor-enabled false`, `:manage-schedule-enabled false`, and forces
+  `:installed-plugins []`. On failure, the SDK cleans up the half-configured
+  session before propagating the error.
+
+Both modes always emit `:tool-filter-precedence "excluded"` on
+`session.create` and `session.resume`, and reject bare `"*"` in
+`:available-tools` / `:excluded-tools` at the SDK boundary.
+
+### Tool Sets
+
+Use [`github.copilot-sdk.tool-set`](#tool-sets) to construct `:available-tools` /
+`:excluded-tools` lists with built-in helpers. Mirrors the upstream
+`BuiltInTools` constants. (upstream PR #1428)
+
+```clojure
+(require '[github.copilot-sdk.tool-set :as tool-set])
+
+;; Source-qualified single tool — patterns are "<source>:<name>",
+;; source is one of "builtin", "mcp", or "custom":
+(tool-set/builtin "ask_user")     ; => "builtin:ask_user"
+(tool-set/builtin "*")            ; => "builtin:*"   (all built-ins)
+(tool-set/mcp "*")                ; => "mcp:*"      (all MCP tools)
+(tool-set/custom "my_tool")       ; => "custom:my_tool"
+
+;; Vector of patterns:
+(tool-set/builtins ["task" "skill"])
+;; => ["builtin:task" "builtin:skill"]
+
+;; The "Isolated" preset matches BuiltInTools.Isolated upstream —
+;; every built-in that is safely session-bounded (no host I/O):
+tool-set/isolated
+;; => ["builtin:ask_user" "builtin:task_complete" "builtin:exit_plan_mode" ...]
+```
+
+The constructors enforce well-formed entries: a bare `"*"` is rejected (the SDK
+also rejects it in `:available-tools` / `:excluded-tools` at the session
+boundary — apps must explicitly opt into a source so an absent source can
+never silently grant access to unexpected tools). The runtime always receives
+`:tool-filter-precedence "excluded"` on `session.create` / `session.resume`
+so the ordering between allow and deny lists is deterministic.
 
 ### Tools
 

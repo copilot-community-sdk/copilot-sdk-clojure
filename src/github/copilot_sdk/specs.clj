@@ -186,23 +186,40 @@
 ;; Factory fn: (session) → session-fs-handler
 (s/def ::create-session-fs-handler fn?)
 
+;; Client mode (upstream PR #1428). `:copilot-cli` (the default) preserves
+;; the historical behavior; `:empty` enables multitenancy hardening:
+;; tenant-scoped storage is required, the system keychain is disabled, and
+;; a set of safe session defaults is spread under the caller's config.
+;;
+;; Note: the unqualified key in client-options is `:mode`, but the existing
+;; ::mode spec at line ~899 is already taken by message-options for
+;; #{:enqueue :immediate}. We use a uniquely-named ::client-mode spec and
+;; validate the unqualified `:mode` key via a predicate in ::client-options
+;; (mirrors the ::remote-session-mode pattern further down).
+(s/def ::client-mode #{:empty :copilot-cli})
+
 (def client-options-keys
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
-    :session-fs :copilot-home :tcp-connection-token :remote?})
+    :session-fs :copilot-home :tcp-connection-token :remote?
+    :mode})
 
 (s/def ::client-options
-  (closed-keys
-   (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
-                    ::use-stdio? ::log-level ::auto-start? ::auto-restart?
-                    ::notification-queue-size ::router-queue-size
-                    ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
-                    ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
-                    ::session-fs ::copilot-home ::tcp-connection-token ::remote?])
-   client-options-keys))
+  (s/and
+   (closed-keys
+    (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
+                     ::use-stdio? ::log-level ::auto-start? ::auto-restart?
+                     ::notification-queue-size ::router-queue-size
+                     ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
+                     ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
+                     ::session-fs ::copilot-home ::tcp-connection-token ::remote?])
+    client-options-keys)
+   (fn [m]
+     (or (not (contains? m :mode))
+         (s/valid? ::client-mode (:mode m))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool definitions
@@ -601,7 +618,7 @@
 
 ;; Multitenancy hardening flags (upstream PR #1474). All optional, plain
 ;; booleans/strings. Application-mode behavior is driven by Client Mode
-;; (upstream PR #1428), which has been deferred to a dedicated future round.
+;; (upstream PR #1428).
 (s/def ::skip-embedding-retrieval boolean?)
 (s/def ::organization-custom-instructions string?)
 (s/def ::enable-on-demand-instruction-discovery boolean?)
@@ -609,6 +626,15 @@
 (s/def ::enable-host-git-operations boolean?)
 (s/def ::enable-session-store boolean?)
 (s/def ::enable-skills boolean?)
+
+;; Client-mode session option flags (upstream PR #1428). Sent via
+;; session.options.update after session.create / session.resume. In empty
+;; mode these get safe defaults applied beneath the caller's config; in
+;; CLI mode they are only emitted when explicitly set.
+(s/def ::skip-custom-instructions boolean?)
+(s/def ::custom-agents-local-only boolean?)
+(s/def ::coauthor-enabled boolean?)
+(s/def ::manage-schedule-enabled boolean?)
 
 ;; Reasoning summary mode (upstream PR #813 - pre-existing parity gap).
 ;; Wire enum: "none" | "concise" | "detailed". Mirrors upstream's ReasoningSummary type.
@@ -648,6 +674,10 @@
     :enable-host-git-operations
     :enable-session-store
     :enable-skills
+    :skip-custom-instructions
+    :custom-agents-local-only
+    :coauthor-enabled
+    :manage-schedule-enabled
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
@@ -682,6 +712,10 @@
                     ::enable-host-git-operations
                     ::enable-session-store
                     ::enable-skills
+                    ::skip-custom-instructions
+                    ::custom-agents-local-only
+                    ::coauthor-enabled
+                    ::manage-schedule-enabled
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
@@ -710,6 +744,10 @@
     :enable-host-git-operations
     :enable-session-store
     :enable-skills
+    :skip-custom-instructions
+    :custom-agents-local-only
+    :coauthor-enabled
+    :manage-schedule-enabled
     :include-sub-agent-streaming-events?})
 
 (s/def ::resume-session-config
@@ -741,6 +779,10 @@
                     ::enable-host-git-operations
                     ::enable-session-store
                     ::enable-skills
+                    ::skip-custom-instructions
+                    ::custom-agents-local-only
+                    ::coauthor-enabled
+                    ::manage-schedule-enabled
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
@@ -774,6 +816,10 @@
                     ::enable-host-git-operations
                     ::enable-session-store
                     ::enable-skills
+                    ::skip-custom-instructions
+                    ::custom-agents-local-only
+                    ::coauthor-enabled
+                    ::manage-schedule-enabled
                     ::include-sub-agent-streaming-events?])
    resume-session-config-keys))
 
