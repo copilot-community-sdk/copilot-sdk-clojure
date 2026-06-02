@@ -1624,7 +1624,85 @@
                    :tool-name "mcp__server__tool"
                    :mcp-server-name "my-mcp-server"
                    :mcp-tool-name "original-tool"})
-        "tool.execution_start-data should accept mcp-server-name and mcp-tool-name")))
+        "tool.execution_start-data should accept mcp-server-name and mcp-tool-name"))
+  (testing "tool.execution_start event data allows the :model field (upstream 1.0.57)"
+    (is (s/valid? :github.copilot-sdk.specs/tool.execution_start-data
+                  {:tool-call-id "tc-1"
+                   :tool-name "shell"
+                   :model "claude-sonnet-4.6"})
+        "tool.execution_start-data should accept the model identifier")))
+
+(deftest test-extensions-attachments-pushed-event-generated
+  (testing "session.extensions.attachments_pushed is a known generated event type (upstream schema 1.0.57)"
+    (is (contains? github.copilot-sdk.generated.event-specs/event-types "session.extensions.attachments_pushed"))
+    (is (some? (s/get-spec :github.copilot-sdk.generated.event-specs/session.extensions.attachments_pushed))
+        "generated envelope spec should be registered"))
+  (testing "the generated event envelope validates a well-formed ephemeral payload"
+    (is (s/valid? :github.copilot-sdk.generated.event-specs/session.extensions.attachments_pushed
+                  {:type "session.extensions.attachments_pushed"
+                   :id "evt-1"
+                   :parent-id nil
+                   :timestamp "2026-06-02T00:00:00Z"
+                   :ephemeral true
+                   :data {:attachments [{:type "extension_context"
+                                         :title "pill"
+                                         :extension-id "ext"
+                                         :captured-at "2026-06-02T00:00:00Z"}]}}))))
+
+(deftest test-extension-context-attachment-payload-preserved
+  (testing "extension_context attachment :payload survives normalize-incoming on user.message"
+    (let [normalize @#'protocol/normalize-incoming
+          raw-msg {:jsonrpc "2.0"
+                   :method "session.event"
+                   :params {:sessionId "abc"
+                            :event {:type "user.message"
+                                    :data {:content "hi"
+                                           :attachments [{:type "file"
+                                                          :displayName "a.txt"
+                                                          :path "/tmp/a.txt"}
+                                                         {:type "extension_context"
+                                                          :title "My Pill"
+                                                          :extensionId "my-ext"
+                                                          :payload {:firstName "Foo"
+                                                                    :nested {:userId 42}}}]}}}}
+          normalized (normalize raw-msg)
+          atts (get-in normalized [:params :event :data :attachments])
+          ext (nth atts 1)]
+      (is (= "extension_context" (:type ext)))
+      (is (= "Foo" (get-in ext [:payload :firstName]))
+          "payload top-level keys must not be kebab-cased")
+      (is (= 42 (get-in ext [:payload :nested :userId]))
+          "payload nested keys must not be kebab-cased")
+      (is (= "My Pill" (:title ext))
+          "non-opaque attachment fields are still converted/preserved")))
+  (testing "payload is preserved in historical events from session.getMessages responses"
+    (let [normalize @#'protocol/normalize-incoming
+          raw-response {:jsonrpc "2.0"
+                        :id 7
+                        :result {:events [{:type "user.message"
+                                           :data {:content "hi"
+                                                  :attachments [{:type "extension_context"
+                                                                 :title "P"
+                                                                 :extensionId "e"
+                                                                 :payload {:nestedKey {:userId 7}}}]}}]}}
+          normalized (normalize raw-response)
+          ext (get-in normalized [:result :events 0 :data :attachments 0])]
+      (is (= 7 (get-in ext [:payload :nestedKey :userId]))
+          "historical payload keys must not be kebab-cased")))
+  (testing "extension_context payload survives on session.extensions.attachments_pushed events"
+    (let [normalize @#'protocol/normalize-incoming
+          raw-msg {:jsonrpc "2.0"
+                   :method "session.event"
+                   :params {:sessionId "abc"
+                            :event {:type "session.extensions.attachments_pushed"
+                                    :data {:attachments [{:type "extension_context"
+                                                          :title "P"
+                                                          :extensionId "e"
+                                                          :payload {:camelKey 1}}]}}}}
+          normalized (normalize raw-msg)
+          ext (get-in normalized [:params :event :data :attachments 0])]
+      (is (= 1 (get-in ext [:payload :camelKey]))
+          "payload keys must not be kebab-cased on attachments_pushed events"))))
 
 (deftest test-upstream-event-data-field-specs
   (testing "assistant reasoning and message fields from generated events are explicitly spec'd"
@@ -3792,6 +3870,49 @@
           _ (sdk/set-model! session "gpt-5.4"
                             {:model-capabilities {:model-supports {:supports-vision true}}})]
       (is (= true (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision]))))))
+
+(deftest test-switch-model-with-context-tier
+  (testing "switch-model! forwards contextTier (upstream PR #1522)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4" {:context-tier :long-context})]
+      (is (= "long_context" (:contextTier @captured-params))
+          "context-tier keyword must convert to the underscore wire value")))
+
+  (testing "switch-model! forwards reasoningSummary (setModel parity)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4" {:reasoning-summary "concise"})]
+      (is (= "concise" (:reasoningSummary @captured-params)))))
+
+  (testing "set-model! forwards contextTier (alias for switch-model!)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/set-model! session "gpt-5.4" {:context-tier :default})]
+      (is (= "default" (:contextTier @captured-params)))))
+
+  (testing "switch-model! omits contextTier when :context-tier is nil"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4" {:context-tier nil})]
+      (is (not (contains? @captured-params :contextTier))
+          "nil :context-tier must be omitted, not sent as contextTier: null (switchTo schema has no null tier)"))))
 
 (deftest test-history-compact-rpc-name
   (testing "compaction-compact! uses session.history.compact RPC (upstream #1039)"

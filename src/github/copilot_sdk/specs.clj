@@ -1269,7 +1269,7 @@
 
 (s/def ::tool.execution_start-data
   (s/keys :req-un [::tool-call-id ::tool-name]
-          :opt-un [::arguments ::parent-tool-call-id ::mcp-server-name ::mcp-tool-name]))
+          :opt-un [::arguments ::parent-tool-call-id ::mcp-server-name ::mcp-tool-name ::model]))
 
 (s/def ::progress-message string?)
 (s/def ::success boolean?)

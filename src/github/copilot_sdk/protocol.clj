@@ -220,6 +220,21 @@
                            :error {:code -32603
                                    :message (str "Internal error: " (ex-message e))}}))))))
 
+(defn- restore-extension-context-payloads
+  "Restore the opaque `:payload` of each `extension_context` attachment from
+   the raw (pre-`wire->clj`) attachments onto the converted attachments, so
+   source-defined payload keys aren't kebab-cased. Raw and converted
+   attachment vectors are positionally aligned (conversion preserves order
+   and count)."
+  [raw-atts conv-atts]
+  (mapv (fn [raw conv]
+          (if (and (= "extension_context" (:type raw))
+                   (contains? raw :payload))
+            (assoc conv :payload (:payload raw))
+            conv))
+        raw-atts
+        conv-atts))
+
 (defn- preserve-event-opaque-fields
   "Given a raw wire event (pre-`wire->clj`) and a converted event, restore
    source-defined / opaque fields verbatim onto the converted shape so
@@ -250,6 +265,19 @@
       (assoc-in [:data :arguments] (get-in raw-event [:data :arguments]))
       (contains? (:data raw-event) :result)
       (assoc-in [:data :result] (get-in raw-event [:data :result])))
+
+    ;; Upstream schema 1.0.57: `extension_context` attachments carry an opaque
+    ;; caller-supplied `:payload`. These appear on `user.message` attachments
+    ;; (reachable via `session.getMessages`) and on the ephemeral
+    ;; `session.extensions.attachments_pushed` event. Restore each payload so
+    ;; its source-defined keys aren't kebab-cased.
+    ("user.message" "session.extensions.attachments_pushed")
+    (cond-> converted-event
+      (seq (get-in raw-event [:data :attachments]))
+      (assoc-in [:data :attachments]
+                (restore-extension-context-payloads
+                 (get-in raw-event [:data :attachments])
+                 (get-in converted-event [:data :attachments]))))
 
     converted-event))
 

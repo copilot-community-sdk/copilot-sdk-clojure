@@ -1568,6 +1568,9 @@
 
    Optional opts map:
    - :reasoning-effort      - Reasoning effort level for the new model (\"low\", \"medium\", \"high\", \"xhigh\")
+   - :reasoning-summary     - Reasoning summary mode for the new model (\"none\", \"concise\", \"detailed\")
+   - :context-tier          - Context window tier for models that support it
+                              (:default or :long-context, upstream PR #1522)
    - :model-capabilities    - Model capabilities override map (upstream PR #1029)
                               e.g. {:model-supports {:supports-vision true}}
 
@@ -1576,9 +1579,12 @@
   ([session model-id opts]
    (let [{:keys [session-id client]} session
          conn (connection-io client)
+         context-tier (util/context-tier->wire (:context-tier opts))
          params (cond-> {:sessionId session-id
                          :modelId model-id}
                   (:reasoning-effort opts) (assoc :reasoningEffort (:reasoning-effort opts))
+                  (:reasoning-summary opts) (assoc :reasoningSummary (:reasoning-summary opts))
+                  (some? context-tier) (assoc :contextTier context-tier)
                   (:model-capabilities opts) (assoc :modelCapabilities
                                                     (util/clj->wire (:model-capabilities opts))))
          result (proto/send-request! conn "session.model.switchTo" params)]

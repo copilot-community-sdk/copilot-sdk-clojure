@@ -162,6 +162,18 @@
   [attachments]
   (mapv attachment->wire attachments))
 
+(defn context-tier->wire
+  "Convert a Clojure :context-tier keyword to the wire string value.
+   The CLI expects \"default\" / \"long_context\" (underscore), so csk
+   camelCasing would produce the wrong value — we map explicitly."
+  [tier]
+  (case tier
+    :default "default"
+    :long-context "long_context"
+    nil nil
+    (throw (ex-info "Invalid :context-tier value (expected :default or :long-context)"
+                    {:context-tier tier}))))
+
 ;; -----------------------------------------------------------------------------
 ;; Event type normalization
 ;; -----------------------------------------------------------------------------

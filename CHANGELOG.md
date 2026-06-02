@@ -3,6 +3,34 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.0-beta.12 sync)
+- **`:context-tier` and `:reasoning-summary` on `switch-model!` / `set-model!`**
+  (upstream PR #1522). `:context-tier` accepts `:default` or `:long-context`
+  (wire-encoded as `contextTier` → `"default"` / `"long_context"`);
+  `:reasoning-summary` accepts `"none"` / `"concise"` / `"detailed"`
+  (wire-encoded as `reasoningSummary`). Mirrors the existing create/resume
+  session-config options.
+- **`:model` field on `:copilot/tool.execution_start` event data**
+  (upstream npm `@github/copilot` 1.0.57). Added to `::tool.execution_start-data`
+  as an optional key, mirroring `::tool.execution_complete-data`.
+- **`session.extensions.attachments_pushed` event + `extension_context`
+  attachment branch** — regenerated wire specs from the bumped schema
+  (upstream PR #1517). The new ephemeral event is not promoted to the curated
+  public `event-types` / `session-events` sets, consistent with the existing
+  canvas/extension surface.
+
+### Fixed (v1.0.0-beta.12 sync)
+- **Preserve opaque `extension_context` attachment payloads** — `extension_context`
+  attachments (reachable on `user.message` events via `session.getMessages` and on
+  `session.extensions.attachments_pushed` events) carry an opaque `:payload` whose
+  keys must not be kebab-cased by `wire->clj`. The protocol layer now restores the
+  raw payload for these attachments on both the live notification and historical
+  response paths.
+
+### Changed (v1.0.0-beta.12 sync)
+- Pinned schema bumped `1.0.56-1` → `1.0.57`; version synced to upstream release
+  `v1.0.0-beta.12` (`1.0.0-beta.12.0`).
+
 ### Added (Client Mode Empty — upstream PR #1428)
 - **`:mode` client option** — `#{:copilot-cli :empty}`, default
   `:copilot-cli`. Selects between historical CLI behavior and a hardened
