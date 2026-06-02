@@ -1,6 +1,6 @@
 (ns github.copilot-sdk.process
   "Process management for spawning and managing the Copilot CLI."
-  (:require [clojure.core.async :as async :refer [go chan close! put!]]
+  (:require [clojure.core.async :as async :refer [chan close! >!!]]
             [clojure.string :as str])
   (:import [java.lang ProcessBuilder ProcessBuilder$Redirect]
            [java.io File]
@@ -145,10 +145,13 @@
     (let [process (.start builder)
           exit-chan (chan 1)]
 
-      ;; Monitor process exit
-      (go
+      ;; Monitor process exit. `.waitFor` blocks the calling thread until the
+      ;; child exits, so it must run on a real thread (async/thread), never a
+      ;; go block (which would park a shared dispatch thread for the process
+      ;; lifetime).
+      (async/thread
         (let [exit-code (.waitFor process)]
-          (put! exit-chan {:exit-code exit-code})
+          (>!! exit-chan {:exit-code exit-code})
           (close! exit-chan)))
 
       (map->ManagedProcess
@@ -236,11 +239,14 @@
   (let [ch (chan 256)
         reader (java.io.BufferedReader.
                 (java.io.InputStreamReader. (:stderr mp) "UTF-8"))]
-    (go
+    ;; `.readLine` blocks until a line, EOF, or stream close, so the read loop
+    ;; must run on a real thread rather than parking a go dispatch thread.
+    ;; `>!!` applies backpressure so a slow consumer can't drop stderr lines.
+    (async/thread
       (try
         (loop []
           (when-let [line (.readLine reader)]
-            (put! ch {:type :stderr :line line})
+            (>!! ch {:type :stderr :line line})
             (recur)))
         (catch Exception _)
         (finally
