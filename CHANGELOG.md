@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Security
+- **Validation exceptions no longer leak secrets.** Configuration validation
+  failures (`client`, `create-session`, `resume-session`, and MCP-server checks)
+  previously embedded the raw caller-supplied options map in the thrown
+  exception's `ex-data` (and via `clojure.spec`'s `::s/value`), so a default
+  uncaught-exception report could print `:github-token`,
+  `:tcp-connection-token`, BYOK `:provider` credentials (`:api-key`,
+  `:bearer-token`, custom `:headers`), and MCP `:mcp-headers` / `:env` values in
+  cleartext. These values are now masked (`"***"`) in both the exception message
+  and `ex-data` before the exception is thrown.
+
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
   :azure-options {:azure-api-version ...}}` now serializes to the upstream wire

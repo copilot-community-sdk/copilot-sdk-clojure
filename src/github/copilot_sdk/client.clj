@@ -55,6 +55,53 @@
           {:host (if (str/blank? host) "localhost" host)
            :port port})))))
 
+(defn- mask-present
+  "Replace the value of each key in `ks` with \"***\", but only when the key is
+   already present in `m` (absent keys stay absent)."
+  [m ks]
+  (reduce (fn [acc k] (if (contains? acc k) (assoc acc k "***") acc)) m ks))
+
+(defn- mask-all-values
+  "Replace every value in map `m` with \"***\". Returns `m` unchanged if not a map.
+   Used for header/env maps where every value is potentially a secret."
+  [m]
+  (if (map? m) (zipmap (keys m) (repeat "***")) m))
+
+(defn- redact-mcp-servers
+  "Mask secret-bearing fields (`:mcp-headers`, `:env`) in an MCP servers config map
+   (keyed by server id) before embedding it in exception data. Non-map inputs and
+   non-map server entries pass through unchanged."
+  [servers]
+  (if-not (map? servers)
+    servers
+    (into {}
+          (map (fn [[id server]]
+                 [id (if (map? server)
+                       (cond-> server
+                         (map? (:mcp-headers server)) (update :mcp-headers mask-all-values)
+                         (map? (:env server)) (update :env mask-all-values))
+                       server)]))
+          servers)))
+
+(defn- redact-secrets
+  "Mask secret values in a caller-supplied options/config map so it can be embedded
+   in exception data and messages without leaking credentials. Masks the top-level
+   auth tokens, the nested BYOK `:provider` credentials (api/bearer keys and any
+   custom request `:headers`), and any `:mcp-servers` header/env values. Non-map
+   inputs pass through unchanged."
+  [m]
+  (if-not (map? m)
+    m
+    (cond-> (mask-present m [:github-token :tcp-connection-token])
+      (map? (:provider m))
+      (update :provider (fn [p]
+                          (-> p
+                              (mask-present [:api-key :bearer-token])
+                              (cond-> (map? (:headers p))
+                                (update :headers mask-all-values)))))
+      (contains? m :mcp-servers)
+      (update :mcp-servers redact-mcp-servers))))
+
 (defn- default-options
   "Return default client options."
   []
@@ -74,10 +121,11 @@
 (defn- ensure-valid-mcp-servers!
   [servers]
   (when-not (s/valid? ::specs/mcp-servers servers)
-    (throw (ex-info "Invalid :mcp-servers config (expected map keyed by server ID)."
-                    {:spec ::specs/mcp-servers
-                     :mcp-servers servers
-                     :explain (s/explain-data ::specs/mcp-servers servers)}))))
+    (let [safe-servers (redact-mcp-servers servers)]
+      (throw (ex-info "Invalid :mcp-servers config (expected map keyed by server ID)."
+                      {:spec ::specs/mcp-servers
+                       :mcp-servers safe-servers
+                       :explain (s/explain-data ::specs/mcp-servers safe-servers)})))))
 
 ;; Client is a simple map with a single state atom
 ;; The state atom contains all mutable state as an immutable map:
@@ -162,9 +210,9 @@
    (client {}))
   ([opts]
    (when (and (:cli-url opts) (= true (:use-stdio? opts)))
-     (throw (ex-info "cli-url is mutually exclusive with use-stdio?" opts)))
+     (throw (ex-info "cli-url is mutually exclusive with use-stdio?" (redact-secrets opts))))
    (when (and (:cli-url opts) (:cli-path opts))
-     (throw (ex-info "cli-url is mutually exclusive with cli-path" opts)))
+     (throw (ex-info "cli-url is mutually exclusive with cli-path" (redact-secrets opts))))
    ;; Validation: github-token and use-logged-in-user? cannot be used with cli-url
    (when (and (:cli-url opts) (or (:github-token opts) (some? (:use-logged-in-user? opts))))
      (throw (ex-info "github-token and use-logged-in-user? cannot be used with cli-url (external server manages its own auth)"
@@ -198,15 +246,16 @@
               :provided-storage-keys (select-keys opts [:copilot-home :session-fs
                                                         :cli-url :is-child-process?])})))
    (when-not (s/valid? ::specs/client-options opts)
-     (let [unknown (specs/unknown-keys opts specs/client-options-keys)
-           explain (s/explain-data ::specs/client-options opts)
+     (let [safe-opts (redact-secrets opts)
+           unknown (specs/unknown-keys opts specs/client-options-keys)
+           explain (s/explain-data ::specs/client-options safe-opts)
            msg (if (seq unknown)
                  (format "Invalid client options: unknown keys %s. Valid keys are: %s"
                          (pr-str unknown)
                          (pr-str (sort specs/client-options-keys)))
                  (format "Invalid client options: %s"
-                         (with-out-str (s/explain ::specs/client-options opts))))]
-       (throw (ex-info msg {:options opts :unknown-keys unknown :explain explain}))))
+                         (with-out-str (s/explain ::specs/client-options safe-opts))))]
+       (throw (ex-info msg {:options safe-opts :unknown-keys unknown :explain explain}))))
    (when-let [size (:notification-queue-size opts)]
      (when (<= size 0)
        (throw (ex-info "notification-queue-size must be > 0" {:notification-queue-size size}))))
@@ -1388,18 +1437,19 @@
   "Validate session config, throwing on invalid input."
   [config]
   (when-not (s/valid? ::specs/session-config config)
-    (let [unknown (specs/unknown-keys config specs/session-config-keys)
-          explain (s/explain-data ::specs/session-config config)
+    (let [safe-config (redact-secrets config)
+          unknown (specs/unknown-keys config specs/session-config-keys)
+          explain (s/explain-data ::specs/session-config safe-config)
           msg (if (seq unknown)
                 (format "Invalid session config: unknown keys %s. Valid keys are: %s"
                         (pr-str unknown)
                         (pr-str (sort specs/session-config-keys)))
                 (format "Invalid session config: %s"
-                        (with-out-str (s/explain ::specs/session-config config))))]
-      (throw (ex-info msg {:config config :unknown-keys unknown :explain explain}))))
+                        (with-out-str (s/explain ::specs/session-config safe-config))))]
+      (throw (ex-info msg {:config safe-config :unknown-keys unknown :explain explain}))))
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config config}))))
+                    {:config (redact-secrets config)}))))
 
 (defn- validate-tool-filter-list!
   "Reject bare `\"*\"` in a tool filter list (mirrors upstream
@@ -1942,7 +1992,7 @@
     (when-not (:create-session-fs-handler config)
       (throw (ex-info (str ":create-session-fs-handler is required in session config "
                            "when :session-fs is enabled in client options.")
-                      {:config config})))))
+                      {:config (redact-secrets config)})))))
 
 (defn- install-session-fs-handler!
   "Construct and install the per-session sessionFs handler. Caller is
@@ -2209,12 +2259,13 @@
    Returns a CopilotSession."
   [client session-id config]
   (when-not (s/valid? ::specs/resume-session-config config)
-    (throw (ex-info "Invalid resume session config"
-                    {:config config
-                     :explain (s/explain-data ::specs/resume-session-config config)})))
+    (let [safe-config (redact-secrets config)]
+      (throw (ex-info "Invalid resume session config"
+                      {:config safe-config
+                       :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config config})))
+                    {:config (redact-secrets config)})))
   (validate-tool-filters! config)
   (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
@@ -2387,12 +2438,13 @@
            )))"
   [client session-id config]
   (when-not (s/valid? ::specs/resume-session-config config)
-    (throw (ex-info "Invalid resume session config"
-                    {:config config
-                     :explain (s/explain-data ::specs/resume-session-config config)})))
+    (let [safe-config (redact-secrets config)]
+      (throw (ex-info "Invalid resume session config"
+                      {:config safe-config
+                       :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config config})))
+                    {:config (redact-secrets config)})))
   (validate-tool-filters! config)
   (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)

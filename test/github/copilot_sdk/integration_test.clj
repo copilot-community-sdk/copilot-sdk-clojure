@@ -5542,6 +5542,46 @@
     (let [c (sdk/client {:mode :copilot-cli :auto-start? false})]
       (is (= :copilot-cli (get-in c [:options :mode]))))))
 
+(deftest test-validation-errors-redact-secrets
+  (testing "secrets never appear in validation exception data or messages (SEC-1)"
+    (let [token "ghp_SUPERSECRETtoken123"
+          tcp-token "tcptokenSECRET000"
+          azure-key "sk-azureSECRET456"
+          mcp-secret "Bearer mcpSECRET789"
+          dump (fn [^Throwable e] (pr-str (Throwable->map e)))
+          leaked? (fn [^Throwable e ^String s]
+                    (or (.contains (str (ex-message e)) s)
+                        (.contains ^String (dump e) s)))
+          capture (fn [f] (try (f) nil (catch clojure.lang.ExceptionInfo e e)))]
+      (testing "client-options spec-explain path"
+        (let [e (capture #(sdk/client {:github-token token :log-level :bogus :auto-start? false}))]
+          (is (some? e) "expected a validation failure")
+          (is (not (leaked? e token)) "github-token must be redacted")))
+      (testing "client-options unknown-keys path"
+        (let [e (capture #(sdk/client {:github-token token :totally-unknown-key 1 :auto-start? false}))]
+          (is (some? e))
+          (is (not (leaked? e token)) "github-token must be redacted")))
+      (testing "client-options mutual-exclusion raw-opts path"
+        (let [e (capture #(sdk/client {:cli-url "localhost:1234" :use-stdio? true
+                                       :tcp-connection-token tcp-token :auto-start? false}))]
+          (is (some? e))
+          (is (not (leaked? e tcp-token)) "tcp-connection-token must be redacted")))
+      (testing "session-config BYOK provider api-key"
+        (let [c (sdk/client {:auto-start? false})
+              e (capture #(sdk/create-session c {:provider {:provider-type "azure" :api-key azure-key}}))]
+          (is (some? e))
+          (is (not (leaked? e azure-key)) "BYOK :api-key must be redacted")))
+      (testing "resume-config BYOK provider api-key"
+        (let [c (sdk/client {:auto-start? false})
+              e (capture #(sdk/resume-session c "sid" {:provider {:provider-type "azure" :api-key azure-key}}))]
+          (is (some? e))
+          (is (not (leaked? e azure-key)) "BYOK :api-key must be redacted")))
+      (testing "mcp-servers header secret"
+        (let [c (sdk/client {:auto-start? false})
+              e (capture #(sdk/create-session c {:mcp-servers {"s" {:mcp-headers {"Authorization" mcp-secret}}}}))]
+          (is (some? e))
+          (is (not (leaked? e mcp-secret)) "MCP header secret must be redacted"))))))
+
 (deftest test-empty-mode-spec-validation
   (testing "an unknown :mode value is rejected by the spec"
     (is (thrown-with-msg?
