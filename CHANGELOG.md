@@ -14,6 +14,21 @@ All notable changes to this project will be documented in this file. This change
   cleartext. These values are now masked (`"***"`) in both the exception message
   and `ex-data` before the exception is thrown.
 
+### Fixed (correctness)
+- **In-flight requests no longer hang on disconnect.** A graceful
+  `disconnect` (e.g. `stop!`) previously left any in-flight JSON-RPC request's
+  response channel unresolved, so a caller blocked on it would wait forever.
+  `disconnect` now drains all pending requests and delivers a
+  `{:error {:code -32000 :message "Connection closed"}}` to each. The read
+  loop's EOF/IO-error draining and `disconnect` now share a single atomic
+  `drain-pending!`, so a pending request is resolved exactly once even when
+  both run concurrently.
+- **Requests sent during/after disconnect fail fast.** `send-request` now
+  registers its pending entry only while the connection is running, in one
+  atomic step, and resolves the response channel with a connection-closed error
+  if the connection is gone or the outgoing channel is already closed —
+  previously such a request was silently dropped and the caller hung.
+
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
   :azure-options {:azure-api-version ...}}` now serializes to the upstream wire

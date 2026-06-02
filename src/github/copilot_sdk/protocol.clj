@@ -122,6 +122,18 @@
 (defn- conn-state [state-atom] (get @state-atom :connection))
 (defn- update-conn! [state-atom f & args] (apply swap! state-atom update :connection f args))
 
+(defn- drain-pending!
+  "Atomically clear all pending requests and deliver `error` to each response
+   channel. Safe to call concurrently from the read loop and `disconnect`: the
+   single `swap-vals!` guarantees each pending entry is captured exactly once, so
+   no response channel is delivered to twice. `error` is the `:error` payload
+   (e.g. `{:code -32000 :message \"...\"}`)."
+  [state-atom error]
+  (let [[old _] (swap-vals! state-atom assoc-in [:connection :pending-requests] {})]
+    (doseq [[_ {:keys [ch]}] (get-in old [:connection :pending-requests])]
+      (put! ch {:error error})
+      (close! ch))))
+
 ;; -----------------------------------------------------------------------------
 ;; Message Handling
 ;; -----------------------------------------------------------------------------
@@ -391,12 +403,8 @@
                (do
                  (log/debug "Read loop: EOF from remote")
                  (update-conn! state-atom assoc :running? false)
-                 ;; Signal error to pending requests
-                 (doseq [[_ {:keys [ch]}] (:pending-requests (conn-state state-atom))]
-                   (put! ch {:error {:code -32000
-                                     :message "Connection closed by remote"}})
-                   (close! ch))
-                 (update-conn! state-atom assoc :pending-requests {})))))
+                 (drain-pending! state-atom {:code -32000
+                                             :message "Connection closed by remote"})))))
          (catch AsynchronousCloseException _
            (log/debug "Read loop: channel closed asynchronously"))
          (catch ClosedChannelException _
@@ -407,12 +415,8 @@
              (log/debug "Read loop: pipe closed by remote")
              (when (:running? (conn-state state-atom))
                (log/error "Read loop IO exception: " (ex-message e))
-               ;; Signal error to pending requests
-               (doseq [[_ {:keys [ch]}] (:pending-requests (conn-state state-atom))]
-                 (put! ch {:error {:code -32000
-                                   :message (str "Connection error: " (ex-message e))}})
-                 (close! ch))
-               (update-conn! state-atom assoc :pending-requests {}))))
+               (drain-pending! state-atom {:code -32000
+                                           :message (str "Connection error: " (ex-message e))}))))
          (catch Exception e
            (when (:running? (conn-state state-atom))
              (log/error "Read loop exception: " (ex-message e))))
@@ -544,6 +548,12 @@
     ;; Signal loops to stop
     (update-conn! state-atom assoc :running? false)
 
+    ;; Resolve any in-flight requests so callers blocked on their response
+    ;; channels unblock immediately instead of hanging forever. Done after
+    ;; clearing :running? so a concurrent send-request fails fast rather than
+    ;; registering a new entry we'd miss.
+    (drain-pending! state-atom {:code -32000 :message "Connection closed"})
+
     ;; Close outgoing channel first to stop write go-loop
     (close! (:outgoing-ch conn))
 
@@ -570,6 +580,18 @@
 
     (log/debug "JSON-RPC connection closed")))
 
+(defn- remove-pending-by-chan!
+  "Remove a pending request entry by channel identity."
+  [state-atom target-ch]
+  (update-conn! state-atom update :pending-requests
+                (fn [pending]
+                  (reduce-kv (fn [m id {:keys [ch] :as entry}]
+                               (if (identical? ch target-ch)
+                                 m
+                                 (assoc m id entry)))
+                             {}
+                             pending))))
+
 (defn send-request
   "Send a JSON-RPC request and return a channel for the response.
    The channel delivers a single {:result ...} or {:error ...} map, then closes.
@@ -594,21 +616,30 @@
          entry (cond-> {:ch ch :method method}
                  on-response-inline (assoc :on-response-inline on-response-inline))]
      (log/debug "Sending request: method=" method " id=" id)
-     (swap! state-atom assoc-in [:connection :pending-requests id] entry)
-     (put! (:outgoing-ch conn) msg)
-     ch)))
-
-(defn- remove-pending-by-chan!
-  "Remove a pending request entry by channel identity."
-  [state-atom target-ch]
-  (update-conn! state-atom update :pending-requests
-                (fn [pending]
-                  (reduce-kv (fn [m id {:keys [ch] :as entry}]
-                               (if (identical? ch target-ch)
-                                 m
-                                 (assoc m id entry)))
-                             {}
-                             pending))))
+     ;; Register the pending entry only if the connection is still running, in a
+     ;; single atomic step so a concurrent disconnect either sees the entry (and
+     ;; drains it) or refuses registration. Without this, a request registered
+     ;; after disconnect would never be resolved and the caller would hang.
+     (let [[old new] (swap-vals! state-atom
+                                 (fn [s]
+                                   (if (get-in s [:connection :running?])
+                                     (assoc-in s [:connection :pending-requests id] entry)
+                                     s)))
+           registered? (not (identical? old new))]
+       (if registered?
+         (put! (:outgoing-ch conn) msg
+               (fn [enqueued?]
+                 ;; If the outgoing channel was already closed the message was
+                 ;; dropped, so resolve the pending entry with an error rather
+                 ;; than leaving the caller blocked.
+                 (when-not enqueued?
+                   (remove-pending-by-chan! state-atom ch)
+                   (put! ch {:error {:code -32000 :message "Connection closed"}})
+                   (close! ch))))
+         (do
+           (put! ch {:error {:code -32000 :message "Connection closed"}})
+           (close! ch)))
+       ch))))
 
 (defn send-request!
   "Send a JSON-RPC request and block for the response.
