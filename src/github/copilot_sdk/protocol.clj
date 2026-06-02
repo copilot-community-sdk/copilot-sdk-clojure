@@ -134,6 +134,15 @@
       (put! ch {:error error})
       (close! ch))))
 
+(defn- pop-pending!
+  "Atomically remove and return the pending entry for `id`, or nil if it is no
+   longer registered. Using `swap-vals!` guarantees the entry is claimed by
+   exactly one caller, so `handle-response!` and `drain-pending!` can never both
+   deliver to the same response channel."
+  [state-atom id]
+  (let [[old _] (swap-vals! state-atom update-in [:connection :pending-requests] dissoc id)]
+    (get-in old [:connection :pending-requests id])))
+
 ;; -----------------------------------------------------------------------------
 ;; Message Handling
 ;; -----------------------------------------------------------------------------
@@ -149,11 +158,11 @@
    is dispatched. Used by `client/create-session` for the cloud-no-id
    flow (upstream PR #1479)."
   [state-atom msg]
-  (let [id (:id msg)
-        pending-requests (:pending-requests (conn-state state-atom))]
+  (let [id (:id msg)]
     (log/debug "Received response for id=" id)
-    (when-let [{:keys [ch on-response-inline]} (get pending-requests id)]
-      (update-conn! state-atom update :pending-requests dissoc id)
+    ;; Atomically claim the pending entry so a concurrent drain-pending!
+    ;; (disconnect / EOF) can never also deliver to this response channel.
+    (when-let [{:keys [ch on-response-inline]} (pop-pending! state-atom id)]
       (if-let [error (:error msg)]
         (do
           (log/debug "Response error: " error)
@@ -410,13 +419,22 @@
          (catch ClosedChannelException _
            (log/debug "Read loop: channel already closed"))
          (catch IOException e
-           ;; "Pipe closed" is normal during shutdown when other end closes
-           (if (= "Pipe closed" (ex-message e))
-             (log/debug "Read loop: pipe closed by remote")
+           ;; "Pipe closed" is normal during shutdown when the other end
+           ;; closes. Either way, if we were still running this is an
+           ;; unexpected remote close: stop the loop and resolve pending
+           ;; requests so callers don't hang. (During a local disconnect,
+           ;; :running? is already false and pending already drained, so the
+           ;; drain below is a harmless no-op.)
+           (let [pipe-closed? (= "Pipe closed" (ex-message e))]
              (when (:running? (conn-state state-atom))
-               (log/error "Read loop IO exception: " (ex-message e))
+               (if pipe-closed?
+                 (log/debug "Read loop: pipe closed by remote")
+                 (log/error "Read loop IO exception: " (ex-message e)))
+               (update-conn! state-atom assoc :running? false)
                (drain-pending! state-atom {:code -32000
-                                           :message (str "Connection error: " (ex-message e))}))))
+                                           :message (if pipe-closed?
+                                                      "Connection closed by remote"
+                                                      (str "Connection error: " (ex-message e)))}))))
          (catch Exception e
            (when (:running? (conn-state state-atom))
              (log/error "Read loop exception: " (ex-message e))))

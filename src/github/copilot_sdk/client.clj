@@ -1054,6 +1054,15 @@
           ;; left as :error (not :disconnected) so callers can distinguish a
           ;; failed start from a clean stop.
           (swap! (:state client) assoc :stopping? true)
+          ;; Tear down the notification router if it was started before the
+          ;; failure (mirrors stop!), so its dispatcher thread/channel don't leak.
+          (swap! (:state client) assoc :router-running? false)
+          (when-let [^Thread router-thread (:router-thread @(:state client))]
+            (.interrupt router-thread)
+            (try (.join router-thread 500) (catch Exception _)))
+          (when-let [router-ch (:router-ch @(:state client))]
+            (close! router-ch))
+          (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
           (let [{:keys [connection-io socket process]} @(:state client)]
             (when connection-io
               (try (proto/disconnect connection-io) (catch Exception _)))
