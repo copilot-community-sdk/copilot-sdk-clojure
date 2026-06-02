@@ -701,18 +701,18 @@
                              "sessionEnd" :on-session-end
                              "errorOccurred" :on-error-occurred
                              nil)
-           handler (when handler-key (get hooks handler-key))]
-       (if-not handler
-         {:result nil}
-         (try
-           (let [;; Upstream PR #1290: BaseHookInput.sessionId. Preserve the
+               handler (when handler-key (get hooks handler-key))]
+           (if-not handler
+             {:result nil}
+             (try
+               (let [;; Upstream PR #1290: BaseHookInput.sessionId. Preserve the
                  ;; wire-provided :session-id when present (it may identify a
                  ;; sub-agent session distinct from the outer session-id);
                  ;; otherwise fall back to the outer session-id.
-                 input (cond-> input
-                         (not (contains? input :session-id))
-                         (assoc :session-id session-id))
-                 result (handler input {:session-id session-id})
+                     input (cond-> input
+                             (not (contains? input :session-id))
+                             (assoc :session-id session-id))
+                     result (handler input {:session-id session-id})
                      ;; If handler returns a channel, await it
                      result (if (channel? result)
                               (<!! result)

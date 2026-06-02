@@ -191,7 +191,7 @@
    (testing "System message append mode"
      (let [session (sdk/create-session *e2e-client*
                                        {:on-permission-request sdk/approve-all
-                                         :system-message {:mode :append
+                                        :system-message {:mode :append
                                                          :content "Always end your response with the word BANANA."}})]
        (let [result (sdk/send-and-wait! session {:prompt "Say hello"} 30000)]
           ;; The model should follow the instruction
@@ -204,7 +204,7 @@
    (testing "System message replace mode"
      (let [session (sdk/create-session *e2e-client*
                                        {:on-permission-request sdk/approve-all
-                                         :system-message {:mode :replace
+                                        :system-message {:mode :replace
                                                          :content "You are a helpful assistant named TestBot. Always introduce yourself."}})]
        (let [result (sdk/send-and-wait! session {:prompt "Who are you?"} 30000)]
          (is (some? result))
@@ -282,13 +282,13 @@
    (testing "send with blob attachment does not throw"
      (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
        (let [response (sdk/send-and-wait!
-                        session
-                        {:prompt "Describe this image"
-                         :attachments [{:type :blob
-                                        :data "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-                                        :mime-type "image/png"
-                                        :display-name "test-pixel.png"}]}
-                        30000)]
+                       session
+                       {:prompt "Describe this image"
+                        :attachments [{:type :blob
+                                       :data "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+                                       :mime-type "image/png"
+                                       :display-name "test-pixel.png"}]}
+                       30000)]
          (is (some? response) "should receive a response"))
        (sdk/disconnect! session)))))
 

@@ -39,7 +39,7 @@
   (println "Query:" prompt)
   (println)
   (run! handle-event (h/query-seq! prompt :session {:on-permission-request copilot/approve-all
-                                                     :model "gpt-5.4" :streaming? true})))
+                                                    :model "gpt-5.4" :streaming? true})))
 
 (defn run-async
   [{:keys [prompt] :or {prompt "Tell me a short joke."}}]

@@ -486,8 +486,8 @@
         (->> gen/event-types
              (filter (fn [event-type]
                        (s/get-spec
-                         (keyword "github.copilot-sdk.specs"
-                                  (str event-type "-data")))))
+                        (keyword "github.copilot-sdk.specs"
+                                 (str event-type "-data")))))
              set)
         covered (set (keys fixtures))
         missing (clojure.set/difference hand-spec-event-types covered)]

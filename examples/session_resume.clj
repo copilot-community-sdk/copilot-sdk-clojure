@@ -15,23 +15,23 @@
   (copilot/with-client [client {}]
     (println "Creating session...")
     (let [session (copilot/create-session
-                    client
-                    {:on-permission-request copilot/approve-all
-                     :model "claude-haiku-4.5"
-                     :available-tools []})]
+                   client
+                   {:on-permission-request copilot/approve-all
+                    :model "claude-haiku-4.5"
+                    :available-tools []})]
       (println "Sending code word:" code-word)
       (let [result (copilot/send-and-wait!
-                     session
-                     {:prompt (str "Remember this code word: " code-word
-                                   ". Just confirm by repeating it back.")})]
+                    session
+                    {:prompt (str "Remember this code word: " code-word
+                                  ". Just confirm by repeating it back.")})]
         (println "🤖:" (get-in result [:data :content])))
 
       (let [session-id (:session-id session)]
         (println "\nResuming session" session-id "...")
         (let [resumed (copilot/resume-session
-                        client session-id
-                        {:on-permission-request copilot/approve-all
-                         :available-tools []})]
+                       client session-id
+                       {:on-permission-request copilot/approve-all
+                        :available-tools []})]
           (println "Asking:" prompt)
           (let [result (copilot/send-and-wait! resumed {:prompt prompt})]
             (println "🤖:" (get-in result [:data :content]))))))))

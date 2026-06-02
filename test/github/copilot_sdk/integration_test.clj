@@ -1440,14 +1440,14 @@
                                           (.countDown rpc-latch))))
             session (sdk/create-session *test-client*
                                         {:on-permission-request
-                                          (fn [_request _ctx]
-                                            (cond-> {:kind legacy-kind}
-                                              (= legacy-kind :denied-interactively-by-user)
-                                              (assoc :feedback "custom feedback")
+                                         (fn [_request _ctx]
+                                           (cond-> {:kind legacy-kind}
+                                             (= legacy-kind :denied-interactively-by-user)
+                                             (assoc :feedback "custom feedback")
 
-                                              true
-                                              (assoc :rules [{:kind "shell"}]
-                                                     :internal true)))})
+                                             true
+                                             (assoc :rules [{:kind "shell"}]
+                                                    :internal true)))})
             session-id (sdk/session-id session)]
         (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
         (reset! requests [])
@@ -5651,7 +5651,6 @@
            clojure.lang.ExceptionInfo
            #"Client is not started|not connected|Connection"
            (sdk/create-session c {}))))))
-
 
 ;; -----------------------------------------------------------------------------
 ;; Client Mode (upstream PR #1428) — wire payload tests:
