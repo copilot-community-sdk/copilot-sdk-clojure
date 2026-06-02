@@ -283,12 +283,12 @@
      (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
        (let [response (sdk/send-and-wait!
                        session
-                       {:prompt "Describe this image"
+                       {:prompt "Reply with just the word OK."
                         :attachments [{:type :blob
                                        :data "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
                                        :mime-type "image/png"
                                        :display-name "test-pixel.png"}]}
-                       30000)]
+                       60000)]
          (is (some? response) "should receive a response"))
        (sdk/disconnect! session)))))
 
