@@ -301,23 +301,33 @@
         session-config (build-session-config session)
         sess (copilot/create-session c session-config)
         events-ch (copilot/subscribe-events sess)
-        out-ch (chan buffer)]
+        out-ch (chan buffer)
+       ;; disconnect! blocks (thread joins), so run it on a real thread and
+       ;; return a channel the go-loop can park on instead of blocking a
+       ;; shared go dispatch thread.
+        disconnect-async (fn [] (async/thread (copilot/disconnect! sess)))]
+    (try
+     ;; Send the prompt
+      (copilot/send! sess {:prompt prompt})
 
-    ;; Send the prompt
-    (copilot/send! sess {:prompt prompt})
+     ;; Pipe events to output channel, cleanup on completion
+      (go-loop []
+        (if-let [event (<! events-ch)]
+          (do
+            (>! out-ch event)
+            (if (#{:copilot/session.idle :copilot/session.error} (:type event))
+              (do
+                (<! (disconnect-async))
+                (close! out-ch))
+              (recur)))
+          (do
+            (<! (disconnect-async))
+            (close! out-ch))))
 
-    ;; Pipe events to output channel, cleanup on completion
-    (go-loop []
-      (if-let [event (<! events-ch)]
-        (do
-          (>! out-ch event)
-          (if (#{:copilot/session.idle :copilot/session.error} (:type event))
-            (do
-              (copilot/disconnect! sess)
-              (close! out-ch))
-            (recur)))
-        (do
-          (copilot/disconnect! sess)
-          (close! out-ch))))
-
-    out-ch))
+      out-ch
+      (catch Throwable t
+       ;; send! failed before the go-loop started: release the session that
+       ;; would otherwise leak, close the output channel, and surface the error.
+        (copilot/disconnect! sess)
+        (close! out-ch)
+        (throw t)))))

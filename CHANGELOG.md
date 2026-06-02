@@ -15,6 +15,13 @@ All notable changes to this project will be documented in this file. This change
   and `ex-data` before the exception is thrown.
 
 ### Fixed (correctness)
+- **`query-chan` no longer blocks a go dispatch thread or leaks on send
+  failure.** It called the blocking `disconnect!` directly inside its event
+  go-loop (parking a shared core.async dispatch thread for the duration of
+  connection teardown); teardown now runs on `async/thread` and the loop parks
+  on its result. If the initial `send!` throws before the loop starts, the
+  freshly created session is now disconnected (instead of leaking) and the
+  output channel is closed before the error propagates.
 - **`subscribe-events` / `events->chan` now actually isolate slow subscribers.**
   Both used a fixed (blocking) channel buffer, but their docstrings promised
   that a full subscriber buffer drops events "for this subscriber only." With a
