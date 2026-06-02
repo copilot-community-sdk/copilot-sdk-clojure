@@ -174,11 +174,14 @@ This project emphasizes **rigor and correctness**, particularly for:
 ## Project Structure
 
 ```
+src/github/copilot_sdk.clj   # Top-level public API namespace (github.copilot-sdk):
+                             # re-exports + curated public `event-types` / `session-events` sets
 src/github/copilot_sdk/
 ├── client.clj       # Main client API (create-client, create-session, etc.)
 ├── session.clj      # Session operations (send!, send-and-wait!, etc.)
 ├── helpers.clj      # Convenience functions (query, query-seq!, query-chan, etc.)
 ├── tools.clj        # Helper functions for defining tools (define-tool, result-success, etc.)
+├── tool_set.clj     # Source-qualified tool filter patterns (:available-tools/:excluded-tools)
 ├── specs.clj        # clojure.spec definitions for all data shapes
 ├── instrument.clj   # Function specs (fdefs) and instrumentation
 ├── util.clj         # Wire conversion (camelCase ↔ kebab-case), MCP helpers

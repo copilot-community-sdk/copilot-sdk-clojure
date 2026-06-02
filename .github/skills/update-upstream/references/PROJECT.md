@@ -18,6 +18,7 @@ When syncing, map upstream changes to the corresponding Clojure files:
 | `nodejs/src/index.ts` | Public exports (defines the public API surface) |
 | `nodejs/src/generated/session-events.ts` | All event types and data shapes |
 | `nodejs/src/generated/rpc.ts` | RPC method signatures |
+| `nodejs/src/toolSet.ts` | `ToolSet` / `BuiltInTools` tool-filter helpers |
 
 ### Clojure Counterparts
 
@@ -26,9 +27,11 @@ When syncing, map upstream changes to the corresponding Clojure files:
 | Types / config | `specs.clj` | Session config, event data, permissions, tools |
 | Client methods | `client.clj` | Broadcast handlers, create-client, create-session |
 | Session methods | `session.clj` | send/receive, UI convenience methods |
-| Event types | `client.clj` | `event-types` set, `subscribe-events!` |
+| Curated public event sets | `copilot_sdk.clj` | Top-level `github.copilot-sdk` ns: hand-curated public `event-types` / `session-events` sets |
+| Generated event specs | `generated/event_specs.clj` | AUTO-GENERATED full `event-types` set + wire specs (`bb codegen`) |
 | RPC methods | `protocol.clj` | JSON-RPC protocol layer |
-| Public exports | `client.clj`, `helpers.clj`, `tools.clj` | Public API surface |
+| Tool-filter helpers | `tool_set.clj` | Source-qualified `:available-tools` / `:excluded-tools` patterns |
+| Public exports | `copilot_sdk.clj`, `client.clj`, `helpers.clj`, `tools.clj` | Public API surface |
 | Function specs | `instrument.clj` | fdefs for all public functions |
 
 ## Wire Conversion Cheat Sheet
