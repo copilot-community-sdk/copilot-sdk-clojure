@@ -5582,6 +5582,18 @@
           (is (some? e))
           (is (not (leaked? e mcp-secret)) "MCP header secret must be redacted"))))))
 
+(deftest test-failed-start-releases-resources
+  (testing "a failed start! tears down the spawned process and connection (A5)"
+    ;; `true` exits 0 immediately, so in TCP mode wait-for-port observes the
+    ;; process die before announcing a port and start! throws after spawning.
+    (let [c (sdk/client {:cli-path "true" :use-stdio? false :auto-start? false})]
+      (is (thrown? Exception (sdk/start! c)))
+      (let [st @(:state c)]
+        (is (= :error (:status st)) "status should be :error after a failed start")
+        (is (nil? (:process st)) "spawned process must be released")
+        (is (nil? (:connection-io st)) "connection must be released")
+        (is (nil? (:socket st)) "socket must be released")))))
+
 (deftest test-empty-mode-spec-validation
   (testing "an unknown :mode value is rejected by the spec"
     (is (thrown-with-msg?

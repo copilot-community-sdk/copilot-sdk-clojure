@@ -1047,7 +1047,22 @@
               msg (cond-> (str "Failed to start client: " (ex-message e))
                     stderr (str "\nstderr: " stderr))]
           (log/error msg)
-          (swap! (:state client) assoc :status :error)
+          ;; Release any resources created before the failure so a failed
+          ;; start! does not leak the spawned process, its stderr/exit watcher
+          ;; threads, the socket, or the JSON-RPC connection. Mark :stopping? so
+          ;; the process-exit watcher treats the teardown as expected. Status is
+          ;; left as :error (not :disconnected) so callers can distinguish a
+          ;; failed start from a clean stop.
+          (swap! (:state client) assoc :stopping? true)
+          (let [{:keys [connection-io socket process]} @(:state client)]
+            (when connection-io
+              (try (proto/disconnect connection-io) (catch Exception _)))
+            (when socket
+              (try (.close ^Socket socket) (catch Exception _)))
+            (when (and (not (:external-server? client)) process)
+              (try (proc/destroy! process) (catch Exception _))))
+          (swap! (:state client) assoc :status :error :connection nil
+                 :connection-io nil :socket nil :process nil :actual-port nil)
           (throw e))))))
 
 (defn stop!

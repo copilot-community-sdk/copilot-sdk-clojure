@@ -15,6 +15,12 @@ All notable changes to this project will be documented in this file. This change
   and `ex-data` before the exception is thrown.
 
 ### Fixed (correctness)
+- **A failed `start!` no longer leaks resources.** If startup failed after the
+  CLI process was spawned (e.g. the process died before announcing its port, or
+  protocol verification failed), the error path only set the client status to
+  `:error` and left the spawned process, its stderr/exit-watcher threads, the
+  socket, and the JSON-RPC connection running. `start!` now tears these down
+  before re-throwing.
 - **In-flight requests no longer hang on disconnect.** A graceful
   `disconnect` (e.g. `stop!`) previously left any in-flight JSON-RPC request's
   response channel unresolved, so a caller blocked on it would wait forever.
