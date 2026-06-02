@@ -13,6 +13,12 @@ All notable changes to this project will be documented in this file. This change
   only `:openai` worked, because it is the runtime default. Matches the
   `ProviderConfig` shape in `nodejs/src/types.ts`.
 
+### Added (GA parity)
+- **`:session-idle-timeout-seconds` client option** — server-wide session idle
+  timeout. When `> 0`, the SDK appends `--session-idle-timeout <n>` to the
+  spawned CLI, matching the official SDK's `sessionIdleTimeoutSeconds`. Default
+  disabled (`0`).
+
 ### Changed (GA parity)
 - **`list-tools`, `get-quota`, and `get-current-model` are now marked
   `^:experimental`.** None of these correspond to a method on the official

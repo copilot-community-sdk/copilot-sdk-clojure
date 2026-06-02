@@ -67,6 +67,7 @@
 ;; spawns the CLI in TCP mode and the caller did not provide one.
 ;; Upstream PR #1176 (@github/copilot-sdk).
 (s/def ::tcp-connection-token ::non-blank-string)
+(s/def ::session-idle-timeout-seconds (s/and int? #(>= % 0)))
 
 ;; OpenTelemetry configuration (upstream PR #785)
 (s/def ::otlp-endpoint string?)
@@ -205,6 +206,7 @@
     :tool-timeout-ms :env :github-token :use-logged-in-user?
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
     :session-fs :copilot-home :tcp-connection-token :remote?
+    :session-idle-timeout-seconds
     :mode})
 
 (s/def ::client-options
@@ -215,7 +217,8 @@
                      ::notification-queue-size ::router-queue-size
                      ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
                      ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
-                     ::session-fs ::copilot-home ::tcp-connection-token ::remote?])
+                     ::session-fs ::copilot-home ::tcp-connection-token ::remote?
+                     ::session-idle-timeout-seconds])
     client-options-keys)
    (fn [m]
      (or (not (contains? m :mode))

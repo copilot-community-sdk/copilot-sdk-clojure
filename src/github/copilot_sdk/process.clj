@@ -15,7 +15,8 @@
 
 (defn- build-cli-args
   "Build CLI arguments based on options."
-  [{:keys [log-level use-stdio? port cli-args github-token use-logged-in-user? remote?]}]
+  [{:keys [log-level use-stdio? port cli-args github-token use-logged-in-user? remote?
+           session-idle-timeout-seconds]}]
   (cond-> (vec (or cli-args []))
     true (conj "--server")
     true (conj "--no-auto-update")
@@ -25,6 +26,9 @@
     ;; Auth options (PR #237)
     github-token (conj "--auth-token-env")
     (false? use-logged-in-user?) (conj "--no-auto-login")
+    ;; Server-wide session idle timeout (upstream client.ts: --session-idle-timeout)
+    (and session-idle-timeout-seconds (pos? session-idle-timeout-seconds))
+    (conj "--session-idle-timeout" (str session-idle-timeout-seconds))
     ;; Remote session support (upstream PR #1192)
     remote? (conj "--remote")))
 

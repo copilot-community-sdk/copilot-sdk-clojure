@@ -141,6 +141,9 @@
     - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
     - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
     - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
+    - :session-idle-timeout-seconds - Server-wide session idle timeout in seconds. When > 0,
+                       the SDK appends `--session-idle-timeout <n>` to the spawned CLI so idle
+                       sessions are cleaned up after the given duration. Default: disabled.
     - :remote?       - **Experimental**. Enable remote session support (Mission Control). When true,
                        the SDK appends `--remote` to the spawned CLI; sessions in a GitHub repository
                        working directory become accessible from GitHub web and mobile. Ignored when
