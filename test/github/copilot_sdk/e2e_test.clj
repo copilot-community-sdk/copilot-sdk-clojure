@@ -7,7 +7,7 @@
    
    Run with: COPILOT_E2E_TESTS=true COPILOT_CLI_PATH=/path/to/copilot clojure -M:test"
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
-            [clojure.core.async :as async :refer [<!! >!! chan go go-loop <! timeout alts!!]]
+            [clojure.core.async :refer [alts!! timeout]]
             [github.copilot-sdk :as sdk]))
 
 ;; Check if E2E tests are enabled
@@ -165,27 +165,6 @@
         ;; Clean up
        (sdk/destroy! session)))))
 
-(deftest ^:e2e test-e2e-streaming-deltas
-  (when-e2e
-   (testing "Streaming deltas when enabled"
-     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all :streaming? true})
-           events-ch (sdk/subscribe-events session)
-           deltas (atom [])
-           _ (sdk/send! session {:prompt "Count from 1 to 5."})
-            ;; Collect events
-           _ (loop [count 0]
-               (when (< count 200)
-                 (let [[v _] (alts!! [events-ch (timeout 30000)])]
-                   (when (some? v)
-                     (when (= :copilot/assistant.message_delta (:type v))
-                       (swap! deltas conj (get-in v [:data :delta-content])))
-                     (when (not= :copilot/session.idle (:type v))
-                       (recur (inc count)))))))]
-        ;; May or may not have deltas depending on model
-       (is (>= (count @deltas) 0))
-       (sdk/unsubscribe-events session events-ch)
-       (sdk/destroy! session)))))
-
 (deftest ^:e2e test-e2e-system-message-append
   (when-e2e
    (testing "System message append mode"
@@ -245,25 +224,6 @@
        (sdk/destroy! session1)
        (sdk/destroy! session2)))))
 
-(deftest ^:e2e test-e2e-send-returns-immediately
-  (when-e2e
-   (testing "send! returns immediately before completion"
-     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
-           events (atom [])
-           events-ch (sdk/subscribe-events session)]
-        ;; Start collecting events in background
-       (go-loop []
-         (when-let [e (<! events-ch)]
-           (swap! events conj (:type e))
-           (recur)))
-        ;; Send should return before idle
-       (sdk/send! session {:prompt "Tell me a long story about a dragon."})
-        ;; At this point, idle should NOT be in events yet (or very unlikely)
-       (Thread/sleep 100) ; Small delay to let some events come through
-        ;; Note: This is a timing-dependent test
-       (sdk/unsubscribe-events session events-ch)
-       (sdk/destroy! session)))))
-
 (deftest ^:e2e test-e2e-send-and-wait-timeout
   (when-e2e
    (testing "sendAndWait throws on timeout"
@@ -291,14 +251,3 @@
                        60000)]
          (is (some? response) "should receive a response"))
        (sdk/disconnect! session)))))
-
-;; -----------------------------------------------------------------------------
-;; Run Info
-;; -----------------------------------------------------------------------------
-
-(deftest test-e2e-status
-  (testing "E2E test status"
-    (if e2e-enabled?
-      (println "E2E tests ENABLED - using CLI at:" cli-path)
-      (println "E2E tests DISABLED - set COPILOT_E2E_TESTS=true to enable"))
-    (is true "Status check always passes")))
