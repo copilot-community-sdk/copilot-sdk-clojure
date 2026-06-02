@@ -71,6 +71,7 @@
     :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta
     :copilot/assistant.message
+    :copilot/assistant.message_start
     :copilot/assistant.message_delta
     :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end
@@ -128,7 +129,17 @@
     ;; ephemeral hook-progress event.
     :copilot/session.autopilot_objective_changed
     :copilot/session.permissions_changed
-    :copilot/hook.progress})
+    :copilot/hook.progress
+    ;; Remaining schema events (pinned schema 1.0.57). model.call_failure is an
+    ;; ephemeral LLM-call telemetry event; assistant.message_start marks the
+    ;; start of a streaming assistant message; extensions.attachments_pushed is
+    ;; emitted when an extension pushes attachment pills. Canvas events are
+    ;; delivered even though the canvas authoring API is out of scope for 1.0.0
+    ;; (see doc limitations) so consumers can still observe them.
+    :copilot/model.call_failure
+    :copilot/session.extensions.attachments_pushed
+    :copilot/session.canvas.opened
+    :copilot/session.canvas.registry_changed})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -175,6 +186,7 @@
     :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta
     :copilot/assistant.message
+    :copilot/assistant.message_start
     :copilot/assistant.message_delta
     :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end

@@ -1037,6 +1037,7 @@
     :copilot/user.message :copilot/pending_messages.modified
     :copilot/assistant.turn_start :copilot/assistant.intent :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta :copilot/assistant.message :copilot/assistant.message_delta
+    :copilot/assistant.message_start
     :copilot/assistant.streaming_delta :copilot/assistant.turn_end :copilot/assistant.usage
     :copilot/abort
     :copilot/tool.user_requested :copilot/tool.execution_start :copilot/tool.execution_partial_result
@@ -1082,7 +1083,14 @@
     ;; mode toggles, and an ephemeral hook-progress event.
     :copilot/session.autopilot_objective_changed
     :copilot/session.permissions_changed
-    :copilot/hook.progress})
+    :copilot/hook.progress
+    ;; Remaining schema events (pinned schema 1.0.57): model-call telemetry,
+    ;; streaming message start, extension attachment pushes, and canvas events
+    ;; (delivered even though the canvas authoring API is out of scope for 1.0.0).
+    :copilot/model.call_failure
+    :copilot/session.extensions.attachments_pushed
+    :copilot/session.canvas.opened
+    :copilot/session.canvas.registry_changed})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)

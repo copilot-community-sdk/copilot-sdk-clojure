@@ -3,6 +3,28 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (GA parity)
+- **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
+  :azure-options {:azure-api-version ...}}` now serializes to the upstream wire
+  shape (`type` / `azure` / `apiVersion`) instead of the camelCased SDK names
+  (`providerType` / `azureOptions` / `azureApiVersion`). The runtime reads the
+  provider config verbatim, so the previous encoding meant non-OpenAI BYOK
+  (`:azure`, `:anthropic`) and the Azure `apiVersion` were silently dropped —
+  only `:openai` worked, because it is the runtime default. Matches the
+  `ProviderConfig` shape in `nodejs/src/types.ts`.
+
+### Changed (GA parity)
+- **Public `event-types` set now matches the pinned schema exactly.** The
+  curated set previously omitted `assistant.message_start`, `model.call_failure`,
+  `session.extensions.attachments_pushed`, and the two canvas events
+  (`session.canvas.opened`, `session.canvas.registry_changed`). These are all
+  delivered by the runtime and parsed by the wire layer, so consumers must be
+  able to discover them; they are now included (and added to the idiom
+  `::event-type` spec), with `assistant.message_start` also categorized under
+  `assistant-events`. The canvas authoring API remains out of scope for 1.0.0 —
+  only the events are observable. A new codegen test guards against future drift
+  between the public `event-types` set and the generated schema set.
+
 ### Added (v1.0.0-beta.12 sync)
 - **`:context-tier` and `:reasoning-summary` on `switch-model!` / `set-model!`**
   (upstream PR #1522). `:context-tier` accepts `:default` or `:long-context`
@@ -15,9 +37,7 @@ All notable changes to this project will be documented in this file. This change
   as an optional key, mirroring `::tool.execution_complete-data`.
 - **`session.extensions.attachments_pushed` event + `extension_context`
   attachment branch** — regenerated wire specs from the bumped schema
-  (upstream PR #1517). The new ephemeral event is not promoted to the curated
-  public `event-types` / `session-events` sets, consistent with the existing
-  canvas/extension surface.
+  (upstream PR #1517).
 
 ### Fixed (v1.0.0-beta.12 sync)
 - **Preserve opaque `extension_context` attachment payloads** — `extension_context`

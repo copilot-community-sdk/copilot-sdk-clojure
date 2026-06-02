@@ -41,6 +41,7 @@
             [clojure.string :as str]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-specs :as gen]
+            [github.copilot-sdk :as sdk]
             [github.copilot-sdk.specs])
   (:import [java.time Instant]))
 
@@ -290,6 +291,20 @@
     (doseq [event-type (keys fixtures)]
       (is (contains? gen/event-types event-type)
           (str event-type " missing from gen/event-types — schema may have moved")))))
+
+(deftest public-event-types-match-generated-schema-set
+  (testing "the public curated `event-types` set covers exactly the schema's event types
+            (guards against drift between the hand-curated GA surface and the pinned schema)"
+    (let [curated (set (map name sdk/event-types))
+          generated gen/event-types
+          missing (clojure.set/difference generated curated)
+          extra (clojure.set/difference curated generated)]
+      (is (empty? missing)
+          (str "schema event types missing from public event-types: " (sort missing)
+               " — add them (or update the schema pin)"))
+      (is (empty? extra)
+          (str "public event-types not present in the schema: " (sort extra)
+               " — remove them or update the schema pin")))))
 
 (deftest generated-data-specs-reject-envelope-weakened-types
   (testing "session.schedule_created-data rejects string :id (must be positive integer)"
