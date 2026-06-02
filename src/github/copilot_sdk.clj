@@ -1151,15 +1151,34 @@
   [name opts]
   (tools/define-tool name opts))
 
-;; Re-export result helpers
-(def result-success tools/result-success)
-(def result-failure tools/result-failure)
-(def result-denied tools/result-denied)
-(def result-rejected tools/result-rejected)
-(def convert-mcp-call-tool-result
+;; Re-export result helpers as thin wrappers so the public surface keeps the
+;; source docstrings and signatures (a bare `def` alias drops both).
+(defn result-success
+  "Create a successful tool result."
+  ([text] (tools/result-success text))
+  ([text telemetry] (tools/result-success text telemetry)))
+
+(defn result-failure
+  "Create a failed tool result."
+  ([text] (tools/result-failure text))
+  ([text error] (tools/result-failure text error))
+  ([text error telemetry] (tools/result-failure text error telemetry)))
+
+(defn result-denied
+  "Create a denied tool result (permission denied)."
+  ([text] (tools/result-denied text))
+  ([text telemetry] (tools/result-denied text telemetry)))
+
+(defn result-rejected
+  "Create a rejected tool result (user rejected)."
+  ([text] (tools/result-rejected text))
+  ([text telemetry] (tools/result-rejected text telemetry)))
+
+(defn convert-mcp-call-tool-result
   "Convert an MCP CallToolResult into the SDK's ToolResultObject format.
    See `github.copilot-sdk.tools/convert-mcp-call-tool-result`."
-  tools/convert-mcp-call-tool-result)
+  [result]
+  (tools/convert-mcp-call-tool-result result))
 
 ;; Re-export permission helpers
 (def approve-all
