@@ -1534,18 +1534,6 @@
           (assoc :maxPromptTokens (:maxInputTokens wire)))
       wire)))
 
-(defn- context-tier->wire
-  "Convert a Clojure :context-tier keyword to the wire string value.
-   The CLI expects \"default\" / \"long_context\" (underscore), so csk
-   camelCasing would produce the wrong value — we map explicitly."
-  [tier]
-  (case tier
-    :default "default"
-    :long-context "long_context"
-    nil nil
-    (throw (ex-info "Invalid :context-tier value (expected :default or :long-context)"
-                    {:context-tier tier}))))
-
 (defn- large-output->wire
   "Convert a :large-output config map to wire shape, accepting both the
    pre-existing `:output-dir` key and the upstream-aligned alias
@@ -1743,7 +1731,7 @@
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:reasoning-summary config) (assoc :reasoning-summary (:reasoning-summary config))
       (contains? config :context-tier)
-      (assoc :context-tier (context-tier->wire (:context-tier config)))
+      (assoc :context-tier (util/context-tier->wire (:context-tier config)))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
@@ -1857,7 +1845,7 @@
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:reasoning-summary config) (assoc :reasoning-summary (:reasoning-summary config))
       (contains? config :context-tier)
-      (assoc :context-tier (context-tier->wire (:context-tier config)))
+      (assoc :context-tier (util/context-tier->wire (:context-tier config)))
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))

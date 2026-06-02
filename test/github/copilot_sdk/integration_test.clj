@@ -3793,6 +3793,49 @@
                             {:model-capabilities {:model-supports {:supports-vision true}}})]
       (is (= true (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision]))))))
 
+(deftest test-switch-model-with-context-tier
+  (testing "switch-model! forwards contextTier (upstream PR #1522)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4" {:context-tier :long-context})]
+      (is (= "long_context" (:contextTier @captured-params))
+          "context-tier keyword must convert to the underscore wire value")))
+
+  (testing "switch-model! forwards reasoningSummary (setModel parity)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4" {:reasoning-summary "concise"})]
+      (is (= "concise" (:reasoningSummary @captured-params)))))
+
+  (testing "set-model! forwards contextTier (alias for switch-model!)"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/set-model! session "gpt-5.4" {:context-tier :default})]
+      (is (= "default" (:contextTier @captured-params)))))
+
+  (testing "switch-model! omits contextTier when :context-tier is nil"
+    (let [captured-params (atom nil)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= method "session.model.switchTo")
+                                        (reset! captured-params params))))
+          session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          _ (sdk/switch-model! session "gpt-5.4" {:context-tier nil})]
+      (is (not (contains? @captured-params :contextTier))
+          "nil :context-tier must be omitted, not sent as contextTier: null (switchTo schema has no null tier)"))))
+
 (deftest test-history-compact-rpc-name
   (testing "compaction-compact! uses session.history.compact RPC (upstream #1039)"
     (let [requests (atom [])

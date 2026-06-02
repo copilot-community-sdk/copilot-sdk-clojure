@@ -295,6 +295,8 @@
   :args (s/cat :session ::specs/session
                :model-id string?
                :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
+                                                      ::specs/reasoning-summary
+                                                      ::specs/context-tier
                                                       ::specs/model-capabilities]))))
   :ret (s/nilable ::specs/model-id))
 
@@ -302,6 +304,8 @@
   :args (s/cat :session ::specs/session
                :model-id string?
                :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
+                                                      ::specs/reasoning-summary
+                                                      ::specs/context-tier
                                                       ::specs/model-capabilities]))))
   :ret (s/nilable ::specs/model-id))
 
