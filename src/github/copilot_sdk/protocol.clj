@@ -564,6 +564,7 @@
     ;; Wait for read thread to exit
     (when-let [^Thread thread (:read-thread conn)]
       (try
+        (.interrupt thread)
         (.join thread 1000)
         (catch Exception _)))
 
