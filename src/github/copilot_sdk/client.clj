@@ -1291,11 +1291,14 @@
             (throw result)
             result))))))
 
-(defn list-tools
+(defn ^:experimental list-tools
   "List available tools with their metadata.
    Optional :model param returns model-specific tool overrides.
    Returns a vector of tool info maps with keys:
-   :name :namespaced-name :description :parameters :instructions"
+   :name :namespaced-name :description :parameters :instructions
+
+   Experimental: not part of the official Copilot SDK API; the wire RPC
+   (`tools.list`) is exposed for convenience and may change."
   ([client]
    (list-tools client nil))
   ([client model]
@@ -1313,11 +1316,14 @@
                (:instructions t) (assoc :instructions (:instructions t))))
            tools))))
 
-(defn get-quota
+(defn ^:experimental get-quota
   "Get account quota information.
    Returns a map of quota type (string) to quota snapshot maps:
    {:entitlement-requests :used-requests :remaining-percentage
-    :overage :overage-allowed-with-exhausted-quota? :reset-date}"
+    :overage :overage-allowed-with-exhausted-quota? :reset-date}
+
+   Experimental: not part of the official Copilot SDK API; the wire RPC
+   (`account.getQuota`) is exposed for convenience and may change."
   [client]
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)

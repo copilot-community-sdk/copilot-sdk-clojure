@@ -14,6 +14,12 @@ All notable changes to this project will be documented in this file. This change
   `ProviderConfig` shape in `nodejs/src/types.ts`.
 
 ### Changed (GA parity)
+- **`list-tools`, `get-quota`, and `get-current-model` are now marked
+  `^:experimental`.** None of these correspond to a method on the official
+  Copilot SDK's `CopilotClient` / `CopilotSession`; they expose convenience
+  wire RPCs (`tools.list`, `account.getQuota`, `session.model.getCurrent`).
+  Marking them experimental keeps the stable GA surface aligned with the
+  upstream SDK while leaving the helpers available. Non-breaking.
 - **Public `event-types` set now matches the pinned schema exactly.** The
   curated set previously omitted `assistant.message_start`, `model.call_failure`,
   `session.extensions.attachments_pushed`, and the two canvas events

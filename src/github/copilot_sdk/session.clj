@@ -1552,9 +1552,12 @@
   (let [{:keys [session-id client]} session]
     (:workspace-path (session-state client session-id))))
 
-(defn get-current-model
+(defn ^:experimental get-current-model
   "Get the current model for this session.
-   Returns the model ID string, or nil if none set."
+   Returns the model ID string, or nil if none set.
+
+   Experimental: not part of the official Copilot SDK API; the wire RPC
+   (`session.model.getCurrent`) is exposed for convenience and may change."
   [session]
   (let [{:keys [session-id client]} session
         conn (connection-io client)
