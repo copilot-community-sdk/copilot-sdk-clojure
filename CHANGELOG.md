@@ -15,6 +15,14 @@ All notable changes to this project will be documented in this file. This change
   and `ex-data` before the exception is thrown.
 
 ### Fixed (correctness)
+- **`subscribe-events` / `events->chan` now actually isolate slow subscribers.**
+  Both used a fixed (blocking) channel buffer, but their docstrings promised
+  that a full subscriber buffer drops events "for this subscriber only." With a
+  fixed buffer, `mult` blocks when any tap's buffer fills, stalling delivery to
+  *all* subscribers until the slow one drains. Both wrappers now use a
+  `sliding-buffer`, so a slow subscriber drops its own oldest events without
+  ever blocking the mult or other subscribers — matching the documented
+  behavior. Docstrings and the API reference were corrected accordingly.
 - **A failed `start!` no longer leaks resources.** If startup failed after the
   CLI process was spawned (e.g. the process died before announcing its port, or
   protocol verification failed), the error path only set the client status to

@@ -1499,15 +1499,14 @@
    The channel will receive nil (close) when the session is disconnected.
    For explicit cleanup before session disconnection, call unsubscribe-events.
    
-   Drop behavior: If this subscriber's channel buffer is full when mult tries
-   to deliver an event, that specific event is silently dropped for this
-   subscriber only. Other subscribers with available buffer space still receive
-   the event. The returned channel has a buffer of 1024 events which should be
-   sufficient for most use cases.
+   Drop behavior: the returned channel uses a sliding buffer of 1024 events.
+   If this subscriber falls behind and its buffer fills, the oldest buffered
+   events are dropped for this subscriber only — delivery to other subscribers
+   is never blocked. 1024 is sufficient for most use cases.
    
    This is a convenience wrapper around (tap (events session) ch)."
   [session]
-  (let [ch (chan 1024)
+  (let [ch (chan (async/sliding-buffer 1024))
         {:keys [session-id client]} session
         {:keys [event-mult]} (session-io client session-id)]
     (tap event-mult ch)
@@ -1520,16 +1519,17 @@
    - :buffer - Channel buffer size (default 1024)
    - :xf     - Transducer applied to events
 
-   Drop behavior: If this subscriber's channel buffer is full when mult tries
-   to deliver an event, that specific event is silently dropped for this
-   subscriber only. Other subscribers with available buffer space still receive
-   the event."
+   Drop behavior: the returned channel uses a sliding buffer of `:buffer`
+   events. If this subscriber falls behind and its buffer fills, the oldest
+   buffered events are dropped for this subscriber only — delivery to other
+   subscribers is never blocked."
   ([session]
    (events->chan session {}))
   ([session {:keys [buffer xf] :or {buffer 1024}}]
    (let [{:keys [session-id client]} session
          {:keys [event-mult]} (session-io client session-id)
-         ch (if xf (chan buffer xf) (chan buffer))]
+         buf (async/sliding-buffer buffer)
+         ch (if xf (chan buf xf) (chan buf))]
      (tap event-mult ch)
      ch)))
 

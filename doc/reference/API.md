@@ -831,22 +831,23 @@ Subscribe to session events with optional buffer size and transducer.
 (copilot/subscribe-events session)
 ```
 
-Subscribe to session events. Returns a channel (buffer size 1024) that receives events.
+Subscribe to session events. Returns a channel (sliding buffer, size 1024) that receives events.
 This is a convenience wrapper around `(tap (copilot/events session) ch)`.
 
 ##### Event Drop Behavior
 
-Session events are delivered via core.async `mult`. When `mult` receives an event, it
-attempts to `put!` to each subscriber's channel. **If a subscriber's buffer is full at
-that moment, that specific event is silently dropped for that subscriber only.**
+Session events are delivered via core.async `mult` to a per-subscriber **sliding-buffer**
+channel. Because a sliding buffer never blocks on `put!`, `mult` is never stalled by a slow
+subscriber. **If a subscriber falls behind and its buffer fills, the oldest buffered events
+are dropped for that subscriber only** to make room for new ones.
 
 Key points:
-- **Per-subscriber**: Each subscriber is independent. If subscriber A's buffer is full
-  but B has space, only A misses the event.
-- **Per-event**: Only the event that arrived when the buffer was full is dropped.
-  Earlier events already in the buffer are not affected.
+- **Per-subscriber**: Each subscriber is independent. A slow subscriber drops its own oldest
+  events without affecting delivery to other subscribers.
+- **Oldest-first**: When the buffer is full, the oldest buffered events are dropped, not the
+  newest — subscribers always see the most recent events.
 - **Silent**: No error, warning, or indication that a drop occurred.
-- **Not recoverable**: The dropped event is gone for that subscriber.
+- **Not recoverable**: Dropped events are gone for that subscriber.
 
 With the default 1024 buffer, drops are unlikely unless a subscriber completely stops
 reading. For most use cases, this is not a concern.
