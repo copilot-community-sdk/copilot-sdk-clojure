@@ -172,4 +172,6 @@ Real recurring traps when porting upstream changes:
 
 4. **Test fixtures: match the shape the layer actually produces.** Mock server responses use wire shape; client-side assertions use idiomatic shape. Production conversion (`util/wire->clj`) only transforms keyword keys — string-keyed fixtures silently bypass it and produce tests that pass for the wrong reason.
 
+5. **Outbound optional fields: match upstream's omit-vs-null behavior per RPC.** Don't reflexively gate an optional wire field on `contains?` and emit JSON `null`. Some patch RPCs (e.g. `session.options.update`) genuinely accept `null` to clear a value; others (e.g. `session.model.switchTo`) have no null variant in the schema — upstream spreads `...options`, dropping `undefined`. Check the upstream call site and the request schema: if the field has no null union, compute the wire value first and gate on `(some? v)` so a `nil` option omits the key instead of sending `null`.
+
 For the mechanics of camelCase ↔ kebab-case conversion (including the `?`-suffix rule), see the cheat sheet in `references/PROJECT.md`.
