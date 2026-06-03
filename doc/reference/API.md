@@ -133,6 +133,8 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:remote?` | boolean | `false` | When `true`, append `--remote` to the spawned CLI args so the CLI exposes the session over a GitHub-hosted remote endpoint. Ignored when `:cli-url` is set. (upstream PR #1192) |
 | `:session-idle-timeout-seconds` | integer | `0` (disabled) | Server-wide session idle timeout in seconds. When `> 0`, append `--session-idle-timeout <n>` to the spawned CLI so idle sessions are cleaned up after the given duration. |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
+| `:telemetry` | map | nil | OpenTelemetry export config, applied as environment variables to the **spawned** CLI (ignored when connecting to an existing server via `:cli-url` or a parent process via `:is-child-process?`, since no CLI is spawned). When present, enables OTel. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785) |
+| `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}`, called per request (session create/resume and each message send) to propagate a distributed-trace context. Only `:traceparent` and `:tracestate` are forwarded. See [Observability](#observability) |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
 | `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 9 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
@@ -263,6 +265,9 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
 | `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
+| `:on-exit-plan-mode` | fn | Handler for `exitPlanMode.request` RPCs — invoked when the agent asks to leave plan mode. When provided, advertises `requestExitPlanMode=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
+| `:on-auto-mode-switch` | fn | Handler for `autoModeSwitch.request` RPCs — invoked when the agent asks to switch autonomy mode. When provided, advertises `requestAutoModeSwitch=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
+| `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set; defaulted to `false` in `:mode :empty` (caller can override). Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
 | `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
@@ -1555,6 +1560,70 @@ When `:streaming? true`:
 - `:copilot/assistant.reasoning_delta` events contain incremental reasoning in `:delta-content` (model-dependent)
 - Accumulate delta values to build the full response progressively
 - The final `:copilot/assistant.message` event always contains the complete content
+
+---
+
+## Observability
+
+The SDK supports two independent telemetry mechanisms.
+
+### OpenTelemetry export (client `:telemetry`)
+
+Pass a `:telemetry` map in the **client** options to enable OpenTelemetry export on the
+spawned CLI. Presence of the map enables OTel; all sub-keys are optional:
+
+```clojure
+(def client
+  (copilot/client
+    {:telemetry {:otlp-endpoint "http://localhost:4318"
+                 :exporter-type "otlp"
+                 :source-name   "my-app"
+                 :capture-content? false}}))
+```
+
+| Key | Type | Description | CLI env var |
+|-----|------|-------------|-------------|
+| `:otlp-endpoint` | string | OTLP HTTP endpoint to export spans to | `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `:file-path` | string | Write spans to a local file instead of/alongside OTLP | `COPILOT_OTEL_FILE_EXPORTER_PATH` |
+| `:exporter-type` | string | Exporter selection | `COPILOT_OTEL_EXPORTER_TYPE` |
+| `:source-name` | string | Service / source name attached to spans | `COPILOT_OTEL_SOURCE_NAME` |
+| `:capture-content?` | boolean | Capture prompt/response content in spans. **Defaults to off** — only enable in trusted environments, as it records message content | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` |
+
+When `:telemetry` is present the SDK sets `COPILOT_OTEL_ENABLED=true` on the CLI process.
+(upstream PR #785)
+
+#### Distributed trace propagation (`:on-get-trace-context`)
+
+To stitch CLI spans into a caller-managed distributed trace, provide a zero-arg
+`:on-get-trace-context` function in the **client** options. The SDK calls it **per request**
+to capture a fresh trace context — on session create, session resume, and every message
+send — forwarding only `:traceparent` and `:tracestate`:
+
+```clojure
+(def client
+  (copilot/client
+    {:on-get-trace-context
+     (fn [] {:traceparent "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+             :tracestate  "rojo=00f067aa0ba902b7"})}))
+```
+
+### Internal session telemetry (`:enable-session-telemetry?`)
+
+`:enable-session-telemetry?` is a **session** config flag that controls the CLI's own
+internal usage telemetry — independent of the OpenTelemetry export above. It defaults to
+enabled for GitHub-authenticated sessions and is **always disabled** when a BYOK
+`:provider` is configured. In `:mode :empty` it is defaulted to `false` as one of the
+multi-tenant hardening defaults (the caller can still set it explicitly). Set it to
+`false` to opt out:
+
+```clojure
+(def session
+  (copilot/create-session client
+    {:enable-session-telemetry? false
+     :on-permission-request copilot/approve-all}))
+```
+
+(upstream PR #1224)
 
 ---
 
