@@ -12,6 +12,28 @@ All notable changes to this project will be documented in this file. This change
   range are Go/Java/CI/release plumbing and E2E test de-flaking — nothing to
   port. This SDK is therefore at full API/wire/schema parity with upstream GA.
 
+### Documentation
+- **Documented observability/telemetry.** Added an Observability section to the
+  API reference covering the client `:telemetry` map (OpenTelemetry export:
+  `:otlp-endpoint`, `:file-path`, `:exporter-type`, `:source-name`,
+  `:capture-content?`), the client `:on-get-trace-context` distributed-trace hook,
+  and the session `:enable-session-telemetry?` flag. These options were already
+  implemented but undocumented in the API reference.
+- **Documented `:on-exit-plan-mode` and `:on-auto-mode-switch`** session config
+  handlers (upstream PR #1228) in the API reference, plus added option-table rows
+  for `:telemetry` and `:on-get-trace-context` to the client constructor.
+- **Corrected stale docstrings.** The top-level `create-session`,
+  `resume-session`, and `join-session` docstrings claimed `:on-permission-request`
+  was **required**; it has been **optional** since upstream PR #1308. Docstrings
+  now match the implementation.
+- **Added a Features navigation map** to the documentation hub and a durable
+  `doc/upstream-doc-gap-matrix.md` recording per-topic coverage versus the
+  upstream SDK docs.
+- **Doc validation now covers `doc/`-root pages.** `bb validate-docs` previously
+  skipped markdown files directly under `doc/` (e.g. `index.md`,
+  `getting-started.md`); it now validates them, and link extraction ignores
+  illustrative links inside inline-code spans.
+
 ### Security
 - **Validation exceptions no longer leak secrets.** Configuration validation
   failures (`client`, `create-session`, `resume-session`, and MCP-server checks)
