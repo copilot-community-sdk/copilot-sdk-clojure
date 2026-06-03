@@ -133,8 +133,8 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:remote?` | boolean | `false` | When `true`, append `--remote` to the spawned CLI args so the CLI exposes the session over a GitHub-hosted remote endpoint. Ignored when `:cli-url` is set. (upstream PR #1192) |
 | `:session-idle-timeout-seconds` | integer | `0` (disabled) | Server-wide session idle timeout in seconds. When `> 0`, append `--session-idle-timeout <n>` to the spawned CLI so idle sessions are cleaned up after the given duration. |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
-| `:telemetry` | map | nil | OpenTelemetry export config. When present, enables OTel on the spawned CLI. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785) |
-| `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}` to propagate a distributed-trace context into each session. Only `:traceparent` and `:tracestate` are forwarded. See [Observability](#observability) |
+| `:telemetry` | map | nil | OpenTelemetry export config, applied as environment variables to the **spawned** CLI (ignored when connecting to an existing server via `:cli-url` or a parent process via `:is-child-process?`, since no CLI is spawned). When present, enables OTel. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785) |
+| `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}`, called per request (session create/resume and each message send) to propagate a distributed-trace context. Only `:traceparent` and `:tracestate` are forwarded. See [Observability](#observability) |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
 | `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 9 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
@@ -1595,9 +1595,9 @@ When `:telemetry` is present the SDK sets `COPILOT_OTEL_ENABLED=true` on the CLI
 #### Distributed trace propagation (`:on-get-trace-context`)
 
 To stitch CLI spans into a caller-managed distributed trace, provide a zero-arg
-`:on-get-trace-context` function in the **client** options. The SDK calls it to capture a
-fresh trace context for session operations (session create, resume, and each message
-send), forwarding only `:traceparent` and `:tracestate`:
+`:on-get-trace-context` function in the **client** options. The SDK calls it **per request**
+to capture a fresh trace context — on session create, session resume, and every message
+send — forwarding only `:traceparent` and `:tracestate`:
 
 ```clojure
 (def client

@@ -486,10 +486,9 @@
    - :disabled-skills      - Disable specific skills by name
    - :working-directory    - Working directory for the session (tool operations relative to this)
 
-   See the [API reference](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/reference/API.md)
-   for the complete, current option list (including observability/telemetry, trace
-   context, exit-plan-mode / auto-mode-switch handlers, skills, plugins, remote, and
-   cloud session options).
+   See the API reference (doc/reference/API.md in this repository) for the complete,
+   current option list (including observability/telemetry, trace context, exit-plan-mode /
+   auto-mode-switch handlers, skills, plugins, remote, and cloud session options).
 
    Example:
    ```clojure
