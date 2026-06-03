@@ -49,7 +49,7 @@
   (let [deadline (timeout 120000)]
     (try
       (loop []
-        (let [[event port] (alts!! [ch deadline])]
+        (let [[event port] (alts!! [ch deadline] :priority true)]
           (cond
             (= port deadline)
             (throw (ex-info "Timed out waiting for session event" {:event-type type-kw}))
