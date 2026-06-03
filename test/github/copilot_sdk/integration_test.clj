@@ -352,19 +352,15 @@
       (is (= "claude-sonnet-4.5" new-model))
       (is (= "claude-sonnet-4.5" (sdk/get-current-model session))))))
 
-(deftest test-log-message-only
-  (testing "Log with message only returns event-id"
-    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          event-id (sdk/log! session "Processing started")]
-      (is (string? event-id))
-      (is (seq event-id)))))
-
-(deftest test-log-with-options
-  (testing "Log with level and ephemeral options returns event-id"
-    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          event-id (sdk/log! session "Something went wrong" {:level "error" :ephemeral? true})]
-      (is (string? event-id))
-      (is (seq event-id)))))
+(deftest test-log-returns-event-id
+  (testing "log! returns a non-empty event-id string"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
+      (doseq [[desc args] [["message only" ["Processing started"]]
+                           ["with level + ephemeral options" ["Something went wrong" {:level "error" :ephemeral? true}]]]]
+        (testing desc
+          (let [event-id (apply sdk/log! session args)]
+            (is (string? event-id))
+            (is (seq event-id))))))))
 
 (deftest test-log-verifies-rpc-params
   (testing "Log sends correct RPC params"
@@ -833,6 +829,59 @@
       (is (= "key" (:apiKey create-provider)))
       (is (not (contains? create-provider :maxPromptTokens)))
       (is (not (contains? create-provider :maxInputTokens))))))
+
+(deftest test-provider-config-type-and-azure-wire-keys
+  (testing "ProviderConfig :provider-type/:azure-options serialize with upstream wire keys
+            (type/azure/apiVersion), not camelCased SDK names (parity with nodejs ProviderConfig)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          provider {:provider-type :azure
+                    :wire-api :responses
+                    :base-url "https://my-resource.openai.azure.com"
+                    :api-key "key"
+                    :bearer-token "tok"
+                    :azure-options {:azure-api-version "2024-02-01"}}
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})]
+      (doseq [method ["session.create" "session.resume"]]
+        (let [p (get-in @seen [method :provider])]
+          (testing method
+            (is (= "azure" (:type p)) "wire key must be `type`")
+            (is (not (contains? p :providerType)) "SDK key `providerType` must NOT leak onto wire")
+            (is (= {:apiVersion "2024-02-01"} (:azure p)) "wire key must be `azure` with `apiVersion`")
+            (is (not (contains? p :azureOptions)) "SDK key `azureOptions` must NOT leak onto wire")
+            (is (not (contains? (:azure p) :azureApiVersion)) "nested `azureApiVersion` must NOT leak")
+            ;; Correctly-camelCased fields must still survive alongside the remaps.
+            (is (= "responses" (:wireApi p)))
+            (is (= "https://my-resource.openai.azure.com" (:baseUrl p)))
+            (is (= "tok" (:bearerToken p)))))))))
+
+(deftest test-provider-config-absent-azure-stays-absent
+  (testing "ProviderConfig without :azure-options must not emit a wire `azure` key"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= method "session.create")
+                                                      (reset! seen params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "gpt-5.4"
+                                 :provider {:provider-type :anthropic
+                                            :base-url "https://api.anthropic.com"
+                                            :api-key "key"}})
+          p (get-in @seen [:provider])]
+      (is (= "anthropic" (:type p)))
+      (is (not (contains? p :providerType)))
+      (is (not (contains? p :azure)))
+      (is (not (contains? p :azureOptions))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Schedule events (upstream schema 1.0.42 — adds session.schedule_created and
@@ -1440,14 +1489,14 @@
                                           (.countDown rpc-latch))))
             session (sdk/create-session *test-client*
                                         {:on-permission-request
-                                          (fn [_request _ctx]
-                                            (cond-> {:kind legacy-kind}
-                                              (= legacy-kind :denied-interactively-by-user)
-                                              (assoc :feedback "custom feedback")
+                                         (fn [_request _ctx]
+                                           (cond-> {:kind legacy-kind}
+                                             (= legacy-kind :denied-interactively-by-user)
+                                             (assoc :feedback "custom feedback")
 
-                                              true
-                                              (assoc :rules [{:kind "shell"}]
-                                                     :internal true)))})
+                                             true
+                                             (assoc :rules [{:kind "shell"}]
+                                                    :internal true)))})
             session-id (sdk/session-id session)]
         (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
         (reset! requests [])
@@ -2271,63 +2320,43 @@
           (is (= "cmd-req-1" (:requestId (:params (first cmd-rpcs)))))
           (is (nil? (:error (:params (first cmd-rpcs))))))))))
 
-(deftest test-command-execute-unknown-command
-  (testing "unknown command sends error via RPC"
-    (let [requests (atom [])
-          rpc-latch (java.util.concurrent.CountDownLatch. 1)
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (swap! requests conj {:method method :params params})
-                                      (when (= "session.commands.handlePendingCommand" method)
-                                        (.countDown rpc-latch))))
-          session (sdk/create-session *test-client*
-                                      {:on-permission-request sdk/approve-all
-                                       :commands [{:name "deploy"
-                                                   :command-handler (fn [_] nil)}]})
-          session-id (sdk/session-id session)]
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      (reset! requests [])
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "command.execute"
-                                     {:requestId "cmd-req-2"
-                                      :command "/unknown"
-                                      :commandName "unknown"
-                                      :args ""})
-      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
-      (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
-        (is (= 1 (count cmd-rpcs)))
-        (when (seq cmd-rpcs)
-          (is (string? (:error (:params (first cmd-rpcs)))))
-          (is (re-find #"Unknown command" (:error (:params (first cmd-rpcs))))))))))
-
-(deftest test-command-handler-error
-  (testing "command handler exception sends error via RPC"
-    (let [requests (atom [])
-          rpc-latch (java.util.concurrent.CountDownLatch. 1)
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (swap! requests conj {:method method :params params})
-                                      (when (= "session.commands.handlePendingCommand" method)
-                                        (.countDown rpc-latch))))
-          session (sdk/create-session *test-client*
-                                      {:on-permission-request sdk/approve-all
-                                       :commands [{:name "fail"
-                                                   :command-handler (fn [_]
-                                                                      (throw (Exception. "deploy failed")))}]})
-          session-id (sdk/session-id session)]
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      (reset! requests [])
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "command.execute"
-                                     {:requestId "cmd-req-3"
-                                      :command "/fail"
-                                      :commandName "fail"
-                                      :args ""})
-      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
-      (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)]
-        (is (= 1 (count cmd-rpcs)))
-        (when (seq cmd-rpcs)
-          (is (= "deploy failed" (:error (:params (first cmd-rpcs))))))))))
+(deftest test-command-error-rpc
+  (testing "command errors are reported via handlePendingCommand"
+    (doseq [[desc commands req-id command command-name expected-error]
+            [["unknown command reports an error"
+              [{:name "deploy" :command-handler (fn [_] nil)}]
+              "cmd-req-2" "/unknown" "unknown" #"Unknown command"]
+             ["handler exception reports the exception message"
+              [{:name "fail" :command-handler (fn [_] (throw (Exception. "deploy failed")))}]
+              "cmd-req-3" "/fail" "fail" "deploy failed"]]]
+      (testing desc
+        (let [requests (atom [])
+              rpc-latch (java.util.concurrent.CountDownLatch. 1)
+              _ (mock/set-request-hook! *mock-server*
+                                        (fn [method params]
+                                          (swap! requests conj {:method method :params params})
+                                          (when (= "session.commands.handlePendingCommand" method)
+                                            (.countDown rpc-latch))))
+              session (sdk/create-session *test-client*
+                                          {:on-permission-request sdk/approve-all
+                                           :commands commands})
+              session-id (sdk/session-id session)]
+          (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+          (reset! requests [])
+          (mock/send-v3-broadcast-event! *mock-server* session-id
+                                         "command.execute"
+                                         {:requestId req-id
+                                          :command command
+                                          :commandName command-name
+                                          :args ""})
+          (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+          (let [cmd-rpcs (filter #(= "session.commands.handlePendingCommand" (:method %)) @requests)
+                err (:error (:params (first cmd-rpcs)))]
+            (is (= 1 (count cmd-rpcs)))
+            (when (seq cmd-rpcs)
+              (if (string? expected-error)
+                (is (= expected-error err))
+                (is (re-find expected-error err))))))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Capabilities and Elicitation Tests
@@ -3448,99 +3477,55 @@
 ;; Tool Result Normalization Tests (v3 broadcast path)
 ;; -----------------------------------------------------------------------------
 
-(deftest test-tool-result-string-passthrough
-  (testing "tool handler returning string is normalized to success result"
-    (let [requests (atom [])
-          rpc-latch (java.util.concurrent.CountDownLatch. 1)
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (swap! requests conj {:method method :params params})
-                                      (when (= "session.tools.handlePendingToolCall" method)
-                                        (.countDown rpc-latch))))
-          session (sdk/create-session *test-client*
-                                      {:on-permission-request sdk/approve-all
-                                       :tools [{:tool-name "test-tool"
-                                                :tool-handler (fn [_args _inv] "hello world")}]})
-          session-id (sdk/session-id session)]
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      (reset! requests [])
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "external_tool.requested"
-                                     {:requestId "tool-req-1"
-                                      :toolName "test-tool"
-                                      :toolCallId "tc-1"
-                                      :arguments {}})
-      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
-      (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
-            result (get-in (first rpcs) [:params :result])]
-        (is (= 1 (count rpcs)))
-        (is (map? result))
-        (is (= "hello world" (:textResultForLlm result)))
-        (is (= "success" (:resultType result)))))))
-
-(deftest test-tool-result-nil-normalized
-  (testing "tool handler returning nil is normalized to failure result"
-    (let [requests (atom [])
-          rpc-latch (java.util.concurrent.CountDownLatch. 1)
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (swap! requests conj {:method method :params params})
-                                      (when (= "session.tools.handlePendingToolCall" method)
-                                        (.countDown rpc-latch))))
-          session (sdk/create-session *test-client*
-                                      {:on-permission-request sdk/approve-all
-                                       :tools [{:tool-name "nil-tool"
-                                                :tool-handler (fn [_args _inv] nil)}]})
-          session-id (sdk/session-id session)]
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      (reset! requests [])
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "external_tool.requested"
-                                     {:requestId "tool-req-2"
-                                      :toolName "nil-tool"
-                                      :toolCallId "tc-2"
-                                      :arguments {}})
-      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
-      (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
-            result (get-in (first rpcs) [:params :result])]
-        (is (= 1 (count rpcs)))
-        (is (map? result))
-        (is (= "Tool returned no result" (:textResultForLlm result)))
-        (is (= "failure" (:resultType result)))))))
-
-(deftest test-tool-result-structured-object
-  (testing "tool handler returning structured ToolResultObject is forwarded correctly"
-    (let [requests (atom [])
-          rpc-latch (java.util.concurrent.CountDownLatch. 1)
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (swap! requests conj {:method method :params params})
-                                      (when (= "session.tools.handlePendingToolCall" method)
-                                        (.countDown rpc-latch))))
-          session (sdk/create-session *test-client*
-                                      {:on-permission-request sdk/approve-all
-                                       :tools [{:tool-name "struct-tool"
-                                                :tool-handler (fn [_args _inv]
-                                                                {:text-result-for-llm "all good"
-                                                                 :result-type "success"
-                                                                 :tool-telemetry {:latency-ms 42}})}]})
-          session-id (sdk/session-id session)]
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      (reset! requests [])
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "external_tool.requested"
-                                     {:requestId "tool-req-3"
-                                      :toolName "struct-tool"
-                                      :toolCallId "tc-3"
-                                      :arguments {}})
-      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
-      (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
-            result (get-in (first rpcs) [:params :result])]
-        (is (= 1 (count rpcs)))
-        (is (map? result))
-        (is (= "all good" (:textResultForLlm result)))
-        (is (= "success" (:resultType result)))
-        (is (= 42 (get-in result [:toolTelemetry :latencyMs])))))))
+(deftest test-tool-result-normalization
+  (testing "tool handler return values are normalized into the handlePendingToolCall result"
+    (doseq [[desc tool-handler req-id tc-id assert-result]
+            [["string is normalized to success"
+              (fn [_args _inv] "hello world") "tool-req-1" "tc-1"
+              (fn [result]
+                (is (= "hello world" (:textResultForLlm result)))
+                (is (= "success" (:resultType result))))]
+             ["nil is normalized to failure"
+              (fn [_args _inv] nil) "tool-req-2" "tc-2"
+              (fn [result]
+                (is (= "Tool returned no result" (:textResultForLlm result)))
+                (is (= "failure" (:resultType result))))]
+             ["structured ToolResultObject is forwarded with telemetry"
+              (fn [_args _inv] {:text-result-for-llm "all good"
+                                :result-type "success"
+                                :tool-telemetry {:latency-ms 42}})
+              "tool-req-3" "tc-3"
+              (fn [result]
+                (is (= "all good" (:textResultForLlm result)))
+                (is (= "success" (:resultType result)))
+                (is (= 42 (get-in result [:toolTelemetry :latencyMs]))))]]]
+      (testing desc
+        (let [requests (atom [])
+              rpc-latch (java.util.concurrent.CountDownLatch. 1)
+              _ (mock/set-request-hook! *mock-server*
+                                        (fn [method params]
+                                          (swap! requests conj {:method method :params params})
+                                          (when (= "session.tools.handlePendingToolCall" method)
+                                            (.countDown rpc-latch))))
+              session (sdk/create-session *test-client*
+                                          {:on-permission-request sdk/approve-all
+                                           :tools [{:tool-name "test-tool"
+                                                    :tool-handler tool-handler}]})
+              session-id (sdk/session-id session)]
+          (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+          (reset! requests [])
+          (mock/send-v3-broadcast-event! *mock-server* session-id
+                                         "external_tool.requested"
+                                         {:requestId req-id
+                                          :toolName "test-tool"
+                                          :toolCallId tc-id
+                                          :arguments {}})
+          (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+          (let [rpcs (filter #(= "session.tools.handlePendingToolCall" (:method %)) @requests)
+                result (get-in (first rpcs) [:params :result])]
+            (is (= 1 (count rpcs)))
+            (is (map? result))
+            (assert-result result)))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session RPC Wrapper Tests (experimental session APIs)
@@ -4145,40 +4130,29 @@
 
 ;; --- requestPermission behavioral change (upstream PR #1056) ----------------
 
-(deftest test-request-permission-true-on-create
-  (testing "session.create always sends requestPermission: true"
-    (let [seen (atom {})
-          _ (mock/set-request-hook! *mock-server* (fn [method params]
-                                                    (when (#{"session.create"} method)
-                                                      (swap! seen assoc method params))))
-          _ (sdk/create-session *test-client*
-                                {:on-permission-request sdk/approve-all})
-          create-params (get @seen "session.create")]
-      (is (true? (:requestPermission create-params))))))
-
-(deftest test-request-permission-false-on-resume-without-handler
-  (testing "session.resume sends requestPermission: false with default handler"
-    (let [seen (atom {})
-          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
-          _ (mock/set-request-hook! *mock-server* (fn [method params]
-                                                    (when (#{"session.resume"} method)
-                                                      (swap! seen assoc method params))))
-          _ (sdk/resume-session *test-client* session-id
-                                {:on-permission-request sdk/default-join-session-permission-handler})
-          resume-params (get @seen "session.resume")]
-      (is (false? (:requestPermission resume-params))))))
-
-(deftest test-request-permission-true-on-resume-with-handler
-  (testing "session.resume sends requestPermission: true when handler provided"
-    (let [seen (atom {})
-          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
-          _ (mock/set-request-hook! *mock-server* (fn [method params]
-                                                    (when (#{"session.resume"} method)
-                                                      (swap! seen assoc method params))))
-          _ (sdk/resume-session *test-client* session-id
-                                {:on-permission-request sdk/approve-all})
-          resume-params (get @seen "session.resume")]
-      (is (true? (:requestPermission resume-params))))))
+(deftest test-request-permission-flag-on-create-and-resume
+  (testing "requestPermission flag reflects whether a permission handler is active"
+    (let [base-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))]
+      (doseq [[desc method create! expected]
+              [["session.create always sends requestPermission: true"
+                "session.create"
+                #(sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+                true]
+               ["session.resume with default join handler sends requestPermission: false"
+                "session.resume"
+                #(sdk/resume-session *test-client* base-id
+                                     {:on-permission-request sdk/default-join-session-permission-handler})
+                false]
+               ["session.resume with explicit handler sends requestPermission: true"
+                "session.resume"
+                #(sdk/resume-session *test-client* base-id {:on-permission-request sdk/approve-all})
+                true]]]
+        (testing desc
+          (let [seen (atom nil)]
+            (mock/set-request-hook! *mock-server*
+                                    (fn [m params] (when (= method m) (reset! seen params))))
+            (create!)
+            (is (= expected (:requestPermission @seen)))))))))
 
 ;; --- New RPC wrappers (CLI 1.0.22 / 1.0.26) --------------------------------
 
@@ -5568,6 +5542,73 @@
     (let [c (sdk/client {:mode :copilot-cli :auto-start? false})]
       (is (= :copilot-cli (get-in c [:options :mode]))))))
 
+(deftest test-validation-errors-redact-secrets
+  (testing "secrets never appear in validation exception data or messages (SEC-1)"
+    (let [token "ghp_SUPERSECRETtoken123"
+          tcp-token "tcptokenSECRET000"
+          azure-key "sk-azureSECRET456"
+          mcp-secret "Bearer mcpSECRET789"
+          dump (fn [^Throwable e] (pr-str (Throwable->map e)))
+          leaked? (fn [^Throwable e ^String s]
+                    (or (.contains (str (ex-message e)) s)
+                        (.contains ^String (dump e) s)))
+          capture (fn [f] (try (f) nil (catch clojure.lang.ExceptionInfo e e)))]
+      (testing "client-options spec-explain path"
+        (let [e (capture #(sdk/client {:github-token token :log-level :bogus :auto-start? false}))]
+          (is (some? e) "expected a validation failure")
+          (is (not (leaked? e token)) "github-token must be redacted")))
+      (testing "client-options unknown-keys path"
+        (let [e (capture #(sdk/client {:github-token token :totally-unknown-key 1 :auto-start? false}))]
+          (is (some? e))
+          (is (not (leaked? e token)) "github-token must be redacted")))
+      (testing "client-options mutual-exclusion raw-opts path"
+        (let [e (capture #(sdk/client {:cli-url "localhost:1234" :use-stdio? true
+                                       :tcp-connection-token tcp-token :auto-start? false}))]
+          (is (some? e))
+          (is (not (leaked? e tcp-token)) "tcp-connection-token must be redacted")))
+      (testing "session-config BYOK provider api-key"
+        (let [c (sdk/client {:auto-start? false})
+              e (capture #(sdk/create-session c {:provider {:provider-type "azure" :api-key azure-key}}))]
+          (is (some? e))
+          (is (not (leaked? e azure-key)) "BYOK :api-key must be redacted")))
+      (testing "resume-config BYOK provider api-key"
+        (let [c (sdk/client {:auto-start? false})
+              e (capture #(sdk/resume-session c "sid" {:provider {:provider-type "azure" :api-key azure-key}}))]
+          (is (some? e))
+          (is (not (leaked? e azure-key)) "BYOK :api-key must be redacted")))
+      (testing "mcp-servers header secret"
+        (let [c (sdk/client {:auto-start? false})
+              e (capture #(sdk/create-session c {:mcp-servers {"s" {:mcp-headers {"Authorization" mcp-secret}}}}))]
+          (is (some? e))
+          (is (not (leaked? e mcp-secret)) "MCP header secret must be redacted")))
+      (testing "client-options :env secret value"
+        ;; :env is merged into the spawned CLI environment, so it can carry
+        ;; credentials; a validation failure must not leak them via ex-data.
+        (let [env-secret "ghp_ENVSECRET999"
+              e (capture #(sdk/client {:env {"GH_TOKEN" env-secret} :log-level :bogus :auto-start? false}))]
+          (is (some? e))
+          (is (not (leaked? e env-secret)) ":env secret value must be redacted")))
+      (testing "blank/invalid secret value still produces a useful spec error"
+        ;; A blank :github-token fails the ::non-blank-string spec. Redaction must
+        ;; NOT mask it to "***" (which would make the map look valid and suppress
+        ;; the explanation); blank values carry no secret to leak.
+        (let [e (capture #(sdk/client {:github-token "" :auto-start? false}))]
+          (is (some? e) "blank github-token should fail validation")
+          (is (.contains (str (ex-message e)) "github-token")
+              "the error should still point at :github-token"))))))
+
+(deftest test-failed-start-releases-resources
+  (testing "a failed start! tears down the spawned process and connection (A5)"
+    ;; `true` exits 0 immediately, so in TCP mode wait-for-port observes the
+    ;; process die before announcing a port and start! throws after spawning.
+    (let [c (sdk/client {:cli-path "true" :use-stdio? false :auto-start? false})]
+      (is (thrown? Exception (sdk/start! c)))
+      (let [st @(:state c)]
+        (is (= :error (:status st)) "status should be :error after a failed start")
+        (is (nil? (:process st)) "spawned process must be released")
+        (is (nil? (:connection-io st)) "connection must be released")
+        (is (nil? (:socket st)) "socket must be released")))))
+
 (deftest test-empty-mode-spec-validation
   (testing "an unknown :mode value is rejected by the spec"
     (is (thrown-with-msg?
@@ -5651,7 +5692,6 @@
            clojure.lang.ExceptionInfo
            #"Client is not started|not connected|Connection"
            (sdk/create-session c {}))))))
-
 
 ;; -----------------------------------------------------------------------------
 ;; Client Mode (upstream PR #1428) — wire payload tests:

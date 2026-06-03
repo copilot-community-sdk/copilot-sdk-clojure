@@ -99,6 +99,20 @@
       (is (not (some #{"--remote"} (build-cli-args {:use-stdio? true :remote? false})))
           "--remote must NOT be present when :remote? is explicitly false"))))
 
+(deftest build-cli-args-session-idle-timeout
+  (testing ":session-idle-timeout-seconds > 0 appends --session-idle-timeout <n>"
+    (let [build-cli-args @#'proc/build-cli-args
+          args (build-cli-args {:use-stdio? true :session-idle-timeout-seconds 300})]
+      (is (= ["--session-idle-timeout" "300"]
+             (->> args (drop-while #(not= % "--session-idle-timeout")) (take 2)))
+          "--session-idle-timeout must be followed by the seconds value")))
+  (testing ":session-idle-timeout-seconds of 0 or unset does NOT append the flag"
+    (let [build-cli-args @#'proc/build-cli-args]
+      (is (not (some #{"--session-idle-timeout"} (build-cli-args {:use-stdio? true})))
+          "absent by default")
+      (is (not (some #{"--session-idle-timeout"} (build-cli-args {:use-stdio? true :session-idle-timeout-seconds 0})))
+          "absent when 0 (disabled), matching upstream's > 0 guard"))))
+
 ;; -----------------------------------------------------------------------------
 ;; Client mode (upstream PR #1428)
 ;; -----------------------------------------------------------------------------

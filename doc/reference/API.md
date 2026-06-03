@@ -131,6 +131,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:copilot-home` | string | nil | Base directory for Copilot data files. Sets `COPILOT_HOME` env var on the spawned CLI. (upstream PR #1191) |
 | `:tcp-connection-token` | string | nil | Connection token for the headless CLI server (TCP only). When the SDK spawns its own CLI in TCP mode and this is omitted, a UUID is generated automatically so the loopback listener is safe by default. The token is sent to the CLI via `COPILOT_CONNECTION_TOKEN` and forwarded over the wire on the new `connect` handshake. Rejected when combined with `:use-stdio? true`. (upstream PR #1176) |
 | `:remote?` | boolean | `false` | When `true`, append `--remote` to the spawned CLI args so the CLI exposes the session over a GitHub-hosted remote endpoint. Ignored when `:cli-url` is set. (upstream PR #1192) |
+| `:session-idle-timeout-seconds` | integer | `0` (disabled) | Server-wide session idle timeout in seconds. When `> 0`, append `--session-idle-timeout <n>` to the spawned CLI so idle sessions are cleaned up after the given duration. |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
@@ -830,22 +831,23 @@ Subscribe to session events with optional buffer size and transducer.
 (copilot/subscribe-events session)
 ```
 
-Subscribe to session events. Returns a channel (buffer size 1024) that receives events.
+Subscribe to session events. Returns a channel (sliding buffer, size 1024) that receives events.
 This is a convenience wrapper around `(tap (copilot/events session) ch)`.
 
 ##### Event Drop Behavior
 
-Session events are delivered via core.async `mult`. When `mult` receives an event, it
-attempts to `put!` to each subscriber's channel. **If a subscriber's buffer is full at
-that moment, that specific event is silently dropped for that subscriber only.**
+Session events are delivered via core.async `mult` to a per-subscriber **sliding-buffer**
+channel. Because a sliding buffer never blocks on `put!`, `mult` is never stalled by a slow
+subscriber. **If a subscriber falls behind and its buffer fills, the oldest buffered events
+are dropped for that subscriber only** to make room for new ones.
 
 Key points:
-- **Per-subscriber**: Each subscriber is independent. If subscriber A's buffer is full
-  but B has space, only A misses the event.
-- **Per-event**: Only the event that arrived when the buffer was full is dropped.
-  Earlier events already in the buffer are not affected.
+- **Per-subscriber**: Each subscriber is independent. A slow subscriber drops its own oldest
+  events without affecting delivery to other subscribers.
+- **Oldest-first**: When the buffer is full, the oldest buffered events are dropped, not the
+  newest — subscribers always see the most recent events.
 - **Silent**: No error, warning, or indication that a drop occurred.
-- **Not recoverable**: The dropped event is gone for that subscriber.
+- **Not recoverable**: Dropped events are gone for that subscriber.
 
 With the default 1024 buffer, drops are unlikely unless a subscriber completely stops
 reading. For most use cases, this is not a concern.

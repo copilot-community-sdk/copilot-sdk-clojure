@@ -230,6 +230,16 @@ This Clojure SDK provides equivalent functionality to the [official JavaScript S
 | Blocking calls | `await sendAndWait()` | `send-and-wait!` |
 | Non-blocking | `send()` + events | `send!` + `events` mult |
 
+### Known limitations vs the official SDK (1.0.0)
+
+The following upstream surface is intentionally **out of scope for 1.0.0 GA**:
+
+- **Canvas authoring API** — the official SDK exposes a canvas authoring/registration
+  surface (config fields + session getter). This SDK does not implement the authoring
+  API. The related **events** (`session.canvas.opened`, `session.canvas.registry_changed`,
+  `session.extensions.attachments_pushed`) **are** observable via the normal event stream.
+  Tracked in [#121](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/121).
+
 ### Quick Comparison
 
 **JavaScript:**

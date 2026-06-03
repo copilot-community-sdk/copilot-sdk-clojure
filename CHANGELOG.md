@@ -3,6 +3,87 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Security
+- **Validation exceptions no longer leak secrets.** Configuration validation
+  failures (`client`, `create-session`, `resume-session`, and MCP-server checks)
+  previously embedded the raw caller-supplied options map in the thrown
+  exception's `ex-data` (and via `clojure.spec`'s `::s/value`), so a default
+  uncaught-exception report could print `:github-token`,
+  `:tcp-connection-token`, BYOK `:provider` credentials (`:api-key`,
+  `:bearer-token`, custom `:headers`), and MCP `:mcp-headers` / `:env` values in
+  cleartext. These values are now masked (`"***"`) in both the exception message
+  and `ex-data` before the exception is thrown.
+
+### Fixed (correctness)
+- **`query-chan` no longer blocks a go dispatch thread or leaks on send
+  failure.** It called the blocking `disconnect!` directly inside its event
+  go-loop (parking a shared core.async dispatch thread for the duration of
+  connection teardown); teardown now runs on `async/thread` and the loop parks
+  on its result. If the initial `send!` throws before the loop starts, the
+  freshly created session is now disconnected (instead of leaking) and the
+  output channel is closed before the error propagates.
+- **`subscribe-events` / `events->chan` now actually isolate slow subscribers.**
+  Both used a fixed (blocking) channel buffer, but their docstrings promised
+  that a full subscriber buffer drops events "for this subscriber only." With a
+  fixed buffer, `mult` blocks when any tap's buffer fills, stalling delivery to
+  *all* subscribers until the slow one drains. Both wrappers now use a
+  `sliding-buffer`, so a slow subscriber drops its own oldest events without
+  ever blocking the mult or other subscribers — matching the documented
+  behavior. Docstrings and the API reference were corrected accordingly.
+- **A failed `start!` no longer leaks resources.** If startup failed after the
+  CLI process was spawned (e.g. the process died before announcing its port, or
+  protocol verification failed), the error path only set the client status to
+  `:error` and left the spawned process, its stderr/exit-watcher threads, the
+  socket, and the JSON-RPC connection running. `start!` now tears these down
+  before re-throwing.
+- **In-flight requests no longer hang on disconnect.** A graceful
+  `disconnect` (e.g. `stop!`) previously left any in-flight JSON-RPC request's
+  response channel unresolved, so a caller blocked on it would wait forever.
+  `disconnect` now drains all pending requests and delivers a
+  `{:error {:code -32000 :message "Connection closed"}}` to each. The read
+  loop's EOF/IO-error draining and `disconnect` now share a single atomic
+  `drain-pending!`, so a pending request is resolved exactly once even when
+  both run concurrently.
+- **Requests sent during/after disconnect fail fast.** `send-request` now
+  registers its pending entry only while the connection is running, in one
+  atomic step, and resolves the response channel with a connection-closed error
+  if the connection is gone or the outgoing channel is already closed —
+  previously such a request was silently dropped and the caller hung.
+
+### Fixed (GA parity)
+- **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
+  :azure-options {:azure-api-version ...}}` now serializes to the upstream wire
+  shape (`type` / `azure` / `apiVersion`) instead of the camelCased SDK names
+  (`providerType` / `azureOptions` / `azureApiVersion`). The runtime reads the
+  provider config verbatim, so the previous encoding meant non-OpenAI BYOK
+  (`:azure`, `:anthropic`) and the Azure `apiVersion` were silently dropped —
+  only `:openai` worked, because it is the runtime default. Matches the
+  `ProviderConfig` shape in `nodejs/src/types.ts`.
+
+### Added (GA parity)
+- **`:session-idle-timeout-seconds` client option** — server-wide session idle
+  timeout. When `> 0`, the SDK appends `--session-idle-timeout <n>` to the
+  spawned CLI, matching the official SDK's `sessionIdleTimeoutSeconds`. Default
+  disabled (`0`).
+
+### Changed (GA parity)
+- **`list-tools`, `get-quota`, and `get-current-model` are now marked
+  `^:experimental`.** None of these correspond to a method on the official
+  Copilot SDK's `CopilotClient` / `CopilotSession`; they expose convenience
+  wire RPCs (`tools.list`, `account.getQuota`, `session.model.getCurrent`).
+  Marking them experimental keeps the stable GA surface aligned with the
+  upstream SDK while leaving the helpers available. Non-breaking.
+- **Public `event-types` set now matches the pinned schema exactly.** The
+  curated set previously omitted `assistant.message_start`, `model.call_failure`,
+  `session.extensions.attachments_pushed`, and the two canvas events
+  (`session.canvas.opened`, `session.canvas.registry_changed`). These are all
+  delivered by the runtime and parsed by the wire layer, so consumers must be
+  able to discover them; they are now included (and added to the idiom
+  `::event-type` spec), with `assistant.message_start` also categorized under
+  `assistant-events`. The canvas authoring API remains out of scope for 1.0.0 —
+  only the events are observable. A new codegen test guards against future drift
+  between the public `event-types` set and the generated schema set.
+
 ### Added (v1.0.0-beta.12 sync)
 - **`:context-tier` and `:reasoning-summary` on `switch-model!` / `set-model!`**
   (upstream PR #1522). `:context-tier` accepts `:default` or `:long-context`
@@ -15,9 +96,7 @@ All notable changes to this project will be documented in this file. This change
   as an optional key, mirroring `::tool.execution_complete-data`.
 - **`session.extensions.attachments_pushed` event + `extension_context`
   attachment branch** — regenerated wire specs from the bumped schema
-  (upstream PR #1517). The new ephemeral event is not promoted to the curated
-  public `event-types` / `session-events` sets, consistent with the existing
-  canvas/extension surface.
+  (upstream PR #1517).
 
 ### Fixed (v1.0.0-beta.12 sync)
 - **Preserve opaque `extension_context` attachment payloads** — `extension_context`

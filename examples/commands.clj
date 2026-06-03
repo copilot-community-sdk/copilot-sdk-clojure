@@ -34,6 +34,6 @@
     (println "Session created with commands: /status, /help")
     (println "Sending a message...")
     (let [response (copilot/send-and-wait! session
-                     {:prompt "Say hello briefly."})]
+                                           {:prompt "Say hello briefly."})]
       (println "\nAssistant:" (get-in response [:data :content]))
       (println "\nDone."))))

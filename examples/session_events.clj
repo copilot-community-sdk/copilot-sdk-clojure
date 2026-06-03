@@ -15,11 +15,11 @@
          model "gpt-5.4"
          reasoning-effort "high"}}]
   (copilot/with-client-session
-      [client {:log-level :debug}
-       session {:on-permission-request copilot/approve-all
-                :model model
-                :streaming? true
-                :reasoning-effort reasoning-effort}]
+    [client {:log-level :debug}
+     session {:on-permission-request copilot/approve-all
+              :model model
+              :streaming? true
+              :reasoning-effort reasoning-effort}]
     (let [events-ch (copilot/subscribe-events session)
           all-events (atom [])]
       (copilot/send! session {:prompt prompt})

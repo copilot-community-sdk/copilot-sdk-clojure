@@ -55,6 +55,68 @@
           {:host (if (str/blank? host) "localhost" host)
            :port port})))))
 
+(defn- mask-secret
+  "Replace `v` with \"***\" only when it is a non-blank string (i.e. an actual
+   secret value). nil, blank, and non-string values are returned unchanged: they
+   carry no secret to leak, and preserving them keeps spec validation errors
+   accurate (masking a blank/invalid value to \"***\" could otherwise make an
+   invalid map look valid and suppress the real `s/explain` output)."
+  [v]
+  (if (and (string? v) (not (str/blank? v))) "***" v))
+
+(defn- mask-present
+  "Replace the value of each key in `ks` with \"***\" when the key is present in
+   `m` and its value is a secret (see [[mask-secret]]). Absent keys stay absent;
+   nil/blank/non-string values are left unchanged."
+  [m ks]
+  (reduce (fn [acc k] (if (contains? acc k) (update acc k mask-secret) acc)) m ks))
+
+(defn- mask-all-values
+  "Mask every secret value in map `m` (see [[mask-secret]]). Returns `m`
+   unchanged if not a map. Used for header/env maps where every value is
+   potentially a secret; nil/blank/non-string values are left unchanged."
+  [m]
+  (if (map? m) (into {} (map (fn [[k v]] [k (mask-secret v)])) m) m))
+
+(defn- redact-mcp-servers
+  "Mask secret-bearing fields (`:mcp-headers`, `:env`) in an MCP servers config map
+   (keyed by server id) before embedding it in exception data. Non-map inputs and
+   non-map server entries pass through unchanged."
+  [servers]
+  (if-not (map? servers)
+    servers
+    (into {}
+          (map (fn [[id server]]
+                 [id (if (map? server)
+                       (cond-> server
+                         (map? (:mcp-headers server)) (update :mcp-headers mask-all-values)
+                         (map? (:env server)) (update :env mask-all-values))
+                       server)]))
+          servers)))
+
+(defn- redact-secrets
+  "Mask secret values in a caller-supplied options/config map so it can be embedded
+   in exception data and messages without leaking credentials. Masks the top-level
+   auth tokens, the `:env` map (merged into the spawned CLI environment, so it
+   can carry credentials), the nested BYOK `:provider` credentials (api/bearer
+   keys and any custom request `:headers`), and any `:mcp-servers` header/env
+   values. Non-map inputs pass through unchanged."
+  [m]
+  (if-not (map? m)
+    m
+    (cond-> (mask-present m [:github-token :tcp-connection-token])
+      (map? (:env m))
+      (update :env mask-all-values)
+
+      (map? (:provider m))
+      (update :provider (fn [p]
+                          (-> p
+                              (mask-present [:api-key :bearer-token])
+                              (cond-> (map? (:headers p))
+                                (update :headers mask-all-values)))))
+      (contains? m :mcp-servers)
+      (update :mcp-servers redact-mcp-servers))))
+
 (defn- default-options
   "Return default client options."
   []
@@ -74,10 +136,11 @@
 (defn- ensure-valid-mcp-servers!
   [servers]
   (when-not (s/valid? ::specs/mcp-servers servers)
-    (throw (ex-info "Invalid :mcp-servers config (expected map keyed by server ID)."
-                    {:spec ::specs/mcp-servers
-                     :mcp-servers servers
-                     :explain (s/explain-data ::specs/mcp-servers servers)}))))
+    (let [safe-servers (redact-mcp-servers servers)]
+      (throw (ex-info "Invalid :mcp-servers config (expected map keyed by server ID)."
+                      {:spec ::specs/mcp-servers
+                       :mcp-servers safe-servers
+                       :explain (s/explain-data ::specs/mcp-servers safe-servers)})))))
 
 ;; Client is a simple map with a single state atom
 ;; The state atom contains all mutable state as an immutable map:
@@ -141,6 +204,9 @@
     - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
     - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
     - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
+    - :session-idle-timeout-seconds - Server-wide session idle timeout in seconds. When > 0,
+                       the SDK appends `--session-idle-timeout <n>` to the spawned CLI so idle
+                       sessions are cleaned up after the given duration. Default: disabled.
     - :remote?       - **Experimental**. Enable remote session support (Mission Control). When true,
                        the SDK appends `--remote` to the spawned CLI; sessions in a GitHub repository
                        working directory become accessible from GitHub web and mobile. Ignored when
@@ -159,9 +225,9 @@
    (client {}))
   ([opts]
    (when (and (:cli-url opts) (= true (:use-stdio? opts)))
-     (throw (ex-info "cli-url is mutually exclusive with use-stdio?" opts)))
+     (throw (ex-info "cli-url is mutually exclusive with use-stdio?" (redact-secrets opts))))
    (when (and (:cli-url opts) (:cli-path opts))
-     (throw (ex-info "cli-url is mutually exclusive with cli-path" opts)))
+     (throw (ex-info "cli-url is mutually exclusive with cli-path" (redact-secrets opts))))
    ;; Validation: github-token and use-logged-in-user? cannot be used with cli-url
    (when (and (:cli-url opts) (or (:github-token opts) (some? (:use-logged-in-user? opts))))
      (throw (ex-info "github-token and use-logged-in-user? cannot be used with cli-url (external server manages its own auth)"
@@ -195,15 +261,16 @@
               :provided-storage-keys (select-keys opts [:copilot-home :session-fs
                                                         :cli-url :is-child-process?])})))
    (when-not (s/valid? ::specs/client-options opts)
-     (let [unknown (specs/unknown-keys opts specs/client-options-keys)
-           explain (s/explain-data ::specs/client-options opts)
+     (let [safe-opts (redact-secrets opts)
+           unknown (specs/unknown-keys opts specs/client-options-keys)
+           explain (s/explain-data ::specs/client-options safe-opts)
            msg (if (seq unknown)
                  (format "Invalid client options: unknown keys %s. Valid keys are: %s"
                          (pr-str unknown)
                          (pr-str (sort specs/client-options-keys)))
                  (format "Invalid client options: %s"
-                         (with-out-str (s/explain ::specs/client-options opts))))]
-       (throw (ex-info msg {:options opts :unknown-keys unknown :explain explain}))))
+                         (with-out-str (s/explain ::specs/client-options safe-opts))))]
+       (throw (ex-info msg {:options safe-opts :unknown-keys unknown :explain explain}))))
    (when-let [size (:notification-queue-size opts)]
      (when (<= size 0)
        (throw (ex-info "notification-queue-size must be > 0" {:notification-queue-size size}))))
@@ -995,7 +1062,31 @@
               msg (cond-> (str "Failed to start client: " (ex-message e))
                     stderr (str "\nstderr: " stderr))]
           (log/error msg)
-          (swap! (:state client) assoc :status :error)
+          ;; Release any resources created before the failure so a failed
+          ;; start! does not leak the spawned process, its stderr/exit watcher
+          ;; threads, the socket, or the JSON-RPC connection. Mark :stopping? so
+          ;; the process-exit watcher treats the teardown as expected. Status is
+          ;; left as :error (not :disconnected) so callers can distinguish a
+          ;; failed start from a clean stop.
+          (swap! (:state client) assoc :stopping? true)
+          ;; Tear down the notification router if it was started before the
+          ;; failure (mirrors stop!), so its dispatcher thread/channel don't leak.
+          (swap! (:state client) assoc :router-running? false)
+          (when-let [^Thread router-thread (:router-thread @(:state client))]
+            (.interrupt router-thread)
+            (try (.join router-thread 500) (catch Exception _)))
+          (when-let [router-ch (:router-ch @(:state client))]
+            (close! router-ch))
+          (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+          (let [{:keys [connection-io socket process]} @(:state client)]
+            (when connection-io
+              (try (proto/disconnect connection-io) (catch Exception _)))
+            (when socket
+              (try (.close ^Socket socket) (catch Exception _)))
+            (when (and (not (:external-server? client)) process)
+              (try (proc/destroy! process) (catch Exception _))))
+          (swap! (:state client) assoc :status :error :connection nil
+                 :connection-io nil :socket nil :process nil :actual-port nil)
           (throw e))))))
 
 (defn stop!
@@ -1291,11 +1382,14 @@
             (throw result)
             result))))))
 
-(defn list-tools
+(defn ^:experimental list-tools
   "List available tools with their metadata.
    Optional :model param returns model-specific tool overrides.
    Returns a vector of tool info maps with keys:
-   :name :namespaced-name :description :parameters :instructions"
+   :name :namespaced-name :description :parameters :instructions
+
+   Experimental: not part of the official Copilot SDK API; the wire RPC
+   (`tools.list`) is exposed for convenience and may change."
   ([client]
    (list-tools client nil))
   ([client model]
@@ -1313,11 +1407,14 @@
                (:instructions t) (assoc :instructions (:instructions t))))
            tools))))
 
-(defn get-quota
+(defn ^:experimental get-quota
   "Get account quota information.
    Returns a map of quota type (string) to quota snapshot maps:
    {:entitlement-requests :used-requests :remaining-percentage
-    :overage :overage-allowed-with-exhausted-quota? :reset-date}"
+    :overage :overage-allowed-with-exhausted-quota? :reset-date}
+
+   Experimental: not part of the official Copilot SDK API; the wire RPC
+   (`account.getQuota`) is exposed for convenience and may change."
   [client]
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
@@ -1379,18 +1476,19 @@
   "Validate session config, throwing on invalid input."
   [config]
   (when-not (s/valid? ::specs/session-config config)
-    (let [unknown (specs/unknown-keys config specs/session-config-keys)
-          explain (s/explain-data ::specs/session-config config)
+    (let [safe-config (redact-secrets config)
+          unknown (specs/unknown-keys config specs/session-config-keys)
+          explain (s/explain-data ::specs/session-config safe-config)
           msg (if (seq unknown)
                 (format "Invalid session config: unknown keys %s. Valid keys are: %s"
                         (pr-str unknown)
                         (pr-str (sort specs/session-config-keys)))
                 (format "Invalid session config: %s"
-                        (with-out-str (s/explain ::specs/session-config config))))]
-      (throw (ex-info msg {:config config :unknown-keys unknown :explain explain}))))
+                        (with-out-str (s/explain ::specs/session-config safe-config))))]
+      (throw (ex-info msg {:config safe-config :unknown-keys unknown :explain explain}))))
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config config}))))
+                    {:config (redact-secrets config)}))))
 
 (defn- validate-tool-filter-list!
   "Reject bare `\"*\"` in a tool filter list (mirrors upstream
@@ -1518,21 +1616,34 @@
                (cond-> {:mode :customize :sections ec-remove}
                  (:content sm) (assoc :content (:content sm))))))))
 
+(defn- rename-keys-present
+  "Rename keys of `m` per the `old->new` map, only for keys actually present.
+   Leaves all other entries untouched."
+  [m old->new]
+  (reduce-kv (fn [acc old new]
+               (if (contains? acc old)
+                 (-> acc (dissoc old) (assoc new (get acc old)))
+                 acc))
+             m old->new))
+
 (defn- provider->wire
   "Convert a Clojure ProviderConfig map to its JSON-RPC wire shape.
 
-   `util/clj->wire` handles the camelCase conversion for most fields, but the
-   SDK property name `:max-input-tokens` (camelizes to `maxInputTokens`) does
-   NOT match the wire field name (`maxPromptTokens`). This helper renames the
-   field after the standard conversion. Mirrors upstream
-   `toWireProviderConfig` in `nodejs/src/client.ts` (PR #966)."
+   `util/clj->wire` camelCases keyword keys, but several SDK property names are
+   chosen for Clojure clarity and differ from the upstream `ProviderConfig` field
+   names, which the runtime reads verbatim (`provider: config.provider` in
+   nodejs/src/client.ts). This helper restores the upstream wire names so BYOK
+   works for every provider type: `providerType`->`type`, `azureOptions`->`azure`,
+   `maxInputTokens`->`maxPromptTokens`, and the nested `azureApiVersion`->`apiVersion`.
+   Mirrors the `ProviderConfig` shape in nodejs/src/types.ts."
   [provider]
-  (let [wire (util/clj->wire provider)]
-    (if (contains? wire :maxInputTokens)
-      (-> wire
-          (dissoc :maxInputTokens)
-          (assoc :maxPromptTokens (:maxInputTokens wire)))
-      wire)))
+  (let [wire (rename-keys-present (util/clj->wire provider)
+                                  {:providerType :type
+                                   :azureOptions :azure
+                                   :maxInputTokens :maxPromptTokens})]
+    (cond-> wire
+      (contains? wire :azure)
+      (update :azure rename-keys-present {:azureApiVersion :apiVersion}))))
 
 (defn- large-output->wire
   "Convert a :large-output config map to wire shape, accepting both the
@@ -1920,7 +2031,7 @@
     (when-not (:create-session-fs-handler config)
       (throw (ex-info (str ":create-session-fs-handler is required in session config "
                            "when :session-fs is enabled in client options.")
-                      {:config config})))))
+                      {:config (redact-secrets config)})))))
 
 (defn- install-session-fs-handler!
   "Construct and install the per-session sessionFs handler. Caller is
@@ -2187,12 +2298,13 @@
    Returns a CopilotSession."
   [client session-id config]
   (when-not (s/valid? ::specs/resume-session-config config)
-    (throw (ex-info "Invalid resume session config"
-                    {:config config
-                     :explain (s/explain-data ::specs/resume-session-config config)})))
+    (let [safe-config (redact-secrets config)]
+      (throw (ex-info "Invalid resume session config"
+                      {:config safe-config
+                       :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config config})))
+                    {:config (redact-secrets config)})))
   (validate-tool-filters! config)
   (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
@@ -2365,12 +2477,13 @@
            )))"
   [client session-id config]
   (when-not (s/valid? ::specs/resume-session-config config)
-    (throw (ex-info "Invalid resume session config"
-                    {:config config
-                     :explain (s/explain-data ::specs/resume-session-config config)})))
+    (let [safe-config (redact-secrets config)]
+      (throw (ex-info "Invalid resume session config"
+                      {:config safe-config
+                       :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config config})))
+                    {:config (redact-secrets config)})))
   (validate-tool-filters! config)
   (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)

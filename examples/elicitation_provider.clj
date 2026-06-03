@@ -43,17 +43,17 @@
       (do
         (println "   → Auto-filling form fields:")
         (let [content (reduce-kv
-                        (fn [acc field-name field-schema]
-                          (let [field-type (get field-schema "type" (:type field-schema))
-                                value (case field-type
-                                        "boolean" true
-                                        "string" "auto-filled"
-                                        ("number" "integer") 42
-                                        "auto-filled")]
-                            (println (str "     " field-name " (" field-type "): " value))
-                            (assoc acc (keyword field-name) value)))
-                        {}
-                        props)]
+                       (fn [acc field-name field-schema]
+                         (let [field-type (get field-schema "type" (:type field-schema))
+                               value (case field-type
+                                       "boolean" true
+                                       "string" "auto-filled"
+                                       ("number" "integer") 42
+                                       "auto-filled")]
+                           (println (str "     " field-name " (" field-type "): " value))
+                           (assoc acc (keyword field-name) value)))
+                       {}
+                       props)]
           {:action "accept" :content content}))
       (do
         (println "   → No schema provided, approving without content")

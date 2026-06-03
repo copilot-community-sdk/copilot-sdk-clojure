@@ -41,6 +41,7 @@
             [clojure.string :as str]
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-specs :as gen]
+            [github.copilot-sdk :as sdk]
             [github.copilot-sdk.specs])
   (:import [java.time Instant]))
 
@@ -291,6 +292,20 @@
       (is (contains? gen/event-types event-type)
           (str event-type " missing from gen/event-types — schema may have moved")))))
 
+(deftest public-event-types-match-generated-schema-set
+  (testing "the public curated `event-types` set covers exactly the schema's event types
+            (guards against drift between the hand-curated GA surface and the pinned schema)"
+    (let [curated (set (map name sdk/event-types))
+          generated gen/event-types
+          missing (clojure.set/difference generated curated)
+          extra (clojure.set/difference curated generated)]
+      (is (empty? missing)
+          (str "schema event types missing from public event-types: " (sort missing)
+               " — add them (or update the schema pin)"))
+      (is (empty? extra)
+          (str "public event-types not present in the schema: " (sort extra)
+               " — remove them or update the schema pin")))))
+
 (deftest generated-data-specs-reject-envelope-weakened-types
   (testing "session.schedule_created-data rejects string :id (must be positive integer)"
     (let [spec-kw :github.copilot-sdk.generated.event-specs/session.schedule_created-data]
@@ -486,8 +501,8 @@
         (->> gen/event-types
              (filter (fn [event-type]
                        (s/get-spec
-                         (keyword "github.copilot-sdk.specs"
-                                  (str event-type "-data")))))
+                        (keyword "github.copilot-sdk.specs"
+                                 (str event-type "-data")))))
              set)
         covered (set (keys fixtures))
         missing (clojure.set/difference hand-spec-event-types covered)]

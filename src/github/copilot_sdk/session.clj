@@ -701,18 +701,18 @@
                              "sessionEnd" :on-session-end
                              "errorOccurred" :on-error-occurred
                              nil)
-           handler (when handler-key (get hooks handler-key))]
-       (if-not handler
-         {:result nil}
-         (try
-           (let [;; Upstream PR #1290: BaseHookInput.sessionId. Preserve the
+               handler (when handler-key (get hooks handler-key))]
+           (if-not handler
+             {:result nil}
+             (try
+               (let [;; Upstream PR #1290: BaseHookInput.sessionId. Preserve the
                  ;; wire-provided :session-id when present (it may identify a
                  ;; sub-agent session distinct from the outer session-id);
                  ;; otherwise fall back to the outer session-id.
-                 input (cond-> input
-                         (not (contains? input :session-id))
-                         (assoc :session-id session-id))
-                 result (handler input {:session-id session-id})
+                     input (cond-> input
+                             (not (contains? input :session-id))
+                             (assoc :session-id session-id))
+                     result (handler input {:session-id session-id})
                      ;; If handler returns a channel, await it
                      result (if (channel? result)
                               (<!! result)
@@ -1499,15 +1499,14 @@
    The channel will receive nil (close) when the session is disconnected.
    For explicit cleanup before session disconnection, call unsubscribe-events.
    
-   Drop behavior: If this subscriber's channel buffer is full when mult tries
-   to deliver an event, that specific event is silently dropped for this
-   subscriber only. Other subscribers with available buffer space still receive
-   the event. The returned channel has a buffer of 1024 events which should be
-   sufficient for most use cases.
+   Drop behavior: the returned channel uses a sliding buffer of 1024 events.
+   If this subscriber falls behind and its buffer fills, the oldest buffered
+   events are dropped for this subscriber only — delivery to other subscribers
+   is never blocked. 1024 is sufficient for most use cases.
    
    This is a convenience wrapper around (tap (events session) ch)."
   [session]
-  (let [ch (chan 1024)
+  (let [ch (chan (async/sliding-buffer 1024))
         {:keys [session-id client]} session
         {:keys [event-mult]} (session-io client session-id)]
     (tap event-mult ch)
@@ -1520,16 +1519,17 @@
    - :buffer - Channel buffer size (default 1024)
    - :xf     - Transducer applied to events
 
-   Drop behavior: If this subscriber's channel buffer is full when mult tries
-   to deliver an event, that specific event is silently dropped for this
-   subscriber only. Other subscribers with available buffer space still receive
-   the event."
+   Drop behavior: the returned channel uses a sliding buffer of `:buffer`
+   events. If this subscriber falls behind and its buffer fills, the oldest
+   buffered events are dropped for this subscriber only — delivery to other
+   subscribers is never blocked."
   ([session]
    (events->chan session {}))
   ([session {:keys [buffer xf] :or {buffer 1024}}]
    (let [{:keys [session-id client]} session
          {:keys [event-mult]} (session-io client session-id)
-         ch (if xf (chan buffer xf) (chan buffer))]
+         buf (async/sliding-buffer buffer)
+         ch (if xf (chan buf xf) (chan buf))]
      (tap event-mult ch)
      ch)))
 
@@ -1552,9 +1552,12 @@
   (let [{:keys [session-id client]} session]
     (:workspace-path (session-state client session-id))))
 
-(defn get-current-model
+(defn ^:experimental get-current-model
   "Get the current model for this session.
-   Returns the model ID string, or nil if none set."
+   Returns the model ID string, or nil if none set.
+
+   Experimental: not part of the official Copilot SDK API; the wire RPC
+   (`session.model.getCurrent`) is exposed for convenience and may change."
   [session]
   (let [{:keys [session-id client]} session
         conn (connection-io client)

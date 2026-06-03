@@ -46,3 +46,36 @@
         (is (empty? (get-in @state-atom [:connection :pending-requests])))
         (finally
           (protocol/disconnect conn))))))
+
+(deftest test-disconnect-resolves-pending-requests
+  (testing "disconnect fails in-flight requests instead of hanging (A3)"
+    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
+          in (PipedInputStream.)
+          _ (PipedOutputStream. in)
+          out (ByteArrayOutputStream.)
+          conn (protocol/connect in out state-atom)
+          resp-ch (protocol/send-request conn "ping" {})]
+      (is (true? (wait-for #(seq (get-in @state-atom [:connection :pending-requests])) 200))
+          "request should be registered while running")
+      (protocol/disconnect conn)
+      (let [result (async/alt!! resp-ch ([v] v)
+                                (async/timeout 500) ([_] ::timeout))]
+        (is (not= ::timeout result) "response channel must resolve on disconnect")
+        (is (= -32000 (get-in result [:error :code]))))
+      (is (empty? (get-in @state-atom [:connection :pending-requests]))))))
+
+(deftest test-send-request-after-disconnect-fails-fast
+  (testing "send-request after disconnect resolves with error, never hangs (A4)"
+    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
+          in (PipedInputStream.)
+          _ (PipedOutputStream. in)
+          out (ByteArrayOutputStream.)
+          conn (protocol/connect in out state-atom)]
+      (protocol/disconnect conn)
+      (let [resp-ch (protocol/send-request conn "ping" {})
+            result (async/alt!! resp-ch ([v] v)
+                                (async/timeout 500) ([_] ::timeout))]
+        (is (not= ::timeout result) "send-request after disconnect must resolve")
+        (is (= -32000 (get-in result [:error :code]))))
+      (is (empty? (get-in @state-atom [:connection :pending-requests]))
+          "no pending entry should be left registered"))))

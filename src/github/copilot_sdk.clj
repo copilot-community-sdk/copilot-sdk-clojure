@@ -71,6 +71,7 @@
     :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta
     :copilot/assistant.message
+    :copilot/assistant.message_start
     :copilot/assistant.message_delta
     :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end
@@ -128,7 +129,17 @@
     ;; ephemeral hook-progress event.
     :copilot/session.autopilot_objective_changed
     :copilot/session.permissions_changed
-    :copilot/hook.progress})
+    :copilot/hook.progress
+    ;; Remaining schema events (pinned schema 1.0.57). model.call_failure is an
+    ;; ephemeral LLM-call telemetry event; assistant.message_start marks the
+    ;; start of a streaming assistant message; extensions.attachments_pushed is
+    ;; emitted when an extension pushes attachment pills. Canvas events are
+    ;; delivered even though the canvas authoring API is out of scope for 1.0.0
+    ;; (see doc limitations) so consumers can still observe them.
+    :copilot/model.call_failure
+    :copilot/session.extensions.attachments_pushed
+    :copilot/session.canvas.opened
+    :copilot/session.canvas.registry_changed})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -175,6 +186,7 @@
     :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta
     :copilot/assistant.message
+    :copilot/assistant.message_start
     :copilot/assistant.message_delta
     :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end
@@ -410,12 +422,14 @@
   [client]
   (client/list-models client))
 
-(defn list-tools
+(defn ^:experimental list-tools
   "List available tools with their metadata.
    Optional model param returns model-specific tool overrides.
 
    Returns a vector of tool info maps with keys:
    :name :namespaced-name :description :parameters :instructions
+
+   Experimental: not part of the official Copilot SDK API.
 
    Example:
    ```clojure
@@ -427,11 +441,13 @@
   ([client model]
    (client/list-tools client model)))
 
-(defn get-quota
+(defn ^:experimental get-quota
   "Get account quota information.
    Returns a map of quota type (string) to quota snapshot maps:
    {:entitlement-requests :used-requests :remaining-percentage
     :overage :overage-allowed-with-exhausted-quota? :reset-date}
+
+   Experimental: not part of the official Copilot SDK API.
 
    Example:
    ```clojure
@@ -1026,9 +1042,11 @@
   [provider]
   (session/create-session-fs-adapter provider))
 
-(defn get-current-model
+(defn ^:experimental get-current-model
   "Get the current model for this session.
    Returns the model ID string, or nil if none set.
+
+   Experimental: not part of the official Copilot SDK API.
 
    Example:
    ```clojure
@@ -1151,15 +1169,34 @@
   [name opts]
   (tools/define-tool name opts))
 
-;; Re-export result helpers
-(def result-success tools/result-success)
-(def result-failure tools/result-failure)
-(def result-denied tools/result-denied)
-(def result-rejected tools/result-rejected)
-(def convert-mcp-call-tool-result
+;; Re-export result helpers as thin wrappers so the public surface keeps the
+;; source docstrings and signatures (a bare `def` alias drops both).
+(defn result-success
+  "Create a successful tool result."
+  ([text] (tools/result-success text))
+  ([text telemetry] (tools/result-success text telemetry)))
+
+(defn result-failure
+  "Create a failed tool result."
+  ([text] (tools/result-failure text))
+  ([text error] (tools/result-failure text error))
+  ([text error telemetry] (tools/result-failure text error telemetry)))
+
+(defn result-denied
+  "Create a denied tool result (permission denied)."
+  ([text] (tools/result-denied text))
+  ([text telemetry] (tools/result-denied text telemetry)))
+
+(defn result-rejected
+  "Create a rejected tool result (user rejected)."
+  ([text] (tools/result-rejected text))
+  ([text telemetry] (tools/result-rejected text telemetry)))
+
+(defn convert-mcp-call-tool-result
   "Convert an MCP CallToolResult into the SDK's ToolResultObject format.
    See `github.copilot-sdk.tools/convert-mcp-call-tool-result`."
-  tools/convert-mcp-call-tool-result)
+  [result]
+  (tools/convert-mcp-call-tool-result result))
 
 ;; Re-export permission helpers
 (def approve-all

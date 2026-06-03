@@ -46,7 +46,7 @@
 
           (println "💬 Sending message that triggers ask_user...")
           (let [result (copilot/send-and-wait! session
-                         {:prompt (str "Use the ask_user tool to ask me to pick between 'Red' and 'Blue'. "
-                                       "Wait for my answer. If asking fails, say exactly 'The user skipped the question'.")})]
+                                               {:prompt (str "Use the ask_user tool to ask me to pick between 'Red' and 'Blue'. "
+                                                             "Wait for my answer. If asking fails, say exactly 'The user skipped the question'.")})]
             (println (str "📝 Response: " (get-in result [:data :content]) "\n"))
             (println (str "📊 Questions received: " (count @cancelled-requests)))))))))

@@ -113,7 +113,7 @@
                                                (println "   Auto-responding:" response)
                                                {:response response}))}]
       (let [result (copilot/send-and-wait! session
-                     {:prompt "You MUST use the ask_user tool to ask me whether I prefer 'verbose' or 'concise' output before responding. Then say hello in that style."})]
+                                           {:prompt "You MUST use the ask_user tool to ask me whether I prefer 'verbose' or 'concise' output before responding. Then say hello in that style."})]
         (println "\n🤖" (get-in result [:data :content]))
         (when-not @input-requested?
           (println "\n⚠️  Note: The agent chose not to use ask_user this time.")

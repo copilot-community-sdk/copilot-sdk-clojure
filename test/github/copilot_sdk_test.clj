@@ -323,23 +323,23 @@
 (deftest session-config-unknown-keys-test
   (testing "unknown session config key is rejected"
     (is (not (s/valid? ::specs/session-config {:on-permission-request identity
-                                                :reasoning-efforts "high"}))))
+                                               :reasoning-efforts "high"}))))
 
   (testing "typo in session config provides helpful error"
     (let [unknown (specs/unknown-keys {:model "gpt-5.4" :streeming? true}
-                                       specs/session-config-keys)]
+                                      specs/session-config-keys)]
       (is (contains? unknown :streeming?))))
 
   (testing "valid session config keys are accepted"
     (is (s/valid? ::specs/session-config {:on-permission-request identity
-                                           :model "gpt-5.4"
-                                           :streaming? true
-                                           :reasoning-effort "high"})))
+                                          :model "gpt-5.4"
+                                          :streaming? true
+                                          :reasoning-effort "high"})))
 
   (testing "session config rejects unknown keys even with valid ones"
     (is (not (s/valid? ::specs/session-config {:on-permission-request identity
-                                                :model "gpt-5.4"
-                                                :unknown-key "value"})))))
+                                               :model "gpt-5.4"
+                                               :unknown-key "value"})))))
 
 (deftest evt-helper-test
   (testing "evt converts unqualified to qualified keywords"
@@ -365,11 +365,11 @@
 (deftest mcp-server-wire-format-test
   (testing "local MCP server: :mcp-* prefix stripped on wire"
     (let [wire (util/mcp-server->wire {:mcp-command "node"
-                                        :mcp-args ["server.js"]
-                                        :mcp-tools ["*"]
-                                        :mcp-timeout 30000
-                                        :env {"DEBUG" "true"}
-                                        :cwd "/tmp"})]
+                                       :mcp-args ["server.js"]
+                                       :mcp-tools ["*"]
+                                       :mcp-timeout 30000
+                                       :env {"DEBUG" "true"}
+                                       :cwd "/tmp"})]
       (is (= "node" (:command wire)))
       (is (= ["server.js"] (:args wire)))
       (is (= ["*"] (:tools wire)))
@@ -383,9 +383,9 @@
 
   (testing "remote MCP server: :mcp-* prefix stripped on wire"
     (let [wire (util/mcp-server->wire {:mcp-server-type :http
-                                        :mcp-url "https://example.com/mcp"
-                                        :mcp-tools ["*"]
-                                        :mcp-headers {"Authorization" "Bearer tok"}})]
+                                       :mcp-url "https://example.com/mcp"
+                                       :mcp-tools ["*"]
+                                       :mcp-headers {"Authorization" "Bearer tok"}})]
       (is (= "http" (:type wire)))
       (is (= "https://example.com/mcp" (:url wire)))
       (is (= ["*"] (:tools wire)))
