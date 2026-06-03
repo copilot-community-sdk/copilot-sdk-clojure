@@ -1,6 +1,6 @@
 # Getting Started with the Copilot SDK for Clojure
 
-> **Note:** This SDK is in [public preview](https://github.blog/changelog/2026-04-02-copilot-sdk-in-public-preview/) and may change in breaking ways.
+> **Note:** Version `1.0.0` is the first generally available (GA) release. The public API is stable. Subsequent releases track the upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) versioning (see [Versioning](../PUBLISHING.md#versioning)); any breaking changes are called out in the [CHANGELOG](../CHANGELOG.md).
 
 In this tutorial, you'll use the Copilot SDK for Clojure to build a command-line assistant. You'll start with the basics, add streaming responses, then add custom tools — giving Copilot the ability to call your code.
 

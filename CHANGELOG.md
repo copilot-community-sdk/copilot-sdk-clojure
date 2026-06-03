@@ -3,6 +3,24 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Highlights
+First generally available (GA) release, at full API/wire/schema parity with
+upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) `v1.0.0`.
+The public API is stable going forward. Notable changes since the last published
+release (`v1.0.0-beta.3.0`):
+
+- **Stable, idiomatic public API** — immutable data throughout, `clojure.spec`
+  validation at the boundary, and `core.async` event streams; the public surface
+  has been audited and frozen for GA.
+- **Correctness & safety hardening** — async lifecycle, thread-safety, resource
+  cleanup, and input-handling fixes (see Security and Fixed below).
+- **Documentation** — API reference, guides, and auth/MCP docs brought to parity
+  with upstream.
+- **Examples** — coverage meets or exceeds upstream; `./run-all-examples.sh` runs
+  green end-to-end.
+
+See the sections below for the complete change list since `v1.0.0-beta.3.0`.
+
 ### Added (examples)
 - **New `manual_tool_resume` example** (`examples/manual_tool_resume.clj`),
   the SDK-driven analogue of the upstream `manual_tool_resume` sample. It
