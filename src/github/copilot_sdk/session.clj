@@ -1505,7 +1505,7 @@
   "Subscribe to session events. Returns a channel that receives events.
    
    The channel will receive nil (close) when the session is disconnected.
-   For explicit cleanup before session disconnection, call unsubscribe-events.
+   For explicit cleanup before session disconnection, call unsubscribe-events!.
    
    Drop behavior: the returned channel uses a sliding buffer of 1024 events.
    If this subscriber falls behind and its buffer fills, the oldest buffered
@@ -1541,8 +1541,11 @@
      (tap event-mult ch)
      ch)))
 
-(defn unsubscribe-events
-  "Unsubscribe a channel from session events."
+(defn unsubscribe-events!
+  "Unsubscribe a channel from session events.
+
+   Side effects: untaps `ch` from the session's event mult and closes `ch`.
+   The caller must not use `ch` after calling this."
   [session ch]
   (let [{:keys [session-id client]} session
         {:keys [event-mult]} (session-io client session-id)]

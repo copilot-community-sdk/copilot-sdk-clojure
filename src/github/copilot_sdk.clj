@@ -890,7 +890,7 @@
 (defn subscribe-events
   "Subscribe to session events. Returns a channel (buffer 1024) that receives events.
    The channel receives nil (close) when the session is disconnected.
-   For explicit cleanup, call unsubscribe-events.
+   For explicit cleanup, call unsubscribe-events!.
    
    This is a convenience wrapper around (tap (copilot/events session) ch).
 
@@ -926,10 +926,13 @@
   ([session opts]
    (session/events->chan session opts)))
 
-(defn unsubscribe-events
-  "Unsubscribe a channel from session events."
+(defn unsubscribe-events!
+  "Unsubscribe a channel from session events.
+
+   Side effects: untaps `ch` from the session's event mult and closes `ch`.
+   The caller must not use `ch` after calling this."
   [session ch]
-  (session/unsubscribe-events session ch))
+  (session/unsubscribe-events! session ch))
 
 (defn session-id
   "Get the session ID."

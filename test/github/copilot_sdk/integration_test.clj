@@ -612,7 +612,7 @@
               (swap! events conj v)
               (recur))))
         (is (pos? (count @events))))
-      (sdk/unsubscribe-events session events-ch))))
+      (sdk/unsubscribe-events! session events-ch))))
 
 (deftest test-non-session-notification-routed
   (testing "Non-session notifications are delivered to client notifications channel"
@@ -2214,7 +2214,7 @@
         (is (= :copilot/session.snapshot_rewind (:type event)))
         (is (= "evt-42" (get-in event [:data :up-to-event-id])))
         (is (= 5 (get-in event [:data :events-removed]))))
-      (sdk/unsubscribe-events session events-ch))))
+      (sdk/unsubscribe-events! session events-ch))))
 
 ;; -----------------------------------------------------------------------------
 ;; Async Session Lifecycle Tests

@@ -277,7 +277,7 @@
                 :args (s/cat :session ::specs/session)
                 :ret any?)  ; core.async channel
 
-(register-fdef! github.copilot-sdk.session/unsubscribe-events
+(register-fdef! github.copilot-sdk.session/unsubscribe-events!
                 :args (s/cat :session ::specs/session
                              :ch any?)
                 :ret nil?)

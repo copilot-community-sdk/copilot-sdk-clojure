@@ -852,10 +852,10 @@ Key points:
 With the default 1024 buffer, drops are unlikely unless a subscriber completely stops
 reading. For most use cases, this is not a concern.
 
-#### `unsubscribe-events`
+#### `unsubscribe-events!`
 
 ```clojure
-(copilot/unsubscribe-events session ch)
+(copilot/unsubscribe-events! session ch)
 ```
 
 Unsubscribe a channel from session events.

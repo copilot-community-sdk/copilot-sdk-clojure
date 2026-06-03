@@ -83,6 +83,12 @@ All notable changes to this project will be documented in this file. This change
   was dead state. `:stopping?` (which the process-exit watcher does read) is
   unchanged.
 
+### Changed
+- **BREAKING**: renamed `unsubscribe-events` to `unsubscribe-events!`. The
+  function mutates — it untaps the channel from the session's event mult and
+  closes it — so it now carries the `!` side-effect suffix per the SDK's naming
+  convention. Update callers to the new name (no behavior change).
+
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
   :azure-options {:azure-api-version ...}}` now serializes to the upstream wire

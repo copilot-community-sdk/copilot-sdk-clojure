@@ -157,7 +157,7 @@ The SDK uses core.async `mult/tap` for event subscription:
 |----------|-------------|
 | `(copilot/events session)` | Get the core.async mult for all events |
 | `(copilot/subscribe-events session)` | Get a tapped channel (convenience) |
-| `(copilot/unsubscribe-events session ch)` | Untap a channel |
+| `(copilot/unsubscribe-events! session ch)` | Untap a channel |
 | `(copilot/events->chan session opts)` | Advanced: custom buffer, transducer |
 
 ## Step 4: Add a Custom Tool
