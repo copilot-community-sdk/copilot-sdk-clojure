@@ -5580,7 +5580,15 @@
         (let [c (sdk/client {:auto-start? false})
               e (capture #(sdk/create-session c {:mcp-servers {"s" {:mcp-headers {"Authorization" mcp-secret}}}}))]
           (is (some? e))
-          (is (not (leaked? e mcp-secret)) "MCP header secret must be redacted"))))))
+          (is (not (leaked? e mcp-secret)) "MCP header secret must be redacted")))
+      (testing "blank/invalid secret value still produces a useful spec error"
+        ;; A blank :github-token fails the ::non-blank-string spec. Redaction must
+        ;; NOT mask it to "***" (which would make the map look valid and suppress
+        ;; the explanation); blank values carry no secret to leak.
+        (let [e (capture #(sdk/client {:github-token "" :auto-start? false}))]
+          (is (some? e) "blank github-token should fail validation")
+          (is (.contains (str (ex-message e)) "github-token")
+              "the error should still point at :github-token"))))))
 
 (deftest test-failed-start-releases-resources
   (testing "a failed start! tears down the spawned process and connection (A5)"

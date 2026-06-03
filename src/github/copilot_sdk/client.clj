@@ -55,17 +55,28 @@
           {:host (if (str/blank? host) "localhost" host)
            :port port})))))
 
+(defn- mask-secret
+  "Replace `v` with \"***\" only when it is a non-blank string (i.e. an actual
+   secret value). nil, blank, and non-string values are returned unchanged: they
+   carry no secret to leak, and preserving them keeps spec validation errors
+   accurate (masking a blank/invalid value to \"***\" could otherwise make an
+   invalid map look valid and suppress the real `s/explain` output)."
+  [v]
+  (if (and (string? v) (not (str/blank? v))) "***" v))
+
 (defn- mask-present
-  "Replace the value of each key in `ks` with \"***\", but only when the key is
-   already present in `m` (absent keys stay absent)."
+  "Replace the value of each key in `ks` with \"***\" when the key is present in
+   `m` and its value is a secret (see [[mask-secret]]). Absent keys stay absent;
+   nil/blank/non-string values are left unchanged."
   [m ks]
-  (reduce (fn [acc k] (if (contains? acc k) (assoc acc k "***") acc)) m ks))
+  (reduce (fn [acc k] (if (contains? acc k) (update acc k mask-secret) acc)) m ks))
 
 (defn- mask-all-values
-  "Replace every value in map `m` with \"***\". Returns `m` unchanged if not a map.
-   Used for header/env maps where every value is potentially a secret."
+  "Mask every secret value in map `m` (see [[mask-secret]]). Returns `m`
+   unchanged if not a map. Used for header/env maps where every value is
+   potentially a secret; nil/blank/non-string values are left unchanged."
   [m]
-  (if (map? m) (zipmap (keys m) (repeat "***")) m))
+  (if (map? m) (into {} (map (fn [[k v]] [k (mask-secret v)])) m) m))
 
 (defn- redact-mcp-servers
   "Mask secret-bearing fields (`:mcp-headers`, `:env`) in an MCP servers config map
