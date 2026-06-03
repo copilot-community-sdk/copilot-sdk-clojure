@@ -161,8 +161,8 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Update README SHA
-        run: bb readme:sha
+      - name: Update install-docs SHA
+        run: bb install-docs:sha
 
       - name: Stamp changelog
         run: clojure -T:build stamp-changelog
@@ -183,7 +183,7 @@ jobs:
           VERSION=$(grep -m1 -F '(def version' build.clj | sed 's/.*"\(.*\)".*/\1/')
           BRANCH="release/v${VERSION}-run${GITHUB_RUN_ID}"
           git checkout -b "$BRANCH"
-          git add build.clj README.md CHANGELOG.md
+          git add build.clj README.md doc/getting-started.md CHANGELOG.md
           git commit -m "chore: release v${VERSION}"
           git push origin "$BRANCH"
           PR_URL=$(gh pr create \

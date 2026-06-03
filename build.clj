@@ -221,7 +221,7 @@
   "Docs embedding install coordinates (mvn version + git SHA), kept in sync at release time."
   ["README.md" "doc/getting-started.md"])
 
-(defn update-readme-sha "Update the git SHA in install docs to HEAD." [_opts]
+(defn update-install-doc-shas "Update the git SHA in install docs to HEAD." [_opts]
   (let [{:keys [exit out]} (shell/sh "git" "rev-parse" "HEAD")
         sha (str/trim out)]
     (when-not (zero? exit) (throw (ex-info "Failed to read git SHA" {})))
