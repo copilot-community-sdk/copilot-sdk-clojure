@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (v1.0.0 GA sync)
+- **Synced version to upstream GA `v1.0.0`** (`1.0.0-beta.12.0` -> `1.0.0.0`).
+  Upstream's `v1.0.0` release is functionally identical to `v1.0.0-beta.12` at
+  the SDK level: no changes to `nodejs/src/`, the pinned `@github/copilot` CLI
+  dependency stays `^1.0.57` (matching our schema `1.0.57`), and there are no
+  `schemas/` or generated-code diffs. The remaining upstream commits in the
+  range are Go/Java/CI/release plumbing and E2E test de-flaking — nothing to
+  port. This SDK is therefore at full API/wire/schema parity with upstream GA.
+
 ### Security
 - **Validation exceptions no longer leak secrets.** Configuration validation
   failures (`client`, `create-session`, `resume-session`, and MCP-server checks)
