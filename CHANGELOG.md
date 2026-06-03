@@ -69,6 +69,14 @@ See the sections below for the complete change list since `v1.0.0-beta.3.0`.
   `getting-started.md`); it now validates them, and link extraction ignores
   illustrative links inside inline-code spans.
 
+### Changed (release tooling)
+- **Install-doc coordinates stay in sync at release.** The release SHA/version
+  refresh (`update-install-doc-shas`, `bb install-docs:sha`, formerly
+  `update-readme-sha`/`bb readme:sha`) now updates every doc that embeds install
+  coordinates (`README.md` and `doc/getting-started.md`) from a shared list, and
+  the Release workflow stages both. Previously only `README.md` was refreshed, so
+  `doc/getting-started.md` drifted (stale `:mvn/version` and `:git/sha`).
+
 ### Security
 - **Validation exceptions no longer leak secrets.** Configuration validation
   failures (`client`, `create-session`, `resume-session`, and MCP-server checks)
