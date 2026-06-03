@@ -216,6 +216,12 @@
                                             (s/keys :opt-un [::specs/timeout-ms])))
                 :ret any?)  ; core.async channel
 
+(register-fdef! github.copilot-sdk.session/<send-and-wait!
+                :args (s/cat :session ::specs/session
+                             :opts (s/merge ::specs/send-options
+                                            (s/keys :opt-un [::specs/timeout-ms])))
+                :ret any?)  ; core.async channel
+
 (register-fdef! github.copilot-sdk.session/abort!
                 :args (s/cat :session ::specs/session)
                 :ret nil?)
@@ -277,7 +283,7 @@
                 :args (s/cat :session ::specs/session)
                 :ret any?)  ; core.async channel
 
-(register-fdef! github.copilot-sdk.session/unsubscribe-events
+(register-fdef! github.copilot-sdk.session/unsubscribe-events!
                 :args (s/cat :session ::specs/session
                              :ch any?)
                 :ret nil?)

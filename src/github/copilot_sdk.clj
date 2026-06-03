@@ -371,9 +371,9 @@
   "Ping the server to check connectivity.
    Returns {:message :timestamp :protocol-version}.
 
-   `:timestamp` is an ISO 8601 date-time string on CLI ≥ 1.0.51
-   (upstream PR #1340). Earlier CLI versions returned a numeric
-   epoch-millis value."
+   `:timestamp` is either an ISO 8601 date-time string (CLI ≥ 1.0.51,
+   upstream PR #1340) or a numeric epoch-millis value, depending on the
+   CLI version; the SDK forwards whatever the server sends."
   ([client]
    (client/ping client))
   ([client message]
@@ -799,6 +799,27 @@
   [session opts]
   (session/<send! session opts))
 
+(defn <send-and-wait!
+  "Send a message and return a channel that delivers the final assistant message
+   event - the channel-based equivalent of `send-and-wait!`. Use it inside go
+   blocks instead of blocking a dispatch thread. Unlike `<send!` (which delivers
+   the final content string), this delivers the full assistant message event.
+
+   Options: same as send!, plus:
+   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
+
+   The returned channel delivers a single value (the final assistant message
+   event, or nothing if none was received) then closes.
+
+   Example:
+   ```clojure
+   (go
+     (let [event (<! (copilot/<send-and-wait! session {:prompt \"What is 2+2?\"}))]
+       (println (get-in event [:data :content]))))
+   ```"
+  [session opts]
+  (session/<send-and-wait! session opts))
+
 (defn send-async-with-id
   "Send a message and return {:message-id :events-ch}."
   [session opts]
@@ -890,7 +911,7 @@
 (defn subscribe-events
   "Subscribe to session events. Returns a channel (buffer 1024) that receives events.
    The channel receives nil (close) when the session is disconnected.
-   For explicit cleanup, call unsubscribe-events.
+   For explicit cleanup, call unsubscribe-events!.
    
    This is a convenience wrapper around (tap (copilot/events session) ch).
 
@@ -926,10 +947,13 @@
   ([session opts]
    (session/events->chan session opts)))
 
-(defn unsubscribe-events
-  "Unsubscribe a channel from session events."
+(defn unsubscribe-events!
+  "Unsubscribe a channel from session events.
+
+   Side effects: untaps `ch` from the session's event mult and closes `ch`.
+   The caller must not use `ch` after calling this."
   [session ch]
-  (session/unsubscribe-events session ch))
+  (session/unsubscribe-events! session ch))
 
 (defn session-id
   "Get the session ID."

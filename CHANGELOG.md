@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (v1.0.0 GA sync)
+- **Synced version to upstream GA `v1.0.0`** (`1.0.0-beta.12.0` -> `1.0.0.0`).
+  Upstream's `v1.0.0` release is functionally identical to `v1.0.0-beta.12` at
+  the SDK level: no changes to `nodejs/src/`, the pinned `@github/copilot` CLI
+  dependency stays `^1.0.57` (matching our schema `1.0.57`), and there are no
+  `schemas/` or generated-code diffs. The remaining upstream commits in the
+  range are Go/Java/CI/release plumbing and E2E test de-flaking — nothing to
+  port. This SDK is therefore at full API/wire/schema parity with upstream GA.
+
 ### Security
 - **Validation exceptions no longer leak secrets.** Configuration validation
   failures (`client`, `create-session`, `resume-session`, and MCP-server checks)
@@ -15,6 +24,24 @@ All notable changes to this project will be documented in this file. This change
   and `ex-data` before the exception is thrown.
 
 ### Fixed (correctness)
+- **`start!` is now safe under concurrent calls.** The status guard previously
+  did a non-atomic check-then-act (read `:status`, then a separate `swap!` to
+  `:connecting`), so two threads calling `start!` on the same client could both
+  pass the guard and spawn two CLI processes. The transition is now an atomic
+  `swap-vals!` compare-and-set: only the caller that observes a non-`:connecting`
+  /`:connected` status proceeds to spawn; the others no-op. The same atomic guard
+  is applied to the test-only `connect-with-streams!`.
+- **`disconnect!` is now idempotent under concurrent calls.** It used a
+  non-atomic check-then-act on the session's `:destroyed?` flag, so two threads
+  disconnecting the same session could both send a `session.destroy` RPC. The
+  teardown is now claimed with an atomic `swap-vals!` on `:destroyed?`; only the
+  winning caller notifies the server and closes the event channel.
+- **`remove-session!` no longer closes the event channel before removing the
+  session.** It closed the channel first and dissoc'd the session afterward,
+  leaving a window where the notification router could still resolve the session
+  and `offer!` an event to the just-closed channel (a spurious "buffer full"
+  warning). The session is now removed from the registry first, then its channel
+  is closed.
 - **`query-chan` no longer blocks a go dispatch thread or leaks on send
   failure.** It called the blocking `disconnect!` directly inside its event
   go-loop (parking a shared core.async dispatch thread for the duration of
@@ -49,6 +76,26 @@ All notable changes to this project will be documented in this file. This change
   atomic step, and resolves the response channel with a connection-closed error
   if the connection is gone or the outgoing channel is already closed —
   previously such a request was silently dropped and the caller hung.
+
+### Removed
+- **Dropped the unused `:force-stopping?` client-state flag.** `force-stop!`
+  set it (and `initial-state` initialized it), but nothing ever read it, so it
+  was dead state. `:stopping?` (which the process-exit watcher does read) is
+  unchanged.
+
+### Changed
+- **BREAKING**: renamed `unsubscribe-events` to `unsubscribe-events!`. The
+  function mutates — it untaps the channel from the session's event mult and
+  closes it — so it now carries the `!` side-effect suffix per the SDK's naming
+  convention. Update callers to the new name (no behavior change).
+
+### Added
+- **`<send-and-wait!`** — channel-based equivalent of `send-and-wait!` for use
+  inside `go` blocks. Returns a channel that delivers the final assistant message
+  event (same shape as `send-and-wait!`'s successful return; content under
+  `[:data :content]`), or closes empty if none was received. Like `<send!`, it
+  does not surface `:copilot/session.error`/timeout as exceptions. Complements
+  `<send!` (which yields just the content string).
 
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...

@@ -405,12 +405,13 @@
 (defn remove-session!
   "Remove a session from client state. Called on RPC failure during pre-registration."
   [client session-id]
-  (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-    (close! event-chan))
-  (swap! (:state client) (fn [s]
-                           (-> s
-                               (update :sessions dissoc session-id)
-                               (update :session-io dissoc session-id)))))
+  (let [event-chan (get-in @(:state client) [:session-io session-id :event-chan])]
+    (swap! (:state client) (fn [s]
+                             (-> s
+                                 (update :sessions dissoc session-id)
+                                 (update :session-io dissoc session-id))))
+    (when event-chan
+      (close! event-chan))))
 
 (defn dispatch-event!
   "Dispatch an event to all subscribers via the mult. Called by client notification router.
@@ -1242,6 +1243,44 @@
       (close! out-ch))
     out-ch))
 
+(defn <send-and-wait!
+  "Send a message and return a channel that delivers the final assistant message
+   event. This is the channel-based equivalent of `send-and-wait!`; use it inside
+   go blocks instead of blocking a dispatch thread.
+
+   The delivered event has the same shape as `send-and-wait!`'s successful return
+   value (an `:copilot/assistant.message` event - content lives under
+   `[:data :content]`). Error semantics differ: unlike `send-and-wait!`, which
+   throws on `:copilot/session.error` or timeout, this variant never surfaces those
+   - on error or timeout the channel simply closes (delivering the last assistant
+   message if one had already arrived, otherwise nothing). This matches `<send!`.
+
+   Options: same as send!.
+
+   Additional options:
+   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
+
+   The returned channel delivers at most one value then closes."
+  [session opts]
+  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
+        events-ch (send-async session (assoc opts :timeout-ms timeout-ms))
+        out-ch (chan (async/sliding-buffer 1))]
+    (go
+      (loop [last-msg nil]
+        (when-let [event (<! events-ch)]
+          (cond
+            (= :copilot/assistant.message (:type event))
+            (recur event)
+
+            (#{:copilot/session.idle :copilot/session.error} (:type event))
+            (when last-msg
+              (async/offer! out-ch last-msg))
+
+            :else
+            (recur last-msg))))
+      (close! out-ch))
+    out-ch))
+
 (defn send-async-with-id
   "Send a message and return {:message-id :events-ch}."
   [session opts]
@@ -1447,27 +1486,34 @@
    (disconnect! (:client session) (:session-id session)))
   ([client session-id]
    (log/debug "Disconnecting session: " session-id)
-   (when-not (:destroyed? (session-state client session-id))
-     (let [conn (connection-io client)]
-       ;; Try to notify server, but don't block forever if connection is broken
-       (try
-         (proto/send-request! conn "session.destroy" {:session-id session-id} 5000)
-         (catch Exception _
-           ;; Ignore errors - we're cleaning up anyway
-           nil))
-       ;; Atomically update state — clear handlers and closures to aid GC
-       (update-session! client session-id assoc
-                        :destroyed? true
-                        :tool-handlers {}
-                        :permission-handler nil
-                        :user-input-handler nil
-                        :hooks {}
-                        :config nil)
-       ;; Close the event source channel - this propagates to all tapped channels
-       (when-let [{:keys [event-chan]} (session-io client session-id)]
-         (close! event-chan))
-       (log/debug "Session disconnected: " session-id)
-       nil))))
+   ;; Atomically claim the teardown: only the caller that flips :destroyed?
+   ;; from falsey to true proceeds. Concurrent disconnect! calls on the same
+   ;; session then no-op instead of sending a second session.destroy RPC.
+   (let [[old _] (swap-vals! (:state client)
+                             (fn [s]
+                               (if (get-in s [:sessions session-id :destroyed?])
+                                 s
+                                 (assoc-in s [:sessions session-id :destroyed?] true))))]
+     (when-not (get-in old [:sessions session-id :destroyed?])
+       (let [conn (connection-io client)]
+         ;; Try to notify server, but don't block forever if connection is broken
+         (try
+           (proto/send-request! conn "session.destroy" {:session-id session-id} 5000)
+           (catch Exception _
+             ;; Ignore errors - we're cleaning up anyway
+             nil))
+         ;; Clear handlers and closures to aid GC (:destroyed? already set above)
+         (update-session! client session-id assoc
+                          :tool-handlers {}
+                          :permission-handler nil
+                          :user-input-handler nil
+                          :hooks {}
+                          :config nil)
+         ;; Close the event source channel - this propagates to all tapped channels
+         (when-let [{:keys [event-chan]} (session-io client session-id)]
+           (close! event-chan))
+         (log/debug "Session disconnected: " session-id)
+         nil)))))
 
 (defn destroy!
   "Deprecated: Use disconnect! instead. This function will be removed in a future release.
@@ -1497,7 +1543,7 @@
   "Subscribe to session events. Returns a channel that receives events.
    
    The channel will receive nil (close) when the session is disconnected.
-   For explicit cleanup before session disconnection, call unsubscribe-events.
+   For explicit cleanup before session disconnection, call unsubscribe-events!.
    
    Drop behavior: the returned channel uses a sliding buffer of 1024 events.
    If this subscriber falls behind and its buffer fills, the oldest buffered
@@ -1533,8 +1579,11 @@
      (tap event-mult ch)
      ch)))
 
-(defn unsubscribe-events
-  "Unsubscribe a channel from session events."
+(defn unsubscribe-events!
+  "Unsubscribe a channel from session events.
+
+   Side effects: untaps `ch` from the session's event mult and closes `ch`.
+   The caller must not use `ch` after calling this."
   [session ch]
   (let [{:keys [session-id client]} session
         {:keys [event-mult]} (session-io client session-id)]

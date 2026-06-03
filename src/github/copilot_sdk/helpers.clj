@@ -98,7 +98,7 @@
         (cond
           ;; No client exists - create one
           (nil? client)
-          (let [new-client (copilot/client (or client-opts {}))]
+          (let [new-client (copilot/client normalized)]
             (copilot/start! new-client)
             (reset! client-state {:client new-client :client-opts normalized})
             new-client)
