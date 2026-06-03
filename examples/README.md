@@ -928,15 +928,19 @@ sample (Python/.NET): a tool declared **without** a `:handler` is
 *declaration-only* — the runtime advertises it to the model but leaves the
 call pending for the application to resolve by hand. With no
 `:on-permission-request` handler registered either, the permission prompt is
-also left pending.
+also left pending. The pending requests are resolved across **three separate
+client lifecycles** via `resume-session` with `:continue-pending-work? true`.
 
 ### What It Demonstrates
 
 - Defining a declaration-only tool (no `:handler`) — upstream PR #1308
+- Resuming pending work across client lifecycles with `resume-session` +
+  `:continue-pending-work? true`, resolving the **original** request ids
 - Reading the `:request-id` from `:copilot/permission.requested` and resolving
-  it with `handle-pending-permission-request!` (`{:kind :approve-once}`)
+  it after resume with `handle-pending-permission-request!`
+  (`{:kind :approve-once}`)
 - Reading the `:request-id` from `:copilot/external_tool.requested` and
-  supplying the result with `handle-pending-tool-call!`
+  supplying the result after another resume with `handle-pending-tool-call!`
 - Subscribing to events **before** each trigger so no event is missed, with a
   bounded (120s) `alts!!` wait
 
@@ -947,10 +951,12 @@ clojure -A:examples -X manual-tool-resume/run
 clojure -A:examples -X manual-tool-resume/run :model '"gpt-5.4"'
 ```
 
-> The same pending requests can also be resolved after `resume-session` with
-> `:continue-pending-work? true` when the originating CLI process persists them
-> across resume. This example keeps everything in one client lifecycle so it
-> runs deterministically against any CLI build.
+> Each lifecycle ends by suspending the session with `disconnect!` rather than
+> force-killing the client. This demonstrates manual pending-work resolution
+> across graceful **suspend/resume**, not hard crash recovery: on CLI builds
+> where in-flight pending requests are persisted only during graceful teardown,
+> a SIGKILL (`force-stop!`) can drop the pending request ids before the next
+> `resume-session` can continue them.
 
 See [`doc/reference/API.md`](../doc/reference/API.md) for
 `handle-pending-permission-request!` and `handle-pending-tool-call!`.

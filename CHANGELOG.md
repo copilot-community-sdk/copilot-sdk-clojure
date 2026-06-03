@@ -8,9 +8,12 @@ All notable changes to this project will be documented in this file. This change
   the SDK-driven analogue of the upstream `manual_tool_resume` sample. It
   demonstrates a declaration-only tool (defined without a `:handler`, upstream
   PR #1308) whose pending permission request and pending tool call are resolved
-  by hand via `handle-pending-permission-request!` and
-  `handle-pending-tool-call!`, subscribing to events before each trigger with a
-  bounded wait.
+  by hand across three separate client lifecycles via `resume-session` with
+  `:continue-pending-work? true` — resolving the original request ids with
+  `handle-pending-permission-request!` and `handle-pending-tool-call!`,
+  subscribing to events before each trigger with a bounded wait. Each lifecycle
+  suspends gracefully with `disconnect!` (which persists the in-flight pending
+  requests) rather than force-killing the client.
 - **`run-all-examples.sh` now runs `ask_user_failure` and `manual_tool_resume`**
   (19 CLI-only examples total) and documents why `byok_provider`, `empty_mode`,
   and `mcp_local_server` are excluded (they require a provider API key or
