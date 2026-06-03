@@ -405,12 +405,13 @@
 (defn remove-session!
   "Remove a session from client state. Called on RPC failure during pre-registration."
   [client session-id]
-  (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-    (close! event-chan))
-  (swap! (:state client) (fn [s]
-                           (-> s
-                               (update :sessions dissoc session-id)
-                               (update :session-io dissoc session-id)))))
+  (let [event-chan (get-in @(:state client) [:session-io session-id :event-chan])]
+    (swap! (:state client) (fn [s]
+                             (-> s
+                                 (update :sessions dissoc session-id)
+                                 (update :session-io dissoc session-id))))
+    (when event-chan
+      (close! event-chan))))
 
 (defn dispatch-event!
   "Dispatch an event to all subscribers via the mult. Called by client notification router.
@@ -1447,27 +1448,34 @@
    (disconnect! (:client session) (:session-id session)))
   ([client session-id]
    (log/debug "Disconnecting session: " session-id)
-   (when-not (:destroyed? (session-state client session-id))
-     (let [conn (connection-io client)]
-       ;; Try to notify server, but don't block forever if connection is broken
-       (try
-         (proto/send-request! conn "session.destroy" {:session-id session-id} 5000)
-         (catch Exception _
-           ;; Ignore errors - we're cleaning up anyway
-           nil))
-       ;; Atomically update state — clear handlers and closures to aid GC
-       (update-session! client session-id assoc
-                        :destroyed? true
-                        :tool-handlers {}
-                        :permission-handler nil
-                        :user-input-handler nil
-                        :hooks {}
-                        :config nil)
-       ;; Close the event source channel - this propagates to all tapped channels
-       (when-let [{:keys [event-chan]} (session-io client session-id)]
-         (close! event-chan))
-       (log/debug "Session disconnected: " session-id)
-       nil))))
+   ;; Atomically claim the teardown: only the caller that flips :destroyed?
+   ;; from falsey to true proceeds. Concurrent disconnect! calls on the same
+   ;; session then no-op instead of sending a second session.destroy RPC.
+   (let [[old _] (swap-vals! (:state client)
+                             (fn [s]
+                               (if (get-in s [:sessions session-id :destroyed?])
+                                 s
+                                 (assoc-in s [:sessions session-id :destroyed?] true))))]
+     (when-not (get-in old [:sessions session-id :destroyed?])
+       (let [conn (connection-io client)]
+         ;; Try to notify server, but don't block forever if connection is broken
+         (try
+           (proto/send-request! conn "session.destroy" {:session-id session-id} 5000)
+           (catch Exception _
+             ;; Ignore errors - we're cleaning up anyway
+             nil))
+         ;; Clear handlers and closures to aid GC (:destroyed? already set above)
+         (update-session! client session-id assoc
+                          :tool-handlers {}
+                          :permission-handler nil
+                          :user-input-handler nil
+                          :hooks {}
+                          :config nil)
+         ;; Close the event source channel - this propagates to all tapped channels
+         (when-let [{:keys [event-chan]} (session-io client session-id)]
+           (close! event-chan))
+         (log/debug "Session disconnected: " session-id)
+         nil)))))
 
 (defn destroy!
   "Deprecated: Use disconnect! instead. This function will be removed in a future release.

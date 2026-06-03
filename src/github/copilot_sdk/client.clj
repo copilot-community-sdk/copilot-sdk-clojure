@@ -155,7 +155,6 @@
 ;;  :router-ch nil or channel
 ;;  :stopping? false
 ;;  :restarting? false
-;;  :force-stopping? false
 ;;  :models-cache nil|promise|vector (list-models cache)
 ;;  :lifecycle-handlers {handler-id -> {:handler fn :event-type type-or-nil}}}
 
@@ -175,7 +174,6 @@
    :router-thread nil
    :router-running? false
    :stopping? false
-   :force-stopping? false
    :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
    :lifecycle-handlers {}
    :stderr-buffer nil         ; atom of recent stderr lines (for error context)
@@ -1162,7 +1160,7 @@
 (defn force-stop!
   "Force stop the CLI server without graceful cleanup."
   [client]
-  (swap! (:state client) assoc :force-stopping? true :stopping? true)
+  (swap! (:state client) assoc :stopping? true)
 
   (let [{:keys [connection-io socket process]} @(:state client)]
     (try
@@ -1203,7 +1201,6 @@
           :router-queue nil
           :router-thread nil
           :router-running? false
-          :force-stopping? false
           :models-cache nil
           :lifecycle-handlers {}
           :stderr-buffer nil}) ; reset caches, handlers, and stderr

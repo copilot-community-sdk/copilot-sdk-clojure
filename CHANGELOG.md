@@ -31,6 +31,17 @@ All notable changes to this project will be documented in this file. This change
   `swap-vals!` compare-and-set: only the caller that observes a non-`:connecting`
   /`:connected` status proceeds to spawn; the others no-op. The same atomic guard
   is applied to the test-only `connect-with-streams!`.
+- **`disconnect!` is now idempotent under concurrent calls.** It used a
+  non-atomic check-then-act on the session's `:destroyed?` flag, so two threads
+  disconnecting the same session could both send a `session.destroy` RPC. The
+  teardown is now claimed with an atomic `swap-vals!` on `:destroyed?`; only the
+  winning caller notifies the server and closes the event channel.
+- **`remove-session!` no longer closes the event channel before removing the
+  session.** It closed the channel first and dissoc'd the session afterward,
+  leaving a window where the notification router could still resolve the session
+  and `offer!` an event to the just-closed channel (a spurious "buffer full"
+  warning). The session is now removed from the registry first, then its channel
+  is closed.
 - **`query-chan` no longer blocks a go dispatch thread or leaks on send
   failure.** It called the blocking `disconnect!` directly inside its event
   go-loop (parking a shared core.async dispatch thread for the duration of
@@ -65,6 +76,12 @@ All notable changes to this project will be documented in this file. This change
   atomic step, and resolves the response channel with a connection-closed error
   if the connection is gone or the outgoing channel is already closed —
   previously such a request was silently dropped and the caller hung.
+
+### Removed
+- **Dropped the unused `:force-stopping?` client-state flag.** `force-stop!`
+  set it (and `initial-state` initialized it), but nothing ever read it, so it
+  was dead state. `:stopping?` (which the process-exit watcher does read) is
+  unchanged.
 
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
