@@ -1,6 +1,7 @@
 (ns github.copilot-sdk-test
   (:require [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk :as copilot]
+            [github.copilot-sdk.helpers :as h]
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util]
@@ -261,6 +262,23 @@
   (testing "result-rejected"
     (let [r (copilot/result-rejected "User rejected")]
       (is (= "rejected" (:result-type r))))))
+
+(deftest ensure-client-honors-requested-opts-test
+  ;; Regression: the shared-client initializer must create the first client with
+  ;; the caller-supplied :client options (e.g. a custom :cli-path or :env), per
+  ;; the documented contract ("First query initializes the client with provided
+  ;; :client options"). Stub start! so no CLI is spawned; the client constructor
+  ;; itself does not spawn, so the option-threading logic is exercised in full.
+  (let [state-atom @#'h/client-state
+        saved @state-atom]
+    (try
+      (reset! state-atom nil)
+      (with-redefs [copilot/start! (fn [c] c)]
+        (let [c (#'h/ensure-client! {:cli-path "custom-copilot-xyz"})]
+          (is (= "custom-copilot-xyz" (:cli-path (copilot/client-options c)))
+              "first-use client must honor the requested :cli-path")))
+      (finally
+        (reset! state-atom saved)))))
 
 ;; =============================================================================
 ;; Protocol Tests (Unit)
