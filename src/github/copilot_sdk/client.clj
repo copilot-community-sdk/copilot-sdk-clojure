@@ -97,13 +97,17 @@
 (defn- redact-secrets
   "Mask secret values in a caller-supplied options/config map so it can be embedded
    in exception data and messages without leaking credentials. Masks the top-level
-   auth tokens, the nested BYOK `:provider` credentials (api/bearer keys and any
-   custom request `:headers`), and any `:mcp-servers` header/env values. Non-map
-   inputs pass through unchanged."
+   auth tokens, the `:env` map (merged into the spawned CLI environment, so it
+   can carry credentials), the nested BYOK `:provider` credentials (api/bearer
+   keys and any custom request `:headers`), and any `:mcp-servers` header/env
+   values. Non-map inputs pass through unchanged."
   [m]
   (if-not (map? m)
     m
     (cond-> (mask-present m [:github-token :tcp-connection-token])
+      (map? (:env m))
+      (update :env mask-all-values)
+
       (map? (:provider m))
       (update :provider (fn [p]
                           (-> p

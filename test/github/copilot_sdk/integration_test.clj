@@ -5581,6 +5581,13 @@
               e (capture #(sdk/create-session c {:mcp-servers {"s" {:mcp-headers {"Authorization" mcp-secret}}}}))]
           (is (some? e))
           (is (not (leaked? e mcp-secret)) "MCP header secret must be redacted")))
+      (testing "client-options :env secret value"
+        ;; :env is merged into the spawned CLI environment, so it can carry
+        ;; credentials; a validation failure must not leak them via ex-data.
+        (let [env-secret "ghp_ENVSECRET999"
+              e (capture #(sdk/client {:env {"GH_TOKEN" env-secret} :log-level :bogus :auto-start? false}))]
+          (is (some? e))
+          (is (not (leaked? e env-secret)) ":env secret value must be redacted")))
       (testing "blank/invalid secret value still produces a useful spec error"
         ;; A blank :github-token fails the ::non-blank-string spec. Redaction must
         ;; NOT mask it to "***" (which would make the map look valid and suppress
