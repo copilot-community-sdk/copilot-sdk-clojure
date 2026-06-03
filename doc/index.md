@@ -33,7 +33,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 - [Session Filesystem](reference/API.md#session-filesystem) — route filesystem operations through host-provided handlers. **Security note:** the host fully controls session file access.
 - Remote / cloud sessions (`:remote-session`, `:cloud`) and [fleet mode](reference/API.md#experimental-rpc-methods) — **experimental**; not covered by GA semver guarantees.
 
-
+## Reference
 
 - [API Reference](reference/API.md) — Complete API: helpers, client, session, events, tools
 - [Generated API Docs](api/index.html) — Codox-generated namespace documentation

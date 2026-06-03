@@ -267,7 +267,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
 | `:on-exit-plan-mode` | fn | Handler for `exitPlanMode.request` RPCs — invoked when the agent asks to leave plan mode. When provided, advertises `requestExitPlanMode=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
 | `:on-auto-mode-switch` | fn | Handler for `autoModeSwitch.request` RPCs — invoked when the agent asks to switch autonomy mode. When provided, advertises `requestAutoModeSwitch=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
-| `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set. Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
+| `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set; defaulted to `false` in `:mode :empty` (caller can override). Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
 | `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
@@ -1595,8 +1595,9 @@ When `:telemetry` is present the SDK sets `COPILOT_OTEL_ENABLED=true` on the CLI
 #### Distributed trace propagation (`:on-get-trace-context`)
 
 To stitch CLI spans into a caller-managed distributed trace, provide a zero-arg
-`:on-get-trace-context` function in the **client** options. It is called per session and
-returns a W3C trace-context map; only `:traceparent` and `:tracestate` are forwarded:
+`:on-get-trace-context` function in the **client** options. The SDK calls it to capture a
+fresh trace context for session operations (session create, resume, and each message
+send), forwarding only `:traceparent` and `:tracestate`:
 
 ```clojure
 (def client
@@ -1611,7 +1612,9 @@ returns a W3C trace-context map; only `:traceparent` and `:tracestate` are forwa
 `:enable-session-telemetry?` is a **session** config flag that controls the CLI's own
 internal usage telemetry — independent of the OpenTelemetry export above. It defaults to
 enabled for GitHub-authenticated sessions and is **always disabled** when a BYOK
-`:provider` is configured. Set it to `false` to opt out:
+`:provider` is configured. In `:mode :empty` it is defaulted to `false` as one of the
+multi-tenant hardening defaults (the caller can still set it explicitly). Set it to
+`false` to opt out:
 
 ```clojure
 (def session
