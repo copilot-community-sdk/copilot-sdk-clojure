@@ -465,8 +465,12 @@
 (defn create-session
   "Create a new conversation session.
 
-   Config options (`:on-permission-request` is **required**):
-   - :on-permission-request - Permission handler function (**required**, e.g. `approve-all`)
+   `:on-permission-request` is **optional** (since upstream PR #1308) — omit it to
+   leave permission requests pending for manual resolution via
+   `handle-pending-permission-request!`. Commonly-used config options:
+   - :on-permission-request - Permission handler function (optional, e.g. `approve-all`).
+                             When omitted, permission requests surface as
+                             `:copilot/permission.requested` events and stay pending.
    - :session-id           - Custom session ID
    - :model                - Model to use (e.g., \"gpt-5.4\", \"claude-sonnet-4.5\")
    - :tools                - Vector of tool definitions (use define-tool)
@@ -478,12 +482,14 @@
    - :mcp-servers          - MCP server configs map (keyed by server ID)
    - :custom-agents        - Custom agent configs
    - :default-agent        - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
-   - :config-dir           - Override config directory for CLI (configDir)
    - :skill-directories    - Additional skill directories to load
    - :disabled-skills      - Disable specific skills by name
-   - :large-output         - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir}
-                             Note: CLI protocol feature, not in official SDK. outputDir may be ignored.
    - :working-directory    - Working directory for the session (tool operations relative to this)
+
+   See the [API reference](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/reference/API.md)
+   for the complete, current option list (including observability/telemetry, trace
+   context, exit-plan-mode / auto-mode-switch handlers, skills, plugins, remote, and
+   cloud session options).
 
    Example:
    ```clojure
@@ -611,7 +617,8 @@
    plus:
    - :disable-resume?  - When true, skip emitting the session.resume event (default: false)
 
-   `:on-permission-request` is **required**.
+   `:on-permission-request` is **optional** (since upstream PR #1308) — omit it to
+   leave permission requests pending for manual resolution.
 
    Example:
    ```clojure
@@ -651,7 +658,8 @@
    Reads the SESSION_ID environment variable and connects to the parent CLI process
    via stdio. Intended for extensions spawned by the Copilot CLI.
 
-   Config is the same as `resume-session` (`:on-permission-request` is **required**).
+   Config is the same as `resume-session`. `:on-permission-request` is **optional**;
+   when omitted, join-session uses `default-join-session-permission-handler`.
    The `:disable-resume?` option defaults to true.
 
    Returns a map with `:client` and `:session` keys. The caller is responsible for
