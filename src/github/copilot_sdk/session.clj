@@ -1245,17 +1245,22 @@
 
 (defn <send-and-wait!
   "Send a message and return a channel that delivers the final assistant message
-   event - the same value `send-and-wait!` returns. This is the channel-based
-   equivalent of `send-and-wait!`; use it inside go blocks instead of blocking a
-   dispatch thread.
+   event. This is the channel-based equivalent of `send-and-wait!`; use it inside
+   go blocks instead of blocking a dispatch thread.
+
+   The delivered event has the same shape as `send-and-wait!`'s successful return
+   value (an `:copilot/assistant.message` event - content lives under
+   `[:data :content]`). Error semantics differ: unlike `send-and-wait!`, which
+   throws on `:copilot/session.error` or timeout, this variant never surfaces those
+   - on error or timeout the channel simply closes (delivering the last assistant
+   message if one had already arrived, otherwise nothing). This matches `<send!`.
 
    Options: same as send!.
 
    Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
 
-   The returned channel delivers a single value (the final assistant message
-   event, or nothing if none was received) then closes."
+   The returned channel delivers at most one value then closes."
   [session opts]
   (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
         events-ch (send-async session (assoc opts :timeout-ms timeout-ms))

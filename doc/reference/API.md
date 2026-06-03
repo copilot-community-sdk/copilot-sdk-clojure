@@ -805,14 +805,16 @@ Combined with `<create-session`, enables fully non-blocking pipelines:
 (copilot/<send-and-wait! session options)
 ```
 
-Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final assistant message **event** (the same value `send-and-wait!` returns), or closes with nothing if no assistant message was received.
+Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final assistant message **event** — the same shape as `send-and-wait!`'s successful return value (content lives under `[:data :content]`), or closes with nothing if no assistant message was received.
 Supports `:timeout-ms` in options (default: `300000`, set to `nil` to disable).
+
+Error semantics differ from `send-and-wait!`: where `send-and-wait!` throws on `:copilot/session.error` or timeout, this variant never surfaces those — the channel closes (delivering the last assistant message if one arrived, otherwise nothing), consistent with `<send!`.
 
 ```clojure
 (go
   (let [session (<! (copilot/<create-session client {:on-permission-request copilot/approve-all}))
         event   (<! (copilot/<send-and-wait! session {:prompt "Explain monads"}))]
-    (println (:content event))))
+    (println (get-in event [:data :content]))))
 ```
 
 Use `<send!` when you only need the content string; use `<send-and-wait!` when you need the full event (metadata, id, etc.).

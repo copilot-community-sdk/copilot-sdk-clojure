@@ -92,8 +92,10 @@ All notable changes to this project will be documented in this file. This change
 ### Added
 - **`<send-and-wait!`** — channel-based equivalent of `send-and-wait!` for use
   inside `go` blocks. Returns a channel that delivers the final assistant message
-  event (the same value `send-and-wait!` returns), or closes empty if none was
-  received. Complements `<send!` (which yields just the content string).
+  event (same shape as `send-and-wait!`'s successful return; content under
+  `[:data :content]`), or closes empty if none was received. Like `<send!`, it
+  does not surface `:copilot/session.error`/timeout as exceptions. Complements
+  `<send!` (which yields just the content string).
 
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
