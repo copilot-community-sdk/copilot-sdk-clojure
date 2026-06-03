@@ -799,6 +799,27 @@
   [session opts]
   (session/<send! session opts))
 
+(defn <send-and-wait!
+  "Send a message and return a channel that delivers the final assistant message
+   event - the channel-based equivalent of `send-and-wait!`. Use it inside go
+   blocks instead of blocking a dispatch thread. Unlike `<send!` (which delivers
+   the final content string), this delivers the full assistant message event.
+
+   Options: same as send!, plus:
+   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
+
+   The returned channel delivers a single value (the final assistant message
+   event, or nothing if none was received) then closes.
+
+   Example:
+   ```clojure
+   (go
+     (let [event (<! (copilot/<send-and-wait! session {:prompt \"What is 2+2?\"}))]
+       (println (get-in event [:data :content]))))
+   ```"
+  [session opts]
+  (session/<send-and-wait! session opts))
+
 (defn send-async-with-id
   "Send a message and return {:message-id :events-ch}."
   [session opts]

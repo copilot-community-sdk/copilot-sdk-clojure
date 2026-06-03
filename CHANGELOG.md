@@ -89,6 +89,12 @@ All notable changes to this project will be documented in this file. This change
   closes it — so it now carries the `!` side-effect suffix per the SDK's naming
   convention. Update callers to the new name (no behavior change).
 
+### Added
+- **`<send-and-wait!`** — channel-based equivalent of `send-and-wait!` for use
+  inside `go` blocks. Returns a channel that delivers the final assistant message
+  event (the same value `send-and-wait!` returns), or closes empty if none was
+  received. Complements `<send!` (which yields just the content string).
+
 ### Fixed (GA parity)
 - **BYOK `ProviderConfig` wire keys** — `:provider {:provider-type ...
   :azure-options {:azure-api-version ...}}` now serializes to the upstream wire

@@ -551,6 +551,32 @@
             (is (= "Here is the final answer with all the details." result)
                 "<send! should return the last assistant.message content, not the first")))))))
 
+(deftest test-<send-and-wait!-returns-final-event
+  (testing "<send-and-wait! delivers the final assistant.message EVENT (not just content)"
+    (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id session)
+          client (:client session)]
+      (with-redefs [protocol/send-request (fn [_ _ _]
+                                            (let [ch (async/chan 1)]
+                                              (async/put! ch {:result {:message-id "msg-id"}})
+                                              (async/close! ch)
+                                              ch))]
+        (let [result-ch (sdk/<send-and-wait! session {:prompt "Q"})]
+          (Thread/sleep 50)
+          (session/dispatch-event! client session-id
+                                   {:type :copilot/assistant.message
+                                    :data {:content "first" :message-id "m1"}})
+          (session/dispatch-event! client session-id
+                                   {:type :copilot/assistant.message
+                                    :data {:content "final answer" :message-id "m2"}})
+          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+          (let [[result _] (alts!! [result-ch (timeout 2000)])]
+            (is (= :copilot/assistant.message (:type result))
+                "<send-and-wait! should deliver the full event map, not just content")
+            (is (= "final answer" (get-in result [:data :content]))
+                "<send-and-wait! should deliver the LAST assistant.message")
+            (is (= "m2" (get-in result [:data :message-id])))))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Session Operations Tests
 ;; -----------------------------------------------------------------------------
