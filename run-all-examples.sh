@@ -69,3 +69,18 @@ clojure -A:examples -X elicitation-provider/run
 echo ""
 echo "=== commands ==="
 clojure -A:examples -X commands/run
+
+echo ""
+echo "=== ask-user-failure ==="
+clojure -A:examples -X ask-user-failure/run
+
+echo ""
+echo "=== manual-tool-resume ==="
+clojure -A:examples -X manual-tool-resume/run
+
+# Intentionally excluded — these require external credentials or network setup
+# and cannot run unattended in CI:
+#   byok_provider     needs a provider API key (OPENAI_API_KEY / ANTHROPIC_API_KEY / ...)
+#   empty_mode        :empty mode disables the local keychain, so it also needs a provider key
+#   mcp_local_server  needs npx (Node.js) + network to download @modelcontextprotocol/server-filesystem
+# Run them manually after providing the relevant key / tooling. See examples/README.md.

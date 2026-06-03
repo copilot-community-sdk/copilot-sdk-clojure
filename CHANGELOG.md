@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (examples)
+- **New `manual_tool_resume` example** (`examples/manual_tool_resume.clj`),
+  the SDK-driven analogue of the upstream `manual_tool_resume` sample. It
+  demonstrates a declaration-only tool (defined without a `:handler`, upstream
+  PR #1308) whose pending permission request and pending tool call are resolved
+  by hand via `handle-pending-permission-request!` and
+  `handle-pending-tool-call!`, subscribing to events before each trigger with a
+  bounded wait.
+- **`run-all-examples.sh` now runs `ask_user_failure` and `manual_tool_resume`**
+  (19 CLI-only examples total) and documents why `byok_provider`, `empty_mode`,
+  and `mcp_local_server` are excluded (they require a provider API key or
+  `npx`/network setup). `examples/README.md` updated to match.
+
 ### Changed (v1.0.0 GA sync)
 - **Synced version to upstream GA `v1.0.0`** (`1.0.0-beta.12.0` -> `1.0.0.0`).
   Upstream's `v1.0.0` release is functionally identical to `v1.0.0-beta.12` at
