@@ -371,9 +371,9 @@
   "Ping the server to check connectivity.
    Returns {:message :timestamp :protocol-version}.
 
-   `:timestamp` is an ISO 8601 date-time string on CLI ≥ 1.0.51
-   (upstream PR #1340). Earlier CLI versions returned a numeric
-   epoch-millis value."
+   `:timestamp` is either an ISO 8601 date-time string (CLI ≥ 1.0.51,
+   upstream PR #1340) or a numeric epoch-millis value, depending on the
+   CLI version; the SDK forwards whatever the server sends."
   ([client]
    (client/ping client))
   ([client message]
