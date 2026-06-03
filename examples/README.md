@@ -98,7 +98,7 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs 19 examples that need only the Copilot CLI (examples 1–9, 12–19, and 21).
+> **Note:** `run-all-examples.sh` runs 18 example files that need only the Copilot CLI (examples 1–9, 12–19, and 21) — 19 runs in total, since `helpers-query` runs twice (`run` and `run-multi`).
 > Examples 10 (BYOK), 11 (MCP), and 20 (empty-mode — uses BYOK) require external dependencies (API keys, Node.js) and are run manually.
 
 With a custom CLI path:

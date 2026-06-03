@@ -15,7 +15,8 @@ All notable changes to this project will be documented in this file. This change
   suspends gracefully with `disconnect!` (which persists the in-flight pending
   requests) rather than force-killing the client.
 - **`run-all-examples.sh` now runs `ask_user_failure` and `manual_tool_resume`**
-  (19 CLI-only examples total) and documents why `byok_provider`, `empty_mode`,
+  (18 CLI-only example files; 19 runs total, since `helpers-query` runs twice)
+  and documents why `byok_provider`, `empty_mode`,
   and `mcp_local_server` are excluded (they require a provider API key or
   `npx`/network setup). `examples/README.md` updated to match.
 
