@@ -14,9 +14,11 @@
 (def doc-files
   "Markdown files to validate."
   (->> (concat (fs/glob "." "doc/**/*.md")
+               (fs/glob "." "doc/*.md")
                (fs/glob "." "*.md")
                (fs/glob "." "examples/**/*.md"))
        (map str)
+       (distinct)
        (remove #(str/includes? % "doc/api/"))
        sort))
 
@@ -60,13 +62,15 @@
 ;; --- Link Validation ---
 
 (defn extract-md-links
-  "Extract [text](path) links from markdown content. Returns seq of {:text :path :line}."
+  "Extract [text](path) links from markdown content. Returns seq of {:text :path :line}.
+   Links inside inline-code spans (backtick-delimited) are illustrative, not real links,
+   and are skipped."
   [content]
   (let [lines (str/split-lines content)]
     (->> lines
          (map-indexed
           (fn [idx line]
-            (->> (re-seq #"\[([^\]]*)\]\(([^)]+)\)" line)
+            (->> (re-seq #"\[([^\]]*)\]\(([^)]+)\)" (str/replace line #"`[^`]*`" ""))
                  (map (fn [[_ text path]]
                         {:text text :path path :line (inc idx)})))))
          (apply concat))))
