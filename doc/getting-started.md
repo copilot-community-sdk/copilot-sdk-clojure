@@ -34,7 +34,7 @@ copilot --version
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.2.1.1-SNAPSHOT"}}}
+{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.0.0"}}}
 ```
 
 Or use as a Git dependency:
@@ -42,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "7a30402b9bd843494752c46a18ff7f2fec27a620"}}}
+         :git/sha "034698e6f09cfb833f7769a4dd1a061e7ba2ad03"}}}
 ```
 
 ## Step 2: Send Your First Message
