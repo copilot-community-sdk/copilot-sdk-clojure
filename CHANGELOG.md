@@ -24,6 +24,13 @@ All notable changes to this project will be documented in this file. This change
   and `ex-data` before the exception is thrown.
 
 ### Fixed (correctness)
+- **`start!` is now safe under concurrent calls.** The status guard previously
+  did a non-atomic check-then-act (read `:status`, then a separate `swap!` to
+  `:connecting`), so two threads calling `start!` on the same client could both
+  pass the guard and spawn two CLI processes. The transition is now an atomic
+  `swap-vals!` compare-and-set: only the caller that observes a non-`:connecting`
+  /`:connected` status proceeds to spawn; the others no-op. The same atomic guard
+  is applied to the test-only `connect-with-streams!`.
 - **`query-chan` no longer blocks a go dispatch thread or leaks on send
   failure.** It called the blocking `disconnect!` directly inside its event
   go-loop (parking a shared core.async dispatch thread for the duration of

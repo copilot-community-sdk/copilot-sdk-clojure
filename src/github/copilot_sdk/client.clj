@@ -987,107 +987,111 @@
   "Start the CLI server and establish connection.
    Blocks until connected or throws on error.
 
-   Thread safety: do not call start! and stop! concurrently from different
-   threads. The :stopping? flag guards against concurrent calls, but explicit
-   concurrent calls are unsupported."
+   Thread safety: concurrent start! calls are safe — an atomic compare-and-set
+   on :status ensures only one caller spawns the process; the others no-op.
+   Do not, however, call start! and stop! concurrently from different threads."
   [client]
-  (when-not (= :connected (:status @(:state client)))
-    (log/info "Starting Copilot client...")
-    (swap! (:state client) assoc :stopping? false :status :connecting)
+  (let [[old _] (swap-vals! (:state client)
+                            (fn [s]
+                              (if (#{:connecting :connected} (:status s))
+                                s
+                                (assoc s :stopping? false :status :connecting))))]
+    (when-not (#{:connecting :connected} (:status old))
+      (log/info "Starting Copilot client...")
 
-    ;; Set log level from options
-    (when-let [level (:log-level (:options client))]
-      (log/set-log-level! level))
+      ;; Set log level from options
+      (when-let [level (:log-level (:options client))]
+        (log/set-log-level! level))
 
-    (try
+      (try
       ;; Start CLI process if not connecting to external server
-      (when-not (:external-server? client)
-        (log/debug "Spawning CLI process")
-        (let [opts (:options client)
-              mp (proc/spawn-cli opts)]
-          (swap! (:state client) assoc :process mp)
-          (start-stderr-forwarder! client mp)
-          (watch-process-exit! client mp)
+        (when-not (:external-server? client)
+          (log/debug "Spawning CLI process")
+          (let [opts (:options client)
+                mp (proc/spawn-cli opts)]
+            (swap! (:state client) assoc :process mp)
+            (start-stderr-forwarder! client mp)
+            (watch-process-exit! client mp)
 
           ;; For TCP mode, wait for port announcement
-          (when-not (:use-stdio? opts)
-            (let [port (proc/wait-for-port mp 10000)]
-              (swap! (:state client) assoc :actual-port port)))))
+            (when-not (:use-stdio? opts)
+              (let [port (proc/wait-for-port mp 10000)]
+                (swap! (:state client) assoc :actual-port port)))))
 
       ;; Connect to server
-      (cond
+        (cond
         ;; Child process mode: use own stdin/stdout to talk to parent
-        (:is-child-process? (:options client))
-        (do
-          (log/debug "Connecting via parent stdio (child process mode)")
-          (connect-parent-stdio! client))
+          (:is-child-process? (:options client))
+          (do
+            (log/debug "Connecting via parent stdio (child process mode)")
+            (connect-parent-stdio! client))
 
         ;; External server (cli-url) or TCP mode
-        (or (:external-server? client)
-            (not (:use-stdio? (:options client))))
-        (do
-          (log/debug "Connecting via TCP")
-          (connect-tcp! client))
+          (or (:external-server? client)
+              (not (:use-stdio? (:options client))))
+          (do
+            (log/debug "Connecting via TCP")
+            (connect-tcp! client))
 
         ;; Normal stdio to spawned process
-        :else
-        (do
-          (log/debug "Connecting via stdio")
-          (connect-stdio! client)))
+          :else
+          (do
+            (log/debug "Connecting via stdio")
+            (connect-stdio! client)))
 
       ;; Verify protocol version
-      (verify-protocol-version! client)
+        (verify-protocol-version! client)
 
       ;; Register sessionFs provider if configured
-      (when-let [sf-config (:session-fs client)]
-        (let [{:keys [connection-io]} @(:state client)]
-          (proto/send-request! connection-io "sessionFs.setProvider"
-                               (cond-> {:initial-cwd (:initial-cwd sf-config)
-                                        :session-state-path (:session-state-path sf-config)
-                                        :conventions (:conventions sf-config)}
+        (when-let [sf-config (:session-fs client)]
+          (let [{:keys [connection-io]} @(:state client)]
+            (proto/send-request! connection-io "sessionFs.setProvider"
+                                 (cond-> {:initial-cwd (:initial-cwd sf-config)
+                                          :session-state-path (:session-state-path sf-config)
+                                          :conventions (:conventions sf-config)}
                                  ;; Upstream PR #1299: forward provider capabilities (e.g., {:sqlite true}).
-                                 (:capabilities sf-config)
-                                 (assoc :capabilities (:capabilities sf-config))))))
+                                   (:capabilities sf-config)
+                                   (assoc :capabilities (:capabilities sf-config))))))
 
       ;; Set up notification routing and request handling
-      (start-notification-router! client)
-      (setup-request-handler! client)
+        (start-notification-router! client)
+        (setup-request-handler! client)
 
-      (swap! (:state client) assoc :status :connected)
-      (log/info "Copilot client connected")
-      nil
+        (swap! (:state client) assoc :status :connected)
+        (log/info "Copilot client connected")
+        nil
 
-      (catch Exception e
-        (let [stderr (get-stderr-output client)
-              msg (cond-> (str "Failed to start client: " (ex-message e))
-                    stderr (str "\nstderr: " stderr))]
-          (log/error msg)
+        (catch Exception e
+          (let [stderr (get-stderr-output client)
+                msg (cond-> (str "Failed to start client: " (ex-message e))
+                      stderr (str "\nstderr: " stderr))]
+            (log/error msg)
           ;; Release any resources created before the failure so a failed
           ;; start! does not leak the spawned process, its stderr/exit watcher
           ;; threads, the socket, or the JSON-RPC connection. Mark :stopping? so
           ;; the process-exit watcher treats the teardown as expected. Status is
           ;; left as :error (not :disconnected) so callers can distinguish a
           ;; failed start from a clean stop.
-          (swap! (:state client) assoc :stopping? true)
+            (swap! (:state client) assoc :stopping? true)
           ;; Tear down the notification router if it was started before the
           ;; failure (mirrors stop!), so its dispatcher thread/channel don't leak.
-          (swap! (:state client) assoc :router-running? false)
-          (when-let [^Thread router-thread (:router-thread @(:state client))]
-            (.interrupt router-thread)
-            (try (.join router-thread 500) (catch Exception _)))
-          (when-let [router-ch (:router-ch @(:state client))]
-            (close! router-ch))
-          (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
-          (let [{:keys [connection-io socket process]} @(:state client)]
-            (when connection-io
-              (try (proto/disconnect connection-io) (catch Exception _)))
-            (when socket
-              (try (.close ^Socket socket) (catch Exception _)))
-            (when (and (not (:external-server? client)) process)
-              (try (proc/destroy! process) (catch Exception _))))
-          (swap! (:state client) assoc :status :error :connection nil
-                 :connection-io nil :socket nil :process nil :actual-port nil)
-          (throw e))))))
+            (swap! (:state client) assoc :router-running? false)
+            (when-let [^Thread router-thread (:router-thread @(:state client))]
+              (.interrupt router-thread)
+              (try (.join router-thread 500) (catch Exception _)))
+            (when-let [router-ch (:router-ch @(:state client))]
+              (close! router-ch))
+            (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+            (let [{:keys [connection-io socket process]} @(:state client)]
+              (when connection-io
+                (try (proto/disconnect connection-io) (catch Exception _)))
+              (when socket
+                (try (.close ^Socket socket) (catch Exception _)))
+              (when (and (not (:external-server? client)) process)
+                (try (proc/destroy! process) (catch Exception _))))
+            (swap! (:state client) assoc :status :error :connection nil
+                   :connection-io nil :socket nil :process nil :actual-port nil)
+            (throw e)))))))
 
 (defn stop!
   "Stop the CLI server and close all sessions.
@@ -2672,27 +2676,31 @@
   "Connect to a server using pre-existing input/output streams.
    For testing purposes only."
   [client in out]
-  (when-not (= :connected (:status @(:state client)))
-    (swap! (:state client) assoc :status :connecting)
-    (try
-      ;; Initialize connection state before connecting
-      (swap! (:state client) assoc :connection (proto/initial-connection-state))
-      (let [conn (proto/connect in out (:state client))]
-        (swap! (:state client) assoc :connection-io conn))
-      (verify-protocol-version! client)
-      ;; Register sessionFs provider if configured
-      (when-let [sf-config (:session-fs client)]
-        (let [{:keys [connection-io]} @(:state client)]
-          (proto/send-request! connection-io "sessionFs.setProvider"
-                               (cond-> {:initial-cwd (:initial-cwd sf-config)
-                                        :session-state-path (:session-state-path sf-config)
-                                        :conventions (:conventions sf-config)}
-                                 (:capabilities sf-config)
-                                 (assoc :capabilities (:capabilities sf-config))))))
-      (start-notification-router! client)
-      (setup-request-handler! client)
-      (swap! (:state client) assoc :status :connected)
-      nil
-      (catch Exception e
-        (swap! (:state client) assoc :status :error)
-        (throw e)))))
+  (let [[old _] (swap-vals! (:state client)
+                            (fn [s]
+                              (if (#{:connecting :connected} (:status s))
+                                s
+                                (assoc s :status :connecting))))]
+    (when-not (#{:connecting :connected} (:status old))
+      (try
+        ;; Initialize connection state before connecting
+        (swap! (:state client) assoc :connection (proto/initial-connection-state))
+        (let [conn (proto/connect in out (:state client))]
+          (swap! (:state client) assoc :connection-io conn))
+        (verify-protocol-version! client)
+        ;; Register sessionFs provider if configured
+        (when-let [sf-config (:session-fs client)]
+          (let [{:keys [connection-io]} @(:state client)]
+            (proto/send-request! connection-io "sessionFs.setProvider"
+                                 (cond-> {:initial-cwd (:initial-cwd sf-config)
+                                          :session-state-path (:session-state-path sf-config)
+                                          :conventions (:conventions sf-config)}
+                                   (:capabilities sf-config)
+                                   (assoc :capabilities (:capabilities sf-config))))))
+        (start-notification-router! client)
+        (setup-request-handler! client)
+        (swap! (:state client) assoc :status :connected)
+        nil
+        (catch Exception e
+          (swap! (:state client) assoc :status :error)
+          (throw e))))))

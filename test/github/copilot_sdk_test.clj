@@ -2,6 +2,7 @@
   (:require [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk :as copilot]
             [github.copilot-sdk.helpers :as h]
+            [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util]
@@ -279,6 +280,23 @@
               "first-use client must honor the requested :cli-path")))
       (finally
         (reset! state-atom saved)))))
+
+(deftest start-guard-prevents-double-spawn-test
+  ;; The start! status guard must be atomic: if a start is already in progress
+  ;; (:connecting) or complete (:connected), a second start! must NOT spawn a
+  ;; second CLI process. A non-atomic check-then-act lets two concurrent callers
+  ;; both pass the guard and double-spawn. We simulate the in-progress state
+  ;; deterministically and assert no spawn is attempted.
+  (testing "already :connecting -> start! is a no-op (no second spawn)"
+    (let [c (copilot/client {:auto-start? false :use-stdio? true})]
+      (swap! (:state c) assoc :status :connecting)
+      (with-redefs [proc/spawn-cli (fn [_] (throw (ex-info "start! must not spawn when already :connecting" {})))]
+        (is (nil? (copilot/start! c))))))
+  (testing "already :connected -> start! is a no-op"
+    (let [c (copilot/client {:auto-start? false :use-stdio? true})]
+      (swap! (:state c) assoc :status :connected)
+      (with-redefs [proc/spawn-cli (fn [_] (throw (ex-info "start! must not spawn when already :connected" {})))]
+        (is (nil? (copilot/start! c)))))))
 
 ;; =============================================================================
 ;; Protocol Tests (Unit)
