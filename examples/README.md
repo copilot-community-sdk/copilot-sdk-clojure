@@ -88,6 +88,9 @@ clojure -A:examples -X reasoning-effort/run
 
 # Empty (multitenancy) mode
 clojure -A:examples -X empty-mode/run
+
+# Manual tool resume (declaration-only tool, manual pending-call resolution)
+clojure -A:examples -X manual-tool-resume/run
 ```
 
 Or run all examples:
@@ -95,8 +98,8 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs 16 examples that need only the Copilot CLI (examples 1–9, 12–16, 18, and 19).
-> Examples 10 (BYOK), 11 (MCP), and 20 (empty-mode — uses BYOK) require external dependencies (API keys, Node.js), and example 17 (ask-user-failure) is excluded for reliability. Run these manually.
+> **Note:** `run-all-examples.sh` runs 18 example files that need only the Copilot CLI (examples 1–9, 12–19, and 21) — 19 runs in total, since `helpers-query` runs twice (`run` and `run-multi`).
+> Examples 10 (BYOK), 11 (MCP), and 20 (empty-mode — uses BYOK) require external dependencies (API keys, Node.js) and are run manually.
 
 With a custom CLI path:
 ```bash
@@ -912,6 +915,51 @@ OPENAI_API_KEY=sk-... clojure -A:examples -X empty-mode/run :prompt '"What is Cl
 
 See [`doc/reference/API.md`](../doc/reference/API.md#client-mode-empty)
 for the full Client Mode reference.
+
+---
+
+## Example 21: Manual Tool Resume (`manual_tool_resume.clj`)
+
+**Difficulty:** Advanced
+**Concepts:** Declaration-only tools, manual permission resolution, manual tool-call resolution
+
+Demonstrates the SDK-driven analogue of the upstream `manual_tool_resume`
+sample (Python/.NET): a tool declared **without** a `:handler` is
+*declaration-only* — the runtime advertises it to the model but leaves the
+call pending for the application to resolve by hand. With no
+`:on-permission-request` handler registered either, the permission prompt is
+also left pending. The pending requests are resolved across **three separate
+client lifecycles** via `resume-session` with `:continue-pending-work? true`.
+
+### What It Demonstrates
+
+- Defining a declaration-only tool (no `:handler`) — upstream PR #1308
+- Resuming pending work across client lifecycles with `resume-session` +
+  `:continue-pending-work? true`, resolving the **original** request ids
+- Reading the `:request-id` from `:copilot/permission.requested` and resolving
+  it after resume with `handle-pending-permission-request!`
+  (`{:kind :approve-once}`)
+- Reading the `:request-id` from `:copilot/external_tool.requested` and
+  supplying the result after another resume with `handle-pending-tool-call!`
+- Subscribing to events **before** each trigger so no event is missed, with a
+  bounded (120s) `alts!!` wait
+
+### Usage
+
+```bash
+clojure -A:examples -X manual-tool-resume/run
+clojure -A:examples -X manual-tool-resume/run :model '"gpt-5.4"'
+```
+
+> Each lifecycle ends by suspending the session with `disconnect!` rather than
+> force-killing the client. This demonstrates manual pending-work resolution
+> across graceful **suspend/resume**, not hard crash recovery: on CLI builds
+> where in-flight pending requests are persisted only during graceful teardown,
+> a SIGKILL (`force-stop!`) can drop the pending request ids before the next
+> `resume-session` can continue them.
+
+See [`doc/reference/API.md`](../doc/reference/API.md) for
+`handle-pending-permission-request!` and `handle-pending-tool-call!`.
 
 ---
 
