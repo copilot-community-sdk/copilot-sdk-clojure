@@ -19,7 +19,7 @@ the Java SDK.
 | Tracks upstream | github/copilot-sdk **Node.js** | github/copilot-sdk **.NET** |
 | Wire schema source | hand-maintained | `@github/copilot` npm `schemas/*.json` (JSON Schema → codegen) |
 | Versioning | `UPSTREAM.CLJ_PATCH` (4-segment) | `<upstream>-java.<n>` |
-| Min runtime | JDK 8+ (Babashka-compatible) | JDK 17 (JDK 25 recommended for virtual threads) |
+| Min runtime | JDK 8+ | JDK 17 (JDK 25 recommended for virtual threads) |
 
 ---
 
@@ -54,7 +54,6 @@ and the public API of each.
 | Forward compatibility for new event types | ⚠ unknown events drop through (no spec failure, since specs are input-only on send paths) | ✅ explicit `UnknownSessionEvent` as Jackson `defaultImpl` |
 | `with-client` / `with-client-session` macros | ✅ | n/a (uses try-with-resources `AutoCloseable`) |
 | Clojure spec runtime instrumentation | ✅ ~80 `s/fdef` definitions | n/a |
-| Babashka compatibility | ✅ explicit CI gate (`bb test:bb`) | n/a |
 
 **Net feature delta.** The Clojure SDK has a slightly broader user-facing surface
 (`query` helpers, `join-session`, client-level MCP CRUD, lazy-seq event ergonomics,
@@ -306,8 +305,8 @@ This is a real strategic question, not a rhetorical one. Here is an honest asses
 
 | # | Option | Effort | What you gain | What you lose |
 |---|---|---|---|---|
-| A | **Status quo: pure Clojure** | 0 | REPL-native idioms, single-atom state, mult-based events, `with-*` macros, `helpers/query`, Babashka compat | Ongoing manual sync, drift risk, v2-only mock, no schema source-of-truth |
-| B | **Thin Clojure veneer over Java SDK** | High (~3–6 weeks of focused work) | Schema correctness for free; ride the Java team's codegen + agentic sync pipeline; fewer types to maintain | Force Clojure consumers onto JVM-only, Jackson-typed POJOs; lose Babashka compatibility entirely; lose `core.async` event channels (have to bridge from Java consumers); lose `with-*` macros idiom; CompletableFuture interop is awkward in Clojure; lose REPL-friendly state inspection |
+| A | **Status quo: pure Clojure** | 0 | REPL-native idioms, single-atom state, mult-based events, `with-*` macros, `helpers/query` | Ongoing manual sync, drift risk, v2-only mock, no schema source-of-truth |
+| B | **Thin Clojure veneer over Java SDK** | High (~3–6 weeks of focused work) | Schema correctness for free; ride the Java team's codegen + agentic sync pipeline; fewer types to maintain | Force Clojure consumers onto JVM-only, Jackson-typed POJOs; lose `core.async` event channels (have to bridge from Java consumers); lose `with-*` macros idiom; CompletableFuture interop is awkward in Clojure; lose REPL-friendly state inspection |
 | C | **Adopt the Java codegen *output* (or schema directly), keep Clojure runtime** | Medium (~2–3 weeks) | Auto-generated Clojure specs + wire-key registry + RPC method registry from `@github/copilot` npm schemas. **Eliminates manual drift on the schema side, keeps Clojure idioms.** | Need to build a Clojure codegen (or transpile via `scripts/codegen/java.ts` style); some integration work |
 | D | **Drop Clojure SDK, point users at Java SDK + interop** | 0 | Zero maintenance | Forfeit the main reason a Clojure SDK exists |
 
@@ -321,9 +320,8 @@ This is a real strategic question, not a rhetorical one. Here is an honest asses
    a marshalling layer (POJO→map, CompletableFuture→chan, sealed event class→tagged
    map). You end up with the Java type surface as your maintenance burden *plus* the
    wrapper, plus user-facing semantics that feel un-Clojure.
-2. **You lose Babashka compatibility.** The Java SDK requires JDK 17. The Clojure SDK
-   explicitly tests `bb test:bb`. That capability is non-trivial to give up — it's how
-   scripts and CI tools embed the SDK.
+2. **You lock users into a heavier runtime.** The Java SDK requires JDK 17. The Clojure
+   SDK targets JDK 8+, which keeps it embeddable in a wider range of host environments.
 3. **You lose the things the Clojure SDK is genuinely better at:** the `helpers/query`
    family, `with-client-session` macros, single-atom REPL state, mult-based event
    fan-out, `async/thread` handler isolation. These are why someone reaches for a
