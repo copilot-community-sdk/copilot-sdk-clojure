@@ -143,6 +143,14 @@ See the sections below for the complete change list since `v1.0.0-beta.3.0`.
   previously such a request was silently dropped and the caller hung.
 
 ### Removed
+- **Dropped the Babashka test-compatibility tasks (`test:bb`, `test:all`) from
+  `bb.edn`.** The `test:bb` task ran the full JVM test suite under the Babashka
+  interpreter as a compatibility gate, but the suite depends on libraries
+  Babashka does not bundle (e.g. `clojure.data.json`), so the task could not
+  succeed and was not wired into CI. Removed the tasks and the related
+  "Babashka compatibility" claims in `JAVA_SDK_COMPARISON.md`. `bb test`
+  (the JVM test runner) and the Babashka-based build tooling under `script/`
+  are unaffected.
 - **Dropped the unused `:force-stopping?` client-state flag.** `force-stop!`
   set it (and `initial-state` initialized it), but nothing ever read it, so it
   was dead state. `:stopping?` (which the process-exit watcher does read) is
