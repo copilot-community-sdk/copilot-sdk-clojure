@@ -1,6 +1,6 @@
 # Getting Started with the Copilot SDK for Clojure
 
-> **Note:** This SDK is in [public preview](https://github.blog/changelog/2026-04-02-copilot-sdk-in-public-preview/) and may change in breaking ways.
+> **Note:** Version `1.0.0.0` is the first generally available (GA) release (tracking upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) `v1.0.0`). The public API is stable. Subsequent releases follow the upstream versioning scheme (see [Versioning](../PUBLISHING.md#versioning)); any breaking changes are called out in the [CHANGELOG](../CHANGELOG.md).
 
 In this tutorial, you'll use the Copilot SDK for Clojure to build a command-line assistant. You'll start with the basics, add streaming responses, then add custom tools — giving Copilot the ability to call your code.
 
@@ -34,7 +34,7 @@ copilot --version
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "0.2.1.1-SNAPSHOT"}}}
+{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.0.0"}}}
 ```
 
 Or use as a Git dependency:
@@ -42,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "7a30402b9bd843494752c46a18ff7f2fec27a620"}}}
+         :git/sha "034698e6f09cfb833f7769a4dd1a061e7ba2ad03"}}}
 ```
 
 ## Step 2: Send Your First Message

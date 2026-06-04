@@ -3,6 +3,24 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Highlights
+First generally available (GA) release, at full API/wire/schema parity with
+upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) `v1.0.0`.
+The public API is stable going forward. Notable changes since the last published
+release (`v1.0.0-beta.3.0`):
+
+- **Stable, idiomatic public API** — immutable data throughout, `clojure.spec`
+  validation at the boundary, and `core.async` event streams; the public surface
+  has been audited and frozen for GA.
+- **Correctness & safety hardening** — async lifecycle, thread-safety, resource
+  cleanup, and input-handling fixes (see Security and Fixed below).
+- **Documentation** — API reference, guides, and auth/MCP docs brought to parity
+  with upstream.
+- **Examples** — coverage meets or exceeds upstream; `./run-all-examples.sh` runs
+  green end-to-end.
+
+See the sections below for the complete change list since `v1.0.0-beta.3.0`.
+
 ### Added (examples)
 - **New `manual_tool_resume` example** (`examples/manual_tool_resume.clj`),
   the SDK-driven analogue of the upstream `manual_tool_resume` sample. It
@@ -50,6 +68,14 @@ All notable changes to this project will be documented in this file. This change
   skipped markdown files directly under `doc/` (e.g. `index.md`,
   `getting-started.md`); it now validates them, and link extraction ignores
   illustrative links inside inline-code spans.
+
+### Changed (release tooling)
+- **Install-doc coordinates stay in sync at release.** The release SHA/version
+  refresh (`update-install-doc-shas`, `bb install-docs:sha`, formerly
+  `update-readme-sha`/`bb readme:sha`) now updates every doc that embeds install
+  coordinates (`README.md` and `doc/getting-started.md`) from a shared list, and
+  the Release workflow stages both. Previously only `README.md` was refreshed, so
+  `doc/getting-started.md` drifted (stale `:mvn/version` and `:git/sha`).
 
 ### Security
 - **Validation exceptions no longer leak secrets.** Configuration validation

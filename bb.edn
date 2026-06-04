@@ -26,8 +26,8 @@
   jar {:doc "Build the JAR and POM."
        :task (clojure "-T:build" "jar")}
 
-  readme:sha {:doc "Update README git dependency SHA to HEAD."
-              :task (clojure "-T:build" "update-readme-sha")}
+  install-docs:sha {:doc "Update git dependency SHA in install docs (README, getting-started) to HEAD."
+                    :task (clojure "-T:build" "update-install-doc-shas")}
 
   ci {:doc "Run CI pipeline: unit/integration tests, doc validation, jar build."
       :task (shell "bash" "-lc"

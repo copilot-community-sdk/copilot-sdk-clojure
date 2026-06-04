@@ -217,19 +217,24 @@
 
 (defn release "Alias for deploy-central." [opts] (deploy-central opts))
 
-(defn update-readme-sha "Update README.md git SHA to HEAD." [_opts]
+(def ^:private install-doc-files
+  "Docs embedding install coordinates (mvn version + git SHA), kept in sync at release time."
+  ["README.md" "doc/getting-started.md"])
+
+(defn update-install-doc-shas "Update the git SHA in install docs to HEAD." [_opts]
   (let [{:keys [exit out]} (shell/sh "git" "rev-parse" "HEAD")
-        sha (str/trim out)
-        readme (slurp "README.md")
-        match? (boolean (re-find #":git/sha \"[^\"]+\"" readme))
-        updated (str/replace readme #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
+        sha (str/trim out)]
     (when-not (zero? exit) (throw (ex-info "Failed to read git SHA" {})))
-    (when-not match? (throw (ex-info "Pattern not found in README.md" {})))
-    (if (= readme updated)
-      (println "README.md SHA already up to date:" sha)
-      (do
-        (spit "README.md" updated)
-        (println "Updated README.md SHA to" sha)))))
+    (doseq [file install-doc-files]
+      (let [content (slurp file)
+            match? (boolean (re-find #":git/sha \"[^\"]+\"" content))
+            updated (str/replace content #":git/sha \"[^\"]+\"" (str ":git/sha \"" sha "\""))]
+        (when-not match? (throw (ex-info (str "git SHA pattern not found in " file) {:file file})))
+        (if (= content updated)
+          (println file "SHA already up to date:" sha)
+          (do
+            (spit file updated)
+            (println "Updated" file "SHA to" sha)))))))
 
 (defn- update-version-in-files!
   "Update version string in all files that reference it."
@@ -244,13 +249,14 @@
         (println "build.clj already at version" new-version)
         (throw (ex-info "Failed to update version in build.clj" {}))))
     (spit "build.clj" updated))
-  ;; README.md
-  (let [readme (slurp "README.md")
-        updated (-> readme
-                    (str/replace #"\{:mvn/version \"[^\"]+\"\}"
-                                 (str "{:mvn/version \"" new-version "\"}")))]
-    (spit "README.md" updated))
-  (println "Updated: build.clj, README.md"))
+  ;; install docs (mvn coordinate)
+  (doseq [file install-doc-files]
+    (let [content (slurp file)
+          updated (str/replace content
+                               #"\{:mvn/version \"[^\"]+\"\}"
+                               (str "{:mvn/version \"" new-version "\"}"))]
+      (spit file updated)))
+  (println "Updated: build.clj," (str/join ", " install-doc-files)))
 
 (def ^:private upstream-version-re
   "Matches an upstream version: X.Y.Z or X.Y.Z-(alpha|beta|rc).N."
