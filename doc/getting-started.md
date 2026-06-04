@@ -42,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "034698e6f09cfb833f7769a4dd1a061e7ba2ad03"}}}
+         :git/sha "169015a303443713a733b84a1d69623d83d20688"}}}
 ```
 
 ## Step 2: Send Your First Message
