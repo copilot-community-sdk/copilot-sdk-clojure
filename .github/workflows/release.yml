@@ -181,14 +181,16 @@ jobs:
             exit 0
           fi
           VERSION=$(grep -m1 -F '(def version' build.clj | sed 's/.*"\(.*\)".*/\1/')
-          BRANCH="release/v${VERSION}-run${GITHUB_RUN_ID}"
+          # Include the run attempt so re-runs (which reuse GITHUB_RUN_ID) get a
+          # fresh branch instead of colliding with the ref a prior attempt pushed.
+          BRANCH="release/v${VERSION}-run${GITHUB_RUN_ID}-attempt${GITHUB_RUN_ATTEMPT}"
           git checkout -b "$BRANCH"
           git add build.clj README.md doc/getting-started.md CHANGELOG.md
           git commit -m "chore: release v${VERSION}"
           git push origin "$BRANCH"
           PR_URL=$(gh pr create \
             --title "chore: release v${VERSION}" \
-            --body "Automated release PR for v${VERSION}. Created by the Release workflow (run ${GITHUB_RUN_ID})." \
+            --body "Automated release PR for v${VERSION}. Created by the Release workflow (run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT})." \
             --base main \
             --head "$BRANCH")
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
