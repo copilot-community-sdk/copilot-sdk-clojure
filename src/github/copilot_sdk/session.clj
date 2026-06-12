@@ -151,12 +151,22 @@
 
 (defn set-open-canvases!
   "Replace the open-canvases snapshot for `session-id`. Called once after
-  `session.resume` succeeds. Stores `[]` when called with `nil` so the
-  resume/create paths can pass through `(or (:open-canvases result) [])`
-  uniformly."
+  `session.resume` succeeds. Sanitizes the input the same way live
+  `session.canvas.opened` upserts do — non-sequential values are treated as
+  empty, and entries failing `valid-open-canvas-instance?` are dropped with a
+  warning so the snapshot invariant holds for callers (and instrumentation)."
   [client session-id canvases]
-  (swap! (:state client) assoc-in [:sessions session-id :open-canvases]
-         (vec (or canvases []))))
+  (let [coll (when (sequential? canvases) canvases)
+        {:keys [valid invalid]} (group-by (fn [c]
+                                            (if (valid-open-canvas-instance? c)
+                                              :valid :invalid))
+                                          coll)]
+    (when (seq invalid)
+      (log/warn "dropping invalid entries from session.resume openCanvases"
+                {:session-id session-id
+                 :dropped-count (count invalid)}))
+    (swap! (:state client) assoc-in [:sessions session-id :open-canvases]
+           (vec valid))))
 
 (defn upsert-open-canvas!
   "Apply a `session.canvas.opened` event payload to the snapshot. If an entry

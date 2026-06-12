@@ -6186,6 +6186,38 @@
         (is (= "ready" (:availability (first canvases))))
         (is (= "Hello" (:title (first canvases))))))))
 
+(deftest test-open-canvases-resume-sanitizes-invalid-entries
+  (testing "session.resume openCanvases drops invalid entries (parity with live upserts)"
+    (mock/set-resume-response-extras!
+     *mock-server*
+     ;; Mix of one valid, one missing :reopen, one missing :availability,
+     ;; one with bad availability value, one not even a map.
+     {:openCanvases [{:instanceId "i1"
+                      :extensionId "ext-a"
+                      :canvasId "c1"
+                      :reopen false
+                      :availability "ready"}
+                     {:instanceId "i2"
+                      :extensionId "ext-a"
+                      :canvasId "c2"
+                      :availability "ready"}
+                     {:instanceId "i3"
+                      :extensionId "ext-a"
+                      :canvasId "c3"
+                      :reopen true}
+                     {:instanceId "i4"
+                      :extensionId "ext-a"
+                      :canvasId "c4"
+                      :reopen true
+                      :availability "BOGUS"}]})
+    (let [created (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id created)
+          resumed (sdk/resume-session *test-client* session-id
+                                      {:on-permission-request sdk/approve-all})
+          canvases (sdk/open-canvases resumed)]
+      (is (= 1 (count canvases)) "only the fully-valid entry is kept")
+      (is (= "i1" (:instance-id (first canvases)))))))
+
 (deftest test-create-session-no-open-canvases-snapshot
   (testing "session.create does NOT populate open-canvases (resume-only)"
     (mock/set-resume-response-extras!
