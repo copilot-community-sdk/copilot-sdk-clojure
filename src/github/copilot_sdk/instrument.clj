@@ -426,7 +426,7 @@
 
 (register-fdef! github.copilot-sdk.session/open-canvases
                 :args (s/cat :session ::specs/session)
-                :ret (s/coll-of map? :kind sequential?))
+                :ret ::specs/open-canvases)
 
 (register-fdef! github.copilot-sdk.session/elicitation-supported?
                 :args (s/cat :session ::specs/session)

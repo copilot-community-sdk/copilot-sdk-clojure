@@ -6509,6 +6509,46 @@
         (finally
           (mock/set-request-hook! *mock-server* nil))))))
 
+(deftest test-resume-config-open-canvases-namespaced-input-keys
+  (testing "Namespaced keyword keys in :input preserve their full ns/name when stringified"
+    (let [captured (atom nil)
+          hook (fn [method params]
+                 (when (= "session.resume" method)
+                   (reset! captured params))
+                 nil)]
+      (mock/set-request-hook! *mock-server* hook)
+      (try
+        (let [created (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+              session-id (sdk/session-id created)]
+          (sdk/resume-session
+           *test-client* session-id
+           {:on-permission-request sdk/approve-all
+            :open-canvases [{:instance-id "i1"
+                             :extension-id "ext-a"
+                             :canvas-id "c1"
+                             :reopen false
+                             :availability "ready"
+                             :input {:my.app/user_id 42
+                                     :nested {:other.ns/key "v"}}}]})
+          (let [params @captured
+                oc (first (:openCanvases params))
+                input (:input oc)]
+            (is (some? input))
+            ;; Namespaced keys must be preserved as "ns/name", NOT silently
+            ;; truncated to just the local name. Keys may surface as strings
+            ;; or as preserved keywords through clj->wire — check both.
+            (is (= 42 (or (get input "my.app/user_id")
+                          (get input :my.app/user_id)))
+                "namespaced keyword key preserved as full ns/name")
+            (is (nil? (get input "user_id")) "local-name-only must not appear")
+            (is (nil? (get input :user_id)))
+            (let [nested (or (get input "nested") (get input :nested))]
+              (is (= "v" (or (get nested "other.ns/key")
+                             (get nested :other.ns/key)))
+                  "nested namespaced key also preserved"))))
+        (finally
+          (mock/set-request-hook! *mock-server* nil))))))
+
 (deftest test-resume-config-open-canvases-explicit-empty-and-omitted
   (testing "resume-session forwards explicit empty :open-canvases (parity with upstream config.openCanvases) and omits the param when the key is absent"
     (let [captured (atom nil)

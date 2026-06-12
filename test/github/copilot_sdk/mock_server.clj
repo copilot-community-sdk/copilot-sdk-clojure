@@ -171,8 +171,8 @@
                             (make-event server "session.resume"
                                         {:resumeTime (.toString (java.time.Instant/now))
                                          :eventCount 0}))
-        (merge {:sessionId session-id}
-               @(:resume-response-extras server)))
+        (merge @(:resume-response-extras server)
+               {:sessionId session-id}))
       (throw (ex-info "Session not found" {:code -32001 :session-id session-id})))))
 
 (defn- handle-session-send [server params]

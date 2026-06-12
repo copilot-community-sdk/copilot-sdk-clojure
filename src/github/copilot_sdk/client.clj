@@ -1906,11 +1906,16 @@
   "Recursively convert keyword keys to strings in a value (used for opaque
   payloads). Strings, sequences, and primitives pass through. csk's recursive
   transform-keys leaves non-keyword keys untouched, so stringified maps
-  round-trip through `util/clj->wire` unchanged."
+  round-trip through `util/clj->wire` unchanged.
+
+  Namespaced keywords are preserved as `\"ns/name\"` so caller-supplied keys
+  (e.g. `:my.app/user_id`) are not silently truncated to their local name."
   [v]
   (cond
     (map? v)         (into {} (map (fn [[k vv]]
-                                     [(if (keyword? k) (name k) k)
+                                     [(if (keyword? k)
+                                        (subs (str k) 1)
+                                        k)
                                       (stringify-keys-deep vv)]))
                            v)
     (sequential? v)  (mapv stringify-keys-deep v)
