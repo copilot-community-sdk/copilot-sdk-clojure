@@ -6299,6 +6299,15 @@
                                  :reopen false
                                  :availability "ready"})
       (Thread/sleep 200)
+      (is (= 1 (count (sdk/open-canvases session))))
+      ;; Closed with non-string instanceId (numeric) — no-op (matches strict
+      ;; ::instance-id non-blank-string spec used elsewhere)
+      (mock/send-session-event! *mock-server* session-id
+                                "session.canvas.closed"
+                                {:instanceId 42
+                                 :extensionId "ext-a"
+                                 :canvasId "c1"})
+      (Thread/sleep 200)
       (is (= 1 (count (sdk/open-canvases session)))))))
 
 (deftest test-schedule-data-cron-and-at

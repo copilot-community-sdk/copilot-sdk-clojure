@@ -1917,26 +1917,26 @@
     :else            v))
 
 (defn- canvas-instance->wire
-  "Convert an open-canvas instance to its wire shape. Required fields go through
-  explicit per-key conversion to camelCase; the optional `:input` map's keys
-  are stringified so they round-trip through `util/clj->wire` verbatim — caller
-  keys (e.g. `:user_id`) are NOT camelCased.
+  "Convert an open-canvas instance to its wire shape. Required fields stay in
+  idiomatic kebab-case so `util/clj->wire` does the camelCase conversion once;
+  the optional `:input` map's keys are stringified so they round-trip through
+  `util/clj->wire` verbatim — caller keys (e.g. `:user_id`) are NOT camelCased.
 
   Used to seed `openCanvases` on `session.resume` / `session.join` (upstream
   PR #1604, ResumeSessionConfig.openCanvases)."
   [canvas]
   (cond-> {}
-    (some? (:instance-id canvas))    (assoc :instanceId    (:instance-id canvas))
-    (some? (:extension-id canvas))   (assoc :extensionId   (:extension-id canvas))
-    (some? (:canvas-id canvas))      (assoc :canvasId      (:canvas-id canvas))
-    (some? (:reopen canvas))         (assoc :reopen        (:reopen canvas))
-    (some? (:availability canvas))   (assoc :availability  (:availability canvas))
-    (some? (:extension-name canvas)) (assoc :extensionName (:extension-name canvas))
-    (some? (:title canvas))          (assoc :title         (:title canvas))
-    (some? (:status canvas))         (assoc :status        (:status canvas))
-    (some? (:url canvas))            (assoc :url           (:url canvas))
-    (contains? canvas :input)        (assoc :input         (stringify-keys-deep
-                                                            (:input canvas)))))
+    (some? (:instance-id canvas))    (assoc :instance-id    (:instance-id canvas))
+    (some? (:extension-id canvas))   (assoc :extension-id   (:extension-id canvas))
+    (some? (:canvas-id canvas))      (assoc :canvas-id      (:canvas-id canvas))
+    (some? (:reopen canvas))         (assoc :reopen         (:reopen canvas))
+    (some? (:availability canvas))   (assoc :availability   (:availability canvas))
+    (some? (:extension-name canvas)) (assoc :extension-name (:extension-name canvas))
+    (some? (:title canvas))          (assoc :title          (:title canvas))
+    (some? (:status canvas))         (assoc :status         (:status canvas))
+    (some? (:url canvas))            (assoc :url            (:url canvas))
+    (contains? canvas :input)        (assoc :input          (stringify-keys-deep
+                                                             (:input canvas)))))
 
 (defn- build-resume-session-params
   "Build wire params for session.resume from session-id and config."

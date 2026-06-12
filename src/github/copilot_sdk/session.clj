@@ -181,12 +181,12 @@
 
 (defn remove-open-canvas!
   "Apply a `session.canvas.closed` event payload to the snapshot — removes the
-  entry with matching `:instance-id`. Logs a warning and no-ops on missing/
-  blank `:instance-id`. Closing an absent instance is a silent no-op
-  (idempotent), matching upstream `removeOpenCanvas`."
+  entry with matching `:instance-id`. Logs a warning and no-ops when
+  `:instance-id` is not a non-blank string. Closing an absent instance is a
+  silent no-op (idempotent), matching upstream `removeOpenCanvas`."
   [client session-id data]
   (let [iid (:instance-id data)]
-    (if (or (nil? iid) (and (string? iid) (str/blank? iid)))
+    (if-not (and (string? iid) (not (str/blank? iid)))
       (log/warn "failed to deserialize session.canvas.closed payload"
                 {:session-id session-id})
       (swap! (:state client) update-in [:sessions session-id :open-canvases]
