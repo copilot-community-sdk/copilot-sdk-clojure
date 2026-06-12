@@ -212,6 +212,10 @@
           "type": "string",
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
+        "apiCallId": {
+          "type": "string",
+          "description": "Provider's completion / response identifier; shared across all chunks of a single API call. Used to group multi-chunk assistant utterances."
+        },
         "anthropicAdvisorBlocks": {
           "type": "array",
           "items": {
@@ -1036,14 +1040,16 @@
         "quotaSnapshots": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/AssistantUsageQuotaSnapshot"
+            "$ref": "#/definitions/AssistantUsageQuotaSnapshot",
+            "visibility": "internal"
           },
           "description": "Per-quota resource usage snapshots, keyed by quota identifier",
           "visibility": "internal"
         },
         "copilotUsage": {
           "$ref": "#/definitions/AssistantUsageCopilotUsage",
-          "description": "Per-request cost and usage data from the CAPI copilot_usage response field"
+          "description": "Per-request cost and usage data from the CAPI copilot_usage response field",
+          "visibility": "internal"
         },
         "reasoningEffort": {
           "type": "string",
@@ -1863,6 +1869,88 @@
       "description": "Session event \"session.background_tasks_changed\".",
       "title": "BackgroundTasksChangedEvent"
     },
+    "CanvasClosedData": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable caller-supplied identifier of the canvas instance that was closed"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        }
+      },
+      "required": [
+        "instanceId",
+        "extensionId",
+        "canvasId"
+      ],
+      "additionalProperties": false,
+      "title": "CanvasClosedData",
+      "description": "Schema for the `CanvasClosedData` type."
+    },
+    "CanvasClosedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.canvas.closed",
+          "description": "Type discriminator. Always \"session.canvas.closed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/CanvasClosedData",
+          "description": "Schema for the `CanvasClosedData` type."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.canvas.closed\".",
+      "title": "CanvasClosedEvent"
+    },
     "CanvasOpenedAvailability": {
       "type": "string",
       "enum": [
@@ -2573,7 +2661,8 @@
         },
         "copilotUsage": {
           "$ref": "#/definitions/CompactionCompleteCompactionTokensUsedCopilotUsage",
-          "description": "Per-request cost and usage data from the CAPI copilot_usage response field"
+          "description": "Per-request cost and usage data from the CAPI copilot_usage response field",
+          "visibility": "internal"
         },
         "duration": {
           "type": "integer",
@@ -4376,6 +4465,10 @@
         "stack": {
           "type": "string",
           "description": "Error stack trace, when available"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source label of the hook that errored (e.g. the plugin it was loaded from), when known"
         }
       },
       "required": [
@@ -4445,6 +4538,10 @@
         "message": {
           "type": "string",
           "description": "Human-readable progress message from the hook process"
+        },
+        "temporary": {
+          "type": "boolean",
+          "description": "When true, this status message replaces the previous temporary one instead of accumulating"
         }
       },
       "required": [
@@ -4597,7 +4694,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Payload indicating the session is idle with no background agents in flight",
+      "description": "Payload indicating the session is idle with no background agents or attached shell commands in flight",
       "title": "IdleData"
     },
     "IdleEvent": {
@@ -4641,7 +4738,7 @@
         },
         "data": {
           "$ref": "#/definitions/IdleData",
-          "description": "Payload indicating the session is idle with no background agents in flight"
+          "description": "Payload indicating the session is idle with no background agents or attached shell commands in flight"
         }
       },
       "required": [
@@ -4653,7 +4750,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents in flight",
+      "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents or attached shell commands in flight",
       "title": "IdleEvent"
     },
     "InfoData": {
@@ -7321,6 +7418,11 @@
           "minimum": 0,
           "description": "Total number of persisted events in the session at the time of resume"
         },
+        "eventsFileSizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "On-disk byte size of the session's persisted events.jsonl file at resume time; omitted when the file does not exist or cannot be stat'd"
+        },
         "selectedModel": {
           "type": "string",
           "description": "Model currently selected at resume time"
@@ -7664,8 +7766,21 @@
         "intervalMs": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "description": "Interval between ticks in milliseconds",
+          "description": "Interval between ticks in milliseconds (relative-interval schedules)",
           "format": "duration"
+        },
+        "cron": {
+          "type": "string",
+          "description": "5-field cron expression for a recurring calendar schedule, evaluated in `tz`"
+        },
+        "tz": {
+          "type": "string",
+          "description": "IANA timezone the `cron` expression is evaluated in"
+        },
+        "at": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Absolute fire time (epoch milliseconds) for a one-shot calendar schedule"
         },
         "prompt": {
           "type": "string",
@@ -7682,7 +7797,6 @@
       },
       "required": [
         "id",
-        "intervalMs",
         "prompt"
       ],
       "additionalProperties": false,
@@ -7763,7 +7877,7 @@
         },
         {
           "$ref": "#/definitions/IdleEvent",
-          "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents in flight"
+          "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents or attached shell commands in flight"
         },
         {
           "$ref": "#/definitions/TitleChangedEvent",
@@ -8090,6 +8204,10 @@
           "description": "Session event \"session.canvas.registry_changed\"."
         },
         {
+          "$ref": "#/definitions/CanvasClosedEvent",
+          "description": "Session event \"session.canvas.closed\"."
+        },
+        {
           "$ref": "#/definitions/ExtensionsAttachmentsPushedEvent",
           "description": "Session event \"session.extensions.attachments_pushed\"."
         },
@@ -8185,6 +8303,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Unix timestamp (milliseconds) when the session started"
+        },
+        "eventsFileSizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "On-disk byte size of the session's persisted events.jsonl file at shutdown time; omitted when the file does not exist or cannot be stat'd"
         },
         "codeChanges": {
           "$ref": "#/definitions/ShutdownCodeChanges",
@@ -9068,7 +9191,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Model used by the sub-agent (if any model calls succeeded before failure)"
+          "description": "Model selected for the sub-agent, when known"
         },
         "totalToolCalls": {
           "type": "integer",
@@ -9261,7 +9384,7 @@
         },
         "model": {
           "type": "string",
-          "description": "Model the sub-agent will run with, when known at start. Surfaced in the timeline for auto-selected sub-agents (e.g. rubber-duck)."
+          "description": "Model the sub-agent will run with, when known at start."
         }
       },
       "required": [

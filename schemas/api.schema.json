@@ -17,14 +17,16 @@
     },
     "connect": {
       "rpcMethod": "connect",
-      "description": "Performs the SDK server connection handshake and validates the optional connection token.",
+      "description": "Performs the SDK server connection handshake and validates the optional connection token. Marked internal because this is JSON-RPC transport plumbing invoked automatically by an SDK client's own `connect()` wrapper, not a user-facing method. Stays internal as long as the SDK client owns the handshake; would only become public if the SDK ever exposed the raw schema surface to consumers without a connection wrapper.",
       "params": {
         "$ref": "#/definitions/ConnectRequest",
-        "description": "Optional connection token presented by the SDK client during the handshake."
+        "description": "Optional connection token presented by the SDK client during the handshake.",
+        "visibility": "internal"
       },
       "result": {
         "$ref": "#/definitions/ConnectResult",
-        "description": "Handshake result reporting the server's protocol version and package version on success."
+        "description": "Handshake result reporting the server's protocol version and package version on success.",
+        "visibility": "internal"
       },
       "visibility": "internal"
     },
@@ -172,6 +174,154 @@
         }
       }
     },
+    "plugins": {
+      "list": {
+        "rpcMethod": "plugins.list",
+        "description": "Lists plugins installed in user/global state.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/PluginListResult",
+          "description": "Plugins installed in user/global state."
+        },
+        "stability": "experimental"
+      },
+      "install": {
+        "rpcMethod": "plugins.install",
+        "description": "Installs a plugin from a marketplace, GitHub repo, URL, or local path.",
+        "params": {
+          "$ref": "#/definitions/PluginsInstallRequest",
+          "description": "Plugin source and optional working directory for relative-path resolution."
+        },
+        "result": {
+          "$ref": "#/definitions/PluginInstallResult",
+          "description": "Result of installing a plugin."
+        },
+        "stability": "experimental"
+      },
+      "uninstall": {
+        "rpcMethod": "plugins.uninstall",
+        "description": "Uninstalls an installed plugin.",
+        "params": {
+          "$ref": "#/definitions/PluginsUninstallRequest",
+          "description": "Name (or spec) of the plugin to uninstall."
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "update": {
+        "rpcMethod": "plugins.update",
+        "description": "Updates an installed plugin to its latest published version.",
+        "params": {
+          "$ref": "#/definitions/PluginsUpdateRequest",
+          "description": "Name (or spec) of the plugin to update."
+        },
+        "result": {
+          "$ref": "#/definitions/PluginUpdateResult",
+          "description": "Result of updating a single plugin."
+        },
+        "stability": "experimental"
+      },
+      "updateAll": {
+        "rpcMethod": "plugins.updateAll",
+        "description": "Updates every installed plugin to its latest published version.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/PluginUpdateAllResult",
+          "description": "Result of updating all installed plugins."
+        },
+        "stability": "experimental"
+      },
+      "enable": {
+        "rpcMethod": "plugins.enable",
+        "description": "Enables installed plugins for new sessions.",
+        "params": {
+          "$ref": "#/definitions/PluginsEnableRequest",
+          "description": "Plugin names (or specs) to enable."
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "disable": {
+        "rpcMethod": "plugins.disable",
+        "description": "Disables installed plugins for new sessions.",
+        "params": {
+          "$ref": "#/definitions/PluginsDisableRequest",
+          "description": "Plugin names (or specs) to disable."
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "marketplaces": {
+        "list": {
+          "rpcMethod": "plugins.marketplaces.list",
+          "description": "Lists all registered marketplaces (defaults + user-added).",
+          "params": null,
+          "result": {
+            "$ref": "#/definitions/MarketplaceListResult",
+            "description": "All registered marketplaces, including built-in defaults."
+          },
+          "stability": "experimental"
+        },
+        "add": {
+          "rpcMethod": "plugins.marketplaces.add",
+          "description": "Registers a new marketplace from a source (owner/repo, URL, or local path).",
+          "params": {
+            "$ref": "#/definitions/PluginsMarketplacesAddRequest",
+            "description": "Marketplace source to register."
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceAddResult",
+            "description": "Result of registering a new marketplace."
+          },
+          "stability": "experimental"
+        },
+        "remove": {
+          "rpcMethod": "plugins.marketplaces.remove",
+          "description": "Removes a previously-registered marketplace. When the marketplace has dependent plugins and `force` is not set, the marketplace is left intact and the result lists the dependents so the caller can decide whether to retry with `force=true`.",
+          "params": {
+            "$ref": "#/definitions/PluginsMarketplacesRemoveRequest",
+            "description": "Name of the marketplace to remove and an optional force flag."
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceRemoveResult",
+            "description": "Outcome of the remove attempt, including dependent-plugin info when applicable."
+          },
+          "stability": "experimental"
+        },
+        "browse": {
+          "rpcMethod": "plugins.marketplaces.browse",
+          "description": "Lists plugins advertised by a registered marketplace.",
+          "params": {
+            "$ref": "#/definitions/PluginsMarketplacesBrowseRequest",
+            "description": "Name of the marketplace whose plugin catalog to fetch."
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceBrowseResult",
+            "description": "Plugins advertised by the marketplace."
+          },
+          "stability": "experimental"
+        },
+        "refresh": {
+          "rpcMethod": "plugins.marketplaces.refresh",
+          "description": "Re-fetches one or all registered marketplace catalogs.",
+          "params": {
+            "$ref": "#/definitions/PluginsMarketplacesRefreshRequest",
+            "description": "Optional marketplace name; omit to refresh all."
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceRefreshResult",
+            "description": "Result of refreshing one or more marketplace catalogs."
+          },
+          "stability": "experimental"
+        }
+      }
+    },
     "skills": {
       "config": {
         "setDisabledSkills": {
@@ -197,6 +347,36 @@
           "$ref": "#/definitions/ServerSkillList",
           "description": "Skills discovered across global and project sources."
         }
+      }
+    },
+    "agents": {
+      "discover": {
+        "rpcMethod": "agents.discover",
+        "description": "Discovers custom agents across user, project, plugin, and remote sources.",
+        "params": {
+          "$ref": "#/definitions/AgentsDiscoverRequest",
+          "description": "Optional project paths to include in agent discovery."
+        },
+        "result": {
+          "$ref": "#/definitions/ServerAgentList",
+          "description": "Agents discovered across user, project, plugin, and remote sources."
+        },
+        "stability": "experimental"
+      }
+    },
+    "instructions": {
+      "discover": {
+        "rpcMethod": "instructions.discover",
+        "description": "Discovers instruction sources across user, repository, and plugin sources.",
+        "params": {
+          "$ref": "#/definitions/InstructionsDiscoverRequest",
+          "description": "Optional project paths to include in instruction discovery."
+        },
+        "result": {
+          "$ref": "#/definitions/ServerInstructionSourceList",
+          "description": "Instruction sources discovered across user, repository, and plugin sources."
+        },
+        "stability": "experimental"
       }
     },
     "user": {
@@ -236,6 +416,19 @@
       }
     },
     "sessions": {
+      "open": {
+        "rpcMethod": "sessions.open",
+        "description": "Creates or resumes a local session and returns the opened session ID.",
+        "params": {
+          "$ref": "#/definitions/SessionOpenParams",
+          "description": "Open a session by creating, resuming, attaching, connecting to a remote, or handing off."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionOpenResult",
+          "description": "Result of opening a session."
+        },
+        "stability": "experimental"
+      },
       "fork": {
         "rpcMethod": "sessions.fork",
         "description": "Creates a new session by forking persisted history from an existing session.",
@@ -264,14 +457,14 @@
       },
       "list": {
         "rpcMethod": "sessions.list",
-        "description": "Lists persisted sessions, optionally filtered by working-directory context.",
+        "description": "Lists sessions, optionally filtered by source and working-directory context. Returned entries are discriminated by `isRemote`: local entries carry only the lightweight `LocalSessionMetadataValue` shape; remote entries carry the full `RemoteSessionMetadataValue` shape (repository, PR number, taskType, etc.).",
         "params": {
           "$ref": "#/definitions/SessionsListRequest",
-          "description": "Optional metadata-load limit and filters applied to the returned sessions."
+          "description": "Optional source filter, metadata-load limit, and context filter applied to the returned sessions."
         },
         "result": {
           "$ref": "#/definitions/SessionList",
-          "description": "Persisted sessions matching the filter, ordered most-recently-modified first."
+          "description": "Sessions matching the filter, ordered most-recently-modified first."
         },
         "stability": "experimental"
       },
@@ -316,7 +509,7 @@
       },
       "getEventFilePath": {
         "rpcMethod": "sessions.getEventFilePath",
-        "description": "Computes the absolute path to a session's persisted events.jsonl file.",
+        "description": "Computes the absolute path to a session's persisted events.jsonl file. Internal: filesystem paths are only meaningful in-process (CLI and runtime share a filesystem). Currently used by the CLI's contribution-graph feature to read historical events directly. Remote SDK consumers must not depend on this; a proper event-query API would replace it if the contribution graph ever needed to work over the wire.",
         "params": {
           "$ref": "#/definitions/SessionsGetEventFilePathRequest",
           "description": "Session ID whose event-log file path to compute."
@@ -325,7 +518,8 @@
           "$ref": "#/definitions/SessionsGetEventFilePathResult",
           "description": "Absolute path to the session's events.jsonl file on disk."
         },
-        "stability": "experimental"
+        "stability": "experimental",
+        "visibility": "internal"
       },
       "getSizes": {
         "rpcMethod": "sessions.getSizes",
@@ -352,7 +546,7 @@
       },
       "getPersistedRemoteSteerable": {
         "rpcMethod": "sessions.getPersistedRemoteSteerable",
-        "description": "Returns a session's persisted remote-steerable flag, if any has been recorded.",
+        "description": "Returns a session's persisted remote-steerable flag, if any has been recorded. Internal: this is CLI-specific book-keeping used by `--continue` / `--resume` to inherit the prior session's remote-steerable preference. SDK consumers that want similar behavior should manage their own persistence around start/stop calls rather than relying on this runtime-side flag.",
         "params": {
           "$ref": "#/definitions/SessionsGetPersistedRemoteSteerableRequest",
           "description": "Session ID to look up the persisted remote-steerable flag for."
@@ -361,7 +555,8 @@
           "$ref": "#/definitions/SessionsGetPersistedRemoteSteerableResult",
           "description": "The session's persisted remote-steerable flag, or omitted when no value has been persisted."
         },
-        "stability": "experimental"
+        "stability": "experimental",
+        "visibility": "internal"
       },
       "close": {
         "rpcMethod": "sessions.close",
@@ -479,6 +674,126 @@
           "description": "Replace the manager-wide additional plugins. New session creations and subsequent hook reloads see the new set; already-running sessions keep their existing hook installation until the next reload."
         },
         "stability": "experimental"
+      },
+      "getBoardEntryCount": {
+        "rpcMethod": "sessions.getBoardEntryCount",
+        "description": "Gets the dynamic-context board entry count associated with a session, when available. Internal: this exists solely so CLI telemetry events (`rem_spawn_gate`, `rem_consolidation_complete`) can pair START / END board counts around the detached rem-agent spawn. \"Dynamic context board\" is a runtime-internal concept that is not part of the public SDK contract; the long-term plan is to relocate the telemetry emission into the runtime so this method can be deleted entirely.",
+        "params": {
+          "$ref": "#/definitions/SessionsGetBoardEntryCountRequest",
+          "description": "Session ID whose board entry count should be returned."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionsGetBoardEntryCountResult",
+          "description": "Dynamic-context board entry count, when available."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "startRemoteControl": {
+        "rpcMethod": "sessions.startRemoteControl",
+        "description": "Attaches the runtime-managed remote-control singleton to a session, awaiting initial setup. If remote control is already attached to a different session, the singleton is transferred (preserving the underlying Mission Control connection). Returns the final status.",
+        "params": {
+          "$ref": "#/definitions/SessionsStartRemoteControlRequest",
+          "description": "Parameters for attaching the remote-control singleton to a session."
+        },
+        "result": {
+          "$ref": "#/definitions/RemoteControlStatusResult",
+          "description": "Wrapper for the singleton's current status."
+        },
+        "stability": "experimental"
+      },
+      "transferRemoteControl": {
+        "rpcMethod": "sessions.transferRemoteControl",
+        "description": "Atomically rebinds the remote-control singleton to a different session, preserving the underlying Mission Control connection. When `expectedFromSessionId` is provided and does not match the singleton's current `attachedSessionId`, the transfer is rejected with `transferred: false` and the current status is returned unchanged.",
+        "params": {
+          "$ref": "#/definitions/SessionsTransferRemoteControlRequest",
+          "description": "Parameters for atomically rebinding the remote-control singleton."
+        },
+        "result": {
+          "$ref": "#/definitions/RemoteControlTransferResult",
+          "description": "Outcome of a transferRemoteControl call."
+        },
+        "stability": "experimental"
+      },
+      "setRemoteControlSteering": {
+        "rpcMethod": "sessions.setRemoteControlSteering",
+        "description": "Patches the steering state of the active remote-control singleton. When remote control is off, this is a no-op and the off status is returned. Today only `enabled: true` is actionable on the underlying exporter; passing `false` is reserved for future use.",
+        "params": {
+          "$ref": "#/definitions/SessionsSetRemoteControlSteeringRequest",
+          "description": "Patch for the singleton's steering state."
+        },
+        "result": {
+          "$ref": "#/definitions/RemoteControlStatusResult",
+          "description": "Wrapper for the singleton's current status."
+        },
+        "stability": "experimental"
+      },
+      "stopRemoteControl": {
+        "rpcMethod": "sessions.stopRemoteControl",
+        "description": "Stops the remote-control singleton. When `expectedSessionId` is provided and does not match the singleton's current `attachedSessionId`, the stop is rejected with `stopped: false` and the current status is returned unchanged (unless `force` is set, in which case the singleton is unconditionally torn down).",
+        "params": {
+          "$ref": "#/definitions/SessionsStopRemoteControlRequest",
+          "description": "Parameters for stopping the remote-control singleton."
+        },
+        "result": {
+          "$ref": "#/definitions/RemoteControlStopResult",
+          "description": "Outcome of a stopRemoteControl call."
+        },
+        "stability": "experimental"
+      },
+      "getRemoteControlStatus": {
+        "rpcMethod": "sessions.getRemoteControlStatus",
+        "description": "Returns the current state of the remote-control singleton, including the attached session id and frontend URL when active.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/RemoteControlStatusResult",
+          "description": "Wrapper for the singleton's current status."
+        },
+        "stability": "experimental"
+      },
+      "pollSpawnedSessions": {
+        "rpcMethod": "sessions.pollSpawnedSessions",
+        "description": "Cursor-based long-poll for sessions spawned by the runtime (e.g. in response to a Mission Control `start_session` command). The cursor is an opaque token; pass it back to receive only spawn events that occurred AFTER the cursor was issued. Omit the cursor on the first call to receive any events buffered since the runtime started. Internal: this is a CLI background-daemon plumbing primitive. SDK consumers that need to react to runtime-spawned sessions should subscribe to a higher-level event stream rather than driving a long-poll loop.",
+        "params": {
+          "$ref": "#/definitions/SessionsPollSpawnedSessionsRequest",
+          "description": "Cursor and optional long-poll wait for polling runtime-spawned sessions."
+        },
+        "result": {
+          "$ref": "#/definitions/PollSpawnedSessionsResult",
+          "description": "Batch of spawn events plus a cursor for follow-up polls."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "registerExtensionToolsOnSession": {
+        "rpcMethod": "sessions.registerExtensionToolsOnSession",
+        "description": "Registers extension-provided tools on the given session, gated by an optional `enabled` callback. Returns an opaque unsubscribe function the caller must invoke to deregister the tools when the extension is torn down. Marked internal because `loader`, `enabled`, and the returned `unsubscribe` are in-process handles that cannot cross the JSON-RPC boundary. Disappears once extension discovery / launch / tool registration are owned by the runtime: SDK consumers will pass pure config (search paths, disabled ids) via `SessionOptions` and the runtime will resolve, launch, register, and tear down extensions itself.",
+        "params": {
+          "$ref": "#/definitions/RegisterExtensionToolsParams",
+          "description": "Params to attach an extension loader's tools to a session.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/RegisterExtensionToolsResult",
+          "description": "Handle for releasing the extension tool registration.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "configureSessionExtensions": {
+        "rpcMethod": "sessions.configureSessionExtensions",
+        "description": "Attaches (or detaches) an in-process ExtensionController delegate for the given session, used by shared-API surfaces that need to query or modify the session's extension state. Pass `controller: undefined` to detach. Marked internal because the controller is an in-process object that cannot cross the JSON-RPC boundary. Disappears alongside `registerExtensionToolsOnSession`: once the runtime owns extension management, the public surface exposes list/enable/disable/reload as dedicated RPCs served by the runtime.",
+        "params": {
+          "$ref": "#/definitions/ConfigureSessionExtensionsParams",
+          "description": "Params to attach or detach an in-process ExtensionController delegate.",
+          "visibility": "internal"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
       }
     },
     "agentRegistry": {
@@ -563,9 +878,10 @@
             "description": "If set, the request will fail if the named tool is not available when this message is among the user messages at the start of the current exchange"
           },
           "source": {
-            "description": "Optional provenance tag copied to the resulting user.message event. Supported values are `system`, `command-*`, and `schedule-*`.",
-            "visibility": "internal",
-            "x-opaque-json": true
+            "type": "string",
+            "pattern": "^(system|command-.*|schedule-\\d+)$",
+            "description": "Optional provenance tag copied to the resulting user.message event. Must match one of three forms: the literal `system`, `command-<command-id>` for messages originating from a command (e.g. slash command, Mission Control command), or `schedule-<numeric-id>` for messages originating from a scheduled job.",
+            "visibility": "internal"
           },
           "agentMode": {
             "$ref": "#/definitions/SendAgentMode",
@@ -1219,6 +1535,29 @@
         },
         "result": {
           "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "readSqlTodos": {
+        "rpcMethod": "session.plan.readSqlTodos",
+        "description": "Reads todo rows from the session SQL database for plan rendering.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/PlanReadSqlTodosResult",
+          "description": "Todo rows read from the session SQL database. Empty when no session database is available."
         },
         "stability": "experimental"
       }
@@ -2091,7 +2430,7 @@
     "mcp": {
       "list": {
         "rpcMethod": "session.mcp.list",
-        "description": "Lists MCP servers configured for the session and their connection status.",
+        "description": "Lists MCP servers configured for the session, their connection status, and host-level state. The host-level state (disabled/filtered servers, failed/needs-auth/pending connections, mcp3p policy, full config) is empty/zero when no MCP host has been initialized for the session.",
         "params": {
           "type": "object",
           "description": "Identifies the target session.",
@@ -2108,7 +2447,38 @@
         },
         "result": {
           "$ref": "#/definitions/McpServerList",
-          "description": "MCP servers configured for the session, with their connection status."
+          "description": "MCP servers configured for the session, with their connection status and host-level state."
+        },
+        "stability": "experimental"
+      },
+      "listTools": {
+        "rpcMethod": "session.mcp.listTools",
+        "description": "Lists the tools exposed by a connected MCP server on this session's host.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "minLength": 1,
+              "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+              "description": "Name of the connected MCP server whose tools to list."
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName"
+          ],
+          "additionalProperties": false,
+          "description": "Server name whose tool list should be returned.",
+          "title": "McpListToolsRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/McpListToolsResult",
+          "description": "Tools exposed by the connected MCP server. Throws when the server is not connected."
         },
         "stability": "experimental"
       },
@@ -2193,6 +2563,38 @@
           "type": "null"
         },
         "stability": "experimental"
+      },
+      "reloadWithConfig": {
+        "rpcMethod": "session.mcp.reloadWithConfig",
+        "description": "Reloads MCP server connections for the session with an explicit host-provided configuration.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "config": {
+              "description": "Opaque runtime MCP reload configuration. Marked internal: an in-process runtime shape (reloadMcpServers throws over the wire).",
+              "visibility": "internal",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "config"
+          ],
+          "additionalProperties": false,
+          "description": "Opaque MCP reload configuration.",
+          "title": "McpReloadWithConfigRequest",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/McpStartServersResult",
+          "description": "MCP server startup filtering result."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
       },
       "executeSampling": {
         "rpcMethod": "session.mcp.executeSampling",
@@ -2323,7 +2725,282 @@
         },
         "stability": "experimental"
       },
+      "configureGitHub": {
+        "rpcMethod": "session.mcp.configureGitHub",
+        "description": "Configures the built-in GitHub MCP server for the session's current auth context.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "authInfo": {
+              "description": "Opaque runtime auth info for GitHub MCP configuration. Marked internal: an in-process runtime shape (configureGitHubMcp is a no-op over the wire).",
+              "visibility": "internal",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "authInfo"
+          ],
+          "additionalProperties": false,
+          "description": "Opaque auth info used to configure GitHub MCP.",
+          "title": "McpConfigureGitHubRequest",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/McpConfigureGitHubResult",
+          "description": "Result of configuring GitHub MCP."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "startServer": {
+        "rpcMethod": "session.mcp.startServer",
+        "description": "Starts an individual MCP server on the session's host.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "description": "Name of the MCP server to start"
+            },
+            "config": {
+              "description": "Opaque server configuration (MCPServerConfig). Marked internal: an in-process runtime shape supplied only by in-process CLI callers.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName",
+            "config"
+          ],
+          "additionalProperties": false,
+          "description": "Server name and opaque configuration for an individual MCP server start.",
+          "title": "McpStartServerRequest",
+          "visibility": "internal"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "restartServer": {
+        "rpcMethod": "session.mcp.restartServer",
+        "description": "Restarts an individual MCP server on the session's host (stops then starts).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "description": "Name of the MCP server to restart"
+            },
+            "config": {
+              "description": "Opaque server configuration (MCPServerConfig). Marked internal: an in-process runtime shape supplied only by in-process CLI callers.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName",
+            "config"
+          ],
+          "additionalProperties": false,
+          "description": "Server name and opaque configuration for an individual MCP server restart.",
+          "title": "McpRestartServerRequest",
+          "visibility": "internal"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "stopServer": {
+        "rpcMethod": "session.mcp.stopServer",
+        "description": "Stops an individual MCP server on the session's host.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "description": "Name of the MCP server to stop"
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName"
+          ],
+          "additionalProperties": false,
+          "description": "Server name for an individual MCP server stop.",
+          "title": "McpStopServerRequest"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "registerExternalClient": {
+        "rpcMethod": "session.mcp.registerExternalClient",
+        "description": "Registers a pre-connected external MCP client (e.g. IDE) on the session's host. The caller retains lifecycle ownership of the client and transport. Marked internal because the `client` and `transport` arguments are in-process MCP SDK instances that cannot be serialized across the JSON-RPC boundary; once the CLI moves on top of the SDK, external clients will be expressed as transport configs the runtime can construct itself.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "description": "Logical server name for the external client"
+            },
+            "client": {
+              "description": "In-process MCP Client instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            },
+            "transport": {
+              "description": "In-process MCP Transport instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            },
+            "config": {
+              "description": "In-process server config (MCPServerConfig) paired with the in-process client/transport. Marked internal alongside its companions.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName",
+            "client",
+            "transport",
+            "config"
+          ],
+          "additionalProperties": false,
+          "description": "Registration parameters for an external MCP client.",
+          "title": "McpRegisterExternalClientRequest",
+          "visibility": "internal"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "unregisterExternalClient": {
+        "rpcMethod": "session.mcp.unregisterExternalClient",
+        "description": "Unregisters a previously registered external MCP client by server name. Marked internal as the paired companion of `registerExternalClient`: only in-process callers that registered a client this way can meaningfully unregister it. Disappears alongside `registerExternalClient`: once external clients are described to the runtime as config rather than handed in as instances, lifecycle (including deregistration) is owned entirely by the runtime.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "description": "Server name of the external client to unregister"
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName"
+          ],
+          "additionalProperties": false,
+          "description": "Server name identifying the external client to remove.",
+          "title": "McpUnregisterExternalClientRequest",
+          "visibility": "internal"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "isServerRunning": {
+        "rpcMethod": "session.mcp.isServerRunning",
+        "description": "Checks whether a named MCP server is currently running on the session's host.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "serverName": {
+              "type": "string",
+              "description": "Name of the MCP server to check"
+            }
+          },
+          "required": [
+            "sessionId",
+            "serverName"
+          ],
+          "additionalProperties": false,
+          "description": "Server name to check running status for.",
+          "title": "McpIsServerRunningRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/McpIsServerRunningResult",
+          "description": "Whether the named MCP server is running."
+        },
+        "stability": "experimental"
+      },
       "oauth": {
+        "respond": {
+          "rpcMethod": "session.mcp.oauth.respond",
+          "description": "Responds to a pending MCP OAuth provider request. Marked internal because the `provider` argument is an in-process OAuthClientProvider instance that cannot be carried over the wire; the public OAuth surface will route the response through a wire-clean handshake once the CLI moves on top of the SDK.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "requestId": {
+                "type": "string",
+                "description": "OAuth request identifier from mcp.oauth_required"
+              },
+              "provider": {
+                "description": "In-process OAuthClientProvider instance, or omitted to deny. Marked internal: cannot be serialized across the JSON-RPC boundary.",
+                "visibility": "internal",
+                "x-opaque-json": true
+              }
+            },
+            "required": [
+              "sessionId",
+              "requestId"
+            ],
+            "additionalProperties": false,
+            "description": "MCP OAuth request id and optional provider response.",
+            "title": "McpOauthRespondRequest",
+            "visibility": "internal"
+          },
+          "result": {
+            "$ref": "#/definitions/McpOauthRespondResult",
+            "description": "Empty result after recording the MCP OAuth response."
+          },
+          "stability": "experimental",
+          "visibility": "internal"
+        },
         "login": {
           "rpcMethod": "session.mcp.oauth.login",
           "description": "Starts OAuth authentication for a remote MCP server.",
@@ -2603,6 +3280,54 @@
           "description": "Plugins installed for the session, with their enabled state and version metadata."
         },
         "stability": "experimental"
+      },
+      "reload": {
+        "rpcMethod": "session.plugins.reload",
+        "description": "Reloads the session's plugin set, refreshing MCP servers, custom agents, hooks, and skills cache so SDK-driven changes via `server.plugins.*` take effect immediately.",
+        "params": {
+          "anyOf": [
+            {
+              "not": {}
+            },
+            {
+              "type": "object",
+              "properties": {
+                "reloadMcp": {
+                  "type": "boolean",
+                  "description": "Reload MCP server connections after refreshing plugins. Defaults to true."
+                },
+                "reloadCustomAgents": {
+                  "type": "boolean",
+                  "description": "Re-run custom-agent discovery after refreshing plugins. Defaults to true."
+                },
+                "reloadHooks": {
+                  "type": "boolean",
+                  "description": "Re-load user, plugin, and (subject to `deferRepoHooks`) repo hooks. Defaults to true. Has no effect when the host has not registered a hook reloader (e.g. remote sessions)."
+                },
+                "deferRepoHooks": {
+                  "type": "boolean",
+                  "description": "When true, skip repo-level hooks during the hook reload. Use before folder trust is confirmed; load them post-trust via `sessions.loadDeferredRepoHooks`."
+                }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "description": "Optional flags controlling which side effects the reload performs.",
+          "title": "PluginsReloadRequest",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ]
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
       }
     },
     "options": {
@@ -2620,9 +3345,17 @@
               "type": "string",
               "description": "The model ID to use for assistant turns."
             },
+            "modelCapabilitiesOverrides": {
+              "$ref": "#/definitions/ModelCapabilitiesOverride",
+              "description": "Per-property model capability overrides for the selected model."
+            },
             "reasoningEffort": {
               "type": "string",
               "description": "Reasoning effort for the selected model (model-defined enum)."
+            },
+            "reasoningSummary": {
+              "$ref": "#/definitions/OptionsUpdateReasoningSummary",
+              "description": "Reasoning summary mode for supported model clients."
             },
             "clientName": {
               "type": "string",
@@ -2648,9 +3381,8 @@
               "description": "Whether experimental capabilities are enabled."
             },
             "provider": {
-              "description": "Custom model-provider configuration (BYOK). Opaque shape; see `ProviderConfig` in the runtime.",
-              "x-opaque-json": true,
-              "stability": "experimental"
+              "$ref": "#/definitions/ProviderConfig",
+              "description": "Custom model-provider configuration (BYOK)."
             },
             "workingDirectory": {
               "type": "string",
@@ -2690,9 +3422,8 @@
               "description": "Per-shell process flags (e.g., `pwsh` arguments)."
             },
             "sandboxConfig": {
-              "description": "Sandbox configuration shape; opaque to SDK consumers. See `SandboxConfig` in the runtime.",
-              "x-opaque-json": true,
-              "stability": "experimental"
+              "$ref": "#/definitions/SandboxConfig",
+              "description": "Resolved sandbox configuration."
             },
             "logInteractiveShells": {
               "type": "boolean",
@@ -2789,14 +3520,22 @@
             "additionalContentExclusionPolicies": {
               "type": "array",
               "items": {
-                "x-opaque-json": true
+                "$ref": "#/definitions/OptionsUpdateAdditionalContentExclusionPolicy"
               },
-              "description": "Additional content-exclusion policies to merge into the session's policy set. Opaque shape; see `ContentExclusionApiResponse` in the runtime.",
+              "description": "Additional content-exclusion policies to merge into the session's policy set.",
               "stability": "experimental"
             },
             "manageScheduleEnabled": {
               "type": "boolean",
               "description": "Whether to expose the `manage_schedule` tool to the agent. The runtime always owns the per-session schedule registry; this flag only controls tool exposure (typically gated to staff users)."
+            },
+            "sessionCapabilities": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SessionCapability",
+                "description": "Session capability id"
+              },
+              "description": "Replaces the session's capability set with the given list. Use to enable or disable capabilities mid-session (e.g., remove `memory` for reproducible scripted runs). Omit the field to leave the existing capability set unchanged."
             },
             "skipEmbeddingRetrieval": {
               "type": "boolean",
@@ -2821,6 +3560,10 @@
             "enableSkills": {
               "type": "boolean",
               "description": "Whether to enable skill directory scanning and loading. Falls back to enableConfigDiscovery when unset."
+            },
+            "contextTier": {
+              "$ref": "#/definitions/OptionsUpdateContextTier",
+              "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier."
             }
           },
           "additionalProperties": false,
@@ -3308,6 +4051,29 @@
       }
     },
     "telemetry": {
+      "getEngagementId": {
+        "rpcMethod": "session.telemetry.getEngagementId",
+        "description": "Gets the telemetry engagement ID currently associated with the session, when available.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/SessionTelemetryEngagement",
+          "description": "Telemetry engagement ID for the session, when available."
+        },
+        "stability": "experimental"
+      },
       "setFeatureOverrides": {
         "rpcMethod": "session.telemetry.setFeatureOverrides",
         "description": "Sets feature override key/value pairs to attach to subsequent telemetry events for the session.",
@@ -3341,6 +4107,45 @@
       }
     },
     "ui": {
+      "ephemeralQuery": {
+        "rpcMethod": "session.ui.ephemeralQuery",
+        "description": "Runs a transient no-tools model query against the current conversation context.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "question": {
+              "type": "string",
+              "description": "Question to answer from the current conversation context."
+            },
+            "onChunk": {
+              "description": "In-process streaming callback `(text) => void` invoked with each token as the model emits it. Marked internal: excluded from the public SDK surface. In a process-separated SDK this is replaced by a streaming RPC that yields chunks and a final answer.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            },
+            "abortSignal": {
+              "description": "In-process `AbortSignal` forwarded to the model client to cancel an in-flight request. Marked internal: excluded from the public SDK surface. Replaced by an explicit cancellation token + cancel RPC in the SDK migration.",
+              "visibility": "internal",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "question"
+          ],
+          "additionalProperties": false,
+          "description": "Transient question to answer without adding it to conversation history.",
+          "title": "UIEphemeralQueryRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/UIEphemeralQueryResult",
+          "description": "Transient answer generated from current conversation context."
+        },
+        "stability": "experimental"
+      },
       "elicitation": {
         "rpcMethod": "session.ui.elicitation",
         "description": "Requests structured input from a UI-capable client.",
@@ -4351,6 +5156,29 @@
         },
         "stability": "experimental"
       },
+      "activity": {
+        "rpcMethod": "session.metadata.activity",
+        "description": "Returns a snapshot of activity flags for the session.",
+        "params": {
+          "type": "object",
+          "description": "Identifies the target session.",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false
+        },
+        "result": {
+          "$ref": "#/definitions/SessionActivity",
+          "description": "Current activity flags for the session."
+        },
+        "stability": "experimental"
+      },
       "contextInfo": {
         "rpcMethod": "session.metadata.contextInfo",
         "description": "Returns the token breakdown for the session's current context window for a given model.",
@@ -4549,6 +5377,69 @@
         "result": {
           "$ref": "#/definitions/ShellKillResult",
           "description": "Indicates whether the signal was delivered; false if the process was unknown or already exited."
+        },
+        "stability": "experimental"
+      },
+      "executeUserRequested": {
+        "rpcMethod": "session.shell.executeUserRequested",
+        "description": "Executes a user-requested shell command through the session runtime.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "requestId": {
+              "type": "string",
+              "description": "Caller-provided cancellation handle for this execution"
+            },
+            "command": {
+              "type": "string",
+              "description": "Shell command to execute"
+            }
+          },
+          "required": [
+            "sessionId",
+            "requestId",
+            "command"
+          ],
+          "additionalProperties": false,
+          "description": "User-requested shell command and cancellation handle.",
+          "title": "ShellExecuteUserRequestedRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/UserRequestedShellCommandResult",
+          "description": "Result of a user-requested shell command."
+        },
+        "stability": "experimental"
+      },
+      "cancelUserRequested": {
+        "rpcMethod": "session.shell.cancelUserRequested",
+        "description": "Cancels a user-requested shell command by request ID.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "requestId": {
+              "type": "string",
+              "description": "Request ID previously passed to executeUserRequested"
+            }
+          },
+          "required": [
+            "sessionId",
+            "requestId"
+          ],
+          "additionalProperties": false,
+          "description": "User-requested shell execution cancellation handle.",
+          "title": "ShellCancelUserRequestedRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/CancelUserRequestedShellCommandResult",
+          "description": "Cancellation result for a user-requested shell command."
         },
         "stability": "experimental"
       }
@@ -6356,6 +7247,25 @@
       "description": "Custom agents available to the session after reloading definitions from disk.",
       "title": "AgentReloadResult"
     },
+    "AgentsDiscoverRequest": {
+      "type": "object",
+      "properties": {
+        "projectPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional list of project directory paths to scan for project-scoped agents. When omitted or empty, only user/plugin/remote-independent agents are returned (no project scan)."
+        },
+        "excludeHostAgents": {
+          "type": "boolean",
+          "description": "When true, omit the host's agents (the `<COPILOT_HOME>/agents` directory and all plugin agents), leaving only project and remote agents. For multitenant deployments."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional project paths to include in agent discovery.",
+      "title": "AgentsDiscoverRequest"
+    },
     "AgentSelectRequest": {
       "type": "object",
       "properties": {
@@ -6816,7 +7726,7 @@
           "$ref": "#/definitions/ApiKeyAuthInfo"
         }
       ],
-      "description": "The new auth credentials to install on the session. When omitted or `undefined`, the call is a no-op and the session's existing credentials are preserved. The runtime stores the value verbatim and uses it for outbound model/API requests; it does NOT re-validate or re-fetch the associated Copilot user response. Several variants carry secret material; treat this method's params as containing secrets at rest and in transit.",
+      "description": "Initial authentication info for the session.",
       "title": "AuthInfo"
     },
     "AuthInfoType": {
@@ -6841,6 +7751,21 @@
         "token": "Authentication from a GitHub token.",
         "copilot-api-token": "Authentication from a Copilot API token."
       }
+    },
+    "CancelUserRequestedShellCommandResult": {
+      "type": "object",
+      "properties": {
+        "cancelled": {
+          "type": "boolean",
+          "description": "Whether an in-flight execution was found and signalled to cancel"
+        }
+      },
+      "required": [
+        "cancelled"
+      ],
+      "additionalProperties": false,
+      "description": "Cancellation result for a user-requested shell command.",
+      "title": "CancelUserRequestedShellCommandResult"
     },
     "CanvasAction": {
       "type": "object",
@@ -7300,6 +8225,27 @@
       "additionalProperties": false,
       "description": "Indicates whether the queued-command response was matched to a pending request.",
       "title": "CommandsRespondToQueuedCommandResult"
+    },
+    "ConfigureSessionExtensionsParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session to attach the extension controller delegate to."
+        },
+        "controller": {
+          "description": "In-process ExtensionController delegate (CLI-only optimization). Marked internal: this field is excluded from the public SDK surface. The post-SDK extension surface exposes list/enable/disable/reload via dedicated RPCs served by the runtime.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Params to attach or detach an in-process ExtensionController delegate.",
+      "title": "ConfigureSessionExtensionsParams",
+      "visibility": "internal"
     },
     "ConnectedRemoteSessionMetadata": {
       "type": "object",
@@ -9285,6 +10231,35 @@
       "title": "InstalledPlugin",
       "description": "Schema for the `InstalledPlugin` type."
     },
+    "InstalledPluginInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Plugin name"
+        },
+        "marketplace": {
+          "type": "string",
+          "description": "Marketplace the plugin came from. Empty string (\"\") for direct repo / URL / local installs."
+        },
+        "version": {
+          "type": "string",
+          "description": "Installed version (when reported by the plugin manifest)"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the plugin is currently enabled for new sessions"
+        }
+      },
+      "required": [
+        "name",
+        "marketplace",
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Information about an installed plugin tracked in global state.",
+      "title": "InstalledPluginInfo"
+    },
     "InstalledPluginSource": {
       "anyOf": [
         {
@@ -9380,13 +10355,32 @@
       "title": "InstalledPluginSourceUrl",
       "description": "Schema for the `InstalledPluginSourceUrl` type."
     },
+    "InstructionsDiscoverRequest": {
+      "type": "object",
+      "properties": {
+        "projectPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Optional list of project directory paths to scan for repository/working-directory instruction sources. When omitted or empty, only user-level and plugin instruction sources are returned (no project scan)."
+        },
+        "excludeHostInstructions": {
+          "type": "boolean",
+          "description": "When true, omit the host's instruction sources (user/home-level files and plugin rules), leaving only repository and working-directory sources. For multitenant deployments."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional project paths to include in instruction discovery.",
+      "title": "InstructionsDiscoverRequest"
+    },
     "InstructionsGetSourcesResult": {
       "type": "object",
       "properties": {
         "sources": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/InstructionsSources"
+            "$ref": "#/definitions/InstructionSource"
           },
           "description": "Instruction sources for the session"
         }
@@ -9398,7 +10392,7 @@
       "description": "Instruction sources loaded for the session, in merge order.",
       "title": "InstructionsGetSourcesResult"
     },
-    "InstructionsSources": {
+    "InstructionSource": {
       "type": "object",
       "properties": {
         "id": {
@@ -9418,11 +10412,11 @@
           "description": "Raw content of the instruction file"
         },
         "type": {
-          "$ref": "#/definitions/InstructionsSourcesType",
+          "$ref": "#/definitions/InstructionSourceType",
           "description": "Category of instruction source — used for merge logic"
         },
         "location": {
-          "$ref": "#/definitions/InstructionsSourcesLocation",
+          "$ref": "#/definitions/InstructionSourceLocation",
           "description": "Where this source lives — used for UI grouping"
         },
         "applyTo": {
@@ -9439,6 +10433,10 @@
         "defaultDisabled": {
           "type": "boolean",
           "description": "When true, this source starts disabled and must be toggled on by the user"
+        },
+        "projectPath": {
+          "type": "string",
+          "description": "The project path this source was discovered from. Only set by sessionless discovery for repository/working-directory sources, where it disambiguates same-named files (e.g. .github/copilot-instructions.md) across multiple workspace roots. The session-scoped getSources leaves it unset."
         }
       },
       "required": [
@@ -9450,10 +10448,10 @@
         "location"
       ],
       "additionalProperties": false,
-      "title": "InstructionsSources",
-      "description": "Schema for the `InstructionsSources` type."
+      "title": "InstructionSource",
+      "description": "Schema for the `InstructionSource` type."
     },
-    "InstructionsSourcesLocation": {
+    "InstructionSourceLocation": {
       "type": "string",
       "enum": [
         "user",
@@ -9462,7 +10460,7 @@
         "plugin"
       ],
       "description": "Where this source lives — used for UI grouping",
-      "title": "InstructionsSourcesLocation",
+      "title": "InstructionSourceLocation",
       "x-enumDescriptions": {
         "user": "Instructions live in user-level configuration.",
         "repository": "Instructions live in repository-level configuration.",
@@ -9470,7 +10468,7 @@
         "plugin": "Instructions live in plugin-provided configuration."
       }
     },
-    "InstructionsSourcesType": {
+    "InstructionSourceType": {
       "type": "string",
       "enum": [
         "home",
@@ -9482,7 +10480,7 @@
         "plugin"
       ],
       "description": "Category of instruction source — used for merge logic",
-      "title": "InstructionsSourcesType",
+      "title": "InstructionSourceType",
       "x-enumDescriptions": {
         "home": "Instructions loaded from the user's home configuration.",
         "repo": "Instructions loaded from repository-scoped files.",
@@ -9492,6 +10490,61 @@
         "child-instructions": "Instructions inherited from child instruction files.",
         "plugin": "Instructions supplied by an installed plugin."
       }
+    },
+    "LocalSessionMetadataValue": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Stable session identifier"
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Session creation time as an ISO 8601 timestamp"
+        },
+        "modifiedTime": {
+          "type": "string",
+          "description": "Last-modified time of the session's persisted state, as ISO 8601"
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short summary of the session, when one has been derived"
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional human-friendly name set via /rename"
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Runtime client name that created/last resumed this session"
+        },
+        "isRemote": {
+          "type": "boolean",
+          "const": false,
+          "description": "Always false for local sessions."
+        },
+        "isDetached": {
+          "type": "boolean",
+          "description": "True for detached maintenance sessions that should be hidden from normal resume lists."
+        },
+        "context": {
+          "$ref": "#/definitions/SessionContext",
+          "description": "Pre-resolved working-directory context for session startup."
+        },
+        "mcTaskId": {
+          "type": "string",
+          "description": "GitHub task ID, when this local session is bound to one. Only present for local sessions exported to remote control."
+        }
+      },
+      "required": [
+        "sessionId",
+        "startTime",
+        "modifiedTime",
+        "isRemote"
+      ],
+      "additionalProperties": false,
+      "title": "LocalSessionMetadataValue",
+      "description": "Schema for the `LocalSessionMetadataValue` type."
     },
     "LogRequest": {
       "type": "object",
@@ -9564,6 +10617,185 @@
       "additionalProperties": false,
       "description": "Parameters for (re)loading the merged LSP configuration set.",
       "title": "LspInitializeRequest"
+    },
+    "MarketplaceAddResult": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Final name of the marketplace as resolved from its manifest"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Result of registering a new marketplace.",
+      "title": "MarketplaceAddResult"
+    },
+    "MarketplaceBrowseResult": {
+      "type": "object",
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketplacePluginInfo",
+            "description": "Plugin entry advertised by a marketplace."
+          },
+          "description": "Plugins advertised by the marketplace"
+        }
+      },
+      "required": [
+        "plugins"
+      ],
+      "additionalProperties": false,
+      "description": "Plugins advertised by the marketplace.",
+      "title": "MarketplaceBrowseResult"
+    },
+    "MarketplaceInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Marketplace name (matches the @marketplace suffix in plugin specs)"
+        },
+        "source": {
+          "type": "string",
+          "description": "Human-readable description of where the marketplace data is fetched from (e.g. \"GitHub: owner/repo\")."
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "True when this is a default marketplace shipped with the runtime. Defaults are not removable."
+        }
+      },
+      "required": [
+        "name",
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Registered marketplace summary.",
+      "title": "MarketplaceInfo"
+    },
+    "MarketplaceListResult": {
+      "type": "object",
+      "properties": {
+        "marketplaces": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketplaceInfo",
+            "description": "Registered marketplace summary."
+          },
+          "description": "Registered marketplaces"
+        }
+      },
+      "required": [
+        "marketplaces"
+      ],
+      "additionalProperties": false,
+      "description": "All registered marketplaces, including built-in defaults.",
+      "title": "MarketplaceListResult"
+    },
+    "MarketplacePluginInfo": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Plugin name as listed in the marketplace catalog"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short description from the marketplace catalog, when present"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin entry advertised by a marketplace.",
+      "title": "MarketplacePluginInfo"
+    },
+    "MarketplaceRefreshEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Marketplace name that was refreshed"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the refresh succeeded"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message (failure only)"
+        }
+      },
+      "required": [
+        "name",
+        "success"
+      ],
+      "additionalProperties": false,
+      "title": "MarketplaceRefreshEntry",
+      "description": "Schema for the `MarketplaceRefreshEntry` type."
+    },
+    "MarketplaceRefreshResult": {
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/MarketplaceRefreshEntry"
+          },
+          "description": "Per-marketplace refresh results in deterministic order."
+        }
+      },
+      "required": [
+        "results"
+      ],
+      "additionalProperties": false,
+      "description": "Result of refreshing one or more marketplace catalogs.",
+      "title": "MarketplaceRefreshResult"
+    },
+    "MarketplaceRemoveResult": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "boolean",
+          "description": "True when the marketplace was actually removed. False when removal was skipped because the marketplace has dependent plugins and `force` was not set."
+        },
+        "dependentPlugins": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of installed plugins that prevented removal. Populated only when `removed=false`."
+        }
+      },
+      "required": [
+        "removed"
+      ],
+      "additionalProperties": false,
+      "description": "Outcome of the remove attempt, including dependent-plugin info when applicable.",
+      "title": "MarketplaceRemoveResult"
+    },
+    "McpAllowedServer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Allowed server name"
+        },
+        "redactedNote": {
+          "type": "string",
+          "description": "PII-free note explaining why the server was allowed"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "title": "McpAllowedServer",
+      "description": "Schema for the `McpAllowedServer` type."
     },
     "McpAppsCallToolRequest": {
       "type": "object",
@@ -10195,6 +11427,38 @@
       "description": "MCP server name and replacement configuration to write to user configuration.",
       "title": "McpConfigUpdateRequest"
     },
+    "McpConfigureGitHubRequest": {
+      "type": "object",
+      "properties": {
+        "authInfo": {
+          "description": "Opaque runtime auth info for GitHub MCP configuration. Marked internal: an in-process runtime shape (configureGitHubMcp is a no-op over the wire).",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "authInfo"
+      ],
+      "additionalProperties": false,
+      "description": "Opaque auth info used to configure GitHub MCP.",
+      "title": "McpConfigureGitHubRequest",
+      "visibility": "internal"
+    },
+    "McpConfigureGitHubResult": {
+      "type": "object",
+      "properties": {
+        "changed": {
+          "type": "boolean",
+          "description": "Whether GitHub MCP configuration changed."
+        }
+      },
+      "required": [
+        "changed"
+      ],
+      "additionalProperties": false,
+      "description": "Result of configuring GitHub MCP.",
+      "title": "McpConfigureGitHubResult"
+    },
     "McpDisableRequest": {
       "type": "object",
       "properties": {
@@ -10310,6 +11574,164 @@
       "x-opaque-json": true,
       "stability": "experimental"
     },
+    "McpFilteredServer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Filtered server name"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable filter reason"
+        },
+        "redactedReason": {
+          "type": "string",
+          "description": "PII-free filter reason"
+        },
+        "enterpriseName": {
+          "type": "string",
+          "description": "Enterprise login associated with an allowlist policy"
+        }
+      },
+      "required": [
+        "name",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "title": "McpFilteredServer",
+      "description": "Schema for the `McpFilteredServer` type."
+    },
+    "McpHostState": {
+      "type": "object",
+      "properties": {
+        "mcp3pEnabled": {
+          "type": "boolean",
+          "description": "Whether third-party MCP servers are policy-enabled for this session."
+        },
+        "disabledServers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Configured servers that are explicitly disabled."
+        },
+        "filteredServers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Configured servers filtered out by enterprise allowlist policy."
+        },
+        "clients": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of currently-connected MCP clients."
+        },
+        "pendingConnections": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of servers with in-flight connection attempts."
+        },
+        "failedServers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/McpServerFailureInfo",
+            "description": "Recorded MCP server connection failure."
+          },
+          "description": "Map of server name to recorded connection failure."
+        },
+        "needsAuthServers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/McpServerNeedsAuthInfo",
+            "description": "Recorded MCP server pending-auth state."
+          },
+          "description": "Map of server name to recorded pending-auth state."
+        }
+      },
+      "required": [
+        "mcp3pEnabled",
+        "disabledServers",
+        "filteredServers",
+        "clients",
+        "pendingConnections",
+        "failedServers",
+        "needsAuthServers"
+      ],
+      "additionalProperties": false,
+      "description": "Host-level state, omitted when no MCP host is initialized.",
+      "title": "McpHostState"
+    },
+    "McpIsServerRunningRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server to check"
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "Server name to check running status for.",
+      "title": "McpIsServerRunningRequest"
+    },
+    "McpIsServerRunningResult": {
+      "type": "object",
+      "properties": {
+        "running": {
+          "type": "boolean",
+          "description": "True if the server has an active client and transport."
+        }
+      },
+      "required": [
+        "running"
+      ],
+      "additionalProperties": false,
+      "description": "Whether the named MCP server is running.",
+      "title": "McpIsServerRunningResult"
+    },
+    "McpListToolsRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "Name of the connected MCP server whose tools to list."
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "Server name whose tool list should be returned.",
+      "title": "McpListToolsRequest"
+    },
+    "McpListToolsResult": {
+      "type": "object",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpTools"
+          },
+          "description": "Tools exposed by the server."
+        }
+      },
+      "required": [
+        "tools"
+      ],
+      "additionalProperties": false,
+      "description": "Tools exposed by the connected MCP server. Throws when the server is not connected.",
+      "title": "McpListToolsResult"
+    },
     "McpOauthLoginRequest": {
       "type": "object",
       "properties": {
@@ -10352,6 +11774,85 @@
       "description": "OAuth authorization URL the caller should open, or empty when cached tokens already authenticated the server.",
       "title": "McpOauthLoginResult"
     },
+    "McpOauthRespondRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "OAuth request identifier from mcp.oauth_required"
+        },
+        "provider": {
+          "description": "In-process OAuthClientProvider instance, or omitted to deny. Marked internal: cannot be serialized across the JSON-RPC boundary.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "MCP OAuth request id and optional provider response.",
+      "title": "McpOauthRespondRequest",
+      "visibility": "internal"
+    },
+    "McpOauthRespondResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Empty result after recording the MCP OAuth response.",
+      "title": "McpOauthRespondResult"
+    },
+    "McpRegisterExternalClientRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Logical server name for the external client"
+        },
+        "client": {
+          "description": "In-process MCP Client instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        },
+        "transport": {
+          "description": "In-process MCP Transport instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        },
+        "config": {
+          "description": "In-process server config (MCPServerConfig) paired with the in-process client/transport. Marked internal alongside its companions.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "serverName",
+        "client",
+        "transport",
+        "config"
+      ],
+      "additionalProperties": false,
+      "description": "Registration parameters for an external MCP client.",
+      "title": "McpRegisterExternalClientRequest",
+      "visibility": "internal"
+    },
+    "McpReloadWithConfigRequest": {
+      "type": "object",
+      "properties": {
+        "config": {
+          "description": "Opaque runtime MCP reload configuration. Marked internal: an in-process runtime shape (reloadMcpServers throws over the wire).",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "config"
+      ],
+      "additionalProperties": false,
+      "description": "Opaque MCP reload configuration.",
+      "title": "McpReloadWithConfigRequest",
+      "visibility": "internal"
+    },
     "McpRemoveGitHubResult": {
       "type": "object",
       "properties": {
@@ -10366,6 +11867,28 @@
       "additionalProperties": false,
       "description": "Indicates whether the auto-managed `github` MCP server was removed (false when nothing to remove).",
       "title": "McpRemoveGitHubResult"
+    },
+    "McpRestartServerRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server to restart"
+        },
+        "config": {
+          "description": "Opaque server configuration (MCPServerConfig). Marked internal: an in-process runtime shape supplied only by in-process CLI callers.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "serverName",
+        "config"
+      ],
+      "additionalProperties": false,
+      "description": "Server name and opaque configuration for an individual MCP server restart.",
+      "title": "McpRestartServerRequest",
+      "visibility": "internal"
     },
     "McpSamplingExecutionAction": {
       "type": "string",
@@ -10636,6 +12159,27 @@
       "description": "Stdio MCP server configuration launched as a child process.",
       "title": "McpServerConfigStdio"
     },
+    "McpServerFailureInfo": {
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "description": "Failure message produced when the MCP server connection failed."
+        },
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "epoch-ms timestamp at which the failure was recorded."
+        }
+      },
+      "required": [
+        "message",
+        "timestamp"
+      ],
+      "additionalProperties": false,
+      "description": "Recorded MCP server connection failure.",
+      "title": "McpServerFailureInfo"
+    },
     "McpServerList": {
       "type": "object",
       "properties": {
@@ -10645,14 +12189,34 @@
             "$ref": "#/definitions/McpServer"
           },
           "description": "Configured MCP servers"
+        },
+        "host": {
+          "$ref": "#/definitions/McpHostState",
+          "description": "Host-level state, omitted when no MCP host is initialized."
         }
       },
       "required": [
         "servers"
       ],
       "additionalProperties": false,
-      "description": "MCP servers configured for the session, with their connection status.",
+      "description": "MCP servers configured for the session, with their connection status and host-level state.",
       "title": "McpServerList"
+    },
+    "McpServerNeedsAuthInfo": {
+      "type": "object",
+      "properties": {
+        "timestamp": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "epoch-ms timestamp at which the server signalled it needs authentication."
+        }
+      },
+      "required": [
+        "timestamp"
+      ],
+      "additionalProperties": false,
+      "description": "Recorded MCP server pending-auth state.",
+      "title": "McpServerNeedsAuthInfo"
     },
     "McpServerSource": {
       "type": "string",
@@ -10734,6 +12298,103 @@
       "additionalProperties": false,
       "description": "Env-value mode recorded on the session after the update.",
       "title": "McpSetEnvValueModeResult"
+    },
+    "McpStartServerRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server to start"
+        },
+        "config": {
+          "description": "Opaque server configuration (MCPServerConfig). Marked internal: an in-process runtime shape supplied only by in-process CLI callers.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "serverName",
+        "config"
+      ],
+      "additionalProperties": false,
+      "description": "Server name and opaque configuration for an individual MCP server start.",
+      "title": "McpStartServerRequest",
+      "visibility": "internal"
+    },
+    "McpStartServersResult": {
+      "type": "object",
+      "properties": {
+        "filteredServers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpFilteredServer"
+          },
+          "description": "Servers filtered out before startup"
+        },
+        "allowedServers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpAllowedServer"
+          },
+          "description": "Non-default servers allowed by policy"
+        }
+      },
+      "required": [
+        "filteredServers"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server startup filtering result.",
+      "title": "McpStartServersResult"
+    },
+    "McpStopServerRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server to stop"
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "Server name for an individual MCP server stop.",
+      "title": "McpStopServerRequest"
+    },
+    "McpTools": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Tool description, when provided."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "title": "McpTools",
+      "description": "Schema for the `McpTools` type."
+    },
+    "McpUnregisterExternalClientRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Server name of the external client to unregister"
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "Server name identifying the external client to remove.",
+      "title": "McpUnregisterExternalClientRequest",
+      "visibility": "internal"
     },
     "MetadataContextInfoRequest": {
       "type": "object",
@@ -11184,7 +12845,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Override individual model capabilities resolved by the runtime",
+      "description": "Initial model capability overrides.",
       "title": "ModelCapabilitiesOverride"
     },
     "ModelCapabilitiesOverrideLimits": {
@@ -11601,6 +13262,114 @@
       "description": "Open canvas instance snapshot.",
       "title": "OpenCanvasInstance"
     },
+    "OptionsUpdateAdditionalContentExclusionPolicy": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/OptionsUpdateAdditionalContentExclusionPolicyRule"
+          }
+        },
+        "last_updated_at": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "x-opaque-json": true
+        },
+        "scope": {
+          "$ref": "#/definitions/OptionsUpdateAdditionalContentExclusionPolicyScope",
+          "description": "Allowed values for the `OptionsUpdateAdditionalContentExclusionPolicyScope` enumeration."
+        }
+      },
+      "required": [
+        "rules",
+        "last_updated_at",
+        "scope"
+      ],
+      "additionalProperties": true,
+      "title": "OptionsUpdateAdditionalContentExclusionPolicy",
+      "description": "Schema for the `OptionsUpdateAdditionalContentExclusionPolicy` type."
+    },
+    "OptionsUpdateAdditionalContentExclusionPolicyRule": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ifAnyMatch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ifNoneMatch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "$ref": "#/definitions/OptionsUpdateAdditionalContentExclusionPolicyRuleSource",
+          "description": "Schema for the `OptionsUpdateAdditionalContentExclusionPolicyRuleSource` type."
+        }
+      },
+      "required": [
+        "paths",
+        "source"
+      ],
+      "additionalProperties": true,
+      "title": "OptionsUpdateAdditionalContentExclusionPolicyRule",
+      "description": "Schema for the `OptionsUpdateAdditionalContentExclusionPolicyRule` type."
+    },
+    "OptionsUpdateAdditionalContentExclusionPolicyRuleSource": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false,
+      "title": "OptionsUpdateAdditionalContentExclusionPolicyRuleSource",
+      "description": "Schema for the `OptionsUpdateAdditionalContentExclusionPolicyRuleSource` type."
+    },
+    "OptionsUpdateAdditionalContentExclusionPolicyScope": {
+      "type": "string",
+      "enum": [
+        "repo",
+        "all"
+      ],
+      "title": "OptionsUpdateAdditionalContentExclusionPolicyScope",
+      "x-enumDescriptions": {
+        "repo": "The content exclusion policy applies to the current repository.",
+        "all": "The content exclusion policy applies across all repositories."
+      },
+      "description": "Allowed values for the `OptionsUpdateAdditionalContentExclusionPolicyScope` enumeration."
+    },
+    "OptionsUpdateContextTier": {
+      "type": "string",
+      "enum": [
+        "default",
+        "long_context"
+      ],
+      "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier.",
+      "title": "OptionsUpdateContextTier",
+      "x-enumDescriptions": {
+        "default": "Use the model's default context tier and its standard token limits / pricing.",
+        "long_context": "Use the model's long-context tier (when available) so larger inputs are accepted and tier-specific pricing applies."
+      }
+    },
     "OptionsUpdateEnvValueMode": {
       "type": "string",
       "enum": [
@@ -11612,6 +13381,21 @@
       "x-enumDescriptions": {
         "direct": "Pass MCP server environment values as literal strings.",
         "indirect": "Resolve MCP server environment values from host-side references."
+      }
+    },
+    "OptionsUpdateReasoningSummary": {
+      "type": "string",
+      "enum": [
+        "none",
+        "concise",
+        "detailed"
+      ],
+      "description": "Reasoning summary mode for supported model clients.",
+      "title": "OptionsUpdateReasoningSummary",
+      "x-enumDescriptions": {
+        "none": "Do not request reasoning summaries from the model.",
+        "concise": "Request a concise summary of model reasoning.",
+        "detailed": "Request a detailed summary of model reasoning."
       }
     },
     "OptionsUpdateToolFilterPrecedence": {
@@ -13614,6 +15398,48 @@
       "description": "Existence, contents, and resolved path of the session plan file.",
       "title": "PlanReadResult"
     },
+    "PlanReadSqlTodosResult": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PlanSqlTodosRow"
+          },
+          "description": "Rows from the session SQL todos table, ordered by creation time and id."
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "additionalProperties": false,
+      "description": "Todo rows read from the session SQL database. Empty when no session database is available.",
+      "title": "PlanReadSqlTodosResult"
+    },
+    "PlanSqlTodosRow": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Todo identifier."
+        },
+        "title": {
+          "type": "string",
+          "description": "Todo title."
+        },
+        "description": {
+          "type": "string",
+          "description": "Todo description."
+        },
+        "status": {
+          "type": "string",
+          "description": "Todo status."
+        }
+      },
+      "additionalProperties": false,
+      "title": "PlanSqlTodosRow",
+      "description": "Schema for the `PlanSqlTodosRow` type."
+    },
     "PlanUpdateRequest": {
       "type": "object",
       "properties": {
@@ -13658,6 +15484,34 @@
       "title": "Plugin",
       "description": "Schema for the `Plugin` type."
     },
+    "PluginInstallResult": {
+      "type": "object",
+      "properties": {
+        "plugin": {
+          "$ref": "#/definitions/InstalledPluginInfo",
+          "description": "The newly installed plugin's metadata"
+        },
+        "skillsInstalled": {
+          "type": "integer",
+          "description": "Number of skills discovered and installed from the plugin"
+        },
+        "postInstallMessage": {
+          "type": "string",
+          "description": "Optional post-install message provided by the plugin (e.g. setup instructions)"
+        },
+        "deprecationWarning": {
+          "type": "string",
+          "description": "Set when the install path is deprecated (e.g. direct repo / URL / local installs). Callers should surface this to end users."
+        }
+      },
+      "required": [
+        "plugin",
+        "skillsInstalled"
+      ],
+      "additionalProperties": false,
+      "description": "Result of installing a plugin.",
+      "title": "PluginInstallResult"
+    },
     "PluginList": {
       "type": "object",
       "properties": {
@@ -13675,6 +15529,417 @@
       "additionalProperties": false,
       "description": "Plugins installed for the session, with their enabled state and version metadata.",
       "title": "PluginList"
+    },
+    "PluginListResult": {
+      "type": "object",
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InstalledPluginInfo",
+            "description": "Information about an installed plugin tracked in global state."
+          },
+          "description": "Installed plugins"
+        }
+      },
+      "required": [
+        "plugins"
+      ],
+      "additionalProperties": false,
+      "description": "Plugins installed in user/global state.",
+      "title": "PluginListResult"
+    },
+    "PluginsDisableRequest": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plugin names or \"plugin@marketplace\" specs to disable. Unknown names are ignored. Non-marketplace direct installs cannot be disabled via this API; uninstall them instead. Plugin-owned MCP servers are stopped in active sessions immediately; other plugin contributions remain available until each session reloads plugins."
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin names (or specs) to disable.",
+      "title": "PluginsDisableRequest"
+    },
+    "PluginsEnableRequest": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plugin names or \"plugin@marketplace\" specs to enable. Unknown names are ignored. Non-marketplace direct installs are always enabled and cannot be toggled via this API."
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin names (or specs) to enable.",
+      "title": "PluginsEnableRequest"
+    },
+    "PluginsInstallRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Plugin install spec. Accepts the same forms as the CLI: \"plugin@marketplace\" (marketplace install), \"owner/repo\" or \"owner/repo:subpath\" (GitHub direct), an http/https/ssh URL, or a local path. Direct (non-marketplace) installs are deprecated and will produce a deprecationWarning in the result."
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Working directory used to resolve relative local paths in `source`. Defaults to the server's current working directory."
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin source and optional working directory for relative-path resolution.",
+      "title": "PluginsInstallRequest"
+    },
+    "PluginsMarketplacesAddRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Marketplace source. Accepts the same forms as the CLI: \"owner/repo\" or \"owner/repo#ref\" (GitHub), an http/https/ssh URL (optionally with #ref), a git scp-style URL (user@host:path), or a local path. The marketplace's own name (from its manifest) is used as the registration key."
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Marketplace source to register.",
+      "title": "PluginsMarketplacesAddRequest"
+    },
+    "PluginsMarketplacesBrowseRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Marketplace name to browse"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Name of the marketplace whose plugin catalog to fetch.",
+      "title": "PluginsMarketplacesBrowseRequest"
+    },
+    "PluginsMarketplacesRefreshRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Marketplace name to refresh. When omitted, every registered marketplace is refreshed."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Optional marketplace name; omit to refresh all.",
+      "title": "PluginsMarketplacesRefreshRequest"
+    },
+    "PluginsMarketplacesRemoveRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Marketplace name to remove"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "When true, also uninstall every plugin sourced from this marketplace. When false (default), removal is a no-op if any plugin from this marketplace is installed and the dependent plugin names are returned in the result."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Name of the marketplace to remove and an optional force flag.",
+      "title": "PluginsMarketplacesRemoveRequest"
+    },
+    "PluginsReloadRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reloadMcp": {
+              "type": "boolean",
+              "description": "Reload MCP server connections after refreshing plugins. Defaults to true."
+            },
+            "reloadCustomAgents": {
+              "type": "boolean",
+              "description": "Re-run custom-agent discovery after refreshing plugins. Defaults to true."
+            },
+            "reloadHooks": {
+              "type": "boolean",
+              "description": "Re-load user, plugin, and (subject to `deferRepoHooks`) repo hooks. Defaults to true. Has no effect when the host has not registered a hook reloader (e.g. remote sessions)."
+            },
+            "deferRepoHooks": {
+              "type": "boolean",
+              "description": "When true, skip repo-level hooks during the hook reload. Use before folder trust is confirmed; load them post-trust via `sessions.loadDeferredRepoHooks`."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Optional flags controlling which side effects the reload performs.",
+      "title": "PluginsReloadRequest"
+    },
+    "PluginsUninstallRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Plugin name or \"plugin@marketplace\" spec to uninstall. When ambiguous, prefer the fully-qualified spec."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Name (or spec) of the plugin to uninstall.",
+      "title": "PluginsUninstallRequest"
+    },
+    "PluginsUpdateRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Plugin name or \"plugin@marketplace\" spec to update."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Name (or spec) of the plugin to update.",
+      "title": "PluginsUpdateRequest"
+    },
+    "PluginUpdateAllEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Plugin name that was updated"
+        },
+        "marketplace": {
+          "type": "string",
+          "description": "Marketplace the plugin came from. Empty string (\"\") for direct installs."
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the update succeeded for this plugin"
+        },
+        "previousVersion": {
+          "type": "string",
+          "description": "Previously installed version, when available"
+        },
+        "newVersion": {
+          "type": "string",
+          "description": "Version after the update, when available"
+        },
+        "skillsInstalled": {
+          "type": "integer",
+          "description": "Number of skills installed after the update (success only)"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message (failure only)"
+        }
+      },
+      "required": [
+        "name",
+        "marketplace",
+        "success"
+      ],
+      "additionalProperties": false,
+      "title": "PluginUpdateAllEntry",
+      "description": "Schema for the `PluginUpdateAllEntry` type."
+    },
+    "PluginUpdateAllResult": {
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PluginUpdateAllEntry"
+          },
+          "description": "Per-plugin update results in deterministic order."
+        }
+      },
+      "required": [
+        "results"
+      ],
+      "additionalProperties": false,
+      "description": "Result of updating all installed plugins.",
+      "title": "PluginUpdateAllResult"
+    },
+    "PluginUpdateResult": {
+      "type": "object",
+      "properties": {
+        "previousVersion": {
+          "type": "string",
+          "description": "Version that was previously installed, when available"
+        },
+        "newVersion": {
+          "type": "string",
+          "description": "Version after the update, when reported by the plugin manifest"
+        },
+        "skillsInstalled": {
+          "type": "integer",
+          "description": "Number of skills discovered and installed after the update"
+        }
+      },
+      "required": [
+        "skillsInstalled"
+      ],
+      "additionalProperties": false,
+      "description": "Result of updating a single plugin.",
+      "title": "PluginUpdateResult"
+    },
+    "PollSpawnedSessionsResult": {
+      "type": "object",
+      "properties": {
+        "events": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionsPollSpawnedSessionsEvent"
+          },
+          "description": "Spawn events emitted since the supplied cursor."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor to pass back to receive only events after this batch."
+        }
+      },
+      "required": [
+        "events",
+        "cursor"
+      ],
+      "additionalProperties": false,
+      "description": "Batch of spawn events plus a cursor for follow-up polls.",
+      "title": "PollSpawnedSessionsResult"
+    },
+    "ProviderConfig": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/ProviderConfigType",
+          "description": "Provider type. Defaults to \"openai\" for generic OpenAI-compatible APIs."
+        },
+        "wireApi": {
+          "$ref": "#/definitions/ProviderConfigWireApi",
+          "description": "Wire API format (openai/azure only). Defaults to \"completions\"."
+        },
+        "baseUrl": {
+          "type": "string",
+          "description": "API endpoint URL."
+        },
+        "apiKey": {
+          "type": "string",
+          "description": "API key. Optional for local providers like Ollama."
+        },
+        "bearerToken": {
+          "type": "string",
+          "description": "Bearer token for authentication. Sets the Authorization header directly. Takes precedence over apiKey when both are set."
+        },
+        "azure": {
+          "$ref": "#/definitions/ProviderConfigAzure",
+          "description": "Azure-specific provider options."
+        },
+        "modelId": {
+          "type": "string",
+          "description": "Well-known model ID used for capability lookup. When set, agent behavior config and token limits are inferred from this model."
+        },
+        "wireModel": {
+          "type": "string",
+          "description": "The model identifier sent to the provider API for inference (the \"wire\" model), as opposed to modelId which is the well-known base."
+        },
+        "maxPromptTokens": {
+          "type": "number",
+          "description": "Maximum prompt/input tokens for the model."
+        },
+        "maxContextWindowTokens": {
+          "type": "number",
+          "description": "Maximum context window tokens for the model."
+        },
+        "maxOutputTokens": {
+          "type": "number",
+          "description": "Maximum output tokens for the model."
+        },
+        "headers": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Custom HTTP headers to include in all outbound requests to the provider."
+        }
+      },
+      "required": [
+        "baseUrl"
+      ],
+      "additionalProperties": false,
+      "description": "Custom model-provider configuration (BYOK).",
+      "title": "ProviderConfig",
+      "stability": "experimental"
+    },
+    "ProviderConfigAzure": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "string",
+          "description": "API version. When set, uses the versioned deployment route. When omitted, uses the GA versionless v1 route."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Azure-specific provider options.",
+      "title": "ProviderConfigAzure"
+    },
+    "ProviderConfigType": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "azure",
+        "anthropic"
+      ],
+      "description": "Provider type. Defaults to \"openai\" for generic OpenAI-compatible APIs.",
+      "title": "ProviderConfigType",
+      "x-enumDescriptions": {
+        "openai": "Generic OpenAI-compatible API.",
+        "azure": "Azure OpenAI Service endpoint.",
+        "anthropic": "Anthropic API endpoint."
+      }
+    },
+    "ProviderConfigWireApi": {
+      "type": "string",
+      "enum": [
+        "completions",
+        "responses"
+      ],
+      "description": "Wire API format (openai/azure only). Defaults to \"completions\".",
+      "title": "ProviderConfigWireApi",
+      "x-enumDescriptions": {
+        "completions": "OpenAI Chat Completions wire format.",
+        "responses": "OpenAI Responses API wire format."
+      }
     },
     "PushAttachment": {
       "anyOf": [
@@ -14139,6 +16404,49 @@
       "description": "Opaque handle representing an event-type interest registration.",
       "title": "RegisterEventInterestResult"
     },
+    "RegisterExtensionToolsParams": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session to register extension tools on."
+        },
+        "loader": {
+          "description": "In-process ExtensionLoader handle (CLI-only optimization). Marked internal: this field is excluded from the public SDK surface. When the CLI migrates to a process-separated SDK, extension discovery/launch moves entirely into the runtime — the CLI passes pure config (search paths, disabled ids) via SessionOptions instead.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        },
+        "options": {
+          "$ref": "#/definitions/SessionsRegisterExtensionToolsOnSessionOptions",
+          "description": "Optional registration options."
+        }
+      },
+      "required": [
+        "sessionId",
+        "loader"
+      ],
+      "additionalProperties": false,
+      "description": "Params to attach an extension loader's tools to a session.",
+      "title": "RegisterExtensionToolsParams",
+      "visibility": "internal"
+    },
+    "RegisterExtensionToolsResult": {
+      "type": "object",
+      "properties": {
+        "unsubscribe": {
+          "description": "In-process unsubscribe function (CLI-only optimization). Marked internal: replaced by an explicit `extensions.unregister` RPC in the SDK migration.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "unsubscribe"
+      ],
+      "additionalProperties": false,
+      "description": "Handle for releasing the extension tool registration.",
+      "title": "RegisterExtensionToolsResult",
+      "visibility": "internal"
+    },
     "ReleaseEventInterestParams": {
       "type": "object",
       "properties": {
@@ -14153,6 +16461,238 @@
       "additionalProperties": false,
       "description": "Opaque handle previously returned by `registerInterest` to release.",
       "title": "ReleaseEventInterestParams"
+    },
+    "RemoteControlConfig": {
+      "type": "object",
+      "properties": {
+        "remote": {
+          "type": "boolean",
+          "description": "Whether remote export should be enabled."
+        },
+        "steerable": {
+          "type": "boolean",
+          "description": "Whether the MC session may steer the local session (write mode)."
+        },
+        "explicit": {
+          "type": "boolean",
+          "description": "Whether the user explicitly requested remote (vs. implicit session-sync). Controls warning surfacing for missing-repo cases."
+        },
+        "silent": {
+          "type": "boolean",
+          "description": "When true, suppresses timeline messages on successful setup."
+        },
+        "taskId": {
+          "type": "string",
+          "description": "Existing Mission Control task ID to attach the exported session to."
+        },
+        "existingMcSession": {
+          "$ref": "#/definitions/RemoteControlConfigExistingMcSession",
+          "description": "Reattach to an existing MC session without creating a new one."
+        }
+      },
+      "required": [
+        "remote",
+        "steerable",
+        "explicit",
+        "silent"
+      ],
+      "additionalProperties": false,
+      "description": "Configuration for the runtime-managed remote-control singleton.",
+      "title": "RemoteControlConfig"
+    },
+    "RemoteControlConfigExistingMcSession": {
+      "type": "object",
+      "properties": {
+        "mcSessionId": {
+          "type": "string",
+          "description": "Existing MC session ID to reattach to."
+        },
+        "mcTaskId": {
+          "type": "string",
+          "description": "Existing MC task ID for the reattached session."
+        }
+      },
+      "required": [
+        "mcSessionId",
+        "mcTaskId"
+      ],
+      "additionalProperties": false,
+      "description": "Reattach to an existing MC session without creating a new one.",
+      "title": "RemoteControlConfigExistingMcSession"
+    },
+    "RemoteControlStatus": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/RemoteControlStatusOff",
+          "description": "Remote control is not connected."
+        },
+        {
+          "$ref": "#/definitions/RemoteControlStatusConnecting",
+          "description": "Remote control is in the middle of initial setup."
+        },
+        {
+          "$ref": "#/definitions/RemoteControlStatusActive",
+          "description": "Remote control is connected to a local session."
+        },
+        {
+          "$ref": "#/definitions/RemoteControlStatusError",
+          "description": "The last setup attempt failed. The singleton is otherwise off."
+        }
+      ],
+      "description": "State of the runtime-managed remote-control singleton.",
+      "title": "RemoteControlStatus"
+    },
+    "RemoteControlStatusActive": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "active",
+          "description": "Remote control state tag: active."
+        },
+        "attachedSessionId": {
+          "type": "string",
+          "description": "Session id remote control is pointed at."
+        },
+        "frontendUrl": {
+          "type": "string",
+          "description": "MC frontend URL for this session, when known."
+        },
+        "isSteerable": {
+          "type": "boolean",
+          "description": "Whether the MC session may steer this session."
+        },
+        "promptManager": {
+          "description": "In-process prompt-manager handle (CLI-only optimization). Marked internal: this field is excluded from the public SDK surface. When the CLI migrates to a process-separated SDK, the same bidirectional prompt-routing handshake is expressed via dedicated remote-control RPCs (register/resolve) rather than a shared in-process object.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "state",
+        "attachedSessionId",
+        "isSteerable"
+      ],
+      "additionalProperties": false,
+      "description": "Remote control is connected to a local session.",
+      "title": "RemoteControlStatusActive"
+    },
+    "RemoteControlStatusConnecting": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "connecting",
+          "description": "Remote control state tag: connecting."
+        },
+        "attachedSessionId": {
+          "type": "string",
+          "description": "Session id the connection is attaching to."
+        }
+      },
+      "required": [
+        "state",
+        "attachedSessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Remote control is in the middle of initial setup.",
+      "title": "RemoteControlStatusConnecting"
+    },
+    "RemoteControlStatusError": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "error",
+          "description": "Remote control state tag: setup failed."
+        },
+        "error": {
+          "type": "string",
+          "description": "Human-readable error message from the last setup attempt."
+        },
+        "attachedSessionId": {
+          "type": "string",
+          "description": "Session id the failing setup attempt targeted, when known."
+        }
+      },
+      "required": [
+        "state",
+        "error"
+      ],
+      "additionalProperties": false,
+      "description": "The last setup attempt failed. The singleton is otherwise off.",
+      "title": "RemoteControlStatusError"
+    },
+    "RemoteControlStatusOff": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "type": "string",
+          "const": "off",
+          "description": "Remote control state tag: not connected."
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "additionalProperties": false,
+      "description": "Remote control is not connected.",
+      "title": "RemoteControlStatusOff"
+    },
+    "RemoteControlStatusResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/RemoteControlStatus",
+          "description": "State of the runtime-managed remote-control singleton."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Wrapper for the singleton's current status.",
+      "title": "RemoteControlStatusResult"
+    },
+    "RemoteControlStopResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/RemoteControlStatus",
+          "description": "State of the runtime-managed remote-control singleton."
+        },
+        "stopped": {
+          "type": "boolean",
+          "description": "Whether the singleton was actually torn down by this call."
+        }
+      },
+      "required": [
+        "status",
+        "stopped"
+      ],
+      "additionalProperties": false,
+      "description": "Outcome of a stopRemoteControl call.",
+      "title": "RemoteControlStopResult"
+    },
+    "RemoteControlTransferResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/RemoteControlStatus",
+          "description": "State of the runtime-managed remote-control singleton."
+        },
+        "transferred": {
+          "type": "boolean",
+          "description": "Whether the rebinding actually happened."
+        }
+      },
+      "required": [
+        "status",
+        "transferred"
+      ],
+      "additionalProperties": false,
+      "description": "Outcome of a transferRemoteControl call.",
+      "title": "RemoteControlTransferResult"
     },
     "RemoteEnableRequest": {
       "type": "object",
@@ -14228,6 +16768,121 @@
       "description": "Remote session connection result.",
       "title": "RemoteSessionConnectionResult"
     },
+    "RemoteSessionMetadataRepository": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Repository owner."
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name."
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch associated with the remote session."
+        }
+      },
+      "required": [
+        "owner",
+        "name",
+        "branch"
+      ],
+      "additionalProperties": false,
+      "description": "GitHub repository the remote session belongs to.",
+      "title": "RemoteSessionMetadataRepository"
+    },
+    "RemoteSessionMetadataTaskType": {
+      "type": "string",
+      "enum": [
+        "cca",
+        "cli"
+      ],
+      "description": "Whether the remote task originated from CCA or CLI `--remote`.",
+      "title": "RemoteSessionMetadataTaskType",
+      "x-enumDescriptions": {
+        "cca": "GitHub Copilot coding agent task.",
+        "cli": "CLI remote task."
+      }
+    },
+    "RemoteSessionMetadataValue": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Stable session identifier."
+        },
+        "startTime": {
+          "type": "string",
+          "description": "Session creation time as an ISO 8601 timestamp."
+        },
+        "modifiedTime": {
+          "type": "string",
+          "description": "Last-modified time as an ISO 8601 timestamp."
+        },
+        "summary": {
+          "type": "string",
+          "description": "Short summary of the session, when one has been derived."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional human-friendly name set via /rename."
+        },
+        "isRemote": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for remote sessions."
+        },
+        "context": {
+          "$ref": "#/definitions/SessionContext",
+          "description": "Most recent working directory context."
+        },
+        "repository": {
+          "$ref": "#/definitions/RemoteSessionMetadataRepository",
+          "description": "GitHub repository the remote session belongs to."
+        },
+        "remoteSessionIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Backing remote session IDs (most recent first)."
+        },
+        "pullRequestNumber": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Pull request number associated with the session."
+        },
+        "resourceId": {
+          "type": "string",
+          "description": "Original remote resource identifier (task ID or PR node ID)."
+        },
+        "taskType": {
+          "$ref": "#/definitions/RemoteSessionMetadataTaskType",
+          "description": "Whether the remote task originated from CCA or CLI `--remote`."
+        },
+        "staleAt": {
+          "type": "string",
+          "description": "Deadline (ISO 8601) at which a CLI remote session becomes stale without further heartbeats."
+        },
+        "state": {
+          "type": "string",
+          "description": "Server-side task state returned by GitHub."
+        }
+      },
+      "required": [
+        "sessionId",
+        "startTime",
+        "modifiedTime",
+        "isRemote",
+        "repository",
+        "remoteSessionIds"
+      ],
+      "additionalProperties": false,
+      "description": "Remote session metadata for the session to hand off (typically obtained from `sessions.list` with `source: \"remote\"`).",
+      "title": "RemoteSessionMetadataValue"
+    },
     "RemoteSessionMode": {
       "type": "string",
       "enum": [
@@ -14243,6 +16898,167 @@
         "on": "Enable both remote session export and remote steering."
       }
     },
+    "RemoteSessionRepository": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Repository owner or organization login."
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name."
+        },
+        "branch": {
+          "type": "string",
+          "description": "Optional branch associated with the remote session."
+        }
+      },
+      "required": [
+        "owner",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Repository context for the remote session.",
+      "title": "RemoteSessionRepository"
+    },
+    "SandboxConfig": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether sandboxing is enabled for the session."
+        },
+        "userPolicy": {
+          "$ref": "#/definitions/SandboxConfigUserPolicy",
+          "description": "User-managed sandbox policy fragment merged into the auto-discovered base policy."
+        },
+        "config": {
+          "type": "object",
+          "additionalProperties": {},
+          "description": "Raw `ContainerConfig` (per `@microsoft/mxc-sdk`) passed directly to `spawnSandboxFromConfig`, bypassing policy merging.",
+          "x-opaque-json": true
+        },
+        "addCurrentWorkingDirectory": {
+          "type": "boolean",
+          "description": "Whether to auto-add the current working directory to readwritePaths. Default: true."
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Resolved sandbox configuration.",
+      "title": "SandboxConfig",
+      "stability": "experimental"
+    },
+    "SandboxConfigUserPolicy": {
+      "type": "object",
+      "properties": {
+        "filesystem": {
+          "$ref": "#/definitions/SandboxConfigUserPolicyFilesystem",
+          "description": "Filesystem rules to merge into the base policy."
+        },
+        "network": {
+          "$ref": "#/definitions/SandboxConfigUserPolicyNetwork",
+          "description": "Network rules to merge into the base policy."
+        },
+        "experimental": {
+          "$ref": "#/definitions/SandboxConfigUserPolicyExperimental",
+          "description": "Platform-specific experimental policy fields."
+        }
+      },
+      "additionalProperties": false,
+      "description": "User-managed sandbox policy fragment merged into the auto-discovered base policy.",
+      "title": "SandboxConfigUserPolicy"
+    },
+    "SandboxConfigUserPolicyExperimental": {
+      "type": "object",
+      "properties": {
+        "seatbelt": {
+          "$ref": "#/definitions/SandboxConfigUserPolicyExperimentalSeatbelt",
+          "description": "macOS seatbelt experimental options."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Platform-specific experimental policy fields.",
+      "title": "SandboxConfigUserPolicyExperimental"
+    },
+    "SandboxConfigUserPolicyExperimentalSeatbelt": {
+      "type": "object",
+      "properties": {
+        "keychainAccess": {
+          "type": "boolean",
+          "description": "Whether the macOS seatbelt profile may access the keychain."
+        }
+      },
+      "additionalProperties": false,
+      "description": "macOS seatbelt experimental options.",
+      "title": "SandboxConfigUserPolicyExperimentalSeatbelt"
+    },
+    "SandboxConfigUserPolicyFilesystem": {
+      "type": "object",
+      "properties": {
+        "readwritePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths granted read/write access."
+        },
+        "readonlyPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths granted read-only access."
+        },
+        "deniedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths explicitly denied."
+        },
+        "clearPolicyOnExit": {
+          "type": "boolean",
+          "description": "Whether to clear the policy when the session exits."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Filesystem rules to merge into the base policy.",
+      "title": "SandboxConfigUserPolicyFilesystem"
+    },
+    "SandboxConfigUserPolicyNetwork": {
+      "type": "object",
+      "properties": {
+        "allowOutbound": {
+          "type": "boolean",
+          "description": "Whether outbound network traffic is allowed at all."
+        },
+        "allowLocalNetwork": {
+          "type": "boolean",
+          "description": "Whether traffic to local/loopback addresses is allowed."
+        },
+        "allowedHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Hosts allowed in addition to the base policy."
+        },
+        "blockedHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Hosts explicitly blocked."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Network rules to merge into the base policy.",
+      "title": "SandboxConfigUserPolicyNetwork"
+    },
     "ScheduleEntry": {
       "type": "object",
       "properties": {
@@ -14254,8 +17070,21 @@
         "intervalMs": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "description": "Interval between scheduled ticks, in milliseconds.",
+          "description": "Interval between scheduled ticks, in milliseconds (relative-interval schedules).",
           "format": "duration"
+        },
+        "cron": {
+          "type": "string",
+          "description": "5-field cron expression for a recurring calendar schedule, evaluated in `tz`."
+        },
+        "tz": {
+          "type": "string",
+          "description": "IANA timezone the `cron` expression is evaluated in."
+        },
+        "at": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Absolute fire time (epoch milliseconds) for a one-shot calendar schedule."
         },
         "prompt": {
           "type": "string",
@@ -14277,7 +17106,6 @@
       },
       "required": [
         "id",
-        "intervalMs",
         "prompt",
         "recurring",
         "nextRunAt"
@@ -14454,9 +17282,10 @@
           "description": "If set, the request will fail if the named tool is not available when this message is among the user messages at the start of the current exchange"
         },
         "source": {
-          "description": "Optional provenance tag copied to the resulting user.message event. Supported values are `system`, `command-*`, and `schedule-*`.",
-          "visibility": "internal",
-          "x-opaque-json": true
+          "type": "string",
+          "pattern": "^(system|command-.*|schedule-\\d+)$",
+          "description": "Optional provenance tag copied to the resulting user.message event. Must match one of three forms: the literal `system`, `command-<command-id>` for messages originating from a command (e.g. slash command, Mission Control command), or `schedule-<numeric-id>` for messages originating from a scheduled job.",
+          "visibility": "internal"
         },
         "agentMode": {
           "$ref": "#/definitions/SendAgentMode",
@@ -14503,6 +17332,42 @@
       "additionalProperties": false,
       "description": "Result of sending a user message",
       "title": "SendResult"
+    },
+    "ServerAgentList": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AgentInfo"
+          },
+          "description": "All discovered agents across all sources"
+        }
+      },
+      "required": [
+        "agents"
+      ],
+      "additionalProperties": false,
+      "description": "Agents discovered across user, project, plugin, and remote sources.",
+      "title": "ServerAgentList"
+    },
+    "ServerInstructionSourceList": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InstructionSource"
+          },
+          "description": "All discovered instruction sources"
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "additionalProperties": false,
+      "description": "Instruction sources discovered across user, repository, and plugin sources.",
+      "title": "ServerInstructionSourceList"
     },
     "ServerSkill": {
       "type": "object",
@@ -14565,6 +17430,26 @@
       "description": "Skills discovered across global and project sources.",
       "title": "ServerSkillList"
     },
+    "SessionActivity": {
+      "type": "object",
+      "properties": {
+        "abortable": {
+          "type": "boolean",
+          "description": "Whether an in-flight operation can currently be aborted."
+        },
+        "hasActiveWork": {
+          "type": "boolean",
+          "description": "Whether the session currently has active work, including running turns or tasks."
+        }
+      },
+      "required": [
+        "abortable",
+        "hasActiveWork"
+      ],
+      "additionalProperties": false,
+      "description": "Current activity flags for the session.",
+      "title": "SessionActivity"
+    },
     "SessionAuthStatus": {
       "type": "object",
       "properties": {
@@ -14620,6 +17505,37 @@
       "description": "Map of sessionId -> bytes freed by removing the session's workspace directory.",
       "title": "SessionBulkDeleteResult"
     },
+    "SessionCapability": {
+      "type": "string",
+      "enum": [
+        "tui-hints",
+        "plan-mode",
+        "memory",
+        "cli-documentation",
+        "ask-user",
+        "interactive-mode",
+        "system-notifications",
+        "elicitation",
+        "session-store",
+        "mcp-apps",
+        "canvas-renderer"
+      ],
+      "description": "Session capability enabled for this session",
+      "title": "SessionCapability",
+      "x-enumDescriptions": {
+        "tui-hints": "TUI-specific prompt hints such as keyboard shortcuts.",
+        "plan-mode": "Plan-mode handling and instructions.",
+        "memory": "Memory tool and memories prompt section.",
+        "cli-documentation": "Copilot CLI documentation tool and prompt section.",
+        "ask-user": "Interactive ask_user tool support.",
+        "interactive-mode": "Interactive CLI identity and behavior.",
+        "system-notifications": "Automatic hidden system notifications.",
+        "elicitation": "SDK elicitation support.",
+        "session-store": "Cross-session history tools and session-store SQL prompt/tool metadata.",
+        "mcp-apps": "MCP Apps UI passthrough.",
+        "canvas-renderer": "Host-provided canvas rendering support."
+      }
+    },
     "SessionContext": {
       "type": "object",
       "properties": {
@@ -14648,8 +17564,8 @@
         "cwd"
       ],
       "additionalProperties": false,
-      "title": "SessionContext",
-      "description": "Schema for the `SessionContext` type."
+      "description": "Pre-resolved working-directory context for session startup.",
+      "title": "SessionContext"
     },
     "SessionContextHostType": {
       "type": "string",
@@ -14711,7 +17627,7 @@
             "limit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Total context limit for /context display: promptTokenLimit + outputTokenLimit (the model's full max_output_tokens reserved on top of the prompt budget)."
+              "description": "Prompt token limit plus the model's full output token limit."
             },
             "bufferTokens": {
               "type": "integer",
@@ -14747,7 +17663,7 @@
         "sessions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/SessionMetadata"
+            "$ref": "#/definitions/LocalSessionMetadataValue"
           },
           "description": "Enriched records, with summary and context backfilled. Sessions confirmed empty and unnamed may be omitted."
         }
@@ -15453,17 +18369,31 @@
         "sessions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/SessionMetadata"
+            "$ref": "#/definitions/SessionListEntry",
+            "description": "Local or remote session metadata entry. Narrow on `isRemote` to access source-specific fields."
           },
-          "description": "Sessions ordered most-recently-modified first"
+          "description": "Sessions ordered most-recently-modified first. Discriminated by `isRemote`."
         }
       },
       "required": [
         "sessions"
       ],
       "additionalProperties": false,
-      "description": "Persisted sessions matching the filter, ordered most-recently-modified first.",
+      "description": "Sessions matching the filter, ordered most-recently-modified first.",
       "title": "SessionList"
+    },
+    "SessionListEntry": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/LocalSessionMetadataValue"
+        },
+        {
+          "$ref": "#/definitions/RemoteSessionMetadataValue",
+          "description": "Full remote-session metadata in wire-portable form."
+        }
+      ],
+      "description": "Local or remote session metadata entry. Narrow on `isRemote` to access source-specific fields.",
+      "title": "SessionListEntry"
     },
     "SessionListFilter": {
       "type": "object",
@@ -15527,60 +18457,6 @@
         "warning": "Warning message that may require attention.",
         "error": "Error message describing a failure."
       }
-    },
-    "SessionMetadata": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string",
-          "description": "Stable session identifier"
-        },
-        "startTime": {
-          "type": "string",
-          "description": "Session creation time as an ISO 8601 timestamp"
-        },
-        "modifiedTime": {
-          "type": "string",
-          "description": "Last-modified time of the session's persisted state, as ISO 8601"
-        },
-        "summary": {
-          "type": "string",
-          "description": "Short summary of the session, when one has been derived"
-        },
-        "name": {
-          "type": "string",
-          "description": "Optional human-friendly name set via /rename"
-        },
-        "clientName": {
-          "type": "string",
-          "description": "Runtime client name that created/last resumed this session"
-        },
-        "isRemote": {
-          "type": "boolean",
-          "description": "True for remote (GitHub) sessions; false for local"
-        },
-        "isDetached": {
-          "type": "boolean",
-          "description": "True for detached maintenance sessions that should be hidden from normal resume lists."
-        },
-        "context": {
-          "$ref": "#/definitions/SessionContext",
-          "description": "Schema for the `SessionContext` type."
-        },
-        "mcTaskId": {
-          "type": "string",
-          "description": "GitHub task ID, when this local session is bound to one. Only present for local sessions exported to remote control."
-        }
-      },
-      "required": [
-        "sessionId",
-        "startTime",
-        "modifiedTime",
-        "isRemote"
-      ],
-      "additionalProperties": false,
-      "title": "SessionMetadata",
-      "description": "Schema for the `SessionMetadata` type."
     },
     "SessionMetadataSnapshot": {
       "type": "object",
@@ -15701,6 +18577,441 @@
       "additionalProperties": false,
       "description": "The list of models available to this session.",
       "title": "SessionModelList"
+    },
+    "SessionOpenOptions": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Optional stable session identifier to use for a new session."
+        },
+        "name": {
+          "type": "string",
+          "description": "Optional human-friendly session name."
+        },
+        "model": {
+          "type": "string",
+          "description": "Initial model identifier."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Initial reasoning effort level."
+        },
+        "reasoningSummary": {
+          "$ref": "#/definitions/SessionOpenOptionsReasoningSummary",
+          "description": "Initial reasoning summary mode for supported model clients."
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Identifier of the client driving the session."
+        },
+        "clientKind": {
+          "type": "string",
+          "description": "Structured client kind used for runtime behavior gates."
+        },
+        "lspClientName": {
+          "type": "string",
+          "description": "Identifier sent to LSP-style integrations."
+        },
+        "integrationId": {
+          "type": "string",
+          "description": "Stable integration identifier for analytics."
+        },
+        "featureFlags": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "boolean"
+          },
+          "description": "Feature-flag values resolved by the host."
+        },
+        "isExperimentalMode": {
+          "type": "boolean",
+          "description": "Whether experimental behavior is enabled."
+        },
+        "authInfo": {
+          "$ref": "#/definitions/AuthInfo",
+          "description": "Initial authentication info for the session."
+        },
+        "provider": {
+          "$ref": "#/definitions/ProviderConfig",
+          "description": "Custom model-provider configuration (BYOK)."
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Working directory to anchor the session."
+        },
+        "workingDirectoryContext": {
+          "$ref": "#/definitions/SessionContext",
+          "description": "Pre-resolved working-directory context for session startup."
+        },
+        "remoteSteerable": {
+          "type": "boolean",
+          "description": "Whether this session supports remote steering."
+        },
+        "remoteExporting": {
+          "type": "boolean",
+          "description": "Telemetry-only remote exporting flag."
+        },
+        "remoteDefaultedOn": {
+          "type": "boolean",
+          "description": "Telemetry-only remote-defaulted flag."
+        },
+        "detachedFromSpawningParentSessionId": {
+          "type": "string",
+          "description": "Parent session ID for detached child telemetry rollup."
+        },
+        "detachedFromSpawningParentEngagementId": {
+          "type": "string",
+          "description": "Parent engagement ID for detached child telemetry rollup."
+        },
+        "availableTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Allowlist of available tool names."
+        },
+        "excludedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Denylist of tool names."
+        },
+        "enableScriptSafety": {
+          "type": "boolean",
+          "description": "Whether shell-script safety heuristics are enabled."
+        },
+        "shellInitProfile": {
+          "type": "string",
+          "description": "Shell init profile."
+        },
+        "shellProcessFlags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Per-shell process flags."
+        },
+        "sandboxConfig": {
+          "$ref": "#/definitions/SandboxConfig",
+          "description": "Resolved sandbox configuration."
+        },
+        "logInteractiveShells": {
+          "type": "boolean",
+          "description": "Whether interactive shell sessions are logged."
+        },
+        "envValueMode": {
+          "$ref": "#/definitions/SessionOpenOptionsEnvValueMode",
+          "description": "How MCP server environment values are interpreted."
+        },
+        "skillDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional directories to search for skills."
+        },
+        "disabledSkills": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Skill IDs disabled for this session."
+        },
+        "installedPlugins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InstalledPlugin"
+          },
+          "description": "Installed plugins visible to the session."
+        },
+        "customAgentsLocalOnly": {
+          "type": "boolean",
+          "description": "Whether custom agents default to local-only execution."
+        },
+        "skipCustomInstructions": {
+          "type": "boolean",
+          "description": "Whether to skip custom instruction sources."
+        },
+        "disabledInstructionSources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Instruction source IDs disabled for this session."
+        },
+        "coauthorEnabled": {
+          "type": "boolean",
+          "description": "Whether commit-message coauthor trailers are enabled."
+        },
+        "trajectoryFile": {
+          "type": "string",
+          "description": "Optional trajectory output file path."
+        },
+        "enableStreaming": {
+          "type": "boolean",
+          "description": "Whether model responses stream as delta events."
+        },
+        "copilotUrl": {
+          "type": "string",
+          "description": "Override URL for the Copilot API endpoint."
+        },
+        "askUserDisabled": {
+          "type": "boolean",
+          "description": "Whether ask_user is explicitly disabled."
+        },
+        "continueOnAutoMode": {
+          "type": "boolean",
+          "description": "Whether auto-mode continuation is enabled."
+        },
+        "runningInInteractiveMode": {
+          "type": "boolean",
+          "description": "Whether the host is an interactive UI."
+        },
+        "enableOnDemandInstructionDiscovery": {
+          "type": "boolean",
+          "description": "Whether on-demand custom instruction discovery is enabled."
+        },
+        "modelCapabilitiesOverrides": {
+          "$ref": "#/definitions/ModelCapabilitiesOverride",
+          "description": "Initial model capability overrides."
+        },
+        "agentContext": {
+          "type": "string",
+          "description": "Runtime context discriminator for agent filtering."
+        },
+        "eventsLogDirectory": {
+          "type": "string",
+          "description": "Override directory for session event logs."
+        },
+        "configDir": {
+          "type": "string",
+          "description": "Override Copilot configuration directory."
+        },
+        "additionalContentExclusionPolicies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionOpenOptionsAdditionalContentExclusionPolicy"
+          },
+          "description": "Additional content-exclusion policies to merge into the session policy set.",
+          "stability": "experimental"
+        },
+        "sessionCapabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionCapability",
+            "description": "Session capability enabled for this session"
+          },
+          "description": "Capabilities enabled for this session."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Session construction options.",
+      "title": "SessionOpenOptions"
+    },
+    "SessionOpenOptionsAdditionalContentExclusionPolicy": {
+      "type": "object",
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionOpenOptionsAdditionalContentExclusionPolicyRule"
+          }
+        },
+        "last_updated_at": {
+          "type": [
+            "string",
+            "number"
+          ],
+          "x-opaque-json": true
+        },
+        "scope": {
+          "$ref": "#/definitions/SessionOpenOptionsAdditionalContentExclusionPolicyScope",
+          "description": "Allowed values for the `SessionOpenOptionsAdditionalContentExclusionPolicyScope` enumeration."
+        }
+      },
+      "required": [
+        "rules",
+        "last_updated_at",
+        "scope"
+      ],
+      "additionalProperties": true,
+      "title": "SessionOpenOptionsAdditionalContentExclusionPolicy",
+      "description": "Schema for the `SessionOpenOptionsAdditionalContentExclusionPolicy` type."
+    },
+    "SessionOpenOptionsAdditionalContentExclusionPolicyRule": {
+      "type": "object",
+      "properties": {
+        "paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ifAnyMatch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ifNoneMatch": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "source": {
+          "$ref": "#/definitions/SessionOpenOptionsAdditionalContentExclusionPolicyRuleSource",
+          "description": "Schema for the `SessionOpenOptionsAdditionalContentExclusionPolicyRuleSource` type."
+        }
+      },
+      "required": [
+        "paths",
+        "source"
+      ],
+      "additionalProperties": true,
+      "title": "SessionOpenOptionsAdditionalContentExclusionPolicyRule",
+      "description": "Schema for the `SessionOpenOptionsAdditionalContentExclusionPolicyRule` type."
+    },
+    "SessionOpenOptionsAdditionalContentExclusionPolicyRuleSource": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "type"
+      ],
+      "additionalProperties": false,
+      "title": "SessionOpenOptionsAdditionalContentExclusionPolicyRuleSource",
+      "description": "Schema for the `SessionOpenOptionsAdditionalContentExclusionPolicyRuleSource` type."
+    },
+    "SessionOpenOptionsAdditionalContentExclusionPolicyScope": {
+      "type": "string",
+      "enum": [
+        "repo",
+        "all"
+      ],
+      "title": "SessionOpenOptionsAdditionalContentExclusionPolicyScope",
+      "x-enumDescriptions": {
+        "repo": "The content exclusion policy applies to the current repository.",
+        "all": "The content exclusion policy applies across all repositories."
+      },
+      "description": "Allowed values for the `SessionOpenOptionsAdditionalContentExclusionPolicyScope` enumeration."
+    },
+    "SessionOpenOptionsEnvValueMode": {
+      "type": "string",
+      "enum": [
+        "direct",
+        "indirect"
+      ],
+      "description": "How MCP server environment values are interpreted.",
+      "title": "SessionOpenOptionsEnvValueMode",
+      "x-enumDescriptions": {
+        "direct": "Pass MCP server environment values as literal strings.",
+        "indirect": "Resolve MCP server environment values from host-side references."
+      }
+    },
+    "SessionOpenOptionsReasoningSummary": {
+      "type": "string",
+      "enum": [
+        "none",
+        "concise",
+        "detailed"
+      ],
+      "description": "Initial reasoning summary mode for supported model clients.",
+      "title": "SessionOpenOptionsReasoningSummary",
+      "x-enumDescriptions": {
+        "none": "Do not request reasoning summaries from the model.",
+        "concise": "Request a concise summary of model reasoning.",
+        "detailed": "Request a detailed summary of model reasoning."
+      }
+    },
+    "SessionOpenParams": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/SessionsOpenCreate",
+          "description": "Parameters for creating a new local session."
+        },
+        {
+          "$ref": "#/definitions/SessionsOpenResume",
+          "description": "Parameters for resuming a specific local session."
+        },
+        {
+          "$ref": "#/definitions/SessionsOpenResumeLast",
+          "description": "Parameters for resuming the most relevant local session."
+        },
+        {
+          "$ref": "#/definitions/SessionsOpenAttach",
+          "description": "Parameters for attaching to an already-active session by ID."
+        },
+        {
+          "$ref": "#/definitions/SessionsOpenRemote",
+          "description": "Parameters for connecting to a live remote session."
+        },
+        {
+          "$ref": "#/definitions/SessionsOpenCloud",
+          "description": "Parameters for creating a new cloud session."
+        },
+        {
+          "$ref": "#/definitions/SessionsOpenHandoff",
+          "description": "Parameters for fetching a remote session and handing it off to a new local session."
+        }
+      ],
+      "description": "Open a session by creating, resuming, attaching, connecting to a remote, or handing off.",
+      "title": "SessionOpenParams"
+    },
+    "SessionOpenResult": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/SessionsOpenStatus",
+          "description": "Outcome of the open request."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Opened session ID. Omitted when status is `not_found`."
+        },
+        "sessionApi": {
+          "description": "In-process SessionClientApi handle for the opened session, returned to CLI callers as a transitional shortcut. Marked internal so the public SDK surface does not expose it; SDK consumers should construct per-session clients from `sessionId` instead.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        },
+        "startupPrompts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Startup prompts queued by user-level hook configs at session creation. Only populated when status is `created`; resumed sessions return an empty array."
+        },
+        "remoteSessionId": {
+          "type": "string",
+          "description": "Remote session ID, present when status is `connected`."
+        },
+        "metadata": {
+          "$ref": "#/definitions/RemoteSessionMetadataValue",
+          "description": "Remote session metadata, present when status is `connected`."
+        },
+        "progress": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionsOpenProgress"
+          },
+          "description": "Handoff progress steps, present when status is `handed_off`."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Result of opening a session.",
+      "title": "SessionOpenResult"
     },
     "SessionPruneResult": {
       "type": "object",
@@ -15829,7 +19140,7 @@
         "sessions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/SessionMetadata"
+            "$ref": "#/definitions/LocalSessionMetadataValue"
           },
           "description": "Session metadata records to enrich. Records that already have summary and context are returned unchanged."
         }
@@ -15964,6 +19275,34 @@
       "description": "Identifier and optional friendly name assigned to the newly forked session.",
       "title": "SessionsForkResult"
     },
+    "SessionsGetBoardEntryCountRequest": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID whose board entry count should be returned."
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Session ID whose board entry count should be returned.",
+      "title": "SessionsGetBoardEntryCountRequest"
+    },
+    "SessionsGetBoardEntryCountResult": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Board entry count, when available."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Dynamic-context board entry count, when available.",
+      "title": "SessionsGetBoardEntryCountResult"
+    },
     "SessionsGetEventFilePathRequest": {
       "type": "object",
       "properties": {
@@ -16072,10 +19411,14 @@
         {
           "type": "object",
           "properties": {
+            "source": {
+              "$ref": "#/definitions/SessionSource",
+              "description": "Which session sources to include. Defaults to `local` for backward compatibility."
+            },
             "metadataLimit": {
               "type": "integer",
               "minimum": 0,
-              "description": "When provided, only the first N sessions (sorted by modification time, newest first) load full metadata; remaining sessions return basic info only. Use 0 to return only basic info for every session."
+              "description": "When provided, only the first N local sessions (sorted by modification time, newest first) load full metadata; remaining sessions return basic info only. Use 0 to return only basic info for every local session. Has no effect on remote entries (which always carry their full shape)."
             },
             "filter": {
               "$ref": "#/definitions/SessionListFilter",
@@ -16084,13 +19427,17 @@
             "includeDetached": {
               "type": "boolean",
               "description": "When true, include detached maintenance sessions. Defaults to false for user-facing session lists."
+            },
+            "throwOnError": {
+              "type": "boolean",
+              "description": "Only meaningful when `source` includes remote. When true, propagates errors from the remote service instead of silently returning an empty remote list. Defaults to false."
             }
           },
           "additionalProperties": false,
-          "description": "Optional metadata-load limit and filters applied to the returned sessions."
+          "description": "Optional source filter, metadata-load limit, and context filter applied to the returned sessions."
         }
       ],
-      "description": "Optional metadata-load limit and filters applied to the returned sessions.",
+      "description": "Optional source filter, metadata-load limit, and context filter applied to the returned sessions.",
       "title": "SessionsListRequest"
     },
     "SessionsLoadDeferredRepoHooksRequest": {
@@ -16107,6 +19454,354 @@
       "additionalProperties": false,
       "description": "Active session ID whose deferred repo-level hooks should be loaded.",
       "title": "SessionsLoadDeferredRepoHooksRequest"
+    },
+    "SessionsOpenAttach": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "attach",
+          "description": "Attach to an already-active in-process session by ID. Unlike `resume`, this does NOT re-load from disk; the session must already be loaded by an earlier `create`/`resume` call. Returns `status: 'not_found'` when no active session matches the id. Useful for in-process consumers that need a fresh API handle to a session opened elsewhere (e.g., a peer foreground-session switch)."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID to attach to."
+        }
+      },
+      "required": [
+        "kind",
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for attaching to an already-active session by ID.",
+      "title": "SessionsOpenAttach"
+    },
+    "SessionsOpenCloud": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "cloud",
+          "description": "Create a new cloud (coding-agent) session."
+        },
+        "repository": {
+          "$ref": "#/definitions/RemoteSessionRepository",
+          "description": "Repository for the cloud session."
+        },
+        "owner": {
+          "type": "string",
+          "description": "Optional owner (user or organization login) to associate with the cloud session when no repository is provided. Ignored when `repository` is set (the repo's owner takes precedence)."
+        },
+        "options": {
+          "$ref": "#/definitions/SessionOpenOptions",
+          "description": "Session options for cloud session creation."
+        },
+        "onTaskCreated": {
+          "description": "In-process callback invoked when the cloud task is created (before connection). Marked internal because a function reference cannot cross the JSON-RPC boundary. Disappears in the SDK migration: the field is purely cosmetic (it flips a single CLI phase label from 'creating' to 'connecting') and the wire-clean version just drops the intermediate phase.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for creating a new cloud session.",
+      "title": "SessionsOpenCloud"
+    },
+    "SessionsOpenCreate": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "create",
+          "description": "Create a new local session."
+        },
+        "options": {
+          "$ref": "#/definitions/SessionOpenOptions",
+          "description": "Session construction options."
+        },
+        "emitStart": {
+          "type": "boolean",
+          "description": "Whether to emit session.start during creation. Defaults to true."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for creating a new local session.",
+      "title": "SessionsOpenCreate"
+    },
+    "SessionsOpenHandoff": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "handoff",
+          "description": "Fetch a remote session and hand it off to a new local session."
+        },
+        "metadata": {
+          "$ref": "#/definitions/RemoteSessionMetadataValue",
+          "description": "Remote session metadata for the session to hand off (typically obtained from `sessions.list` with `source: \"remote\"`)."
+        },
+        "options": {
+          "$ref": "#/definitions/SessionOpenOptions",
+          "description": "Session construction options for the new local session."
+        },
+        "taskType": {
+          "$ref": "#/definitions/SessionsOpenHandoffTaskType",
+          "description": "Task type determines the handoff strategy (CCA fetches events; CLI prepares a transient session)."
+        },
+        "onProgress": {
+          "description": "In-process progress callback `(update) => void` invoked for each handoff step. Marked internal because a function reference cannot cross the JSON-RPC boundary. The host-side `handoffSession` is already declared as `AsyncGenerator<HandoffProgress, HandoffResult>`; the schema layer flattens it because it does not yet support streaming methods. The wire-clean replacement is to expose the AsyncGenerator directly (or use vscode-jsonrpc `$/progress` notifications) once the schema/transport layer supports it.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "kind",
+        "metadata"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for fetching a remote session and handing it off to a new local session.",
+      "title": "SessionsOpenHandoff"
+    },
+    "SessionsOpenHandoffTaskType": {
+      "type": "string",
+      "enum": [
+        "cca",
+        "cli"
+      ],
+      "description": "Task type determines the handoff strategy (CCA fetches events; CLI prepares a transient session).",
+      "title": "SessionsOpenHandoffTaskType",
+      "x-enumDescriptions": {
+        "cca": "GitHub Copilot coding agent task.",
+        "cli": "CLI remote task."
+      }
+    },
+    "SessionsOpenProgress": {
+      "type": "object",
+      "properties": {
+        "step": {
+          "$ref": "#/definitions/SessionsOpenProgressStep",
+          "description": "Handoff step."
+        },
+        "status": {
+          "$ref": "#/definitions/SessionsOpenProgressStatus",
+          "description": "Step status."
+        },
+        "message": {
+          "type": "string",
+          "description": "Optional step message."
+        }
+      },
+      "required": [
+        "step",
+        "status"
+      ],
+      "additionalProperties": false,
+      "title": "SessionsOpenProgress",
+      "description": "Schema for the `SessionsOpenProgress` type."
+    },
+    "SessionsOpenProgressStatus": {
+      "type": "string",
+      "enum": [
+        "in-progress",
+        "complete"
+      ],
+      "description": "Step status.",
+      "title": "SessionsOpenProgressStatus",
+      "x-enumDescriptions": {
+        "in-progress": "The step has started and has not yet finished.",
+        "complete": "The step has completed successfully."
+      }
+    },
+    "SessionsOpenProgressStep": {
+      "type": "string",
+      "enum": [
+        "load-session",
+        "validate-repo",
+        "check-changes",
+        "checkout-branch",
+        "create-session",
+        "save-session"
+      ],
+      "description": "Handoff step.",
+      "title": "SessionsOpenProgressStep",
+      "x-enumDescriptions": {
+        "load-session": "Loading the source session's events from the remote service.",
+        "validate-repo": "Validating that the local repository matches the remote session's repository.",
+        "check-changes": "Checking the local working tree for uncommitted changes that would block the handoff.",
+        "checkout-branch": "Checking out the branch associated with the remote session in the local working tree.",
+        "create-session": "Creating the new local session and seeding it with the source session's events.",
+        "save-session": "Persisting the newly-created local session to disk."
+      }
+    },
+    "SessionsOpenRemote": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "remote",
+          "description": "Connect to a live remote session."
+        },
+        "remoteSessionId": {
+          "type": "string",
+          "description": "Remote session identifier to connect to."
+        },
+        "repository": {
+          "$ref": "#/definitions/RemoteSessionRepository",
+          "description": "Repository context for the remote session."
+        },
+        "options": {
+          "$ref": "#/definitions/SessionOpenOptions",
+          "description": "Session options for the connection."
+        }
+      },
+      "required": [
+        "kind",
+        "remoteSessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for connecting to a live remote session.",
+      "title": "SessionsOpenRemote"
+    },
+    "SessionsOpenResume": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "resume",
+          "description": "Resume a specific local session by ID or prefix."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID or unique prefix to resume."
+        },
+        "options": {
+          "$ref": "#/definitions/SessionOpenOptions",
+          "description": "Session resume options."
+        },
+        "resume": {
+          "type": "boolean",
+          "description": "Whether to emit session.resume after loading. Defaults to true."
+        },
+        "suppressResumeWorkspaceMetadataWriteback": {
+          "type": "boolean",
+          "description": "Suppress workspace.yaml metadata writeback when resuming from an incidental cwd."
+        }
+      },
+      "required": [
+        "kind",
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for resuming a specific local session.",
+      "title": "SessionsOpenResume"
+    },
+    "SessionsOpenResumeLast": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "resumeLast",
+          "description": "Resume the most relevant existing local session."
+        },
+        "context": {
+          "$ref": "#/definitions/SessionContext",
+          "description": "Working-directory context used to choose the most relevant session."
+        },
+        "options": {
+          "$ref": "#/definitions/SessionOpenOptions",
+          "description": "Session resume options."
+        },
+        "suppressResumeWorkspaceMetadataWriteback": {
+          "type": "boolean",
+          "description": "Suppress workspace.yaml metadata writeback when resuming from an incidental cwd."
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for resuming the most relevant local session.",
+      "title": "SessionsOpenResumeLast"
+    },
+    "SessionsOpenStatus": {
+      "type": "string",
+      "enum": [
+        "created",
+        "resumed",
+        "not_found",
+        "connected",
+        "handed_off"
+      ],
+      "description": "Outcome of the open request.",
+      "title": "SessionsOpenStatus",
+      "x-enumDescriptions": {
+        "created": "A new session was created.",
+        "resumed": "An existing session was loaded or reattached.",
+        "not_found": "No matching persisted session was found.",
+        "connected": "Connected to an existing remote session.",
+        "handed_off": "Remote session was handed off to a new local session."
+      }
+    },
+    "SessionSource": {
+      "type": "string",
+      "enum": [
+        "local",
+        "remote",
+        "all"
+      ],
+      "description": "Which session sources to include. Defaults to `local` for backward compatibility.",
+      "title": "SessionSource",
+      "x-enumDescriptions": {
+        "local": "Return only local sessions.",
+        "remote": "Return only remote sessions.",
+        "all": "Return both local and remote sessions."
+      }
+    },
+    "SessionsPollSpawnedSessionsEvent": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session id of the newly-spawned session."
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "title": "SessionsPollSpawnedSessionsEvent",
+      "description": "Schema for the `SessionsPollSpawnedSessionsEvent` type."
+    },
+    "SessionsPollSpawnedSessionsRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "cursor": {
+              "type": "string",
+              "description": "Opaque cursor returned by a previous poll. Omit on the first call to receive any spawn events buffered since the runtime started."
+            },
+            "waitMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 60000,
+              "description": "Milliseconds to wait for new spawn events when the cursor is at the tail. 0 (default) returns immediately even if no events are buffered. Capped at 60000ms.",
+              "format": "duration"
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Cursor and optional long-poll wait for polling runtime-spawned sessions.",
+      "title": "SessionsPollSpawnedSessionsRequest"
     },
     "SessionsPruneOldRequest": {
       "type": "object",
@@ -16138,6 +19833,19 @@
       "additionalProperties": false,
       "description": "Age threshold and optional flags controlling which old sessions are pruned (or simulated when dryRun is true).",
       "title": "SessionsPruneOldRequest"
+    },
+    "SessionsRegisterExtensionToolsOnSessionOptions": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "In-process `() => boolean` gating callback (CLI-only optimization). Marked internal: replaced by runtime-side enable/disable RPCs in the SDK migration.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional registration options.",
+      "title": "SessionsRegisterExtensionToolsOnSessionOptions"
     },
     "SessionsReleaseLockRequest": {
       "type": "object",
@@ -16234,6 +19942,95 @@
       "description": "Replace the manager-wide additional plugins. New session creations and subsequent hook reloads see the new set; already-running sessions keep their existing hook installation until the next reload.",
       "title": "SessionsSetAdditionalPluginsResult"
     },
+    "SessionsSetRemoteControlSteeringRequest": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Target steering state. Today only `true` is actionable on the underlying exporter; `false` is reserved for future use."
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false,
+      "description": "Patch for the singleton's steering state.",
+      "title": "SessionsSetRemoteControlSteeringRequest"
+    },
+    "SessionsStartRemoteControlRequest": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Local session id to attach remote control to."
+        },
+        "config": {
+          "$ref": "#/definitions/RemoteControlConfig",
+          "description": "Configuration for the runtime-managed remote-control singleton."
+        }
+      },
+      "required": [
+        "sessionId",
+        "config"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for attaching the remote-control singleton to a session.",
+      "title": "SessionsStartRemoteControlRequest"
+    },
+    "SessionsStopRemoteControlRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "expectedSessionId": {
+              "type": "string",
+              "description": "When provided, the stop is rejected unless the singleton currently points at this session id (compare-and-swap semantics)."
+            },
+            "force": {
+              "type": "boolean",
+              "description": "When true, the singleton is unconditionally torn down regardless of `expectedSessionId`. Use during shutdown or explicit `/remote off`."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Parameters for stopping the remote-control singleton.",
+      "title": "SessionsStopRemoteControlRequest"
+    },
+    "SessionsTransferRemoteControlRequest": {
+      "type": "object",
+      "properties": {
+        "toSessionId": {
+          "type": "string",
+          "description": "Local session id to point remote control at."
+        },
+        "expectedFromSessionId": {
+          "type": "string",
+          "description": "When provided, the transfer is rejected unless the singleton currently points at this session id (compare-and-swap semantics to avoid clobbering newer state)."
+        }
+      },
+      "required": [
+        "toSessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for atomically rebinding the remote-control singleton.",
+      "title": "SessionsTransferRemoteControlRequest"
+    },
+    "SessionTelemetryEngagement": {
+      "type": "object",
+      "properties": {
+        "engagementId": {
+          "type": "string",
+          "description": "Current telemetry engagement ID, when available."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Telemetry engagement ID for the session, when available.",
+      "title": "SessionTelemetryEngagement"
+    },
     "SessionUpdateOptionsParams": {
       "type": "object",
       "properties": {
@@ -16241,9 +20038,17 @@
           "type": "string",
           "description": "The model ID to use for assistant turns."
         },
+        "modelCapabilitiesOverrides": {
+          "$ref": "#/definitions/ModelCapabilitiesOverride",
+          "description": "Per-property model capability overrides for the selected model."
+        },
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort for the selected model (model-defined enum)."
+        },
+        "reasoningSummary": {
+          "$ref": "#/definitions/OptionsUpdateReasoningSummary",
+          "description": "Reasoning summary mode for supported model clients."
         },
         "clientName": {
           "type": "string",
@@ -16269,9 +20074,8 @@
           "description": "Whether experimental capabilities are enabled."
         },
         "provider": {
-          "description": "Custom model-provider configuration (BYOK). Opaque shape; see `ProviderConfig` in the runtime.",
-          "x-opaque-json": true,
-          "stability": "experimental"
+          "$ref": "#/definitions/ProviderConfig",
+          "description": "Custom model-provider configuration (BYOK)."
         },
         "workingDirectory": {
           "type": "string",
@@ -16311,9 +20115,8 @@
           "description": "Per-shell process flags (e.g., `pwsh` arguments)."
         },
         "sandboxConfig": {
-          "description": "Sandbox configuration shape; opaque to SDK consumers. See `SandboxConfig` in the runtime.",
-          "x-opaque-json": true,
-          "stability": "experimental"
+          "$ref": "#/definitions/SandboxConfig",
+          "description": "Resolved sandbox configuration."
         },
         "logInteractiveShells": {
           "type": "boolean",
@@ -16410,14 +20213,22 @@
         "additionalContentExclusionPolicies": {
           "type": "array",
           "items": {
-            "x-opaque-json": true
+            "$ref": "#/definitions/OptionsUpdateAdditionalContentExclusionPolicy"
           },
-          "description": "Additional content-exclusion policies to merge into the session's policy set. Opaque shape; see `ContentExclusionApiResponse` in the runtime.",
+          "description": "Additional content-exclusion policies to merge into the session's policy set.",
           "stability": "experimental"
         },
         "manageScheduleEnabled": {
           "type": "boolean",
           "description": "Whether to expose the `manage_schedule` tool to the agent. The runtime always owns the per-session schedule registry; this flag only controls tool exposure (typically gated to staff users)."
+        },
+        "sessionCapabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionCapability",
+            "description": "Session capability id"
+          },
+          "description": "Replaces the session's capability set with the given list. Use to enable or disable capabilities mid-session (e.g., remove `memory` for reproducible scripted runs). Omit the field to leave the existing capability set unchanged."
         },
         "skipEmbeddingRetrieval": {
           "type": "boolean",
@@ -16442,6 +20253,10 @@
         "enableSkills": {
           "type": "boolean",
           "description": "Whether to enable skill directory scanning and loading. Falls back to enableConfigDiscovery when unset."
+        },
+        "contextTier": {
+          "$ref": "#/definitions/OptionsUpdateContextTier",
+          "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier."
         }
       },
       "additionalProperties": false,
@@ -16519,6 +20334,21 @@
         "ado": "The working directory repository is hosted on Azure DevOps."
       }
     },
+    "ShellCancelUserRequestedRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID previously passed to executeUserRequested"
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "User-requested shell execution cancellation handle.",
+      "title": "ShellCancelUserRequestedRequest"
+    },
     "ShellExecRequest": {
       "type": "object",
       "properties": {
@@ -16558,6 +20388,26 @@
       "additionalProperties": false,
       "description": "Identifier of the spawned process, used to correlate streamed output and exit notifications.",
       "title": "ShellExecResult"
+    },
+    "ShellExecuteUserRequestedRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Caller-provided cancellation handle for this execution"
+        },
+        "command": {
+          "type": "string",
+          "description": "Shell command to execute"
+        }
+      },
+      "required": [
+        "requestId",
+        "command"
+      ],
+      "additionalProperties": false,
+      "description": "User-requested shell command and cancellation handle.",
+      "title": "ShellExecuteUserRequestedRequest"
     },
     "ShellKillRequest": {
       "type": "object",
@@ -17197,7 +21047,7 @@
         },
         "prompt": {
           "type": "string",
-          "description": "Prompt passed to the agent"
+          "description": "Most recent prompt delivered to the agent. Updated whenever the agent receives a follow-up message."
         },
         "result": {
           "type": "string",
@@ -17205,7 +21055,11 @@
         },
         "model": {
           "type": "string",
-          "description": "Model used for the task when specified"
+          "description": "Requested model override for the task when specified"
+        },
+        "resolvedModel": {
+          "type": "string",
+          "description": "Runtime model resolved for the task when available"
         },
         "executionMode": {
           "$ref": "#/definitions/TaskExecutionMode",
@@ -18443,6 +22297,46 @@
       "title": "UIElicitationStringOneOfFieldOneOf",
       "description": "Schema for the `UIElicitationStringOneOfFieldOneOf` type."
     },
+    "UIEphemeralQueryRequest": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "Question to answer from the current conversation context."
+        },
+        "onChunk": {
+          "description": "In-process streaming callback `(text) => void` invoked with each token as the model emits it. Marked internal: excluded from the public SDK surface. In a process-separated SDK this is replaced by a streaming RPC that yields chunks and a final answer.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        },
+        "abortSignal": {
+          "description": "In-process `AbortSignal` forwarded to the model client to cancel an in-flight request. Marked internal: excluded from the public SDK surface. Replaced by an explicit cancellation token + cancel RPC in the SDK migration.",
+          "visibility": "internal",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "question"
+      ],
+      "additionalProperties": false,
+      "description": "Transient question to answer without adding it to conversation history.",
+      "title": "UIEphemeralQueryRequest"
+    },
+    "UIEphemeralQueryResult": {
+      "type": "object",
+      "properties": {
+        "answer": {
+          "type": "string",
+          "description": "Full assistant response text."
+        }
+      },
+      "required": [
+        "answer"
+      ],
+      "additionalProperties": false,
+      "description": "Transient answer generated from current conversation context.",
+      "title": "UIEphemeralQueryResult"
+    },
     "UIExitPlanModeAction": {
       "type": "string",
       "enum": [
@@ -18938,6 +22832,46 @@
       "additionalProperties": false,
       "title": "UserAuthInfo",
       "description": "Schema for the `UserAuthInfo` type."
+    },
+    "UserRequestedShellCommandResult": {
+      "type": "object",
+      "properties": {
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call id emitted for the shell execution"
+        },
+        "success": {
+          "type": "boolean",
+          "description": "Whether the command completed successfully"
+        },
+        "output": {
+          "type": "string",
+          "description": "Captured command output"
+        },
+        "exitCode": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Process exit code, when available"
+        },
+        "error": {
+          "type": "string",
+          "description": "Error output when the execution failed"
+        }
+      },
+      "required": [
+        "toolCallId",
+        "success",
+        "output"
+      ],
+      "additionalProperties": false,
+      "description": "Result of a user-requested shell command.",
+      "title": "UserRequestedShellCommandResult"
     },
     "UserToolSessionApproval": {
       "anyOf": [
@@ -19574,6 +23508,10 @@
             "name": {
               "type": "string",
               "description": "Display name for the session, if set"
+            },
+            "user_named": {
+              "type": "boolean",
+              "description": "Whether the display name was explicitly set by the user"
             },
             "created_at": {
               "type": "string",

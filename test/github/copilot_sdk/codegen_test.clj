@@ -254,7 +254,11 @@
     :status "active"}
 
    "hook.progress"
-   {:message "extracting..."}})
+   {:message "extracting..."}
+
+   ;; v1.0.1 sync: session.canvas.closed (upstream PR #1604).
+   "session.canvas.closed"
+   {:instance-id "i1" :extension-id "ext.x" :canvas-id "diff"}})
 
 (defn- envelope
   "Wrap a data payload in a minimal valid envelope of the given type. Honours
