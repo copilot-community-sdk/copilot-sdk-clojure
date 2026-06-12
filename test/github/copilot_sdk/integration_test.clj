@@ -6509,6 +6509,39 @@
         (finally
           (mock/set-request-hook! *mock-server* nil))))))
 
+(deftest test-resume-config-open-canvases-explicit-empty-and-omitted
+  (testing "resume-session forwards explicit empty :open-canvases (parity with upstream config.openCanvases) and omits the param when the key is absent"
+    (let [captured (atom nil)
+          hook (fn [method params]
+                 (when (= "session.resume" method)
+                   (reset! captured params))
+                 nil)]
+      (mock/set-request-hook! *mock-server* hook)
+      (try
+        ;; Explicit empty vector — must be sent as []
+        (let [created (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+              session-id (sdk/session-id created)]
+          (sdk/resume-session
+           *test-client* session-id
+           {:on-permission-request sdk/approve-all
+            :open-canvases []})
+          (let [params @captured]
+            (is (some? params))
+            (is (contains? params :openCanvases) "explicit empty vector forwarded as openCanvases param")
+            (is (= [] (:openCanvases params)))))
+        (reset! captured nil)
+        ;; Key absent — param must be omitted entirely
+        (let [created (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+              session-id (sdk/session-id created)]
+          (sdk/resume-session
+           *test-client* session-id
+           {:on-permission-request sdk/approve-all})
+          (let [params @captured]
+            (is (some? params))
+            (is (not (contains? params :openCanvases)) "missing :open-canvases key omits openCanvases param")))
+        (finally
+          (mock/set-request-hook! *mock-server* nil))))))
+
 (deftest test-schedule-at-spec-rejects-non-positive
   (testing "::at requires a positive integer (epoch ms)"
     (is (s/valid? :github.copilot-sdk.specs/session.schedule_created-data

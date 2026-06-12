@@ -2046,8 +2046,12 @@
       (assoc :enable-skills (:enable-skills config))
       ;; Upstream PR #1604: seed the open-canvases snapshot on resume/join.
       ;; Per-canvas wire conversion is explicit so the opaque `:input` map is
-      ;; passed through verbatim (see `canvas-instance->wire`).
-      (seq (:open-canvases config))
+      ;; passed through verbatim (see `canvas-instance->wire`). Mirrors upstream
+      ;; client.ts which sends `openCanvases: config.openCanvases` directly: an
+      ;; explicit empty vector is forwarded so callers can deliberately clear/
+      ;; seed an empty snapshot, while a missing `:open-canvases` key omits the
+      ;; param entirely.
+      (contains? config :open-canvases)
       (assoc :open-canvases (mapv canvas-instance->wire (:open-canvases config)))
       true (assoc :include-sub-agent-streaming-events
                   (if (some? (:include-sub-agent-streaming-events? config))
