@@ -300,6 +300,15 @@
                  (get-in raw-event [:data :attachments])
                  (get-in converted-event [:data :attachments]))))
 
+    ;; Upstream PR #1604 (schema 1.0.58+): `session.canvas.opened` carries an
+    ;; opaque caller-supplied `:input` map (`{ [k: string]: unknown }`).
+    ;; Preserve raw keys so consumers can forward them verbatim — same
+    ;; convention used for `external_tool.requested` `:arguments` etc.
+    "session.canvas.opened"
+    (cond-> converted-event
+      (contains? (:data raw-event) :input)
+      (assoc-in [:data :input] (get-in raw-event [:data :input])))
+
     converted-event))
 
 (defn- normalize-incoming
@@ -362,6 +371,21 @@
                         (preserve-event-opaque-fields raw conv))
                       raw-events
                       (get-in converted [:result :events])))
+
+      ;; Upstream PR #1604: `session.resume` responses include `openCanvases[]`
+      ;; — each canvas may carry an opaque caller-supplied `:input` map.
+      ;; Preserve raw input keys so they aren't kebab-cased when surfaced via
+      ;; `(open-canvases session)`. Raw and converted vectors are positionally
+      ;; aligned (conversion preserves order).
+      (and (:id msg) (not method)
+           (sequential? (get-in msg [:result :openCanvases])))
+      (assoc-in converted [:result :open-canvases]
+                (mapv (fn [raw conv]
+                        (if (contains? raw :input)
+                          (assoc conv :input (:input raw))
+                          conv))
+                      (get-in msg [:result :openCanvases])
+                      (get-in converted [:result :open-canvases])))
 
       :else
       converted)))

@@ -84,6 +84,7 @@
                             :destroyed? false
                             :workspace-path workspace-path
                             :capabilities {}
+                            :open-canvases []
                             :config config})
                  (assoc-in [:session-io session-id]
                            {:event-chan event-chan
@@ -124,6 +125,73 @@
   "Store host capabilities in session state. Called after session.create/session.resume RPC."
   [client session-id capabilities]
   (swap! (:state client) assoc-in [:sessions session-id :capabilities] (or capabilities {})))
+
+;; --- Open canvas snapshot (upstream PR #1604) -------------------------------
+;; The CLI host can open auxiliary UI canvases inside a session. The SDK keeps
+;; an in-memory snapshot of currently-open canvases per session. The snapshot
+;; is initialized from `session.resume` (NOT `session.create` — matches upstream
+;; client.ts behavior) and mutated by `session.canvas.opened` /
+;; `session.canvas.closed` events. Each entry's keys go through `wire->clj`
+;; kebab-case conversion (`:instance-id`, `:extension-id`, `:canvas-id`,
+;; `:reopen`, `:availability`, optional `:extension-name`, `:title`, `:status`,
+;; `:url`, `:input`). The opaque `:input` map (caller-defined keys) is preserved
+;; verbatim by the protocol layer so source-supplied keys are not kebab-cased.
+
+(defn- valid-open-canvas-instance?
+  "Mirrors upstream `isOpenCanvasInstance` (nodejs/src/session.ts). All five
+   required fields must be present and well-typed before an entry is admitted
+   to the snapshot."
+  [data]
+  (and (map? data)
+       (string? (:instance-id data)) (not (str/blank? (:instance-id data)))
+       (string? (:extension-id data)) (not (str/blank? (:extension-id data)))
+       (string? (:canvas-id data)) (not (str/blank? (:canvas-id data)))
+       (boolean? (:reopen data))
+       (#{"ready" "stale"} (:availability data))))
+
+(defn set-open-canvases!
+  "Replace the open-canvases snapshot for `session-id`. Called once after
+  `session.resume` succeeds. Stores `[]` when called with `nil` so the
+  resume/create paths can pass through `(or (:open-canvases result) [])`
+  uniformly."
+  [client session-id canvases]
+  (swap! (:state client) assoc-in [:sessions session-id :open-canvases]
+         (vec (or canvases []))))
+
+(defn upsert-open-canvas!
+  "Apply a `session.canvas.opened` event payload to the snapshot. If an entry
+  with the same `:instance-id` exists, replace it in place (preserves order);
+  otherwise append. Logs a warning and no-ops on payloads missing any of the
+  required fields (`:instance-id`, `:extension-id`, `:canvas-id`, `:reopen`,
+  `:availability`), matching upstream `isOpenCanvasInstance` validation."
+  [client session-id data]
+  (if-not (valid-open-canvas-instance? data)
+    (log/warn "failed to deserialize session.canvas.opened payload"
+              {:session-id session-id})
+    (let [iid (:instance-id data)]
+      (swap! (:state client) update-in [:sessions session-id :open-canvases]
+             (fn [canvases]
+               (let [canvases (vec (or canvases []))
+                     idx (first (keep-indexed
+                                 (fn [i c] (when (= (:instance-id c) iid) i))
+                                 canvases))]
+                 (if idx
+                   (assoc canvases idx data)
+                   (conj canvases data))))))))
+
+(defn remove-open-canvas!
+  "Apply a `session.canvas.closed` event payload to the snapshot — removes the
+  entry with matching `:instance-id`. Logs a warning and no-ops on missing/
+  blank `:instance-id`. Closing an absent instance is a silent no-op
+  (idempotent), matching upstream `removeOpenCanvas`."
+  [client session-id data]
+  (let [iid (:instance-id data)]
+    (if (or (nil? iid) (and (string? iid) (str/blank? iid)))
+      (log/warn "failed to deserialize session.canvas.closed payload"
+                {:session-id session-id})
+      (swap! (:state client) update-in [:sessions session-id :open-canvases]
+             (fn [canvases]
+               (filterv #(not= (:instance-id %) iid) (or canvases [])))))))
 
 (defn register-transform-callbacks!
   "Store system message transform callbacks on a session.
@@ -2118,6 +2186,18 @@
   [session]
   (let [{:keys [session-id client]} session]
     (:capabilities (session-state client session-id))))
+
+(defn open-canvases
+  "Get the current open-canvases snapshot for `session`. Returns a vector of
+  canvas-instance maps (each with `:instance-id`, `:extension-id`, `:canvas-id`,
+  `:reopen`, `:availability`, plus optional `:extension-name`, `:title`,
+  `:status`, `:url`, `:input`). The snapshot is initialized from
+  `session.resume` and updated by `session.canvas.opened` /
+  `session.canvas.closed` events. `session.create` does NOT populate it
+  (matches upstream Node.js behavior)."
+  [session]
+  (let [{:keys [session-id client]} session]
+    (vec (:open-canvases (session-state client session-id)))))
 
 (defn elicitation-supported?
   "Check if the CLI host supports interactive elicitation dialogs."

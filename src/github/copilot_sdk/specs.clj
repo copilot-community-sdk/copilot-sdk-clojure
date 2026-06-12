@@ -751,7 +751,9 @@
     :custom-agents-local-only
     :coauthor-enabled
     :manage-schedule-enabled
-    :include-sub-agent-streaming-events?})
+    :include-sub-agent-streaming-events?
+    ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
+    :open-canvases})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -786,7 +788,8 @@
                     ::custom-agents-local-only
                     ::coauthor-enabled
                     ::manage-schedule-enabled
-                    ::include-sub-agent-streaming-events?])
+                    ::include-sub-agent-streaming-events?
+                    ::open-canvases])
    resume-session-config-keys))
 
 ;; join-session config: same as resume-session-config but :on-permission-request is optional.
@@ -823,7 +826,8 @@
                     ::custom-agents-local-only
                     ::coauthor-enabled
                     ::manage-schedule-enabled
-                    ::include-sub-agent-streaming-events?])
+                    ::include-sub-agent-streaming-events?
+                    ::open-canvases])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -1093,6 +1097,7 @@
     :copilot/model.call_failure
     :copilot/session.extensions.attachments_pushed
     :copilot/session.canvas.opened
+    :copilot/session.canvas.closed
     :copilot/session.canvas.registry_changed})
 
 ;; Session events
@@ -1115,10 +1120,11 @@
                    ::detached-from-spawning-parent-session-id]))
 
 (s/def ::event-count nat-int?)
+(s/def ::events-file-size-bytes nat-int?)
 (s/def ::session.resume-data
   (s/keys :req-un [::event-count]
           :opt-un [::selected-model ::reasoning-effort ::already-in-use? ::remote-steerable?
-                   ::host-type ::head-commit ::base-commit]))
+                   ::host-type ::head-commit ::base-commit ::events-file-size-bytes]))
 
 (s/def ::status-code integer?)
 (s/def ::provider-call-id string?)
@@ -1217,7 +1223,7 @@
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
                    ::interaction-id ::output-tokens ::phase ::reasoning-opaque
-                   ::reasoning-text ::request-id
+                   ::reasoning-text ::request-id ::api-call-id
                    ::anthropic-advisor-blocks ::anthropic-advisor-model ::model]))
 
 (s/def ::total-response-size-bytes nat-int?)
@@ -1310,7 +1316,8 @@
 (s/def ::session.shutdown-data
   (s/keys :req-un [::shutdown-type ::total-api-duration-ms
                    ::session-start-time ::code-changes ::model-metrics]
-          :opt-un [::error-reason ::current-model ::total-premium-requests]))
+          :opt-un [::error-reason ::current-model ::total-premium-requests
+                   ::events-file-size-bytes]))
 
 ;; Session title changed event
 (s/def ::title string?)
@@ -1352,9 +1359,12 @@
 
 ;; Hook progress event (upstream schema 1.0.56-1, round 6 sync). Ephemeral
 ;; event emitted by hooks during long-running work. Reuses the existing
-;; ::message non-blank-string spec.
+;; ::message non-blank-string spec. `:temporary` (added v1.0.1, PR #1612)
+;; signals a transient progress message that may be replaced.
+(s/def ::temporary boolean?)
 (s/def ::hook.progress-data
-  (s/keys :req-un [::message]))
+  (s/keys :req-un [::message]
+          :opt-un [::temporary]))
 
 ;; Session plan changed event
 (s/def ::operation #{"create" "update" "delete"})
@@ -1372,12 +1382,13 @@
 (s/def ::session.task_complete-data
   (s/keys :opt-un [::summary ::aborted?]))
 
-;; Schedule events (upstream schema 1.0.42)
-;; Note: schedule data uses a positive integer `:id` (numeric scheduled-prompt
-;; id, `exclusiveMinimum: 0` in the schema), distinct from the string ::id
-;; (UUID) used elsewhere — validated via predicate to avoid colliding with the
-;; global ::id spec. ::interval-ms is also strictly positive per schema.
+;; Schedule events (upstream schema 1.0.42; v1.0.1 added cron/at variants —
+;; upstream PR #1597). `:interval-ms` is now optional; cron-only and one-shot
+;; (`:at`) schedules are also valid.
 (s/def ::interval-ms pos-int?)
+(s/def ::at pos-int?)
+(s/def ::cron string?)
+(s/def ::tz string?)
 ;; ::prompt is already defined above (::non-blank-string), reused here
 ;; :recurring — boolean, added upstream CLI 1.0.48-1 (PR #1288). Whether the
 ;; schedule re-arms after each tick (`/every`) or fires once (`/after`).
@@ -1385,14 +1396,36 @@
 ;; `:recurring` (csk does not append `?` for booleans).
 (s/def ::recurring boolean?)
 (s/def ::session.schedule_created-data
-  (s/and (s/keys :req-un [::interval-ms ::prompt]
-                 :opt-un [::recurring])
+  (s/and (s/keys :req-un [::prompt]
+                 :opt-un [::recurring ::interval-ms ::at ::cron ::tz])
          #(contains? % :id)
          #(pos-int? (:id %))))
 (s/def ::session.schedule_cancelled-data
   (s/and map?
          #(contains? % :id)
          #(pos-int? (:id %))))
+
+;; Canvas event data and snapshot entries (upstream PR #1604).
+;; Wire fields: instanceId, extensionId, canvasId, extensionName, reopen,
+;; availability, status, title, url, input. csk converts to kebab-case;
+;; booleans (`reopen`) keep no trailing `?`. `:input` is opaque caller-supplied
+;; data — open map per upstream `{ [k: string]: unknown }`.
+(s/def ::instance-id ::non-blank-string)
+(s/def ::extension-id ::non-blank-string)
+(s/def ::canvas-id ::non-blank-string)
+(s/def ::extension-name string?)
+(s/def ::reopen boolean?)
+(s/def ::availability #{"ready" "stale"})
+(s/def ::input map?)
+
+(s/def ::open-canvas-instance
+  (s/keys :req-un [::instance-id ::extension-id ::canvas-id ::reopen ::availability]
+          :opt-un [::extension-name ::title ::status ::url ::input]))
+
+(s/def ::open-canvases (s/coll-of ::open-canvas-instance :kind sequential? :into []))
+
+(s/def ::session.canvas.closed-data
+  (s/keys :req-un [::instance-id ::extension-id ::canvas-id]))
 
 ;; Skill invoked event
 (s/def ::allowed-tools (s/coll-of string?))

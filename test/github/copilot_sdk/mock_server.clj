@@ -70,7 +70,8 @@
             supports-connect?  ; atom boolean - when false, `connect` returns -32601 (legacy fallback)
             pending-events     ; atom - events to send on next opportunity
             pending-responses  ; atom {id -> chan} - responses to server→client RPCs
-            protocol-version]) ; atom Long - protocol version reported by ping/connect/status
+            protocol-version   ; atom Long - protocol version reported by ping/connect/status
+            resume-response-extras]) ; atom map - extra fields to merge into session.resume responses
 
 (defn- generate-id [^AtomicLong counter]
   (str "evt-" (.incrementAndGet counter)))
@@ -170,7 +171,8 @@
                             (make-event server "session.resume"
                                         {:resumeTime (.toString (java.time.Instant/now))
                                          :eventCount 0}))
-        {:sessionId session-id})
+        (merge {:sessionId session-id}
+               @(:resume-response-extras server)))
       (throw (ex-info "Session not found" {:code -32001 :session-id session-id})))))
 
 (defn- handle-session-send [server params]
@@ -463,7 +465,8 @@
       :supports-connect? (atom true)
       :pending-events (atom [])
       :pending-responses (atom {})
-      :protocol-version (atom DEFAULT_PROTOCOL_VERSION)})))
+      :protocol-version (atom DEFAULT_PROTOCOL_VERSION)
+      :resume-response-extras (atom {})})))
 
 (defn start-mock-server!
   "Start the mock server in a background thread."
@@ -496,6 +499,14 @@
    Hook receives (method params)."
   [server hook-fn]
   (reset! (:on-request server) hook-fn))
+
+(defn set-resume-response-extras!
+  "Set extra wire-shape (camelCase) fields the mock server merges into
+   `session.resume` RPC responses. Lets tests inject fields like
+   `:openCanvases` without changing the default success path. Pass `{}`
+   to clear."
+  [server extras]
+  (reset! (:resume-response-extras server) (or extras {})))
 
 (defn inject-tool-call!
   "Inject a tool call request from the mock server.
