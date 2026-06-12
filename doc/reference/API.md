@@ -290,6 +290,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
 | `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 | `:manage-schedule-enabled` | boolean | Enable the built-in schedule-management tools. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
+| `:open-canvases` | vector | (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry: `{:instance-id ... :extension-id ... :canvas-id ... :reopen bool :availability "ready"\|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}`. Caller-defined `:input` keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See [`open-canvases`](#open-canvases). (upstream PR #1604) |
 
 #### `resume-session`
 
@@ -1276,6 +1277,48 @@ Request structured user input via interactive dialogs. Check host support before
 
 Get the host capabilities map reported when the session was created or resumed.
 
+### `open-canvases`
+
+```clojure
+(copilot/open-canvases session)
+;; => [{:instance-id "i1" :canvas-id "diff" :extension-id "ext.x"
+;;      :reopen false :availability "ready"}]
+```
+
+Get the current open-canvases snapshot for `session`. Returns a vector of
+canvas-instance maps. The snapshot is initialized from `session.resume` and
+updated by `:copilot/session.canvas.opened` / `:copilot/session.canvas.closed`
+events. `session.create` does NOT populate it (matches upstream Node.js).
+
+Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`,
+`:reopen`, `:availability` and optional `:extension-name`, `:title`,
+`:status`, `:url`, `:input`. Closing an instance that's not in the snapshot is a
+silent no-op (idempotent); malformed payloads (missing required field, wrong
+type, or invalid `:availability`) log a warning and leave the snapshot
+unchanged — matches upstream `isOpenCanvasInstance` strictness.
+
+The `:input` map (caller-defined opaque data on each canvas) is preserved
+verbatim through wire conversion. Keys you receive (e.g. via the canvas
+opened event or after a resume) round-trip back to the CLI without
+camelCasing — including `snake_case` and nested keys.
+
+#### Seeding `open-canvases` on resume
+
+To restore canvases after reconnecting, pass `:open-canvases` to
+[`resume-session`](#resume-session) or [`join-session`](#join-session). The
+shape mirrors what `(open-canvases session)` returned previously:
+
+```clojure
+(let [snap (copilot/open-canvases old-session)]
+  (copilot/resume-session client session-id
+                          {:on-permission-request copilot/approve-all
+                           :open-canvases snap}))
+```
+
+The SDK preserves caller-defined `:input` keys verbatim on the wire (they are
+sent as JSON object fields with the original key names, unchanged by Clojure's
+kebab-case conversion).
+
 ### `elicitation-supported?`
 
 ```clojure
@@ -1488,6 +1531,9 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.remote_steerable_changed` | Session remote steering capability changed; data: `{:remote-steerable true/false}` |
 | `:copilot/capabilities.changed` | Session capabilities dynamically changed (e.g., elicitation support); ephemeral. Data: `{:ui {:elicitation true/false}}` |
 | `:copilot/mcp_app.tool_call_complete` | An MCP App tool call completed (upstream schema 1.0.52-4, SEP-1865); ephemeral. Data: `{:server-name ... :tool-name ... :duration-ms ... :success bool :arguments {...} :result {...}}` — `:arguments` and `:result` are opaque source-defined maps whose keys are preserved verbatim (not kebab-cased). |
+| `:copilot/session.canvas.opened` | A canvas (auxiliary UI surface) was opened in the session; ephemeral. Data: `{:instance-id ... :canvas-id ... :extension-id ... :reopen bool :availability "ready"|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}`. The SDK upserts the entry into the [`open-canvases`](#open-canvases) snapshot before publishing. |
+| `:copilot/session.canvas.closed` | A canvas was closed; ephemeral. Data: `{:instance-id ... :canvas-id ... :extension-id ...}`. The SDK removes the matching entry from the [`open-canvases`](#open-canvases) snapshot before publishing. (upstream PR #1604) |
+| `:copilot/session.canvas.registry_changed` | The set of canvases the host can offer changed; ephemeral. |
 
 ### Example: Handling Events
 

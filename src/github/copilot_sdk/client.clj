@@ -607,6 +607,15 @@
                     (log/warn "Model mismatch for session " session-id
                               ": requested " requested-model ", server selected " selected-model))))
               (when-not (:destroyed? (get-in @(:state client) [:sessions session-id]))
+                ;; Canvas state (upstream PR #1604) — apply at all protocol
+                ;; versions, before publishing, so observers see a consistent
+                ;; snapshot. These are session events, not v3 broadcasts.
+                (case event-type
+                  :copilot/session.canvas.opened
+                  (session/upsert-open-canvas! client session-id (:data normalized-event))
+                  :copilot/session.canvas.closed
+                  (session/remove-open-canvas! client session-id (:data normalized-event))
+                  nil)
                 ;; Protocol v3: apply state-mutating broadcast handlers before publishing,
                 ;; so event observers see consistent state (e.g. capabilities.changed)
                 (when (>= (negotiated-protocol-version client) 3)
@@ -1893,6 +1902,47 @@
                     true))
       true (assoc :env-value-mode "direct"))))
 
+(defn- stringify-keys-deep
+  "Recursively convert keyword keys to strings in a value (used for opaque
+  payloads). Strings, sequences, and primitives pass through. csk's recursive
+  transform-keys leaves non-keyword keys untouched, so stringified maps
+  round-trip through `util/clj->wire` unchanged.
+
+  Namespaced keywords are preserved as `\"ns/name\"` so caller-supplied keys
+  (e.g. `:my.app/user_id`) are not silently truncated to their local name."
+  [v]
+  (cond
+    (map? v)         (into {} (map (fn [[k vv]]
+                                     [(if (keyword? k)
+                                        (subs (str k) 1)
+                                        k)
+                                      (stringify-keys-deep vv)]))
+                           v)
+    (sequential? v)  (mapv stringify-keys-deep v)
+    :else            v))
+
+(defn- canvas-instance->wire
+  "Convert an open-canvas instance to its wire shape. Required fields stay in
+  idiomatic kebab-case so `util/clj->wire` does the camelCase conversion once;
+  the optional `:input` map's keys are stringified so they round-trip through
+  `util/clj->wire` verbatim — caller keys (e.g. `:user_id`) are NOT camelCased.
+
+  Used to seed `openCanvases` on `session.resume` / `session.join` (upstream
+  PR #1604, ResumeSessionConfig.openCanvases)."
+  [canvas]
+  (cond-> {}
+    (some? (:instance-id canvas))    (assoc :instance-id    (:instance-id canvas))
+    (some? (:extension-id canvas))   (assoc :extension-id   (:extension-id canvas))
+    (some? (:canvas-id canvas))      (assoc :canvas-id      (:canvas-id canvas))
+    (some? (:reopen canvas))         (assoc :reopen         (:reopen canvas))
+    (some? (:availability canvas))   (assoc :availability   (:availability canvas))
+    (some? (:extension-name canvas)) (assoc :extension-name (:extension-name canvas))
+    (some? (:title canvas))          (assoc :title          (:title canvas))
+    (some? (:status canvas))         (assoc :status         (:status canvas))
+    (some? (:url canvas))            (assoc :url            (:url canvas))
+    (contains? canvas :input)        (assoc :input          (stringify-keys-deep
+                                                             (:input canvas)))))
+
 (defn- build-resume-session-params
   "Build wire params for session.resume from session-id and config."
   [session-id config]
@@ -1999,6 +2049,15 @@
       (assoc :enable-session-store (:enable-session-store config))
       (some? (:enable-skills config))
       (assoc :enable-skills (:enable-skills config))
+      ;; Upstream PR #1604: seed the open-canvases snapshot on resume/join.
+      ;; Per-canvas wire conversion is explicit so the opaque `:input` map is
+      ;; passed through verbatim (see `canvas-instance->wire`). Mirrors upstream
+      ;; client.ts which sends `openCanvases: config.openCanvases` directly: an
+      ;; explicit empty vector is forwarded so callers can deliberately clear/
+      ;; seed an empty snapshot, while a missing `:open-canvases` key omits the
+      ;; param entirely.
+      (contains? config :open-canvases)
+      (assoc :open-canvases (mapv canvas-instance->wire (:open-canvases config)))
       true (assoc :include-sub-agent-streaming-events
                   (if (some? (:include-sub-agent-streaming-events? config))
                     (:include-sub-agent-streaming-events? config)
@@ -2325,6 +2384,7 @@
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
+        (session/set-open-canvases! client session-id (:open-canvases result))
         ;; Mode-specific post-resume options patch (upstream PR #1428).
         (apply-session-options-update! client session config)
         session)
@@ -2519,6 +2579,7 @@
             (let [result (:result response)]
               (session/set-workspace-path! client session-id (:workspace-path result))
               (session/set-capabilities! client session-id (:capabilities result))
+              (session/set-open-canvases! client session-id (:open-canvases result))
               (let [r (<! (<apply-session-options-update! client session config))]
                 (if (instance? Throwable r)
                   r

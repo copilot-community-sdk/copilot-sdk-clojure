@@ -139,6 +139,7 @@
     :copilot/model.call_failure
     :copilot/session.extensions.attachments_pushed
     :copilot/session.canvas.opened
+    :copilot/session.canvas.closed
     :copilot/session.canvas.registry_changed})
 
 (def session-events
@@ -983,6 +984,25 @@
    ```"
   [session]
   (session/capabilities session))
+
+(defn open-canvases
+  "Get the current open-canvases snapshot for `session`. Returns a vector of
+  canvas-instance maps. The snapshot is initialized from `session.resume` and
+  updated by `:copilot/session.canvas.opened` / `:copilot/session.canvas.closed`
+  events. `session.create` does NOT populate it (matches upstream Node.js).
+
+  Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`,
+  `:reopen`, `:availability` and optional `:extension-name`, `:title`,
+  `:status`, `:url`, `:input`.
+
+  Example:
+  ```clojure
+  (copilot/open-canvases session)
+  ;; => [{:instance-id \"i1\" :canvas-id \"diff\" :extension-id \"ext.x\"
+  ;;      :reopen false :availability \"ready\"}]
+  ```"
+  [session]
+  (session/open-canvases session))
 
 (defn elicitation-supported?
   "Check if the CLI host supports interactive elicitation dialogs.

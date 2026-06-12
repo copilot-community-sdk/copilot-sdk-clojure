@@ -3,6 +3,51 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.1 sync)
+- **`open-canvases` snapshot** — port of upstream PR #1604. A new
+  `github.copilot-sdk/open-canvases` (also `github.copilot-sdk.session/open-canvases`)
+  returns the per-session vector of currently-open canvases. The snapshot is
+  initialized from the `session.resume` response (`session.create` does NOT
+  populate it, matching upstream Node.js client) and updated by the
+  `:copilot/session.canvas.opened` and `:copilot/session.canvas.closed`
+  events. Missing/blank `:instance-id` payloads log a warning and no-op.
+- **`:copilot/session.canvas.closed` event type** — newly added in upstream
+  PR #1604. Fires when a canvas is closed; the SDK removes the matching
+  entry from the open-canvases snapshot before publishing the event so
+  observers see consistent state.
+- **New optional event-data fields** (upstream schema 1.0.57 → 1.0.61):
+  - `:copilot/session.resume` and `:copilot/session.shutdown`:
+    `:events-file-size-bytes` (`nat-int?`).
+  - `:copilot/assistant.message`: `:api-call-id`.
+  - `:copilot/hook.progress`: `:temporary` (`boolean?`).
+  - `:copilot/session.schedule_created`: `:at`, `:cron`, `:tz` (with
+    `:interval-ms` relaxed to optional — schedules can now use
+    cron / fixed-time variants instead of intervals).
+
+### Changed (v1.0.1 sync)
+- Bumped pinned `@github/copilot` schema 1.0.57 → 1.0.61, regenerating
+  `generated/event_specs.clj` and `generated/coerce.clj`.
+
+### Added (v1.0.1 sync follow-up)
+- **`:open-canvases` accepted in `resume-session` / `join-session` config**
+  (upstream `ResumeSessionConfig.openCanvases`). Lets callers seed the
+  open-canvases snapshot when reconnecting to a session.
+
+### Changed (v1.0.1 sync follow-up)
+- **Strict validation on `session.canvas.opened` upserts** — payloads missing
+  any of `:instance-id`, `:extension-id`, `:canvas-id`, `:reopen` (boolean),
+  or `:availability` (`"ready"` / `"stale"`) are now no-ops with a warn log,
+  matching upstream `isOpenCanvasInstance`.
+- **`:input` map keys preserved verbatim** on `session.canvas.opened` events,
+  on `openCanvases` returned by `session.resume`, and when sent outbound via
+  the `:open-canvases` resume config. Caller-defined opaque keys (e.g.
+  `:user_id`, nested or non-camelCase) are NOT re-cased by wire conversion.
+
+### Fixed (v1.0.1 sync follow-up)
+- `:github.copilot-sdk.specs/at` now requires `pos-int?` (was lax `number?`).
+  `at` represents an epoch-ms timestamp, so non-integer or non-positive
+  values are invalid by construction.
+
 ## [1.0.0.0] - 2026-06-04
 ### Highlights
 First generally available (GA) release, at full API/wire/schema parity with
