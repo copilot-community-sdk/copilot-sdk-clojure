@@ -23,6 +23,9 @@
                                   (or the async ``copilot/<handle-pending-tool-call!``).
      - :overrides-built-in-tool - When true, explicitly overrides a built-in tool of the same name.
                                   Without this flag, name clashes with built-in tools cause an error.
+     - :defer                   - `:auto` or `:never` (upstream PR #1632). Controls whether the tool may
+                                  be deferred (loaded lazily via tool search) rather than always pre-loaded.
+                                  `:auto` allows deferral; `:never` forces pre-loading. Defaults to `:auto`.
    
    The handler (when provided) receives:
    - args       - The parsed arguments from the LLM (no key conversion)
@@ -54,7 +57,7 @@
    ;; Listen for :copilot/external_tool.requested events and resolve via
    ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
-  [name {:keys [description parameters handler overrides-built-in-tool]}]
+  [name {:keys [description parameters handler overrides-built-in-tool defer]}]
   (cond-> {:tool-name name
            :tool-description description
            :tool-parameters parameters}
@@ -64,7 +67,9 @@
     (some? handler)
     (assoc :tool-handler handler)
     (some? overrides-built-in-tool)
-    (assoc :overrides-built-in-tool overrides-built-in-tool)))
+    (assoc :overrides-built-in-tool overrides-built-in-tool)
+    (some? defer)
+    (assoc :defer defer)))
 
 (defn define-tool-from-spec
   "Define a tool using a clojure.spec for parameter validation.
@@ -93,7 +98,10 @@
                                   validation occurs in the declaration-only
                                   path).
      - :overrides-built-in-tool - When true, overrides a built-in tool of the same name
-   
+     - :defer                   - `:auto` or `:never` (upstream PR #1632). When `:auto` the tool may be
+                                  deferred (loaded lazily via tool search); `:never` forces pre-loading.
+                                  Defaults to `:auto`.
+
    Example (with handler):
    ```clojure
    (s/def ::location string?)
@@ -117,7 +125,7 @@
    ;; Resolve pending calls via
    ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
-  [name {:keys [description spec handler overrides-built-in-tool]}]
+  [name {:keys [description spec handler overrides-built-in-tool defer]}]
   ;; For now, we don't auto-convert spec to JSON schema
   ;; The handler should validate using the spec
   (cond-> {:tool-name name
@@ -134,7 +142,9 @@
                               :error "spec validation failed"}
                              (handler args invocation))))
     (some? overrides-built-in-tool)
-    (assoc :overrides-built-in-tool overrides-built-in-tool)))
+    (assoc :overrides-built-in-tool overrides-built-in-tool)
+    (some? defer)
+    (assoc :defer defer)))
 
 (defn result-success
   "Create a successful tool result."

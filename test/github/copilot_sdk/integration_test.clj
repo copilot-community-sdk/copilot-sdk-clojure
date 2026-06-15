@@ -1376,6 +1376,79 @@
       (is (not (contains? wire-tool :overridesBuiltInTool))
           "overridesBuiltInTool should be absent when not set"))))
 
+(deftest test-defer-on-wire
+  ;; Upstream PR #1632: tool definitions accept an optional `defer` of
+  ;; "auto" | "never". The idiom uses keywords (:auto / :never) and the
+  ;; keyword is converted to its wire string via (name kw).
+  (testing "defer is sent on the wire on session.create (keyword -> string)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          tool (sdk/define-tool "lookup_issue"
+                 {:description "Fetch issue details"
+                  :defer :auto
+                  :handler (fn [_ _] "ok")})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
+          wire-tool (first (:tools (get @seen "session.create")))]
+      (is (some? wire-tool) "tool should be present in wire payload")
+      (is (= "auto" (:defer wire-tool))
+          "defer :auto must be sent as the wire string \"auto\"")))
+
+  (testing "defer :never is sent as the wire string \"never\""
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          tool (sdk/define-tool "lookup_issue"
+                 {:description "Fetch issue details"
+                  :defer :never
+                  :handler (fn [_ _] "ok")})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
+          wire-tool (first (:tools (get @seen "session.create")))]
+      (is (= "never" (:defer wire-tool))
+          "defer :never must be sent as the wire string \"never\"")))
+
+  (testing "defer is absent on the wire when not set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create"} method)
+                                                      (swap! seen assoc method params))))
+          tool (sdk/define-tool "my_tool" {:description "A tool" :handler (fn [_ _] "ok")})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all :tools [tool]})
+          wire-tool (first (:tools (get @seen "session.create")))]
+      (is (some? wire-tool) "tool should be present in wire payload")
+      (is (not (contains? wire-tool :defer))
+          "defer should be absent when not set")))
+
+  (testing "defer is sent on the wire on session.resume"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          tool (sdk/define-tool "lookup_issue"
+                 {:description "Fetch issue details"
+                  :defer :auto
+                  :handler (fn [_ _] "ok")})
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all :tools [tool]})
+          wire-tool (first (:tools (get @seen "session.resume")))]
+      (is (some? wire-tool) "tool should be present in resume wire payload")
+      (is (= "auto" (:defer wire-tool))
+          "defer must be sent on session.resume too"))))
+
+(deftest test-defer-spec
+  (testing "::tool accepts :defer :auto and :never"
+    (is (s/valid? ::specs/tool {:tool-name "t" :defer :auto}))
+    (is (s/valid? ::specs/tool {:tool-name "t" :defer :never})))
+  (testing "::tool rejects an invalid or non-keyword :defer"
+    (is (not (s/valid? ::specs/tool {:tool-name "t" :defer "auto"}))
+        "wire string is not a valid idiom value")
+    (is (not (s/valid? ::specs/tool {:tool-name "t" :defer :bogus}))
+        ":bogus is not a member of #{:auto :never}")))
+
 ;; -----------------------------------------------------------------------------
 ;; Permission Tests (upstream PR #509: deny-by-default)
 ;; -----------------------------------------------------------------------------

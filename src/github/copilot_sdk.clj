@@ -1184,6 +1184,9 @@
      - :parameters              - JSON schema for parameters
      - :handler                 - Function (fn [args invocation] -> result)
      - :overrides-built-in-tool - When true, overrides a built-in tool of the same name
+     - :defer                   - `:auto` or `:never` (upstream PR #1632). When `:auto` the tool may be
+                                  deferred (loaded lazily via tool search); `:never` forces pre-loading.
+                                  Defaults to `:auto`.
 
    The handler receives:
    - args       - The parsed arguments from the LLM

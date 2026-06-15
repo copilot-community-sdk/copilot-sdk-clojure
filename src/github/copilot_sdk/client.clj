@@ -1665,6 +1665,22 @@
     (cond-> (dissoc lo :output-directory)
       dir (assoc :output-dir dir))))
 
+(defn- tool-def->wire
+  "Convert a single tool definition to its wire shape for session.create /
+   session.resume. Shared by both builders so the two paths cannot drift.
+   `:defer` (upstream PR #1632) is an idiom keyword (:auto | :never) sent as
+   its wire string."
+  [t]
+  (cond-> {:name (:tool-name t)
+           :description (:tool-description t)
+           :parameters (:tool-parameters t)}
+    (some? (:overrides-built-in-tool t))
+    (assoc :overridesBuiltInTool (:overrides-built-in-tool t))
+    (some? (:skip-permission? t))
+    (assoc :skipPermission (:skip-permission? t))
+    (some? (:defer t))
+    (assoc :defer (name (:defer t)))))
+
 (defn- config-defaults-for-mode
   "Mode-specific session config defaults spread UNDER the caller's config
    (caller's values always win). Mirrors upstream `configDefaultsForMode`
@@ -1791,15 +1807,7 @@
   (when-let [servers (:mcp-servers config)]
     (ensure-valid-mcp-servers! servers))
   (let [wire-tools (when (:tools config)
-                     (mapv (fn [t]
-                             (cond-> {:name (:tool-name t)
-                                      :description (:tool-description t)
-                                      :parameters (:tool-parameters t)}
-                               (some? (:overrides-built-in-tool t))
-                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))
-                               (some? (:skip-permission? t))
-                               (assoc :skipPermission (:skip-permission? t))))
-                           (:tools config)))
+                     (mapv tool-def->wire (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
@@ -1949,15 +1957,7 @@
   (when-let [servers (:mcp-servers config)]
     (ensure-valid-mcp-servers! servers))
   (let [wire-tools (when (:tools config)
-                     (mapv (fn [t]
-                             (cond-> {:name (:tool-name t)
-                                      :description (:tool-description t)
-                                      :parameters (:tool-parameters t)}
-                               (some? (:overrides-built-in-tool t))
-                               (assoc :overridesBuiltInTool (:overrides-built-in-tool t))
-                               (some? (:skip-permission? t))
-                               (assoc :skipPermission (:skip-permission? t))))
-                           (:tools config)))
+                     (mapv tool-def->wire (:tools config)))
         wire-sys-msg (when-let [sm (:system-message config)]
                        (system-message->wire sm))
         wire-provider (when-let [provider (:provider config)]
