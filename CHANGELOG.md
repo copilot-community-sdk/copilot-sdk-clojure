@@ -3,6 +3,17 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.1 sync)
+- **`:defer` tool-definition option** — port of upstream
+  [PR #1632](https://github.com/github/copilot-sdk/pull/1632). `define-tool` and
+  `define-tool-from-spec` now accept an optional `:defer` keyword (`:auto` or
+  `:never`) that controls whether a tool may be deferred (loaded lazily via tool
+  search) rather than always pre-loaded. The keyword is converted to the wire
+  string (`"auto"` / `"never"`) and sent on the tool definition in both
+  `session.create` and `session.resume`; when omitted the field is not sent and
+  the runtime applies its default (`"auto"`). Added `::defer` value spec
+  (`#{:auto :never}`) to the `::tool` spec.
+
 ### Added (v1.0.1 sync)
 - **`open-canvases` snapshot** — port of upstream PR #1604. A new
   `github.copilot-sdk/open-canvases` (also `github.copilot-sdk.session/open-canvases`)

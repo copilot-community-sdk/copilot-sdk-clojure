@@ -235,6 +235,10 @@
 (s/def ::tool-handler fn?)
 (s/def ::overrides-built-in-tool boolean?)
 (s/def ::skip-permission? boolean?)
+;; Upstream PR #1632: controls whether a tool may be deferred (loaded lazily via
+;; tool search) rather than always pre-loaded. The idiom uses keywords; the
+;; value is sent on the wire as the corresponding string ("auto" | "never").
+(s/def ::defer #{:auto :never})
 
 (s/def ::tool
   ;; Upstream PR #1308: handler is now optional. Tools without a handler are
@@ -242,7 +246,7 @@
   ;; and the consumer resolves them via `handle-pending-tool-call!`.
   (s/keys :req-un [::tool-name]
           :opt-un [::tool-handler ::tool-description ::tool-parameters
-                   ::overrides-built-in-tool ::skip-permission?]))
+                   ::overrides-built-in-tool ::skip-permission? ::defer]))
 
 (s/def ::tools (s/coll-of ::tool))
 
