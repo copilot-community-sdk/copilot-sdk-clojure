@@ -1842,6 +1842,21 @@ Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `
                 (copilot/result-success (my-custom-grep pattern)))}))
 ```
 
+**Deferring tools:**
+
+Set `:defer` to `:auto` or `:never` (upstream PR #1632) to control whether a tool may be *deferred* — loaded lazily via tool search rather than always pre-loaded into the model's context. `:auto` (the default) lets the runtime defer the tool; `:never` forces it to be pre-loaded. Deferring large tool sets keeps the active context smaller.
+
+```clojure
+(def always-loaded
+  (copilot/define-tool "critical_action"
+    {:description "A tool that must always be available"
+     :defer :never
+     :parameters {:type "object" :properties {}}
+     :handler (fn [_ _] (copilot/result-success "done"))}))
+```
+
+The keyword is converted to the wire string (`:auto` -> `"auto"`, `:never` -> `"never"`); when `:defer` is omitted the field is not sent and the runtime applies its default.
+
 **Handler return values:**
 
 | Return Type | Description |
