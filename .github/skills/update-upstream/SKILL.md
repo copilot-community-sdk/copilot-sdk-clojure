@@ -174,4 +174,6 @@ Real recurring traps when porting upstream changes:
 
 5. **Outbound optional fields: match upstream's omit-vs-null behavior per RPC.** Don't reflexively gate an optional wire field on `contains?` and emit JSON `null`. Some patch RPCs (e.g. `session.options.update`) genuinely accept `null` to clear a value; others (e.g. `session.model.switchTo`) have no null variant in the schema — upstream spreads `...options`, dropping `undefined`. Check the upstream call site and the request schema: if the field has no null union, compute the wire value first and gate on `(some? v)` so a `nil` option omits the key instead of sending `null`.
 
+6. **`session.create` and `session.resume` build wire params in two separate functions — keep shared sub-shapes in a named helper.** `build-create-session-params` and `build-resume-session-params` both emit tool defs, system message, provider, MCP servers, custom agents, and commands. A new field on any shape sent by both must be added to both builders, or it ships on create and silently vanishes on resume. Funnel each shared sub-shape through one `*->wire` helper (e.g. `tool-def->wire`, `util/mcp-servers->wire`) rather than duplicating a `cond->` inline.
+
 For the mechanics of camelCase ↔ kebab-case conversion (including the `?`-suffix rule), see the cheat sheet in `references/PROJECT.md`.
