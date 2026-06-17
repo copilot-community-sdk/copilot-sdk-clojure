@@ -76,6 +76,8 @@
              (assoc "COPILOT_OTEL_EXPORTER_TYPE" (:exporter-type telemetry))
              (:source-name telemetry)
              (assoc "COPILOT_OTEL_SOURCE_NAME" (:source-name telemetry))
+             (:otlp-protocol telemetry)
+             (assoc "OTEL_EXPORTER_OTLP_PROTOCOL" (:otlp-protocol telemetry))
              (some? (:capture-content? telemetry))
              (assoc "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
                     (str (:capture-content? telemetry))))))})
@@ -190,6 +192,20 @@
   [^ManagedProcess mp]
   (when-let [^Process p (:process mp)]
     (.isAlive p)))
+
+(defn wait-for-exit!
+  "Block until the process exits or timeout-ms elapses.
+   Returns true if the process exited, false on timeout.
+
+   Uses `Process.waitFor`, which is safe to call concurrently with the
+   exit-chan monitor thread (and any other waiters) on the same process.
+   When there is no underlying process, returns true (nothing to wait for)."
+  [^ManagedProcess mp timeout-ms]
+  (if-let [^Process p (:process mp)]
+    (try
+      (.waitFor p timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
+      (catch Exception _ false))
+    true))
 
 (defn wait-for-port
   "Wait for TCP server to announce its port on stdout.

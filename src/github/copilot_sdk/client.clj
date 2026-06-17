@@ -200,7 +200,7 @@
     - :use-logged-in-user? - Whether to use logged-in user auth (default: true, false when github-token provided)
     - :is-child-process? - When true, SDK is a child of an existing Copilot CLI process and uses stdio to communicate with it (no process spawning)
     - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
-    - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :file-path, :exporter-type, :source-name, :capture-content?
+    - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :otlp-protocol, :file-path, :exporter-type, :source-name, :capture-content?. :otlp-protocol is \"http/json\" or \"http/protobuf\" and sets OTEL_EXPORTER_OTLP_PROTOCOL.
     - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
     - :session-idle-timeout-seconds - Server-wide session idle timeout in seconds. When > 0,
                        the SDK appends `--session-idle-timeout <n>` to the spawned CLI so idle
@@ -1104,6 +1104,14 @@
   "Stop the CLI server and close all sessions.
    Returns a vector of any errors encountered during cleanup.
 
+   Performs graceful cleanup in order: disconnect sessions, request
+   `runtime.shutdown` for SDK-owned CLI processes (bounded by a 10s timeout),
+   close the connection and socket, then terminate the process. When the
+   `runtime.shutdown` request succeeds, the child is given up to 10s to exit on
+   its own before being force-killed. External runtimes (`:external-server?`)
+   are never asked to shut down — only the connection to them is closed. Use
+   force-stop! to skip graceful shutdown.
+
    Thread safety: do not call start! and stop! concurrently from different
    threads. Auto-restart is suppressed via the :stopping? flag, but explicit
    concurrent calls are unsupported."
@@ -1111,6 +1119,7 @@
   (log/info "Stopping Copilot client...")
   (swap! (:state client) assoc :stopping? true)
   (let [errors (atom [])
+        runtime-shutdown-completed? (atom false)
         {:keys [sessions session-io process connection-io socket]} @(:state client)]
     (try
       ;; 0. Stop notification routing
@@ -1132,6 +1141,17 @@
                             {:session-id session-id} e)))))
       (swap! (:state client) assoc :sessions {} :session-io {})
 
+      ;; 1b. Ask SDK-owned runtimes to flush and clean up before tearing down
+      ;; their transport/process. External runtimes may be shared, so we only
+      ;; close our connection to them (see step 2). Bounded by a 10s timeout.
+      (when (and connection-io process (not (:external-server? client)))
+        (try
+          (proto/send-request! connection-io "runtime.shutdown" {} 10000)
+          (reset! runtime-shutdown-completed? true)
+          (catch Exception e
+            (swap! errors conj
+                   (ex-info "Failed to gracefully shut down runtime" {} e)))))
+
       ;; 2. Close connection (non-blocking, may leave read thread blocked for stdio)
       (when connection-io
         (try
@@ -1150,10 +1170,14 @@
                    (ex-info "Failed to close socket" {} e))))
         (swap! (:state client) assoc :socket nil))
 
-      ;; 4. Kill CLI process (this also unblocks any stdio read thread)
+      ;; 4. Terminate the CLI process (this also unblocks any stdio read thread).
+      ;; When runtime.shutdown succeeded, give the child up to 10s to exit on its
+      ;; own first; only force-kill (SIGTERM->wait->SIGKILL) if it overstays.
       (when (and (not (:external-server? client)) process)
         (try
-          (proc/destroy! process)
+          (when-not (and @runtime-shutdown-completed?
+                         (proc/wait-for-exit! process 10000))
+            (proc/destroy! process))
           (catch Exception e
             (swap! errors conj
                    (ex-info "Failed to kill CLI process" {} e))))
@@ -1357,7 +1381,11 @@
                                                              :max-prompt-images
                                                              :max-prompt-image-size}}}
    :model-policy {:policy-state :terms}
-   :model-billing {:multiplier}
+   :model-billing {:multiplier
+                   :token-prices {:input-price :output-price :cache-price
+                                  :batch-size :context-max
+                                  :long-context {:input-price :output-price
+                                                 :cache-price :context-max}}}
    :supported-reasoning-efforts :default-reasoning-effort
    :supports-reasoning-effort (legacy flat key)
    :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size} (legacy)"
@@ -1686,10 +1714,11 @@
    (caller's values always win). Mirrors upstream `configDefaultsForMode`
    in `client.ts` (upstream PR #1428).
 
-   In `:empty` mode this returns the 9 safe defaults that enable
+   In `:empty` mode this returns the 10 safe defaults that enable
    multitenancy hardening (no telemetry, in-memory token + embedding
-   storage, no host filesystem / git / skills). In `:copilot-cli`
-   mode this returns `{}` so the historical behavior is preserved."
+   storage, no host filesystem / git / skills, no persistent memory). In
+   `:copilot-cli` mode this returns `{}` so the historical behavior is
+   preserved."
   [mode]
   (if (= mode :empty)
     {:enable-session-telemetry? false
@@ -1700,7 +1729,8 @@
      :enable-file-hooks false
      :enable-host-git-operations false
      :enable-session-store false
-     :enable-skills false}
+     :enable-skills false
+     :memory {:enabled false}}
     {}))
 
 (defn- normalize-config-for-mode
@@ -1827,7 +1857,9 @@
                                   (assoc :description (:description c))))
                               cmds))
         config-dir (or (:config-directory config) (:config-dir config))
-        wire-large-output (some-> (:large-output config) large-output->wire)]
+        wire-large-output (some-> (:large-output config) large-output->wire)
+        wire-memory (when-let [m (:memory config)]
+                      (util/clj->wire m))]
     (cond-> {}
       (:session-id config) (assoc :session-id (:session-id config))
       (:client-name config) (assoc :client-name (:client-name config))
@@ -1858,6 +1890,7 @@
       wire-large-output (assoc :large-output wire-large-output)
       (:working-directory config) (assoc :working-directory (:working-directory config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
+      wire-memory (assoc :memory wire-memory)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:reasoning-summary config) (assoc :reasoning-summary (:reasoning-summary config))
       (contains? config :context-tier)
@@ -1977,7 +2010,9 @@
                                   (assoc :description (:description c))))
                               cmds))
         config-dir (or (:config-directory config) (:config-dir config))
-        wire-large-output (some-> (:large-output config) large-output->wire)]
+        wire-large-output (some-> (:large-output config) large-output->wire)
+        wire-memory (when-let [m (:memory config)]
+                      (util/clj->wire m))]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
@@ -2005,6 +2040,7 @@
       (:plugin-directories config) (assoc :plugin-directories (:plugin-directories config))
       wire-large-output (assoc :large-output wire-large-output)
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
+      wire-memory (assoc :memory wire-memory)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
       (:reasoning-summary config) (assoc :reasoning-summary (:reasoning-summary config))
       (contains? config :context-tier)
@@ -2175,6 +2211,8 @@
                             {:enabled (default true)
                              :background-compaction-threshold (0.0-1.0, default 0.80)
                              :buffer-exhaustion-threshold (0.0-1.0, default 0.95)}
+    - :memory             - Persistent memory config {:enabled boolean} (upstream PR #1617).
+                            Sent on both create and resume; omitted when unset.
     - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\" (PR #302)
     - :github-token       - GitHub token for this session (sent as gitHubToken)
     - :on-user-input-request - Handler for ask_user requests (PR #269)
@@ -2335,6 +2373,8 @@
    - :skill-directories  - Directories to load skills from
     - :disabled-skills    - Skills to disable
     - :infinite-sessions  - Infinite session configuration
+    - :memory             - Persistent memory config {:enabled boolean} (upstream PR #1617).
+                            Parity with create-session; omitted when unset.
     - :reasoning-effort   - Reasoning effort level: \"low\", \"medium\", \"high\", or \"xhigh\"
     - :github-token       - GitHub token for this session (sent as gitHubToken)
     - :on-user-input-request - Handler for ask_user requests

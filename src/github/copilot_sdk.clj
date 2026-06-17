@@ -62,6 +62,7 @@
     :copilot/session.warning
     :copilot/session.mode_changed
     :copilot/session.plan_changed
+    :copilot/session.todos_changed
     :copilot/session.workspace_file_changed
     :copilot/session.task_complete
     :copilot/user.message
@@ -162,6 +163,7 @@
     :copilot/session.warning
     :copilot/session.mode_changed
     :copilot/session.plan_changed
+    :copilot/session.todos_changed
     :copilot/session.workspace_file_changed
     :copilot/session.task_complete
     :copilot/session.schedule_created

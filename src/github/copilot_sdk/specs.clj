@@ -74,9 +74,13 @@
 (s/def ::exporter-type string?)
 (s/def ::source-name string?)
 (s/def ::capture-content? boolean?)
+;; OTLP HTTP protocol for all signals; sets OTEL_EXPORTER_OTLP_PROTOCOL
+;; (upstream commit b5ce1c89).
+(s/def ::otlp-protocol #{"http/json" "http/protobuf"})
 
 (s/def ::telemetry
-  (s/keys :opt-un [::otlp-endpoint ::file-path ::exporter-type ::source-name ::capture-content?]))
+  (s/keys :opt-un [::otlp-endpoint ::file-path ::exporter-type ::source-name
+                   ::capture-content? ::otlp-protocol]))
 
 ;; Trace context provider: 0-arity fn returning {:traceparent ... :tracestate ...}
 (s/def ::on-get-trace-context fn?)
@@ -332,14 +336,15 @@
 (s/def ::mcp-args (s/coll-of string?))
 (s/def ::mcp-url ::non-blank-string)
 (s/def ::mcp-headers (s/map-of string? string?))
+(s/def ::mcp-defer-tools #{:auto :never})
 
 (s/def ::mcp-local-server
   (s/keys :req-un [::mcp-command ::mcp-tools]
-          :opt-un [::mcp-args ::mcp-server-type ::mcp-timeout ::env ::cwd]))
+          :opt-un [::mcp-args ::mcp-server-type ::mcp-timeout ::env ::cwd ::mcp-defer-tools]))
 
 (s/def ::mcp-remote-server
   (s/keys :req-un [::mcp-server-type ::mcp-url ::mcp-tools]
-          :opt-un [::mcp-timeout ::mcp-headers]))
+          :opt-un [::mcp-timeout ::mcp-headers ::mcp-defer-tools]))
 
 ;; New canonical names (upstream PR #1051)
 (s/def ::mcp-stdio-server ::mcp-local-server)
@@ -480,6 +485,11 @@
 (s/def ::buffer-exhaustion-threshold (s/and number? #(<= 0.0 % 1.0)))
 (s/def ::infinite-sessions
   (s/keys :opt-un [::enabled ::background-compaction-threshold ::buffer-exhaustion-threshold]))
+
+;; Memory configuration (upstream PR #1638). Lets the agent persist and recall
+;; information across turns. `:enabled` is required by MemoryConfiguration.
+(s/def ::memory
+  (s/keys :req-un [::enabled]))
 
 ;; Reasoning effort support (PR #302)
 (s/def ::reasoning-effort #{"low" "medium" "high" "xhigh"})
@@ -664,6 +674,7 @@
     :instruction-directories
     :plugin-directories
     :disabled-skills :large-output :infinite-sessions
+    :memory
     :reasoning-effort :reasoning-summary :context-tier
     :on-user-input-request :on-elicitation-request :hooks
     :on-exit-plan-mode :on-auto-mode-switch
@@ -702,6 +713,7 @@
                     ::instruction-directories
                     ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
+                    ::memory
                     ::reasoning-effort ::reasoning-summary ::context-tier
                     ::on-user-input-request ::on-elicitation-request ::hooks
                     ::on-exit-plan-mode ::on-auto-mode-switch
@@ -735,6 +747,7 @@
     :instruction-directories
     :plugin-directories
     :disabled-skills :large-output :infinite-sessions
+    :memory
     :reasoning-effort :reasoning-summary :context-tier
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
     :on-exit-plan-mode :on-auto-mode-switch
@@ -771,6 +784,7 @@
                     ::instruction-directories
                     ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
+                    ::memory
                     ::reasoning-effort ::reasoning-summary ::context-tier
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-exit-plan-mode ::on-auto-mode-switch
@@ -809,6 +823,7 @@
                     ::instruction-directories
                     ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
+                    ::memory
                     ::reasoning-effort ::reasoning-summary ::context-tier
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-exit-plan-mode ::on-auto-mode-switch
@@ -1044,7 +1059,8 @@
     :copilot/session.compaction_start :copilot/session.compaction_complete
     :copilot/session.shutdown :copilot/session.task_complete
     :copilot/session.title_changed :copilot/session.warning :copilot/session.context_changed
-    :copilot/session.mode_changed :copilot/session.plan_changed :copilot/session.workspace_file_changed
+    :copilot/session.mode_changed :copilot/session.plan_changed :copilot/session.todos_changed
+    :copilot/session.workspace_file_changed
     :copilot/user.message :copilot/pending_messages.modified
     :copilot/assistant.turn_start :copilot/assistant.intent :copilot/assistant.reasoning
     :copilot/assistant.reasoning_delta :copilot/assistant.message :copilot/assistant.message_delta
@@ -1221,14 +1237,19 @@
 (s/def ::handled? boolean?)
 (s/def ::stop-processing-queue? boolean?)
 
-(s/def ::anthropic-advisor-blocks (s/coll-of any?))
-(s/def ::anthropic-advisor-model string?)
+;; :server-tools — added upstream CLI 1.0.63, replacing the removed
+;; anthropicAdvisorBlocks/anthropicAdvisorModel fields. Neutral provider-tagged
+;; server-side tool-use payload (tool search, advisor) round-tripped verbatim.
+;; Open map — passes through opaquely. :service-request-id is the
+;; x-copilot-service-request-id header for CAPI log correlation.
+(s/def ::server-tools map?)
+(s/def ::service-request-id string?)
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
                    ::interaction-id ::output-tokens ::phase ::reasoning-opaque
                    ::reasoning-text ::request-id ::api-call-id
-                   ::anthropic-advisor-blocks ::anthropic-advisor-model ::model]))
+                   ::server-tools ::service-request-id ::turn-id ::model]))
 
 (s/def ::total-response-size-bytes nat-int?)
 (s/def ::turn-id ::non-blank-string)
@@ -1276,6 +1297,12 @@
 ;; doesn't so unknown future values pass through.
 (s/def ::api-endpoint string?)
 
+;; :content-filter-triggered, :finish-reason — added upstream CLI 1.0.63.
+;; True when the provider's content filter blocked output; finish-reason is the
+;; provider's completion reason string (e.g. "stop", "length", "content_filter").
+(s/def ::content-filter-triggered boolean?)
+(s/def ::finish-reason string?)
+
 (s/def ::assistant.usage-data
   (s/keys :req-un [::model]
           :opt-un [::api-call-id ::api-endpoint ::cache-read-tokens
@@ -1283,7 +1310,8 @@
                    ::initiator ::input-tokens ::inter-token-latency-ms
                    ::output-tokens ::parent-tool-call-id ::provider-call-id
                    ::quota-snapshots ::reasoning-effort ::reasoning-tokens
-                   ::time-to-first-token-ms ::ttft-ms]))
+                   ::time-to-first-token-ms ::ttft-ms
+                   ::content-filter-triggered ::finish-reason]))
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
@@ -1664,8 +1692,21 @@
 
 ;; Model billing
 (s/def ::multiplier number?)
+;; :token-prices — added upstream CLI 1.0.63 (AI Credits pricing metadata).
+;; All fields are AI Credits per billing batch unless noted. The :long-context
+;; tier mirrors the standard tier minus :batch-size and its own :long-context.
+(s/def ::input-price number?)
+(s/def ::output-price number?)
+(s/def ::cache-price number?)
+(s/def ::batch-size number?)
+(s/def ::context-max number?)
+(s/def ::long-context
+  (s/keys :opt-un [::input-price ::output-price ::cache-price ::context-max]))
+(s/def ::token-prices
+  (s/keys :opt-un [::input-price ::output-price ::cache-price ::batch-size
+                   ::context-max ::long-context]))
 (s/def ::model-billing
-  (s/keys :opt-un [::multiplier]))
+  (s/keys :opt-un [::multiplier ::token-prices]))
 
 ;; Supported reasoning efforts
 (s/def ::supported-reasoning-efforts (s/coll-of string?))

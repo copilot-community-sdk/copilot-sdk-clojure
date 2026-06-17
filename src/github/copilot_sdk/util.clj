@@ -96,12 +96,14 @@
    :mcp-server-type :type
    :mcp-timeout :timeout
    :mcp-url :url
-   :mcp-headers :headers})
+   :mcp-headers :headers
+   :mcp-defer-tools :defer-tools})
 
 (defn mcp-server->wire
   "Convert a single MCP server config from Clojure idiom to wire format.
    Strips the :mcp- prefix from MCP-specific keys, then converts remaining
-   keys to camelCase. Keyword values for :type are converted to strings.
+   keys to camelCase. Keyword values for :type and :defer-tools are converted
+   to strings.
    Example: {:mcp-command \"node\" :mcp-args [\"x\"] :mcp-server-type :http}
    becomes {\"command\" \"node\" \"args\" [\"x\"] \"type\" \"http\"}."
   [m]
@@ -112,7 +114,10 @@
         ;; Convert keyword values for :type to strings (upstream expects string)
         stringified (cond-> renamed
                       (keyword? (:type renamed))
-                      (update :type name))]
+                      (update :type name)
+
+                      (keyword? (:defer-tools renamed))
+                      (update :defer-tools name))]
     (clj->wire stringified)))
 
 (defn mcp-servers->wire
