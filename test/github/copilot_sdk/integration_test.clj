@@ -7,6 +7,7 @@
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
             [github.copilot-sdk.protocol :as protocol]
+            [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.tools :as tools]
@@ -2072,13 +2073,21 @@
     (is (s/valid? :github.copilot-sdk.specs/permission-kind :extension-permission-access))
     (is (false? (s/valid? :github.copilot-sdk.specs/permission-kind :bogus-kind))))
 
-  (testing "::assistant.message-data accepts new advisor + model fields (CLI 1.0.45)"
+  (testing "::assistant.message-data accepts :server-tools + :service-request-id (CLI 1.0.63)"
     (is (s/valid? :github.copilot-sdk.specs/assistant.message-data
                   {:message-id "m1"
                    :content "answer"
-                   :anthropic-advisor-blocks [{:type "server_tool_use"}]
-                   :anthropic-advisor-model "claude-advisor"
-                   :model "gpt-5"})))
+                   :server-tools {:advisor-model "claude-advisor"}
+                   :service-request-id "req-1"
+                   :model "gpt-5"}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/assistant.message-data
+                          {:message-id "m1"
+                           :content "answer"
+                           :server-tools "not-a-map"})))
+    (is (false? (s/valid? :github.copilot-sdk.specs/assistant.message-data
+                          {:message-id "m1"
+                           :content "answer"
+                           :service-request-id 42}))))
 
   (testing "::session.start-data accepts :detached-from-spawning-parent-session-id (CLI 1.0.44-3)"
     (is (s/valid? :github.copilot-sdk.specs/session.start-data
@@ -5829,7 +5838,7 @@
           "tool-filter-precedence must always be \"excluded\" on resume"))))
 
 (deftest test-empty-mode-spreads-config-defaults-under-caller
-  (testing "empty mode spreads the 9 safe defaults under caller config (PR #1428)"
+  (testing "empty mode spreads the 10 safe defaults under caller config (PR #1428)"
     (let [server (mock/create-mock-server)
           _ (mock/start-mock-server! server)
           seen (atom {})
@@ -5856,7 +5865,50 @@
           (is (= false (:enableHostGitOperations p)))
           (is (= false (:enableSessionStore p)))
           (is (= false (:enableSkills p)))
+          (is (= {:enabled false} (:memory p))
+              "empty mode disables persistent memory by default")
           (is (= "excluded" (:toolFilterPrecedence p))))
+        (finally
+          (try (sdk/stop! client) (catch Exception _))
+          (Thread/sleep 50)
+          (mock/stop-mock-server! server))))))
+
+(deftest test-empty-mode-memory-default-on-create-and-resume
+  (testing "empty mode sends memory {:enabled false} by default on create and resume,
+            and the caller can override it (upstream configDefaultsForMode)"
+    (let [server (mock/create-mock-server)
+          _ (mock/start-mock-server! server)
+          seen (atom {})
+          _ (mock/set-request-hook! server
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          client (sdk/client {:mode :empty
+                              :copilot-home "/tmp/empty-mode-memory-test"
+                              :auto-start? false})
+          [in out] (mock/client-streams server)]
+      (try
+        (client/connect-with-streams! client in out)
+        ;; Default: no caller :memory -> empty-mode default flows to the wire.
+        (sdk/create-session client
+                            {:on-permission-request sdk/approve-all
+                             :available-tools ["builtin:think"]})
+        (is (= {:enabled false} (:memory (get @seen "session.create")))
+            "create defaults memory to {:enabled false} in empty mode")
+        (let [session-id (sdk/get-last-session-id client)]
+          (sdk/resume-session client session-id
+                              {:on-permission-request sdk/approve-all
+                               :available-tools ["builtin:think"]})
+          (is (= {:enabled false} (:memory (get @seen "session.resume")))
+              "resume defaults memory to {:enabled false} in empty mode"))
+        ;; Caller override wins over the mode default.
+        (reset! seen {})
+        (sdk/create-session client
+                            {:on-permission-request sdk/approve-all
+                             :available-tools ["builtin:think"]
+                             :memory {:enabled true}})
+        (is (= {:enabled true} (:memory (get @seen "session.create")))
+            "caller-provided :memory overrides the empty-mode default")
         (finally
           (try (sdk/stop! client) (catch Exception _))
           (Thread/sleep 50)
@@ -6700,3 +6752,154 @@
     (is (not (s/valid? :github.copilot-sdk.specs/session.schedule_created-data
                        {:id 1 :prompt "p" :at 1.5}))
         "non-integer (double) is rejected")))
+
+;; --- C1: memory configuration on the wire (upstream PR memory 86df7e50) -------
+
+(deftest test-memory-config-on-wire
+  (testing ":memory is forwarded to session.create as {:enabled bool}"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :memory {:enabled true}})
+          create-params (get @seen "session.create")]
+      (is (= {:enabled true} (:memory create-params)))))
+
+  (testing ":memory {:enabled false} is forwarded (not stripped)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :memory {:enabled false}})
+          create-params (get @seen "session.create")]
+      (is (= {:enabled false} (:memory create-params)))))
+
+  (testing ":memory is omitted from session.create when unset (never null)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :memory)))))
+
+  (testing ":memory is forwarded to session.resume (parity with create)"
+    (let [seen (atom {})
+          session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.resume"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :memory {:enabled true}})
+          resume-params (get @seen "session.resume")]
+      (is (= {:enabled true} (:memory resume-params))))))
+
+;; --- C5: deferTools on MCP server configs (1.0.63 schema) --------------------
+
+(deftest test-mcp-defer-tools-on-wire
+  (testing ":mcp-defer-tools keyword is forwarded as deferTools string"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :mcp-servers {"srv-http" {:mcp-server-type :http
+                                                           :mcp-url "https://mcp.test"
+                                                           :mcp-tools ["*"]
+                                                           :mcp-defer-tools :auto}
+                                               "srv-stdio" {:mcp-command "node"
+                                                            :mcp-args ["server.js"]
+                                                            :mcp-tools ["*"]
+                                                            :mcp-defer-tools :never}}})
+          create-params (get @seen "session.create")]
+      (is (= "auto" (get-in create-params [:mcpServers :srv-http :deferTools])))
+      (is (= "never" (get-in create-params [:mcpServers :srv-stdio :deferTools])))))
+
+  (testing "deferTools is omitted when :mcp-defer-tools unset"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :mcp-servers {"srv-http" {:mcp-server-type :http
+                                                           :mcp-url "https://mcp.test"
+                                                           :mcp-tools ["*"]}}})
+          create-params (get @seen "session.create")]
+      (is (not (contains? (get-in create-params [:mcpServers :srv-http]) :deferTools))))))
+
+;; --- C3: graceful runtime.shutdown in stop! (upstream PR #1667) --------------
+
+(deftest test-graceful-runtime-shutdown
+  (testing "stop! sends runtime.shutdown for SDK-owned (non-external) process"
+    (let [seen (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method _params]
+                                      (swap! seen conj method)))]
+      ;; Inject a placeholder process so the SDK-owned guard fires. A bare map
+      ;; has no :process key, so proc/destroy! is a no-op.
+      (swap! (:state *test-client*) assoc :process {:placeholder true})
+      (sdk/stop! *test-client*)
+      (is (some #{"runtime.shutdown"} @seen)
+          "runtime.shutdown RPC is sent during graceful stop")))
+
+  (testing "stop! does NOT send runtime.shutdown when no process is owned"
+    (let [seen (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method _params]
+                                      (swap! seen conj method)))]
+      ;; No :process injected — fixture connect-with-streams! spawns nothing.
+      (sdk/stop! *test-client*)
+      (is (not (some #{"runtime.shutdown"} @seen))
+          "runtime.shutdown is skipped when the client does not own a process"))))
+
+(deftest graceful-shutdown-waits-for-natural-exit
+  (testing "stop! waits for the child to exit on its own after a successful
+            runtime.shutdown and skips the kill when it does"
+    (let [waited? (atom false)
+          killed? (atom false)]
+      (swap! (:state *test-client*) assoc :process {:placeholder true})
+      (with-redefs [proc/wait-for-exit! (fn [_ _] (reset! waited? true) true)
+                    proc/destroy! (fn [_] (reset! killed? true))]
+        (sdk/stop! *test-client*))
+      (is @waited? "stop! waits for natural exit after runtime.shutdown succeeds")
+      (is (not @killed?)
+          "stop! does not SIGTERM the child when it exits gracefully")))
+
+  (testing "stop! force-kills the child when it does not exit within the window"
+    (let [killed? (atom false)]
+      (swap! (:state *test-client*) assoc :process {:placeholder true})
+      (with-redefs [proc/wait-for-exit! (fn [_ _] false)
+                    proc/destroy! (fn [_] (reset! killed? true))]
+        (sdk/stop! *test-client*))
+      (is @killed?
+          "stop! kills the child if it does not exit within the graceful window")))
+
+  (testing "stop! kills immediately (no graceful wait) when runtime.shutdown fails"
+    (let [waited? (atom false)
+          killed? (atom false)]
+      (swap! (:state *test-client*) assoc :process {:placeholder true})
+      (with-redefs [protocol/send-request!
+                    (fn [_conn method _params & _]
+                      (when (= method "runtime.shutdown")
+                        (throw (ex-info "boom" {})))
+                      nil)
+                    proc/wait-for-exit! (fn [_ _] (reset! waited? true) true)
+                    proc/destroy! (fn [_] (reset! killed? true))]
+        (sdk/stop! *test-client*))
+      (is (not @waited?)
+          "stop! does not wait for natural exit when runtime.shutdown failed")
+      (is @killed?
+          "stop! force-kills the child immediately when runtime.shutdown failed"))))
