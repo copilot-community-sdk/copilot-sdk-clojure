@@ -133,11 +133,11 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:remote?` | boolean | `false` | When `true`, append `--remote` to the spawned CLI args so the CLI exposes the session over a GitHub-hosted remote endpoint. Ignored when `:cli-url` is set. (upstream PR #1192) |
 | `:session-idle-timeout-seconds` | integer | `0` (disabled) | Server-wide session idle timeout in seconds. When `> 0`, append `--session-idle-timeout <n>` to the spawned CLI so idle sessions are cleaned up after the given duration. |
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
-| `:telemetry` | map | nil | OpenTelemetry export config, applied as environment variables to the **spawned** CLI (ignored when connecting to an existing server via `:cli-url` or a parent process via `:is-child-process?`, since no CLI is spawned). When present, enables OTel. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785) |
+| `:telemetry` | map | nil | OpenTelemetry export config, applied as environment variables to the **spawned** CLI (ignored when connecting to an existing server via `:cli-url` or a parent process via `:is-child-process?`, since no CLI is spawned). When present, enables OTel. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:otlp-protocol` (`"http/json"` or `"http/protobuf"` — sets `OTEL_EXPORTER_OTLP_PROTOCOL`), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785, [PR #1648](https://github.com/github/copilot-sdk/pull/1648)) |
 | `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}`, called per request (session create/resume and each message send) to propagate a distributed-trace context. Only `:traceparent` and `:tracestate` are forwarded. See [Observability](#observability) |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
-| `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 9 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
+| `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 10 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
 
 ### Methods
 
@@ -166,6 +166,13 @@ Create a client, start it, and ensure `stop!` runs on exit.
 ```
 
 Stop the server and close all sessions gracefully.
+
+For SDK-spawned processes (not `:external-server?`), `stop!` issues a
+`runtime.shutdown` RPC before closing the connection, giving the CLI a chance to
+flush state and exit cleanly. The call is bounded by a 10-second timeout; on
+timeout or error the SDK falls back to terminating the process (SIGTERM, then
+SIGKILL). Connecting to an external server (`:cli-url`) skips the shutdown RPC and
+the process is left running. (upstream [PR #1667](https://github.com/github/copilot-sdk/pull/1667))
 
 #### `force-stop!`
 
@@ -291,6 +298,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 | `:manage-schedule-enabled` | boolean | Enable the built-in schedule-management tools. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 | `:open-canvases` | vector | (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry: `{:instance-id ... :extension-id ... :canvas-id ... :reopen bool :availability "ready"\|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}`. Caller-defined `:input` keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See [`open-canvases`](#open-canvases). (upstream PR #1604) |
+| `:memory` | map | Persistent-memory configuration. Shape: `{:enabled boolean}`. Sent on **both** `session.create` and `session.resume`; omitted entirely when the key is absent (never wire `null`). Wire-encoded as `memory`. In `:mode :empty` it is defaulted to `{:enabled false}` (caller can override). (upstream [PR #1617](https://github.com/github/copilot-sdk/pull/1617)) |
 
 #### `resume-session`
 
@@ -441,7 +449,14 @@ Requires authentication (unless `:on-list-models` is provided). Returns a vector
                                        :max-prompt-image-size 20971520}}}
   :model-policy {:policy-state "enabled"
                  :terms "..."}
-  :model-billing {:multiplier 1.0}
+  :model-billing {:multiplier 1.0
+                  ;; Per-token prices (upstream PR #1633), present when the
+                  ;; model reports them; keys are optional:
+                  :token-prices {:input-price 0.00000125
+                                 :output-price 0.00001
+                                 :cache-price 0.0000003125
+                                 :long-context {:input-price 0.0000025
+                                                :output-price 0.00002}}}
   ;; Model picker categorization (CLI 1.0.46+):
   :model-picker-category "powerful"            ;; "lightweight" | "versatile" | "powerful"
   :model-picker-price-category "very_high"     ;; "low" | "medium" | "high" | "very_high"
@@ -1470,6 +1485,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
 | `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"/"update"}` |
 | `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..." :aborted? false}` (both optional) |
+| `:copilot/session.todos_changed` | Signal-only: the agent's todos / todo-deps table was written. **No payload** — fetch current state via `session.plan.readSqlTodosWithDependencies()`. Events arrive in order; debounce on arrival if needed (upstream schema 1.0.63) |
 | `:copilot/session.schedule_created` | Scheduled prompt registered via `/every`; data: `{:id <pos-int> :interval-ms <pos-int> :prompt "..."}` (upstream schema 1.0.42) |
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
 | `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
@@ -1485,13 +1501,13 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
-| `:copilot/assistant.usage` | Token usage for this turn |
+| `:copilot/assistant.usage` | Token usage for this turn; data may include optional `:content-filter-triggered` (boolean) and `:finish-reason` (string) (upstream schema 1.0.63) |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
 | `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments`, `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:model` |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
-| `:copilot/tool.execution_complete` | Tool execution completed |
+| `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) |
 | `:copilot/subagent.started` | Subagent started; data includes :tool-call-id, :agent-name, :agent-display-name, :agent-description |
 | `:copilot/subagent.completed` | Subagent completed; data includes :tool-call-id, :agent-name, :agent-display-name, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
 | `:copilot/subagent.failed` | Subagent failed; data includes :tool-call-id, :agent-name, :agent-display-name, :error, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
@@ -1630,13 +1646,14 @@ spawned CLI. Presence of the map enables OTel; all sub-keys are optional:
 | Key | Type | Description | CLI env var |
 |-----|------|-------------|-------------|
 | `:otlp-endpoint` | string | OTLP HTTP endpoint to export spans to | `OTEL_EXPORTER_OTLP_ENDPOINT` |
+| `:otlp-protocol` | string | OTLP wire protocol: `"http/json"` or `"http/protobuf"` | `OTEL_EXPORTER_OTLP_PROTOCOL` |
 | `:file-path` | string | Write spans to a local file instead of/alongside OTLP | `COPILOT_OTEL_FILE_EXPORTER_PATH` |
 | `:exporter-type` | string | Exporter selection | `COPILOT_OTEL_EXPORTER_TYPE` |
 | `:source-name` | string | Service / source name attached to spans | `COPILOT_OTEL_SOURCE_NAME` |
 | `:capture-content?` | boolean | Capture prompt/response content in spans. **Defaults to off** — only enable in trusted environments, as it records message content | `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` |
 
 When `:telemetry` is present the SDK sets `COPILOT_OTEL_ENABLED=true` on the CLI process.
-(upstream PR #785)
+(upstream PR #785, [PR #1648](https://github.com/github/copilot-sdk/pull/1648))
 
 #### Distributed trace propagation (`:on-get-trace-context`)
 
@@ -1736,7 +1753,7 @@ What `:empty` mode enforces (vs `:copilot-cli`):
   `:skip-embedding-retrieval true`, `:embedding-cache-storage :in-memory`,
   `:enable-on-demand-instruction-discovery false`, `:enable-file-hooks false`,
   `:enable-host-git-operations false`, `:enable-session-store false`,
-  `:enable-skills false`.
+  `:enable-skills false`, `:memory {:enabled false}`.
 - **System message normalization**: the SDK strips the `environment_context`
   section from the system message (or promotes `:append` to `:customize`) so
   no host-environment context leaks. If the caller already provides their own
