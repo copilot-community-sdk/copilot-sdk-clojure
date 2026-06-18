@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.1 sync)
+- **`:memory` session configuration** — port of upstream
+  [PR #1617](https://github.com/github/copilot-sdk/pull/1617). `create-session`
+  and `resume-session` now accept an optional `:memory` map (shape
+  `{:enabled boolean}`) that configures the agent's persistent memory. It is
+  forwarded on **both** `session.create` and `session.resume`, omitted entirely
+  when the key is absent (never wire `null`), and wire-encoded as `memory`. In
+  `:mode :empty` it is defaulted to `{:enabled false}` (caller can override).
+  Added a `::memory` spec (reusing the existing `::enabled`).
+- **`:otlp-protocol` telemetry option** — port of upstream
+  [PR #1648](https://github.com/github/copilot-sdk/pull/1648). The client
+  `:telemetry` map accepts an optional `:otlp-protocol` (`"http/json"` or
+  `"http/protobuf"`), mapped to the `OTEL_EXPORTER_OTLP_PROTOCOL` environment
+  variable on the spawned CLI. Added `::otlp-protocol` to the `::telemetry` spec.
+- **Graceful `runtime.shutdown` in `stop!`** — port of upstream
+  [PR #1667](https://github.com/github/copilot-sdk/pull/1667) (restores the
+  behavior of the reverted PR #1539). For SDK-spawned (non-external) processes,
+  `stop!` now sends a `runtime.shutdown` RPC bounded by a 10-second timeout
+  before closing the connection, falling back to process termination
+  (SIGTERM → SIGKILL) on timeout or error. `force-stop!` is unchanged.
+- **`:mcp-defer-tools` MCP option** — new in upstream CLI schema 1.0.63. Stdio
+  and HTTP/SSE MCP server configs accept an optional `:mcp-defer-tools` keyword
+  (`:auto` or `:never`) controlling tool-deferral. Wire-encoded as `deferTools`
+  with the keyword value stringified. Added `::mcp-defer-tools` spec to both MCP
+  server specs.
+- **`:copilot/session.todos_changed` event** — new signal-only event in upstream
+  CLI schema 1.0.63. Carries no payload; fires when the agent's todos / todo-deps
+  table is written. Added to the public `event-types` and `session-events` sets.
+- **New optional event-data fields** (upstream CLI schema 1.0.63):
+  - `:copilot/assistant.usage`: `:content-filter-triggered` (boolean),
+    `:finish-reason` (string).
+  - `:copilot/tool.execution_complete`: `:structured-content` (arbitrary
+    structured tool result).
+  - `:copilot/assistant.message`: `:server-tools` (replaces the removed
+    `anthropicAdvisorBlocks` / `anthropicAdvisorModel` fields).
+  - `:copilot/tool.execution_start`: `:tool-description`.
+- **`::model-billing` token-prices spec** — port of upstream
+  [PR #1633](https://github.com/github/copilot-sdk/pull/1633). The
+  `::model-billing` spec gains an optional `:token-prices` map
+  (`:input-price`, `:output-price`, `:cache-price`, `:batch-size`,
+  `:context-max`, `:long-context`); `list-models` already passes the whole
+  billing map through, so this is documentation/validation only.
 - **`:defer` tool-definition option** — port of upstream
   [PR #1632](https://github.com/github/copilot-sdk/pull/1632). `define-tool` and
   `define-tool-from-spec` now accept an optional `:defer` keyword (`:auto` or
@@ -13,6 +54,14 @@ All notable changes to this project will be documented in this file. This change
   `session.create` and `session.resume`; when omitted the field is not sent and
   the runtime applies its default (`"auto"`). Added `::defer` value spec
   (`#{:auto :never}`) to the `::tool` spec.
+
+### Changed (post-v1.0.1 sync)
+- Bumped pinned `@github/copilot` schema 1.0.61 → 1.0.63
+  ([PR #1686](https://github.com/github/copilot-sdk/pull/1686) and intermediate
+  1.0.62), regenerating `generated/event_specs.clj` and `generated/coerce.clj`.
+  Pulls in the new `session.todos_changed` event, optional usage /
+  tool-execution / assistant-message fields, the MCP `deferTools` config, and
+  the `ExtensionSource` enum extension (`plugin` / `session`).
 
 ### Added (v1.0.1 sync)
 - **`open-canvases` snapshot** — port of upstream PR #1604. A new

@@ -54,6 +54,18 @@
       (is (= "my-app" (get overrides "COPILOT_OTEL_SOURCE_NAME")))
       (is (= "true" (get overrides "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"))))))
 
+(deftest cli-env-overrides-otlp-protocol
+  (testing ":otlp-protocol maps onto OTEL_EXPORTER_OTLP_PROTOCOL (upstream b5ce1c89)"
+    (doseq [proto ["http/json" "http/protobuf"]]
+      (let [{:keys [overrides]} (proc/cli-env-overrides
+                                 {:telemetry {:otlp-endpoint "http://localhost:4318"
+                                              :otlp-protocol proto}})]
+        (is (= proto (get overrides "OTEL_EXPORTER_OTLP_PROTOCOL"))))))
+  (testing "OTEL_EXPORTER_OTLP_PROTOCOL is omitted when :otlp-protocol unset"
+    (let [{:keys [overrides]} (proc/cli-env-overrides
+                               {:telemetry {:otlp-endpoint "http://localhost:4318"}})]
+      (is (not (contains? overrides "OTEL_EXPORTER_OTLP_PROTOCOL"))))))
+
 (deftest cli-env-defaults-can-be-overridden-by-user-env
   (testing "NODE_DEBUG is a default — user :env should be able to re-enable it"
     ;; This locks in the precedence contract: defaults are applied BEFORE user :env

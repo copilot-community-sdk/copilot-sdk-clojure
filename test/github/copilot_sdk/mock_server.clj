@@ -394,6 +394,7 @@
                  "session.remote.enable" {:url "https://copilot-remote.test/abc" :remoteSteerable true}
                  "session.remote.disable" {}
                  "sessionFs.setProvider" {:ok true}
+                 "runtime.shutdown" {}
                  (throw (ex-info "Method not found" {:code -32601 :method method})))
         ;; Merge hook-provided data into result only when hook returns ::merge-response
         ;; This prevents accidental response mutation from spy hooks (e.g. swap! return values)

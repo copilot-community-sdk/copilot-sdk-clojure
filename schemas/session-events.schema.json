@@ -216,18 +216,9 @@
           "type": "string",
           "description": "Provider's completion / response identifier; shared across all chunks of a single API call. Used to group multi-chunk assistant utterances."
         },
-        "anthropicAdvisorBlocks": {
-          "type": "array",
-          "items": {
-            "x-opaque-json": true
-          },
-          "description": "Raw Anthropic content array with advisor blocks (server_tool_use, advisor_tool_result) for verbatim round-tripping",
-          "stability": "experimental"
-        },
-        "anthropicAdvisorModel": {
-          "type": "string",
-          "description": "Anthropic advisor model ID used for this response, for timeline display on replay",
-          "stability": "experimental"
+        "serverTools": {
+          "$ref": "#/definitions/AssistantMessageServerTools",
+          "description": "Neutral provider-tagged server-side tool-use payload (tool search, advisor) for verbatim round-tripping"
         },
         "turnId": {
           "type": "string",
@@ -381,6 +372,42 @@
       "additionalProperties": false,
       "description": "Session event \"assistant.message\". Assistant response containing text content, optional tool requests, and interaction metadata",
       "title": "AssistantMessageEvent"
+    },
+    "AssistantMessageServerTools": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "x-opaque-json": true
+          }
+        },
+        "functionCallNamespaces": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "rawContentBlocks": {
+          "type": "array",
+          "items": {
+            "x-opaque-json": true
+          }
+        },
+        "advisorModel": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider"
+      ],
+      "additionalProperties": false,
+      "description": "Neutral provider-tagged server-side tool-use payload (tool search, advisor) for verbatim round-tripping",
+      "title": "AssistantMessageServerTools",
+      "stability": "experimental"
     },
     "AssistantMessageStartData": {
       "type": "object",
@@ -1054,6 +1081,14 @@
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
+        },
+        "finishReason": {
+          "type": "string",
+          "description": "Finish reason reported by the model for this API call (e.g. \"stop\", \"length\", \"tool_calls\", \"content_filter\"). Normalized to OpenAI vocabulary; for Anthropic models a \"refusal\" stop reason maps to \"content_filter\"."
+        },
+        "contentFilterTriggered": {
+          "type": "boolean",
+          "description": "Whether the model response was blocked or truncated by content filtering (finish_reason === 'content_filter'). For Anthropic models this corresponds to a 'refusal' stop reason."
         }
       },
       "required": [
@@ -4065,7 +4100,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Source-qualified extension ID (e.g., 'project:my-ext', 'user:auth-helper')"
+          "description": "Source-qualified extension ID (e.g., 'project:my-ext', 'user:auth-helper', 'plugin:my-plugin:my-ext')"
         },
         "name": {
           "type": "string",
@@ -4094,13 +4129,17 @@
       "type": "string",
       "enum": [
         "project",
-        "user"
+        "user",
+        "plugin",
+        "session"
       ],
       "description": "Discovery source",
       "title": "ExtensionsLoadedExtensionSource",
       "x-enumDescriptions": {
         "project": "Extension discovered from the current project.",
-        "user": "Extension discovered from the user's extension directory."
+        "user": "Extension discovered from the user's extension directory.",
+        "plugin": "Extension contributed by an installed plugin.",
+        "session": "Extension discovered from the current session's state directory."
       }
     },
     "ExtensionsLoadedExtensionStatus": {
@@ -7920,6 +7959,10 @@
           "description": "Session event \"session.plan_changed\". Plan file operation details indicating what changed"
         },
         {
+          "$ref": "#/definitions/TodosChangedEvent",
+          "description": "Session event \"session.todos_changed\". Signal-only event: the agent's todos or todo_deps table was written to. No payload — clients should call session.plan.readSqlTodosWithDependencies() to fetch the current state. Events arrive in order; clients can debounce on arrival if needed."
+        },
+        {
           "$ref": "#/definitions/WorkspaceFileChangedEvent",
           "description": "Session event \"session.workspace_file_changed\". Workspace file change details including path and operation type"
         },
@@ -8570,7 +8613,7 @@
         },
         "source": {
           "type": "string",
-          "description": "Source identifier for where the skill was discovered. Known values include: project (workspace skill), inherited (parent-directory skill), personal-copilot (~/.copilot/skills), personal-agents (~/.agents/skills), personal-claude (~/.claude/skills), custom (configured directory), plugin (installed plugin), builtin (bundled runtime skill), and remote (org/enterprise skill)"
+          "description": "Source identifier for where the skill was discovered. Known values include: project (workspace skill), inherited (parent-directory skill), personal-copilot (~/.copilot/skills), personal-agents (~/.agents/skills), custom (configured directory), plugin (installed plugin), builtin (bundled runtime skill), and remote (org/enterprise skill)"
         },
         "pluginName": {
           "type": "string",
@@ -10012,6 +10055,69 @@
       "description": "Session event \"session.title_changed\". Session title change payload containing the new display title",
       "title": "TitleChangedEvent"
     },
+    "TodosChangedData": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Signal-only event: the agent's todos or todo_deps table was written to. No payload — clients should call session.plan.readSqlTodosWithDependencies() to fetch the current state. Events arrive in order; clients can debounce on arrival if needed.",
+      "title": "TodosChangedData"
+    },
+    "TodosChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.todos_changed",
+          "description": "Type discriminator. Always \"session.todos_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/TodosChangedData",
+          "description": "Signal-only event: the agent's todos or todo_deps table was written to. No payload — clients should call session.plan.readSqlTodosWithDependencies() to fetch the current state. Events arrive in order; clients can debounce on arrival if needed."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.todos_changed\". Signal-only event: the agent's todos or todo_deps table was written to. No payload — clients should call session.plan.readSqlTodosWithDependencies() to fetch the current state. Events arrive in order; clients can debounce on arrival if needed.",
+      "title": "TodosChangedEvent"
+    },
     "ToolExecutionCompleteContent": {
       "anyOf": [
         {
@@ -10432,6 +10538,10 @@
         "uiResource": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResource",
           "description": "MCP Apps UI resource content for rendering in a sandboxed iframe"
+        },
+        "structuredContent": {
+          "description": "Structured content (arbitrary JSON) returned verbatim by the MCP tool",
+          "x-opaque-json": true
         }
       },
       "required": [
@@ -10845,6 +10955,10 @@
           "type": "boolean",
           "description": "When true, the tool output should be displayed expanded (verbatim) in the CLI timeline"
         },
+        "toolDescription": {
+          "$ref": "#/definitions/ToolExecutionStartToolDescription",
+          "description": "Tool definition metadata, present for MCP tools with MCP Apps support"
+        },
         "parentToolCallId": {
           "type": "string",
           "description": "Tool call ID of the parent tool invocation when this event originates from a sub-agent",
@@ -10912,6 +11026,73 @@
       "additionalProperties": false,
       "description": "Session event \"tool.execution_start\". Tool execution startup details including MCP server information when applicable",
       "title": "ToolExecutionStartEvent"
+    },
+    "ToolExecutionStartToolDescription": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Tool description"
+        },
+        "_meta": {
+          "$ref": "#/definitions/ToolExecutionStartToolDescriptionMeta",
+          "description": "MCP Apps metadata for UI resource association"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Tool definition metadata, present for MCP tools with MCP Apps support",
+      "title": "ToolExecutionStartToolDescription"
+    },
+    "ToolExecutionStartToolDescriptionMeta": {
+      "type": "object",
+      "properties": {
+        "ui": {
+          "$ref": "#/definitions/ToolExecutionStartToolDescriptionMetaUI",
+          "description": "Schema for the `ToolExecutionStartToolDescriptionMetaUI` type."
+        }
+      },
+      "additionalProperties": false,
+      "description": "MCP Apps metadata for UI resource association",
+      "title": "ToolExecutionStartToolDescriptionMeta"
+    },
+    "ToolExecutionStartToolDescriptionMetaUI": {
+      "type": "object",
+      "properties": {
+        "resourceUri": {
+          "type": "string",
+          "description": "URI of the UI resource"
+        },
+        "visibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ToolExecutionStartToolDescriptionMetaUIVisibility"
+          },
+          "description": "Who can access this tool"
+        }
+      },
+      "additionalProperties": false,
+      "title": "ToolExecutionStartToolDescriptionMetaUI",
+      "description": "Schema for the `ToolExecutionStartToolDescriptionMetaUI` type."
+    },
+    "ToolExecutionStartToolDescriptionMetaUIVisibility": {
+      "type": "string",
+      "enum": [
+        "model",
+        "app"
+      ],
+      "title": "ToolExecutionStartToolDescriptionMetaUIVisibility",
+      "x-enumDescriptions": {
+        "model": "Tool is callable by the model (LLM tool surface)",
+        "app": "Tool is callable by the MCP App view (iframe) via session.mcp.apps.callTool"
+      },
+      "description": "Allowed values for the `ToolExecutionStartToolDescriptionMetaUIVisibility` enumeration."
     },
     "ToolsUpdatedData": {
       "type": "object",

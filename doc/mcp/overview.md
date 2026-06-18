@@ -111,6 +111,7 @@ Here's a complete working example using the official [`@modelcontextprotocol/ser
 | `:mcp-tools` | vector | Yes | Tools to enable (`["*"]` for all, `[]` for none, or specific tool names) |
 | `:mcp-server-type` | keyword | No | `:local` or `:stdio` (defaults to local) |
 | `:mcp-timeout` | number | No | Timeout in milliseconds |
+| `:mcp-defer-tools` | keyword | No | Tool-deferral policy: `:auto` (defer tool registration until needed) or `:never`. Wire-encoded as `deferTools` (upstream schema 1.0.63) |
 | `:env` | map | No | Environment variables for the subprocess |
 | `:cwd` | string | No | Working directory for the subprocess |
 
@@ -122,11 +123,14 @@ Here's a complete working example using the official [`@modelcontextprotocol/ser
 | `:mcp-url` | string | Yes | Server URL |
 | `:mcp-tools` | vector | Yes | Tools to enable (`["*"]` for all) |
 | `:mcp-timeout` | number | No | Timeout in milliseconds |
+| `:mcp-defer-tools` | keyword | No | Tool-deferral policy: `:auto` or `:never`. Wire-encoded as `deferTools` (upstream schema 1.0.63) |
 | `:mcp-headers` | map | No | HTTP headers (e.g., for authentication) |
 
 ### Key Naming Convention
 
 MCP server config keys use an `:mcp-` prefix in Clojure (e.g., `:mcp-command`, `:mcp-args`, `:mcp-tools`) to distinguish them from other configuration options. On the wire, the SDK automatically strips this prefix to match the upstream protocol (e.g., `command`, `args`, `tools`).
+
+Some prefixed keys map to a camelCase wire key rather than a bare strip: `:mcp-defer-tools` becomes `deferTools`, and its keyword value (`:auto`/`:never`) is stringified.
 
 The non-prefixed keys `:env` and `:cwd` are shared with other config types and do not have an `:mcp-` prefix.
 
