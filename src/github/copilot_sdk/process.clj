@@ -204,6 +204,11 @@
   (if-let [^Process p (:process mp)]
     (try
       (.waitFor p timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
+      (catch InterruptedException _
+        ;; Restore the interrupt flag that waitFor cleared so callers'
+        ;; shutdown hooks / cancellation logic still observe the interrupt.
+        (.interrupt (Thread/currentThread))
+        false)
       (catch Exception _ false))
     true))
 

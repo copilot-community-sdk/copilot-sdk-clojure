@@ -105,7 +105,8 @@
    keys to camelCase. Keyword values for :type and :defer-tools are converted
    to strings.
    Example: {:mcp-command \"node\" :mcp-args [\"x\"] :mcp-server-type :http}
-   becomes {\"command\" \"node\" \"args\" [\"x\"] \"type\" \"http\"}."
+   becomes {:command \"node\" :args [\"x\"] :type \"http\"} (camelCase keyword
+   keys, with :type / :defer-tools values stringified)."
   [m]
   (let [renamed (reduce-kv (fn [acc k v]
                              (assoc acc (get mcp-key-renames k k) v))

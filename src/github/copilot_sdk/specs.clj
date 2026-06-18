@@ -486,7 +486,7 @@
 (s/def ::infinite-sessions
   (s/keys :opt-un [::enabled ::background-compaction-threshold ::buffer-exhaustion-threshold]))
 
-;; Memory configuration (upstream PR #1638). Lets the agent persist and recall
+;; Memory configuration (upstream PR #1617). Lets the agent persist and recall
 ;; information across turns. `:enabled` is required by MemoryConfiguration.
 (s/def ::memory
   (s/keys :req-un [::enabled]))

@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file. This change
   forwarded on **both** `session.create` and `session.resume`, omitted entirely
   when the key is absent (never wire `null`), and wire-encoded as `memory`. In
   `:mode :empty` it is defaulted to `{:enabled false}` (caller can override).
-  Added `::memory` / `::memory-enabled` specs.
+  Added a `::memory` spec (reusing the existing `::enabled`).
 - **`:otlp-protocol` telemetry option** — port of upstream
   [PR #1648](https://github.com/github/copilot-sdk/pull/1648). The client
   `:telemetry` map accepts an optional `:otlp-protocol` (`"http/json"` or
