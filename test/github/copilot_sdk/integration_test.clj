@@ -6137,6 +6137,19 @@
           (is (not (leaked? e named-key)) "named provider :api-key must be redacted")
           (is (not (leaked? e named-bearer)) "named provider :bearer-token must be redacted")
           (is (not (leaked? e named-hdr)) "named provider :headers value must be redacted")))
+      (testing "session-config BYOK :providers as a non-sequential collection (set)"
+        ;; redact-secrets runs on the *already-invalid* config in the error path,
+        ;; so it must not rely on ::providers being sequential. A set of providers
+        ;; (still a valid ::coll-of) must have its secrets masked too.
+        (let [c (sdk/client {:auto-start? false})
+              set-key "sk-setSECRET111"]
+          (let [e (capture #(sdk/create-session
+                             c {:providers #{{:name "openai" :base-url "https://o.test"
+                                              :api-key set-key}}
+                                :totally-unknown-key 1}))]
+            (is (some? e) "an unknown key should fail validation")
+            (is (not (leaked? e set-key))
+                "set-valued :providers entry :api-key must still be redacted"))))
       (testing "resume-config BYOK provider api-key"
         (let [c (sdk/client {:auto-start? false})
               e (capture #(sdk/resume-session c "sid" {:provider {:provider-type "azure" :api-key azure-key}}))]

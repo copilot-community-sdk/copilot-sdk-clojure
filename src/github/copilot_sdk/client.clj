@@ -123,7 +123,10 @@
       (map? (:provider m))
       (update :provider mask-provider)
 
-      (sequential? (:providers m))
+      ;; ::providers is a `coll-of` — it accepts any collection (vector, list,
+      ;; set), and redact-secrets runs on *already-invalid* configs in the error
+      ;; path, so masking must not depend on the collection being sequential.
+      (and (coll? (:providers m)) (not (map? (:providers m))))
       (update :providers (fn [ps] (mapv mask-provider ps)))
 
       (contains? m :mcp-servers)
