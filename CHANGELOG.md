@@ -19,9 +19,10 @@ Ported from upstream `github/copilot-sdk` v1.0.1 → v1.0.4 (`@github/copilot`
   boolean}`), wire-encoded as `capi.enableWebSocketResponses`. Added `::capi` and
   `::enable-web-socket-responses` specs.
 - **Provider `:transport`** — port of upstream
-  [PR #1711](https://github.com/github/copilot-sdk/pull/1711). The BYOK `:provider`
-  (and registry named providers) accept an optional `:transport` (`:http` or
-  `:websockets`), emitted as wire `transport`. Added `::transport` spec.
+  [PR #1711](https://github.com/github/copilot-sdk/pull/1711). The singular BYOK
+  `:provider` accepts an optional `:transport` (`:http` or `:websockets`), emitted
+  as wire `transport`. Registry named providers (in `:providers`) do **not** accept
+  `:transport`, matching upstream's `NamedProviderConfig`. Added `::transport` spec.
 - **Multi-provider BYOK registry (`:providers` / `:models`)** — port of upstream
   [PR #1718](https://github.com/github/copilot-sdk/pull/1718) (`@experimental`).
   `create-session` and `resume-session` accept `:providers` (a vector of named
