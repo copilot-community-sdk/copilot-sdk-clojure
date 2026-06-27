@@ -2085,7 +2085,16 @@
         ":preserve must validate as a static section action")
     ;; :preserve is a no-op marker — content is NOT required (unlike replace/append/prepend)
     (is (s/valid? :github.copilot-sdk.specs/section-override {:action :preserve})
-        ":preserve override needs no :content"))
+        ":preserve override needs no :content")
+    ;; ...and it carries no content: a content-bearing :preserve/:remove is a
+    ;; caller mistake the spec must reject (upstream PR #1713 — these actions
+    ;; have no content payload).
+    (is (false? (s/valid? :github.copilot-sdk.specs/section-override
+                          {:action :preserve :content "x"}))
+        ":preserve must reject :content")
+    (is (false? (s/valid? :github.copilot-sdk.specs/section-override
+                          {:action :remove :content "x"}))
+        ":remove must reject :content"))
   (testing ":preserve action survives the create-session wire conversion"
     (let [seen (atom {})
           _ (mock/set-request-hook! *mock-server*

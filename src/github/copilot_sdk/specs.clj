@@ -309,6 +309,11 @@
          #(if (and (keyword? (:action %))
                    (#{:replace :append :prepend} (:action %)))
             (string? (:content %))
+            true)
+         ;; The no-op markers carry no payload — reject stray :content so a
+         ;; caller mistake fails fast instead of being silently dropped.
+         #(if (#{:remove :preserve} (:action %))
+            (not (contains? % :content))
             true)))
 
 ;; Customize config: mode :customize with optional sections map and content
