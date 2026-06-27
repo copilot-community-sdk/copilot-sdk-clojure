@@ -2337,6 +2337,31 @@
                               (sdk/resume-session *test-client* session-id cfg))
             "resume-session rejects :provider + :providers")))))
 
+(deftest test-v1-0-4-provider-and-models-mutually-exclusive
+  (testing "combining singular :provider with the :models registry is rejected on both create and resume (upstream SessionConfig contract, PR #1718)"
+    ;; Upstream documents (types.ts SessionConfig.providers/models JSDoc) that
+    ;; combining *either* `providers` *or* `models` with the singular `provider`
+    ;; is rejected — `:models` is part of the same multi-provider registry
+    ;; surface. A config with `:provider` + `:models` (no `:providers`) must fail
+    ;; the same client-side guard, otherwise it serializes a wire payload that
+    ;; contradicts the documented "provider vs multi-provider registry" contract.
+    (let [cfg {:on-permission-request sdk/approve-all
+               :model "m"
+               :provider {:base-url "https://single.test"}
+               :models [{:provider "p" :id "m"}]}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"(?i):provider.*cannot be combined.*:models"
+                            (sdk/create-session *test-client* cfg))
+          "create-session rejects :provider + :models")
+      (let [ok-session (sdk/create-session *test-client*
+                                           {:on-permission-request sdk/approve-all
+                                            :model "m"})
+            session-id (sdk/session-id ok-session)]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"(?i):provider.*cannot be combined.*:models"
+                              (sdk/resume-session *test-client* session-id cfg))
+            "resume-session rejects :provider + :models")))))
+
 (deftest test-v1-0-4-bearer-token-exception-message-not-leaked
   (testing "an exception thrown by a bearer-token callback never leaks its message to logs or the runtime (SEC)"
     ;; The callback mints credentials; an exception it raises can easily carry

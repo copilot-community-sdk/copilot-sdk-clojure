@@ -229,7 +229,7 @@ has a required `:id` (provider-local model id) and `:provider` (a name in
      :model "openai/gpt-5.4"}))
 ```
 
-`:providers` cannot be combined with the singular `:provider`.
+`:providers` and `:models` cannot be combined with the singular `:provider` — use the multi-provider registry or the whole-session `:provider`, not both.
 
 ## Limitations
 

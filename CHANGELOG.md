@@ -28,8 +28,8 @@ Ported from upstream `github/copilot-sdk` v1.0.1 → v1.0.4 (`@github/copilot`
   `create-session` and `resume-session` accept `:providers` (a vector of named
   providers) and `:models` (a model catalog referencing them by `:name`). A model
   selection id is `"providerName/id"`. Combining the singular `:provider` with
-  `:providers` is rejected. Added `::named-provider`, `::provider-model`,
-  `::providers`, and `::models` specs.
+  either `:providers` or `:models` is rejected. Added `::named-provider`,
+  `::provider-model`, `::providers`, and `::models` specs.
 - **`:bearer-token-provider` callback** — port of upstream
   [PR #1748](https://github.com/github/copilot-sdk/pull/1748) (`@experimental`).
   Providers accept a `:bearer-token-provider` function for dynamic, per-request

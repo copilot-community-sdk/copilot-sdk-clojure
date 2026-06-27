@@ -1550,14 +1550,15 @@
 (defn- validate-provider-config!
   "Validate singular-`:provider` BYOK constraints shared by create and resume:
    `:model` is required when `:provider` is set, and `:provider` cannot be
-   combined with the multi-provider `:providers` registry (upstream documents
-   the combination as rejected)."
+   combined with the multi-provider registry — neither `:providers` nor
+   `:models` (upstream documents combining either with the singular `provider`
+   as rejected)."
   [config]
   (when (and (:provider config) (not (:model config)))
     (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
                     {:config (redact-secrets config)})))
-  (when (and (:provider config) (:providers config))
-    (throw (ex-info "Invalid session config: :provider cannot be combined with the :providers registry (use one or the other)"
+  (when (and (:provider config) (or (:providers config) (:models config)))
+    (throw (ex-info "Invalid session config: :provider cannot be combined with the :providers/:models registry (use one or the other)"
                     {:config (redact-secrets config)}))))
 
 (defn- validate-session-config!
