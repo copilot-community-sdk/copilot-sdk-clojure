@@ -133,21 +133,20 @@
 ;; client.ts behavior) and mutated by `session.canvas.opened` /
 ;; `session.canvas.closed` events. Each entry's keys go through `wire->clj`
 ;; kebab-case conversion (`:instance-id`, `:extension-id`, `:canvas-id`,
-;; `:reopen`, `:availability`, optional `:extension-name`, `:title`, `:status`,
-;; `:url`, `:input`). The opaque `:input` map (caller-defined keys) is preserved
-;; verbatim by the protocol layer so source-supplied keys are not kebab-cased.
+;; optional `:extension-name`, `:title`, `:status`, `:url`, `:input`). The
+;; opaque `:input` map (caller-defined keys) is preserved verbatim by the
+;; protocol layer so source-supplied keys are not kebab-cased.
 
 (defn- valid-open-canvas-instance?
-  "Mirrors upstream `isOpenCanvasInstance` (nodejs/src/session.ts). All five
-   required fields must be present and well-typed before an entry is admitted
-   to the snapshot."
+  "Mirrors upstream `isOpenCanvasInstance` (nodejs/src/session.ts). Requires the
+   three id fields (`:instance-id`, `:extension-id`, `:canvas-id`) to be present
+   and non-blank strings before an entry is admitted to the snapshot. As of
+   upstream v1.0.4 the `OpenCanvasInstance` shape dropped `reopen`/`availability`."
   [data]
   (and (map? data)
        (string? (:instance-id data)) (not (str/blank? (:instance-id data)))
        (string? (:extension-id data)) (not (str/blank? (:extension-id data)))
-       (string? (:canvas-id data)) (not (str/blank? (:canvas-id data)))
-       (boolean? (:reopen data))
-       (#{"ready" "stale"} (:availability data))))
+       (string? (:canvas-id data)) (not (str/blank? (:canvas-id data)))))
 
 (defn set-open-canvases!
   "Replace the open-canvases snapshot for `session-id`. Called once after
@@ -172,8 +171,8 @@
   "Apply a `session.canvas.opened` event payload to the snapshot. If an entry
   with the same `:instance-id` exists, replace it in place (preserves order);
   otherwise append. Logs a warning and no-ops on payloads missing any of the
-  required fields (`:instance-id`, `:extension-id`, `:canvas-id`, `:reopen`,
-  `:availability`), matching upstream `isOpenCanvasInstance` validation."
+  required id fields (`:instance-id`, `:extension-id`, `:canvas-id`), matching
+  upstream `isOpenCanvasInstance` validation."
   [client session-id data]
   (if-not (valid-open-canvas-instance? data)
     (log/warn "failed to deserialize session.canvas.opened payload"
@@ -758,6 +757,56 @@
            (catch Exception e
              (log/error "User input handler error for session " session-id ": " (ex-message e))
              {:error {:code -32001 :message (str "User input handler error: " (ex-message e))}})))))
+   :io))
+
+(defn- extract-bearer-token-providers
+  "Build a `{provider-name -> callback}` map from session config (upstream PR #1748).
+   The singular whole-session `:provider` callback is keyed under the implicit
+   provider name `\"default\"` (upstream `DEFAULT_PROVIDER_NAME`); each named
+   provider in `:providers` is keyed by its `:name`."
+  [config]
+  (let [singular (when-let [f (get-in config [:provider :bearer-token-provider])]
+                   {"default" f})
+        named (into {} (keep (fn [p]
+                               (when-let [f (:bearer-token-provider p)]
+                                 [(:name p) f]))
+                             (:providers config)))]
+    (merge singular named)))
+
+(defn handle-provider-token-request!
+  "Handle an incoming providerToken.getToken request (upstream PR #1748).
+   Returns a channel with the result.
+
+   The runtime issues this session-scoped request when a BYOK provider configured
+   with a `:bearer-token-provider` callback needs a fresh token. The matching
+   callback (looked up by `provider-name`) is invoked with the idiomatic
+   `ProviderTokenArgs` map `{:provider-name <name>}` and must return the raw token
+   string (without the `Bearer ` prefix); a channel yielding the string is also
+   accepted. The runtime performs no caching, so the callback owns refresh."
+  [client session-id provider-name]
+  (async/thread-call
+   (fn []
+     (let [config (:config (session-state client session-id))
+           callback (get (extract-bearer-token-providers config) provider-name)]
+       (if-not callback
+         {:error {:code -32001
+                  :message (str "No bearer-token provider registered for provider \""
+                                provider-name "\"")}}
+         (try
+           (let [result (callback {:provider-name provider-name})
+                 result (if (channel? result) (<!! result) result)]
+             (if (string? result)
+               {:result {:token result}}
+               (do
+                 (log/warn "Bearer-token provider returned a non-string for session "
+                           session-id " (result type: "
+                           (some-> result class .getName) ")")
+                 {:error {:code -32001
+                          :message "Bearer-token provider returned a non-string token"}})))
+           (catch Exception e
+             (log/error "Bearer-token provider error for session " session-id ": " (ex-message e))
+             {:error {:code -32001
+                      :message (str "Bearer-token provider error: " (ex-message e))}})))))
    :io))
 
 (defn handle-hooks-invoke!
@@ -2200,11 +2249,10 @@
 (defn open-canvases
   "Get the current open-canvases snapshot for `session`. Returns a vector of
   canvas-instance maps (each with `:instance-id`, `:extension-id`, `:canvas-id`,
-  `:reopen`, `:availability`, plus optional `:extension-name`, `:title`,
-  `:status`, `:url`, `:input`). The snapshot is initialized from
-  `session.resume` and updated by `session.canvas.opened` /
-  `session.canvas.closed` events. `session.create` does NOT populate it
-  (matches upstream Node.js behavior)."
+  plus optional `:extension-name`, `:title`, `:status`, `:url`, `:input`). The
+  snapshot is initialized from `session.resume` and updated by
+  `session.canvas.opened` / `session.canvas.closed` events. `session.create`
+  does NOT populate it (matches upstream Node.js behavior)."
   [session]
   (let [{:keys [session-id client]} session]
     (vec (:open-canvases (session-state client session-id)))))

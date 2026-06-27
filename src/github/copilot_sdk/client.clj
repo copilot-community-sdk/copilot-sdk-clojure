@@ -94,13 +94,25 @@
                        server)]))
           servers)))
 
+(defn- mask-provider
+  "Mask the secret-bearing fields of a single BYOK provider map: the `:api-key`
+   and `:bearer-token` auth fields, plus every value in a custom request
+   `:headers` map. Non-map inputs pass through unchanged."
+  [p]
+  (if-not (map? p)
+    p
+    (-> p
+        (mask-present [:api-key :bearer-token])
+        (cond-> (map? (:headers p)) (update :headers mask-all-values)))))
+
 (defn- redact-secrets
   "Mask secret values in a caller-supplied options/config map so it can be embedded
    in exception data and messages without leaking credentials. Masks the top-level
    auth tokens, the `:env` map (merged into the spawned CLI environment, so it
-   can carry credentials), the nested BYOK `:provider` credentials (api/bearer
-   keys and any custom request `:headers`), and any `:mcp-servers` header/env
-   values. Non-map inputs pass through unchanged."
+   can carry credentials), the nested BYOK `:provider` credentials and every
+   entry of the `:providers` registry (api/bearer keys and any custom request
+   `:headers`), and any `:mcp-servers` header/env values. Non-map inputs pass
+   through unchanged."
   [m]
   (if-not (map? m)
     m
@@ -109,11 +121,11 @@
       (update :env mask-all-values)
 
       (map? (:provider m))
-      (update :provider (fn [p]
-                          (-> p
-                              (mask-present [:api-key :bearer-token])
-                              (cond-> (map? (:headers p))
-                                (update :headers mask-all-values)))))
+      (update :provider mask-provider)
+
+      (sequential? (:providers m))
+      (update :providers (fn [ps] (mapv mask-provider ps)))
+
       (contains? m :mcp-servers)
       (update :mcp-servers redact-mcp-servers))))
 
@@ -772,6 +784,14 @@
                                                                                   {:question question
                                                                                    :choices choices
                                                                                    :allow-freeform allow-freeform}))))
+
+                                      ;; Bearer-token provider request (PR #1748)
+                                      "providerToken.getToken"
+                                      (let [{:keys [session-id provider-name]} params]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-provider-token-request!
+                                               client session-id provider-name))))
 
                                       ;; Hooks invocation (PR #269)
                                       "hooks.invoke"
@@ -1674,15 +1694,60 @@
    nodejs/src/client.ts). This helper restores the upstream wire names so BYOK
    works for every provider type: `providerType`->`type`, `azureOptions`->`azure`,
    `maxInputTokens`->`maxPromptTokens`, and the nested `azureApiVersion`->`apiVersion`.
-   Mirrors the `ProviderConfig` shape in nodejs/src/types.ts."
+   Mirrors the `ProviderConfig` shape in nodejs/src/types.ts.
+
+   `:bearer-token-provider` (upstream PR #1748) is an on-demand token callback,
+   not wire data: the fn is stripped and replaced with a boolean
+   `:hasBearerTokenProvider` flag so the runtime knows to issue
+   `providerToken.getToken` requests instead of reading a static credential."
   [provider]
-  (let [wire (rename-keys-present (util/clj->wire provider)
+  (let [has-btp (some? (:bearer-token-provider provider))
+        wire (rename-keys-present (util/clj->wire (dissoc provider :bearer-token-provider))
                                   {:providerType :type
                                    :azureOptions :azure
                                    :maxInputTokens :maxPromptTokens})]
     (cond-> wire
       (contains? wire :azure)
-      (update :azure rename-keys-present {:azureApiVersion :apiVersion}))))
+      (update :azure rename-keys-present {:azureApiVersion :apiVersion})
+      has-btp (assoc :hasBearerTokenProvider true))))
+
+(defn- named-provider->wire
+  "Convert a Clojure NamedProviderConfig map to its JSON-RPC wire shape
+   (upstream PR #1718). Like `provider->wire` for the shared provider fields
+   (`providerType`->`type`, `azureOptions`->`azure`, nested
+   `azureApiVersion`->`apiVersion`), but a named provider carries no transport
+   or inline model-override fields: `name`, `baseUrl`, `apiKey`, `bearerToken`,
+   `wireApi`, `azure`, and `headers` all camelCase cleanly. Mirrors the
+   `NamedProviderConfig` shape in nodejs/src/types.ts.
+
+   `:bearer-token-provider` (upstream PR #1748) is stripped and replaced with a
+   boolean `:hasBearerTokenProvider` flag, exactly as in `provider->wire`."
+  [np]
+  (let [has-btp (some? (:bearer-token-provider np))
+        wire (rename-keys-present (util/clj->wire (dissoc np :bearer-token-provider))
+                                  {:providerType :type
+                                   :azureOptions :azure})]
+    (cond-> wire
+      (contains? wire :azure)
+      (update :azure rename-keys-present {:azureApiVersion :apiVersion})
+      has-btp (assoc :hasBearerTokenProvider true))))
+
+(defn- provider-model->wire
+  "Convert a Clojure ProviderModelConfig map to its JSON-RPC wire shape
+   (upstream PR #1718). `id`, `provider`, `wireModel`, `modelId`, `name`,
+   `maxContextWindowTokens`, and `maxOutputTokens` camelCase cleanly; only
+   `maxInputTokens`->`maxPromptTokens` needs a rename (mirroring
+   `provider->wire`). `:capabilities` is an opaque ModelCapabilitiesOverride
+   forwarded verbatim — it is pulled aside before `clj->wire` and re-attached
+   so its source-defined string keys (a mix of camelCase and snake_case) are
+   never run through kebab->camel conversion. Mirrors the `ProviderModelConfig`
+   shape in nodejs/src/types.ts."
+  [pm]
+  (let [capabilities (:capabilities pm)
+        wire (rename-keys-present (util/clj->wire (dissoc pm :capabilities))
+                                  {:maxInputTokens :maxPromptTokens})]
+    (cond-> wire
+      (some? capabilities) (assoc :capabilities capabilities))))
 
 (defn- large-output->wire
   "Convert a :large-output config map to wire shape, accepting both the
@@ -1859,7 +1924,11 @@
         config-dir (or (:config-directory config) (:config-dir config))
         wire-large-output (some-> (:large-output config) large-output->wire)
         wire-memory (when-let [m (:memory config)]
-                      (util/clj->wire m))]
+                      (util/clj->wire m))
+        wire-providers (when-let [ps (:providers config)]
+                         (mapv named-provider->wire ps))
+        wire-models (when-let [ms (:models config)]
+                      (mapv provider-model->wire ms))]
     (cond-> {}
       (:session-id config) (assoc :session-id (:session-id config))
       (:client-name config) (assoc :client-name (:client-name config))
@@ -1877,7 +1946,11 @@
       ;; on the SDK boundary by design (mirrors upstream `resolveToolFilterOptions`).
       true (assoc :tool-filter-precedence "excluded")
       wire-provider (assoc :provider wire-provider)
+      wire-providers (assoc :providers wire-providers)
+      wire-models (assoc :models wire-models)
+      (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
       true (assoc :request-permission true)
+      (:capi config) (assoc :capi (util/clj->wire (:capi config)))
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
@@ -1975,8 +2048,6 @@
     (some? (:instance-id canvas))    (assoc :instance-id    (:instance-id canvas))
     (some? (:extension-id canvas))   (assoc :extension-id   (:extension-id canvas))
     (some? (:canvas-id canvas))      (assoc :canvas-id      (:canvas-id canvas))
-    (some? (:reopen canvas))         (assoc :reopen         (:reopen canvas))
-    (some? (:availability canvas))   (assoc :availability   (:availability canvas))
     (some? (:extension-name canvas)) (assoc :extension-name (:extension-name canvas))
     (some? (:title canvas))          (assoc :title          (:title canvas))
     (some? (:status canvas))         (assoc :status         (:status canvas))
@@ -2012,7 +2083,11 @@
         config-dir (or (:config-directory config) (:config-dir config))
         wire-large-output (some-> (:large-output config) large-output->wire)
         wire-memory (when-let [m (:memory config)]
-                      (util/clj->wire m))]
+                      (util/clj->wire m))
+        wire-providers (when-let [ps (:providers config)]
+                         (mapv named-provider->wire ps))
+        wire-models (when-let [ms (:models config)]
+                      (mapv provider-model->wire ms))]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
@@ -2026,9 +2101,13 @@
       ;; See `build-create-session-params` for rationale.
       true (assoc :tool-filter-precedence "excluded")
       wire-provider (assoc :provider wire-provider)
+      wire-providers (assoc :providers wire-providers)
+      wire-models (assoc :models wire-models)
+      (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
       true (assoc :request-permission
                   (not (identical? (:on-permission-request config)
                                    default-join-session-permission-handler)))
+      (:capi config) (assoc :capi (util/clj->wire (:capi config)))
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)

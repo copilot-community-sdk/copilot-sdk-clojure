@@ -55,7 +55,8 @@
 
 (def section-key->wire
   "Map from Clojure keyword to wire string for system message sections."
-  {:identity             "identity"
+  {:preamble             "preamble"
+   :identity             "identity"
    :tone                 "tone"
    :tool-efficiency      "tool_efficiency"
    :environment-context  "environment_context"
