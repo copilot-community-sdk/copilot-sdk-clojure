@@ -49,8 +49,9 @@ Ported from upstream `github/copilot-sdk` v1.0.1 → v1.0.4 (`@github/copilot`
   Public `event-types` / `session-events` entries added where upstream exposes a
   public SDK event.
 - **`open-canvases` validation relaxed** — parity with upstream `session.ts`:
-  an open-canvas instance now requires only `:extension-id` + `:canvas-id`
-  (dropped the `:reopen` / `:availability` requirements).
+  an open-canvas instance now requires only the three id fields `:instance-id` +
+  `:extension-id` + `:canvas-id` (dropped the `:reopen` / `:availability`
+  requirements).
 
 ### Changed (v1.0.4 sync)
 - **`redact-secrets` masks the `:providers` registry** — the validation-error
