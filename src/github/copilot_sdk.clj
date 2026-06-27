@@ -141,7 +141,17 @@
     :copilot/session.extensions.attachments_pushed
     :copilot/session.canvas.opened
     :copilot/session.canvas.closed
-    :copilot/session.canvas.registry_changed})
+    :copilot/session.canvas.registry_changed
+    ;; v1.0.4 sync (pinned schema 1.0.65). binary_asset carries persisted /
+    ;; omitted binary attachment references; the three new canvas events extend
+    ;; the canvas lifecycle (recorded/removed/unavailable) and schedule_rearmed
+    ;; fires when a recurring schedule re-arms after a tick. Delivered so
+    ;; consumers can observe them even where the authoring API is out of scope.
+    :copilot/session.binary_asset
+    :copilot/session.canvas.recorded
+    :copilot/session.canvas.removed
+    :copilot/session.canvas.unavailable
+    :copilot/session.schedule_rearmed})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -180,7 +190,9 @@
     :copilot/capabilities.changed
     ;; Round 6 additions (upstream schema 1.0.56-1).
     :copilot/session.autopilot_objective_changed
-    :copilot/session.permissions_changed})
+    :copilot/session.permissions_changed
+    ;; v1.0.4 sync (pinned schema 1.0.65): recurring schedule re-arm event.
+    :copilot/session.schedule_rearmed})
 
 (def assistant-events
   "Assistant response events."
@@ -993,15 +1005,14 @@
   updated by `:copilot/session.canvas.opened` / `:copilot/session.canvas.closed`
   events. `session.create` does NOT populate it (matches upstream Node.js).
 
-  Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`,
-  `:reopen`, `:availability` and optional `:extension-name`, `:title`,
-  `:status`, `:url`, `:input`.
+  Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`
+  and optional `:extension-name`, `:title`, `:status`, `:url`, `:input`.
 
   Example:
   ```clojure
   (copilot/open-canvases session)
   ;; => [{:instance-id \"i1\" :canvas-id \"diff\" :extension-id \"ext.x\"
-  ;;      :reopen false :availability \"ready\"}]
+  ;;      :title \"Diff\"}]
   ```"
   [session]
   (session/open-canvases session))

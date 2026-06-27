@@ -3,6 +3,63 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.4 sync)
+Ported from upstream `github/copilot-sdk` v1.0.1 → v1.0.4 (`@github/copilot`
+1.0.63 → 1.0.65). Schema bumped to 1.0.65.
+- **`:preamble` system-message section + `:preserve` action** — port of upstream
+  [PR #1713](https://github.com/github/copilot-sdk/pull/1713). The customize-mode
+  section catalog gains `:preamble` (the agent identity preamble, split out from
+  the `:identity` group, which is now a section group). The static section
+  actions gain `:preserve`, a no-op marker that opts an individually-addressable
+  section out of a group-level `:remove`. Both `system-prompt-sections` and its
+  `system-message-sections` alias expose `:preamble`.
+- **`:capi` session option** — port of upstream
+  [PR #1711](https://github.com/github/copilot-sdk/pull/1711). `create-session`
+  and `resume-session` accept an optional `:capi` map (`{:enable-web-socket-responses
+  boolean}`), wire-encoded as `capi.enableWebSocketResponses`. Added `::capi` and
+  `::enable-web-socket-responses` specs.
+- **Provider `:transport`** — port of upstream
+  [PR #1711](https://github.com/github/copilot-sdk/pull/1711). The singular BYOK
+  `:provider` accepts an optional `:transport` (`:http` or `:websockets`), emitted
+  as wire `transport`. Registry named providers (in `:providers`) do **not** accept
+  `:transport`, matching upstream's `NamedProviderConfig`. Added `::transport` spec.
+- **Multi-provider BYOK registry (`:providers` / `:models`)** — port of upstream
+  [PR #1718](https://github.com/github/copilot-sdk/pull/1718) (`@experimental`).
+  `create-session` and `resume-session` accept `:providers` (a vector of named
+  providers) and `:models` (a model catalog referencing them by `:name`). A model
+  selection id is `"providerName/id"`. Combining the singular `:provider` with
+  either `:providers` or `:models` is rejected. Added `::named-provider`,
+  `::provider-model`, `::providers`, and `::models` specs.
+- **`:bearer-token-provider` callback** — port of upstream
+  [PR #1748](https://github.com/github/copilot-sdk/pull/1748) (`@experimental`).
+  Providers accept a `:bearer-token-provider` function for dynamic, per-request
+  bearer tokens. The fn is stripped before serialization (sending
+  `hasBearerTokenProvider true`); the runtime requests a token via a new inbound
+  `providerToken.getToken` RPC, dispatched to the registered callback. Non-string
+  callback results are rejected and never logged. Added `::bearer-token-provider`
+  spec.
+- **`:exp-assignments` session option** — port of upstream
+  [PR #1750](https://github.com/github/copilot-sdk/pull/1750) (`@internal`).
+  An opaque experiment-flight assignment map forwarded verbatim (string keys
+  bypass kebab→camel conversion) as `expAssignments`. Added `::exp-assignments`
+  spec.
+- **New session-event types** (schema 1.0.65) — schema-driven event types added to
+  the generated wire specs: citations, binary assets (PersistedBinary /
+  OmittedBinary / BinaryAssetReference), additional canvas events
+  (CanvasUnavailable / Recorded / Removed), ScheduleRearmed, and MCP OAuth events.
+  Public `event-types` / `session-events` entries added where upstream exposes a
+  public SDK event.
+- **`open-canvases` validation relaxed** — parity with upstream `session.ts`:
+  an open-canvas instance now requires only the three id fields `:instance-id` +
+  `:extension-id` + `:canvas-id` (dropped the `:reopen` / `:availability`
+  requirements).
+
+### Changed (v1.0.4 sync)
+- **`redact-secrets` masks the `:providers` registry** — the validation-error
+  redactor now masks `:api-key`, `:bearer-token`, and `:headers` on every entry
+  in the multi-provider `:providers` registry, matching the existing singular
+  `:provider` masking.
+
 ### Added (post-v1.0.1 sync)
 - **`:memory` session configuration** — port of upstream
   [PR #1617](https://github.com/github/copilot-sdk/pull/1617). `create-session`

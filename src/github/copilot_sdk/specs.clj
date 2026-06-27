@@ -270,7 +270,8 @@
   "Known system message section identifiers for the customize mode.
    Each section corresponds to a distinct part of the system message.
    Upstream alias: `SystemMessageSection`."
-  {:identity             {:description "Agent identity preamble and mode statement"}
+  {:preamble             {:description "Agent identity preamble and mode statement"}
+   :identity             {:description "Section group covering the identity preamble and its sibling sub-sections (tone, tool efficiency, etc.)"}
    :tone                 {:description "Response style, conciseness rules, output formatting preferences"}
    :tool-efficiency      {:description "Tool usage patterns, parallel calling, batching guidelines"}
    :environment-context  {:description "CWD, OS, git root, directory listing, available tools"}
@@ -290,9 +291,12 @@
 (s/def ::system-prompt-section (set (keys system-prompt-sections)))
 (s/def ::system-message-section ::system-prompt-section)
 
-;; Section override: action can be a keyword for static overrides, or a fn for transforms
+;; Section override: action can be a keyword for static overrides, or a fn for transforms.
+;; `:preserve` (upstream PR #1713) is a no-op marker that opts an individually-addressable
+;; section out of a group-level `:remove` (e.g. keep `:tone` when removing the `:identity`
+;; group). It carries no content.
 (s/def ::section-action
-  (s/or :static #{:replace :remove :append :prepend}
+  (s/or :static #{:replace :remove :append :prepend :preserve}
         :transform fn?))
 
 (s/def ::section-override
@@ -305,6 +309,11 @@
          #(if (and (keyword? (:action %))
                    (#{:replace :append :prepend} (:action %)))
             (string? (:content %))
+            true)
+         ;; The no-op markers carry no payload — reject stray :content so a
+         ;; caller mistake fails fast instead of being silently dropped.
+         #(if (#{:remove :preserve} (:action %))
+            (not (contains? % :content))
             true)))
 
 ;; Customize config: mode :customize with optional sections map and content
@@ -395,6 +404,22 @@
 (s/def ::bearer-token string?)
 (s/def ::azure-api-version string?)
 
+;; Provider :transport — selects the request transport for OpenAI-compatible
+;; providers running `:wire-api :responses` (upstream PR #1711). Defaults to
+;; `:http` runtime-side when omitted; `:websockets` opts into the WebSocket
+;; Responses transport. Upstream attaches `transport` to the singular
+;; `ProviderConfig` only — the multi-provider `NamedProviderConfig` has no
+;; transport field — so this applies to ::provider, not ::named-provider.
+(s/def ::transport #{:http :websockets})
+
+;; On-demand bearer-token callback (upstream PR #1748, @experimental). A 1-arg
+;; function receiving an idiomatic `ProviderTokenArgs` map
+;; `{:provider-name <s> :session-id <s>}`
+;; and returning the raw token string (a channel yielding the string is also
+;; accepted). Applies to both ::provider and ::named-provider. The fn is never
+;; serialized — provider->wire strips it and emits `hasBearerTokenProvider: true`.
+(s/def ::bearer-token-provider fn?)
+
 (s/def ::azure-options
   (s/keys :opt-un [::azure-api-version]))
 
@@ -418,7 +443,7 @@
   (s/and
    (s/keys :req-un [::base-url]
            :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
-                    ::headers
+                    ::headers ::transport ::bearer-token-provider
                     ;; ProviderConfig overrides (upstream PR #966).
                     ;; ::model-id ↦ wire `modelId` (well-known model name for
                     ;; agent config + token-limit lookup; default wire model
@@ -443,6 +468,66 @@
         (pos-int? (:max-input-tokens %)))
    #(or (not (contains? % :max-output-tokens))
         (pos-int? (:max-output-tokens %)))))
+
+;; -----------------------------------------------------------------------------
+;; Multi-provider BYOK registry (upstream PR #1718, @experimental)
+;; -----------------------------------------------------------------------------
+;; The singular ::provider above configures one OpenAI-compatible endpoint.
+;; The registry lets a session declare several named providers (::providers)
+;; plus a model catalog (::models) that references them by name. A model is
+;; addressed as "<provider-name>/<id>"; provider names therefore must not
+;; contain "/". Upstream's `NamedProviderConfig` has no `transport` and no
+;; inline model-override fields (those live on ::provider-model instead).
+
+;; A named provider entry. Like ::provider but `:name` is required (the
+;; registry key, no "/") and there are no transport / model-override fields.
+(s/def ::named-provider
+  (s/and
+   (s/keys :req-un [::name ::base-url]
+           :opt-un [::provider-type ::wire-api ::api-key ::bearer-token
+                    ::azure-options ::headers ::bearer-token-provider])
+   #(s/valid? ::non-blank-string (:name %))
+   #(not (str/includes? (:name %) "/"))
+   ;; `s/keys` is open, so reject the singular-provider-only transport /
+   ;; model-override keys explicitly — otherwise they would pass validation and
+   ;; silently forward on the wire, contradicting the NamedProviderConfig
+   ;; contract (those fields live on ::provider / ::provider-model).
+   #(empty? (select-keys % [:transport :model-id :wire-model
+                            :max-input-tokens :max-output-tokens]))))
+
+;; ModelCapabilitiesOverride — opaque to the SDK. Forwarded verbatim, so keys
+;; must be strings (upstream uses a mix of camelCase and snake_case wire keys
+;; that kebab->camel conversion would otherwise mangle).
+(s/def ::capabilities (s/map-of string? any?))
+
+;; A model in the registry catalog. `:id` is the provider-local model id and
+;; `:provider` is a non-blank string referencing a ::named-provider `:name`.
+;; `:provider` is enforced via predicate rather than `:req-un [::provider]`
+;; because `::provider` is the singular-provider *map* spec, not a string.
+(s/def ::provider-model
+  (s/and
+   (s/keys :req-un [::id]
+           :opt-un [::name ::model-id ::wire-model ::capabilities
+                    ::max-input-tokens ::max-context-window-tokens
+                    ::max-output-tokens])
+   #(s/valid? ::non-blank-string (:id %))
+   #(s/valid? ::non-blank-string (:provider %))
+   #(or (not (contains? % :model-id))
+        (s/valid? ::non-blank-string (:model-id %)))
+   #(or (not (contains? % :max-input-tokens))
+        (pos-int? (:max-input-tokens %)))
+   #(or (not (contains? % :max-context-window-tokens))
+        (pos-int? (:max-context-window-tokens %)))
+   #(or (not (contains? % :max-output-tokens))
+        (pos-int? (:max-output-tokens %)))))
+
+(s/def ::providers (s/coll-of ::named-provider))
+(s/def ::models (s/coll-of ::provider-model))
+
+;; expAssignments (upstream PR #1750, @internal) — opaque experiment flight
+;; assignments. Keys are source-defined flight ids; forwarded verbatim, so
+;; they must be strings (bypassing kebab->camel key conversion).
+(s/def ::exp-assignments (s/map-of string? any?))
 
 ;; -----------------------------------------------------------------------------
 ;; Session configuration
@@ -662,6 +747,14 @@
 ;; nil clears the previous explicit choice; missing leaves it untouched.
 (s/def ::context-tier (s/nilable #{:default :long-context}))
 
+;; CapiSessionOptions (upstream PR #1711). Per-session transport choices for the
+;; built-in Copilot API provider. `:enable-web-socket-responses` controls whether
+;; the WebSocket transport is used for the CAPI Responses API (default true on the
+;; runtime side); set false to force the HTTP Responses transport. Sent verbatim
+;; under the `capi` wire key.
+(s/def ::enable-web-socket-responses boolean?)
+(s/def ::capi (s/keys :opt-un [::enable-web-socket-responses]))
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
@@ -696,6 +789,8 @@
     :custom-agents-local-only
     :coauthor-enabled
     :manage-schedule-enabled
+    :capi
+    :providers :models :exp-assignments
     :include-sub-agent-streaming-events?})
 
 (s/def ::session-config
@@ -735,6 +830,8 @@
                     ::custom-agents-local-only
                     ::coauthor-enabled
                     ::manage-schedule-enabled
+                    ::capi
+                    ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
 
@@ -768,6 +865,8 @@
     :custom-agents-local-only
     :coauthor-enabled
     :manage-schedule-enabled
+    :capi
+    :providers :models :exp-assignments
     :include-sub-agent-streaming-events?
     ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
     :open-canvases})
@@ -806,6 +905,8 @@
                     ::custom-agents-local-only
                     ::coauthor-enabled
                     ::manage-schedule-enabled
+                    ::capi
+                    ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
                     ::open-canvases])
    resume-session-config-keys))
@@ -845,6 +946,8 @@
                     ::custom-agents-local-only
                     ::coauthor-enabled
                     ::manage-schedule-enabled
+                    ::capi
+                    ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
                     ::open-canvases])
    resume-session-config-keys))
@@ -1437,21 +1540,19 @@
          #(contains? % :id)
          #(pos-int? (:id %))))
 
-;; Canvas event data and snapshot entries (upstream PR #1604).
-;; Wire fields: instanceId, extensionId, canvasId, extensionName, reopen,
-;; availability, status, title, url, input. csk converts to kebab-case;
-;; booleans (`reopen`) keep no trailing `?`. `:input` is opaque caller-supplied
-;; data — open map per upstream `{ [k: string]: unknown }`.
+;; Canvas event data and snapshot entries (upstream PR #1604; v1.0.4 dropped
+;; reopen/availability). Wire fields: instanceId, extensionId, canvasId,
+;; extensionName, status, title, url, input. csk converts to kebab-case.
+;; `:input` is opaque caller-supplied data — open map per upstream
+;; `{ [k: string]: unknown }`.
 (s/def ::instance-id ::non-blank-string)
 (s/def ::extension-id ::non-blank-string)
 (s/def ::canvas-id ::non-blank-string)
 (s/def ::extension-name string?)
-(s/def ::reopen boolean?)
-(s/def ::availability #{"ready" "stale"})
 (s/def ::input map?)
 
 (s/def ::open-canvas-instance
-  (s/keys :req-un [::instance-id ::extension-id ::canvas-id ::reopen ::availability]
+  (s/keys :req-un [::instance-id ::extension-id ::canvas-id]
           :opt-un [::extension-name ::title ::status ::url ::input]))
 
 (s/def ::open-canvases (s/coll-of ::open-canvas-instance :kind sequential? :into []))

@@ -3,7 +3,9 @@
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [clojure.core.async :as async :refer [<!! >!! chan close! go timeout alts!!]]
             [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.tools.logging :as log]
+            [clojure.tools.logging.test :as log-test]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
             [github.copilot-sdk.protocol :as protocol]
@@ -2045,6 +2047,490 @@
           ":runtime-instructions must be sent as wire key :runtime_instructions")
       (is (= "replace" (get-in wire [:runtime_instructions :action])))
       (is (= "runtime ctx" (get-in wire [:runtime_instructions :content]))))))
+
+(deftest test-v1-0-4-preamble-section
+  (testing ":preamble is a known system message section (upstream PR #1683)"
+    (is (contains? (set (keys specs/system-prompt-sections)) :preamble))
+    (is (= "preamble" (util/section-kw->wire-id :preamble))
+        ":preamble converts to the wire string \"preamble\"")
+    (is (= :preamble (util/wire-id->section-kw "preamble"))
+        "\"preamble\" round-trips back to :preamble")
+    (is (s/valid? :github.copilot-sdk.specs/system-prompt-section :preamble))
+    (is (s/valid? :github.copilot-sdk.specs/system-message-section :preamble)
+        "::system-message-section alias also accepts it")))
+
+(deftest test-v1-0-4-preamble-section-wire-roundtrip
+  (testing ":preamble section survives the create-session wire conversion"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :system-message {:mode :customize
+                                                  :sections
+                                                  {:preamble
+                                                   {:action :replace
+                                                    :content "you are an agent"}}}})
+          wire (get-in @seen ["session.create" :systemMessage :sections])]
+      (is (contains? wire :preamble)
+          ":preamble must be sent as wire key :preamble")
+      (is (= "replace" (get-in wire [:preamble :action])))
+      (is (= "you are an agent" (get-in wire [:preamble :content]))))))
+
+(deftest test-v1-0-4-preserve-section-action
+  (testing ":preserve is a valid static section action (upstream PR #1713)"
+    (is (s/valid? :github.copilot-sdk.specs/section-action :preserve)
+        ":preserve must validate as a static section action")
+    ;; :preserve is a no-op marker — content is NOT required (unlike replace/append/prepend)
+    (is (s/valid? :github.copilot-sdk.specs/section-override {:action :preserve})
+        ":preserve override needs no :content")
+    ;; ...and it carries no content: a content-bearing :preserve/:remove is a
+    ;; caller mistake the spec must reject (upstream PR #1713 — these actions
+    ;; have no content payload).
+    (is (false? (s/valid? :github.copilot-sdk.specs/section-override
+                          {:action :preserve :content "x"}))
+        ":preserve must reject :content")
+    (is (false? (s/valid? :github.copilot-sdk.specs/section-override
+                          {:action :remove :content "x"}))
+        ":remove must reject :content"))
+  (testing ":preserve action survives the create-session wire conversion"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :system-message {:mode :customize
+                                                  :sections
+                                                  {:identity {:action :remove}
+                                                   :tone {:action :preserve}}}})
+          wire (get-in @seen ["session.create" :systemMessage :sections])]
+      (is (= "preserve" (get-in wire [:tone :action]))
+          ":preserve must be sent as the wire action string \"preserve\"")
+      (is (not (contains? (get wire :tone) :content))
+          ":preserve emits no :content key"))))
+
+(deftest test-v1-0-4-capi-enable-websocket-responses-wire
+  (testing ":capi {:enable-web-socket-responses ...} forwards on both session.create and session.resume (upstream PR #1711)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :capi {:enable-web-socket-responses false}})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :capi {:enable-web-socket-responses false}})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (= {:enableWebSocketResponses false} (:capi create-params))
+          ":capi must be sent verbatim under wire key :capi with camelCase :enableWebSocketResponses on create")
+      (is (= {:enableWebSocketResponses false} (:capi resume-params))
+          ":capi must also forward on resume")))
+  (testing ":capi is accepted by the session-config spec"
+    (is (s/valid? :github.copilot-sdk.specs/capi {:enable-web-socket-responses true}))
+    (is (s/valid? :github.copilot-sdk.specs/capi {})
+        "empty :capi map is valid (field is optional)")))
+
+(deftest test-v1-0-4-provider-transport-wire
+  (testing ":provider :transport forwards on both session.create and session.resume (upstream PR #1711)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          provider {:provider-type :openai
+                    :wire-api :responses
+                    :base-url "https://example.test"
+                    :api-key "key"
+                    :transport :websockets}
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider provider})]
+      (doseq [method ["session.create" "session.resume"]]
+        (let [p (get-in @seen [method :provider])]
+          (testing method
+            (is (= "websockets" (:transport p))
+                ":transport keyword value must serialize to its wire string"))))))
+  (testing "::transport enum is enforced on ::provider"
+    (is (s/valid? :github.copilot-sdk.specs/transport :http))
+    (is (s/valid? :github.copilot-sdk.specs/transport :websockets))
+    (is (false? (s/valid? :github.copilot-sdk.specs/transport :bogus)))
+    (is (s/valid? :github.copilot-sdk.specs/provider
+                  {:base-url "https://example.test" :transport :http}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/provider
+                          {:base-url "https://example.test" :transport :bogus}))
+        "an invalid :transport value must fail provider validation")))
+
+(deftest test-v1-0-4-multi-provider-byok-registry-wire
+  (testing ":providers/:models forward on both session.create and session.resume (upstream PR #1718)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          providers [{:name "my-openai"
+                      :provider-type :openai
+                      :wire-api :responses
+                      :base-url "https://oai.test"
+                      :api-key "k1"
+                      :headers {"X-Org" "acme"}}
+                     {:name "my-azure"
+                      :provider-type :azure
+                      :base-url "https://azure.test"
+                      :api-key "k2"
+                      :azure-options {:azure-api-version "2024-06-01"}}]
+          models [{:id "gpt-4o"
+                   :provider "my-openai"
+                   :model-id "gpt-4o"
+                   :name "GPT-4o"
+                   :wire-model "gpt-4o-2024"
+                   :max-input-tokens 128000
+                   :max-context-window-tokens 200000
+                   :max-output-tokens 16000
+                   :capabilities {"reasoningEffort" "high"
+                                  "max_prompt_tokens" 120000
+                                  "supported_media_types" ["image/png"]}}]
+          cfg {:on-permission-request sdk/approve-all
+               :model "fallback-model"
+               :providers providers
+               :models models}
+          _ (sdk/create-session *test-client* cfg)
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id cfg)]
+      (doseq [method ["session.create" "session.resume"]]
+        (testing method
+          (let [params (get @seen method)
+                wprov (:providers params)
+                wmodels (:models params)
+                oai (first wprov)
+                azure (second wprov)
+                m (first wmodels)]
+            (is (= 2 (count wprov)) "both named providers are forwarded")
+            ;; named provider wire shape
+            (is (= "my-openai" (:name oai)))
+            (is (= "openai" (:type oai)) ":provider-type renames to wire :type")
+            (is (= "responses" (:wireApi oai)))
+            (is (= "https://oai.test" (:baseUrl oai)))
+            (is (= "k1" (:apiKey oai)))
+            (is (= {:X-Org "acme"} (:headers oai)))
+            (is (not (contains? oai :providerType)) "no :providerType leaks onto the wire")
+            ;; azure nested rename
+            (is (= "azure" (:type azure)))
+            (is (= {:apiVersion "2024-06-01"} (:azure azure))
+                ":azure-options -> :azure with nested :azure-api-version -> :apiVersion")
+            ;; provider-model wire shape
+            (is (= "gpt-4o" (:id m)))
+            (is (= "my-openai" (:provider m)))
+            (is (= "gpt-4o" (:modelId m)))
+            (is (= "GPT-4o" (:name m)))
+            (is (= "gpt-4o-2024" (:wireModel m)))
+            (is (= 128000 (:maxPromptTokens m)) ":max-input-tokens -> wire :maxPromptTokens")
+            (is (= 200000 (:maxContextWindowTokens m)))
+            (is (= 16000 (:maxOutputTokens m)))
+            (is (not (contains? m :maxInputTokens)) "no :maxInputTokens leaks onto the wire")
+            ;; capabilities passthrough: opaque string keys survive unmangled
+            (is (= "high" (get-in m [:capabilities :reasoningEffort])))
+            (is (= 120000 (get-in m [:capabilities :max_prompt_tokens]))
+                ":capabilities is opaque — snake_case keys must NOT be camelCased")
+            (is (= ["image/png"] (get-in m [:capabilities :supported_media_types]))))))))
+  (testing "specs accept the multi-provider registry shapes"
+    (is (s/valid? :github.copilot-sdk.specs/named-provider
+                  {:name "p" :base-url "https://x.test"}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:base-url "https://x.test"}))
+        ":name is required on a named provider")
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "has/slash" :base-url "https://x.test"}))
+        "named provider :name must not contain '/'")
+    ;; A named provider carries no transport or inline model-override fields
+    ;; (upstream NamedProviderConfig, PR #1718) — those belong on the singular
+    ;; ::provider / ::provider-model. The spec must reject them so misuse fails
+    ;; fast at validate-session-config! instead of silently forwarding on the wire.
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "p" :base-url "https://x.test" :transport :http}))
+        ":transport is not a named-provider field")
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "p" :base-url "https://x.test" :model-id "gpt-4o"}))
+        ":model-id is not a named-provider field")
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "p" :base-url "https://x.test" :max-input-tokens 1000}))
+        "model-override token limits are not named-provider fields")
+    (is (s/valid? :github.copilot-sdk.specs/provider-model
+                  {:id "m" :provider "p"}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/provider-model
+                          {:provider "p"}))
+        ":id is required on a provider model")
+    (is (false? (s/valid? :github.copilot-sdk.specs/provider-model
+                          {:id "m"}))
+        ":provider is required on a provider model")
+    (is (false? (s/valid? :github.copilot-sdk.specs/provider-model
+                          {:id "m" :provider "p" :max-input-tokens 0}))
+        "token overrides must be positive")
+    (is (s/valid? :github.copilot-sdk.specs/providers
+                  [{:name "p" :base-url "https://x.test"}]))
+    (is (s/valid? :github.copilot-sdk.specs/models
+                  [{:id "m" :provider "p"}]))
+    (is (s/valid? :github.copilot-sdk.specs/session-config
+                  {:providers [{:name "p" :base-url "https://x.test"}]
+                   :models [{:id "m" :provider "p"}]}))))
+
+(deftest test-v1-0-4-exp-assignments-wire
+  (testing ":exp-assignments forwards verbatim on both session.create and session.resume (upstream PR #1750)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          exp {"flight-abc" "treatment" "feature_x" {"enabled" true}}
+          cfg {:on-permission-request sdk/approve-all
+               :exp-assignments exp}
+          _ (sdk/create-session *test-client* cfg)
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id cfg)]
+      (doseq [method ["session.create" "session.resume"]]
+        (testing method
+          (let [p (get @seen method)]
+            (is (= {:flight-abc "treatment" :feature_x {:enabled true}}
+                   (:expAssignments p))
+                ":exp-assignments forwards under wire key :expAssignments with keys preserved verbatim (no kebab->camel)"))))))
+  (testing "::exp-assignments accepts an opaque string-keyed map"
+    (is (s/valid? :github.copilot-sdk.specs/exp-assignments {"a" 1 "b" {"c" 2}}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/exp-assignments {:a 1}))
+        "keys must be strings (source-defined flight ids), not keywords")
+    (is (s/valid? :github.copilot-sdk.specs/session-config
+                  {:exp-assignments {"a" 1}}))))
+
+(deftest test-v1-0-4-provider-and-providers-mutually-exclusive
+  (testing "combining singular :provider with the :providers registry is rejected on both create and resume (upstream ProviderTokenArgs/SessionConfig contract, PR #1718)"
+    ;; Upstream documents that combining `providers`/`models` with the singular
+    ;; `provider` is rejected; the SDK forwards both to the runtime which rejects
+    ;; the combination. We fail fast client-side with a clear message — a
+    ;; Clojure-only convenience that never alters the wire for any valid config
+    ;; (the combination is invalid everywhere).
+    (let [cfg {:on-permission-request sdk/approve-all
+               :model "m"
+               :provider {:base-url "https://single.test"}
+               :providers [{:name "p" :base-url "https://registry.test"}]}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"(?i):provider.*cannot be combined.*:providers"
+                            (sdk/create-session *test-client* cfg))
+          "create-session rejects :provider + :providers")
+      (let [ok-session (sdk/create-session *test-client*
+                                           {:on-permission-request sdk/approve-all
+                                            :model "m"})
+            session-id (sdk/session-id ok-session)]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"(?i):provider.*cannot be combined.*:providers"
+                              (sdk/resume-session *test-client* session-id cfg))
+            "resume-session rejects :provider + :providers")))))
+
+(deftest test-v1-0-4-provider-and-models-mutually-exclusive
+  (testing "combining singular :provider with the :models registry is rejected on both create and resume (upstream SessionConfig contract, PR #1718)"
+    ;; Upstream documents (types.ts SessionConfig.providers/models JSDoc) that
+    ;; combining *either* `providers` *or* `models` with the singular `provider`
+    ;; is rejected — `:models` is part of the same multi-provider registry
+    ;; surface. A config with `:provider` + `:models` (no `:providers`) must fail
+    ;; the same client-side guard, otherwise it serializes a wire payload that
+    ;; contradicts the documented "provider vs multi-provider registry" contract.
+    (let [cfg {:on-permission-request sdk/approve-all
+               :model "m"
+               :provider {:base-url "https://single.test"}
+               :models [{:provider "p" :id "m"}]}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"(?i):provider.*cannot be combined.*:models"
+                            (sdk/create-session *test-client* cfg))
+          "create-session rejects :provider + :models")
+      (let [ok-session (sdk/create-session *test-client*
+                                           {:on-permission-request sdk/approve-all
+                                            :model "m"})
+            session-id (sdk/session-id ok-session)]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"(?i):provider.*cannot be combined.*:models"
+                              (sdk/resume-session *test-client* session-id cfg))
+            "resume-session rejects :provider + :models")))))
+
+(deftest test-v1-0-4-bearer-token-exception-message-not-leaked
+  (testing "an exception thrown by a bearer-token callback never leaks its message to logs or the runtime (SEC)"
+    ;; The callback mints credentials; an exception it raises can easily carry
+    ;; sensitive material in its message (e.g. a token echoed in an auth error).
+    ;; The JSON-RPC error returned to the runtime must be generic and the log
+    ;; must record only the exception class, never `ex-message`. Handler invoked
+    ;; directly so `thread-call` conveys the `with-log` binding to the io thread.
+    (let [secret "tok_LEAKED_IN_EXCEPTION_MESSAGE_456"
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :model "fallback-model"
+                                       :provider {:base-url "https://oai.test"
+                                                  :bearer-token-provider
+                                                  (fn [_] (throw (ex-info secret {})))}})
+          session-id (sdk/session-id session)]
+      (log-test/with-log
+        (let [resp (<!! (session/handle-provider-token-request!
+                         *test-client* session-id "default"))]
+          (is (= -32001 (get-in resp [:error :code]))
+              "a thrown callback yields a JSON-RPC error")
+          (is (not (str/includes? (str (get-in resp [:error :message])) secret))
+              "the error message returned to the runtime must not echo the exception message")
+          (is (seq (log-test/the-log)) "the exception branch should emit a log entry")
+          (doseq [entry (log-test/the-log)]
+            (is (not (str/includes? (str (:message entry)) secret))
+                "exception message must not be logged")))))))
+
+(deftest test-v1-0-4-bearer-token-provider-wire
+  (testing ":bearer-token-provider strips the fn and emits :hasBearerTokenProvider on both builders (upstream PR #1748)"
+    (let [token-fn (fn [_args] "secret-token")
+          provider {:provider-type :openai
+                    :wire-api :responses
+                    :base-url "https://oai.test"
+                    :bearer-token-provider token-fn}
+          named [{:name "my-azure"
+                  :provider-type :azure
+                  :base-url "https://azure.test"
+                  :bearer-token-provider token-fn}]
+          capture (fn [cfg]
+                    (let [seen (atom {})]
+                      (mock/set-request-hook! *mock-server*
+                                              (fn [method params]
+                                                (when (#{"session.create" "session.resume"} method)
+                                                  (swap! seen assoc method params))))
+                      (sdk/create-session *test-client* cfg)
+                      (let [session-id (sdk/get-last-session-id *test-client*)]
+                        (sdk/resume-session *test-client* session-id cfg))
+                      @seen))
+          ;; singular :provider and registry :providers are mutually exclusive,
+          ;; so exercise each on its own config.
+          singular-seen (capture {:on-permission-request sdk/approve-all
+                                  :model "fallback-model"
+                                  :provider provider})
+          registry-seen (capture {:on-permission-request sdk/approve-all
+                                  :model "fallback-model"
+                                  :providers named})]
+      (doseq [method ["session.create" "session.resume"]]
+        (testing method
+          (let [wprov (:provider (get singular-seen method))
+                wnamed (first (:providers (get registry-seen method)))]
+            ;; singular provider
+            (is (true? (:hasBearerTokenProvider wprov))
+                "singular provider with a callback emits :hasBearerTokenProvider true")
+            (is (not (contains? wprov :bearerTokenProvider))
+                "the callback fn must NOT be serialized onto the wire")
+            (is (not (contains? wprov :bearer-token-provider))
+                "the kebab-case callback key must NOT leak onto the wire")
+            ;; named provider
+            (is (true? (:hasBearerTokenProvider wnamed))
+                "named provider with a callback emits :hasBearerTokenProvider true")
+            (is (not (contains? wnamed :bearerTokenProvider))
+                "the named-provider callback fn must NOT be serialized onto the wire"))))))
+  (testing "a provider without a callback omits :hasBearerTokenProvider"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (= "session.create" method)
+                                        (reset! seen params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :model "fallback-model"
+                                 :provider {:base-url "https://oai.test" :api-key "k"}})]
+      (is (not (contains? (:provider @seen) :hasBearerTokenProvider))
+          "no callback => no :hasBearerTokenProvider flag")))
+  (testing "::bearer-token-provider is accepted on provider and named-provider specs"
+    (is (s/valid? :github.copilot-sdk.specs/provider
+                  {:base-url "https://x.test" :bearer-token-provider (fn [_] "t")}))
+    (is (s/valid? :github.copilot-sdk.specs/named-provider
+                  {:name "p" :base-url "https://x.test" :bearer-token-provider (fn [_] "t")}))
+    (is (false? (s/valid? :github.copilot-sdk.specs/provider
+                          {:base-url "https://x.test" :bearer-token-provider "not-a-fn"}))
+        ":bearer-token-provider must be a function")))
+
+(deftest test-v1-0-4-provider-token-get-token-callback
+  (testing "providerToken.getToken routes to the singular provider callback (DEFAULT_PROVIDER_NAME)"
+    (let [called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :model "fallback-model"
+                                       :provider {:base-url "https://oai.test"
+                                                  :bearer-token-provider
+                                                  (fn [args]
+                                                    (reset! called args)
+                                                    "singular-token")}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "providerToken.getToken"
+                                           {:sessionId session-id
+                                            :providerName "default"})]
+      (is (= {:provider-name "default" :session-id session-id} @called)
+          "callback receives idiomatic ProviderTokenArgs with :provider-name and :session-id")
+      (is (= "singular-token" (get-in response [:result :token]))
+          "the resolved token is returned under wire key :token")))
+  (testing "providerToken.getToken routes to a named provider callback by name"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :model "fallback-model"
+                                       :providers [{:name "my-azure"
+                                                    :base-url "https://azure.test"
+                                                    :bearer-token-provider
+                                                    (fn [_] "azure-token")}]})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "providerToken.getToken"
+                                           {:sessionId session-id
+                                            :providerName "my-azure"})]
+      (is (= "azure-token" (get-in response [:result :token])))))
+  (testing "providerToken.getToken with no matching callback returns an error"
+    (let [session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :model "fallback-model"
+                                       :provider {:base-url "https://oai.test"
+                                                  :bearer-token-provider (fn [_] "tok")}})
+          session-id (sdk/session-id session)]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"(?i)no bearer-token provider"
+                            (mock/send-rpc-request! *mock-server*
+                                                    "providerToken.getToken"
+                                                    {:sessionId session-id
+                                                     :providerName "nonexistent"}))))))
+
+(deftest test-v1-0-4-bearer-token-non-string-result-not-logged
+  (testing "a non-string bearer-token callback result value never reaches the logs (SEC)"
+    ;; The callback is credential-related; a mistaken non-string return (e.g. a
+    ;; map carrying the token) must not have its value interpolated into a log
+    ;; message. The JSON-RPC error returned to the runtime is generic; this
+    ;; guards the log side-channel. The handler is invoked directly on the test
+    ;; thread so core.async `thread-call` conveys the `with-log` binding frame
+    ;; to the io thread (the server-dispatch path runs on a reader thread that
+    ;; predates this binding, so it cannot be captured via the mock RPC route).
+    (let [secret "tok_LEAKED_IN_MAP_VALUE_123"
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :model "fallback-model"
+                                       :provider {:base-url "https://oai.test"
+                                                  :bearer-token-provider
+                                                  (fn [_] {:access-token secret})}})
+          session-id (sdk/session-id session)]
+      (log-test/with-log
+        (let [resp (<!! (session/handle-provider-token-request!
+                         *test-client* session-id "default"))]
+          (is (= -32001 (get-in resp [:error :code]))
+              "a non-string result must yield a JSON-RPC error")
+          (is (not (str/includes? (str (get-in resp [:error :message])) secret))
+              "the error message must not echo the secret")
+          (is (seq (log-test/the-log)) "the non-string branch should emit a warning")
+          (doseq [entry (log-test/the-log)]
+            (is (not (str/includes? (str (:message entry)) secret))
+                "non-string callback result value must not be logged")))))))
 
 (deftest test-schema-1-0-52-4-min-protocol-version-3
   (testing "client rejects servers reporting protocol version < 3 (upstream PR #1378)"
@@ -5679,6 +6165,59 @@
               e (capture #(sdk/create-session c {:provider {:provider-type "azure" :api-key azure-key}}))]
           (is (some? e))
           (is (not (leaked? e azure-key)) "BYOK :api-key must be redacted")))
+      (testing "session-config BYOK :providers registry secrets (v1.0.4)"
+        ;; Item 4 added the multi-provider :providers registry; each named
+        ;; provider carries the same secret-bearing fields as the singular
+        ;; :provider. A validation failure (tripped here by an unknown key)
+        ;; must redact them all.
+        (let [c (sdk/client {:auto-start? false})
+              named-key "sk-namedSECRET789"
+              named-bearer "namedBearerSECRET321"
+              named-hdr "Bearer namedHdrSECRET654"
+              e (capture #(sdk/create-session
+                           c {:providers [{:name "openai" :base-url "https://o.test"
+                                           :api-key named-key
+                                           :bearer-token named-bearer
+                                           :headers {"Authorization" named-hdr}}]
+                              :totally-unknown-key 1}))]
+          (is (some? e) "an unknown key should fail validation")
+          (is (not (leaked? e named-key)) "named provider :api-key must be redacted")
+          (is (not (leaked? e named-bearer)) "named provider :bearer-token must be redacted")
+          (is (not (leaked? e named-hdr)) "named provider :headers value must be redacted")))
+      (testing "session-config BYOK :providers as a non-sequential collection (set)"
+        ;; redact-secrets runs on the *already-invalid* config in the error path,
+        ;; so it must not rely on ::providers being sequential. A set of providers
+        ;; (still a valid ::coll-of) must have its secrets masked too.
+        (let [c (sdk/client {:auto-start? false})
+              set-key "sk-setSECRET111"]
+          (let [e (capture #(sdk/create-session
+                             c {:providers #{{:name "openai" :base-url "https://o.test"
+                                              :api-key set-key}}
+                                :totally-unknown-key 1}))]
+            (is (some? e) "an unknown key should fail validation")
+            (is (not (leaked? e set-key))
+                "set-valued :providers entry :api-key must still be redacted"))))
+      (testing "session-config BYOK :providers as an (invalid) map of name->config"
+        ;; The valid ::providers shape is a sequential collection, but
+        ;; redact-secrets runs on the *already-invalid* config in the error
+        ;; path. A caller mistake of passing a map (name->provider-config) must
+        ;; still have its secret-bearing values masked, not leaked verbatim.
+        (let [c (sdk/client {:auto-start? false})
+              map-key "sk-mapSECRET222"
+              map-bearer "mapBearerSECRET333"
+              map-hdr "Bearer mapHdrSECRET444"]
+          (let [e (capture #(sdk/create-session
+                             c {:providers {:openai {:base-url "https://o.test"
+                                                     :api-key map-key
+                                                     :bearer-token map-bearer
+                                                     :headers {"Authorization" map-hdr}}}}))]
+            (is (some? e) "a map-valued :providers should fail validation")
+            (is (not (leaked? e map-key))
+                "map-valued :providers entry :api-key must still be redacted")
+            (is (not (leaked? e map-bearer))
+                "map-valued :providers entry :bearer-token must still be redacted")
+            (is (not (leaked? e map-hdr))
+                "map-valued :providers entry :headers value must still be redacted"))))
       (testing "resume-config BYOK provider api-key"
         (let [c (sdk/client {:auto-start? false})
               e (capture #(sdk/resume-session c "sid" {:provider {:provider-type "azure" :api-key azure-key}}))]
@@ -6294,8 +6833,6 @@
      {:openCanvases [{:instanceId "i1"
                       :extensionId "ext-a"
                       :canvasId "c1"
-                      :reopen false
-                      :availability "ready"
                       :title "Hello"}]})
     ;; create-session does NOT populate open-canvases
     (let [created (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})]
@@ -6308,40 +6845,36 @@
         (is (= "i1" (:instance-id (first canvases))))
         (is (= "ext-a" (:extension-id (first canvases))))
         (is (= "c1" (:canvas-id (first canvases))))
-        (is (= "ready" (:availability (first canvases))))
         (is (= "Hello" (:title (first canvases))))))))
 
 (deftest test-open-canvases-resume-sanitizes-invalid-entries
-  (testing "session.resume openCanvases drops invalid entries (parity with live upserts)"
+  (testing "session.resume openCanvases drops only structurally-invalid entries"
     (mock/set-resume-response-extras!
      *mock-server*
-     ;; Mix of one valid, one missing :reopen, one missing :availability,
-     ;; one with bad availability value, one not even a map.
+     ;; Two valid entries (3 required ids; extra optional fields), then three
+     ;; structurally-invalid ones: missing :canvasId, blank :instanceId, and a
+     ;; non-map. Under v1.0.4 the snapshot shape requires only the three ids;
+     ;; :reopen/:availability were removed from OpenCanvasInstance entirely.
      {:openCanvases [{:instanceId "i1"
                       :extensionId "ext-a"
-                      :canvasId "c1"
-                      :reopen false
-                      :availability "ready"}
+                      :canvasId "c1"}
                      {:instanceId "i2"
                       :extensionId "ext-a"
                       :canvasId "c2"
-                      :availability "ready"}
+                      :title "Second"}
                      {:instanceId "i3"
+                      :extensionId "ext-a"}
+                     {:instanceId ""
                       :extensionId "ext-a"
-                      :canvasId "c3"
-                      :reopen true}
-                     {:instanceId "i4"
-                      :extensionId "ext-a"
-                      :canvasId "c4"
-                      :reopen true
-                      :availability "BOGUS"}]})
+                      :canvasId "c4"}
+                     "not-a-map"]})
     (let [created (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id created)
           resumed (sdk/resume-session *test-client* session-id
                                       {:on-permission-request sdk/approve-all})
           canvases (sdk/open-canvases resumed)]
-      (is (= 1 (count canvases)) "only the fully-valid entry is kept")
-      (is (= "i1" (:instance-id (first canvases)))))))
+      (is (= 2 (count canvases)) "both fully-valid entries are kept")
+      (is (= ["i1" "i2"] (mapv :instance-id canvases))))))
 
 (deftest test-create-session-no-open-canvases-snapshot
   (testing "session.create does NOT populate open-canvases (resume-only)"
@@ -6560,59 +7093,49 @@
     (mock/set-resume-response-extras! *mock-server* {})))
 
 (deftest test-canvas-upsert-strict-validation
-  (testing "upsert rejects payloads missing required fields (matches isOpenCanvasInstance)"
+  (testing "upsert requires the three ids (matches v1.0.4 isOpenCanvasInstance)"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)]
-      ;; Seed a valid entry first
+      ;; Seed a valid entry first (3 required ids only)
       (mock/send-session-event! *mock-server* session-id
                                 "session.canvas.opened"
                                 {:instanceId "i1"
                                  :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
+                                 :canvasId "c1"})
       (Thread/sleep 200)
       (is (= 1 (count (sdk/open-canvases session))))
-      ;; Missing :reopen — strict guard rejects, no upsert
+      ;; Missing :canvasId — guard rejects, no upsert
       (mock/send-session-event! *mock-server* session-id
                                 "session.canvas.opened"
                                 {:instanceId "i2"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :availability "ready"})
+                                 :extensionId "ext-a"})
       (Thread/sleep 200)
       (is (= 1 (count (sdk/open-canvases session)))
-          "missing :reopen rejected")
-      ;; Invalid :availability — strict guard rejects
+          "missing :canvas-id rejected")
+      ;; Blank :extensionId — guard rejects
       (mock/send-session-event! *mock-server* session-id
                                 "session.canvas.opened"
                                 {:instanceId "i3"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "broken"})
+                                 :extensionId ""
+                                 :canvasId "c1"})
       (Thread/sleep 200)
       (is (= 1 (count (sdk/open-canvases session)))
-          "invalid :availability rejected")
-      ;; Wrong type for :reopen — strict guard rejects
+          "blank :extension-id rejected")
+      ;; Non-string :instanceId — guard rejects
       (mock/send-session-event! *mock-server* session-id
                                 "session.canvas.opened"
-                                {:instanceId "i4"
+                                {:instanceId 42
                                  :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen "yes"
-                                 :availability "ready"})
+                                 :canvasId "c1"})
       (Thread/sleep 200)
       (is (= 1 (count (sdk/open-canvases session)))
-          ":reopen must be boolean")
+          ":instance-id must be a non-blank string")
       ;; Sanity: a fully valid second entry is still admitted
       (mock/send-session-event! *mock-server* session-id
                                 "session.canvas.opened"
                                 {:instanceId "i2"
                                  :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen true
-                                 :availability "stale"})
+                                 :canvasId "c1"})
       (Thread/sleep 200)
       (is (= 2 (count (sdk/open-canvases session))) "valid entry admitted"))))
 
@@ -6633,8 +7156,6 @@
             :open-canvases [{:instance-id "i1"
                              :extension-id "ext-a"
                              :canvas-id "c1"
-                             :reopen false
-                             :availability "ready"
                              :extension-name "Ext A"
                              :title "Hello"
                              :status "loading"
@@ -6649,8 +7170,6 @@
               (is (= "i1"   (:instanceId oc)))
               (is (= "ext-a" (:extensionId oc)))
               (is (= "c1"   (:canvasId oc)))
-              (is (false?   (:reopen oc)))
-              (is (= "ready" (:availability oc)))
               (is (= "Ext A" (:extensionName oc)))
               (is (= "Hello" (:title oc)))
               (is (= "loading" (:status oc)))

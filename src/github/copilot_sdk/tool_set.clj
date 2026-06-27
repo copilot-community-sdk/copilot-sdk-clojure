@@ -14,13 +14,15 @@
 
    Examples:
 
-     (tool-set/builtin \"ask_user\")  ;; => \"builtin:ask_user\"
-     (tool-set/builtin \"*\")          ;; => \"builtin:*\"
-     (tool-set/mcp \"*\")              ;; => \"mcp:*\"
-     (tool-set/builtins [\"task\" \"skill\"]) ;; => [\"builtin:task\" \"builtin:skill\"]
+   ```clojure
+   (tool-set/builtin \"ask_user\")  ;; => \"builtin:ask_user\"
+   (tool-set/builtin \"*\")          ;; => \"builtin:*\"
+   (tool-set/mcp \"*\")              ;; => \"mcp:*\"
+   (tool-set/builtins [\"task\" \"skill\"]) ;; => [\"builtin:task\" \"builtin:skill\"]
 
-     ;; Ready-to-use: every built-in that is safely session-bounded.
-     tool-set/isolated  ;; => [\"builtin:ask_user\" \"builtin:task_complete\" ...]")
+   ;; Ready-to-use: every built-in that is safely session-bounded.
+   tool-set/isolated  ;; => [\"builtin:ask_user\" \"builtin:task_complete\" ...]
+   ```")
 
 (def ^:private valid-name-regex
   "Allowed characters in a tool name segment (mirrors upstream `nameRe`)."

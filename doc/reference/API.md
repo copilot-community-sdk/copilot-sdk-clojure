@@ -251,7 +251,11 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:system-message` | map | System message customization (see below) |
 | `:available-tools` | vector | List of allowed tool names |
 | `:excluded-tools` | vector | List of excluded tool names |
-| `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options`, `:headers` (map of HTTP header name→value, sent with each provider request — upstream PR #1094), `:model-id` (string — the model identifier to send to the provider; overrides session `:model`), `:wire-model` (string — model name as sent on the provider wire when it differs from `:model-id`), `:max-input-tokens` (integer — input/prompt token cap; serialized as wire `maxPromptTokens`), `:max-output-tokens` (integer — output token cap). The four override fields were added in upstream PR #966 |
+| `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options`, `:headers` (map of HTTP header name→value, sent with each provider request — upstream PR #1094), `:model-id` (string — the model identifier to send to the provider; overrides session `:model`), `:wire-model` (string — model name as sent on the provider wire when it differs from `:model-id`), `:max-input-tokens` (integer — input/prompt token cap; serialized as wire `maxPromptTokens`), `:max-output-tokens` (integer — output token cap), `:transport` (`:http`/`:websockets` — provider transport; serialized as wire `transport` — upstream PR #1711), `:bearer-token-provider` (fn — dynamic bearer-token callback, see [BYOK docs](../auth/byok.md#dynamic-bearer-tokens) — upstream PR #1748). The four override fields were added in upstream PR #966 |
+| `:providers` | vector | (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of `:provider` — `:base-url` (required), `:provider-type`, `:wire-api`, `:api-key`, `:bearer-token`, `:azure-options`, `:headers`, `:bearer-token-provider` — plus a required `:name` (the registry key, no `/`). Unlike the singular `:provider`, a named provider does **not** accept `:transport` or the inline model-override fields (`:model-id`, `:wire-model`, `:max-input-tokens`, `:max-output-tokens`); model overrides are declared in `:models` instead. Pairs with `:models` to declare a model catalog. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
+| `:models` | vector | (Experimental) Model catalog referencing the `:providers` registry. Each entry: `:id` (required, provider-local model id), `:provider` (required, a `:name` in `:providers`), and optional override fields (`:model-id`, `:wire-model`, `:capabilities`, `:max-input-tokens`, `:max-context-window-tokens`, `:max-output-tokens`). The full model selection id is `"providerName/id"`. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
+| `:capi` | map | CAPI (Copilot API) session options. `{:enable-web-socket-responses boolean}` — serialized as wire `capi.enableWebSocketResponses`. (upstream PR #1711) |
+| `:exp-assignments` | map | (Internal) Opaque experiment flight assignments. Keys are source-defined flight ids and are forwarded verbatim (string keys bypass kebab→camel conversion). Serialized as `expAssignments`. (upstream PR #1750) |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
 | `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:mcp-servers` |
@@ -1995,11 +1999,12 @@ For full control (removes all guardrails), use `:mode :replace`:
 
 #### Customize Mode
 
-The `:customize` mode enables section-level overrides of the system prompt. Eleven sections are configurable:
+The `:customize` mode enables section-level overrides of the system prompt. Twelve sections are configurable:
 
 | Section | Description |
 |---------|-------------|
-| `:identity` | Agent identity preamble and mode statement |
+| `:preamble` | Agent identity preamble and mode statement (upstream PR #1713) |
+| `:identity` | Section group covering the identity preamble and its sibling sub-sections (tone, tool efficiency, etc.) |
 | `:tone` | Response style, conciseness rules, output formatting |
 | `:tool-efficiency` | Tool usage patterns, parallel calling, batching |
 | `:environment-context` | CWD, OS, git root, directory listing, available tools |
@@ -2011,7 +2016,7 @@ The `:customize` mode enables section-level overrides of the system prompt. Elev
 | `:runtime-instructions` | Runtime-provided context (system notifications, memories, mode-specific instructions, content-exclusion policy) — added in upstream PR #1377 |
 | `:last-instructions` | End-of-prompt instructions |
 
-Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`) and transform callbacks (1-arity functions).
+Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`, `:preserve`) and transform callbacks (1-arity functions). `:preserve` is a no-op marker that opts an individually-addressable section out of a group-level `:remove` — e.g. keep `:tone` when removing the `:identity` group (upstream PR #1713).
 
 ```clojure
 (require '[github.copilot-sdk :as copilot])
@@ -2046,15 +2051,16 @@ Inspect available sections with the `system-prompt-sections` constant:
 
 ```clojure
 copilot/system-prompt-sections
-;; => {:identity {:description "Agent identity preamble and mode statement"}
+;; => {:preamble {:description "Agent identity preamble and mode statement"}
+;;     :identity {:description "Section group covering the identity preamble ..."}
 ;;     :tone {:description "Response style, conciseness rules, ..."}
 ;;     :runtime-instructions {:description "Runtime instructions injected ..."} ...}
 ```
 
-Available section keys: `:identity`, `:tone`, `:tool-efficiency`,
-`:environment-context`, `:code-change-rules`, `:guidelines`, `:safety`,
-`:tool-instructions`, `:custom-instructions`, `:runtime-instructions`
-(added in upstream PR #1377), `:last-instructions`.
+Available section keys: `:preamble` (added in upstream PR #1713), `:identity`,
+`:tone`, `:tool-efficiency`, `:environment-context`, `:code-change-rules`,
+`:guidelines`, `:safety`, `:tool-instructions`, `:custom-instructions`,
+`:runtime-instructions` (added in upstream PR #1377), `:last-instructions`.
 
 > **Naming note** — Upstream renamed `SystemPromptSection` →
 > `SystemMessageSection` in the TypeScript SDK. The Clojure SDK keeps

@@ -381,7 +381,7 @@
            (sequential? (get-in msg [:result :openCanvases])))
       (assoc-in converted [:result :open-canvases]
                 (mapv (fn [raw conv]
-                        (if (contains? raw :input)
+                        (if (and (map? raw) (contains? raw :input))
                           (assoc conv :input (:input raw))
                           conv))
                       (get-in msg [:result :openCanvases])

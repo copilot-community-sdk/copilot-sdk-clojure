@@ -108,6 +108,8 @@ foundry service status
 | `:wire-api` | keyword | No | `:completions` or `:responses` (default: `:completions`) |
 | `:api-key` | string | No | API key (optional for local providers like Ollama) |
 | `:bearer-token` | string | No | Bearer token auth (takes precedence over `:api-key`) |
+| `:bearer-token-provider` | fn | No | Dynamic bearer-token callback. See [Dynamic Bearer Tokens](#dynamic-bearer-tokens). (upstream PR #1748) |
+| `:transport` | keyword | No | `:http` or `:websockets` — provider transport. (upstream PR #1711) |
 | `:azure-options` | map | No | Azure-specific options (see below) |
 
 ### Azure Options
@@ -167,6 +169,67 @@ Some providers require bearer token authentication instead of API keys:
             :base-url "https://my-custom-endpoint.example.com/v1"
             :bearer-token (System/getenv "MY_BEARER_TOKEN")}}
 ```
+
+### Dynamic Bearer Tokens
+
+> **Experimental** (upstream PR #1748) — not part of the stable SDK API.
+
+When a provider needs a token that rotates or is minted per-request, supply a
+`:bearer-token-provider` callback instead of a static `:bearer-token`. The SDK
+strips the function before serializing (sending `hasBearerTokenProvider true` on
+the wire) and invokes it on demand when the runtime requests a token.
+
+The callback receives a map with `:provider-name` and `:session-id` and must
+return a token string:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session client
+    {:model "my-model"
+     :on-permission-request copilot/approve-all
+     :provider {:provider-type :openai
+                :base-url "https://my-custom-endpoint.example.com/v1"
+                :bearer-token-provider
+                (fn [{:keys [provider-name session-id]}]
+                  (mint-fresh-token! provider-name))}}))
+```
+
+The callback must return a string. A non-string return is rejected and the token
+value is never logged.
+
+### Multi-Provider Registry
+
+> **Experimental** (upstream PR #1718) — not part of the stable SDK API.
+
+To declare several named providers and a catalog of models that reference them,
+use `:providers` (a vector of named providers) with `:models` (a vector of model
+entries). Each named provider takes the same fields as `:provider` plus a
+required `:name` (the registry key, which must not contain `/`). Each model entry
+has a required `:id` (provider-local model id) and `:provider` (a name in
+`:providers`); the full model selection id is `"providerName/id"`.
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session client
+    {:on-permission-request copilot/approve-all
+     :providers [{:name "openai"
+                  :provider-type :openai
+                  :base-url "https://api.openai.com/v1"
+                  :api-key (System/getenv "OPENAI_API_KEY")}
+                 {:name "anthropic"
+                  :provider-type :anthropic
+                  :base-url "https://api.anthropic.com"
+                  :api-key (System/getenv "ANTHROPIC_API_KEY")}]
+     :models [{:id "gpt-5.4" :provider "openai"}
+              {:id "claude-sonnet-4.5" :provider "anthropic"}]
+     :model "openai/gpt-5.4"}))
+```
+
+`:providers` and `:models` cannot be combined with the singular `:provider` — use the multi-provider registry or the whole-session `:provider`, not both.
 
 ## Limitations
 
