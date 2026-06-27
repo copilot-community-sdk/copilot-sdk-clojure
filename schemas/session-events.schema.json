@@ -228,6 +228,11 @@
           "type": "string",
           "description": "Tool call ID of the parent tool invocation when this event originates from a sub-agent",
           "deprecated": true
+        },
+        "citations": {
+          "$ref": "#/definitions/Citations",
+          "description": "Provider-agnostic citations linking spans of this message's content to the sources that support them. Experimental; only populated when citation emission is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -934,7 +939,8 @@
             "$ref": "#/definitions/AssistantUsageCopilotUsageTokenDetail",
             "description": "Token usage detail for a single billing category"
           },
-          "description": "Itemized token usage breakdown"
+          "description": "Itemized token usage breakdown",
+          "visibility": "internal"
         },
         "totalNanoAiu": {
           "type": "number",
@@ -943,13 +949,11 @@
         }
       },
       "required": [
-        "tokenDetails",
         "totalNanoAiu"
       ],
       "additionalProperties": false,
       "description": "Per-request cost and usage data from the CAPI copilot_usage response field",
-      "title": "AssistantUsageCopilotUsage",
-      "visibility": "internal"
+      "title": "AssistantUsageCopilotUsage"
     },
     "AssistantUsageCopilotUsageTokenDetail": {
       "type": "object",
@@ -1024,20 +1028,20 @@
         "duration": {
           "type": "integer",
           "minimum": 0,
-          "description": "Duration of the API call in milliseconds",
-          "format": "duration"
+          "format": "duration",
+          "description": "Duration of the API call in milliseconds"
         },
         "timeToFirstTokenMs": {
           "type": "integer",
           "minimum": 0,
-          "description": "Time to first token in milliseconds. Only available for streaming requests",
-          "format": "duration"
+          "format": "duration",
+          "description": "Time to first token in milliseconds. Only available for streaming requests"
         },
         "interTokenLatencyMs": {
           "type": "number",
           "minimum": 0,
-          "description": "Average inter-token latency in milliseconds. Only available for streaming requests",
-          "format": "duration"
+          "format": "duration",
+          "description": "Average inter-token latency in milliseconds. Only available for streaming requests"
         },
         "initiator": {
           "type": "string",
@@ -1075,8 +1079,7 @@
         },
         "copilotUsage": {
           "$ref": "#/definitions/AssistantUsageCopilotUsage",
-          "description": "Per-request cost and usage data from the CAPI copilot_usage response field",
-          "visibility": "internal"
+          "description": "Per-request cost and usage data from the CAPI copilot_usage response field"
         },
         "reasoningEffort": {
           "type": "string",
@@ -1202,6 +1205,22 @@
           "format": "date-time",
           "description": "Date when the quota resets",
           "visibility": "internal"
+        },
+        "hasQuota": {
+          "type": "boolean",
+          "description": "Whether the user currently has quota available for use",
+          "visibility": "internal"
+        },
+        "tokenBasedBilling": {
+          "type": "boolean",
+          "description": "Whether this snapshot uses token-based billing (AI-credits allocation)",
+          "visibility": "internal"
+        },
+        "overageEntitlement": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Pay-as-you-go additional-usage budget cap in AI credits (1 credit = $0.01); present only when CAPI emits a finite value",
+          "visibility": "internal"
         }
       },
       "required": [
@@ -1214,9 +1233,9 @@
         "remainingPercentage"
       ],
       "additionalProperties": false,
+      "description": "Schema for the `AssistantUsageQuotaSnapshot` type.",
       "title": "AssistantUsageQuotaSnapshot",
-      "visibility": "internal",
-      "description": "Schema for the `AssistantUsageQuotaSnapshot` type."
+      "visibility": "internal"
     },
     "Attachment": {
       "anyOf": [
@@ -1258,7 +1277,7 @@
         },
         "data": {
           "type": "string",
-          "description": "Base64-encoded content",
+          "description": "Base64-encoded content. Present on input and for external consumers; replaced by an internal `assetId` reference in persisted events when interned to a content-addressed asset.",
           "contentEncoding": "base64"
         },
         "mimeType": {
@@ -1268,11 +1287,23 @@
         "displayName": {
           "type": "string",
           "description": "User-facing display name for the attachment"
+        },
+        "assetId": {
+          "type": "string",
+          "description": "Internal: content-addressed id of the session.binary_asset event holding this attachment's model-facing bytes (e.g. \"sha256:...\"). Absent externally."
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Internal: decoded byte length of the attachment's model-facing bytes. Absent externally."
+        },
+        "omittedReason": {
+          "$ref": "#/definitions/OmittedBinaryOmittedReason",
+          "description": "Internal: why model-facing bytes are absent from persistence. Absent externally."
         }
       },
       "required": [
         "type",
-        "data",
         "mimeType"
       ],
       "additionalProperties": false,
@@ -1294,6 +1325,10 @@
         "displayName": {
           "type": "string",
           "description": "User-facing display name for the attachment"
+        },
+        "taggedFilesEntry": {
+          "type": "string",
+          "description": "Frozen rendered line this attachment contributed to the <tagged_files> prompt block (e.g. \"* /path (12 items)\"). Captured at send time so resumed history reproduces the exact text the model saw, independent of later filesystem changes."
         }
       },
       "required": [
@@ -1369,6 +1404,27 @@
         "lineRange": {
           "$ref": "#/definitions/AttachmentFileLineRange",
           "description": "Optional line range to scope the attachment to a specific section of the file"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "Internal: MIME type of the file's model-facing bytes (post-resize for images). Set when the file's bytes are interned to an asset. Absent externally."
+        },
+        "assetId": {
+          "type": "string",
+          "description": "Internal: content-addressed id of the session.binary_asset event holding this attachment's model-facing bytes (e.g. \"sha256:...\"). Absent externally."
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Internal: decoded byte length of the attachment's model-facing bytes. Absent externally."
+        },
+        "omittedReason": {
+          "$ref": "#/definitions/OmittedBinaryOmittedReason",
+          "description": "Internal: why model-facing bytes are absent from persistence. Absent externally."
+        },
+        "taggedFilesEntry": {
+          "type": "string",
+          "description": "Frozen rendered line this attachment contributed to the <tagged_files> prompt block (e.g. \"* /path (123 lines)\"). Captured at send time so resumed history reproduces the exact text the model saw, independent of later filesystem changes. Present only for attachments routed to <tagged_files> (mutually exclusive with assetId, which marks bytes sent natively)."
         }
       },
       "required": [
@@ -1649,8 +1705,8 @@
         "retryAfterSeconds": {
           "type": "integer",
           "minimum": 0,
-          "description": "Seconds until the rate limit resets, when known. Lets clients render a humanized reset time alongside the prompt.",
-          "format": "duration"
+          "format": "duration",
+          "description": "Seconds until the rate limit resets, when known. Lets clients render a humanized reset time alongside the prompt."
         }
       },
       "required": [
@@ -1845,8 +1901,8 @@
       "type": "object",
       "properties": {},
       "additionalProperties": false,
-      "title": "BackgroundTasksChangedData",
-      "description": "Schema for the `BackgroundTasksChangedData` type."
+      "description": "Schema for the `BackgroundTasksChangedData` type.",
+      "title": "BackgroundTasksChangedData"
     },
     "BackgroundTasksChangedEvent": {
       "type": "object",
@@ -1904,6 +1960,178 @@
       "description": "Session event \"session.background_tasks_changed\".",
       "title": "BackgroundTasksChangedEvent"
     },
+    "BinaryAssetData": {
+      "type": "object",
+      "properties": {
+        "assetId": {
+          "type": "string",
+          "description": "Content-addressed id for this binary asset (e.g. \"sha256:...\")."
+        },
+        "type": {
+          "$ref": "#/definitions/BinaryAssetType",
+          "description": "Binary asset type discriminator. Use \"image\" for images and \"resource\" otherwise."
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the binary asset"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Decoded byte length of the binary asset"
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64-encoded binary data",
+          "contentEncoding": "base64"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the binary data"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Optional metadata from the producing tool."
+        }
+      },
+      "required": [
+        "assetId",
+        "type",
+        "mimeType",
+        "byteLength",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Canonical bytes for a content-addressed binary asset shared by reference across events",
+      "title": "BinaryAssetData"
+    },
+    "BinaryAssetEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.binary_asset",
+          "description": "Type discriminator. Always \"session.binary_asset\"."
+        },
+        "data": {
+          "$ref": "#/definitions/BinaryAssetData",
+          "description": "Canonical bytes for a content-addressed binary asset shared by reference across events"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.binary_asset\". Canonical bytes for a content-addressed binary asset shared by reference across events",
+      "title": "BinaryAssetEvent",
+      "stability": "experimental"
+    },
+    "BinaryAssetReference": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/BinaryAssetReferenceType",
+          "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data."
+        },
+        "assetId": {
+          "type": "string",
+          "description": "Content-addressed id of the session.binary_asset event that holds this binary's bytes (e.g. \"sha256:...\")."
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the referenced binary data"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Decoded byte length of the referenced binary data"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the binary data"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Optional metadata from the producing tool."
+        }
+      },
+      "required": [
+        "type",
+        "assetId",
+        "mimeType",
+        "byteLength"
+      ],
+      "additionalProperties": false,
+      "description": "A reference to binary data persisted once on a session.binary_asset event and shared by id",
+      "title": "BinaryAssetReference",
+      "stability": "experimental"
+    },
+    "BinaryAssetReferenceType": {
+      "type": "string",
+      "enum": [
+        "image",
+        "resource"
+      ],
+      "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data.",
+      "title": "BinaryAssetReferenceType",
+      "x-enumDescriptions": {
+        "image": "Binary image data.",
+        "resource": "Other binary resource data."
+      }
+    },
+    "BinaryAssetType": {
+      "type": "string",
+      "enum": [
+        "image",
+        "resource"
+      ],
+      "description": "Binary asset type discriminator. Use \"image\" for images and \"resource\" otherwise.",
+      "title": "BinaryAssetType",
+      "x-enumDescriptions": {
+        "image": "Binary image data.",
+        "resource": "Other binary resource data."
+      }
+    },
     "CanvasClosedData": {
       "type": "object",
       "properties": {
@@ -1927,8 +2155,9 @@
         "canvasId"
       ],
       "additionalProperties": false,
+      "description": "Schema for the `CanvasClosedData` type.",
       "title": "CanvasClosedData",
-      "description": "Schema for the `CanvasClosedData` type."
+      "stability": "experimental"
     },
     "CanvasClosedEvent": {
       "type": "object",
@@ -1984,20 +2213,8 @@
       ],
       "additionalProperties": false,
       "description": "Session event \"session.canvas.closed\".",
-      "title": "CanvasClosedEvent"
-    },
-    "CanvasOpenedAvailability": {
-      "type": "string",
-      "enum": [
-        "ready",
-        "stale"
-      ],
-      "description": "Runtime-controlled routing state for the instance. \"ready\" when the provider connection is live; \"stale\" when the provider has gone away and the instance is awaiting rebinding.",
-      "title": "CanvasOpenedAvailability",
-      "x-enumDescriptions": {
-        "ready": "Provider connection is live; actions can be invoked.",
-        "stale": "Provider has gone away; the instance is awaiting rebinding."
-      }
+      "title": "CanvasClosedEvent",
+      "stability": "experimental"
     },
     "CanvasOpenedData": {
       "type": "object",
@@ -2033,26 +2250,17 @@
         "input": {
           "description": "Input supplied when the instance was opened",
           "x-opaque-json": true
-        },
-        "reopen": {
-          "type": "boolean",
-          "description": "Whether this notification represents an idempotent reopen"
-        },
-        "availability": {
-          "$ref": "#/definitions/CanvasOpenedAvailability",
-          "description": "Runtime-controlled routing state for the instance. \"ready\" when the provider connection is live; \"stale\" when the provider has gone away and the instance is awaiting rebinding."
         }
       },
       "required": [
         "instanceId",
         "extensionId",
-        "canvasId",
-        "reopen",
-        "availability"
+        "canvasId"
       ],
       "additionalProperties": false,
+      "description": "Schema for the `CanvasOpenedData` type.",
       "title": "CanvasOpenedData",
-      "description": "Schema for the `CanvasOpenedData` type."
+      "stability": "experimental"
     },
     "CanvasOpenedEvent": {
       "type": "object",
@@ -2108,7 +2316,98 @@
       ],
       "additionalProperties": false,
       "description": "Session event \"session.canvas.opened\".",
-      "title": "CanvasOpenedEvent"
+      "title": "CanvasOpenedEvent",
+      "stability": "experimental"
+    },
+    "CanvasRecordedData": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable caller-supplied canvas instance identifier"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        },
+        "title": {
+          "type": "string",
+          "description": "Rendered title"
+        },
+        "input": {
+          "description": "Input supplied when the instance was opened",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "instanceId",
+        "extensionId",
+        "canvasId"
+      ],
+      "additionalProperties": false,
+      "description": "Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Intentionally omits the transient url and availability.",
+      "title": "CanvasRecordedData",
+      "stability": "experimental"
+    },
+    "CanvasRecordedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.canvas.recorded",
+          "description": "Type discriminator. Always \"session.canvas.recorded\"."
+        },
+        "data": {
+          "$ref": "#/definitions/CanvasRecordedData",
+          "description": "Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Intentionally omits the transient url and availability."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.canvas.recorded\". Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Intentionally omits the transient url and availability.",
+      "title": "CanvasRecordedEvent",
+      "stability": "experimental"
     },
     "CanvasRegistryChangedCanvas": {
       "type": "object",
@@ -2135,8 +2434,6 @@
           "description": "Short, single-sentence description shown to the agent in canvas catalogs."
         },
         "inputSchema": {
-          "type": "object",
-          "additionalProperties": {},
           "description": "JSON Schema for canvas open input",
           "x-opaque-json": true
         },
@@ -2155,8 +2452,9 @@
         "description"
       ],
       "additionalProperties": false,
+      "description": "Schema for the `CanvasRegistryChangedCanvas` type.",
       "title": "CanvasRegistryChangedCanvas",
-      "description": "Schema for the `CanvasRegistryChangedCanvas` type."
+      "stability": "experimental"
     },
     "CanvasRegistryChangedCanvasAction": {
       "type": "object",
@@ -2170,8 +2468,6 @@
           "description": "Action description"
         },
         "inputSchema": {
-          "type": "object",
-          "additionalProperties": {},
           "description": "JSON Schema for action input",
           "x-opaque-json": true
         }
@@ -2180,8 +2476,9 @@
         "name"
       ],
       "additionalProperties": false,
+      "description": "Schema for the `CanvasRegistryChangedCanvasAction` type.",
       "title": "CanvasRegistryChangedCanvasAction",
-      "description": "Schema for the `CanvasRegistryChangedCanvasAction` type."
+      "stability": "experimental"
     },
     "CanvasRegistryChangedData": {
       "type": "object",
@@ -2198,8 +2495,9 @@
         "canvases"
       ],
       "additionalProperties": false,
+      "description": "Schema for the `CanvasRegistryChangedData` type.",
       "title": "CanvasRegistryChangedData",
-      "description": "Schema for the `CanvasRegistryChangedData` type."
+      "stability": "experimental"
     },
     "CanvasRegistryChangedEvent": {
       "type": "object",
@@ -2255,7 +2553,174 @@
       ],
       "additionalProperties": false,
       "description": "Session event \"session.canvas.registry_changed\".",
-      "title": "CanvasRegistryChangedEvent"
+      "title": "CanvasRegistryChangedEvent",
+      "stability": "experimental"
+    },
+    "CanvasRemovedData": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable caller-supplied identifier of the canvas instance that was closed"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        }
+      },
+      "required": [
+        "instanceId",
+        "extensionId",
+        "canvasId"
+      ],
+      "additionalProperties": false,
+      "description": "Durable record that a canvas instance was closed, superseding a prior instance_recorded during resume replay.",
+      "title": "CanvasRemovedData",
+      "stability": "experimental"
+    },
+    "CanvasRemovedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.canvas.removed",
+          "description": "Type discriminator. Always \"session.canvas.removed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/CanvasRemovedData",
+          "description": "Durable record that a canvas instance was closed, superseding a prior instance_recorded during resume replay."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.canvas.removed\". Durable record that a canvas instance was closed, superseding a prior instance_recorded during resume replay.",
+      "title": "CanvasRemovedEvent",
+      "stability": "experimental"
+    },
+    "CanvasUnavailableData": {
+      "type": "object",
+      "properties": {
+        "instanceId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Stable caller-supplied identifier of the canvas instance whose provider became unavailable"
+        },
+        "extensionId": {
+          "type": "string",
+          "description": "Owning provider identifier"
+        },
+        "canvasId": {
+          "type": "string",
+          "description": "Provider-local canvas identifier"
+        }
+      },
+      "required": [
+        "instanceId",
+        "extensionId",
+        "canvasId"
+      ],
+      "additionalProperties": false,
+      "description": "Transient signal that an open canvas instance's provider has dropped (for example the extension is reloading mid-session). The host should keep the panel mounted and surface a reconnecting affordance rather than tearing it down; a subsequent `session.canvas.opened` for the same instanceId clears the affordance once the provider reconnects with a fresh url. Ephemeral and never persisted, so it is never replayed on cold resume.",
+      "title": "CanvasUnavailableData",
+      "stability": "experimental"
+    },
+    "CanvasUnavailableEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.canvas.unavailable",
+          "description": "Type discriminator. Always \"session.canvas.unavailable\"."
+        },
+        "data": {
+          "$ref": "#/definitions/CanvasUnavailableData",
+          "description": "Transient signal that an open canvas instance's provider has dropped (for example the extension is reloading mid-session). The host should keep the panel mounted and surface a reconnecting affordance rather than tearing it down; a subsequent `session.canvas.opened` for the same instanceId clears the affordance once the provider reconnects with a fresh url. Ephemeral and never persisted, so it is never replayed on cold resume."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.canvas.unavailable\". Transient signal that an open canvas instance's provider has dropped (for example the extension is reloading mid-session). The host should keep the panel mounted and surface a reconnecting affordance rather than tearing it down; a subsequent `session.canvas.opened` for the same instanceId clears the affordance once the provider reconnects with a fresh url. Ephemeral and never persisted, so it is never replayed on cold resume.",
+      "title": "CanvasUnavailableEvent",
+      "stability": "experimental"
     },
     "CapabilitiesChangedData": {
       "type": "object",
@@ -2344,6 +2809,283 @@
       "additionalProperties": false,
       "description": "UI capability changes",
       "title": "CapabilitiesChangedUI"
+    },
+    "CitableSource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for this source within the tool result. Used for deduplication and may be used by future provider integrations to correlate response citations back to the originating source."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title of the source."
+        },
+        "content": {
+          "type": "string",
+          "description": "The source text made available to the model as citable content."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the source, when it is a web resource."
+        },
+        "path": {
+          "type": "string",
+          "description": "File path relative to the agent's workspace root, when the source is a file."
+        }
+      },
+      "required": [
+        "id",
+        "content"
+      ],
+      "additionalProperties": false,
+      "description": "A source supplied by a tool that should be made available to the model as citable content.",
+      "title": "CitableSource",
+      "stability": "experimental"
+    },
+    "CitationLocation": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CitationLocationChar",
+          "description": "A character range within the source's text content."
+        },
+        {
+          "$ref": "#/definitions/CitationLocationPage",
+          "description": "A page range within a paginated source document."
+        },
+        {
+          "$ref": "#/definitions/CitationLocationBlock",
+          "description": "A content-block range within a structured source document."
+        }
+      ],
+      "description": "Location within a cited source (character, page, or content-block range) that supports a span.",
+      "title": "CitationLocation",
+      "stability": "experimental"
+    },
+    "CitationLocationBlock": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "block",
+          "description": "Citation location type discriminator"
+        },
+        "startBlock": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index of the first content block of the cited range (zero-based, inclusive)."
+        },
+        "endBlock": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index of the last content block of the cited range (zero-based, exclusive)."
+        }
+      },
+      "required": [
+        "type",
+        "startBlock",
+        "endBlock"
+      ],
+      "additionalProperties": false,
+      "description": "A content-block range within a structured source document.",
+      "title": "CitationLocationBlock",
+      "stability": "experimental"
+    },
+    "CitationLocationChar": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "char",
+          "description": "Citation location type discriminator"
+        },
+        "startIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start character offset within the source text (zero-based, inclusive)."
+        },
+        "endIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "End character offset within the source text (zero-based, exclusive)."
+        }
+      },
+      "required": [
+        "type",
+        "startIndex",
+        "endIndex"
+      ],
+      "additionalProperties": false,
+      "description": "A character range within the source's text content.",
+      "title": "CitationLocationChar",
+      "stability": "experimental"
+    },
+    "CitationLocationPage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "page",
+          "description": "Citation location type discriminator"
+        },
+        "startPage": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "First page number of the cited range."
+        },
+        "endPage": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Last page number of the cited range (inclusive)."
+        }
+      },
+      "required": [
+        "type",
+        "startPage",
+        "endPage"
+      ],
+      "additionalProperties": false,
+      "description": "A page range within a paginated source document.",
+      "title": "CitationLocationPage",
+      "stability": "experimental"
+    },
+    "CitationProvider": {
+      "type": "string",
+      "enum": [
+        "anthropic",
+        "openai",
+        "client"
+      ],
+      "description": "The system that produced a citation.",
+      "title": "CitationProvider",
+      "x-enumDescriptions": {
+        "anthropic": "Citation produced by an Anthropic (Claude) model response.",
+        "openai": "Citation produced by an OpenAI model response.",
+        "client": "Citation synthesized client-side by the runtime from tool output."
+      },
+      "stability": "experimental"
+    },
+    "CitationReference": {
+      "type": "object",
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "description": "Identifier of the CitationSource this reference points to (CitationSource.id)."
+        },
+        "citedText": {
+          "type": "string",
+          "description": "The exact text from the source that supports the cited span, when provided by the model."
+        },
+        "location": {
+          "$ref": "#/definitions/CitationLocation",
+          "description": "Location within the source that supports the cited span, when the provider reports one."
+        },
+        "providerMetadata": {
+          "description": "Provider-native citation correlation data (e.g. Anthropic search_result_index / document_index), passed through opaquely for debugging and forward compatibility.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "sourceId"
+      ],
+      "additionalProperties": false,
+      "description": "A single citation occurrence linking a span of generated text to a supporting source.",
+      "title": "CitationReference",
+      "stability": "experimental"
+    },
+    "Citations": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CitationSource",
+            "description": "A source that backs one or more cited spans in the assistant's response."
+          },
+          "description": "Deduplicated set of sources referenced by the citation spans."
+        },
+        "spans": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CitationSpan",
+            "description": "A contiguous span of generated assistant text and the source references that support it."
+          },
+          "description": "Spans of generated text annotated with the sources that support them."
+        }
+      },
+      "required": [
+        "sources",
+        "spans"
+      ],
+      "additionalProperties": false,
+      "description": "Provider-agnostic citations linking spans of the assistant's response to their supporting sources.",
+      "title": "Citations",
+      "stability": "experimental"
+    },
+    "CitationSource": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable, turn-scoped identifier for this source, referenced by CitationReference.sourceId."
+        },
+        "provider": {
+          "$ref": "#/definitions/CitationProvider",
+          "description": "The system that produced this citation."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title of the source."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the source, when it is a web resource."
+        },
+        "path": {
+          "type": "string",
+          "description": "File path relative to the agent's workspace root, when the source is a file."
+        }
+      },
+      "required": [
+        "id",
+        "provider"
+      ],
+      "additionalProperties": false,
+      "description": "A source that backs one or more cited spans in the assistant's response.",
+      "title": "CitationSource",
+      "stability": "experimental"
+    },
+    "CitationSpan": {
+      "type": "object",
+      "properties": {
+        "startIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start offset of the cited span within the final assistant message content (UTF-16 code units, zero-based, inclusive)."
+        },
+        "endIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "End offset of the cited span within the final assistant message content (UTF-16 code units, zero-based, exclusive)."
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CitationReference",
+            "description": "A single citation occurrence linking a span of generated text to a supporting source."
+          },
+          "description": "The sources that support this span of generated text."
+        }
+      },
+      "required": [
+        "startIndex",
+        "endIndex",
+        "references"
+      ],
+      "additionalProperties": false,
+      "description": "A contiguous span of generated assistant text and the source references that support it.",
+      "title": "CitationSpan",
+      "stability": "experimental"
     },
     "CommandCompletedData": {
       "type": "object",
@@ -2594,8 +3336,8 @@
         "name"
       ],
       "additionalProperties": false,
-      "title": "CommandsChangedCommand",
-      "description": "Schema for the `CommandsChangedCommand` type."
+      "description": "Schema for the `CommandsChangedCommand` type.",
+      "title": "CommandsChangedCommand"
     },
     "CommandsChangedData": {
       "type": "object",
@@ -2702,8 +3444,8 @@
         "duration": {
           "type": "integer",
           "minimum": 0,
-          "description": "Duration of the compaction LLM call in milliseconds",
-          "format": "duration"
+          "format": "duration",
+          "description": "Duration of the compaction LLM call in milliseconds"
         },
         "model": {
           "type": "string",
@@ -2723,7 +3465,8 @@
             "$ref": "#/definitions/CompactionCompleteCompactionTokensUsedCopilotUsageTokenDetail",
             "description": "Token usage detail for a single billing category"
           },
-          "description": "Itemized token usage breakdown"
+          "description": "Itemized token usage breakdown",
+          "visibility": "internal"
         },
         "totalNanoAiu": {
           "type": "number",
@@ -2732,7 +3475,6 @@
         }
       },
       "required": [
-        "tokenDetails",
         "totalNanoAiu"
       ],
       "additionalProperties": false,
@@ -2852,6 +3594,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Token count from tool definitions after compaction"
+        },
+        "statusCode": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "For failed compaction only: the HTTP status code of the compaction LLM call failure, when it carried one. Absent for successful compaction and for failures without an HTTP status (e.g. an empty model response or a transport error)."
         }
       },
       "required": [
@@ -3052,12 +3799,12 @@
         "default",
         "long_context"
       ],
+      "description": "Allowed values for the `ContextTier` enumeration.",
       "title": "ContextTier",
       "x-enumDescriptions": {
         "default": "Default context tier with standard context window size.",
         "long_context": "Extended context tier with a larger context window."
-      },
-      "description": "Allowed values for the `ContextTier` enumeration."
+      }
     },
     "CustomAgentsUpdatedAgent": {
       "type": "object",
@@ -3115,8 +3862,8 @@
         "userInvocable"
       ],
       "additionalProperties": false,
-      "title": "CustomAgentsUpdatedAgent",
-      "description": "Schema for the `CustomAgentsUpdatedAgent` type."
+      "description": "Schema for the `CustomAgentsUpdatedAgent` type.",
+      "title": "CustomAgentsUpdatedAgent"
     },
     "CustomAgentsUpdatedData": {
       "type": "object",
@@ -3149,8 +3896,8 @@
         "errors"
       ],
       "additionalProperties": false,
-      "title": "CustomAgentsUpdatedData",
-      "description": "Schema for the `CustomAgentsUpdatedData` type."
+      "description": "Schema for the `CustomAgentsUpdatedData` type.",
+      "title": "CustomAgentsUpdatedData"
     },
     "CustomAgentsUpdatedEvent": {
       "type": "object",
@@ -3301,28 +4048,6 @@
       "title": "CustomNotificationEvent"
     },
     "CustomNotificationPayload": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "number"
-        },
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "null"
-        },
-        {
-          "type": "array",
-          "items": {}
-        },
-        {
-          "type": "object",
-          "additionalProperties": {}
-        }
-      ],
       "description": "Source-defined JSON payload for the custom notification",
       "title": "CustomNotificationPayload",
       "x-opaque-json": true
@@ -3351,26 +4076,9 @@
       }
     },
     "ElicitationCompletedContent": {
-      "anyOf": [
-        {
-          "type": "string"
-        },
-        {
-          "type": "number"
-        },
-        {
-          "type": "boolean"
-        },
-        {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      ],
+      "description": "Schema for the `ElicitationCompletedContent` type.",
       "title": "ElicitationCompletedContent",
-      "x-opaque-json": true,
-      "description": "Schema for the `ElicitationCompletedContent` type."
+      "x-opaque-json": true
     },
     "ElicitationCompletedData": {
       "type": "object",
@@ -3490,7 +4198,6 @@
         "requestId",
         "message"
       ],
-      "additionalProperties": true,
       "description": "Elicitation request; may be form-based (structured input) or URL-based (browser redirect)",
       "title": "ElicitationRequestedData"
     },
@@ -3616,8 +4323,8 @@
         "blob"
       ],
       "additionalProperties": false,
-      "title": "EmbeddedBlobResourceContents",
-      "description": "Schema for the `EmbeddedBlobResourceContents` type."
+      "description": "Schema for the `EmbeddedBlobResourceContents` type.",
+      "title": "EmbeddedBlobResourceContents"
     },
     "EmbeddedTextResourceContents": {
       "type": "object",
@@ -3640,8 +4347,8 @@
         "text"
       ],
       "additionalProperties": false,
-      "title": "EmbeddedTextResourceContents",
-      "description": "Schema for the `EmbeddedTextResourceContents` type."
+      "description": "Schema for the `EmbeddedTextResourceContents` type.",
+      "title": "EmbeddedTextResourceContents"
     },
     "ErrorData": {
       "type": "object",
@@ -3962,8 +4669,8 @@
         "attachments"
       ],
       "additionalProperties": false,
-      "title": "ExtensionsAttachmentsPushedData",
-      "description": "Schema for the `ExtensionsAttachmentsPushedData` type."
+      "description": "Schema for the `ExtensionsAttachmentsPushedData` type.",
+      "title": "ExtensionsAttachmentsPushedData"
     },
     "ExtensionsAttachmentsPushedEvent": {
       "type": "object",
@@ -4036,8 +4743,8 @@
         "extensions"
       ],
       "additionalProperties": false,
-      "title": "ExtensionsLoadedData",
-      "description": "Schema for the `ExtensionsLoadedData` type."
+      "description": "Schema for the `ExtensionsLoadedData` type.",
+      "title": "ExtensionsLoadedData"
     },
     "ExtensionsLoadedEvent": {
       "type": "object",
@@ -4122,8 +4829,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "ExtensionsLoadedExtension",
-      "description": "Schema for the `ExtensionsLoadedExtension` type."
+      "description": "Schema for the `ExtensionsLoadedExtension` type.",
+      "title": "ExtensionsLoadedExtension"
     },
     "ExtensionsLoadedExtensionSource": {
       "type": "string",
@@ -5005,7 +5712,6 @@
           "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type."
         }
       },
-      "additionalProperties": true,
       "description": "The tool's `_meta.ui` block at the time of the call, so consumers can decide whether to forward the result to the model without re-listing tools.",
       "title": "McpAppToolCallCompleteToolMeta"
     },
@@ -5024,9 +5730,8 @@
           "description": "Tool visibility per SEP-1865 (typically a subset of `[\"model\",\"app\"]`)"
         }
       },
-      "additionalProperties": true,
-      "title": "McpAppToolCallCompleteToolMetaUI",
-      "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type."
+      "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type.",
+      "title": "McpAppToolCallCompleteToolMetaUI"
     },
     "McpOauthCompletedData": {
       "type": "object",
@@ -5034,10 +5739,15 @@
         "requestId": {
           "type": "string",
           "description": "Request ID of the resolved OAuth request"
+        },
+        "outcome": {
+          "$ref": "#/definitions/McpOauthCompletionOutcome",
+          "description": "How the pending OAuth request was completed"
         }
       },
       "required": [
-        "requestId"
+        "requestId",
+        "outcome"
       ],
       "additionalProperties": false,
       "description": "MCP OAuth request completion notification",
@@ -5099,12 +5809,25 @@
       "description": "Session event \"mcp.oauth_completed\". MCP OAuth request completion notification",
       "title": "McpOauthCompletedEvent"
     },
+    "McpOauthCompletionOutcome": {
+      "type": "string",
+      "enum": [
+        "token",
+        "cancelled"
+      ],
+      "description": "How the pending MCP OAuth request was completed",
+      "title": "McpOauthCompletionOutcome",
+      "x-enumDescriptions": {
+        "token": "The request completed with a token-backed OAuth provider.",
+        "cancelled": "The request completed without an OAuth provider."
+      }
+    },
     "McpOauthRequiredData": {
       "type": "object",
       "properties": {
         "requestId": {
           "type": "string",
-          "description": "Unique identifier for this OAuth request; used to respond via session.respondToMcpOAuth()"
+          "description": "Unique identifier for this OAuth request; used to respond via session.mcp.oauth.handlePendingRequest"
         },
         "serverName": {
           "type": "string",
@@ -5117,6 +5840,14 @@
         "staticClientConfig": {
           "$ref": "#/definitions/McpOauthRequiredStaticClientConfig",
           "description": "Static OAuth client configuration, if the server specifies one"
+        },
+        "wwwAuthenticateParams": {
+          "$ref": "#/definitions/McpOauthWWWAuthenticateParams",
+          "description": "OAuth WWW-Authenticate parameters parsed from the auth challenge, if available"
+        },
+        "resourceMetadata": {
+          "type": "string",
+          "description": "Raw OAuth protected-resource metadata document fetched for the MCP server, if available"
         }
       },
       "required": [
@@ -5208,6 +5939,29 @@
       "description": "Static OAuth client configuration, if the server specifies one",
       "title": "McpOauthRequiredStaticClientConfig"
     },
+    "McpOauthWWWAuthenticateParams": {
+      "type": "object",
+      "properties": {
+        "resourceMetadataUrl": {
+          "type": "string",
+          "description": "Protected resource metadata URL from the WWW-Authenticate resource_metadata parameter"
+        },
+        "scope": {
+          "type": "string",
+          "description": "Requested OAuth scopes from the WWW-Authenticate scope parameter, if present"
+        },
+        "error": {
+          "type": "string",
+          "description": "OAuth error from the WWW-Authenticate error parameter, if present"
+        }
+      },
+      "required": [
+        "resourceMetadataUrl"
+      ],
+      "additionalProperties": false,
+      "description": "OAuth WWW-Authenticate parameters parsed from an MCP auth challenge",
+      "title": "McpOauthWWWAuthenticateParams"
+    },
     "McpServersLoadedData": {
       "type": "object",
       "properties": {
@@ -5223,8 +5977,8 @@
         "servers"
       ],
       "additionalProperties": false,
-      "title": "McpServersLoadedData",
-      "description": "Schema for the `McpServersLoadedData` type."
+      "description": "Schema for the `McpServersLoadedData` type.",
+      "title": "McpServersLoadedData"
     },
     "McpServersLoadedEvent": {
       "type": "object",
@@ -5319,8 +6073,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "McpServersLoadedServer",
-      "description": "Schema for the `McpServersLoadedServer` type."
+      "description": "Schema for the `McpServersLoadedServer` type.",
+      "title": "McpServersLoadedServer"
     },
     "McpServerSource": {
       "type": "string",
@@ -5381,8 +6135,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "McpServerStatusChangedData",
-      "description": "Schema for the `McpServerStatusChangedData` type."
+      "description": "Schema for the `McpServerStatusChangedData` type.",
+      "title": "McpServerStatusChangedData"
     },
     "McpServerStatusChangedEvent": {
       "type": "object",
@@ -5531,6 +6285,19 @@
       "description": "Session event \"session.mode_changed\". Agent mode change details including previous and new modes",
       "title": "ModeChangedEvent"
     },
+    "ModelCallFailureBadRequestKind": {
+      "type": "string",
+      "enum": [
+        "bodyless",
+        "structured_error"
+      ],
+      "description": "For HTTP 400 failures only: whether the response carried a structured CAPI error envelope (structured_error, a deterministic validation failure) or no error body (bodyless, the transient gateway/proxy signature). Absent for non-400 failures.",
+      "title": "ModelCallFailureBadRequestKind",
+      "x-enumDescriptions": {
+        "bodyless": "The 400 response carried no error body (transient gateway/proxy signature).",
+        "structured_error": "The 400 response carried a structured CAPI error envelope (deterministic validation failure)."
+      }
+    },
     "ModelCallFailureData": {
       "type": "object",
       "properties": {
@@ -5563,8 +6330,8 @@
         "durationMs": {
           "type": "integer",
           "minimum": 0,
-          "description": "Duration of the failed API call in milliseconds",
-          "format": "duration"
+          "format": "duration",
+          "description": "Duration of the failed API call in milliseconds"
         },
         "source": {
           "$ref": "#/definitions/ModelCallFailureSource",
@@ -5573,6 +6340,31 @@
         "errorMessage": {
           "type": "string",
           "description": "Raw provider/runtime error message for restricted telemetry"
+        },
+        "badRequestKind": {
+          "$ref": "#/definitions/ModelCallFailureBadRequestKind",
+          "description": "For HTTP 400 failures only: whether the response carried a structured CAPI error envelope (structured_error, a deterministic validation failure) or no error body (bodyless, the transient gateway/proxy signature). Absent for non-400 failures."
+        },
+        "errorCode": {
+          "type": "string",
+          "description": "For HTTP 400 failures only: the `code` from the CAPI error envelope (e.g. 'model_max_prompt_tokens_exceeded') identifying which deterministic validation failure occurred. Raw server-controlled string, emitted only through restricted telemetry. Absent for bodyless or non-400 failures."
+        },
+        "errorType": {
+          "type": "string",
+          "description": "For HTTP 400 failures only: the `type` from the CAPI error envelope (e.g. 'websocket_error'), a coarser companion to errorCode for envelopes that carry no code. Raw server-controlled string, emitted only through restricted telemetry. Absent for bodyless or non-400 failures."
+        },
+        "quotaSnapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/AssistantUsageQuotaSnapshot",
+            "visibility": "internal"
+          },
+          "description": "Per-quota usage snapshots parsed from the failed response's quota headers, keyed by quota identifier. Present when the error response carried quota headers (e.g. a 402 once the additional spend limit is reached) so the UI can refresh the quota display on failure.",
+          "visibility": "internal"
+        },
+        "requestFingerprint": {
+          "$ref": "#/definitions/ModelCallFailureRequestFingerprint",
+          "description": "Content-free structural summary of the failing request. Contains only counts and shape flags (no prompt content), so it is safe for unrestricted telemetry. Populated only for client-error (4xx) failures."
         }
       },
       "required": [
@@ -5637,6 +6429,56 @@
       "additionalProperties": false,
       "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry",
       "title": "ModelCallFailureEvent"
+    },
+    "ModelCallFailureRequestFingerprint": {
+      "type": "object",
+      "properties": {
+        "messageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of messages in the request"
+        },
+        "toolResultMessageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of \"tool\" result messages in the request"
+        },
+        "toolCallCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of tool calls across assistant messages"
+        },
+        "namelessToolCallCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Tool calls whose name is missing or empty (rejected by strict providers)"
+        },
+        "imagePartCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total number of image content parts"
+        },
+        "imagePartsMissingMediaType": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Image parts whose media type cannot be determined (rejected by strict providers)"
+        },
+        "lastMessageRole": {
+          "type": "string",
+          "description": "Role of the final message in the request"
+        }
+      },
+      "required": [
+        "messageCount",
+        "toolResultMessageCount",
+        "toolCallCount",
+        "namelessToolCallCount",
+        "imagePartCount",
+        "imagePartsMissingMediaType"
+      ],
+      "additionalProperties": false,
+      "description": "Content-free structural summary of the failing request for diagnosing malformed 4xx calls",
+      "title": "ModelCallFailureRequestFingerprint"
     },
     "ModelCallFailureSource": {
       "type": "string",
@@ -5760,6 +6602,75 @@
       "description": "Session event \"session.model_change\". Model change details including previous and new model identifiers",
       "title": "ModelChangeEvent"
     },
+    "OmittedBinaryOmittedReason": {
+      "type": "string",
+      "enum": [
+        "too_large",
+        "asset_unavailable"
+      ],
+      "description": "Why the binary data is absent: it exceeded the inline size limit, or its asset was unavailable",
+      "title": "OmittedBinaryOmittedReason",
+      "x-enumDescriptions": {
+        "too_large": "Bytes exceeded the session's inline size limit.",
+        "asset_unavailable": "The referenced binary asset could not be found (e.g. a truncated log)."
+      }
+    },
+    "OmittedBinaryResult": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/OmittedBinaryType",
+          "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data."
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the omitted binary data"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Decoded byte length of the omitted binary data"
+        },
+        "omittedReason": {
+          "$ref": "#/definitions/OmittedBinaryOmittedReason",
+          "description": "Why the binary data is absent: it exceeded the inline size limit, or its asset was unavailable"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the binary data"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Optional metadata from the producing tool."
+        }
+      },
+      "required": [
+        "type",
+        "mimeType",
+        "byteLength",
+        "omittedReason"
+      ],
+      "additionalProperties": false,
+      "description": "A binary result whose data was omitted from persistence due to the inline size limit",
+      "title": "OmittedBinaryResult",
+      "stability": "experimental"
+    },
+    "OmittedBinaryType": {
+      "type": "string",
+      "enum": [
+        "image",
+        "resource"
+      ],
+      "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data.",
+      "title": "OmittedBinaryType",
+      "x-enumDescriptions": {
+        "image": "Binary image data.",
+        "resource": "Other binary resource data."
+      }
+    },
     "PendingMessagesModifiedData": {
       "type": "object",
       "properties": {},
@@ -5836,8 +6747,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionApproved",
-      "description": "Schema for the `PermissionApproved` type."
+      "description": "Schema for the `PermissionApproved` type.",
+      "title": "PermissionApproved"
     },
     "PermissionApprovedForLocation": {
       "type": "object",
@@ -5862,8 +6773,8 @@
         "locationKey"
       ],
       "additionalProperties": false,
-      "title": "PermissionApprovedForLocation",
-      "description": "Schema for the `PermissionApprovedForLocation` type."
+      "description": "Schema for the `PermissionApprovedForLocation` type.",
+      "title": "PermissionApprovedForLocation"
     },
     "PermissionApprovedForSession": {
       "type": "object",
@@ -5883,8 +6794,8 @@
         "approval"
       ],
       "additionalProperties": false,
-      "title": "PermissionApprovedForSession",
-      "description": "Schema for the `PermissionApprovedForSession` type."
+      "description": "Schema for the `PermissionApprovedForSession` type.",
+      "title": "PermissionApprovedForSession"
     },
     "PermissionCancelled": {
       "type": "object",
@@ -5903,8 +6814,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionCancelled",
-      "description": "Schema for the `PermissionCancelled` type."
+      "description": "Schema for the `PermissionCancelled` type.",
+      "title": "PermissionCancelled"
     },
     "PermissionCompletedData": {
       "type": "object",
@@ -6007,8 +6918,8 @@
         "message"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedByContentExclusionPolicy",
-      "description": "Schema for the `PermissionDeniedByContentExclusionPolicy` type."
+      "description": "Schema for the `PermissionDeniedByContentExclusionPolicy` type.",
+      "title": "PermissionDeniedByContentExclusionPolicy"
     },
     "PermissionDeniedByPermissionRequestHook": {
       "type": "object",
@@ -6031,8 +6942,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedByPermissionRequestHook",
-      "description": "Schema for the `PermissionDeniedByPermissionRequestHook` type."
+      "description": "Schema for the `PermissionDeniedByPermissionRequestHook` type.",
+      "title": "PermissionDeniedByPermissionRequestHook"
     },
     "PermissionDeniedByRules": {
       "type": "object",
@@ -6055,8 +6966,8 @@
         "rules"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedByRules",
-      "description": "Schema for the `PermissionDeniedByRules` type."
+      "description": "Schema for the `PermissionDeniedByRules` type.",
+      "title": "PermissionDeniedByRules"
     },
     "PermissionDeniedInteractivelyByUser": {
       "type": "object",
@@ -6079,8 +6990,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedInteractivelyByUser",
-      "description": "Schema for the `PermissionDeniedInteractivelyByUser` type."
+      "description": "Schema for the `PermissionDeniedInteractivelyByUser` type.",
+      "title": "PermissionDeniedInteractivelyByUser"
     },
     "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser": {
       "type": "object",
@@ -6095,8 +7006,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser",
-      "description": "Schema for the `PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser` type."
+      "description": "Schema for the `PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser` type.",
+      "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser"
     },
     "PermissionPromptRequest": {
       "anyOf": [
@@ -6349,12 +7260,6 @@
           "description": "Human-readable title of the MCP tool"
         },
         "args": {
-          "anyOf": [
-            {},
-            {
-              "type": "null"
-            }
-          ],
           "description": "Arguments to pass to the MCP tool",
           "x-opaque-json": true
         }
@@ -6918,8 +7823,8 @@
         "store",
         "vote"
       ],
-      "description": "Whether this is a store or vote memory operation",
       "default": "store",
+      "description": "Whether this is a store or vote memory operation",
       "title": "PermissionRequestMemoryAction",
       "x-enumDescriptions": {
         "store": "Store a new memory.",
@@ -7021,6 +7926,14 @@
         "warning": {
           "type": "string",
           "description": "Optional warning message about risks of running this command"
+        },
+        "requestSandboxBypass": {
+          "type": "boolean",
+          "description": "True when the model has requested to run this command outside the sandbox (it set requestSandboxBypass: true and the host opted in via sandbox.allowBypass). This is a request, not a grant: the command runs unsandboxed only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
+        },
+        "requestSandboxBypassReason": {
+          "type": "string",
+          "description": "Model-provided justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
         }
       },
       "required": [
@@ -7054,8 +7967,8 @@
         "readOnly"
       ],
       "additionalProperties": false,
-      "title": "PermissionRequestShellCommand",
-      "description": "Schema for the `PermissionRequestShellCommand` type."
+      "description": "Schema for the `PermissionRequestShellCommand` type.",
+      "title": "PermissionRequestShellCommand"
     },
     "PermissionRequestShellPossibleUrl": {
       "type": "object",
@@ -7069,8 +7982,8 @@
         "url"
       ],
       "additionalProperties": false,
-      "title": "PermissionRequestShellPossibleUrl",
-      "description": "Schema for the `PermissionRequestShellPossibleUrl` type."
+      "description": "Schema for the `PermissionRequestShellPossibleUrl` type.",
+      "title": "PermissionRequestShellPossibleUrl"
     },
     "PermissionRequestUrl": {
       "type": "object",
@@ -7199,8 +8112,8 @@
         "argument"
       ],
       "additionalProperties": false,
-      "title": "PermissionRule",
-      "description": "Schema for the `PermissionRule` type."
+      "description": "Schema for the `PermissionRule` type.",
+      "title": "PermissionRule"
     },
     "PermissionsChangedData": {
       "type": "object",
@@ -7275,6 +8188,75 @@
       "additionalProperties": false,
       "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all boolean transition.",
       "title": "PermissionsChangedEvent"
+    },
+    "PersistedBinaryImage": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/PersistedBinaryImageType",
+          "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data."
+        },
+        "data": {
+          "type": "string",
+          "description": "Base64-encoded binary data",
+          "contentEncoding": "base64"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "MIME type of the binary data"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description of the binary data"
+        },
+        "metadata": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Optional metadata from the producing tool."
+        }
+      },
+      "required": [
+        "type",
+        "data",
+        "mimeType"
+      ],
+      "additionalProperties": false,
+      "description": "Binary result returned by a tool for the model",
+      "title": "PersistedBinaryImage"
+    },
+    "PersistedBinaryImageType": {
+      "type": "string",
+      "enum": [
+        "image",
+        "resource"
+      ],
+      "description": "Binary result type discriminator. Use \"image\" for images and \"resource\" for other binary data.",
+      "title": "PersistedBinaryImageType",
+      "x-enumDescriptions": {
+        "image": "Binary image data.",
+        "resource": "Other binary resource data."
+      }
+    },
+    "PersistedBinaryResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/PersistedBinaryImage",
+          "description": "Binary result returned by a tool for the model"
+        },
+        {
+          "$ref": "#/definitions/OmittedBinaryResult",
+          "description": "A binary result whose data was omitted from persistence due to the inline size limit"
+        },
+        {
+          "$ref": "#/definitions/BinaryAssetReference",
+          "description": "A reference to binary data persisted once on a session.binary_asset event and shared by id"
+        }
+      ],
+      "description": "A model-facing binary result as persisted: full inline data, a size-omitted marker, or a deduplicated asset reference",
+      "title": "PersistedBinaryResult",
+      "stability": "experimental"
     },
     "PlanChangedData": {
       "type": "object",
@@ -7651,10 +8633,6 @@
           "description": "Name of the MCP server that initiated the sampling request"
         },
         "mcpRequestId": {
-          "type": [
-            "string",
-            "number"
-          ],
           "description": "The JSON-RPC request ID from the MCP protocol",
           "x-opaque-json": true
         }
@@ -7664,7 +8642,6 @@
         "serverName",
         "mcpRequestId"
       ],
-      "additionalProperties": true,
       "description": "Sampling request from an MCP server; contains the server name and a requestId for correlation",
       "title": "SamplingRequestedData"
     },
@@ -7805,8 +8782,8 @@
         "intervalMs": {
           "type": "integer",
           "exclusiveMinimum": 0,
-          "description": "Interval between ticks in milliseconds (relative-interval schedules)",
-          "format": "duration"
+          "format": "duration",
+          "description": "Interval between ticks in milliseconds (relative-interval schedules)"
         },
         "cron": {
           "type": "string",
@@ -7828,6 +8805,10 @@
         "recurring": {
           "type": "boolean",
           "description": "Whether the schedule re-arms after each tick (`/every`) or fires once (`/after`)"
+        },
+        "selfPaced": {
+          "type": "boolean",
+          "description": "True for a self-paced (`dynamic`) schedule: no fixed cadence; the model arms each next run via the `manage_schedule` `wakeup` action. `nextRunAt` is model-controlled rather than auto-computed."
         },
         "displayPrompt": {
           "type": "string",
@@ -7896,6 +8877,82 @@
       "description": "Session event \"session.schedule_created\". Scheduled prompt registered via /every or /after",
       "title": "ScheduleCreatedEvent"
     },
+    "ScheduleRearmedData": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Id of the self-paced schedule that was re-armed"
+        },
+        "nextRunAt": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Absolute time (epoch milliseconds) the model armed the next run to fire"
+        }
+      },
+      "required": [
+        "id",
+        "nextRunAt"
+      ],
+      "additionalProperties": false,
+      "description": "Self-paced schedule re-armed for its next run",
+      "title": "ScheduleRearmedData"
+    },
+    "ScheduleRearmedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.schedule_rearmed",
+          "description": "Type discriminator. Always \"session.schedule_rearmed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ScheduleRearmedData",
+          "description": "Self-paced schedule re-armed for its next run"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.schedule_rearmed\". Self-paced schedule re-armed for its next run",
+      "title": "ScheduleRearmedEvent"
+    },
     "SessionEvent": {
       "anyOf": [
         {
@@ -7929,6 +8986,10 @@
         {
           "$ref": "#/definitions/ScheduleCancelledEvent",
           "description": "Session event \"session.schedule_cancelled\". Scheduled prompt cancelled from the schedule manager dialog"
+        },
+        {
+          "$ref": "#/definitions/ScheduleRearmedEvent",
+          "description": "Session event \"session.schedule_rearmed\". Self-paced schedule re-armed for its next run"
         },
         {
           "$ref": "#/definitions/AutopilotObjectiveChangedEvent",
@@ -8115,6 +9176,10 @@
           "description": "Session event \"hook.progress\". Ephemeral progress update from a running hook process"
         },
         {
+          "$ref": "#/definitions/BinaryAssetEvent",
+          "description": "Session event \"session.binary_asset\". Canonical bytes for a content-addressed binary asset shared by reference across events"
+        },
+        {
           "$ref": "#/definitions/SystemMessageEvent",
           "description": "Session event \"system.message\". System/developer instruction content with role and optional template metadata"
         },
@@ -8251,6 +9316,18 @@
           "description": "Session event \"session.canvas.closed\"."
         },
         {
+          "$ref": "#/definitions/CanvasUnavailableEvent",
+          "description": "Session event \"session.canvas.unavailable\". Transient signal that an open canvas instance's provider has dropped (for example the extension is reloading mid-session). The host should keep the panel mounted and surface a reconnecting affordance rather than tearing it down; a subsequent `session.canvas.opened` for the same instanceId clears the affordance once the provider reconnects with a fresh url. Ephemeral and never persisted, so it is never replayed on cold resume."
+        },
+        {
+          "$ref": "#/definitions/CanvasRecordedEvent",
+          "description": "Session event \"session.canvas.recorded\". Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Intentionally omits the transient url and availability."
+        },
+        {
+          "$ref": "#/definitions/CanvasRemovedEvent",
+          "description": "Session event \"session.canvas.removed\". Durable record that a canvas instance was closed, superseding a prior instance_recorded during resume replay."
+        },
+        {
           "$ref": "#/definitions/ExtensionsAttachmentsPushedEvent",
           "description": "Session event \"session.extensions.attachments_pushed\"."
         },
@@ -8339,8 +9416,8 @@
         "totalApiDurationMs": {
           "type": "integer",
           "minimum": 0,
-          "description": "Cumulative time spent in API calls during the session, in milliseconds",
-          "format": "duration"
+          "format": "duration",
+          "description": "Cumulative time spent in API calls during the session, in milliseconds"
         },
         "sessionStartTime": {
           "type": "integer",
@@ -8483,8 +9560,8 @@
         "usage"
       ],
       "additionalProperties": false,
-      "title": "ShutdownModelMetric",
-      "description": "Schema for the `ShutdownModelMetric` type."
+      "description": "Schema for the `ShutdownModelMetric` type.",
+      "title": "ShutdownModelMetric"
     },
     "ShutdownModelMetricRequests": {
       "type": "object",
@@ -8518,8 +9595,8 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "title": "ShutdownModelMetricTokenDetail",
-      "description": "Schema for the `ShutdownModelMetricTokenDetail` type."
+      "description": "Schema for the `ShutdownModelMetricTokenDetail` type.",
+      "title": "ShutdownModelMetricTokenDetail"
     },
     "ShutdownModelMetricUsage": {
       "type": "object",
@@ -8573,8 +9650,8 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "title": "ShutdownTokenDetail",
-      "description": "Schema for the `ShutdownTokenDetail` type."
+      "description": "Schema for the `ShutdownTokenDetail` type.",
+      "title": "ShutdownTokenDetail"
     },
     "ShutdownType": {
       "type": "string",
@@ -8725,8 +9802,8 @@
         "skills"
       ],
       "additionalProperties": false,
-      "title": "SkillsLoadedData",
-      "description": "Schema for the `SkillsLoadedData` type."
+      "description": "Schema for the `SkillsLoadedData` type.",
+      "title": "SkillsLoadedData"
     },
     "SkillsLoadedEvent": {
       "type": "object",
@@ -8810,6 +9887,10 @@
         "path": {
           "type": "string",
           "description": "Absolute path to the skill file, if available"
+        },
+        "argumentHint": {
+          "type": "string",
+          "description": "Optional freeform hint describing the skill's expected arguments, from the `argument-hint` frontmatter field"
         }
       },
       "required": [
@@ -8820,8 +9901,8 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "title": "SkillsLoadedSkill",
-      "description": "Schema for the `SkillsLoadedSkill` type."
+      "description": "Schema for the `SkillsLoadedSkill` type.",
+      "title": "SkillsLoadedSkill"
     },
     "SkillSource": {
       "type": "string",
@@ -9085,8 +10166,8 @@
         "durationMs": {
           "type": "integer",
           "minimum": 0,
-          "description": "Wall-clock duration of the sub-agent execution in milliseconds",
-          "format": "duration"
+          "format": "duration",
+          "description": "Wall-clock duration of the sub-agent execution in milliseconds"
         }
       },
       "required": [
@@ -9249,8 +10330,8 @@
         "durationMs": {
           "type": "integer",
           "minimum": 0,
-          "description": "Wall-clock duration of the sub-agent execution in milliseconds",
-          "format": "duration"
+          "format": "duration",
+          "description": "Wall-clock duration of the sub-agent execution in milliseconds"
         }
       },
       "required": [
@@ -9668,8 +10749,8 @@
         "status"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationAgentCompleted",
-      "description": "Schema for the `SystemNotificationAgentCompleted` type."
+      "description": "Schema for the `SystemNotificationAgentCompleted` type.",
+      "title": "SystemNotificationAgentCompleted"
     },
     "SystemNotificationAgentCompletedStatus": {
       "type": "string",
@@ -9711,8 +10792,8 @@
         "agentType"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationAgentIdle",
-      "description": "Schema for the `SystemNotificationAgentIdle` type."
+      "description": "Schema for the `SystemNotificationAgentIdle` type.",
+      "title": "SystemNotificationAgentIdle"
     },
     "SystemNotificationData": {
       "type": "object",
@@ -9820,8 +10901,8 @@
         "triggerTool"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationInstructionDiscovered",
-      "description": "Schema for the `SystemNotificationInstructionDiscovered` type."
+      "description": "Schema for the `SystemNotificationInstructionDiscovered` type.",
+      "title": "SystemNotificationInstructionDiscovered"
     },
     "SystemNotificationNewInboxMessage": {
       "type": "object",
@@ -9856,8 +10937,8 @@
         "summary"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationNewInboxMessage",
-      "description": "Schema for the `SystemNotificationNewInboxMessage` type."
+      "description": "Schema for the `SystemNotificationNewInboxMessage` type.",
+      "title": "SystemNotificationNewInboxMessage"
     },
     "SystemNotificationShellCompleted": {
       "type": "object",
@@ -9885,8 +10966,8 @@
         "shellId"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationShellCompleted",
-      "description": "Schema for the `SystemNotificationShellCompleted` type."
+      "description": "Schema for the `SystemNotificationShellCompleted` type.",
+      "title": "SystemNotificationShellCompleted"
     },
     "SystemNotificationShellDetachedCompleted": {
       "type": "object",
@@ -9910,8 +10991,8 @@
         "shellId"
       ],
       "additionalProperties": false,
-      "title": "SystemNotificationShellDetachedCompleted",
-      "description": "Schema for the `SystemNotificationShellDetachedCompleted` type."
+      "description": "Schema for the `SystemNotificationShellDetachedCompleted` type.",
+      "title": "SystemNotificationShellDetachedCompleted"
     },
     "TaskCompleteData": {
       "type": "object",
@@ -10535,6 +11616,15 @@
           },
           "description": "Structured content blocks (text, images, audio, resources) returned by the tool in their native format"
         },
+        "binaryResultsForLlm": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PersistedBinaryResult",
+            "description": "A model-facing binary result as persisted: full inline data, a size-omitted marker, or a deduplicated asset reference"
+          },
+          "description": "Model-facing binary results (base64 inline or size-omitted markers) sent to the LLM for this tool call",
+          "stability": "experimental"
+        },
         "uiResource": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResource",
           "description": "MCP Apps UI resource content for rendering in a sandboxed iframe"
@@ -10542,6 +11632,15 @@
         "structuredContent": {
           "description": "Structured content (arbitrary JSON) returned verbatim by the MCP tool",
           "x-opaque-json": true
+        },
+        "citableSources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CitableSource",
+            "description": "A source supplied by a tool that should be made available to the model as citable content."
+          },
+          "description": "Provider-neutral source material this tool makes available to the model as citable content. Persisted so it survives session resume. Experimental.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -10602,8 +11701,8 @@
         }
       },
       "additionalProperties": false,
-      "title": "ToolExecutionCompleteToolDescriptionMetaUI",
-      "description": "Schema for the `ToolExecutionCompleteToolDescriptionMetaUI` type."
+      "description": "Schema for the `ToolExecutionCompleteToolDescriptionMetaUI` type.",
+      "title": "ToolExecutionCompleteToolDescriptionMetaUI"
     },
     "ToolExecutionCompleteToolDescriptionMetaUIVisibility": {
       "type": "string",
@@ -10611,12 +11710,12 @@
         "model",
         "app"
       ],
+      "description": "Allowed values for the `ToolExecutionCompleteToolDescriptionMetaUIVisibility` enumeration.",
       "title": "ToolExecutionCompleteToolDescriptionMetaUIVisibility",
       "x-enumDescriptions": {
         "model": "Tool is callable by the model (LLM tool surface)",
         "app": "Tool is callable by the MCP App view (iframe) via session.mcp.apps.callTool"
-      },
-      "description": "Allowed values for the `ToolExecutionCompleteToolDescriptionMetaUIVisibility` enumeration."
+      }
     },
     "ToolExecutionCompleteUIResource": {
       "type": "object",
@@ -10681,8 +11780,8 @@
         }
       },
       "additionalProperties": false,
-      "title": "ToolExecutionCompleteUIResourceMetaUI",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUI` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUI` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUI"
     },
     "ToolExecutionCompleteUIResourceMetaUICsp": {
       "type": "object",
@@ -10713,8 +11812,8 @@
         }
       },
       "additionalProperties": false,
-      "title": "ToolExecutionCompleteUIResourceMetaUICsp",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUICsp` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUICsp` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUICsp"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissions": {
       "type": "object",
@@ -10737,36 +11836,32 @@
         }
       },
       "additionalProperties": false,
-      "title": "ToolExecutionCompleteUIResourceMetaUIPermissions",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissions` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissions` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissions"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera": {
       "type": "object",
       "properties": {},
-      "additionalProperties": true,
-      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsCamera` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsCamera` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite": {
       "type": "object",
       "properties": {},
-      "additionalProperties": true,
-      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation": {
       "type": "object",
       "properties": {},
-      "additionalProperties": true,
-      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone": {
       "type": "object",
       "properties": {},
-      "additionalProperties": true,
-      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone",
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone` type."
+      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone` type.",
+      "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone"
     },
     "ToolExecutionPartialData": {
       "type": "object",
@@ -11078,8 +12173,8 @@
         }
       },
       "additionalProperties": false,
-      "title": "ToolExecutionStartToolDescriptionMetaUI",
-      "description": "Schema for the `ToolExecutionStartToolDescriptionMetaUI` type."
+      "description": "Schema for the `ToolExecutionStartToolDescriptionMetaUI` type.",
+      "title": "ToolExecutionStartToolDescriptionMetaUI"
     },
     "ToolExecutionStartToolDescriptionMetaUIVisibility": {
       "type": "string",
@@ -11087,12 +12182,12 @@
         "model",
         "app"
       ],
+      "description": "Allowed values for the `ToolExecutionStartToolDescriptionMetaUIVisibility` enumeration.",
       "title": "ToolExecutionStartToolDescriptionMetaUIVisibility",
       "x-enumDescriptions": {
         "model": "Tool is callable by the model (LLM tool surface)",
         "app": "Tool is callable by the MCP App view (iframe) via session.mcp.apps.callTool"
-      },
-      "description": "Allowed values for the `ToolExecutionStartToolDescriptionMetaUIVisibility` enumeration."
+      }
     },
     "ToolsUpdatedData": {
       "type": "object",
@@ -11106,8 +12201,8 @@
         "model"
       ],
       "additionalProperties": false,
-      "title": "ToolsUpdatedData",
-      "description": "Schema for the `ToolsUpdatedData` type."
+      "description": "Schema for the `ToolsUpdatedData` type.",
+      "title": "ToolsUpdatedData"
     },
     "ToolsUpdatedEvent": {
       "type": "object",
@@ -11702,8 +12797,8 @@
         "content"
       ],
       "additionalProperties": false,
-      "title": "UserMessageData",
-      "description": "Schema for the `UserMessageData` type."
+      "description": "Schema for the `UserMessageData` type.",
+      "title": "UserMessageData"
     },
     "UserMessageEvent": {
       "type": "object",
@@ -11810,8 +12905,8 @@
         "commandIdentifiers"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalCommands",
-      "description": "Schema for the `UserToolSessionApprovalCommands` type."
+      "description": "Schema for the `UserToolSessionApprovalCommands` type.",
+      "title": "UserToolSessionApprovalCommands"
     },
     "UserToolSessionApprovalCustomTool": {
       "type": "object",
@@ -11831,8 +12926,8 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalCustomTool",
-      "description": "Schema for the `UserToolSessionApprovalCustomTool` type."
+      "description": "Schema for the `UserToolSessionApprovalCustomTool` type.",
+      "title": "UserToolSessionApprovalCustomTool"
     },
     "UserToolSessionApprovalExtensionManagement": {
       "type": "object",
@@ -11851,8 +12946,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalExtensionManagement",
-      "description": "Schema for the `UserToolSessionApprovalExtensionManagement` type."
+      "description": "Schema for the `UserToolSessionApprovalExtensionManagement` type.",
+      "title": "UserToolSessionApprovalExtensionManagement"
     },
     "UserToolSessionApprovalExtensionPermissionAccess": {
       "type": "object",
@@ -11872,8 +12967,8 @@
         "extensionName"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalExtensionPermissionAccess",
-      "description": "Schema for the `UserToolSessionApprovalExtensionPermissionAccess` type."
+      "description": "Schema for the `UserToolSessionApprovalExtensionPermissionAccess` type.",
+      "title": "UserToolSessionApprovalExtensionPermissionAccess"
     },
     "UserToolSessionApprovalMcp": {
       "type": "object",
@@ -11901,8 +12996,8 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalMcp",
-      "description": "Schema for the `UserToolSessionApprovalMcp` type."
+      "description": "Schema for the `UserToolSessionApprovalMcp` type.",
+      "title": "UserToolSessionApprovalMcp"
     },
     "UserToolSessionApprovalMemory": {
       "type": "object",
@@ -11917,8 +13012,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalMemory",
-      "description": "Schema for the `UserToolSessionApprovalMemory` type."
+      "description": "Schema for the `UserToolSessionApprovalMemory` type.",
+      "title": "UserToolSessionApprovalMemory"
     },
     "UserToolSessionApprovalRead": {
       "type": "object",
@@ -11933,8 +13028,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalRead",
-      "description": "Schema for the `UserToolSessionApprovalRead` type."
+      "description": "Schema for the `UserToolSessionApprovalRead` type.",
+      "title": "UserToolSessionApprovalRead"
     },
     "UserToolSessionApprovalWrite": {
       "type": "object",
@@ -11949,8 +13044,8 @@
         "kind"
       ],
       "additionalProperties": false,
-      "title": "UserToolSessionApprovalWrite",
-      "description": "Schema for the `UserToolSessionApprovalWrite` type."
+      "description": "Schema for the `UserToolSessionApprovalWrite` type.",
+      "title": "UserToolSessionApprovalWrite"
     },
     "WarningData": {
       "type": "object",

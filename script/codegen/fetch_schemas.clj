@@ -44,10 +44,21 @@
                 (println "Usage: bb schemas:fetch [--version VERSION]")
                 (System/exit 2)))))
 
-(defn fetch-tarball! [version dest-dir]
-  (let [url (format "https://registry.npmjs.org/@github/copilot/-/copilot-%s.tgz"
-                    version)
-        tgz (str (fs/path dest-dir (format "copilot-%s.tgz" version)))]
+;; Canonical platform package to source schemas from when the main
+;; `@github/copilot` package no longer bundles them (see `-main`). Schemas are
+;; platform-independent JSON, so any platform package yields byte-identical
+;; files; we pin one deterministically for reproducible offline builds.
+(def schema-platform-package "@github/copilot-linux-x64")
+
+(defn- unscoped-name [pkg]
+  ;; "@github/copilot-linux-x64" -> "copilot-linux-x64"; "@github/copilot" -> "copilot".
+  (last (str/split pkg #"/")))
+
+(defn fetch-tarball! [pkg version dest-dir]
+  (let [unscoped (unscoped-name pkg)
+        url      (format "https://registry.npmjs.org/%s/-/%s-%s.tgz"
+                         pkg unscoped version)
+        tgz      (str (fs/path dest-dir (format "%s-%s.tgz" unscoped version)))]
     (println (format "Fetching %s" url))
     (let [{:keys [exit err]}
           @(p/process ["curl" "-fsSL" "-o" tgz url] {:err :string})]
@@ -60,21 +71,23 @@
   ;; Tarball layout: package/schemas/*.json (npm convention prepends `package/`).
   ;; Extract into a dedicated `schemas` subdir so we can copy from a
   ;; clean directory (avoids accidentally picking up package.json or
-  ;; other extracted files).
+  ;; other extracted files). Returns true on success, false if the tarball
+  ;; carries no `package/schemas` directory (newer split-package layout).
   (println (format "Extracting schemas from %s" tgz))
-  (let [{:keys [exit err]}
+  (fs/create-dirs dest-dir)
+  (let [{:keys [exit]}
         @(p/process ["tar" "-xzf" tgz "-C" dest-dir
                      "--strip-components=1"
                      "package/schemas"]
-                    {:err :string})]
-    (when-not (zero? exit)
-      (println "tar failed:" err)
-      (System/exit exit))))
+                    {:err :string :out :string})]
+    (zero? exit)))
 
 (defn extract-package-json! [tgz dest-dir]
-  ;; Extract package/package.json so we can verify its declared version
-  ;; matches the URL-pinned version (defends against mirror caches /
-  ;; redirected tags / corrupted artifacts).
+  ;; Extract package/package.json into dest-dir so we can verify its declared
+  ;; version matches the URL-pinned version (defends against mirror caches /
+  ;; redirected tags / corrupted artifacts). dest-dir is per-package so a
+  ;; second tarball's package.json does not clobber the first.
+  (fs/create-dirs dest-dir)
   (let [{:keys [exit err]}
         @(p/process ["tar" "-xzf" tgz "-C" dest-dir
                      "--strip-components=1"
@@ -93,21 +106,50 @@
       (System/exit 1))
     (println (format "Verified tarball package.json version: %s" actual))))
 
+(defn fetch-verified-tarball! [pkg version tmp]
+  ;; Fetch a package tarball and confirm its package.json version matches the
+  ;; pinned version. Returns the tarball path.
+  (let [tgz      (fetch-tarball! pkg version tmp)
+        meta-dir (str (fs/path tmp (str (unscoped-name pkg) "-meta")))]
+    (extract-package-json! tgz meta-dir)
+    (verify-tarball-version! (str (fs/path meta-dir "package.json")) version)
+    tgz))
+
 (defn -main [& args]
   (let [opts    (parse-args args)
         version (or (:version opts) (read-pinned-version))
         tmp     (str (fs/create-temp-dir {:prefix "copilot-schemas-"}))]
     (try
       (println (format "Pinned schema version: %s" version))
-      (let [tgz       (fetch-tarball! version tmp)
-            schemas-extract-dir (str (fs/path tmp "schemas"))]
-        (fs/create-dirs tmp)
-        (extract-package-json! tgz tmp)
-        (verify-tarball-version! (str (fs/path tmp "package.json")) version)
-        (extract-schemas! tgz tmp)
+      (fs/create-dirs tmp)
+      (let [schemas-extract-dir (str (fs/path tmp "schemas"))
+            ;; Schemas used to ship in the main `@github/copilot` package, but
+            ;; from CLI 1.0.64 onward that package is a thin platform-loader
+            ;; stub and the schemas live in the per-platform packages
+            ;; (e.g. `@github/copilot-linux-x64`). Try the main package first
+            ;; for backward compatibility with older pins, then fall back to a
+            ;; canonical platform package.
+            main-tgz (fetch-verified-tarball! "@github/copilot" version tmp)
+            schema-source
+            (if (extract-schemas! main-tgz tmp)
+              "@github/copilot"
+              (do
+                (println
+                  (format
+                    (str "Main package carries no schemas (split-package layout); "
+                         "falling back to %s.")
+                    schema-platform-package))
+                (let [plat-tgz (fetch-verified-tarball!
+                                 schema-platform-package version tmp)]
+                  (when-not (extract-schemas! plat-tgz tmp)
+                    (println
+                      (format "ERROR: %s carries no package/schemas directory."
+                              schema-platform-package))
+                    (System/exit 1))
+                  schema-platform-package)))]
+        (println (format "Schemas sourced from: %s" schema-source))
         ;; Wipe destination to avoid stale schemas, then copy fresh ones from
-        ;; the extracted `schemas/` subdir (NOT the temp root, which also
-        ;; contains the extracted package.json).
+        ;; the extracted `schemas/` subdir.
         (when (fs/exists? schemas-dir)
           (fs/delete-tree schemas-dir))
         (fs/create-dirs schemas-dir)
@@ -121,12 +163,12 @@
         (spit (str (fs/path schemas-dir "README.md"))
               (format
                 (str "# Upstream Copilot CLI JSON Schemas\n\n"
-                     "These files are fetched verbatim from the `@github/copilot` "
+                     "These files are fetched verbatim from the `%s` "
                      "npm package at the version pinned in `.copilot-schema-version`.\n\n"
                      "**Do not edit by hand.** To update, run `bb schemas:fetch` after "
                      "bumping `.copilot-schema-version`.\n\n"
                      "Currently pinned version: `%s`\n")
-                version)))
+                schema-source version)))
       (println "Schemas updated successfully.")
       (finally
         (fs/delete-tree tmp)))))
