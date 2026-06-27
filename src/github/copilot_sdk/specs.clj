@@ -408,7 +408,8 @@
 (s/def ::transport #{:http :websockets})
 
 ;; On-demand bearer-token callback (upstream PR #1748, @experimental). A 1-arg
-;; function receiving an idiomatic `ProviderTokenArgs` map `{:provider-name <s>}`
+;; function receiving an idiomatic `ProviderTokenArgs` map
+;; `{:provider-name <s> :session-id <s>}`
 ;; and returning the raw token string (a channel yielding the string is also
 ;; accepted). Applies to both ::provider and ::named-provider. The fn is never
 ;; serialized — provider->wire strips it and emits `hasBearerTokenProvider: true`.
