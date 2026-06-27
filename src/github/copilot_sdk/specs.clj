@@ -481,7 +481,13 @@
            :opt-un [::provider-type ::wire-api ::api-key ::bearer-token
                     ::azure-options ::headers ::bearer-token-provider])
    #(s/valid? ::non-blank-string (:name %))
-   #(not (str/includes? (:name %) "/"))))
+   #(not (str/includes? (:name %) "/"))
+   ;; `s/keys` is open, so reject the singular-provider-only transport /
+   ;; model-override keys explicitly — otherwise they would pass validation and
+   ;; silently forward on the wire, contradicting the NamedProviderConfig
+   ;; contract (those fields live on ::provider / ::provider-model).
+   #(empty? (select-keys % [:transport :model-id :wire-model
+                            :max-input-tokens :max-output-tokens]))))
 
 ;; ModelCapabilitiesOverride — opaque to the SDK. Forwarded verbatim, so keys
 ;; must be strings (upstream uses a mix of camelCase and snake_case wire keys

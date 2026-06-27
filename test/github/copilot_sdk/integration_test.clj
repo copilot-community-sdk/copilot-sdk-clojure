@@ -2246,6 +2246,19 @@
     (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
                           {:name "has/slash" :base-url "https://x.test"}))
         "named provider :name must not contain '/'")
+    ;; A named provider carries no transport or inline model-override fields
+    ;; (upstream NamedProviderConfig, PR #1718) — those belong on the singular
+    ;; ::provider / ::provider-model. The spec must reject them so misuse fails
+    ;; fast at validate-session-config! instead of silently forwarding on the wire.
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "p" :base-url "https://x.test" :transport :http}))
+        ":transport is not a named-provider field")
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "p" :base-url "https://x.test" :model-id "gpt-4o"}))
+        ":model-id is not a named-provider field")
+    (is (false? (s/valid? :github.copilot-sdk.specs/named-provider
+                          {:name "p" :base-url "https://x.test" :max-input-tokens 1000}))
+        "model-override token limits are not named-provider fields")
     (is (s/valid? :github.copilot-sdk.specs/provider-model
                   {:id "m" :provider "p"}))
     (is (false? (s/valid? :github.copilot-sdk.specs/provider-model
