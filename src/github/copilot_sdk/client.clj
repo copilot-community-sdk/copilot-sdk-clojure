@@ -1531,6 +1531,19 @@
     (util/wire->clj
      (proto/send-request! conn "mcp.config.remove" params))))
 
+(defn- validate-provider-config!
+  "Validate singular-`:provider` BYOK constraints shared by create and resume:
+   `:model` is required when `:provider` is set, and `:provider` cannot be
+   combined with the multi-provider `:providers` registry (upstream documents
+   the combination as rejected)."
+  [config]
+  (when (and (:provider config) (not (:model config)))
+    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
+                    {:config (redact-secrets config)})))
+  (when (and (:provider config) (:providers config))
+    (throw (ex-info "Invalid session config: :provider cannot be combined with the :providers registry (use one or the other)"
+                    {:config (redact-secrets config)}))))
+
 (defn- validate-session-config!
   "Validate session config, throwing on invalid input."
   [config]
@@ -1545,9 +1558,7 @@
                 (format "Invalid session config: %s"
                         (with-out-str (s/explain ::specs/session-config safe-config))))]
       (throw (ex-info msg {:config safe-config :unknown-keys unknown :explain explain}))))
-  (when (and (:provider config) (not (:model config)))
-    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config (redact-secrets config)}))))
+  (validate-provider-config! config))
 
 (defn- validate-tool-filter-list!
   "Reject bare `\"*\"` in a tool filter list (mirrors upstream
@@ -2482,9 +2493,7 @@
       (throw (ex-info "Invalid resume session config"
                       {:config safe-config
                        :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
-  (when (and (:provider config) (not (:model config)))
-    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config (redact-secrets config)})))
+  (validate-provider-config! config)
   (validate-tool-filters! config)
   (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)
@@ -2662,9 +2671,7 @@
       (throw (ex-info "Invalid resume session config"
                       {:config safe-config
                        :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
-  (when (and (:provider config) (not (:model config)))
-    (throw (ex-info "Invalid session config: :model is required when :provider (BYOK) is specified"
-                    {:config (redact-secrets config)})))
+  (validate-provider-config! config)
   (validate-tool-filters! config)
   (validate-empty-mode-session-requirements! client config)
   (ensure-connected! client)

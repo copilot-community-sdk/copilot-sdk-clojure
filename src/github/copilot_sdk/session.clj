@@ -780,9 +780,10 @@
    The runtime issues this session-scoped request when a BYOK provider configured
    with a `:bearer-token-provider` callback needs a fresh token. The matching
    callback (looked up by `provider-name`) is invoked with the idiomatic
-   `ProviderTokenArgs` map `{:provider-name <name>}` and must return the raw token
-   string (without the `Bearer ` prefix); a channel yielding the string is also
-   accepted. The runtime performs no caching, so the callback owns refresh."
+   `ProviderTokenArgs` map `{:provider-name <name> :session-id <id>}` and must
+   return the raw token string (without the `Bearer ` prefix); a channel yielding
+   the string is also accepted. The runtime performs no caching, so the callback
+   owns refresh."
   [client session-id provider-name]
   (async/thread-call
    (fn []
@@ -793,7 +794,7 @@
                   :message (str "No bearer-token provider registered for provider \""
                                 provider-name "\"")}}
          (try
-           (let [result (callback {:provider-name provider-name})
+           (let [result (callback {:provider-name provider-name :session-id session-id})
                  result (if (channel? result) (<!! result) result)]
              (if (string? result)
                {:result {:token result}}
@@ -804,9 +805,10 @@
                  {:error {:code -32001
                           :message "Bearer-token provider returned a non-string token"}})))
            (catch Exception e
-             (log/error "Bearer-token provider error for session " session-id ": " (ex-message e))
+             (log/error "Bearer-token provider error for session " session-id
+                        " (exception type: " (some-> e class .getName) ")")
              {:error {:code -32001
-                      :message (str "Bearer-token provider error: " (ex-message e))}})))))
+                      :message "Bearer-token provider error"}})))))
    :io))
 
 (defn handle-hooks-invoke!

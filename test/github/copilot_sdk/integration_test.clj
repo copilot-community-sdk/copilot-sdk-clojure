@@ -2291,14 +2291,60 @@
     (is (s/valid? :github.copilot-sdk.specs/session-config
                   {:exp-assignments {"a" 1}}))))
 
+(deftest test-v1-0-4-provider-and-providers-mutually-exclusive
+  (testing "combining singular :provider with the :providers registry is rejected on both create and resume (upstream ProviderTokenArgs/SessionConfig contract, PR #1718)"
+    ;; Upstream documents that combining `providers`/`models` with the singular
+    ;; `provider` is rejected; the SDK forwards both to the runtime which rejects
+    ;; the combination. We fail fast client-side with a clear message — a
+    ;; Clojure-only convenience that never alters the wire for any valid config
+    ;; (the combination is invalid everywhere).
+    (let [cfg {:on-permission-request sdk/approve-all
+               :model "m"
+               :provider {:base-url "https://single.test"}
+               :providers [{:name "p" :base-url "https://registry.test"}]}]
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                            #"(?i):provider.*cannot be combined.*:providers"
+                            (sdk/create-session *test-client* cfg))
+          "create-session rejects :provider + :providers")
+      (let [ok-session (sdk/create-session *test-client*
+                                           {:on-permission-request sdk/approve-all
+                                            :model "m"})
+            session-id (sdk/session-id ok-session)]
+        (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                              #"(?i):provider.*cannot be combined.*:providers"
+                              (sdk/resume-session *test-client* session-id cfg))
+            "resume-session rejects :provider + :providers")))))
+
+(deftest test-v1-0-4-bearer-token-exception-message-not-leaked
+  (testing "an exception thrown by a bearer-token callback never leaks its message to logs or the runtime (SEC)"
+    ;; The callback mints credentials; an exception it raises can easily carry
+    ;; sensitive material in its message (e.g. a token echoed in an auth error).
+    ;; The JSON-RPC error returned to the runtime must be generic and the log
+    ;; must record only the exception class, never `ex-message`. Handler invoked
+    ;; directly so `thread-call` conveys the `with-log` binding to the io thread.
+    (let [secret "tok_LEAKED_IN_EXCEPTION_MESSAGE_456"
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :model "fallback-model"
+                                       :provider {:base-url "https://oai.test"
+                                                  :bearer-token-provider
+                                                  (fn [_] (throw (ex-info secret {})))}})
+          session-id (sdk/session-id session)]
+      (log-test/with-log
+        (let [resp (<!! (session/handle-provider-token-request!
+                         *test-client* session-id "default"))]
+          (is (= -32001 (get-in resp [:error :code]))
+              "a thrown callback yields a JSON-RPC error")
+          (is (not (str/includes? (str (get-in resp [:error :message])) secret))
+              "the error message returned to the runtime must not echo the exception message")
+          (is (seq (log-test/the-log)) "the exception branch should emit a log entry")
+          (doseq [entry (log-test/the-log)]
+            (is (not (str/includes? (str (:message entry)) secret))
+                "exception message must not be logged")))))))
+
 (deftest test-v1-0-4-bearer-token-provider-wire
   (testing ":bearer-token-provider strips the fn and emits :hasBearerTokenProvider on both builders (upstream PR #1748)"
-    (let [seen (atom {})
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (when (#{"session.create" "session.resume"} method)
-                                        (swap! seen assoc method params))))
-          token-fn (fn [_args] "secret-token")
+    (let [token-fn (fn [_args] "secret-token")
           provider {:provider-type :openai
                     :wire-api :responses
                     :base-url "https://oai.test"
@@ -2307,18 +2353,28 @@
                   :provider-type :azure
                   :base-url "https://azure.test"
                   :bearer-token-provider token-fn}]
-          cfg {:on-permission-request sdk/approve-all
-               :model "fallback-model"
-               :provider provider
-               :providers named}
-          _ (sdk/create-session *test-client* cfg)
-          session-id (sdk/get-last-session-id *test-client*)
-          _ (sdk/resume-session *test-client* session-id cfg)]
+          capture (fn [cfg]
+                    (let [seen (atom {})]
+                      (mock/set-request-hook! *mock-server*
+                                              (fn [method params]
+                                                (when (#{"session.create" "session.resume"} method)
+                                                  (swap! seen assoc method params))))
+                      (sdk/create-session *test-client* cfg)
+                      (let [session-id (sdk/get-last-session-id *test-client*)]
+                        (sdk/resume-session *test-client* session-id cfg))
+                      @seen))
+          ;; singular :provider and registry :providers are mutually exclusive,
+          ;; so exercise each on its own config.
+          singular-seen (capture {:on-permission-request sdk/approve-all
+                                  :model "fallback-model"
+                                  :provider provider})
+          registry-seen (capture {:on-permission-request sdk/approve-all
+                                  :model "fallback-model"
+                                  :providers named})]
       (doseq [method ["session.create" "session.resume"]]
         (testing method
-          (let [params (get @seen method)
-                wprov (:provider params)
-                wnamed (first (:providers params))]
+          (let [wprov (:provider (get singular-seen method))
+                wnamed (first (:providers (get registry-seen method)))]
             ;; singular provider
             (is (true? (:hasBearerTokenProvider wprov))
                 "singular provider with a callback emits :hasBearerTokenProvider true")
@@ -2368,8 +2424,8 @@
                                            "providerToken.getToken"
                                            {:sessionId session-id
                                             :providerName "default"})]
-      (is (= {:provider-name "default"} @called)
-          "callback receives idiomatic ProviderTokenArgs with :provider-name")
+      (is (= {:provider-name "default" :session-id session-id} @called)
+          "callback receives idiomatic ProviderTokenArgs with :provider-name and :session-id")
       (is (= "singular-token" (get-in response [:result :token]))
           "the resolved token is returned under wire key :token")))
   (testing "providerToken.getToken routes to a named provider callback by name"
