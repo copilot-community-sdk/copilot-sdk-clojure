@@ -105,6 +105,18 @@
         (mask-present [:api-key :bearer-token])
         (cond-> (map? (:headers p)) (update :headers mask-all-values)))))
 
+(defn- mask-providers
+  "Mask every provider in a `:providers` registry value. The valid shape is a
+   sequential collection of provider maps, but redact-secrets runs on
+   already-invalid configs, so a caller may have supplied a map (name->config)
+   or any other collection — mask the secret-bearing fields in every case so
+   nothing leaks into thrown ex-data."
+  [ps]
+  (cond
+    (map? ps)  (reduce-kv (fn [acc k v] (assoc acc k (mask-provider v))) (empty ps) ps)
+    (coll? ps) (mapv mask-provider ps)
+    :else      ps))
+
 (defn- redact-secrets
   "Mask secret values in a caller-supplied options/config map so it can be embedded
    in exception data and messages without leaking credentials. Masks the top-level
@@ -123,11 +135,12 @@
       (map? (:provider m))
       (update :provider mask-provider)
 
-      ;; ::providers is a `coll-of` — it accepts any collection (vector, list,
-      ;; set), and redact-secrets runs on *already-invalid* configs in the error
-      ;; path, so masking must not depend on the collection being sequential.
-      (and (coll? (:providers m)) (not (map? (:providers m))))
-      (update :providers (fn [ps] (mapv mask-provider ps)))
+      ;; ::providers is a `coll-of` — the valid shape is sequential, but
+      ;; redact-secrets runs on *already-invalid* configs in the error path, so
+      ;; masking must cover any collection (vector, list, set) AND an erroneous
+      ;; map-valued registry. mask-providers dispatches on the shape.
+      (coll? (:providers m))
+      (update :providers mask-providers)
 
       (contains? m :mcp-servers)
       (update :mcp-servers redact-mcp-servers))))

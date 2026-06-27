@@ -6172,6 +6172,27 @@
             (is (some? e) "an unknown key should fail validation")
             (is (not (leaked? e set-key))
                 "set-valued :providers entry :api-key must still be redacted"))))
+      (testing "session-config BYOK :providers as an (invalid) map of name->config"
+        ;; The valid ::providers shape is a sequential collection, but
+        ;; redact-secrets runs on the *already-invalid* config in the error
+        ;; path. A caller mistake of passing a map (name->provider-config) must
+        ;; still have its secret-bearing values masked, not leaked verbatim.
+        (let [c (sdk/client {:auto-start? false})
+              map-key "sk-mapSECRET222"
+              map-bearer "mapBearerSECRET333"
+              map-hdr "Bearer mapHdrSECRET444"]
+          (let [e (capture #(sdk/create-session
+                             c {:providers {:openai {:base-url "https://o.test"
+                                                     :api-key map-key
+                                                     :bearer-token map-bearer
+                                                     :headers {"Authorization" map-hdr}}}}))]
+            (is (some? e) "a map-valued :providers should fail validation")
+            (is (not (leaked? e map-key))
+                "map-valued :providers entry :api-key must still be redacted")
+            (is (not (leaked? e map-bearer))
+                "map-valued :providers entry :bearer-token must still be redacted")
+            (is (not (leaked? e map-hdr))
+                "map-valued :providers entry :headers value must still be redacted"))))
       (testing "resume-config BYOK provider api-key"
         (let [c (sdk/client {:auto-start? false})
               e (capture #(sdk/resume-session c "sid" {:provider {:provider-type "azure" :api-key azure-key}}))]
