@@ -71,16 +71,25 @@
   ;; Tarball layout: package/schemas/*.json (npm convention prepends `package/`).
   ;; Extract into a dedicated `schemas` subdir so we can copy from a
   ;; clean directory (avoids accidentally picking up package.json or
-  ;; other extracted files). Returns true on success, false if the tarball
-  ;; carries no `package/schemas` directory (newer split-package layout).
+  ;; other extracted files). Returns true on success, false only when the
+  ;; tarball legitimately carries no `package/schemas` directory (newer
+  ;; split-package layout — both GNU and BSD tar report "Not found in
+  ;; archive"). Any other tar failure (corrupt download, missing `tar`,
+  ;; permissions) is fatal, so a real error can't be silently masked as a
+  ;; split-package fallback.
   (println (format "Extracting schemas from %s" tgz))
   (fs/create-dirs dest-dir)
-  (let [{:keys [exit]}
+  (let [{:keys [exit err]}
         @(p/process ["tar" "-xzf" tgz "-C" dest-dir
                      "--strip-components=1"
                      "package/schemas"]
                     {:err :string :out :string})]
-    (zero? exit)))
+    (cond
+      (zero? exit) true
+      (str/includes? (str/lower-case (or err "")) "not found in archive") false
+      :else (do
+              (println "tar (schemas) failed:" err)
+              (System/exit exit)))))
 
 (defn extract-package-json! [tgz dest-dir]
   ;; Extract package/package.json into dest-dir so we can verify its declared
