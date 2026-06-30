@@ -729,12 +729,13 @@
 (defn- mcp-auth-result->wire
   "Map an McpAuthResult returned by an :on-mcp-auth-request handler to the wire
    `result` shape for session.mcp.oauth.handlePendingRequest (upstream PR #1669).
-   A map carrying an :access-token yields {:kind \"token\" ...}; anything else
-   (nil, {:kind :cancelled}, or a malformed value) yields {:kind \"cancelled\"}.
-   Token fields stay kebab-cased — util/clj->wire camelCases the keys when the
-   enclosing RPC params are converted, and the string :kind value is preserved."
+  A map carrying a non-nil :access-token yields {:kind \"token\" ...}; anything
+  else (nil, {:access-token nil}, {:kind :cancelled}, or a malformed value)
+  yields {:kind \"cancelled\"}. Token fields stay kebab-cased — util/clj->wire
+  camelCases the keys when the enclosing RPC params are converted, and the
+  string :kind value is preserved."
   [result]
-  (if (and (map? result) (contains? result :access-token))
+  (if (and (map? result) (some? (:access-token result)))
     (cond-> {:kind "token" :access-token (:access-token result)}
       (some? (:token-type result)) (assoc :token-type (:token-type result))
       (some? (:expires-in result)) (assoc :expires-in (:expires-in result)))

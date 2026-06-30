@@ -1954,9 +1954,10 @@
             "nil :expires-in must not serialize to expiresIn: null")))))
 
 (deftest test-mcp-oauth-thrown-and-non-map-results-cancel-v3
-  (testing "v3 handler that throws or returns a non-map cancels the request"
+  (testing "v3 handler that throws, returns a non-map, or a nil access token cancels the request"
     (doseq [[label handler] [["thrown" (fn [_ _] (throw (ex-info "nope" {})))]
-                             ["non-map" (fn [_ _] "not-a-result")]]]
+                             ["non-map" (fn [_ _] "not-a-result")]
+                             ["nil-token" (fn [_ _] {:access-token nil})]]]
       (let [requests (atom [])
             rpc-latch (java.util.concurrent.CountDownLatch. 1)
             _ (mock/set-request-hook! *mock-server*
