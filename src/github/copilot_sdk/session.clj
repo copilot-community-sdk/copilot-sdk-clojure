@@ -736,8 +736,8 @@
   [result]
   (if (and (map? result) (contains? result :access-token))
     (cond-> {:kind "token" :access-token (:access-token result)}
-      (contains? result :token-type) (assoc :token-type (:token-type result))
-      (contains? result :expires-in) (assoc :expires-in (:expires-in result)))
+      (some? (:token-type result)) (assoc :token-type (:token-type result))
+      (some? (:expires-in result)) (assoc :expires-in (:expires-in result)))
     {:kind "cancelled"}))
 
 (defn handle-mcp-auth-request!
@@ -747,7 +747,7 @@
 
    The configured :on-mcp-auth-request handler is invoked with the idiomatic
    McpAuthRequest map (the event data — {:request-id :server-name :server-url
-   :reason ...}) and a context map {:session-id <id>}; it may return a channel.
+   :reason ...}) and a context map {:session-id ...}; it may return a channel.
    A result carrying :access-token answers with a token; nil, {:kind
    :cancelled}, or a thrown exception cancels the request (matching upstream's
    error-swallowing behavior, so a transient handler failure never wedges the
@@ -822,7 +822,7 @@
    The runtime issues this session-scoped request when a BYOK provider configured
    with a `:bearer-token-provider` callback needs a fresh token. The matching
    callback (looked up by `provider-name`) is invoked with the idiomatic
-   `ProviderTokenArgs` map `{:provider-name <name> :session-id <id>}` and must
+   `ProviderTokenArgs` map `{:provider-name ... :session-id ...}` and must
    return the raw token string (without the `Bearer ` prefix); a channel yielding
    the string is also accepted. The runtime performs no caching, so the callback
    owns refresh.

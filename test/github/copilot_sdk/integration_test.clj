@@ -1920,7 +1920,7 @@
           "create-session should propagate a registerInterest RPC failure"))))
 
 (deftest test-mcp-oauth-bare-token-result-v3
-  (testing "v3 handler returning a map with :access-token but no :kind still maps to token"
+  (testing "v3 handler returning a map with :access-token but no :kind still maps to token; explicit nil optional fields are omitted"
     (let [requests (atom [])
           rpc-latch (java.util.concurrent.CountDownLatch. 1)
           _ (mock/set-request-hook! *mock-server*
@@ -1930,7 +1930,9 @@
                                         (.countDown rpc-latch))))
           session (sdk/create-session *test-client*
                                       {:on-mcp-auth-request
-                                       (fn [_request _ctx] {:access-token "bare-tok"})})
+                                       (fn [_request _ctx] {:access-token "bare-tok"
+                                                            :token-type nil
+                                                            :expires-in nil})})
           session-id (sdk/session-id session)]
       (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
       (reset! requests [])
@@ -1945,7 +1947,11 @@
       (let [params (:params (first (filter #(= "session.mcp.oauth.handlePendingRequest" (:method %))
                                            @requests)))]
         (is (= "token" (get-in params [:result :kind])))
-        (is (= "bare-tok" (get-in params [:result :accessToken])))))))
+        (is (= "bare-tok" (get-in params [:result :accessToken])))
+        (is (not (contains? (:result params) :tokenType))
+            "nil :token-type must not serialize to tokenType: null")
+        (is (not (contains? (:result params) :expiresIn))
+            "nil :expires-in must not serialize to expiresIn: null")))))
 
 (deftest test-mcp-oauth-thrown-and-non-map-results-cancel-v3
   (testing "v3 handler that throws or returns a non-map cancels the request"

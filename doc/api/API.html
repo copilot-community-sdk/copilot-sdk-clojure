@@ -1073,7 +1073,7 @@
 <hr />
 <h2><a href="#mcp-oauth-handler" id="mcp-oauth-handler"></a>MCP OAuth Handler</h2>
 <p>Some MCP servers require interactive (browser-based) OAuth. Register an <code>:on-mcp-auth-request</code> handler to take over that flow; without it, the runtime falls back to a browserless cached-token path and never prompts. (upstream PR #1669)</p>
-<pre><code class="language-clojure">(require '[github.copilot-sdk.client :as copilot])
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
 
 (def session
   (copilot/create-session
