@@ -1463,7 +1463,7 @@ The handler may return the result directly or a `core.async` channel yielding it
 | `:server-url` | string | URL of the MCP server requiring auth. |
 | `:reason` | string | Why authentication is needed. |
 | `:www-authenticate-params` | map | (optional) Parsed `WWW-Authenticate` challenge params. |
-| `:resource-metadata` | map | (optional) OAuth protected-resource metadata. |
+| `:resource-metadata` | string | (optional) Raw OAuth protected-resource metadata document. |
 | `:static-client-config` | map | (optional) Pre-registered OAuth client config. |
 
 **Result mapping:** Return a map with `:access-token` (plus optional
