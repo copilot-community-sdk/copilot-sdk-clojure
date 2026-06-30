@@ -183,7 +183,7 @@ foundry service status
               {:id "claude-sonnet-4.5" :provider "anthropic"}]
      :model "openai/gpt-5.4"}))
 </code></pre>
-<p><code>:providers</code> cannot be combined with the singular <code>:provider</code>.</p>
+<p><code>:providers</code> and <code>:models</code> cannot be combined with the singular <code>:provider</code> — use the multi-provider registry or the whole-session <code>:provider</code>, not both.</p>
 <h2><a href="#limitations" id="limitations"></a>Limitations</h2>
 <h3><a href="#identity-limitations" id="identity-limitations"></a>Identity Limitations</h3>
 <p>BYOK authentication uses <strong>static credentials that you supply</strong> (API keys or bearer tokens); it does not natively perform Entra ID, OIDC, or managed identity flows. However, you can use <code>DefaultAzureCredential</code> to obtain a short-lived bearer token and pass it via <code>:bearer-token</code>. See the <a href="./azure-managed-identity.html">Azure Managed Identity workaround</a> for details.</p>

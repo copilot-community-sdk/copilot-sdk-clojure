@@ -177,7 +177,7 @@
 <tr><td> <code>:excluded-tools</code> </td><td> vector </td><td> List of excluded tool names </td></tr>
 <tr><td> <code>:provider</code> </td><td> map </td><td> Provider config for BYOK (see <a href="../auth/byok.html">BYOK docs</a>). Required key: <code>:base-url</code>. Optional: <code>:provider-type</code> (<code>:openai</code>/<code>:azure</code>/<code>:anthropic</code>), <code>:wire-api</code> (<code>:completions</code>/<code>:responses</code>), <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code>, <code>:headers</code> (map of HTTP header name→value, sent with each provider request — upstream PR #1094), <code>:model-id</code> (string — the model identifier to send to the provider; overrides session <code>:model</code>), <code>:wire-model</code> (string — model name as sent on the provider wire when it differs from <code>:model-id</code>), <code>:max-input-tokens</code> (integer — input/prompt token cap; serialized as wire <code>maxPromptTokens</code>), <code>:max-output-tokens</code> (integer — output token cap), <code>:transport</code> (<code>:http</code>/<code>:websockets</code> — provider transport; serialized as wire <code>transport</code> — upstream PR #1711), <code>:bearer-token-provider</code> (fn — dynamic bearer-token callback, see <a href="../auth/byok.md#dynamic-bearer-tokens">BYOK docs</a> — upstream PR #1748). The four override fields were added in upstream PR #966 </td></tr>
 <tr><td> <code>:providers</code> </td><td> vector </td><td> (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of <code>:provider</code> — <code>:base-url</code> (required), <code>:provider-type</code>, <code>:wire-api</code>, <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code>, <code>:headers</code>, <code>:bearer-token-provider</code> — plus a required <code>:name</code> (the registry key, no <code>/</code>). Unlike the singular <code>:provider</code>, a named provider does <strong>not</strong> accept <code>:transport</code> or the inline model-override fields (<code>:model-id</code>, <code>:wire-model</code>, <code>:max-input-tokens</code>, <code>:max-output-tokens</code>); model overrides are declared in <code>:models</code> instead. Pairs with <code>:models</code> to declare a model catalog. Cannot be combined with the singular <code>:provider</code>. (upstream PR #1718) </td></tr>
-<tr><td> <code>:models</code> </td><td> vector </td><td> (Experimental) Model catalog referencing the <code>:providers</code> registry. Each entry: <code>:id</code> (required, provider-local model id), <code>:provider</code> (required, a <code>:name</code> in <code>:providers</code>), and optional override fields (<code>:model-id</code>, <code>:wire-model</code>, <code>:capabilities</code>, <code>:max-input-tokens</code>, <code>:max-context-window-tokens</code>, <code>:max-output-tokens</code>). The full model selection id is <code>"providerName/id"</code>. (upstream PR #1718) </td></tr>
+<tr><td> <code>:models</code> </td><td> vector </td><td> (Experimental) Model catalog referencing the <code>:providers</code> registry. Each entry: <code>:id</code> (required, provider-local model id), <code>:provider</code> (required, a <code>:name</code> in <code>:providers</code>), and optional override fields (<code>:model-id</code>, <code>:wire-model</code>, <code>:capabilities</code>, <code>:max-input-tokens</code>, <code>:max-context-window-tokens</code>, <code>:max-output-tokens</code>). The full model selection id is <code>"providerName/id"</code>. Cannot be combined with the singular <code>:provider</code>. (upstream PR #1718) </td></tr>
 <tr><td> <code>:capi</code> </td><td> map </td><td> CAPI (Copilot API) session options. <code>{:enable-web-socket-responses boolean}</code> — serialized as wire <code>capi.enableWebSocketResponses</code>. (upstream PR #1711) </td></tr>
 <tr><td> <code>:exp-assignments</code> </td><td> map </td><td> (Internal) Opaque experiment flight assignments. Keys are source-defined flight ids and are forwarded verbatim (string keys bypass kebab→camel conversion). Serialized as <code>expAssignments</code>. (upstream PR #1750) </td></tr>
 <tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by server ID (see <a href="../mcp/overview.html">MCP docs</a>). Local (stdio) servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote (HTTP/SSE) servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code>. Spec aliases: <code>::mcp-stdio-server</code> = <code>::mcp-local-server</code>, <code>::mcp-http-server</code> = <code>::mcp-remote-server</code> </td></tr>
@@ -200,6 +200,7 @@
 <tr><td> <code>:agent</code> </td><td> string </td><td> Name of a custom agent to activate at session start. Must match a name in <code>:custom-agents</code>. Equivalent to calling <code>agent.select</code> after creation. </td></tr>
 <tr><td> <code>:on-event</code> </td><td> fn </td><td> Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like <code>session.start</code> are not missed. </td></tr>
 <tr><td> <code>:on-elicitation-request</code> </td><td> fn </td><td> Handler for elicitation requests from the agent. When provided, advertises <code>requestElicitation=true</code> and handles <code>elicitation.requested</code> broadcast events. Single-arg handler receives an <code>ElicitationContext</code> map with <code>:session-id</code>, <code>:message</code>, <code>:requested-schema</code>, <code>:mode</code>, <code>:elicitation-source</code>, <code>:url</code>. Returns an <code>ElicitationResult</code> map <code>{:action "accept"/"decline"/"cancel" :content {...}}</code>. See <a href="#elicitation-provider">Elicitation Provider</a> </td></tr>
+<tr><td> <code>:on-mcp-auth-request</code> </td><td> fn </td><td> Handler for interactive MCP OAuth requests. When provided, the SDK registers interest in <code>mcp.oauth_required</code> (on both create and resume) so the runtime delegates browser-based OAuth to this handler instead of silently using a cached token. 2-arg handler <code>(fn [request ctx])</code> receives an <code>McpAuthRequest</code> map and <code>{:session-id ...}</code>; may return a channel. See <a href="#mcp-oauth-handler">MCP OAuth Handler</a>. (upstream PR #1669) </td></tr>
 <tr><td> <code>:on-exit-plan-mode</code> </td><td> fn </td><td> Handler for <code>exitPlanMode.request</code> RPCs — invoked when the agent asks to leave plan mode. When provided, advertises <code>requestExitPlanMode=true</code>. Receives the request map; returns the approval result. (upstream PR #1228) </td></tr>
 <tr><td> <code>:on-auto-mode-switch</code> </td><td> fn </td><td> Handler for <code>autoModeSwitch.request</code> RPCs — invoked when the agent asks to switch autonomy mode. When provided, advertises <code>requestAutoModeSwitch=true</code>. Receives the request map; returns the approval result. (upstream PR #1228) </td></tr>
 <tr><td> <code>:enable-session-telemetry?</code> </td><td> boolean </td><td> Enable/disable the CLI’s <strong>internal</strong> session telemetry (distinct from the client <code>:telemetry</code> OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK <code>:provider</code> is set; defaulted to <code>false</code> in <code>:mode :empty</code> (caller can override). Wire-encoded as <code>enableSessionTelemetry</code>. See <a href="#observability">Observability</a>. (upstream PR #1224) </td></tr>
@@ -1070,6 +1071,45 @@
 ;; =&gt; {:action "accept", :content {:env "staging", :replicas 3}}
 </code></pre>
 <hr />
+<h2><a href="#mcp-oauth-handler" id="mcp-oauth-handler"></a>MCP OAuth Handler</h2>
+<p>Some MCP servers require interactive (browser-based) OAuth. Register an <code>:on-mcp-auth-request</code> handler to take over that flow; without it, the runtime falls back to a browserless cached-token path and never prompts. (upstream PR #1669)</p>
+<pre><code class="language-clojure">(require '[github.copilot-sdk.client :as copilot])
+
+(def session
+  (copilot/create-session
+    client
+    {:on-permission-request copilot/approve-all
+     :on-mcp-auth-request
+     (fn [request ctx]
+       ;; request is the McpAuthRequest; ctx is {:session-id "..."}
+       (let [token (acquire-oauth-token! (:server-url request))]
+         (if token
+           {:access-token token :token-type "Bearer" :expires-in 3600}
+           {:kind :cancelled})))}))
+</code></pre>
+<p>When the handler is provided, the SDK registers interest in the <code>mcp.oauth_required</code> event (before the <code>session.create</code>/<code>session.resume</code> runtime work begins) so the runtime delegates the OAuth request to your handler. The handler is invoked with two arguments:</p>
+<ol>
+<li>An <code>McpAuthRequest</code> map (the event data).</li>
+<li>A context map <code>{:session-id "..."}</code>.</li>
+</ol>
+<p>The handler may return the result directly or a <code>core.async</code> channel yielding it.</p>
+<p><strong><code>McpAuthRequest</code> fields:</strong></p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:request-id</code> </td><td> string </td><td> Opaque id correlating the request with its response. </td></tr>
+<tr><td> <code>:server-name</code> </td><td> string </td><td> Configured name of the MCP server. </td></tr>
+<tr><td> <code>:server-url</code> </td><td> string </td><td> URL of the MCP server requiring auth. </td></tr>
+<tr><td> <code>:reason</code> </td><td> string </td><td> Why authentication is needed. </td></tr>
+<tr><td> <code>:www-authenticate-params</code> </td><td> map </td><td> (optional) Parsed <code>WWW-Authenticate</code> challenge params. </td></tr>
+<tr><td> <code>:resource-metadata</code> </td><td> map </td><td> (optional) OAuth protected-resource metadata. </td></tr>
+<tr><td> <code>:static-client-config</code> </td><td> map </td><td> (optional) Pre-registered OAuth client config. </td></tr>
+</tbody>
+</table>
+<p><strong>Result mapping:</strong> Return a map with <code>:access-token</code> (plus optional <code>:token-type</code> and <code>:expires-in</code>) to answer with a token. Return <code>nil</code>, <code>{:kind :cancelled}</code>, or throw to cancel the request — a thrown handler never wedges the pending request (errors are swallowed and treated as a cancel, matching upstream).</p>
+<hr />
 <h2><a href="#event-types" id="event-types"></a>Event Types</h2>
 <p>Sessions emit various events during processing. All event types are namespaced keywords prefixed with <code>copilot/</code>.</p>
 <h3><a href="#exported-constants" id="exported-constants"></a>Exported Constants</h3>
@@ -1136,6 +1176,10 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.schedule_cancelled</code> </td><td> Scheduled prompt cancelled from the schedule manager dialog; data: <code>{:id &lt;pos-int&gt;}</code> (upstream schema 1.0.42) </td></tr>
 <tr><td> <code>:copilot/session.autopilot_objective_changed</code> </td><td> Autopilot objective lifecycle events; data: <code>{:operation #{"create" "update" "delete"}}</code> (required) with optional <code>:id</code> (integer) and <code>:status</code> (upstream schema 1.0.56). The <code>:status</code> enum is widened to include <code>"active"</code>, <code>"paused"</code>, <code>"cap_reached"</code>, <code>"completed"</code>. </td></tr>
 <tr><td> <code>:copilot/session.permissions_changed</code> </td><td> Per-session permission flags changed; data: <code>{:allow-all-permissions boolean :previous-allow-all-permissions boolean}</code> (upstream schema 1.0.56). </td></tr>
+<tr><td> <code>:copilot/session.response_limits_changed</code> </td><td> Response limits updated; <code>nil</code> data clears the limits (upstream schema 1.0.66) </td></tr>
+<tr><td> <code>:copilot/session.schedule_rearmed</code> </td><td> Self-paced schedule re-armed for its next run </td></tr>
+<tr><td> <code>:copilot/session.binary_asset</code> </td><td> Canonical bytes for a content-addressed binary asset shared by reference across events </td></tr>
+<tr><td> <code>:copilot/session.extensions.attachments_pushed</code> </td><td> Extension pushed attachments into the session </td></tr>
 <tr><td> <code>:copilot/skill.invoked</code> </td><td> Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version </td></tr>
 <tr><td> <code>:copilot/user.message</code> </td><td> User message added </td></tr>
 <tr><td> <code>:copilot/pending_messages.modified</code> </td><td> Pending message queue updated </td></tr>
@@ -1143,11 +1187,14 @@ copilot/interaction-events
 <tr><td> <code>:copilot/assistant.intent</code> </td><td> Assistant intent update </td></tr>
 <tr><td> <code>:copilot/assistant.reasoning</code> </td><td> Model reasoning (if supported) </td></tr>
 <tr><td> <code>:copilot/assistant.reasoning_delta</code> </td><td> Streaming reasoning chunk </td></tr>
+<tr><td> <code>:copilot/assistant.message_start</code> </td><td> Streaming assistant message start metadata </td></tr>
 <tr><td> <code>:copilot/assistant.message</code> </td><td> Complete assistant response </td></tr>
 <tr><td> <code>:copilot/assistant.message_delta</code> </td><td> Streaming response chunk </td></tr>
 <tr><td> <code>:copilot/assistant.streaming_delta</code> </td><td> Response size update during streaming; data: <code>{:total-response-size-bytes N}</code> </td></tr>
 <tr><td> <code>:copilot/assistant.turn_end</code> </td><td> Assistant turn completed </td></tr>
 <tr><td> <code>:copilot/assistant.usage</code> </td><td> Token usage for this turn; data may include optional <code>:content-filter-triggered</code> (boolean) and <code>:finish-reason</code> (string) (upstream schema 1.0.63) </td></tr>
+<tr><td> <code>:copilot/assistant.idle</code> </td><td> Main agent’s processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) </td></tr>
+<tr><td> <code>:copilot/model.call_failure</code> </td><td> Failed LLM API call metadata for telemetry </td></tr>
 <tr><td> <code>:copilot/abort</code> </td><td> Current message aborted </td></tr>
 <tr><td> <code>:copilot/tool.user_requested</code> </td><td> Tool execution requested by user </td></tr>
 <tr><td> <code>:copilot/tool.execution_start</code> </td><td> Tool execution started; data includes <code>:tool-call-id</code>, <code>:tool-name</code>, optional <code>:arguments</code>, <code>:parent-tool-call-id</code>, <code>:mcp-server-name</code>, <code>:mcp-tool-name</code>, <code>:model</code> </td></tr>
@@ -1174,12 +1221,16 @@ copilot/interaction-events
 <tr><td> <code>:copilot/external_tool.completed</code> </td><td> External tool call completed (v3) </td></tr>
 <tr><td> <code>:copilot/mcp.oauth_required</code> </td><td> MCP server requires OAuth authentication </td></tr>
 <tr><td> <code>:copilot/mcp.oauth_completed</code> </td><td> MCP OAuth authentication completed </td></tr>
+<tr><td> <code>:copilot/mcp.headers_refresh_required</code> </td><td> Dynamic headers refresh request for a remote MCP server (upstream schema 1.0.66) </td></tr>
+<tr><td> <code>:copilot/mcp.headers_refresh_completed</code> </td><td> MCP headers refresh request completed (upstream schema 1.0.66) </td></tr>
 <tr><td> <code>:copilot/command.queued</code> </td><td> Command queued for execution </td></tr>
 <tr><td> <code>:copilot/command.execute</code> </td><td> Command execution started </td></tr>
 <tr><td> <code>:copilot/command.completed</code> </td><td> Command execution completed </td></tr>
 <tr><td> <code>:copilot/commands.changed</code> </td><td> Available commands list changed </td></tr>
 <tr><td> <code>:copilot/exit_plan_mode.requested</code> </td><td> Exit from plan mode requested </td></tr>
 <tr><td> <code>:copilot/exit_plan_mode.completed</code> </td><td> Exit from plan mode completed </td></tr>
+<tr><td> <code>:copilot/auto_mode_switch.requested</code> </td><td> Auto mode switch request requiring user approval </td></tr>
+<tr><td> <code>:copilot/auto_mode_switch.completed</code> </td><td> Auto mode switch completed </td></tr>
 <tr><td> <code>:copilot/session.tools_updated</code> </td><td> Session tools list updated (e.g., after model change) </td></tr>
 <tr><td> <code>:copilot/session.background_tasks_changed</code> </td><td> Background tasks status changed </td></tr>
 <tr><td> <code>:copilot/session.skills_loaded</code> </td><td> Skills loaded for the session </td></tr>
@@ -1196,6 +1247,9 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.canvas.opened</code> </td><td> A canvas (auxiliary UI surface) was opened in the session; ephemeral. Data: <code>{:instance-id ... :canvas-id ... :extension-id ... :reopen bool :availability "ready"|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}</code>. The SDK upserts the entry into the <a href="#open-canvases"><code>open-canvases</code></a> snapshot before publishing. </td></tr>
 <tr><td> <code>:copilot/session.canvas.closed</code> </td><td> A canvas was closed; ephemeral. Data: <code>{:instance-id ... :canvas-id ... :extension-id ...}</code>. The SDK removes the matching entry from the <a href="#open-canvases"><code>open-canvases</code></a> snapshot before publishing. (upstream PR #1604) </td></tr>
 <tr><td> <code>:copilot/session.canvas.registry_changed</code> </td><td> The set of canvases the host can offer changed; ephemeral. </td></tr>
+<tr><td> <code>:copilot/session.canvas.unavailable</code> </td><td> An open canvas instance’s provider dropped (e.g. the extension is reloading mid-session); ephemeral. The host should keep the panel mounted and surface a reconnecting state. (upstream schema 1.0.66) </td></tr>
+<tr><td> <code>:copilot/session.canvas.recorded</code> </td><td> Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient <code>:url</code> and <code>:availability</code>. </td></tr>
+<tr><td> <code>:copilot/session.canvas.removed</code> </td><td> Durable record that a canvas instance was closed, superseding a prior <code>canvas.recorded</code> during resume replay. </td></tr>
 </tbody>
 </table>
 <h3><a href="#example-handling-events" id="example-handling-events"></a>Example: Handling Events</h3>

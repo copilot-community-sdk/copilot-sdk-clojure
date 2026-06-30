@@ -155,6 +155,22 @@
   ;; Both MCP tools and custom tools are available
   )
 </code></pre>
+<h2><a href="#interactive-oauth" id="interactive-oauth"></a>Interactive OAuth</h2>
+<p>Remote MCP servers may require OAuth. By default the runtime uses a browserless, cached-token flow. To drive an interactive (browser-based) authorization, supply an <code>:on-mcp-auth-request</code> handler on <code>create-session</code> / <code>resume-session</code>:</p>
+<pre><code class="language-clojure">(copilot/with-client-session [session
+                              {:on-permission-request copilot/approve-all
+                               :mcp-servers {"remote" {:mcp-url "https://mcp.example.com"
+                                                       :mcp-tools ["*"]}}
+                               :on-mcp-auth-request
+                               (fn [request _ctx]
+                                 (let [token (acquire-oauth-token! (:server-url request))]
+                                   (if token
+                                     {:access-token token :token-type "Bearer" :expires-in 3600}
+                                     {:kind :cancelled})))}]
+  ;; The handler fires when an MCP server emits mcp.oauth_required.
+  )
+</code></pre>
+<p>The handler receives the <code>McpAuthRequest</code> map and a <code>{:session-id ...}</code> context, and may return a <code>core.async</code> channel. Return a map with <code>:access-token</code> to answer with a token, or <code>nil</code> / <code>{:kind :cancelled}</code> / throw to cancel. See <a href="../reference/API.md#mcp-oauth-handler">MCP OAuth Handler</a> for the full request shape and result mapping. (upstream PR #1669)</p>
 <h2><a href="#troubleshooting" id="troubleshooting"></a>Troubleshooting</h2>
 <p>See the <a href="./debugging.html">MCP Debugging Guide</a> for detailed troubleshooting.</p>
 <h3><a href="#common-issues" id="common-issues"></a>Common Issues</h3>

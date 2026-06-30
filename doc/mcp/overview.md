@@ -175,6 +175,33 @@ MCP server tools work alongside custom tools defined with `define-tool`:
   )
 ```
 
+## Interactive OAuth
+
+Remote MCP servers may require OAuth. By default the runtime uses a browserless,
+cached-token flow. To drive an interactive (browser-based) authorization, supply
+an `:on-mcp-auth-request` handler on `create-session` / `resume-session`:
+
+```clojure
+(copilot/with-client-session [session
+                              {:on-permission-request copilot/approve-all
+                               :mcp-servers {"remote" {:mcp-url "https://mcp.example.com"
+                                                       :mcp-tools ["*"]}}
+                               :on-mcp-auth-request
+                               (fn [request _ctx]
+                                 (let [token (acquire-oauth-token! (:server-url request))]
+                                   (if token
+                                     {:access-token token :token-type "Bearer" :expires-in 3600}
+                                     {:kind :cancelled})))}]
+  ;; The handler fires when an MCP server emits mcp.oauth_required.
+  )
+```
+
+The handler receives the `McpAuthRequest` map and a `{:session-id ...}` context,
+and may return a `core.async` channel. Return a map with `:access-token` to
+answer with a token, or `nil` / `{:kind :cancelled}` / throw to cancel. See
+[MCP OAuth Handler](../reference/API.md#mcp-oauth-handler) for the full request
+shape and result mapping. (upstream PR #1669)
+
 ## Troubleshooting
 
 See the [MCP Debugging Guide](./debugging.md) for detailed troubleshooting.

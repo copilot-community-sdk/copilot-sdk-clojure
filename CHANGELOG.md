@@ -3,6 +3,36 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.5-preview.0 sync)
+Ported from upstream `github/copilot-sdk` v1.0.4 → v1.0.5-preview.0 (`@github/copilot`
+1.0.65 → 1.0.66-2). Schema bumped to 1.0.66-2. **Preview sync**: the CLI is a
+prerelease and these additions are `@experimental` upstream.
+- **`:on-mcp-auth-request` handler** — port of upstream
+  [PR #1669](https://github.com/github/copilot-sdk/pull/1669) (`@experimental`).
+  `create-session` and `resume-session` accept an optional `:on-mcp-auth-request`
+  handler for interactive MCP OAuth. When provided, the SDK registers interest in
+  the `mcp.oauth_required` event (before the `session.create` mode-options patch on
+  create, and before the `session.resume` RPC on resume — matching upstream
+  `client.ts`), so the runtime delegates browser-based OAuth to the handler instead
+  of silently using a cached token. The 2-arg handler `(fn [request ctx])` receives
+  an `McpAuthRequest` map (`{:request-id :server-name :server-url :reason
+  :www-authenticate-params :resource-metadata :static-client-config}`) and
+  `{:session-id ...}`, and may return a `core.async` channel. A result with
+  `:access-token` (plus optional `:token-type`, `:expires-in`) answers with a token;
+  `nil`, `{:kind :cancelled}`, or a thrown exception cancels. A failed
+  `registerInterest` rejects session creation/resume rather than being silently
+  swallowed. Added `::on-mcp-auth-request` spec.
+- **BYOK `sessionId` in `:bearer-token-provider` callback** — parity with upstream
+  [PR #1796](https://github.com/github/copilot-sdk/pull/1796) confirmed; no code
+  change required. The `providerToken.getToken` callback already receives
+  `{:provider-name ... :session-id ...}` (since the v1.0.4 sync), matching upstream's
+  rename of `getBearerToken` → `bearerTokenProvider` and its `sessionId` argument.
+- **New session-event types** (schema 1.0.66) — schema-driven event types added to
+  the generated wire specs: `assistant.idle`, `session.response_limits_changed`,
+  `mcp.headers_refresh_required`, and `mcp.headers_refresh_completed`. Public
+  `event-types` / `session-events` / `assistant-events` / `interaction-events`
+  entries added where upstream exposes a public SDK event.
+
 ### Added (v1.0.4 sync)
 Ported from upstream `github/copilot-sdk` v1.0.1 → v1.0.4 (`@github/copilot`
 1.0.63 → 1.0.65). Schema bumped to 1.0.65.
