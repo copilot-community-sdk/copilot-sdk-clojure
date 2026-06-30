@@ -550,6 +550,39 @@
                                            :result {:action "cancel"}}))))
               (catch Exception _ nil))))))))
 
+(defn- handle-v3-mcp-auth-required!
+  "Handle v3 mcp.oauth_required broadcast event (upstream PR #1669).
+   When an :on-mcp-auth-request handler is registered, invokes it and responds
+   via `session.mcp.oauth.handlePendingRequest`. When no handler is registered,
+   leaves the request PENDING — the runtime falls back to a browserless cached
+   token. The event is published to subscribers either way. Mirrors upstream
+   session.ts: a request without a :request-id is ignored."
+  [client session-id event]
+  (let [data (:data event)
+        request-id (:request-id data)
+        handler-registered? (some? (get-in @(:state client)
+                                           [:sessions session-id :mcp-auth-handler]))]
+    (when (and request-id handler-registered?)
+      (go
+        (try
+          (let [result (<! (session/handle-mcp-auth-request! client session-id data))
+                conn (:connection-io @(:state client))]
+            (when conn
+              (<! (proto/send-request conn "session.mcp.oauth.handlePendingRequest"
+                                      {:session-id session-id
+                                       :request-id request-id
+                                       :result result}))))
+          (catch Exception e
+            (log/debug "v3 mcp auth request error for " request-id ": " (ex-message e))
+            (try
+              (let [conn (:connection-io @(:state client))]
+                (when conn
+                  (<! (proto/send-request conn "session.mcp.oauth.handlePendingRequest"
+                                          {:session-id session-id
+                                           :request-id request-id
+                                           :result {:kind "cancelled"}}))))
+              (catch Exception _ nil))))))))
+
 (defn- handle-v3-broadcast-event!
   "Protocol v3: intercept broadcast events for external tools, permissions,
    commands, elicitation, and capabilities.
@@ -569,6 +602,9 @@
 
       :copilot/elicitation.requested
       (handle-v3-elicitation-requested! client session-id event)
+
+      :copilot/mcp.oauth_required
+      (handle-v3-mcp-auth-required! client session-id event)
 
       ;; capabilities.changed state update is applied before event publish
       ;; in the notification router (so observers see consistent state)
@@ -1724,10 +1760,11 @@
    `maxInputTokens`->`maxPromptTokens`, and the nested `azureApiVersion`->`apiVersion`.
    Mirrors the `ProviderConfig` shape in nodejs/src/types.ts.
 
-   `:bearer-token-provider` (upstream PR #1748) is an on-demand token callback,
-   not wire data: the fn is stripped and replaced with a boolean
-   `:hasBearerTokenProvider` flag so the runtime knows to issue
-   `providerToken.getToken` requests instead of reading a static credential."
+   `:bearer-token-provider` (upstream PR #1748; public name settled in #1796) is
+   an on-demand token callback, not wire data: the fn is stripped and replaced
+   with a boolean `:hasBearerTokenProvider` flag so the runtime knows to issue
+   `providerToken.getToken` requests instead of reading a static credential. The
+   callback receives the originating `:session-id` (upstream PR #1796)."
   [provider]
   (let [has-btp (some? (:bearer-token-provider provider))
         wire (rename-keys-present (util/clj->wire (dissoc provider :bearer-token-provider))
@@ -1863,15 +1900,16 @@
                 (= mode :empty) (assoc :installed-plugins []))]
     (when (seq patch) patch)))
 
-(defn- cleanup-failed-options-update!
-  "Best-effort cleanup after a failed session.options.update. Disconnects
-   the runtime session (`session.destroy` RPC) and removes it from the
-   in-memory registry so the SDK doesn't leak a half-configured session."
+(defn- cleanup-failed-session-setup!
+  "Best-effort cleanup after a post-create/resume setup RPC fails (e.g.
+   `session.options.update` or `session.eventLog.registerInterest`).
+   Disconnects the runtime session (`session.destroy` RPC) and removes it from
+   the in-memory registry so the SDK doesn't leak a half-configured session."
   [client session-id]
   (try (session/disconnect! client session-id)
-       (catch Throwable t (log/debug "disconnect! during options.update cleanup failed: " (.getMessage t))))
+       (catch Throwable t (log/debug "disconnect! during session-setup cleanup failed: " (.getMessage t))))
   (try (session/remove-session! client session-id)
-       (catch Throwable t (log/debug "remove-session! during options.update cleanup failed: " (.getMessage t)))))
+       (catch Throwable t (log/debug "remove-session! during session-setup cleanup failed: " (.getMessage t)))))
 
 (defn- apply-session-options-update!
   "Sync: issue session.options.update with the mode-derived patch. No-op
@@ -1886,7 +1924,7 @@
         (proto/send-request! connection-io "session.options.update" params 30000)
         (catch Throwable t
           (log/warn "session.options.update failed; cleaning up session " session-id)
-          (cleanup-failed-options-update! client session-id)
+          (cleanup-failed-session-setup! client session-id)
           (throw t))))))
 
 (defn- <apply-session-options-update!
@@ -1913,10 +1951,10 @@
             (if err
               (do
                 (log/warn "session.options.update failed; cleaning up session " session-id)
-                ;; cleanup-failed-options-update! calls blocking session.destroy
+                ;; cleanup-failed-session-setup! calls blocking session.destroy
                 ;; via proto/send-request! — offload to async/thread so it does
                 ;; not starve the core.async dispatch threadpool.
-                (<! (async/thread (cleanup-failed-options-update! client session-id)))
+                (<! (async/thread (cleanup-failed-session-setup! client session-id)))
                 (>! out err))
               (>! out :ok))
             (close! out))))
@@ -2220,6 +2258,7 @@
                            :on-elicitation-request (:on-elicitation-request config)
                            :on-exit-plan-mode (:on-exit-plan-mode config)
                            :on-auto-mode-switch (:on-auto-mode-switch config)
+                           :on-mcp-auth-request (:on-mcp-auth-request config)
                            :hooks (:hooks config)
                            :on-event (:on-event config)
                            :config config}))
@@ -2246,6 +2285,63 @@
     (when-let [factory (:create-session-fs-handler config)]
       (session/set-session-fs-handler! client session-id
                                        (session/adapt-session-fs-handler (factory session))))))
+
+(defn- register-mcp-auth-interest!
+  "Register interest in `mcp.oauth_required` events for this session (upstream
+   PR #1669). Without registered interest the runtime delegates OAuth to a
+   browserless cached-token fallback and never broadcasts the event, so the
+   `:on-mcp-auth-request` handler would silently never fire. No-op when the
+   session has no handler. Mirrors upstream `client.ts`, which awaits this RPC
+   (before `session.resume`, and after `session.create` but before the
+   mode-options patch) and lets a failure reject the session rather than
+   degrade silently. On RPC failure, cleans up the half-configured session
+   (`session.destroy` + registry removal) and rethrows. Sync variant."
+  [client session-id config]
+  (when (:on-mcp-auth-request config)
+    (let [{:keys [connection-io]} @(:state client)]
+      (try
+        (proto/send-request! connection-io "session.eventLog.registerInterest"
+                             {:session-id session-id
+                              :event-type "mcp.oauth_required"}
+                             30000)
+        (catch Throwable t
+          (log/warn "registerInterest (mcp.oauth_required) failed; cleaning up session " session-id)
+          (cleanup-failed-session-setup! client session-id)
+          (throw t))))))
+
+(defn- <register-mcp-auth-interest!
+  "Async variant of `register-mcp-auth-interest!`. Returns a channel that yields
+   `:ok` on success (including the no-op case) or a Throwable on failure (after
+   cleanup). The channel always closes after one value."
+  [client session-id config]
+  (let [out (async/chan 1)]
+    (if (:on-mcp-auth-request config)
+      (let [{:keys [connection-io]} @(:state client)
+            rpc-ch (proto/send-request connection-io "session.eventLog.registerInterest"
+                                       {:session-id session-id
+                                        :event-type "mcp.oauth_required"})]
+        (go
+          (let [response (<! rpc-ch)
+                err (cond
+                      (nil? response)
+                      (ex-info "registerInterest (mcp.oauth_required) failed: RPC channel closed"
+                               {:session-id session-id})
+                      (:error response)
+                      (ex-info (str "registerInterest (mcp.oauth_required) failed: "
+                                    (get-in response [:error :message] "RPC error"))
+                               {:session-id session-id :error (:error response)}))]
+            (if err
+              (do
+                (log/warn "registerInterest (mcp.oauth_required) failed; cleaning up session " session-id)
+                ;; cleanup calls blocking session.destroy via proto/send-request! —
+                ;; offload to async/thread so it does not starve the dispatch pool.
+                (<! (async/thread (cleanup-failed-session-setup! client session-id)))
+                (>! out err))
+              (>! out :ok))
+            (close! out))))
+      (do (async/put! out :ok)
+          (close! out)))
+    out))
 
 (defn- make-create-session-inline-callback
   "Build the inline-response callback used by the cloud-no-id session
@@ -2328,6 +2424,15 @@
                                elicitation capability. Single-arg handler receives an ElicitationContext
                                map with :session-id, :message, :requested-schema, :mode,
                                :elicitation-source, :url. Returns an ElicitationResult map.
+   - :on-mcp-auth-request - Handler for interactive MCP OAuth requests (upstream PR #1669).
+                            When provided, the SDK registers interest in `mcp.oauth_required`
+                            so the runtime delegates browser-based OAuth to this handler instead
+                            of silently using a cached token. The 2-arg handler receives an
+                            McpAuthRequest map ({:request-id :server-name :server-url :reason
+                            :www-authenticate-params :resource-metadata :static-client-config})
+                            and a context map {:session-id}; it may return a channel. Return a
+                            map with :access-token (plus optional :token-type, :expires-in) to
+                            answer with a token; return nil, {:kind :cancelled}, or throw to cancel.
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-pre-mcp-tool-call,
                             :on-post-tool-use, :on-post-tool-use-failure,
@@ -2422,7 +2527,11 @@
                 session-id (:session-id session)]
             (session/set-workspace-path! client session-id (:workspace-path result))
             (session/set-capabilities! client session-id (:capabilities result))
-            ;; Mode-specific post-create options patch (upstream PR #1428).
+            ;; Register MCP-auth interest before the mode-options patch so the
+            ;; runtime can broadcast `mcp.oauth_required` during any post-create
+            ;; work (upstream client.ts:1477). Then apply the mode-specific
+            ;; options patch (upstream PR #1428).
+            (register-mcp-auth-interest! client session-id config)
             (apply-session-options-update! client session config)
             (log/info "Session created (cloud, server-assigned id): " session-id)
             session)))
@@ -2444,10 +2553,13 @@
                               {:requested session-id :returned returned-id})))
             (session/set-workspace-path! client session-id (:workspace-path result))
             (session/set-capabilities! client session-id (:capabilities result))
-            ;; Mode-specific post-create options patch (upstream PR #1428).
-            ;; Helper handles its own cleanup on failure (disconnect! +
-            ;; remove-session!) before rethrowing; the outer catch's
-            ;; remove-session! is then a safe no-op.
+            ;; Register MCP-auth interest before the mode-options patch so the
+            ;; runtime can broadcast `mcp.oauth_required` during any post-create
+            ;; work (upstream client.ts:1477). Both helpers clean up the
+            ;; half-configured session (disconnect! + remove-session!) before
+            ;; rethrowing; the outer catch's remove-session! is then a safe
+            ;; no-op. Then apply the mode-specific options patch (upstream PR #1428).
+            (register-mcp-auth-interest! client session-id config)
             (apply-session-options-update! client session config)
             (log/info "Session created: " session-id)
             session)
@@ -2489,6 +2601,10 @@
                                Single-arg handler receives an ElicitationContext map with
                                :session-id, :message, :requested-schema, :mode,
                                :elicitation-source, :url. Returns an ElicitationResult map.
+   - :on-mcp-auth-request - Handler for interactive MCP OAuth requests (upstream PR #1669).
+                            Same shape as `create-session`. On resume, interest in
+                            `mcp.oauth_required` is registered before the resume RPC so OAuth
+                            needed while the runtime replays state reaches the handler.
    - :hooks              - Lifecycle hooks map
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
@@ -2526,6 +2642,10 @@
     (session/register-transform-callbacks! client session-id transform-callbacks)
     (try
       (install-session-fs-handler! client session-id session config)
+      ;; Register MCP-auth interest BEFORE session.resume (upstream
+      ;; client.ts:1578) so OAuth the runtime needs while processing resume
+      ;; reaches the handler instead of silently falling back to a cached token.
+      (register-mcp-auth-interest! client session-id config)
       (let [result (proto/send-request! connection-io "session.resume" params)]
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
@@ -2620,11 +2740,17 @@
                         session-id (:session-id session)]
                     (session/set-workspace-path! client session-id (:workspace-path result))
                     (session/set-capabilities! client session-id (:capabilities result))
-                    (let [r (<! (<apply-session-options-update! client session config))]
-                      (if (instance? Throwable r)
-                        r
-                        (do (log/info "Session created (async, cloud, server-assigned id): " session-id)
-                            session))))))))))
+                    ;; Register MCP-auth interest before the mode-options patch
+                    ;; (upstream client.ts:1477). Each helper returns a Throwable
+                    ;; on failure (after cleanup); short-circuit on the first.
+                    (let [reg (<! (<register-mcp-auth-interest! client session-id config))]
+                      (if (instance? Throwable reg)
+                        reg
+                        (let [r (<! (<apply-session-options-update! client session config))]
+                          (if (instance? Throwable r)
+                            r
+                            (do (log/info "Session created (async, cloud, server-assigned id): " session-id)
+                                session))))))))))))
       ;; Standard path: client supplies (or generates) the sessionId up front.
       (let [session-id (or caller-session-id (str (java.util.UUID/randomUUID)))
             params (merge trace-ctx (assoc (build-create-session-params config) :session-id session-id))
@@ -2657,11 +2783,17 @@
                     (do
                       (session/set-workspace-path! client session-id (:workspace-path result))
                       (session/set-capabilities! client session-id (:capabilities result))
-                      (let [r (<! (<apply-session-options-update! client session config))]
-                        (if (instance? Throwable r)
-                          r
-                          (do (log/info "Session created (async): " session-id)
-                              session))))))))))))))
+                      ;; Register MCP-auth interest before the mode-options patch
+                      ;; (upstream client.ts:1477); short-circuit on the first
+                      ;; helper that returns a Throwable (after its own cleanup).
+                      (let [reg (<! (<register-mcp-auth-interest! client session-id config))]
+                        (if (instance? Throwable reg)
+                          reg
+                          (let [r (<! (<apply-session-options-update! client session config))]
+                            (if (instance? Throwable r)
+                              r
+                              (do (log/info "Session created (async): " session-id)
+                                  session))))))))))))))))
 (defn <resume-session
   "Async version of resume-session. Returns a channel that delivers a CopilotSession.
 
@@ -2705,10 +2837,16 @@
             (install-session-fs-handler! client session-id session config)
             (catch Throwable t
               (session/remove-session! client session-id)
-              (throw t)))
-        rpc-ch (proto/send-request connection-io "session.resume" params)]
+              (throw t)))]
     (go
-      (let [response (<! rpc-ch)]
+      ;; Register MCP-auth interest BEFORE session.resume (upstream
+      ;; client.ts:1578) so OAuth the runtime needs while processing resume
+      ;; reaches the handler instead of silently using a cached token. The
+      ;; helper returns a Throwable (after cleanup) on failure.
+      (let [reg (<! (<register-mcp-auth-interest! client session-id config))]
+        (if (instance? Throwable reg)
+          reg
+          (let [response (<! (proto/send-request connection-io "session.resume" params))]
         (if (nil? response)
           ;; Channel closed without response — clean up pre-registered session
           (do (session/remove-session! client session-id)
@@ -2726,7 +2864,7 @@
               (let [r (<! (<apply-session-options-update! client session config))]
                 (if (instance? Throwable r)
                   r
-                  session)))))))))
+                  session)))))))))))
 (defn join-session
   "Join the current foreground session from an extension running as a child process.
 

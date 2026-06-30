@@ -1729,6 +1729,252 @@
                               @requests)))
           "handlePendingPermissionRequest RPC should be sent"))))
 
+;; ---------------------------------------------------------------------------
+;; MCP OAuth lifecycle (upstream PR #1669) — :on-mcp-auth-request handler.
+;; The runtime broadcasts `mcp.oauth_required` only to consumers that
+;; register interest; the SDK registers interest on create/resume when a
+;; handler is configured, then answers each request via
+;; `session.mcp.oauth.handlePendingRequest`.
+;; ---------------------------------------------------------------------------
+
+(deftest test-mcp-oauth-register-interest-on-create
+  (testing "create-session with :on-mcp-auth-request registers interest in mcp.oauth_required"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-mcp-auth-request
+                                       (fn [_request _ctx] {:kind :cancelled})})
+          register-rpcs (filter #(= "session.eventLog.registerInterest" (:method %))
+                                @requests)]
+      (is (sdk/session-id session))
+      (is (= 1 (count register-rpcs))
+          "exactly one registerInterest RPC should be sent on create")
+      (is (= "mcp.oauth_required" (:eventType (:params (first register-rpcs))))
+          "registerInterest should target the mcp.oauth_required event type"))))
+
+(deftest test-mcp-oauth-no-register-interest-without-handler
+  (testing "create-session without :on-mcp-auth-request does not register interest"
+    (let [requests (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          _session (sdk/create-session *test-client* {})]
+      (is (empty? (filter #(= "session.eventLog.registerInterest" (:method %)) @requests))
+          "no registerInterest RPC when no MCP auth handler is configured"))))
+
+(deftest test-mcp-oauth-token-result-v3
+  (testing "v3 mcp.oauth_required handler returning a token responds via handlePendingRequest"
+    (let [received-request (atom nil)
+          requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.mcp.oauth.handlePendingRequest" method)
+                                        (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-mcp-auth-request
+                                       (fn [request _ctx]
+                                         (reset! received-request request)
+                                         {:kind :token
+                                          :access-token "tok-abc"
+                                          :token-type "Bearer"
+                                          :expires-in 3600})})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-v3-broadcast-event! *mock-server* session-id
+                                     "mcp.oauth_required"
+                                     {:requestId "mcp-req-1"
+                                      :serverName "my-mcp"
+                                      :serverUrl "https://mcp.example/sse"
+                                      :reason "initial"})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+          "timed out waiting for handlePendingRequest RPC")
+      ;; Handler received the idiomatic (kebab-cased) request data
+      (is (= "mcp-req-1" (:request-id @received-request)))
+      (is (= "my-mcp" (:server-name @received-request)))
+      (is (= "initial" (:reason @received-request)))
+      (let [rpcs (filter #(= "session.mcp.oauth.handlePendingRequest" (:method %)) @requests)]
+        (is (= 1 (count rpcs)) "exactly one handlePendingRequest RPC should be sent")
+        (let [params (:params (first rpcs))]
+          (is (= "mcp-req-1" (:requestId params)) "RPC carries the request-id")
+          ;; Result is wire-shaped: string kind, camelCased token fields
+          (is (= "token" (get-in params [:result :kind])))
+          (is (= "tok-abc" (get-in params [:result :accessToken])))
+          (is (= "Bearer" (get-in params [:result :tokenType])))
+          (is (= 3600 (get-in params [:result :expiresIn]))))))))
+
+(deftest test-mcp-oauth-cancel-on-nil-v3
+  (testing "v3 mcp.oauth_required handler returning nil cancels the request"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.mcp.oauth.handlePendingRequest" method)
+                                        (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-mcp-auth-request (fn [_request _ctx] nil)})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-v3-broadcast-event! *mock-server* session-id
+                                     "mcp.oauth_required"
+                                     {:requestId "mcp-req-2"
+                                      :serverName "my-mcp"
+                                      :serverUrl "https://mcp.example/sse"
+                                      :reason "reauth"})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+          "timed out waiting for handlePendingRequest RPC")
+      (let [rpcs (filter #(= "session.mcp.oauth.handlePendingRequest" (:method %)) @requests)]
+        (is (= 1 (count rpcs)))
+        (is (= "cancelled" (get-in (:params (first rpcs)) [:result :kind]))
+            "nil handler result should cancel the pending request")))))
+
+(deftest test-mcp-oauth-no-handler-leaves-pending-v3
+  (testing "v3 mcp.oauth_required without a handler sends no handlePendingRequest RPC"
+    (let [requests (atom [])
+          event-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})))
+          session (sdk/create-session *test-client*
+                                      {:on-event
+                                       (fn [event]
+                                         (when (= :copilot/mcp.oauth_required (:type event))
+                                           (.countDown event-latch)))})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-v3-broadcast-event! *mock-server* session-id
+                                     "mcp.oauth_required"
+                                     {:requestId "mcp-req-3"
+                                      :serverName "my-mcp"
+                                      :serverUrl "https://mcp.example/sse"
+                                      :reason "initial"})
+      (is (.await event-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+          "timed out waiting for mcp.oauth_required event delivery")
+      (is (empty? (filter #(= "session.mcp.oauth.handlePendingRequest" (:method %)) @requests))
+          "no handlePendingRequest RPC when no MCP auth handler is registered"))))
+
+(deftest test-mcp-oauth-register-interest-before-resume
+  (testing "resume-session registers interest BEFORE session.resume (upstream client.ts:1578)"
+    ;; Upstream registers `mcp.oauth_required` interest *before* the
+    ;; `session.resume` RPC so OAuth the runtime needs while processing resume
+    ;; (e.g. MCP servers reconnecting) reaches the handler instead of silently
+    ;; falling back to a cached token.
+    (let [handler (fn [_request _ctx] {:kind :cancelled})
+          _ (sdk/create-session *test-client* {:on-mcp-auth-request handler})
+          session-id (sdk/get-last-session-id *test-client*)
+          order (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method _params]
+                                      (when (#{"session.eventLog.registerInterest"
+                                               "session.resume"} method)
+                                        (swap! order conj method))))
+          _ (sdk/resume-session *test-client* session-id {:on-mcp-auth-request handler})
+          methods @order
+          reg-idx (.indexOf methods "session.eventLog.registerInterest")
+          resume-idx (.indexOf methods "session.resume")]
+      (is (nat-int? reg-idx) "registerInterest RPC should be sent on resume")
+      (is (nat-int? resume-idx) "session.resume RPC should be sent")
+      (is (< reg-idx resume-idx)
+          "registerInterest must precede session.resume"))))
+
+(deftest test-mcp-oauth-register-interest-before-resume-async
+  (testing "<resume-session registers interest BEFORE session.resume"
+    (let [handler (fn [_request _ctx] {:kind :cancelled})
+          _ (sdk/create-session *test-client* {:on-mcp-auth-request handler})
+          session-id (sdk/get-last-session-id *test-client*)
+          order (atom [])
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method _params]
+                                      (when (#{"session.eventLog.registerInterest"
+                                               "session.resume"} method)
+                                        (swap! order conj method))))
+          _ (async/<!! (sdk/<resume-session *test-client* session-id
+                                            {:on-mcp-auth-request handler}))
+          methods @order
+          reg-idx (.indexOf methods "session.eventLog.registerInterest")
+          resume-idx (.indexOf methods "session.resume")]
+      (is (nat-int? reg-idx) "registerInterest RPC should be sent on async resume")
+      (is (nat-int? resume-idx) "session.resume RPC should be sent")
+      (is (< reg-idx resume-idx)
+          "registerInterest must precede session.resume on the async path"))))
+
+(deftest test-mcp-oauth-register-interest-failure-rejects-create
+  (testing "a failed registerInterest RPC fails create-session (upstream awaits + rejects)"
+    ;; Upstream `await`s registerInterest and lets a transport failure reject
+    ;; session creation rather than silently degrading to cached-token fallback.
+    (let [_ (mock/set-request-hook! *mock-server*
+                                    (fn [method _params]
+                                      (when (= "session.eventLog.registerInterest" method)
+                                        (throw (ex-info "registerInterest boom"
+                                                        {:code -32603})))))]
+      (is (thrown? Exception
+                   (sdk/create-session *test-client*
+                                       {:on-mcp-auth-request (fn [_ _] {:kind :cancelled})}))
+          "create-session should propagate a registerInterest RPC failure"))))
+
+(deftest test-mcp-oauth-bare-token-result-v3
+  (testing "v3 handler returning a map with :access-token but no :kind still maps to token"
+    (let [requests (atom [])
+          rpc-latch (java.util.concurrent.CountDownLatch. 1)
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (swap! requests conj {:method method :params params})
+                                      (when (= "session.mcp.oauth.handlePendingRequest" method)
+                                        (.countDown rpc-latch))))
+          session (sdk/create-session *test-client*
+                                      {:on-mcp-auth-request
+                                       (fn [_request _ctx] {:access-token "bare-tok"})})
+          session-id (sdk/session-id session)]
+      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+      (reset! requests [])
+      (mock/send-v3-broadcast-event! *mock-server* session-id
+                                     "mcp.oauth_required"
+                                     {:requestId "mcp-req-bare"
+                                      :serverName "my-mcp"
+                                      :serverUrl "https://mcp.example/sse"
+                                      :reason "initial"})
+      (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+          "timed out waiting for handlePendingRequest RPC")
+      (let [params (:params (first (filter #(= "session.mcp.oauth.handlePendingRequest" (:method %))
+                                           @requests)))]
+        (is (= "token" (get-in params [:result :kind])))
+        (is (= "bare-tok" (get-in params [:result :accessToken])))))))
+
+(deftest test-mcp-oauth-thrown-and-non-map-results-cancel-v3
+  (testing "v3 handler that throws or returns a non-map cancels the request"
+    (doseq [[label handler] [["thrown" (fn [_ _] (throw (ex-info "nope" {})))]
+                             ["non-map" (fn [_ _] "not-a-result")]]]
+      (let [requests (atom [])
+            rpc-latch (java.util.concurrent.CountDownLatch. 1)
+            _ (mock/set-request-hook! *mock-server*
+                                      (fn [method params]
+                                        (swap! requests conj {:method method :params params})
+                                        (when (= "session.mcp.oauth.handlePendingRequest" method)
+                                          (.countDown rpc-latch))))
+            session (sdk/create-session *test-client* {:on-mcp-auth-request handler})
+            session-id (sdk/session-id session)]
+        (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+        (reset! requests [])
+        (mock/send-v3-broadcast-event! *mock-server* session-id
+                                       "mcp.oauth_required"
+                                       {:requestId (str "mcp-req-" label)
+                                        :serverName "my-mcp"
+                                        :serverUrl "https://mcp.example/sse"
+                                        :reason "initial"})
+        (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS)
+            (str label ": timed out waiting for handlePendingRequest RPC"))
+        (let [params (:params (first (filter #(= "session.mcp.oauth.handlePendingRequest" (:method %))
+                                             @requests)))]
+          (is (= "cancelled" (get-in params [:result :kind]))
+              (str label " handler result should cancel the pending request")))))))
+
 (deftest test-permission-result-kinds-spec
   (testing "upstream v0.3.0 permission decision kinds are valid"
     (doseq [kind [:approve-once
