@@ -151,7 +151,15 @@
     :copilot/session.canvas.recorded
     :copilot/session.canvas.removed
     :copilot/session.canvas.unavailable
-    :copilot/session.schedule_rearmed})
+    :copilot/session.schedule_rearmed
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2). assistant.idle marks the
+    ;; assistant becoming idle within a turn; response_limits_changed reports
+    ;; updated response-limit budgets; the mcp.headers_refresh_* pair brackets a
+    ;; dynamic-header refresh on an MCP server connection.
+    :copilot/assistant.idle
+    :copilot/session.response_limits_changed
+    :copilot/mcp.headers_refresh_required
+    :copilot/mcp.headers_refresh_completed})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -192,7 +200,9 @@
     :copilot/session.autopilot_objective_changed
     :copilot/session.permissions_changed
     ;; v1.0.4 sync (pinned schema 1.0.65): recurring schedule re-arm event.
-    :copilot/session.schedule_rearmed})
+    :copilot/session.schedule_rearmed
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): updated response-limit budgets.
+    :copilot/session.response_limits_changed})
 
 (def assistant-events
   "Assistant response events."
@@ -205,7 +215,9 @@
     :copilot/assistant.message_delta
     :copilot/assistant.streaming_delta
     :copilot/assistant.turn_end
-    :copilot/assistant.usage})
+    :copilot/assistant.usage
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): assistant idle within a turn.
+    :copilot/assistant.idle})
 
 (def tool-events
   "Tool execution events."
@@ -222,6 +234,8 @@
     :copilot/elicitation.requested :copilot/elicitation.completed
     :copilot/external_tool.requested :copilot/external_tool.completed
     :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): MCP dynamic-header refresh lifecycle.
+    :copilot/mcp.headers_refresh_required :copilot/mcp.headers_refresh_completed
     :copilot/command.queued :copilot/command.execute :copilot/command.completed
     :copilot/commands.changed
     :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed

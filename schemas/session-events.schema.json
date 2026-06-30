@@ -85,6 +85,74 @@
         "user_abort": "An MCP server delivered a user.abort notification."
       }
     },
+    "AssistantIdleData": {
+      "type": "object",
+      "properties": {
+        "aborted": {
+          "type": "boolean",
+          "description": "True when the preceding agentic loop was cancelled via abort signal"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Payload emitted whenever the main agent's processing loop goes idle, including while related background work (running agents or in-flight attached shell commands) is still pending and the session-level idle event is therefore deferred",
+      "title": "AssistantIdleData"
+    },
+    "AssistantIdleEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "assistant.idle",
+          "description": "Type discriminator. Always \"assistant.idle\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AssistantIdleData",
+          "description": "Payload emitted whenever the main agent's processing loop goes idle, including while related background work (running agents or in-flight attached shell commands) is still pending and the session-level idle event is therefore deferred"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"assistant.idle\". Payload emitted whenever the main agent's processing loop goes idle, including while related background work (running agents or in-flight attached shell commands) is still pending and the session-level idle event is therefore deferred",
+      "title": "AssistantIdleEvent"
+    },
     "AssistantIntentData": {
       "type": "object",
       "properties": {
@@ -1256,6 +1324,42 @@
           "description": "GitHub issue, pull request, or discussion reference"
         },
         {
+          "$ref": "#/definitions/AttachmentGitHubCommit",
+          "description": "Pointer to a GitHub commit."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubRelease",
+          "description": "Pointer to a GitHub release."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubActionsJob",
+          "description": "Pointer to a GitHub Actions job."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubRepository",
+          "description": "Pointer to a GitHub repository."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubFileDiff",
+          "description": "Pointer to a single-file diff. At least one of `head` and `base` must be present."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubTreeComparison",
+          "description": "Pointer to a comparison between two git revisions."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubUrl",
+          "description": "Generic GitHub URL reference."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubFile",
+          "description": "Pointer to a file in a GitHub repository at a specific ref."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubSnippet",
+          "description": "Pointer to a line range inside a file in a GitHub repository."
+        },
+        {
           "$ref": "#/definitions/AttachmentBlob",
           "description": "Blob attachment with inline base64-encoded data"
         },
@@ -1264,7 +1368,7 @@
           "description": "Structured context contributed by an extension. Composer pills displayed in the host are forwarded back through session.send.attachments, then rendered into the model prompt as an <extension_context> XML block."
         }
       ],
-      "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload",
+      "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, GitHub-anchored pointer, or extension-supplied context payload",
       "title": "Attachment"
     },
     "AttachmentBlob": {
@@ -1458,6 +1562,178 @@
       "description": "Optional line range to scope the attachment to a specific section of the file",
       "title": "AttachmentFileLineRange"
     },
+    "AttachmentGitHubActionsJob": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_actions_job",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the workflow run belongs to"
+        },
+        "jobId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Job id within the workflow run"
+        },
+        "jobName": {
+          "type": "string",
+          "description": "Display name of the job"
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Display name of the workflow the job ran in"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the job on GitHub"
+        },
+        "conclusion": {
+          "type": "string",
+          "description": "Terminal conclusion of the job when finished (e.g., success, failure, cancelled). Absent for in-progress jobs."
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "jobId",
+        "jobName",
+        "workflowName",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub Actions job.",
+      "title": "AttachmentGitHubActionsJob"
+    },
+    "AttachmentGitHubCommit": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_commit",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the commit belongs to"
+        },
+        "oid": {
+          "type": "string",
+          "description": "Full commit SHA"
+        },
+        "message": {
+          "type": "string",
+          "description": "First line of the commit message"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the commit on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "oid",
+        "message",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub commit.",
+      "title": "AttachmentGitHubCommit"
+    },
+    "AttachmentGitHubFile": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_file",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref the file is read at (branch, tag, or commit SHA)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the file on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "ref",
+        "path",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a file in a GitHub repository at a specific ref.",
+      "title": "AttachmentGitHubFile"
+    },
+    "AttachmentGitHubFileDiff": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_file_diff",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the diff on GitHub (e.g., a commit, compare, or PR-file URL)"
+        },
+        "head": {
+          "$ref": "#/definitions/AttachmentGitHubFileDiffSide",
+          "description": "File location on the head side of the diff. Absent for deletions."
+        },
+        "base": {
+          "$ref": "#/definitions/AttachmentGitHubFileDiffSide",
+          "description": "File location on the base side of the diff. Absent for additions."
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a single-file diff. At least one of `head` and `base` must be present.",
+      "title": "AttachmentGitHubFileDiff"
+    },
+    "AttachmentGitHubFileDiffSide": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref (branch, tag, or commit SHA) the file is read at"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        }
+      },
+      "required": [
+        "repo",
+        "ref",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "One side of a file diff (head or base)",
+      "title": "AttachmentGitHubFileDiffSide"
+    },
     "AttachmentGitHubReference": {
       "type": "object",
       "properties": {
@@ -1514,6 +1790,189 @@
         "pr": "GitHub pull request reference.",
         "discussion": "GitHub discussion reference."
       }
+    },
+    "AttachmentGitHubRelease": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_release",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the release belongs to"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "Git tag the release is anchored to"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable release name"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the release on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "tagName",
+        "name",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub release.",
+      "title": "AttachmentGitHubRelease"
+    },
+    "AttachmentGitHubRepository": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_repository",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository pointer"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the repository on GitHub"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short description of the repository"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref this attachment is anchored at (branch, tag, or commit). When absent the default branch is implied."
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub repository.",
+      "title": "AttachmentGitHubRepository"
+    },
+    "AttachmentGitHubSnippet": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_snippet",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref the file is read at (branch, tag, or commit SHA)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the snippet on GitHub (with line anchor)"
+        },
+        "lineRange": {
+          "$ref": "#/definitions/AttachmentFileLineRange",
+          "description": "Line range the snippet covers"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "ref",
+        "path",
+        "url",
+        "lineRange"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a line range inside a file in a GitHub repository.",
+      "title": "AttachmentGitHubSnippet"
+    },
+    "AttachmentGitHubTreeComparison": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_tree_comparison",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the comparison on GitHub"
+        },
+        "base": {
+          "$ref": "#/definitions/AttachmentGitHubTreeComparisonSide",
+          "description": "Base side of the comparison"
+        },
+        "head": {
+          "$ref": "#/definitions/AttachmentGitHubTreeComparisonSide",
+          "description": "Head side of the comparison"
+        }
+      },
+      "required": [
+        "type",
+        "url",
+        "base",
+        "head"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a comparison between two git revisions.",
+      "title": "AttachmentGitHubTreeComparison"
+    },
+    "AttachmentGitHubTreeComparisonSide": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the revision belongs to"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Git revision (branch, tag, or commit SHA)"
+        }
+      },
+      "required": [
+        "repo",
+        "revision"
+      ],
+      "additionalProperties": false,
+      "description": "One side of a tree comparison (head or base)",
+      "title": "AttachmentGitHubTreeComparisonSide"
+    },
+    "AttachmentGitHubUrl": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_url",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the GitHub resource"
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Generic GitHub URL reference.",
+      "title": "AttachmentGitHubUrl"
     },
     "AttachmentSelection": {
       "type": "object",
@@ -4660,7 +5119,7 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/Attachment",
-            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload"
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, GitHub-anchored pointer, or extension-supplied context payload"
           },
           "description": "Attachments contributed by an extension; the host should surface these as composer pills and forward them via the next session.send call."
         }
@@ -5035,6 +5494,31 @@
       "additionalProperties": false,
       "description": "Session event \"external_tool.requested\". External tool invocation request for client-side tool execution",
       "title": "ExternalToolRequestedEvent"
+    },
+    "GitHubRepoRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Numeric GitHub repository id"
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name (without owner)"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Repository owner login (user or organization)"
+        }
+      },
+      "required": [
+        "name",
+        "owner"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub repository.",
+      "title": "GitHubRepoRef"
     },
     "HandoffData": {
       "type": "object",
@@ -5733,6 +6217,198 @@
       "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type.",
       "title": "McpAppToolCallCompleteToolMetaUI"
     },
+    "McpHeadersRefreshCompletedData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID of the resolved headers refresh request"
+        },
+        "outcome": {
+          "$ref": "#/definitions/McpHeadersRefreshCompletedOutcome",
+          "description": "How the pending MCP headers refresh request resolved."
+        }
+      },
+      "required": [
+        "requestId",
+        "outcome"
+      ],
+      "additionalProperties": false,
+      "description": "MCP headers refresh request completion notification",
+      "title": "McpHeadersRefreshCompletedData"
+    },
+    "McpHeadersRefreshCompletedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp.headers_refresh_completed",
+          "description": "Type discriminator. Always \"mcp.headers_refresh_completed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpHeadersRefreshCompletedData",
+          "description": "MCP headers refresh request completion notification"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp.headers_refresh_completed\". MCP headers refresh request completion notification",
+      "title": "McpHeadersRefreshCompletedEvent"
+    },
+    "McpHeadersRefreshCompletedOutcome": {
+      "type": "string",
+      "enum": [
+        "headers",
+        "none",
+        "timeout"
+      ],
+      "description": "How the pending MCP headers refresh request resolved.",
+      "title": "McpHeadersRefreshCompletedOutcome",
+      "x-enumDescriptions": {
+        "headers": "The host supplied dynamic headers.",
+        "none": "The host responded with no dynamic headers.",
+        "timeout": "No response arrived within the bounded window."
+      }
+    },
+    "McpHeadersRefreshRequiredData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Unique identifier for this headers refresh request; used to respond via session.mcp.headers.handlePendingHeadersRefreshRequest()"
+        },
+        "serverName": {
+          "type": "string",
+          "description": "Display name of the remote MCP server requesting headers"
+        },
+        "serverUrl": {
+          "type": "string",
+          "description": "URL of the remote MCP server requesting headers"
+        },
+        "reason": {
+          "$ref": "#/definitions/McpHeadersRefreshRequiredReason",
+          "description": "Why dynamic headers are being requested."
+        }
+      },
+      "required": [
+        "requestId",
+        "serverName",
+        "serverUrl",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "description": "Dynamic headers refresh request for a remote MCP server",
+      "title": "McpHeadersRefreshRequiredData"
+    },
+    "McpHeadersRefreshRequiredEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp.headers_refresh_required",
+          "description": "Type discriminator. Always \"mcp.headers_refresh_required\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpHeadersRefreshRequiredData",
+          "description": "Dynamic headers refresh request for a remote MCP server"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp.headers_refresh_required\". Dynamic headers refresh request for a remote MCP server",
+      "title": "McpHeadersRefreshRequiredEvent"
+    },
+    "McpHeadersRefreshRequiredReason": {
+      "type": "string",
+      "enum": [
+        "startup",
+        "ttl-expired",
+        "auth-failed"
+      ],
+      "description": "Why dynamic headers are being requested.",
+      "title": "McpHeadersRefreshRequiredReason",
+      "x-enumDescriptions": {
+        "startup": "The transport is making its first dynamic header request for this server.",
+        "ttl-expired": "The previously cached dynamic headers expired.",
+        "auth-failed": "The server returned 401 and stale dynamic headers were invalidated."
+      }
+    },
     "McpOauthCompletedData": {
       "type": "object",
       "properties": {
@@ -5822,6 +6498,23 @@
         "cancelled": "The request completed without an OAuth provider."
       }
     },
+    "McpOauthRequestReason": {
+      "type": "string",
+      "enum": [
+        "initial",
+        "refresh",
+        "reauth",
+        "upscope"
+      ],
+      "description": "Reason the runtime is requesting host-provided MCP OAuth credentials",
+      "title": "McpOauthRequestReason",
+      "x-enumDescriptions": {
+        "initial": "Initial credentials are required before connecting to the MCP server.",
+        "refresh": "The current host-provided credential was rejected and a replacement is requested.",
+        "reauth": "The server requires a new host authorization flow before continuing.",
+        "upscope": "The server requires a credential with additional scope or audience."
+      }
+    },
     "McpOauthRequiredData": {
       "type": "object",
       "properties": {
@@ -5848,12 +6541,17 @@
         "resourceMetadata": {
           "type": "string",
           "description": "Raw OAuth protected-resource metadata document fetched for the MCP server, if available"
+        },
+        "reason": {
+          "$ref": "#/definitions/McpOauthRequestReason",
+          "description": "Why the runtime is requesting host-provided OAuth credentials."
         }
       },
       "required": [
         "requestId",
         "serverName",
-        "serverUrl"
+        "serverUrl",
+        "reason"
       ],
       "additionalProperties": false,
       "description": "OAuth authentication request for an MCP server",
@@ -5922,6 +6620,10 @@
           "type": "string",
           "description": "OAuth client ID for the server"
         },
+        "clientSecret": {
+          "type": "string",
+          "description": "Optional OAuth client secret for confidential static clients, when the runtime can resolve one"
+        },
         "publicClient": {
           "type": "boolean",
           "description": "Whether this is a public OAuth client"
@@ -5944,7 +6646,7 @@
       "properties": {
         "resourceMetadataUrl": {
           "type": "string",
-          "description": "Protected resource metadata URL from the WWW-Authenticate resource_metadata parameter"
+          "description": "Protected resource metadata URL from the WWW-Authenticate resource_metadata parameter, if present"
         },
         "scope": {
           "type": "string",
@@ -5955,9 +6657,6 @@
           "description": "OAuth error from the WWW-Authenticate error parameter, if present"
         }
       },
-      "required": [
-        "resourceMetadataUrl"
-      ],
       "additionalProperties": false,
       "description": "OAuth WWW-Authenticate parameters parsed from an MCP auth challenge",
       "title": "McpOauthWWWAuthenticateParams"
@@ -8426,6 +9125,96 @@
       "description": "Session event \"session.remote_steerable_changed\". Notifies that the session's remote steering capability has changed",
       "title": "RemoteSteerableChangedEvent"
     },
+    "ResponseLimitsChangedData": {
+      "type": "object",
+      "properties": {
+        "responseLimits": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ResponseLimitsConfig",
+              "description": "Optional response limits."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current response limits for the session, or null when no limits are active"
+        }
+      },
+      "required": [
+        "responseLimits"
+      ],
+      "additionalProperties": false,
+      "description": "Response limits update details. Null clears the limits.",
+      "title": "ResponseLimitsChangedData"
+    },
+    "ResponseLimitsChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.response_limits_changed",
+          "description": "Type discriminator. Always \"session.response_limits_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ResponseLimitsChangedData",
+          "description": "Response limits update details. Null clears the limits."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.response_limits_changed\". Response limits update details. Null clears the limits.",
+      "title": "ResponseLimitsChangedEvent"
+    },
+    "ResponseLimitsConfig": {
+      "type": "object",
+      "properties": {
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum AI Credits allowed while responding to one top-level user message."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional response limits.",
+      "title": "ResponseLimitsConfig"
+    },
     "ResumeData": {
       "type": "object",
       "properties": {
@@ -8466,6 +9255,18 @@
             }
           ],
           "description": "Context tier currently selected at resume time; null when no tier is active"
+        },
+        "responseLimits": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ResponseLimitsConfig",
+              "description": "Optional response limits."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Response limits currently configured at resume time; null when no limits are active"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -9012,6 +9813,10 @@
           "description": "Session event \"session.mode_changed\". Agent mode change details including previous and new modes"
         },
         {
+          "$ref": "#/definitions/ResponseLimitsChangedEvent",
+          "description": "Session event \"session.response_limits_changed\". Response limits update details. Null clears the limits."
+        },
+        {
           "$ref": "#/definitions/PermissionsChangedEvent",
           "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all boolean transition."
         },
@@ -9106,6 +9911,10 @@
         {
           "$ref": "#/definitions/AssistantTurnEndEvent",
           "description": "Session event \"assistant.turn_end\". Turn completion metadata including the turn identifier"
+        },
+        {
+          "$ref": "#/definitions/AssistantIdleEvent",
+          "description": "Session event \"assistant.idle\". Payload emitted whenever the main agent's processing loop goes idle, including while related background work (running agents or in-flight attached shell commands) is still pending and the session-level idle event is therefore deferred"
         },
         {
           "$ref": "#/definitions/AssistantUsageEvent",
@@ -9226,6 +10035,14 @@
         {
           "$ref": "#/definitions/McpOauthCompletedEvent",
           "description": "Session event \"mcp.oauth_completed\". MCP OAuth request completion notification"
+        },
+        {
+          "$ref": "#/definitions/McpHeadersRefreshRequiredEvent",
+          "description": "Session event \"mcp.headers_refresh_required\". Dynamic headers refresh request for a remote MCP server"
+        },
+        {
+          "$ref": "#/definitions/McpHeadersRefreshCompletedEvent",
+          "description": "Session event \"mcp.headers_refresh_completed\". MCP headers refresh request completion notification"
         },
         {
           "$ref": "#/definitions/CustomNotificationEvent",
@@ -10051,6 +10868,10 @@
             }
           ],
           "description": "Context tier selected at session creation time for models with tiered context pricing; null when no tier is selected (e.g., non-tiered model)"
+        },
+        "responseLimits": {
+          "$ref": "#/definitions/ResponseLimitsConfig",
+          "description": "Response limits configured at session creation time, if any"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -11207,7 +12028,11 @@
         },
         {
           "$ref": "#/definitions/ToolExecutionCompleteContentTerminal",
-          "description": "Terminal/shell output content block with optional exit code and working directory"
+          "description": "Deprecated for shell command exit metadata. Use ToolExecutionCompleteContentShellExit instead."
+        },
+        {
+          "$ref": "#/definitions/ToolExecutionCompleteContentShellExit",
+          "description": "Shell command exit metadata with optional output preview"
         },
         {
           "$ref": "#/definitions/ToolExecutionCompleteContentImage",
@@ -11410,6 +12235,44 @@
         "dark": "Icon intended for dark themes."
       }
     },
+    "ToolExecutionCompleteContentShellExit": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "shell_exit",
+          "description": "Content block type discriminator"
+        },
+        "shellId": {
+          "type": "string",
+          "description": "Shell id, as assigned by Copilot runtime"
+        },
+        "exitCode": {
+          "type": "integer",
+          "description": "Exit code from the completed shell command"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory where the shell command was executed"
+        },
+        "outputPreview": {
+          "type": "string",
+          "description": "Output associated with this shell command, if available. May be partial, truncated, or a preview; not guaranteed to be full output."
+        },
+        "outputTruncated": {
+          "type": "boolean",
+          "description": "Whether outputPreview is known to be incomplete or truncated"
+        }
+      },
+      "required": [
+        "type",
+        "shellId",
+        "exitCode"
+      ],
+      "additionalProperties": false,
+      "description": "Shell command exit metadata with optional output preview",
+      "title": "ToolExecutionCompleteContentShellExit"
+    },
     "ToolExecutionCompleteContentTerminal": {
       "type": "object",
       "properties": {
@@ -11436,8 +12299,9 @@
         "text"
       ],
       "additionalProperties": false,
-      "description": "Terminal/shell output content block with optional exit code and working directory",
-      "title": "ToolExecutionCompleteContentTerminal"
+      "description": "Deprecated for shell command exit metadata. Use ToolExecutionCompleteContentShellExit instead.",
+      "title": "ToolExecutionCompleteContentTerminal",
+      "deprecated": true
     },
     "ToolExecutionCompleteContentText": {
       "type": "object",
@@ -12030,6 +12894,10 @@
           "description": "Arguments passed to the tool",
           "x-opaque-json": true
         },
+        "shellToolInfo": {
+          "$ref": "#/definitions/ToolExecutionStartShellToolInfo",
+          "description": "Shell-tool path hints derived from the command at start time for shell tools (bash/powershell/local_shell). Produced by the same shell-aware extractor as PermissionRequestShell.possiblePaths, so it is present even when the command is auto-approved and no permission request fires. Absent for non-shell tools."
+        },
         "model": {
           "type": "string",
           "description": "Model identifier that generated this tool call"
@@ -12121,6 +12989,29 @@
       "additionalProperties": false,
       "description": "Session event \"tool.execution_start\". Tool execution startup details including MCP server information when applicable",
       "title": "ToolExecutionStartEvent"
+    },
+    "ToolExecutionStartShellToolInfo": {
+      "type": "object",
+      "properties": {
+        "possiblePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "File paths the command may read or write, derived from the command at start time. Produced by the same shell-aware extractor as PermissionRequestShell.possiblePaths, so it is present even when the command is auto-approved and no permission request fires."
+        },
+        "hasWriteFileRedirection": {
+          "type": "boolean",
+          "description": "Whether the command includes a file write redirection (e.g., > or >>)."
+        }
+      },
+      "required": [
+        "possiblePaths",
+        "hasWriteFileRedirection"
+      ],
+      "additionalProperties": false,
+      "description": "Shell-aware path hints for a shell tool's command, captured at start time so consumers can snapshot a file's pre-image before the tool runs.",
+      "title": "ToolExecutionStartShellToolInfo"
     },
     "ToolExecutionStartToolDescription": {
       "type": "object",
@@ -12754,7 +13645,7 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/Attachment",
-            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload"
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, GitHub-anchored pointer, or extension-supplied context payload"
           },
           "description": "Files, selections, or GitHub references attached to the message"
         },
@@ -12775,6 +13666,10 @@
         "source": {
           "type": "string",
           "description": "Origin of this message, used for timeline filtering (e.g., \"skill-pdf\" for skill-injected messages that should be hidden from the user)"
+        },
+        "delivery": {
+          "$ref": "#/definitions/UserMessageDelivery",
+          "description": "How this message was delivered to the agentic loop relative to loop state (idle-start vs. steering/queued while busy). The timing axis; combine with `source` (origin) for the full picture. Used for telemetry attribution."
         },
         "agentMode": {
           "$ref": "#/definitions/UserMessageAgentMode",
@@ -12799,6 +13694,21 @@
       "additionalProperties": false,
       "description": "Schema for the `UserMessageData` type.",
       "title": "UserMessageData"
+    },
+    "UserMessageDelivery": {
+      "type": "string",
+      "enum": [
+        "idle",
+        "steering",
+        "queued"
+      ],
+      "description": "How this user message was delivered to the agentic loop, relative to whether the loop was already running. This is the timing axis only; the message's origin (human vs. system/command/schedule/skill/etc.) is carried separately by `source`. A system-injected message has a delivery too — e.g. a background-task notification waking an idle agent is `idle`, the same mechanism as a human starting a fresh turn.",
+      "title": "UserMessageDelivery",
+      "x-enumDescriptions": {
+        "idle": "Delivered while the loop was idle; starts its own run immediately (a human's fresh turn, or a system notification waking an idle agent).",
+        "steering": "Injected into the current in-flight run while the agent was busy (immediate mode).",
+        "queued": "Enqueued while the agent was busy; processed as its own run afterward."
+      }
     },
     "UserMessageEvent": {
       "type": "object",
