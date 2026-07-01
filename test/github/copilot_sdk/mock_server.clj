@@ -343,6 +343,9 @@
                  "session.model.switchTo" (handle-session-model-switch-to server params)
                  "session.log" (handle-session-log server params)
                  "session.permissions.handlePendingPermissionRequest" {:ok true}
+                 "session.mcp.oauth.handlePendingRequest" {:ok true}
+                 "session.eventLog.registerInterest" {:handle (str (java.util.UUID/randomUUID))}
+                 "session.eventLog.releaseInterest" {:ok true}
                  "session.commands.handlePendingCommand" {:ok true}
                  "session.commands.respondToQueuedCommand" {:success true}
                  "session.tools.handlePendingToolCall" {:ok true}
@@ -572,6 +575,7 @@
     "permission.requested"
     "command.execute"
     "elicitation.requested"
+    "mcp.oauth_required"
     "capabilities.changed"})
 
 (def ^:private known-event-types

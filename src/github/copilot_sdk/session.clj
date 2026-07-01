@@ -53,7 +53,7 @@
    on a dedicated thread. Uses a sliding buffer, so events may be dropped under
    extreme backpressure if the handler cannot keep up with the event rate."
   [client session-id {:keys [tools on-permission-request on-user-input-request on-elicitation-request
-                             on-exit-plan-mode on-auto-mode-switch
+                             on-exit-plan-mode on-auto-mode-switch on-mcp-auth-request
                              hooks workspace-path on-event config commands]}]
   (log/debug "Creating session: " session-id)
   (let [event-chan (chan (async/sliding-buffer 4096))
@@ -76,6 +76,7 @@
                            {:tool-handlers tool-handlers
                             :command-handlers command-handlers
                             :permission-handler on-permission-request
+                            :mcp-auth-handler on-mcp-auth-request
                             :user-input-handler on-user-input-request
                             :elicitation-handler on-elicitation-request
                             :exit-plan-mode-handler on-exit-plan-mode
@@ -725,6 +726,48 @@
              {:result {:kind :user-not-available}})))))
    :io))
 
+(defn- mcp-auth-result->wire
+  "Map an McpAuthResult returned by an :on-mcp-auth-request handler to the wire
+   `result` shape for session.mcp.oauth.handlePendingRequest (upstream PR #1669).
+  A map carrying a non-nil :access-token yields {:kind \"token\" ...}; anything
+  else (nil, {:access-token nil}, {:kind :cancelled}, or a malformed value)
+  yields {:kind \"cancelled\"}. Token fields stay kebab-cased — util/clj->wire
+  camelCases the keys when the enclosing RPC params are converted, and the
+  string :kind value is preserved."
+  [result]
+  (if (and (map? result) (some? (:access-token result)))
+    (cond-> {:kind "token" :access-token (:access-token result)}
+      (some? (:token-type result)) (assoc :token-type (:token-type result))
+      (some? (:expires-in result)) (assoc :expires-in (:expires-in result)))
+    {:kind "cancelled"}))
+
+(defn handle-mcp-auth-request!
+  "Handle an `mcp.oauth_required` MCP OAuth request (upstream PR #1669).
+   Returns a channel yielding the wire `result` map for
+   session.mcp.oauth.handlePendingRequest.
+
+   The configured :on-mcp-auth-request handler is invoked with the idiomatic
+   McpAuthRequest map (the event data — {:request-id :server-name :server-url
+   :reason ...}) and a context map {:session-id ...}; it may return a channel.
+   A result carrying :access-token answers with a token; nil, {:kind
+   :cancelled}, or a thrown exception cancels the request (matching upstream's
+   error-swallowing behavior, so a transient handler failure never wedges the
+   pending request)."
+  [client session-id request]
+  (async/thread-call
+   (fn []
+     (let [handler (:mcp-auth-handler (session-state client session-id))]
+       (if-not handler
+         {:kind "cancelled"}
+         (try
+           (let [result (handler request {:session-id session-id})
+                result (if (channel? result) (<!! result) result)]
+              (mcp-auth-result->wire result))
+           (catch Exception e
+              (log/error "MCP auth handler error for session " session-id ": " (ex-message e))
+              {:kind "cancelled"})))))
+   :io))
+
 (defn handle-user-input-request!
   "Handle an incoming user input request (ask_user). Returns a channel with the result.
    PR #269 feature.
@@ -780,10 +823,14 @@
    The runtime issues this session-scoped request when a BYOK provider configured
    with a `:bearer-token-provider` callback needs a fresh token. The matching
    callback (looked up by `provider-name`) is invoked with the idiomatic
-   `ProviderTokenArgs` map `{:provider-name <name> :session-id <id>}` and must
+   `ProviderTokenArgs` map `{:provider-name ... :session-id ...}` and must
    return the raw token string (without the `Bearer ` prefix); a channel yielding
    the string is also accepted. The runtime performs no caching, so the callback
-   owns refresh."
+   owns refresh.
+
+   Upstream PR #1796 settled the public name on `bearerTokenProvider` (which this
+   SDK already used) and added `sessionId` to the callback args, so a single
+   callback can mint provider tokens scoped to the originating session."
   [client session-id provider-name]
   (async/thread-call
    (fn []

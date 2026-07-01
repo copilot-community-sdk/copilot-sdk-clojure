@@ -538,6 +538,13 @@
 (s/def ::excluded-tools (s/coll-of string?))
 (s/def ::streaming? boolean?)
 (s/def ::on-permission-request fn?)
+;; MCP OAuth lifecycle (upstream PR #1669). The :on-mcp-auth-request handler is
+;; a fn receiving an McpAuthRequest (the `mcp.oauth_required` event data,
+;; kebab-cased: {:request-id :server-name :server-url :reason ...}) and a
+;; context map {:session-id ...}. It returns an McpAuthResult — either
+;;   {:kind :token :access-token "..." :token-type "Bearer"? :expires-in 3600?}
+;; or {:kind :cancelled}. Returning nil or throwing also cancels the request.
+(s/def ::on-mcp-auth-request fn?)
 (s/def ::config-dir ::non-blank-string)
 ;; Upstream PR #1482 (post-v1.0.0-beta.4): `configDir` was renamed to
 ;; `configDirectory` in the official TypeScript SDK API. The wire stays
@@ -759,6 +766,7 @@
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
     :on-permission-request :streaming? :mcp-servers
+    :on-mcp-auth-request
     :custom-agents :default-agent
     ;; Directory rename (PR #1482): :config-directory is the new spelling;
     ;; :config-dir is accepted as a deprecated alias.
@@ -799,6 +807,7 @@
    ;; permission requests are surfaced as events and left pending for the
    ;; consumer to resolve via `handle-pending-permission-request!`.
    (s/keys :opt-un [::on-permission-request
+                    ::on-mcp-auth-request
                     ::session-id ::client-name ::model ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::provider
                     ::streaming? ::mcp-servers
@@ -838,6 +847,7 @@
 (def ^:private resume-session-config-keys
   #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
     :provider :streaming? :on-permission-request
+    :on-mcp-auth-request
     :mcp-servers :custom-agents :default-agent
     :config-dir :config-directory
     :skill-directories
@@ -875,6 +885,7 @@
   (closed-keys
    ;; Upstream PR #1308: :on-permission-request is now optional.
    (s/keys :opt-un [::on-permission-request
+                    ::on-mcp-auth-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
@@ -916,6 +927,7 @@
 (s/def ::join-session-config
   (closed-keys
    (s/keys :opt-un [::on-permission-request
+                    ::on-mcp-auth-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent

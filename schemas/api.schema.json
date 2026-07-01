@@ -13,7 +13,8 @@
       "result": {
         "$ref": "#/definitions/PingResult",
         "description": "Server liveness response, including the echoed message, current server timestamp, and protocol version."
-      }
+      },
+      "stability": "experimental"
     },
     "connect": {
       "rpcMethod": "connect",
@@ -28,6 +29,7 @@
         "description": "Handshake result reporting the server's protocol version and package version on success.",
         "visibility": "internal"
       },
+      "stability": "experimental",
       "visibility": "internal"
     },
     "models": {
@@ -41,7 +43,8 @@
         "result": {
           "$ref": "#/definitions/ModelList",
           "description": "List of Copilot models available to the resolved user, including capabilities and billing metadata."
-        }
+        },
+        "stability": "experimental"
       }
     },
     "tools": {
@@ -55,7 +58,8 @@
         "result": {
           "$ref": "#/definitions/ToolList",
           "description": "Built-in tools available for the requested model, with their parameters and instructions."
-        }
+        },
+        "stability": "experimental"
       }
     },
     "account": {
@@ -69,7 +73,8 @@
         "result": {
           "$ref": "#/definitions/AccountGetQuotaResult",
           "description": "Quota usage snapshots for the resolved user, keyed by quota type."
-        }
+        },
+        "stability": "experimental"
       },
       "getCurrentAuth": {
         "rpcMethod": "account.getCurrentAuth",
@@ -78,7 +83,8 @@
         "result": {
           "$ref": "#/definitions/AccountGetCurrentAuthResult",
           "description": "Current authentication state"
-        }
+        },
+        "stability": "experimental"
       },
       "getAllUsers": {
         "rpcMethod": "account.getAllUsers",
@@ -90,7 +96,8 @@
             "$ref": "#/definitions/AccountAllUsers"
           },
           "description": "List of all authenticated users"
-        }
+        },
+        "stability": "experimental"
       },
       "login": {
         "rpcMethod": "account.login",
@@ -102,7 +109,8 @@
         "result": {
           "$ref": "#/definitions/AccountLoginResult",
           "description": "Result of a successful login; throws on failure"
-        }
+        },
+        "stability": "experimental"
       },
       "logout": {
         "rpcMethod": "account.logout",
@@ -114,7 +122,8 @@
         "result": {
           "$ref": "#/definitions/AccountLogoutResult",
           "description": "Logout result indicating if more users remain"
-        }
+        },
+        "stability": "experimental"
       }
     },
     "secrets": {
@@ -128,7 +137,8 @@
         "result": {
           "$ref": "#/definitions/SecretsAddFilterValuesResult",
           "description": "Confirmation that the secret values were registered."
-        }
+        },
+        "stability": "experimental"
       }
     },
     "mcp": {
@@ -140,7 +150,8 @@
           "result": {
             "$ref": "#/definitions/McpConfigList",
             "description": "User-configured MCP servers, keyed by server name."
-          }
+          },
+          "stability": "experimental"
         },
         "add": {
           "rpcMethod": "mcp.config.add",
@@ -151,7 +162,8 @@
           },
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         },
         "update": {
           "rpcMethod": "mcp.config.update",
@@ -162,7 +174,8 @@
           },
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         },
         "remove": {
           "rpcMethod": "mcp.config.remove",
@@ -173,7 +186,8 @@
           },
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         },
         "enable": {
           "rpcMethod": "mcp.config.enable",
@@ -184,7 +198,8 @@
           },
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         },
         "disable": {
           "rpcMethod": "mcp.config.disable",
@@ -195,7 +210,8 @@
           },
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         },
         "reload": {
           "rpcMethod": "mcp.config.reload",
@@ -203,7 +219,8 @@
           "params": null,
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         }
       },
       "discover": {
@@ -216,7 +233,8 @@
         "result": {
           "$ref": "#/definitions/McpDiscoverResult",
           "description": "MCP servers discovered from user, workspace, plugin, and built-in sources."
-        }
+        },
+        "stability": "experimental"
       }
     },
     "plugins": {
@@ -378,7 +396,8 @@
           },
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
         }
       },
       "discover": {
@@ -391,7 +410,8 @@
         "result": {
           "$ref": "#/definitions/ServerSkillList",
           "description": "Skills discovered across global and project sources."
-        }
+        },
+        "stability": "experimental"
       },
       "getDiscoveryPaths": {
         "rpcMethod": "skills.getDiscoveryPaths",
@@ -471,7 +491,31 @@
           "params": null,
           "result": {
             "type": "null"
-          }
+          },
+          "stability": "experimental"
+        },
+        "get": {
+          "rpcMethod": "user.settings.get",
+          "description": "Lists every known user setting (settings.json overlaid with the legacy config.json, config.json wins), each with its effective value, its default, and whether it is at the default — so settings the user has never set still appear with their default value. Does not include repository- or enterprise-managed overrides that the runtime layers on top at session time.",
+          "params": null,
+          "result": {
+            "$ref": "#/definitions/UserSettingsGetResult",
+            "description": "Per-key metadata for every known user setting (settings.json overlaid with the legacy config.json, config.json wins), including settings left at their default. Excludes repository- and enterprise-managed overrides."
+          },
+          "stability": "experimental"
+        },
+        "set": {
+          "rpcMethod": "user.settings.set",
+          "description": "Writes one or more user settings to settings.json, replacing each provided top-level key. A key whose value is null is removed. Returns the keys whose new value is shadowed by a legacy config.json entry (config.json wins on read), which the runtime leaves in place — such writes do not take effect until the legacy value is removed.",
+          "params": {
+            "$ref": "#/definitions/UserSettingsSetRequest",
+            "description": "Partial user settings to write to settings.json. Each top-level key is written individually, replacing the existing value; a key whose value is null is removed."
+          },
+          "result": {
+            "$ref": "#/definitions/UserSettingsSetResult",
+            "description": "Outcome of writing user settings."
+          },
+          "stability": "experimental"
         }
       }
     },
@@ -482,7 +526,8 @@
         "params": null,
         "result": {
           "type": "null"
-        }
+        },
+        "stability": "experimental"
       }
     },
     "sessionFs": {
@@ -496,7 +541,8 @@
         "result": {
           "$ref": "#/definitions/SessionFsSetProviderResult",
           "description": "Indicates whether the calling client was registered as the session filesystem provider."
-        }
+        },
+        "stability": "experimental"
       }
     },
     "llmInference": {
@@ -979,7 +1025,7 @@
             "type": "array",
             "items": {
               "$ref": "#/definitions/Attachment",
-              "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload"
+              "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload"
             },
             "description": "Optional attachments (files, directories, selections, blobs, GitHub references) to include with the message"
           },
@@ -1035,7 +1081,8 @@
         ],
         "additionalProperties": false,
         "description": "Parameters for sending a user message to the session",
-        "title": "SendRequest"
+        "title": "SendRequest",
+        "stability": "experimental"
       },
       "result": {
         "$ref": "#/definitions/SendResult",
@@ -1063,7 +1110,8 @@
         ],
         "additionalProperties": false,
         "description": "Parameters for aborting the current turn",
-        "title": "AbortRequest"
+        "title": "AbortRequest",
+        "stability": "experimental"
       },
       "result": {
         "$ref": "#/definitions/AbortResult",
@@ -1095,16 +1143,17 @@
         ],
         "additionalProperties": false,
         "description": "Parameters for shutting down the session",
-        "title": "ShutdownRequest"
+        "title": "ShutdownRequest",
+        "stability": "experimental"
       },
       "result": {
         "type": "null"
       },
       "stability": "experimental"
     },
-    "auth": {
+    "gitHubAuth": {
       "getStatus": {
-        "rpcMethod": "session.auth.getStatus",
+        "rpcMethod": "session.gitHubAuth.getStatus",
         "description": "Gets authentication status and account metadata for the session.",
         "params": {
           "type": "object",
@@ -1127,7 +1176,7 @@
         "stability": "experimental"
       },
       "setCredentials": {
-        "rpcMethod": "session.auth.setCredentials",
+        "rpcMethod": "session.gitHubAuth.setCredentials",
         "description": "Updates the session's auth credentials used for outbound model and API requests.",
         "params": {
           "type": "object",
@@ -1138,7 +1187,7 @@
             },
             "credentials": {
               "$ref": "#/definitions/AuthInfo",
-              "description": "The new auth credentials to install on the session. When omitted or `undefined`, the call is a no-op and the session's existing credentials are preserved. The runtime stores the value verbatim and uses it for outbound model/API requests; it does NOT re-validate or re-fetch the associated Copilot user response. Several variants carry secret material; treat this method's params as containing secrets at rest and in transit."
+              "description": "The new auth credentials to install on the session. When omitted or `undefined`, the call is a no-op and the session's existing credentials are preserved. The runtime installs the supplied value immediately for outbound model/API requests. When the credential carries a raw token (`token`, `env`, or `gh-cli`) but no `copilotUser`, the runtime additionally re-resolves `copilotUser` server-side (best-effort, asynchronously, after the synchronous install) so plan/quota/billing metadata regains fidelity; on resolution failure the verbatim credential remains installed. It does NOT otherwise validate the credential. Several variants carry secret material; treat this method's params as containing secrets at rest and in transit."
             }
           },
           "required": [
@@ -1146,7 +1195,8 @@
           ],
           "additionalProperties": false,
           "description": "New auth credentials to install on the session. Omit to leave credentials unchanged.",
-          "title": "SessionSetCredentialsParams"
+          "title": "SessionSetCredentialsParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionSetCredentialsResult",
@@ -1377,7 +1427,8 @@
           ],
           "additionalProperties": false,
           "description": "Target model identifier and optional reasoning effort, summary, capability overrides, and context tier.",
-          "title": "ModelSwitchToRequest"
+          "title": "ModelSwitchToRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ModelSwitchToResult",
@@ -1406,7 +1457,8 @@
           ],
           "additionalProperties": false,
           "description": "Reasoning effort level to apply to the currently selected model.",
-          "title": "ModelSetReasoningEffortRequest"
+          "title": "ModelSetReasoningEffortRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ModelSetReasoningEffortResult",
@@ -1443,7 +1495,8 @@
             "sessionId"
           ],
           "description": "Optional listing options.",
-          "title": "ModelListRequest"
+          "title": "ModelListRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionModelList",
@@ -1497,7 +1550,8 @@
           ],
           "additionalProperties": false,
           "description": "Agent interaction mode to apply to the session.",
-          "title": "ModeSetRequest"
+          "title": "ModeSetRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -1552,7 +1606,8 @@
           ],
           "additionalProperties": false,
           "description": "New friendly name to apply to the session.",
-          "title": "NameSetRequest"
+          "title": "NameSetRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -1580,7 +1635,8 @@
           ],
           "additionalProperties": false,
           "description": "Auto-generated session summary to apply as the session's name when no user-set name exists.",
-          "title": "NameSetAutoRequest"
+          "title": "NameSetAutoRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/NameSetAutoResult",
@@ -1634,7 +1690,8 @@
           ],
           "additionalProperties": false,
           "description": "Replacement contents to write to the session plan file.",
-          "title": "PlanUpdateRequest"
+          "title": "PlanUpdateRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -1778,7 +1835,8 @@
           ],
           "additionalProperties": false,
           "description": "Relative path of the workspace file to read.",
-          "title": "WorkspacesReadFileRequest"
+          "title": "WorkspacesReadFileRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/WorkspacesReadFileResult",
@@ -1812,7 +1870,8 @@
           ],
           "additionalProperties": false,
           "description": "Relative path and UTF-8 content for the workspace file to create or overwrite.",
-          "title": "WorkspacesCreateFileRequest"
+          "title": "WorkspacesCreateFileRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -1864,7 +1923,8 @@
           ],
           "additionalProperties": false,
           "description": "Checkpoint number to read.",
-          "title": "WorkspacesReadCheckpointRequest"
+          "title": "WorkspacesReadCheckpointRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/WorkspacesReadCheckpointResult",
@@ -1893,7 +1953,8 @@
           ],
           "additionalProperties": false,
           "description": "Pasted content to save as a UTF-8 file in the session workspace.",
-          "title": "WorkspacesSaveLargePasteRequest"
+          "title": "WorkspacesSaveLargePasteRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/WorkspacesSaveLargePasteResult",
@@ -1926,7 +1987,8 @@
           ],
           "additionalProperties": false,
           "description": "Parameters for computing a workspace diff.",
-          "title": "WorkspacesDiffRequest"
+          "title": "WorkspacesDiffRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/WorkspaceDiffResult",
@@ -1981,7 +2043,8 @@
           ],
           "additionalProperties": false,
           "description": "Optional user prompt to combine with the fleet orchestration instructions.",
-          "title": "FleetStartRequest"
+          "title": "FleetStartRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/FleetStartResult",
@@ -2058,7 +2121,8 @@
           ],
           "additionalProperties": false,
           "description": "Name of the custom agent to select for subsequent turns.",
-          "title": "AgentSelectRequest"
+          "title": "AgentSelectRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/AgentSelectResult",
@@ -2152,7 +2216,8 @@
           ],
           "additionalProperties": false,
           "description": "Agent type, prompt, name, and optional description and model override for the new task.",
-          "title": "TasksStartAgentRequest"
+          "title": "TasksStartAgentRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/TasksStartAgentResult",
@@ -2250,7 +2315,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the background task to fetch progress for.",
-          "title": "TasksGetProgressRequest"
+          "title": "TasksGetProgressRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/TasksGetProgressResult",
@@ -2302,7 +2368,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the task to promote to background mode.",
-          "title": "TasksPromoteToBackgroundRequest"
+          "title": "TasksPromoteToBackgroundRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/TasksPromoteToBackgroundResult",
@@ -2354,7 +2421,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the background task to cancel.",
-          "title": "TasksCancelRequest"
+          "title": "TasksCancelRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/TasksCancelResult",
@@ -2383,7 +2451,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the completed or cancelled task to remove from tracking.",
-          "title": "TasksRemoveRequest"
+          "title": "TasksRemoveRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/TasksRemoveResult",
@@ -2421,7 +2490,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the target agent task, message content, and optional sender agent ID.",
-          "title": "TasksSendMessageRequest"
+          "title": "TasksSendMessageRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/TasksSendMessageResult",
@@ -2498,7 +2568,8 @@
           ],
           "additionalProperties": false,
           "description": "Name of the skill to enable for the session.",
-          "title": "SkillsEnableRequest"
+          "title": "SkillsEnableRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -2526,7 +2597,8 @@
           ],
           "additionalProperties": false,
           "description": "Name of the skill to disable for the session.",
-          "title": "SkillsDisableRequest"
+          "title": "SkillsDisableRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -2626,7 +2698,8 @@
           ],
           "additionalProperties": false,
           "description": "Server name whose tool list should be returned.",
-          "title": "McpListToolsRequest"
+          "title": "McpListToolsRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/McpListToolsResult",
@@ -2657,7 +2730,8 @@
           ],
           "additionalProperties": false,
           "description": "Name of the MCP server to enable for the session.",
-          "title": "McpEnableRequest"
+          "title": "McpEnableRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -2687,7 +2761,8 @@
           ],
           "additionalProperties": false,
           "description": "Name of the MCP server to disable for the session.",
-          "title": "McpDisableRequest"
+          "title": "McpDisableRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -2784,7 +2859,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifiers and raw MCP CreateMessageRequest params used to run a sampling inference.",
-          "title": "McpExecuteSamplingParams"
+          "title": "McpExecuteSamplingParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/McpSamplingExecutionResult",
@@ -2813,7 +2889,8 @@
           ],
           "additionalProperties": false,
           "description": "The requestId previously passed to executeSampling that should be cancelled.",
-          "title": "McpCancelSamplingExecutionParams"
+          "title": "McpCancelSamplingExecutionParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/McpCancelSamplingExecutionResult",
@@ -2842,7 +2919,8 @@
           ],
           "additionalProperties": false,
           "description": "Mode controlling how MCP server env values are resolved (`direct` or `indirect`).",
-          "title": "McpSetEnvValueModeParams"
+          "title": "McpSetEnvValueModeParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/McpSetEnvValueModeResult",
@@ -2998,7 +3076,8 @@
           ],
           "additionalProperties": false,
           "description": "Server name for an individual MCP server stop.",
-          "title": "McpStopServerRequest"
+          "title": "McpStopServerRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -3104,7 +3183,8 @@
           ],
           "additionalProperties": false,
           "description": "Server name to check running status for.",
-          "title": "McpIsServerRunningRequest"
+          "title": "McpIsServerRunningRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/McpIsServerRunningResult",
@@ -3175,7 +3255,8 @@
             ],
             "additionalProperties": false,
             "description": "Pending MCP OAuth request ID and host-provided token or cancellation response.",
-            "title": "McpOauthHandlePendingRequest"
+            "title": "McpOauthHandlePendingRequest",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/McpOauthHandlePendingResult",
@@ -3234,11 +3315,49 @@
             ],
             "additionalProperties": false,
             "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, callback success-page copy, and static OAuth client selection.",
-            "title": "McpOauthLoginRequest"
+            "title": "McpOauthLoginRequest",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/McpOauthLoginResult",
             "description": "OAuth authorization URL the caller should open, or empty when cached tokens already authenticated the server."
+          },
+          "stability": "experimental"
+        }
+      },
+      "headers": {
+        "handlePendingHeadersRefreshRequest": {
+          "rpcMethod": "session.mcp.headers.handlePendingHeadersRefreshRequest",
+          "description": "Responds to a pending MCP dynamic headers refresh request. Hosts that subscribe to `mcp.headers_refresh_required` use this to provide short-lived per-server headers or to indicate that no dynamic headers are available for this refresh.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "requestId": {
+                "type": "string",
+                "description": "Headers refresh request identifier from mcp.headers_refresh_required"
+              },
+              "result": {
+                "$ref": "#/definitions/McpHeadersHandlePendingHeadersRefreshRequest",
+                "description": "Host response: supply dynamic headers or decline this refresh."
+              }
+            },
+            "required": [
+              "sessionId",
+              "requestId",
+              "result"
+            ],
+            "additionalProperties": false,
+            "description": "MCP headers refresh request id and the host response.",
+            "title": "McpHeadersHandlePendingHeadersRefreshRequestRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/McpHeadersHandlePendingHeadersRefreshRequestResult",
+            "description": "Indicates whether the pending MCP headers refresh response was accepted."
           },
           "stability": "experimental"
         }
@@ -3272,7 +3391,8 @@
             ],
             "additionalProperties": false,
             "description": "MCP server and resource URI to fetch.",
-            "title": "McpAppsReadResourceRequest"
+            "title": "McpAppsReadResourceRequest",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/McpAppsReadResourceResult",
@@ -3310,7 +3430,8 @@
             ],
             "additionalProperties": false,
             "description": "MCP server to list app-callable tools for.",
-            "title": "McpAppsListToolsRequest"
+            "title": "McpAppsListToolsRequest",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/McpAppsListToolsResult",
@@ -3360,7 +3481,8 @@
             ],
             "additionalProperties": false,
             "description": "MCP server, tool name, and arguments to invoke from an MCP App view.",
-            "title": "McpAppsCallToolRequest"
+            "title": "McpAppsCallToolRequest",
+            "stability": "experimental"
           },
           "result": {
             "type": "object",
@@ -3392,7 +3514,8 @@
             ],
             "additionalProperties": false,
             "description": "Host context to advertise to MCP App guests.",
-            "title": "McpAppsSetHostContextRequest"
+            "title": "McpAppsSetHostContextRequest",
+            "stability": "experimental"
           },
           "result": {
             "type": "null"
@@ -3445,7 +3568,8 @@
             ],
             "additionalProperties": false,
             "description": "MCP server to diagnose MCP Apps wiring for.",
-            "title": "McpAppsDiagnoseRequest"
+            "title": "McpAppsDiagnoseRequest",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/McpAppsDiagnoseResult",
@@ -3520,7 +3644,8 @@
             "sessionId"
           ],
           "description": "Optional flags controlling which side effects the reload performs.",
-          "title": "PluginsReloadRequest"
+          "title": "PluginsReloadRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -3558,7 +3683,8 @@
             "sessionId"
           ],
           "description": "Optional model identifier to scope the endpoint snapshot to.",
-          "title": "ProviderGetEndpointRequest"
+          "title": "ProviderGetEndpointRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ProviderEndpoint",
@@ -3715,6 +3841,10 @@
               "$ref": "#/definitions/OptionsUpdateEnvValueMode",
               "description": "How env values are passed to MCP servers (`direct` inlines literal values; `indirect` resolves at launch)."
             },
+            "allowAllMcpServerInstructions": {
+              "type": "boolean",
+              "description": "Whether to include instructions from every MCP server in the system prompt instead of only allowlisted servers."
+            },
             "skillDirectories": {
               "type": "array",
               "items": {
@@ -3851,6 +3981,18 @@
             "contextTier": {
               "$ref": "#/definitions/OptionsUpdateContextTier",
               "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier."
+            },
+            "responseLimits": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/ResponseLimitsConfig",
+                  "description": "Optional response limits."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Optional response limits. Pass null to clear the response limits."
             }
           },
           "required": [
@@ -3858,7 +4000,8 @@
           ],
           "additionalProperties": false,
           "description": "Patch of mutable session options to apply to the running session.",
-          "title": "SessionUpdateOptionsParams"
+          "title": "SessionUpdateOptionsParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionUpdateOptionsResult",
@@ -3896,7 +4039,8 @@
           ],
           "additionalProperties": false,
           "description": "Parameters for (re)loading the merged LSP configuration set.",
-          "title": "LspInitializeRequest"
+          "title": "LspInitializeRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -3949,7 +4093,8 @@
           ],
           "additionalProperties": false,
           "description": "Source-qualified extension identifier to enable for the session.",
-          "title": "ExtensionsEnableRequest"
+          "title": "ExtensionsEnableRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -3977,7 +4122,8 @@
           ],
           "additionalProperties": false,
           "description": "Source-qualified extension identifier to disable for the session.",
-          "title": "ExtensionsDisableRequest"
+          "title": "ExtensionsDisableRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -4034,7 +4180,8 @@
           ],
           "additionalProperties": false,
           "description": "Parameters for session.extensions.sendAttachmentsToMessage.",
-          "title": "SendAttachmentsToMessageParams"
+          "title": "SendAttachmentsToMessageParams",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -4072,7 +4219,8 @@
           ],
           "additionalProperties": false,
           "description": "Pending external tool call request ID, with the tool result or an error describing why it failed.",
-          "title": "HandlePendingToolCallRequest"
+          "title": "HandlePendingToolCallRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/HandlePendingToolCallResult",
@@ -4147,7 +4295,8 @@
           ],
           "additionalProperties": false,
           "description": "Subagent settings to apply to the current session",
-          "title": "UpdateSubagentSettingsRequest"
+          "title": "UpdateSubagentSettingsRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ToolsUpdateSubagentSettingsResult",
@@ -4194,7 +4343,8 @@
             "sessionId"
           ],
           "description": "Optional filters controlling which command sources to include in the listing.",
-          "title": "CommandsListRequest"
+          "title": "CommandsListRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/CommandList",
@@ -4227,11 +4377,12 @@
           ],
           "additionalProperties": false,
           "description": "Slash command name and optional raw input string to invoke.",
-          "title": "CommandsInvokeRequest"
+          "title": "CommandsInvokeRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SlashCommandInvocationResult",
-          "description": "Result of invoking the slash command (text output, prompt to send to the agent, or completion)."
+          "description": "Result of invoking the slash command (text output, prompt to send to the agent, completion, or subcommand selection)."
         },
         "stability": "experimental"
       },
@@ -4260,7 +4411,8 @@
           ],
           "additionalProperties": false,
           "description": "Pending command request ID and an optional error if the client handler failed.",
-          "title": "CommandsHandlePendingCommandRequest"
+          "title": "CommandsHandlePendingCommandRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/CommandsHandlePendingCommandResult",
@@ -4294,7 +4446,8 @@
           ],
           "additionalProperties": false,
           "description": "Slash command name and argument string to execute synchronously.",
-          "title": "ExecuteCommandParams"
+          "title": "ExecuteCommandParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ExecuteCommandResult",
@@ -4323,7 +4476,8 @@
           ],
           "additionalProperties": false,
           "description": "Slash-prefixed command string to enqueue for FIFO processing.",
-          "title": "EnqueueCommandParams"
+          "title": "EnqueueCommandParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/EnqueueCommandResult",
@@ -4357,7 +4511,8 @@
           ],
           "additionalProperties": false,
           "description": "Queued-command request ID and the result indicating whether the host executed it (and whether to stop processing further queued commands).",
-          "title": "CommandsRespondToQueuedCommandRequest"
+          "title": "CommandsRespondToQueuedCommandRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/CommandsRespondToQueuedCommandResult",
@@ -4414,7 +4569,8 @@
           ],
           "additionalProperties": false,
           "description": "Feature override key/value pairs to attach to subsequent telemetry events from this session.",
-          "title": "TelemetrySetFeatureOverridesRequest"
+          "title": "TelemetrySetFeatureOverridesRequest",
+          "stability": "experimental"
         },
         "result": {
           "type": "null"
@@ -4454,7 +4610,8 @@
           ],
           "additionalProperties": false,
           "description": "Transient question to answer without adding it to conversation history.",
-          "title": "UIEphemeralQueryRequest"
+          "title": "UIEphemeralQueryRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIEphemeralQueryResult",
@@ -4488,7 +4645,8 @@
           ],
           "additionalProperties": false,
           "description": "Prompt message and JSON schema describing the form fields to elicit from the user.",
-          "title": "UIElicitationRequest"
+          "title": "UIElicitationRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIElicitationResponse",
@@ -4522,7 +4680,8 @@
           ],
           "additionalProperties": false,
           "description": "Pending elicitation request ID and the user's response (accept/decline/cancel + form values).",
-          "title": "UIHandlePendingElicitationRequest"
+          "title": "UIHandlePendingElicitationRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIElicitationResult",
@@ -4556,7 +4715,8 @@
           ],
           "additionalProperties": false,
           "description": "Request ID of a pending `user_input.requested` event and the user's response.",
-          "title": "UIHandlePendingUserInputRequest"
+          "title": "UIHandlePendingUserInputRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIHandlePendingResult",
@@ -4589,7 +4749,8 @@
           ],
           "additionalProperties": false,
           "description": "Request ID of a pending `sampling.requested` event and an optional sampling result payload (omit to reject).",
-          "title": "UIHandlePendingSamplingRequest"
+          "title": "UIHandlePendingSamplingRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIHandlePendingResult",
@@ -4623,7 +4784,8 @@
           ],
           "additionalProperties": false,
           "description": "Request ID of a pending `auto_mode_switch.requested` event and the user's response.",
-          "title": "UIHandlePendingAutoModeSwitchRequest"
+          "title": "UIHandlePendingAutoModeSwitchRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIHandlePendingResult",
@@ -4657,7 +4819,8 @@
           ],
           "additionalProperties": false,
           "description": "Request ID of a pending `exit_plan_mode.requested` event and the user's response.",
-          "title": "UIHandlePendingExitPlanModeRequest"
+          "title": "UIHandlePendingExitPlanModeRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIHandlePendingResult",
@@ -4709,7 +4872,8 @@
           ],
           "additionalProperties": false,
           "description": "Opaque handle previously returned by `registerDirectAutoModeSwitchHandler` to release.",
-          "title": "UIUnregisterDirectAutoModeSwitchHandlerRequest"
+          "title": "UIUnregisterDirectAutoModeSwitchHandlerRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UIUnregisterDirectAutoModeSwitchHandlerResult",
@@ -4762,7 +4926,8 @@
           ],
           "additionalProperties": false,
           "description": "Patch of permission policy fields to apply (omit a field to leave it unchanged).",
-          "title": "PermissionsConfigureParams"
+          "title": "PermissionsConfigureParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionsConfigureResult",
@@ -4796,7 +4961,8 @@
           ],
           "additionalProperties": false,
           "description": "Pending permission request ID and the decision to apply (approve/reject and scope).",
-          "title": "PermissionDecisionRequest"
+          "title": "PermissionDecisionRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionRequestResult",
@@ -4820,7 +4986,8 @@
           ],
           "additionalProperties": false,
           "description": "No parameters; returns currently-pending permission requests for the session.",
-          "title": "PermissionsPendingRequestsRequest"
+          "title": "PermissionsPendingRequestsRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PendingPermissionRequestList",
@@ -4853,7 +5020,8 @@
           ],
           "additionalProperties": false,
           "description": "Allow-all toggle for tool permission requests, with an optional telemetry source.",
-          "title": "PermissionsSetApproveAllRequest"
+          "title": "PermissionsSetApproveAllRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionsSetApproveAllResult",
@@ -4886,7 +5054,8 @@
           ],
           "additionalProperties": false,
           "description": "Whether to enable full allow-all permissions for the session.",
-          "title": "PermissionsSetAllowAllRequest"
+          "title": "PermissionsSetAllowAllRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/AllowAllPermissionSetResult",
@@ -4910,7 +5079,8 @@
           ],
           "additionalProperties": false,
           "description": "No parameters.",
-          "title": "PermissionsGetAllowAllRequest"
+          "title": "PermissionsGetAllowAllRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/AllowAllPermissionState",
@@ -4957,7 +5127,8 @@
           ],
           "additionalProperties": false,
           "description": "Scope and add/remove instructions for modifying session- or location-scoped permission rules.",
-          "title": "PermissionsModifyRulesParams"
+          "title": "PermissionsModifyRulesParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionsModifyRulesResult",
@@ -4986,7 +5157,8 @@
           ],
           "additionalProperties": false,
           "description": "Toggles whether permission prompts should be bridged into session events for this client.",
-          "title": "PermissionsSetRequiredRequest"
+          "title": "PermissionsSetRequiredRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionsSetRequiredResult",
@@ -5010,7 +5182,8 @@
           ],
           "additionalProperties": false,
           "description": "No parameters; clears all session-scoped tool permission approvals.",
-          "title": "PermissionsResetSessionApprovalsRequest"
+          "title": "PermissionsResetSessionApprovalsRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionsResetSessionApprovalsResult",
@@ -5039,7 +5212,8 @@
           ],
           "additionalProperties": false,
           "description": "Notification payload describing the permission prompt that the client just rendered.",
-          "title": "PermissionPromptShownNotification"
+          "title": "PermissionPromptShownNotification",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/PermissionsNotifyPromptShownResult",
@@ -5064,7 +5238,8 @@
             ],
             "additionalProperties": false,
             "description": "No parameters; returns the session's allow-listed directories.",
-            "title": "PermissionsPathsListRequest"
+            "title": "PermissionsPathsListRequest",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionPathsList",
@@ -5093,7 +5268,8 @@
             ],
             "additionalProperties": false,
             "description": "Directory path to add to the session's allowed directories.",
-            "title": "PermissionPathsAddParams"
+            "title": "PermissionPathsAddParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionsPathsAddResult",
@@ -5122,7 +5298,8 @@
             ],
             "additionalProperties": false,
             "description": "Directory path to set as the session's new primary working directory.",
-            "title": "PermissionPathsUpdatePrimaryParams"
+            "title": "PermissionPathsUpdatePrimaryParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionsPathsUpdatePrimaryResult",
@@ -5151,7 +5328,8 @@
             ],
             "additionalProperties": false,
             "description": "Path to evaluate against the session's allowed directories.",
-            "title": "PermissionPathsAllowedCheckParams"
+            "title": "PermissionPathsAllowedCheckParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionPathsAllowedCheckResult",
@@ -5180,7 +5358,8 @@
             ],
             "additionalProperties": false,
             "description": "Path to evaluate against the session's workspace (primary) directory.",
-            "title": "PermissionPathsWorkspaceCheckParams"
+            "title": "PermissionPathsWorkspaceCheckParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionPathsWorkspaceCheckResult",
@@ -5211,7 +5390,8 @@
             ],
             "additionalProperties": false,
             "description": "Working directory to resolve into a location-permissions key.",
-            "title": "PermissionLocationResolveParams"
+            "title": "PermissionLocationResolveParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionLocationResolveResult",
@@ -5240,7 +5420,8 @@
             ],
             "additionalProperties": false,
             "description": "Working directory to load persisted location permissions for.",
-            "title": "PermissionLocationApplyParams"
+            "title": "PermissionLocationApplyParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionLocationApplyResult",
@@ -5274,7 +5455,8 @@
             ],
             "additionalProperties": false,
             "description": "Location-scoped tool approval to persist.",
-            "title": "PermissionLocationAddToolApprovalParams"
+            "title": "PermissionLocationAddToolApprovalParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionsLocationsAddToolApprovalResult",
@@ -5305,7 +5487,8 @@
             ],
             "additionalProperties": false,
             "description": "Folder path to check for trust.",
-            "title": "FolderTrustCheckParams"
+            "title": "FolderTrustCheckParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/FolderTrustCheckResult",
@@ -5334,7 +5517,8 @@
             ],
             "additionalProperties": false,
             "description": "Folder path to add to trusted folders.",
-            "title": "FolderTrustAddParams"
+            "title": "FolderTrustAddParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionsFolderTrustAddTrustedResult",
@@ -5365,7 +5549,8 @@
             ],
             "additionalProperties": false,
             "description": "Whether the URL-permission policy should run in unrestricted mode.",
-            "title": "PermissionUrlsSetUnrestrictedModeParams"
+            "title": "PermissionUrlsSetUnrestrictedModeParams",
+            "stability": "experimental"
           },
           "result": {
             "$ref": "#/definitions/PermissionsUrlsSetUnrestrictedModeResult",
@@ -5417,7 +5602,8 @@
         ],
         "additionalProperties": false,
         "description": "Message text, optional severity level, persistence flag, optional follow-up URL, and optional tip.",
-        "title": "LogRequest"
+        "title": "LogRequest",
+        "stability": "experimental"
       },
       "result": {
         "$ref": "#/definitions/LogResult",
@@ -5527,7 +5713,8 @@
           ],
           "additionalProperties": false,
           "description": "Model identifier and token limits used to compute the context-info breakdown.",
-          "title": "MetadataContextInfoRequest"
+          "title": "MetadataContextInfoRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/MetadataContextInfoResult",
@@ -5556,7 +5743,8 @@
           ],
           "additionalProperties": false,
           "description": "Updated working-directory/git context to record on the session.",
-          "title": "MetadataRecordContextChangeRequest"
+          "title": "MetadataRecordContextChangeRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/MetadataRecordContextChangeResult",
@@ -5585,7 +5773,8 @@
           ],
           "additionalProperties": false,
           "description": "Absolute path to set as the session's new working directory.",
-          "title": "MetadataSetWorkingDirectoryRequest"
+          "title": "MetadataSetWorkingDirectoryRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/MetadataSetWorkingDirectoryResult",
@@ -5614,7 +5803,8 @@
           ],
           "additionalProperties": false,
           "description": "Model identifier to use when re-tokenizing the session's existing messages.",
-          "title": "MetadataRecomputeContextTokensRequest"
+          "title": "MetadataRecomputeContextTokensRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/MetadataRecomputeContextTokensResult",
@@ -5655,7 +5845,8 @@
           ],
           "additionalProperties": false,
           "description": "Shell command to run, with optional working directory and timeout in milliseconds.",
-          "title": "ShellExecRequest"
+          "title": "ShellExecRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ShellExecResult",
@@ -5688,7 +5879,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of a process previously returned by \"shell.exec\" and the signal to send.",
-          "title": "ShellKillRequest"
+          "title": "ShellKillRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ShellKillResult",
@@ -5722,7 +5914,8 @@
           ],
           "additionalProperties": false,
           "description": "User-requested shell command and cancellation handle.",
-          "title": "ShellExecuteUserRequestedRequest"
+          "title": "ShellExecuteUserRequestedRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/UserRequestedShellCommandResult",
@@ -5751,7 +5944,8 @@
           ],
           "additionalProperties": false,
           "description": "User-requested shell execution cancellation handle.",
-          "title": "ShellCancelUserRequestedRequest"
+          "title": "ShellCancelUserRequestedRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/CancelUserRequestedShellCommandResult",
@@ -5791,7 +5985,8 @@
             "sessionId"
           ],
           "description": "Optional compaction parameters.",
-          "title": "HistoryCompactRequest"
+          "title": "HistoryCompactRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/HistoryCompactResult",
@@ -5820,7 +6015,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the event to truncate to; this event and all later events are removed.",
-          "title": "HistoryTruncateRequest"
+          "title": "HistoryTruncateRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/HistoryTruncateResult",
@@ -6010,7 +6206,8 @@
           ],
           "additionalProperties": false,
           "description": "Cursor, batch size, and optional long-poll/filter parameters for reading session events.",
-          "title": "EventLogReadRequest"
+          "title": "EventLogReadRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/EventsReadResult",
@@ -6062,7 +6259,8 @@
           ],
           "additionalProperties": false,
           "description": "Event type to register consumer interest for, used by runtime gating logic.",
-          "title": "RegisterEventInterestParams"
+          "title": "RegisterEventInterestParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/RegisterEventInterestResult",
@@ -6091,7 +6289,8 @@
           ],
           "additionalProperties": false,
           "description": "Opaque handle previously returned by `registerInterest` to release.",
-          "title": "ReleaseEventInterestParams"
+          "title": "ReleaseEventInterestParams",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/EventLogReleaseInterestResult",
@@ -6146,7 +6345,8 @@
           ],
           "additionalProperties": false,
           "description": "Optional remote session mode (\"off\", \"export\", or \"on\"); defaults to enabling both export and remote steering.",
-          "title": "RemoteEnableRequest"
+          "title": "RemoteEnableRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/RemoteEnableResult",
@@ -6197,11 +6397,67 @@
           ],
           "additionalProperties": false,
           "description": "New remote-steerability state to persist as a `session.remote_steerable_changed` event.",
-          "title": "RemoteNotifySteerableChangedRequest"
+          "title": "RemoteNotifySteerableChangedRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/RemoteNotifySteerableChangedResult",
           "description": "Persist a steerability change as a `session.remote_steerable_changed` event. Used by the host (CLI / SDK consumer) when it has just finished enabling or disabling steering on a remote exporter that the runtime does not directly own."
+        },
+        "stability": "experimental"
+      }
+    },
+    "visibility": {
+      "get": {
+        "rpcMethod": "session.visibility.get",
+        "description": "Returns the session's current Mission Control sharing status and shareable GitHub URL. Reflects whether the synced session is visible to repository readers (\"repo\") or restricted to its creator and collaborators (\"unshared\").",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/VisibilityGetResult",
+          "description": "Current sharing status and shareable GitHub URL for a session."
+        },
+        "stability": "experimental"
+      },
+      "set": {
+        "rpcMethod": "session.visibility.set",
+        "description": "Sets the session's Mission Control sharing status, controlling whether the synced session is visible to repository readers. Returns the effective status and shareable GitHub URL after the change.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "status": {
+              "$ref": "#/definitions/SessionVisibilityStatus",
+              "description": "Sharing status to apply. \"repo\" makes the session visible to repository readers; \"unshared\" restricts it to the creator and collaborators."
+            }
+          },
+          "required": [
+            "sessionId",
+            "status"
+          ],
+          "additionalProperties": false,
+          "description": "Desired sharing status for the session.",
+          "title": "VisibilitySetRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/VisibilitySetResult",
+          "description": "Effective sharing status and shareable GitHub URL after updating session visibility."
         },
         "stability": "experimental"
       }
@@ -6252,7 +6508,8 @@
           ],
           "additionalProperties": false,
           "description": "Identifier of the scheduled prompt to remove.",
-          "title": "ScheduleStopRequest"
+          "title": "ScheduleStopRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ScheduleStopResult",
@@ -6285,7 +6542,8 @@
           ],
           "additionalProperties": false,
           "description": "Asks the SDK client to acquire a bearer token for a BYOK provider whose config set `hasBearerTokenProvider: true`. Issued by the runtime before each outbound model request; the runtime does no caching, so this is sent once per request.",
-          "title": "ProviderTokenAcquireRequest"
+          "title": "ProviderTokenAcquireRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ProviderTokenAcquireResult",
@@ -6316,7 +6574,8 @@
           ],
           "additionalProperties": false,
           "description": "Path of the file to read from the client-provided session filesystem.",
-          "title": "SessionFsReadFileRequest"
+          "title": "SessionFsReadFileRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionFsReadFileResult",
@@ -6355,7 +6614,8 @@
           ],
           "additionalProperties": false,
           "description": "File path, content to write, and optional mode for the client-provided session filesystem.",
-          "title": "SessionFsWriteFileRequest"
+          "title": "SessionFsWriteFileRequest",
+          "stability": "experimental"
         },
         "result": {
           "anyOf": [
@@ -6402,7 +6662,8 @@
           ],
           "additionalProperties": false,
           "description": "File path, content to append, and optional mode for the client-provided session filesystem.",
-          "title": "SessionFsAppendFileRequest"
+          "title": "SessionFsAppendFileRequest",
+          "stability": "experimental"
         },
         "result": {
           "anyOf": [
@@ -6439,7 +6700,8 @@
           ],
           "additionalProperties": false,
           "description": "Path to test for existence in the client-provided session filesystem.",
-          "title": "SessionFsExistsRequest"
+          "title": "SessionFsExistsRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionFsExistsResult",
@@ -6468,7 +6730,8 @@
           ],
           "additionalProperties": false,
           "description": "Path whose metadata should be returned from the client-provided session filesystem.",
-          "title": "SessionFsStatRequest"
+          "title": "SessionFsStatRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionFsStatResult",
@@ -6506,7 +6769,8 @@
           ],
           "additionalProperties": false,
           "description": "Directory path to create in the client-provided session filesystem, with options for recursive creation and POSIX mode.",
-          "title": "SessionFsMkdirRequest"
+          "title": "SessionFsMkdirRequest",
+          "stability": "experimental"
         },
         "result": {
           "anyOf": [
@@ -6543,7 +6807,8 @@
           ],
           "additionalProperties": false,
           "description": "Directory path whose entries should be listed from the client-provided session filesystem.",
-          "title": "SessionFsReaddirRequest"
+          "title": "SessionFsReaddirRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionFsReaddirResult",
@@ -6572,7 +6837,8 @@
           ],
           "additionalProperties": false,
           "description": "Directory path whose entries (with type information) should be listed from the client-provided session filesystem.",
-          "title": "SessionFsReaddirWithTypesRequest"
+          "title": "SessionFsReaddirWithTypesRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionFsReaddirWithTypesResult",
@@ -6609,7 +6875,8 @@
           ],
           "additionalProperties": false,
           "description": "Path to remove from the client-provided session filesystem, with options for recursive removal and force.",
-          "title": "SessionFsRmRequest"
+          "title": "SessionFsRmRequest",
+          "stability": "experimental"
         },
         "result": {
           "anyOf": [
@@ -6651,7 +6918,8 @@
           ],
           "additionalProperties": false,
           "description": "Source and destination paths for renaming or moving an entry in the client-provided session filesystem.",
-          "title": "SessionFsRenameRequest"
+          "title": "SessionFsRenameRequest",
+          "stability": "experimental"
         },
         "result": {
           "anyOf": [
@@ -6700,7 +6968,8 @@
           ],
           "additionalProperties": false,
           "description": "SQL query, query type, and optional bind parameters for executing a SQLite query against the per-session database.",
-          "title": "SessionFsSqliteQueryRequest"
+          "title": "SessionFsSqliteQueryRequest",
+          "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/SessionFsSqliteQueryResult",
@@ -6949,7 +7218,8 @@
       },
       "additionalProperties": false,
       "description": "Parameters for aborting the current turn",
-      "title": "AbortRequest"
+      "title": "AbortRequest",
+      "stability": "experimental"
     },
     "AbortResult": {
       "type": "object",
@@ -7822,7 +8092,8 @@
       ],
       "additionalProperties": false,
       "description": "Name of the custom agent to select for subsequent turns.",
-      "title": "AgentSelectRequest"
+      "title": "AgentSelectRequest",
+      "stability": "experimental"
     },
     "AgentSelectResult": {
       "type": "object",
@@ -7942,6 +8213,42 @@
           "description": "GitHub issue, pull request, or discussion reference"
         },
         {
+          "$ref": "#/definitions/AttachmentGitHubCommit",
+          "description": "Pointer to a GitHub commit."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubRelease",
+          "description": "Pointer to a GitHub release."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubActionsJob",
+          "description": "Pointer to a GitHub Actions job."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubRepository",
+          "description": "Pointer to a GitHub repository."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubFileDiff",
+          "description": "Pointer to a single-file diff. At least one of `head` and `base` must be present."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubTreeComparison",
+          "description": "Pointer to a comparison between two git revisions."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubUrl",
+          "description": "Generic GitHub URL reference."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubFile",
+          "description": "Pointer to a file in a GitHub repository at a specific ref."
+        },
+        {
+          "$ref": "#/definitions/AttachmentGitHubSnippet",
+          "description": "Pointer to a line range inside a file in a GitHub repository."
+        },
+        {
           "$ref": "#/definitions/AttachmentBlob",
           "description": "Blob attachment with inline base64-encoded data"
         },
@@ -7950,7 +8257,7 @@
           "description": "Structured context contributed by an extension. Composer pills displayed in the host are forwarded back through session.send.attachments, then rendered into the model prompt as an <extension_context> XML block."
         }
       ],
-      "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload",
+      "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload",
       "title": "Attachment"
     },
     "AttachmentBlob": {
@@ -8144,6 +8451,178 @@
       "description": "Optional line range to scope the attachment to a specific section of the file",
       "title": "AttachmentFileLineRange"
     },
+    "AttachmentGitHubActionsJob": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_actions_job",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the workflow run belongs to"
+        },
+        "jobId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Job id within the workflow run"
+        },
+        "jobName": {
+          "type": "string",
+          "description": "Display name of the job"
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Display name of the workflow the job ran in"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the job on GitHub"
+        },
+        "conclusion": {
+          "type": "string",
+          "description": "Terminal conclusion of the job when finished (e.g., success, failure, cancelled). Absent for in-progress jobs."
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "jobId",
+        "jobName",
+        "workflowName",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub Actions job.",
+      "title": "AttachmentGitHubActionsJob"
+    },
+    "AttachmentGitHubCommit": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_commit",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the commit belongs to"
+        },
+        "oid": {
+          "type": "string",
+          "description": "Full commit SHA"
+        },
+        "message": {
+          "type": "string",
+          "description": "First line of the commit message"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the commit on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "oid",
+        "message",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub commit.",
+      "title": "AttachmentGitHubCommit"
+    },
+    "AttachmentGitHubFile": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_file",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref the file is read at (branch, tag, or commit SHA)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the file on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "ref",
+        "path",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a file in a GitHub repository at a specific ref.",
+      "title": "AttachmentGitHubFile"
+    },
+    "AttachmentGitHubFileDiff": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_file_diff",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the diff on GitHub (e.g., a commit, compare, or PR-file URL)"
+        },
+        "head": {
+          "$ref": "#/definitions/AttachmentGitHubFileDiffSide",
+          "description": "File location on the head side of the diff. Absent for deletions."
+        },
+        "base": {
+          "$ref": "#/definitions/AttachmentGitHubFileDiffSide",
+          "description": "File location on the base side of the diff. Absent for additions."
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a single-file diff. At least one of `head` and `base` must be present.",
+      "title": "AttachmentGitHubFileDiff"
+    },
+    "AttachmentGitHubFileDiffSide": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref (branch, tag, or commit SHA) the file is read at"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        }
+      },
+      "required": [
+        "repo",
+        "ref",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "One side of a file diff (head or base)",
+      "title": "AttachmentGitHubFileDiffSide"
+    },
     "AttachmentGitHubReference": {
       "type": "object",
       "properties": {
@@ -8200,6 +8679,189 @@
         "pr": "GitHub pull request reference.",
         "discussion": "GitHub discussion reference."
       }
+    },
+    "AttachmentGitHubRelease": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_release",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the release belongs to"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "Git tag the release is anchored to"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable release name"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the release on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "tagName",
+        "name",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub release.",
+      "title": "AttachmentGitHubRelease"
+    },
+    "AttachmentGitHubRepository": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_repository",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository pointer"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the repository on GitHub"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short description of the repository"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref this attachment is anchored at (branch, tag, or commit). When absent the default branch is implied."
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub repository.",
+      "title": "AttachmentGitHubRepository"
+    },
+    "AttachmentGitHubSnippet": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_snippet",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref the file is read at (branch, tag, or commit SHA)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the snippet on GitHub (with line anchor)"
+        },
+        "lineRange": {
+          "$ref": "#/definitions/AttachmentFileLineRange",
+          "description": "Line range the snippet covers"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "ref",
+        "path",
+        "url",
+        "lineRange"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a line range inside a file in a GitHub repository.",
+      "title": "AttachmentGitHubSnippet"
+    },
+    "AttachmentGitHubTreeComparison": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_tree_comparison",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the comparison on GitHub"
+        },
+        "base": {
+          "$ref": "#/definitions/AttachmentGitHubTreeComparisonSide",
+          "description": "Base side of the comparison"
+        },
+        "head": {
+          "$ref": "#/definitions/AttachmentGitHubTreeComparisonSide",
+          "description": "Head side of the comparison"
+        }
+      },
+      "required": [
+        "type",
+        "url",
+        "base",
+        "head"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a comparison between two git revisions.",
+      "title": "AttachmentGitHubTreeComparison"
+    },
+    "AttachmentGitHubTreeComparisonSide": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "$ref": "#/definitions/GitHubRepoRef",
+          "description": "Repository the revision belongs to"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Git revision (branch, tag, or commit SHA)"
+        }
+      },
+      "required": [
+        "repo",
+        "revision"
+      ],
+      "additionalProperties": false,
+      "description": "One side of a tree comparison (head or base)",
+      "title": "AttachmentGitHubTreeComparisonSide"
+    },
+    "AttachmentGitHubUrl": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_url",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the GitHub resource"
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Generic GitHub URL reference.",
+      "title": "AttachmentGitHubUrl"
     },
     "AttachmentSelection": {
       "type": "object",
@@ -8741,7 +9403,8 @@
       ],
       "additionalProperties": false,
       "description": "Pending command request ID and an optional error if the client handler failed.",
-      "title": "CommandsHandlePendingCommandRequest"
+      "title": "CommandsHandlePendingCommandRequest",
+      "stability": "experimental"
     },
     "CommandsHandlePendingCommandResult": {
       "type": "object",
@@ -8775,7 +9438,8 @@
       ],
       "additionalProperties": false,
       "description": "Slash command name and optional raw input string to invoke.",
-      "title": "CommandsInvokeRequest"
+      "title": "CommandsInvokeRequest",
+      "stability": "experimental"
     },
     "CommandsListRequest": {
       "anyOf": [
@@ -8802,7 +9466,8 @@
         }
       ],
       "description": "Optional filters controlling which command sources to include in the listing.",
-      "title": "CommandsListRequest"
+      "title": "CommandsListRequest",
+      "stability": "experimental"
     },
     "CommandsRespondToQueuedCommandRequest": {
       "type": "object",
@@ -8822,7 +9487,8 @@
       ],
       "additionalProperties": false,
       "description": "Queued-command request ID and the result indicating whether the host executed it (and whether to stop processing further queued commands).",
-      "title": "CommandsRespondToQueuedCommandRequest"
+      "title": "CommandsRespondToQueuedCommandRequest",
+      "stability": "experimental"
     },
     "CommandsRespondToQueuedCommandResult": {
       "type": "object",
@@ -9704,7 +10370,8 @@
       ],
       "additionalProperties": false,
       "description": "Slash-prefixed command string to enqueue for FIFO processing.",
-      "title": "EnqueueCommandParams"
+      "title": "EnqueueCommandParams",
+      "stability": "experimental"
     },
     "EnqueueCommandResult": {
       "type": "object",
@@ -9791,7 +10458,8 @@
       },
       "additionalProperties": false,
       "description": "Cursor, batch size, and optional long-poll/filter parameters for reading session events.",
-      "title": "EventLogReadRequest"
+      "title": "EventLogReadRequest",
+      "stability": "experimental"
     },
     "EventLogReleaseInterestResult": {
       "type": "object",
@@ -9918,7 +10586,8 @@
       ],
       "additionalProperties": false,
       "description": "Slash command name and argument string to execute synchronously.",
-      "title": "ExecuteCommandParams"
+      "title": "ExecuteCommandParams",
+      "stability": "experimental"
     },
     "ExecuteCommandResult": {
       "type": "object",
@@ -10026,7 +10695,8 @@
       ],
       "additionalProperties": false,
       "description": "Source-qualified extension identifier to disable for the session.",
-      "title": "ExtensionsDisableRequest"
+      "title": "ExtensionsDisableRequest",
+      "stability": "experimental"
     },
     "ExtensionsEnableRequest": {
       "type": "object",
@@ -10041,7 +10711,8 @@
       ],
       "additionalProperties": false,
       "description": "Source-qualified extension identifier to enable for the session.",
-      "title": "ExtensionsEnableRequest"
+      "title": "ExtensionsEnableRequest",
+      "stability": "experimental"
     },
     "ExtensionSource": {
       "type": "string",
@@ -10200,6 +10871,10 @@
         {
           "$ref": "#/definitions/ExternalToolTextResultForLlmContentTerminal",
           "description": "Terminal/shell output content block with optional exit code and working directory"
+        },
+        {
+          "$ref": "#/definitions/ExternalToolTextResultForLlmContentShellExit",
+          "description": "Shell command exit metadata with optional output preview"
         },
         {
           "$ref": "#/definitions/ExternalToolTextResultForLlmContentImage",
@@ -10402,6 +11077,44 @@
         "dark": "Icon intended for dark themes."
       }
     },
+    "ExternalToolTextResultForLlmContentShellExit": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "shell_exit",
+          "description": "Content block type discriminator"
+        },
+        "shellId": {
+          "type": "string",
+          "description": "Shell id, as assigned by Copilot runtime"
+        },
+        "exitCode": {
+          "type": "integer",
+          "description": "Exit code from the completed shell command"
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory where the shell command was executed"
+        },
+        "outputPreview": {
+          "type": "string",
+          "description": "Output associated with this shell command, if available. May be partial, truncated, or a preview; not guaranteed to be full output."
+        },
+        "outputTruncated": {
+          "type": "boolean",
+          "description": "Whether outputPreview is known to be incomplete or truncated"
+        }
+      },
+      "required": [
+        "type",
+        "shellId",
+        "exitCode"
+      ],
+      "additionalProperties": false,
+      "description": "Shell command exit metadata with optional output preview",
+      "title": "ExternalToolTextResultForLlmContentShellExit"
+    },
     "ExternalToolTextResultForLlmContentTerminal": {
       "type": "object",
       "properties": {
@@ -10480,7 +11193,8 @@
       },
       "additionalProperties": false,
       "description": "Optional user prompt to combine with the fleet orchestration instructions.",
-      "title": "FleetStartRequest"
+      "title": "FleetStartRequest",
+      "stability": "experimental"
     },
     "FleetStartResult": {
       "type": "object",
@@ -10510,7 +11224,8 @@
       ],
       "additionalProperties": false,
       "description": "Folder path to add to trusted folders.",
-      "title": "FolderTrustAddParams"
+      "title": "FolderTrustAddParams",
+      "stability": "experimental"
     },
     "FolderTrustCheckParams": {
       "type": "object",
@@ -10525,7 +11240,8 @@
       ],
       "additionalProperties": false,
       "description": "Folder path to check for trust.",
-      "title": "FolderTrustCheckParams"
+      "title": "FolderTrustCheckParams",
+      "stability": "experimental"
     },
     "FolderTrustCheckResult": {
       "type": "object",
@@ -10577,6 +11293,31 @@
       "description": "Schema for the `GhCliAuthInfo` type.",
       "title": "GhCliAuthInfo"
     },
+    "GitHubRepoRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Numeric GitHub repository id"
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name (without owner)"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Repository owner login (user or organization)"
+        }
+      },
+      "required": [
+        "name",
+        "owner"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub repository.",
+      "title": "GitHubRepoRef"
+    },
     "HandlePendingToolCallRequest": {
       "type": "object",
       "properties": {
@@ -10598,7 +11339,8 @@
       ],
       "additionalProperties": false,
       "description": "Pending external tool call request ID, with the tool result or an error describing why it failed.",
-      "title": "HandlePendingToolCallRequest"
+      "title": "HandlePendingToolCallRequest",
+      "stability": "experimental"
     },
     "HandlePendingToolCallResult": {
       "type": "object",
@@ -10706,7 +11448,8 @@
         }
       ],
       "description": "Optional compaction parameters.",
-      "title": "HistoryCompactRequest"
+      "title": "HistoryCompactRequest",
+      "stability": "experimental"
     },
     "HistoryCompactResult": {
       "type": "object",
@@ -10771,7 +11514,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the event to truncate to; this event and all later events are removed.",
-      "title": "HistoryTruncateRequest"
+      "title": "HistoryTruncateRequest",
+      "stability": "experimental"
     },
     "HistoryTruncateResult": {
       "type": "object",
@@ -10872,6 +11616,10 @@
         "marketplace": {
           "type": "string",
           "description": "Marketplace the plugin came from. Empty string (\"\") for direct repo / URL / local installs."
+        },
+        "directSourceId": {
+          "type": "string",
+          "description": "Opaque, stable hash identifying a direct (non-marketplace) install source. Present only for direct repo / URL / local installs; absent for marketplace plugins. Same source yields the same id; distinct sources never collide."
         },
         "version": {
           "type": "string",
@@ -11547,7 +12295,8 @@
       ],
       "additionalProperties": false,
       "description": "Message text, optional severity level, persistence flag, optional follow-up URL, and optional tip.",
-      "title": "LogRequest"
+      "title": "LogRequest",
+      "stability": "experimental"
     },
     "LogResult": {
       "type": "object",
@@ -11583,7 +12332,8 @@
       },
       "additionalProperties": false,
       "description": "Parameters for (re)loading the merged LSP configuration set.",
-      "title": "LspInitializeRequest"
+      "title": "LspInitializeRequest",
+      "stability": "experimental"
     },
     "MarketplaceAddResult": {
       "type": "object",
@@ -11798,7 +12548,8 @@
       ],
       "additionalProperties": false,
       "description": "MCP server, tool name, and arguments to invoke from an MCP App view.",
-      "title": "McpAppsCallToolRequest"
+      "title": "McpAppsCallToolRequest",
+      "stability": "experimental"
     },
     "McpAppsDiagnoseCapability": {
       "type": "object",
@@ -11840,7 +12591,8 @@
       ],
       "additionalProperties": false,
       "description": "MCP server to diagnose MCP Apps wiring for.",
-      "title": "McpAppsDiagnoseRequest"
+      "title": "McpAppsDiagnoseRequest",
+      "stability": "experimental"
     },
     "McpAppsDiagnoseResult": {
       "type": "object",
@@ -12029,7 +12781,8 @@
       ],
       "additionalProperties": false,
       "description": "MCP server to list app-callable tools for.",
-      "title": "McpAppsListToolsRequest"
+      "title": "McpAppsListToolsRequest",
+      "stability": "experimental"
     },
     "McpAppsListToolsResult": {
       "type": "object",
@@ -12072,7 +12825,8 @@
       ],
       "additionalProperties": false,
       "description": "MCP server and resource URI to fetch.",
-      "title": "McpAppsReadResourceRequest"
+      "title": "McpAppsReadResourceRequest",
+      "stability": "experimental"
     },
     "McpAppsReadResourceResult": {
       "type": "object",
@@ -12236,7 +12990,8 @@
       ],
       "additionalProperties": false,
       "description": "Host context to advertise to MCP App guests.",
-      "title": "McpAppsSetHostContextRequest"
+      "title": "McpAppsSetHostContextRequest",
+      "stability": "experimental"
     },
     "McpCancelSamplingExecutionParams": {
       "type": "object",
@@ -12251,7 +13006,8 @@
       ],
       "additionalProperties": false,
       "description": "The requestId previously passed to executeSampling that should be cancelled.",
-      "title": "McpCancelSamplingExecutionParams"
+      "title": "McpCancelSamplingExecutionParams",
+      "stability": "experimental"
     },
     "McpCancelSamplingExecutionResult": {
       "type": "object",
@@ -12441,7 +13197,8 @@
       ],
       "additionalProperties": false,
       "description": "Name of the MCP server to disable for the session.",
-      "title": "McpDisableRequest"
+      "title": "McpDisableRequest",
+      "stability": "experimental"
     },
     "McpDiscoverRequest": {
       "type": "object",
@@ -12488,7 +13245,8 @@
       ],
       "additionalProperties": false,
       "description": "Name of the MCP server to enable for the session.",
-      "title": "McpEnableRequest"
+      "title": "McpEnableRequest",
+      "stability": "experimental"
     },
     "McpExecuteSamplingParams": {
       "type": "object",
@@ -12518,7 +13276,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifiers and raw MCP CreateMessageRequest params used to run a sampling inference.",
-      "title": "McpExecuteSamplingParams"
+      "title": "McpExecuteSamplingParams",
+      "stability": "experimental"
     },
     "McpExecuteSamplingRequest": {
       "type": "object",
@@ -12564,6 +13323,80 @@
       "additionalProperties": false,
       "description": "Schema for the `McpFilteredServer` type.",
       "title": "McpFilteredServer"
+    },
+    "McpHeadersHandlePendingHeadersRefreshRequest": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "headers": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Headers to overlay onto the MCP request. Dynamic headers override static config headers but do not replace SDK-managed request headers."
+            },
+            "kind": {
+              "type": "string",
+              "const": "headers"
+            }
+          },
+          "required": [
+            "kind",
+            "headers"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "none"
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        }
+      ],
+      "description": "Host response: supply dynamic headers or decline this refresh.",
+      "title": "McpHeadersHandlePendingHeadersRefreshRequest"
+    },
+    "McpHeadersHandlePendingHeadersRefreshRequestRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Headers refresh request identifier from mcp.headers_refresh_required"
+        },
+        "result": {
+          "$ref": "#/definitions/McpHeadersHandlePendingHeadersRefreshRequest",
+          "description": "Host response: supply dynamic headers or decline this refresh."
+        }
+      },
+      "required": [
+        "requestId",
+        "result"
+      ],
+      "additionalProperties": false,
+      "description": "MCP headers refresh request id and the host response.",
+      "title": "McpHeadersHandlePendingHeadersRefreshRequestRequest",
+      "stability": "experimental"
+    },
+    "McpHeadersHandlePendingHeadersRefreshRequestResult": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "Whether the response was accepted. False if the request was unknown, timed out, or already resolved."
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "additionalProperties": false,
+      "description": "Indicates whether the pending MCP headers refresh response was accepted.",
+      "title": "McpHeadersHandlePendingHeadersRefreshRequestResult"
     },
     "McpHostState": {
       "type": "object",
@@ -12643,7 +13476,8 @@
       ],
       "additionalProperties": false,
       "description": "Server name to check running status for.",
-      "title": "McpIsServerRunningRequest"
+      "title": "McpIsServerRunningRequest",
+      "stability": "experimental"
     },
     "McpIsServerRunningResult": {
       "type": "object",
@@ -12675,7 +13509,8 @@
       ],
       "additionalProperties": false,
       "description": "Server name whose tool list should be returned.",
-      "title": "McpListToolsRequest"
+      "title": "McpListToolsRequest",
+      "stability": "experimental"
     },
     "McpListToolsResult": {
       "type": "object",
@@ -12713,7 +13548,8 @@
       ],
       "additionalProperties": false,
       "description": "Pending MCP OAuth request ID and host-provided token or cancellation response.",
-      "title": "McpOauthHandlePendingRequest"
+      "title": "McpOauthHandlePendingRequest",
+      "stability": "experimental"
     },
     "McpOauthHandlePendingResult": {
       "type": "object",
@@ -12786,7 +13622,8 @@
       ],
       "additionalProperties": false,
       "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, callback success-page copy, and static OAuth client selection.",
-      "title": "McpOauthLoginRequest"
+      "title": "McpOauthLoginRequest",
+      "stability": "experimental"
     },
     "McpOauthLoginResult": {
       "type": "object",
@@ -12813,10 +13650,6 @@
             "tokenType": {
               "type": "string",
               "description": "OAuth token type. Defaults to Bearer when omitted."
-            },
-            "refreshToken": {
-              "type": "string",
-              "description": "Refresh token supplied by the host, if available."
             },
             "expiresIn": {
               "type": "integer",
@@ -13385,7 +14218,8 @@
       ],
       "additionalProperties": false,
       "description": "Mode controlling how MCP server env values are resolved (`direct` or `indirect`).",
-      "title": "McpSetEnvValueModeParams"
+      "title": "McpSetEnvValueModeParams",
+      "stability": "experimental"
     },
     "McpSetEnvValueModeResult": {
       "type": "object",
@@ -13462,7 +14296,8 @@
       ],
       "additionalProperties": false,
       "description": "Server name for an individual MCP server stop.",
-      "title": "McpStopServerRequest"
+      "title": "McpStopServerRequest",
+      "stability": "experimental"
     },
     "McpTools": {
       "type": "object",
@@ -13538,7 +14373,8 @@
       ],
       "additionalProperties": false,
       "description": "Model identifier and token limits used to compute the context-info breakdown.",
-      "title": "MetadataContextInfoRequest"
+      "title": "MetadataContextInfoRequest",
+      "stability": "experimental"
     },
     "MetadataContextInfoResult": {
       "type": "object",
@@ -13583,7 +14419,8 @@
       ],
       "additionalProperties": false,
       "description": "Model identifier to use when re-tokenizing the session's existing messages.",
-      "title": "MetadataRecomputeContextTokensRequest"
+      "title": "MetadataRecomputeContextTokensRequest",
+      "stability": "experimental"
     },
     "MetadataRecomputeContextTokensResult": {
       "type": "object",
@@ -13626,7 +14463,8 @@
       ],
       "additionalProperties": false,
       "description": "Updated working-directory/git context to record on the session.",
-      "title": "MetadataRecordContextChangeRequest"
+      "title": "MetadataRecordContextChangeRequest",
+      "stability": "experimental"
     },
     "MetadataRecordContextChangeResult": {
       "type": "object",
@@ -13648,7 +14486,8 @@
       ],
       "additionalProperties": false,
       "description": "Absolute path to set as the session's new working directory.",
-      "title": "MetadataSetWorkingDirectoryRequest"
+      "title": "MetadataSetWorkingDirectoryRequest",
+      "stability": "experimental"
     },
     "MetadataSetWorkingDirectoryResult": {
       "type": "object",
@@ -13808,6 +14647,12 @@
         "tokenPrices": {
           "$ref": "#/definitions/ModelBillingTokenPrices",
           "description": "Token-level pricing information for this model"
+        },
+        "discountPercent": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Whole-number percentage discount (0-100) applied to usage billed through this model. Populated for the synthetic `auto` model, where requests routed by auto-mode are billed at a reduced rate; absent for concrete models."
         }
       },
       "additionalProperties": false,
@@ -14117,7 +14962,8 @@
         }
       ],
       "description": "Optional listing options.",
-      "title": "ModelListRequest"
+      "title": "ModelListRequest",
+      "stability": "experimental"
     },
     "ModelPickerCategory": {
       "type": "string",
@@ -14198,7 +15044,8 @@
       ],
       "additionalProperties": false,
       "description": "Reasoning effort level to apply to the currently selected model.",
-      "title": "ModelSetReasoningEffortRequest"
+      "title": "ModelSetReasoningEffortRequest",
+      "stability": "experimental"
     },
     "ModelSetReasoningEffortResult": {
       "type": "object",
@@ -14263,7 +15110,8 @@
       ],
       "additionalProperties": false,
       "description": "Target model identifier and optional reasoning effort, summary, capability overrides, and context tier.",
-      "title": "ModelSwitchToRequest"
+      "title": "ModelSwitchToRequest",
+      "stability": "experimental"
     },
     "ModelSwitchToResult": {
       "type": "object",
@@ -14290,7 +15138,8 @@
       ],
       "additionalProperties": false,
       "description": "Agent interaction mode to apply to the session.",
-      "title": "ModeSetRequest"
+      "title": "ModeSetRequest",
+      "stability": "experimental"
     },
     "NamedProviderConfig": {
       "type": "object",
@@ -14378,7 +15227,8 @@
       ],
       "additionalProperties": false,
       "description": "Auto-generated session summary to apply as the session's name when no user-set name exists.",
-      "title": "NameSetAutoRequest"
+      "title": "NameSetAutoRequest",
+      "stability": "experimental"
     },
     "NameSetAutoResult": {
       "type": "object",
@@ -14410,7 +15260,8 @@
       ],
       "additionalProperties": false,
       "description": "New friendly name to apply to the session.",
-      "title": "NameSetRequest"
+      "title": "NameSetRequest",
+      "stability": "experimental"
     },
     "OmittedBinaryOmittedReason": {
       "type": "string",
@@ -15459,7 +16310,8 @@
       ],
       "additionalProperties": false,
       "description": "Pending permission request ID and the decision to apply (approve/reject and scope).",
-      "title": "PermissionDecisionRequest"
+      "title": "PermissionDecisionRequest",
+      "stability": "experimental"
     },
     "PermissionDecisionUserNotAvailable": {
       "type": "object",
@@ -15495,7 +16347,8 @@
       ],
       "additionalProperties": false,
       "description": "Location-scoped tool approval to persist.",
-      "title": "PermissionLocationAddToolApprovalParams"
+      "title": "PermissionLocationAddToolApprovalParams",
+      "stability": "experimental"
     },
     "PermissionLocationApplyParams": {
       "type": "object",
@@ -15510,7 +16363,8 @@
       ],
       "additionalProperties": false,
       "description": "Working directory to load persisted location permissions for.",
-      "title": "PermissionLocationApplyParams"
+      "title": "PermissionLocationApplyParams",
+      "stability": "experimental"
     },
     "PermissionLocationApplyResult": {
       "type": "object",
@@ -15570,7 +16424,8 @@
       ],
       "additionalProperties": false,
       "description": "Working directory to resolve into a location-permissions key.",
-      "title": "PermissionLocationResolveParams"
+      "title": "PermissionLocationResolveParams",
+      "stability": "experimental"
     },
     "PermissionLocationResolveResult": {
       "type": "object",
@@ -15618,7 +16473,8 @@
       ],
       "additionalProperties": false,
       "description": "Directory path to add to the session's allowed directories.",
-      "title": "PermissionPathsAddParams"
+      "title": "PermissionPathsAddParams",
+      "stability": "experimental"
     },
     "PermissionPathsAllowedCheckParams": {
       "type": "object",
@@ -15633,7 +16489,8 @@
       ],
       "additionalProperties": false,
       "description": "Path to evaluate against the session's allowed directories.",
-      "title": "PermissionPathsAllowedCheckParams"
+      "title": "PermissionPathsAllowedCheckParams",
+      "stability": "experimental"
     },
     "PermissionPathsAllowedCheckResult": {
       "type": "object",
@@ -15713,7 +16570,8 @@
       ],
       "additionalProperties": false,
       "description": "Directory path to set as the session's new primary working directory.",
-      "title": "PermissionPathsUpdatePrimaryParams"
+      "title": "PermissionPathsUpdatePrimaryParams",
+      "stability": "experimental"
     },
     "PermissionPathsWorkspaceCheckParams": {
       "type": "object",
@@ -15728,7 +16586,8 @@
       ],
       "additionalProperties": false,
       "description": "Path to evaluate against the session's workspace (primary) directory.",
-      "title": "PermissionPathsWorkspaceCheckParams"
+      "title": "PermissionPathsWorkspaceCheckParams",
+      "stability": "experimental"
     },
     "PermissionPathsWorkspaceCheckResult": {
       "type": "object",
@@ -15758,7 +16617,8 @@
       ],
       "additionalProperties": false,
       "description": "Notification payload describing the permission prompt that the client just rendered.",
-      "title": "PermissionPromptShownNotification"
+      "title": "PermissionPromptShownNotification",
+      "stability": "experimental"
     },
     "PermissionRequestResult": {
       "type": "object",
@@ -15946,7 +16806,8 @@
       },
       "additionalProperties": false,
       "description": "Patch of permission policy fields to apply (omit a field to leave it unchanged).",
-      "title": "PermissionsConfigureParams"
+      "title": "PermissionsConfigureParams",
+      "stability": "experimental"
     },
     "PermissionsConfigureResult": {
       "type": "object",
@@ -15983,7 +16844,8 @@
       "properties": {},
       "additionalProperties": false,
       "description": "No parameters.",
-      "title": "PermissionsGetAllowAllRequest"
+      "title": "PermissionsGetAllowAllRequest",
+      "stability": "experimental"
     },
     "PermissionsLocationsAddToolApprovalDetails": {
       "anyOf": [
@@ -16248,7 +17110,8 @@
       ],
       "additionalProperties": false,
       "description": "Scope and add/remove instructions for modifying session- or location-scoped permission rules.",
-      "title": "PermissionsModifyRulesParams"
+      "title": "PermissionsModifyRulesParams",
+      "stability": "experimental"
     },
     "PermissionsModifyRulesResult": {
       "type": "object",
@@ -16313,7 +17176,8 @@
       "properties": {},
       "additionalProperties": false,
       "description": "No parameters; returns the session's allow-listed directories.",
-      "title": "PermissionsPathsListRequest"
+      "title": "PermissionsPathsListRequest",
+      "stability": "experimental"
     },
     "PermissionsPathsUpdatePrimaryResult": {
       "type": "object",
@@ -16335,14 +17199,16 @@
       "properties": {},
       "additionalProperties": false,
       "description": "No parameters; returns currently-pending permission requests for the session.",
-      "title": "PermissionsPendingRequestsRequest"
+      "title": "PermissionsPendingRequestsRequest",
+      "stability": "experimental"
     },
     "PermissionsResetSessionApprovalsRequest": {
       "type": "object",
       "properties": {},
       "additionalProperties": false,
       "description": "No parameters; clears all session-scoped tool permission approvals.",
-      "title": "PermissionsResetSessionApprovalsRequest"
+      "title": "PermissionsResetSessionApprovalsRequest",
+      "stability": "experimental"
     },
     "PermissionsResetSessionApprovalsResult": {
       "type": "object",
@@ -16376,7 +17242,8 @@
       ],
       "additionalProperties": false,
       "description": "Whether to enable full allow-all permissions for the session.",
-      "title": "PermissionsSetAllowAllRequest"
+      "title": "PermissionsSetAllowAllRequest",
+      "stability": "experimental"
     },
     "PermissionsSetAllowAllSource": {
       "type": "string",
@@ -16412,7 +17279,8 @@
       ],
       "additionalProperties": false,
       "description": "Allow-all toggle for tool permission requests, with an optional telemetry source.",
-      "title": "PermissionsSetApproveAllRequest"
+      "title": "PermissionsSetApproveAllRequest",
+      "stability": "experimental"
     },
     "PermissionsSetApproveAllResult": {
       "type": "object",
@@ -16459,7 +17327,8 @@
       ],
       "additionalProperties": false,
       "description": "Toggles whether permission prompts should be bridged into session events for this client.",
-      "title": "PermissionsSetRequiredRequest"
+      "title": "PermissionsSetRequiredRequest",
+      "stability": "experimental"
     },
     "PermissionsSetRequiredResult": {
       "type": "object",
@@ -16523,7 +17392,8 @@
       ],
       "additionalProperties": false,
       "description": "Whether the URL-permission policy should run in unrestricted mode.",
-      "title": "PermissionUrlsSetUnrestrictedModeParams"
+      "title": "PermissionUrlsSetUnrestrictedModeParams",
+      "stability": "experimental"
     },
     "PingRequest": {
       "type": "object",
@@ -16699,7 +17569,8 @@
       ],
       "additionalProperties": false,
       "description": "Replacement contents to write to the session plan file.",
-      "title": "PlanUpdateRequest"
+      "title": "PlanUpdateRequest",
+      "stability": "experimental"
     },
     "Plugin": {
       "type": "object",
@@ -16947,7 +17818,8 @@
         }
       ],
       "description": "Optional flags controlling which side effects the reload performs.",
-      "title": "PluginsReloadRequest"
+      "title": "PluginsReloadRequest",
+      "stability": "experimental"
     },
     "PluginsUninstallRequest": {
       "type": "object",
@@ -16955,6 +17827,13 @@
         "name": {
           "type": "string",
           "description": "Plugin name or \"plugin@marketplace\" spec to uninstall. When ambiguous, prefer the fully-qualified spec."
+        },
+        "directSourceId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Stable source identity for a direct (non-marketplace) install. Disambiguates uninstall when multiple installed plugins share the same name."
         }
       },
       "required": [
@@ -17355,7 +18234,8 @@
         }
       ],
       "description": "Optional model identifier to scope the endpoint snapshot to.",
-      "title": "ProviderGetEndpointRequest"
+      "title": "ProviderGetEndpointRequest",
+      "stability": "experimental"
     },
     "ProviderModelConfig": {
       "type": "object",
@@ -17447,7 +18327,8 @@
       ],
       "additionalProperties": false,
       "description": "Asks the SDK client to acquire a bearer token for a BYOK provider whose config set `hasBearerTokenProvider: true`. Issued by the runtime before each outbound model request; the runtime does no caching, so this is sent once per request.",
-      "title": "ProviderTokenAcquireRequest"
+      "title": "ProviderTokenAcquireRequest",
+      "stability": "experimental"
     },
     "ProviderTokenAcquireResult": {
       "type": "object",
@@ -17481,6 +18362,42 @@
         {
           "$ref": "#/definitions/PushAttachmentGitHubReference",
           "description": "GitHub issue, pull request, or discussion reference"
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubCommit",
+          "description": "Pointer to a GitHub commit."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubRelease",
+          "description": "Pointer to a GitHub release."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubActionsJob",
+          "description": "Pointer to a GitHub Actions job."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubRepository",
+          "description": "Pointer to a GitHub repository."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubFileDiff",
+          "description": "Pointer to a single-file diff. At least one of `head` and `base` must be present."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubTreeComparison",
+          "description": "Pointer to a comparison between two git revisions."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubUrl",
+          "description": "Generic GitHub URL reference."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubFile",
+          "description": "Pointer to a file in a GitHub repository at a specific ref."
+        },
+        {
+          "$ref": "#/definitions/PushAttachmentGitHubSnippet",
+          "description": "Pointer to a line range inside a file in a GitHub repository."
         },
         {
           "$ref": "#/definitions/PushAttachmentBlob",
@@ -17603,6 +18520,178 @@
       "description": "Optional line range to scope the attachment to a specific section of the file",
       "title": "PushAttachmentFileLineRange"
     },
+    "PushAttachmentGitHubActionsJob": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_actions_job",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the workflow run belongs to"
+        },
+        "jobId": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Job id within the workflow run"
+        },
+        "jobName": {
+          "type": "string",
+          "description": "Display name of the job"
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Display name of the workflow the job ran in"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the job on GitHub"
+        },
+        "conclusion": {
+          "type": "string",
+          "description": "Terminal conclusion of the job when finished (e.g., success, failure, cancelled). Absent for in-progress jobs."
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "jobId",
+        "jobName",
+        "workflowName",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub Actions job.",
+      "title": "PushAttachmentGitHubActionsJob"
+    },
+    "PushAttachmentGitHubCommit": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_commit",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the commit belongs to"
+        },
+        "oid": {
+          "type": "string",
+          "description": "Full commit SHA"
+        },
+        "message": {
+          "type": "string",
+          "description": "First line of the commit message"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the commit on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "oid",
+        "message",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub commit.",
+      "title": "PushAttachmentGitHubCommit"
+    },
+    "PushAttachmentGitHubFile": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_file",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref the file is read at (branch, tag, or commit SHA)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the file on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "ref",
+        "path",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a file in a GitHub repository at a specific ref.",
+      "title": "PushAttachmentGitHubFile"
+    },
+    "PushAttachmentGitHubFileDiff": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_file_diff",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the diff on GitHub (e.g., a commit, compare, or PR-file URL)"
+        },
+        "head": {
+          "$ref": "#/definitions/PushAttachmentGitHubFileDiffSide",
+          "description": "File location on the head side of the diff. Absent for deletions."
+        },
+        "base": {
+          "$ref": "#/definitions/PushAttachmentGitHubFileDiffSide",
+          "description": "File location on the base side of the diff. Absent for additions."
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a single-file diff. At least one of `head` and `base` must be present.",
+      "title": "PushAttachmentGitHubFileDiff"
+    },
+    "PushAttachmentGitHubFileDiffSide": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref (branch, tag, or commit SHA) the file is read at"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        }
+      },
+      "required": [
+        "repo",
+        "ref",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "One side of a file diff (head or base)",
+      "title": "PushAttachmentGitHubFileDiffSide"
+    },
     "PushAttachmentGitHubReference": {
       "type": "object",
       "properties": {
@@ -17659,6 +18748,189 @@
         "pr": "GitHub pull request reference.",
         "discussion": "GitHub discussion reference."
       }
+    },
+    "PushAttachmentGitHubRelease": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_release",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the release belongs to"
+        },
+        "tagName": {
+          "type": "string",
+          "description": "Git tag the release is anchored to"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable release name"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the release on GitHub"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "tagName",
+        "name",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub release.",
+      "title": "PushAttachmentGitHubRelease"
+    },
+    "PushAttachmentGitHubRepository": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_repository",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository pointer"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the repository on GitHub"
+        },
+        "description": {
+          "type": "string",
+          "description": "Short description of the repository"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref this attachment is anchored at (branch, tag, or commit). When absent the default branch is implied."
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub repository.",
+      "title": "PushAttachmentGitHubRepository"
+    },
+    "PushAttachmentGitHubSnippet": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_snippet",
+          "description": "Attachment type discriminator"
+        },
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the file lives in"
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref the file is read at (branch, tag, or commit SHA)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Repository-relative path to the file"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the snippet on GitHub (with line anchor)"
+        },
+        "lineRange": {
+          "$ref": "#/definitions/PushAttachmentFileLineRange",
+          "description": "Line range the snippet covers"
+        }
+      },
+      "required": [
+        "type",
+        "repo",
+        "ref",
+        "path",
+        "url",
+        "lineRange"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a line range inside a file in a GitHub repository.",
+      "title": "PushAttachmentGitHubSnippet"
+    },
+    "PushAttachmentGitHubTreeComparison": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_tree_comparison",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the comparison on GitHub"
+        },
+        "base": {
+          "$ref": "#/definitions/PushAttachmentGitHubTreeComparisonSide",
+          "description": "Base side of the comparison"
+        },
+        "head": {
+          "$ref": "#/definitions/PushAttachmentGitHubTreeComparisonSide",
+          "description": "Head side of the comparison"
+        }
+      },
+      "required": [
+        "type",
+        "url",
+        "base",
+        "head"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a comparison between two git revisions.",
+      "title": "PushAttachmentGitHubTreeComparison"
+    },
+    "PushAttachmentGitHubTreeComparisonSide": {
+      "type": "object",
+      "properties": {
+        "repo": {
+          "$ref": "#/definitions/PushGitHubRepoRef",
+          "description": "Repository the revision belongs to"
+        },
+        "revision": {
+          "type": "string",
+          "description": "Git revision (branch, tag, or commit SHA)"
+        }
+      },
+      "required": [
+        "repo",
+        "revision"
+      ],
+      "additionalProperties": false,
+      "description": "One side of a tree comparison (head or base)",
+      "title": "PushAttachmentGitHubTreeComparisonSide"
+    },
+    "PushAttachmentGitHubUrl": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "github_url",
+          "description": "Attachment type discriminator"
+        },
+        "url": {
+          "type": "string",
+          "description": "URL to the GitHub resource"
+        }
+      },
+      "required": [
+        "type",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Generic GitHub URL reference.",
+      "title": "PushAttachmentGitHubUrl"
     },
     "PushAttachmentSelection": {
       "type": "object",
@@ -17759,6 +19031,31 @@
       "additionalProperties": false,
       "description": "Start position of the selection",
       "title": "PushAttachmentSelectionDetailsStart"
+    },
+    "PushGitHubRepoRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "description": "Numeric GitHub repository id"
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name (without owner)"
+        },
+        "owner": {
+          "type": "string",
+          "description": "Repository owner login (user or organization)"
+        }
+      },
+      "required": [
+        "name",
+        "owner"
+      ],
+      "additionalProperties": false,
+      "description": "Pointer to a GitHub repository.",
+      "title": "PushGitHubRepoRef"
     },
     "QueuedCommandHandled": {
       "type": "object",
@@ -17910,7 +19207,8 @@
       ],
       "additionalProperties": false,
       "description": "Event type to register consumer interest for, used by runtime gating logic.",
-      "title": "RegisterEventInterestParams"
+      "title": "RegisterEventInterestParams",
+      "stability": "experimental"
     },
     "RegisterEventInterestResult": {
       "type": "object",
@@ -17983,7 +19281,8 @@
       ],
       "additionalProperties": false,
       "description": "Opaque handle previously returned by `registerInterest` to release.",
-      "title": "ReleaseEventInterestParams"
+      "title": "ReleaseEventInterestParams",
+      "stability": "experimental"
     },
     "RemoteControlConfig": {
       "type": "object",
@@ -18227,7 +19526,8 @@
       },
       "additionalProperties": false,
       "description": "Optional remote session mode (\"off\", \"export\", or \"on\"); defaults to enabling both export and remote steering.",
-      "title": "RemoteEnableRequest"
+      "title": "RemoteEnableRequest",
+      "stability": "experimental"
     },
     "RemoteEnableResult": {
       "type": "object",
@@ -18262,7 +19562,8 @@
       ],
       "additionalProperties": false,
       "description": "New remote-steerability state to persist as a `session.remote_steerable_changed` event.",
-      "title": "RemoteNotifySteerableChangedRequest"
+      "title": "RemoteNotifySteerableChangedRequest",
+      "stability": "experimental"
     },
     "RemoteNotifySteerableChangedResult": {
       "type": "object",
@@ -18444,6 +19745,19 @@
       "additionalProperties": false,
       "description": "Repository context for the remote session.",
       "title": "RemoteSessionRepository"
+    },
+    "ResponseLimitsConfig": {
+      "type": "object",
+      "properties": {
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum AI Credits allowed while responding to one top-level user message."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional response limits.",
+      "title": "ResponseLimitsConfig"
     },
     "SandboxConfig": {
       "type": "object",
@@ -18683,7 +19997,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the scheduled prompt to remove.",
-      "title": "ScheduleStopRequest"
+      "title": "ScheduleStopRequest",
+      "stability": "experimental"
     },
     "ScheduleStopResult": {
       "type": "object",
@@ -18768,7 +20083,8 @@
       ],
       "additionalProperties": false,
       "description": "Parameters for session.extensions.sendAttachmentsToMessage.",
-      "title": "SendAttachmentsToMessageParams"
+      "title": "SendAttachmentsToMessageParams",
+      "stability": "experimental"
     },
     "SendMode": {
       "type": "string",
@@ -18798,7 +20114,7 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/Attachment",
-            "description": "A user message attachment — a file, directory, code selection, blob, GitHub reference, or extension-supplied context payload"
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload"
           },
           "description": "Optional attachments (files, directories, selections, blobs, GitHub references) to include with the message"
         },
@@ -18853,7 +20169,8 @@
       ],
       "additionalProperties": false,
       "description": "Parameters for sending a user message to the session",
-      "title": "SendRequest"
+      "title": "SendRequest",
+      "stability": "experimental"
     },
     "SendResult": {
       "type": "object",
@@ -19239,7 +20556,8 @@
       ],
       "additionalProperties": false,
       "description": "File path, content to append, and optional mode for the client-provided session filesystem.",
-      "title": "SessionFsAppendFileRequest"
+      "title": "SessionFsAppendFileRequest",
+      "stability": "experimental"
     },
     "SessionFsError": {
       "type": "object",
@@ -19286,7 +20604,8 @@
       ],
       "additionalProperties": false,
       "description": "Path to test for existence in the client-provided session filesystem.",
-      "title": "SessionFsExistsRequest"
+      "title": "SessionFsExistsRequest",
+      "stability": "experimental"
     },
     "SessionFsExistsResult": {
       "type": "object",
@@ -19325,7 +20644,8 @@
       ],
       "additionalProperties": false,
       "description": "Directory path to create in the client-provided session filesystem, with options for recursive creation and POSIX mode.",
-      "title": "SessionFsMkdirRequest"
+      "title": "SessionFsMkdirRequest",
+      "stability": "experimental"
     },
     "SessionFsReaddirRequest": {
       "type": "object",
@@ -19340,7 +20660,8 @@
       ],
       "additionalProperties": false,
       "description": "Directory path whose entries should be listed from the client-provided session filesystem.",
-      "title": "SessionFsReaddirRequest"
+      "title": "SessionFsReaddirRequest",
+      "stability": "experimental"
     },
     "SessionFsReaddirResult": {
       "type": "object",
@@ -19410,7 +20731,8 @@
       ],
       "additionalProperties": false,
       "description": "Directory path whose entries (with type information) should be listed from the client-provided session filesystem.",
-      "title": "SessionFsReaddirWithTypesRequest"
+      "title": "SessionFsReaddirWithTypesRequest",
+      "stability": "experimental"
     },
     "SessionFsReaddirWithTypesResult": {
       "type": "object",
@@ -19447,7 +20769,8 @@
       ],
       "additionalProperties": false,
       "description": "Path of the file to read from the client-provided session filesystem.",
-      "title": "SessionFsReadFileRequest"
+      "title": "SessionFsReadFileRequest",
+      "stability": "experimental"
     },
     "SessionFsReadFileResult": {
       "type": "object",
@@ -19486,7 +20809,8 @@
       ],
       "additionalProperties": false,
       "description": "Source and destination paths for renaming or moving an entry in the client-provided session filesystem.",
-      "title": "SessionFsRenameRequest"
+      "title": "SessionFsRenameRequest",
+      "stability": "experimental"
     },
     "SessionFsRmRequest": {
       "type": "object",
@@ -19509,7 +20833,8 @@
       ],
       "additionalProperties": false,
       "description": "Path to remove from the client-provided session filesystem, with options for recursive removal and force.",
-      "title": "SessionFsRmRequest"
+      "title": "SessionFsRmRequest",
+      "stability": "experimental"
     },
     "SessionFsSetProviderCapabilities": {
       "type": "object",
@@ -19620,7 +20945,8 @@
       ],
       "additionalProperties": false,
       "description": "SQL query, query type, and optional bind parameters for executing a SQLite query against the per-session database.",
-      "title": "SessionFsSqliteQueryRequest"
+      "title": "SessionFsSqliteQueryRequest",
+      "stability": "experimental"
     },
     "SessionFsSqliteQueryResult": {
       "type": "object",
@@ -19693,7 +21019,8 @@
       ],
       "additionalProperties": false,
       "description": "Path whose metadata should be returned from the client-provided session filesystem.",
-      "title": "SessionFsStatRequest"
+      "title": "SessionFsStatRequest",
+      "stability": "experimental"
     },
     "SessionFsStatResult": {
       "type": "object",
@@ -19760,7 +21087,8 @@
       ],
       "additionalProperties": false,
       "description": "File path, content to write, and optional mode for the client-provided session filesystem.",
-      "title": "SessionFsWriteFileRequest"
+      "title": "SessionFsWriteFileRequest",
+      "stability": "experimental"
     },
     "SessionInstalledPlugin": {
       "type": "object",
@@ -20054,6 +21382,18 @@
           "type": "string",
           "description": "Currently selected model identifier, if any"
         },
+        "responseLimits": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ResponseLimitsConfig",
+              "description": "Optional response limits."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current response limits for the session, or null when no limits are active"
+        },
         "workspace": {
           "$ref": "#/definitions/WorkspaceSummary",
           "description": "Public-facing workspace metadata for this session, or null if the session has no associated workspace. Excludes runtime-internal fields (GitHub IDs, summary count, internal flags)."
@@ -20068,6 +21408,7 @@
         "workspacePath",
         "workingDirectory",
         "currentMode",
+        "responseLimits",
         "workspace"
       ],
       "additionalProperties": false,
@@ -20268,6 +21609,10 @@
           "$ref": "#/definitions/SessionOpenOptionsEnvValueMode",
           "description": "How MCP server environment values are interpreted."
         },
+        "allowAllMcpServerInstructions": {
+          "type": "boolean",
+          "description": "Whether to include instructions from every MCP server in the system prompt instead of only allowlisted servers."
+        },
         "skillDirectories": {
           "type": "array",
           "items": {
@@ -20349,6 +21694,10 @@
         "modelCapabilitiesOverrides": {
           "$ref": "#/definitions/ModelCapabilitiesOverride",
           "description": "Initial model capability overrides."
+        },
+        "responseLimits": {
+          "$ref": "#/definitions/ResponseLimitsConfig",
+          "description": "Initial response limits for the session."
         },
         "agentContext": {
           "type": "string",
@@ -20728,12 +22077,13 @@
       "properties": {
         "credentials": {
           "$ref": "#/definitions/AuthInfo",
-          "description": "The new auth credentials to install on the session. When omitted or `undefined`, the call is a no-op and the session's existing credentials are preserved. The runtime stores the value verbatim and uses it for outbound model/API requests; it does NOT re-validate or re-fetch the associated Copilot user response. Several variants carry secret material; treat this method's params as containing secrets at rest and in transit."
+          "description": "The new auth credentials to install on the session. When omitted or `undefined`, the call is a no-op and the session's existing credentials are preserved. The runtime installs the supplied value immediately for outbound model/API requests. When the credential carries a raw token (`token`, `env`, or `gh-cli`) but no `copilotUser`, the runtime additionally re-resolves `copilotUser` server-side (best-effort, asynchronously, after the synchronous install) so plan/quota/billing metadata regains fidelity; on resolution failure the verbatim credential remains installed. It does NOT otherwise validate the credential. Several variants carry secret material; treat this method's params as containing secrets at rest and in transit."
         }
       },
       "additionalProperties": false,
       "description": "New auth credentials to install on the session. Omit to leave credentials unchanged.",
-      "title": "SessionSetCredentialsParams"
+      "title": "SessionSetCredentialsParams",
+      "stability": "experimental"
     },
     "SessionSetCredentialsResult": {
       "type": "object",
@@ -20741,6 +22091,10 @@
         "success": {
           "type": "boolean",
           "description": "Whether the operation succeeded"
+        },
+        "copilotUserResolved": {
+          "type": "boolean",
+          "description": "Whether the session ended up with a populated `copilotUser` for the installed credentials. `true` when the supplied credential already carried `copilotUser` or it was successfully re-resolved server-side. `false` when the credential is installed without `copilotUser` — either re-resolution failed, or the variant cannot be re-resolved from the credential alone (only the raw-token variants `token`, `env`, and `gh-cli` can). In both `false` cases the token swap still applied, but plan/quota/billing metadata is degraded. Present whenever a credential was supplied; omitted only when no credential was supplied (no-op call)."
         }
       },
       "required": [
@@ -21701,6 +23055,10 @@
           "$ref": "#/definitions/OptionsUpdateEnvValueMode",
           "description": "How env values are passed to MCP servers (`direct` inlines literal values; `indirect` resolves at launch)."
         },
+        "allowAllMcpServerInstructions": {
+          "type": "boolean",
+          "description": "Whether to include instructions from every MCP server in the system prompt instead of only allowlisted servers."
+        },
         "skillDirectories": {
           "type": "array",
           "items": {
@@ -21837,11 +23195,24 @@
         "contextTier": {
           "$ref": "#/definitions/OptionsUpdateContextTier",
           "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier."
+        },
+        "responseLimits": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ResponseLimitsConfig",
+              "description": "Optional response limits."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Optional response limits. Pass null to clear the response limits."
         }
       },
       "additionalProperties": false,
       "description": "Patch of mutable session options to apply to the running session.",
-      "title": "SessionUpdateOptionsParams"
+      "title": "SessionUpdateOptionsParams",
+      "stability": "experimental"
     },
     "SessionUpdateOptionsResult": {
       "type": "object",
@@ -21857,6 +23228,19 @@
       "additionalProperties": false,
       "description": "Indicates whether the session options patch was applied successfully.",
       "title": "SessionUpdateOptionsResult"
+    },
+    "SessionVisibilityStatus": {
+      "type": "string",
+      "enum": [
+        "repo",
+        "unshared"
+      ],
+      "description": "Sharing status for a synced session. \"repo\" makes the session visible to anyone with read access to the repository; \"unshared\" restricts it to the creator and collaborators.",
+      "title": "SessionVisibilityStatus",
+      "x-enumDescriptions": {
+        "repo": "The session is visible to repository readers.",
+        "unshared": "The session is restricted to its creator and collaborators."
+      }
     },
     "SessionWorkingDirectoryContext": {
       "type": "object",
@@ -21927,7 +23311,8 @@
       ],
       "additionalProperties": false,
       "description": "User-requested shell execution cancellation handle.",
-      "title": "ShellCancelUserRequestedRequest"
+      "title": "ShellCancelUserRequestedRequest",
+      "stability": "experimental"
     },
     "ShellExecRequest": {
       "type": "object",
@@ -21952,7 +23337,8 @@
       ],
       "additionalProperties": false,
       "description": "Shell command to run, with optional working directory and timeout in milliseconds.",
-      "title": "ShellExecRequest"
+      "title": "ShellExecRequest",
+      "stability": "experimental"
     },
     "ShellExecResult": {
       "type": "object",
@@ -21987,7 +23373,8 @@
       ],
       "additionalProperties": false,
       "description": "User-requested shell command and cancellation handle.",
-      "title": "ShellExecuteUserRequestedRequest"
+      "title": "ShellExecuteUserRequestedRequest",
+      "stability": "experimental"
     },
     "ShellKillRequest": {
       "type": "object",
@@ -22006,7 +23393,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of a process previously returned by \"shell.exec\" and the signal to send.",
-      "title": "ShellKillRequest"
+      "title": "ShellKillRequest",
+      "stability": "experimental"
     },
     "ShellKillResult": {
       "type": "object",
@@ -22052,7 +23440,8 @@
       },
       "additionalProperties": false,
       "description": "Parameters for shutting down the session",
-      "title": "ShutdownRequest"
+      "title": "ShutdownRequest",
+      "stability": "experimental"
     },
     "ShutdownType": {
       "type": "string",
@@ -22227,7 +23616,8 @@
       ],
       "additionalProperties": false,
       "description": "Name of the skill to disable for the session.",
-      "title": "SkillsDisableRequest"
+      "title": "SkillsDisableRequest",
+      "stability": "experimental"
     },
     "SkillsDiscoverRequest": {
       "type": "object",
@@ -22268,7 +23658,8 @@
       ],
       "additionalProperties": false,
       "description": "Name of the skill to enable for the session.",
-      "title": "SkillsEnableRequest"
+      "title": "SkillsEnableRequest",
+      "stability": "experimental"
     },
     "SkillsGetDiscoveryPathsRequest": {
       "type": "object",
@@ -22554,7 +23945,7 @@
           "$ref": "#/definitions/SlashCommandSelectSubcommandResult"
         }
       ],
-      "description": "Result of invoking the slash command (text output, prompt to send to the agent, or completion).",
+      "description": "Result of invoking the slash command (text output, prompt to send to the agent, completion, or subcommand selection).",
       "title": "SlashCommandInvocationResult"
     },
     "SlashCommandKind": {
@@ -22686,6 +24077,18 @@
                 "type": "string"
               },
               "description": "Names of subagents the user has turned off; they cannot be dispatched"
+            },
+            "maxConcurrency": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 32,
+              "description": "Maximum number of subagents that can run concurrently; applies to usage-based billing users only"
+            },
+            "maxDepth": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 256,
+              "description": "Maximum subagent nesting depth; applies to usage-based billing users only"
             }
           },
           "additionalProperties": false,
@@ -22958,7 +24361,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the background task to cancel.",
-      "title": "TasksCancelRequest"
+      "title": "TasksCancelRequest",
+      "stability": "experimental"
     },
     "TasksCancelResult": {
       "type": "object",
@@ -23000,7 +24404,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the background task to fetch progress for.",
-      "title": "TasksGetProgressRequest"
+      "title": "TasksGetProgressRequest",
+      "stability": "experimental"
     },
     "TasksGetProgressResult": {
       "type": "object",
@@ -23152,7 +24557,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the task to promote to background mode.",
-      "title": "TasksPromoteToBackgroundRequest"
+      "title": "TasksPromoteToBackgroundRequest",
+      "stability": "experimental"
     },
     "TasksPromoteToBackgroundResult": {
       "type": "object",
@@ -23189,7 +24595,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the completed or cancelled task to remove from tracking.",
-      "title": "TasksRemoveRequest"
+      "title": "TasksRemoveRequest",
+      "stability": "experimental"
     },
     "TasksRemoveResult": {
       "type": "object",
@@ -23228,7 +24635,8 @@
       ],
       "additionalProperties": false,
       "description": "Identifier of the target agent task, message content, and optional sender agent ID.",
-      "title": "TasksSendMessageRequest"
+      "title": "TasksSendMessageRequest",
+      "stability": "experimental"
     },
     "TasksSendMessageResult": {
       "type": "object",
@@ -23280,7 +24688,8 @@
       ],
       "additionalProperties": false,
       "description": "Agent type, prompt, name, and optional description and model override for the new task.",
-      "title": "TasksStartAgentRequest"
+      "title": "TasksStartAgentRequest",
+      "stability": "experimental"
     },
     "TasksStartAgentResult": {
       "type": "object",
@@ -23339,7 +24748,8 @@
       ],
       "additionalProperties": false,
       "description": "Feature override key/value pairs to attach to subsequent telemetry events from this session.",
-      "title": "TelemetrySetFeatureOverridesRequest"
+      "title": "TelemetrySetFeatureOverridesRequest",
+      "stability": "experimental"
     },
     "TokenAuthInfo": {
       "type": "object",
@@ -23685,7 +25095,8 @@
       ],
       "additionalProperties": false,
       "description": "Prompt message and JSON schema describing the form fields to elicit from the user.",
-      "title": "UIElicitationRequest"
+      "title": "UIElicitationRequest",
+      "stability": "experimental"
     },
     "UIElicitationResponse": {
       "type": "object",
@@ -24068,7 +25479,8 @@
       ],
       "additionalProperties": false,
       "description": "Transient question to answer without adding it to conversation history.",
-      "title": "UIEphemeralQueryRequest"
+      "title": "UIEphemeralQueryRequest",
+      "stability": "experimental"
     },
     "UIEphemeralQueryResult": {
       "type": "object",
@@ -24147,7 +25559,8 @@
       ],
       "additionalProperties": false,
       "description": "Request ID of a pending `auto_mode_switch.requested` event and the user's response.",
-      "title": "UIHandlePendingAutoModeSwitchRequest"
+      "title": "UIHandlePendingAutoModeSwitchRequest",
+      "stability": "experimental"
     },
     "UIHandlePendingElicitationRequest": {
       "type": "object",
@@ -24167,7 +25580,8 @@
       ],
       "additionalProperties": false,
       "description": "Pending elicitation request ID and the user's response (accept/decline/cancel + form values).",
-      "title": "UIHandlePendingElicitationRequest"
+      "title": "UIHandlePendingElicitationRequest",
+      "stability": "experimental"
     },
     "UIHandlePendingExitPlanModeRequest": {
       "type": "object",
@@ -24187,7 +25601,8 @@
       ],
       "additionalProperties": false,
       "description": "Request ID of a pending `exit_plan_mode.requested` event and the user's response.",
-      "title": "UIHandlePendingExitPlanModeRequest"
+      "title": "UIHandlePendingExitPlanModeRequest",
+      "stability": "experimental"
     },
     "UIHandlePendingResult": {
       "type": "object",
@@ -24221,7 +25636,8 @@
       ],
       "additionalProperties": false,
       "description": "Request ID of a pending `sampling.requested` event and an optional sampling result payload (omit to reject).",
-      "title": "UIHandlePendingSamplingRequest"
+      "title": "UIHandlePendingSamplingRequest",
+      "stability": "experimental"
     },
     "UIHandlePendingSamplingResponse": {
       "type": "object",
@@ -24249,7 +25665,8 @@
       ],
       "additionalProperties": false,
       "description": "Request ID of a pending `user_input.requested` event and the user's response.",
-      "title": "UIHandlePendingUserInputRequest"
+      "title": "UIHandlePendingUserInputRequest",
+      "stability": "experimental"
     },
     "UIRegisterDirectAutoModeSwitchHandlerResult": {
       "type": "object",
@@ -24279,7 +25696,8 @@
       ],
       "additionalProperties": false,
       "description": "Opaque handle previously returned by `registerDirectAutoModeSwitchHandler` to release.",
-      "title": "UIUnregisterDirectAutoModeSwitchHandlerRequest"
+      "title": "UIUnregisterDirectAutoModeSwitchHandlerRequest",
+      "stability": "experimental"
     },
     "UIUnregisterDirectAutoModeSwitchHandlerResult": {
       "type": "object",
@@ -24329,7 +25747,8 @@
       ],
       "additionalProperties": false,
       "description": "Subagent settings to apply to the current session",
-      "title": "UpdateSubagentSettingsRequest"
+      "title": "UpdateSubagentSettingsRequest",
+      "stability": "experimental"
     },
     "UsageGetMetricsResult": {
       "type": "object",
@@ -24636,6 +26055,83 @@
       "description": "Result of a user-requested shell command.",
       "title": "UserRequestedShellCommandResult"
     },
+    "UserSettingMetadata": {
+      "type": "object",
+      "properties": {
+        "value": {
+          "description": "The effective value: the user's value if set, otherwise the default.",
+          "x-opaque-json": true
+        },
+        "default": {
+          "description": "The centrally-known default for this setting (null when no default is registered).",
+          "x-opaque-json": true
+        },
+        "isDefault": {
+          "type": "boolean",
+          "description": "True when the user has not set an explicit value for this setting (i.e. it is left at its default). Reflects whether the user has overridden the key, not whether the effective value happens to equal the default — a key explicitly set to a value identical to the default still reports false."
+        }
+      },
+      "required": [
+        "value",
+        "default",
+        "isDefault"
+      ],
+      "additionalProperties": false,
+      "description": "A single user setting's effective value alongside its default, so consumers can render settings left at their default.",
+      "title": "UserSettingMetadata"
+    },
+    "UserSettingsGetResult": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/UserSettingMetadata",
+            "description": "A single user setting's effective value alongside its default, so consumers can render settings left at their default."
+          },
+          "description": "Every known user setting keyed by setting name, each with its effective value, default, and whether it is at the default."
+        }
+      },
+      "required": [
+        "settings"
+      ],
+      "additionalProperties": false,
+      "description": "Per-key metadata for every known user setting (settings.json overlaid with the legacy config.json, config.json wins), including settings left at their default. Excludes repository- and enterprise-managed overrides.",
+      "title": "UserSettingsGetResult"
+    },
+    "UserSettingsSetRequest": {
+      "type": "object",
+      "properties": {
+        "settings": {
+          "description": "Partial user settings to write, as a free-form object keyed by setting name",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "settings"
+      ],
+      "additionalProperties": false,
+      "description": "Partial user settings to write to settings.json. Each top-level key is written individually, replacing the existing value; a key whose value is null is removed.",
+      "title": "UserSettingsSetRequest"
+    },
+    "UserSettingsSetResult": {
+      "type": "object",
+      "properties": {
+        "shadowedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Top-level keys whose write landed in settings.json but is shadowed by a value still present in the legacy config.json (config.json wins on read). The write does not take effect until the legacy value is removed."
+        }
+      },
+      "required": [
+        "shadowedKeys"
+      ],
+      "additionalProperties": false,
+      "description": "Outcome of writing user settings.",
+      "title": "UserSettingsSetResult"
+    },
     "UserToolSessionApproval": {
       "anyOf": [
         {
@@ -24829,6 +26325,70 @@
       "description": "Schema for the `UserToolSessionApprovalWrite` type.",
       "title": "UserToolSessionApprovalWrite"
     },
+    "VisibilityGetResult": {
+      "type": "object",
+      "properties": {
+        "synced": {
+          "type": "boolean",
+          "description": "Whether the session has been synced to Mission Control (i.e. has a GitHub task). When false, the session cannot be shared and `status`/`shareUrl` are absent."
+        },
+        "status": {
+          "$ref": "#/definitions/SessionVisibilityStatus",
+          "description": "Current sharing status. Absent when the session is not synced or the status could not be retrieved (e.g. the user is not authenticated)."
+        },
+        "shareUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Shareable GitHub URL for the session. Present when the session is synced and the URL can be resolved."
+        }
+      },
+      "required": [
+        "synced"
+      ],
+      "additionalProperties": false,
+      "description": "Current sharing status and shareable GitHub URL for a session.",
+      "title": "VisibilityGetResult"
+    },
+    "VisibilitySetRequest": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/SessionVisibilityStatus",
+          "description": "Sharing status to apply. \"repo\" makes the session visible to repository readers; \"unshared\" restricts it to the creator and collaborators."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Desired sharing status for the session.",
+      "title": "VisibilitySetRequest",
+      "stability": "experimental"
+    },
+    "VisibilitySetResult": {
+      "type": "object",
+      "properties": {
+        "synced": {
+          "type": "boolean",
+          "description": "Whether the session has been synced to Mission Control (i.e. has a GitHub task). When false, the visibility change could not be applied and `status`/`shareUrl` are absent."
+        },
+        "status": {
+          "$ref": "#/definitions/SessionVisibilityStatus",
+          "description": "Effective sharing status after the update. May differ from the requested status for task types that are already visible to repository readers by default. Absent when the update could not be applied (e.g. the session is not synced or the user is not authenticated)."
+        },
+        "shareUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Shareable GitHub URL for the session. Present when the session is synced and the URL can be resolved."
+        }
+      },
+      "required": [
+        "synced"
+      ],
+      "additionalProperties": false,
+      "description": "Effective sharing status and shareable GitHub URL after updating session visibility.",
+      "title": "VisibilitySetResult"
+    },
     "WorkspaceDiffFileChange": {
       "type": "object",
       "properties": {
@@ -24976,7 +26536,8 @@
       ],
       "additionalProperties": false,
       "description": "Relative path and UTF-8 content for the workspace file to create or overwrite.",
-      "title": "WorkspacesCreateFileRequest"
+      "title": "WorkspacesCreateFileRequest",
+      "stability": "experimental"
     },
     "WorkspacesDiffRequest": {
       "type": "object",
@@ -24995,7 +26556,8 @@
       ],
       "additionalProperties": false,
       "description": "Parameters for computing a workspace diff.",
-      "title": "WorkspacesDiffRequest"
+      "title": "WorkspacesDiffRequest",
+      "stability": "experimental"
     },
     "WorkspacesGetWorkspaceResult": {
       "type": "object",
@@ -25136,7 +26698,8 @@
       ],
       "additionalProperties": false,
       "description": "Checkpoint number to read.",
-      "title": "WorkspacesReadCheckpointRequest"
+      "title": "WorkspacesReadCheckpointRequest",
+      "stability": "experimental"
     },
     "WorkspacesReadCheckpointResult": {
       "type": "object",
@@ -25169,7 +26732,8 @@
       ],
       "additionalProperties": false,
       "description": "Relative path of the workspace file to read.",
-      "title": "WorkspacesReadFileRequest"
+      "title": "WorkspacesReadFileRequest",
+      "stability": "experimental"
     },
     "WorkspacesReadFileResult": {
       "type": "object",
@@ -25199,7 +26763,8 @@
       ],
       "additionalProperties": false,
       "description": "Pasted content to save as a UTF-8 file in the session workspace.",
-      "title": "WorkspacesSaveLargePasteRequest"
+      "title": "WorkspacesSaveLargePasteRequest",
+      "stability": "experimental"
     },
     "WorkspacesSaveLargePasteResult": {
       "type": "object",

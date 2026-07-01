@@ -276,6 +276,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:agent` | string | Name of a custom agent to activate at session start. Must match a name in `:custom-agents`. Equivalent to calling `agent.select` after creation. |
 | `:on-event` | fn | Event handler (1-arg fn receiving event maps). Registered before the RPC call, guaranteeing early events like `session.start` are not missed. |
 | `:on-elicitation-request` | fn | Handler for elicitation requests from the agent. When provided, advertises `requestElicitation=true` and handles `elicitation.requested` broadcast events. Single-arg handler receives an `ElicitationContext` map with `:session-id`, `:message`, `:requested-schema`, `:mode`, `:elicitation-source`, `:url`. Returns an `ElicitationResult` map `{:action "accept"/"decline"/"cancel" :content {...}}`. See [Elicitation Provider](#elicitation-provider) |
+| `:on-mcp-auth-request` | fn | Handler for interactive MCP OAuth requests. When provided, the SDK registers interest in `mcp.oauth_required` (on both create and resume) so the runtime delegates browser-based OAuth to this handler instead of silently using a cached token. 2-arg handler `(fn [request ctx])` receives an `McpAuthRequest` map and `{:session-id ...}`; may return a channel. See [MCP OAuth Handler](#mcp-oauth-handler). (upstream PR #1669) |
 | `:on-exit-plan-mode` | fn | Handler for `exitPlanMode.request` RPCs — invoked when the agent asks to leave plan mode. When provided, advertises `requestExitPlanMode=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
 | `:on-auto-mode-switch` | fn | Handler for `autoModeSwitch.request` RPCs — invoked when the agent asks to switch autonomy mode. When provided, advertises `requestAutoModeSwitch=true`. Receives the request map; returns the approval result. (upstream PR #1228) |
 | `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set; defaulted to `false` in `:mode :empty` (caller can override). Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
@@ -1421,6 +1422,58 @@ Raw elicitation request for custom JSON schemas. `params` is a map with `:messag
 
 ---
 
+## MCP OAuth Handler
+
+Some MCP servers require interactive (browser-based) OAuth. Register an
+`:on-mcp-auth-request` handler to take over that flow; without it, the runtime
+falls back to a browserless cached-token path and never prompts. (upstream PR #1669)
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def session
+  (copilot/create-session
+    client
+    {:on-permission-request copilot/approve-all
+     :on-mcp-auth-request
+     (fn [request ctx]
+       ;; request is the McpAuthRequest; ctx is {:session-id "..."}
+       (let [token (acquire-oauth-token! (:server-url request))]
+         (if token
+           {:access-token token :token-type "Bearer" :expires-in 3600}
+           {:kind :cancelled})))}))
+```
+
+When the handler is provided, the SDK registers interest in the
+`mcp.oauth_required` event (before the `session.create`/`session.resume` runtime
+work begins) so the runtime delegates the OAuth request to your handler. The
+handler is invoked with two arguments:
+
+1. An `McpAuthRequest` map (the event data).
+2. A context map `{:session-id "..."}`.
+
+The handler may return the result directly or a `core.async` channel yielding it.
+
+**`McpAuthRequest` fields:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:request-id` | string | Opaque id correlating the request with its response. |
+| `:server-name` | string | Configured name of the MCP server. |
+| `:server-url` | string | URL of the MCP server requiring auth. |
+| `:reason` | string | Why authentication is needed. |
+| `:www-authenticate-params` | map | (optional) Parsed `WWW-Authenticate` challenge params. |
+| `:resource-metadata` | string | (optional) Raw OAuth protected-resource metadata document. |
+| `:static-client-config` | map | (optional) Pre-registered OAuth client config. |
+
+**Result mapping:** Return a map with `:access-token` (plus optional
+`:token-type` and `:expires-in`) to answer with a token. Return `nil`,
+`{:kind :cancelled}`, or throw to cancel the request — a thrown handler never
+wedges the pending request (errors are swallowed and treated as a cancel,
+matching upstream).
+
+---
+
 ## Event Types
 
 Sessions emit various events during processing. All event types are namespaced keywords prefixed with `copilot/`.
@@ -1494,6 +1547,10 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
 | `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
 | `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :previous-allow-all-permissions boolean}` (upstream schema 1.0.56). |
+| `:copilot/session.response_limits_changed` | Response limits updated; `nil` data clears the limits (upstream schema 1.0.66) |
+| `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
+| `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
+| `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |
 | `:copilot/skill.invoked` | Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version |
 | `:copilot/user.message` | User message added |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
@@ -1501,11 +1558,14 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.intent` | Assistant intent update |
 | `:copilot/assistant.reasoning` | Model reasoning (if supported) |
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
+| `:copilot/assistant.message_start` | Streaming assistant message start metadata |
 | `:copilot/assistant.message` | Complete assistant response |
 | `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
 | `:copilot/assistant.usage` | Token usage for this turn; data may include optional `:content-filter-triggered` (boolean) and `:finish-reason` (string) (upstream schema 1.0.63) |
+| `:copilot/assistant.idle` | Main agent's processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) |
+| `:copilot/model.call_failure` | Failed LLM API call metadata for telemetry |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
 | `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments`, `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:model` |
@@ -1532,12 +1592,16 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/external_tool.completed` | External tool call completed (v3) |
 | `:copilot/mcp.oauth_required` | MCP server requires OAuth authentication |
 | `:copilot/mcp.oauth_completed` | MCP OAuth authentication completed |
+| `:copilot/mcp.headers_refresh_required` | Dynamic headers refresh request for a remote MCP server (upstream schema 1.0.66) |
+| `:copilot/mcp.headers_refresh_completed` | MCP headers refresh request completed (upstream schema 1.0.66) |
 | `:copilot/command.queued` | Command queued for execution |
 | `:copilot/command.execute` | Command execution started |
 | `:copilot/command.completed` | Command execution completed |
 | `:copilot/commands.changed` | Available commands list changed |
 | `:copilot/exit_plan_mode.requested` | Exit from plan mode requested |
 | `:copilot/exit_plan_mode.completed` | Exit from plan mode completed |
+| `:copilot/auto_mode_switch.requested` | Auto mode switch request requiring user approval |
+| `:copilot/auto_mode_switch.completed` | Auto mode switch completed |
 | `:copilot/session.tools_updated` | Session tools list updated (e.g., after model change) |
 | `:copilot/session.background_tasks_changed` | Background tasks status changed |
 | `:copilot/session.skills_loaded` | Skills loaded for the session |
@@ -1554,6 +1618,9 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.canvas.opened` | A canvas (auxiliary UI surface) was opened in the session; ephemeral. Data: `{:instance-id ... :canvas-id ... :extension-id ... :reopen bool :availability "ready"|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}`. The SDK upserts the entry into the [`open-canvases`](#open-canvases) snapshot before publishing. |
 | `:copilot/session.canvas.closed` | A canvas was closed; ephemeral. Data: `{:instance-id ... :canvas-id ... :extension-id ...}`. The SDK removes the matching entry from the [`open-canvases`](#open-canvases) snapshot before publishing. (upstream PR #1604) |
 | `:copilot/session.canvas.registry_changed` | The set of canvases the host can offer changed; ephemeral. |
+| `:copilot/session.canvas.unavailable` | An open canvas instance's provider dropped (e.g. the extension is reloading mid-session); ephemeral. The host should keep the panel mounted and surface a reconnecting state. (upstream schema 1.0.66) |
+| `:copilot/session.canvas.recorded` | Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient `:url` and `:availability`. |
+| `:copilot/session.canvas.removed` | Durable record that a canvas instance was closed, superseding a prior `canvas.recorded` during resume replay. |
 
 ### Example: Handling Events
 
