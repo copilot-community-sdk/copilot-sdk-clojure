@@ -1997,6 +1997,67 @@
         "stability": "experimental"
       }
     },
+    "completions": {
+      "getTriggerCharacters": {
+        "rpcMethod": "session.completions.getTriggerCharacters",
+        "description": "Gets the characters that should trigger host-driven completions for the session. Empty disables host-driven completions (e.g. local sessions, or a relay host that does not advertise them).",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/CompletionsGetTriggerCharactersResult",
+          "description": "Characters that, when typed in the composer, should trigger a `completions.request`. Empty when the session has no host-driven completions (e.g. local sessions, or a relay host that does not advertise `completionTriggerCharacters`)."
+        },
+        "stability": "experimental"
+      },
+      "request": {
+        "rpcMethod": "session.completions.request",
+        "description": "Requests host-driven completion items for the current composer input. Returns an empty list when the host has no items or does not support completions.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "text": {
+              "type": "string",
+              "description": "The full composed composer input."
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Cursor offset within `text`, in UTF-16 code units."
+            }
+          },
+          "required": [
+            "sessionId",
+            "text",
+            "offset"
+          ],
+          "additionalProperties": false,
+          "description": "Request host-driven completions for the current composer input.",
+          "title": "CompletionsRequestRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/CompletionsRequestResult",
+          "description": "Host-driven completion items for the current composer input. Empty when the host returns no items or does not support completions."
+        },
+        "stability": "experimental"
+      }
+    },
     "instructions": {
       "getSources": {
         "rpcMethod": "session.instructions.getSources",
@@ -3810,6 +3871,13 @@
               },
               "description": "Denylist of tool names for this session."
             },
+            "excludedBuiltinAgents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Built-in subagent names to exclude from this session. Excluded built-ins are hidden from agent discovery and cannot be dispatched unless a custom agent with the same name is available."
+            },
             "toolFilterPrecedence": {
               "$ref": "#/definitions/OptionsUpdateToolFilterPrecedence",
               "description": "Controls how availableTools (allowlist) and excludedTools (denylist) combine when both are set."
@@ -3982,17 +4050,17 @@
               "$ref": "#/definitions/OptionsUpdateContextTier",
               "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier."
             },
-            "responseLimits": {
+            "sessionLimits": {
               "anyOf": [
                 {
-                  "$ref": "#/definitions/ResponseLimitsConfig",
-                  "description": "Optional response limits."
+                  "$ref": "#/definitions/SessionLimitsConfig",
+                  "description": "Optional session limits."
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Optional response limits. Pass null to clear the response limits."
+              "description": "Optional session limits. Pass null to clear the session limits."
             }
           },
           "required": [
@@ -4785,6 +4853,41 @@
           "additionalProperties": false,
           "description": "Request ID of a pending `auto_mode_switch.requested` event and the user's response.",
           "title": "UIHandlePendingAutoModeSwitchRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/UIHandlePendingResult",
+          "description": "Indicates whether the pending UI request was resolved by this call."
+        },
+        "stability": "experimental"
+      },
+      "handlePendingSessionLimitsExhausted": {
+        "rpcMethod": "session.ui.handlePendingSessionLimitsExhausted",
+        "description": "Resolves a pending `session_limits_exhausted.requested` event with the user's selected limit action.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "requestId": {
+              "type": "string",
+              "description": "The unique request ID from the session_limits_exhausted.requested event"
+            },
+            "response": {
+              "$ref": "#/definitions/UISessionLimitsExhaustedResponse",
+              "description": "The selected session-limit action."
+            }
+          },
+          "required": [
+            "sessionId",
+            "requestId",
+            "response"
+          ],
+          "additionalProperties": false,
+          "description": "Request ID of a pending `session_limits_exhausted.requested` event and the user's selected limit action.",
+          "title": "UIHandlePendingSessionLimitsExhaustedRequest",
           "stability": "experimental"
         },
         "result": {
@@ -6250,7 +6353,7 @@
             },
             "eventType": {
               "type": "string",
-              "description": "The event type the consumer wants the runtime to treat as 'observed' for behavior-switching gating. Some runtime code paths inspect whether any consumer is interested in a specific event type and choose a different implementation accordingly (e.g. `mcp.oauth_required`: when interest is registered the runtime delegates the full interactive OAuth flow to the consumer; when no interest is registered the runtime installs a browserless fallback that silently reuses cached tokens). SDK clients that long-poll events do NOT automatically appear as listeners to these gating checks — they must explicitly call `registerInterest` for each event type they want the runtime to count as having a consumer. Multiple registrations for the same event type from the same or different consumers are tracked independently and must each be released. See: `mcp.oauth_required`, `sampling.requested`, `auto_mode_switch.requested`, `user_input.requested`, `elicitation.requested`, `command.queued`, `exit_plan_mode.requested`."
+              "description": "The event type the consumer wants the runtime to treat as 'observed' for behavior-switching gating. Some runtime code paths inspect whether any consumer is interested in a specific event type and choose a different implementation accordingly (e.g. `mcp.oauth_required`: when interest is registered the runtime delegates the full interactive OAuth flow to the consumer; when no interest is registered the runtime installs a browserless fallback that silently reuses cached tokens). SDK clients that long-poll events do NOT automatically appear as listeners to these gating checks — they must explicitly call `registerInterest` for each event type they want the runtime to count as having a consumer. Multiple registrations for the same event type from the same or different consumers are tracked independently and must each be released. See: `mcp.oauth_required`, `sampling.requested`, `auto_mode_switch.requested`, `session_limits_exhausted.requested`, `user_input.requested`, `elicitation.requested`, `command.queued`, `exit_plan_mode.requested`."
             }
           },
           "required": [
@@ -7190,6 +7293,21 @@
         },
         "stability": "experimental"
       }
+    },
+    "gitHubTelemetry": {
+      "event": {
+        "rpcMethod": "gitHubTelemetry.event",
+        "description": "Forwards a single GitHub telemetry event to a host connection that opted into telemetry forwarding for the session.",
+        "params": {
+          "$ref": "#/definitions/GitHubTelemetryNotification",
+          "description": "Payload for a `gitHubTelemetry.event` notification: a single GitHub telemetry event the runtime forwards to a host connection that opted into telemetry forwarding for the session."
+        },
+        "result": {
+          "type": "null"
+        },
+        "notification": true,
+        "stability": "experimental"
+      }
     }
   },
   "definitions": {
@@ -7437,6 +7555,21 @@
       "additionalProperties": false,
       "description": "Schema for the `AccountQuotaSnapshot` type.",
       "title": "AccountQuotaSnapshot"
+    },
+    "AdaptiveThinkingSupport": {
+      "type": "string",
+      "enum": [
+        "unsupported",
+        "optional",
+        "required"
+      ],
+      "description": "Resolved Anthropic adaptive-thinking capability for a model.",
+      "title": "AdaptiveThinkingSupport",
+      "x-enumDescriptions": {
+        "unsupported": "The model does not accept thinking.type='adaptive'",
+        "optional": "The model accepts adaptive thinking but also accepts thinking.type='enabled'",
+        "required": "The model only accepts adaptive thinking and rejects thinking.type='enabled' with HTTP 400 (e.g. opus-4.7/4.8)"
+      }
     },
     "AgentDiscoveryPath": {
       "type": "object",
@@ -9505,6 +9638,65 @@
       "description": "Indicates whether the queued-command response was matched to a pending request.",
       "title": "CommandsRespondToQueuedCommandResult"
     },
+    "CompletionsGetTriggerCharactersResult": {
+      "type": "object",
+      "properties": {
+        "triggerCharacters": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Trigger characters advertised by the host (e.g. `[\"@\", \"#\"]`). Empty disables host-driven completions for the session."
+        }
+      },
+      "required": [
+        "triggerCharacters"
+      ],
+      "additionalProperties": false,
+      "description": "Characters that, when typed in the composer, should trigger a `completions.request`. Empty when the session has no host-driven completions (e.g. local sessions, or a relay host that does not advertise `completionTriggerCharacters`).",
+      "title": "CompletionsGetTriggerCharactersResult"
+    },
+    "CompletionsRequestRequest": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The full composed composer input."
+        },
+        "offset": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cursor offset within `text`, in UTF-16 code units."
+        }
+      },
+      "required": [
+        "text",
+        "offset"
+      ],
+      "additionalProperties": false,
+      "description": "Request host-driven completions for the current composer input.",
+      "title": "CompletionsRequestRequest",
+      "stability": "experimental"
+    },
+    "CompletionsRequestResult": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionCompletionItem",
+            "description": "A single host-driven completion. Accepting an item replaces `[rangeStart, rangeEnd)` (UTF-16 code units) in the composer with `insertText`; when the range is absent, the active token around the cursor is replaced."
+          },
+          "description": "Completion items in host-ranked order."
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false,
+      "description": "Host-driven completion items for the current composer input. Empty when the host returns no items or does not support completions.",
+      "title": "CompletionsRequestResult"
+    },
     "ConfigureSessionExtensionsParams": {
       "type": "object",
       "properties": {
@@ -9883,6 +10075,9 @@
           "type": "boolean"
         },
         "is_staff": {
+          "type": "boolean"
+        },
+        "te": {
           "type": "boolean"
         },
         "token_based_billing": {
@@ -11317,6 +11512,151 @@
       "additionalProperties": false,
       "description": "Pointer to a GitHub repository.",
       "title": "GitHubRepoRef"
+    },
+    "GitHubTelemetryClientInfo": {
+      "type": "object",
+      "properties": {
+        "cli_version": {
+          "type": "string",
+          "description": "Copilot CLI version string."
+        },
+        "os_platform": {
+          "type": "string",
+          "description": "Operating system platform (e.g. darwin, linux, win32)."
+        },
+        "os_version": {
+          "type": "string",
+          "description": "Operating system version string."
+        },
+        "os_arch": {
+          "type": "string",
+          "description": "Operating system architecture (e.g. arm64, x64)."
+        },
+        "node_version": {
+          "type": "string",
+          "description": "Node.js runtime version string."
+        },
+        "copilot_plan": {
+          "type": "string",
+          "description": "Copilot subscription plan, when known."
+        },
+        "client_type": {
+          "type": "string",
+          "description": "Type of client."
+        },
+        "client_name": {
+          "type": "string",
+          "description": "Name of the client application."
+        },
+        "is_staff": {
+          "type": "boolean",
+          "description": "Whether the user is a GitHub/Microsoft staff member."
+        },
+        "dev_device_id": {
+          "type": "string",
+          "description": "Stable machine identifier for the device."
+        }
+      },
+      "required": [
+        "cli_version",
+        "os_platform",
+        "os_version",
+        "os_arch",
+        "node_version"
+      ],
+      "additionalProperties": false,
+      "description": "Client environment metadata describing the process that produced a telemetry event.",
+      "title": "GitHubTelemetryClientInfo",
+      "stability": "experimental"
+    },
+    "GitHubTelemetryEvent": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Event type/kind (e.g. get_completion_with_tools_turn, tool_call_executed)."
+        },
+        "created_at": {
+          "type": "string",
+          "description": "Timestamp when the event was created (ISO 8601 format)."
+        },
+        "model_call_id": {
+          "type": "string",
+          "description": "Reference to the model call that produced this event."
+        },
+        "properties": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "String-valued properties as a map from key to value."
+        },
+        "metrics": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Numeric metrics as a map from key to value."
+        },
+        "exp_assignment_context": {
+          "type": "string",
+          "description": "Experiment assignment context."
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Feature flags enabled for this session, as a map from flag to value."
+        },
+        "session_id": {
+          "type": "string",
+          "description": "Session identifier the event belongs to."
+        },
+        "copilot_tracking_id": {
+          "type": "string",
+          "description": "Copilot tracking ID for user-level attribution."
+        },
+        "client": {
+          "$ref": "#/definitions/GitHubTelemetryClientInfo",
+          "description": "Client environment metadata."
+        }
+      },
+      "required": [
+        "kind",
+        "properties",
+        "metrics"
+      ],
+      "additionalProperties": false,
+      "description": "A single telemetry event in the runtime's native GitHub-shaped telemetry format, forwarded verbatim to opted-in hosts. The `restricted` flag on the enclosing GitHubTelemetryNotification distinguishes standard from restricted events; the payload shape is identical for both.",
+      "title": "GitHubTelemetryEvent",
+      "stability": "experimental"
+    },
+    "GitHubTelemetryNotification": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session the telemetry event belongs to."
+        },
+        "restricted": {
+          "type": "boolean",
+          "description": "Whether this is a restricted telemetry event (cli.restricted_telemetry). Hosts must route restricted events to first-party Microsoft stores only."
+        },
+        "event": {
+          "$ref": "#/definitions/GitHubTelemetryEvent",
+          "description": "The telemetry event, in the runtime's native GitHub-shaped telemetry format."
+        }
+      },
+      "required": [
+        "sessionId",
+        "restricted",
+        "event"
+      ],
+      "additionalProperties": false,
+      "description": "Payload for a `gitHubTelemetry.event` notification: a single GitHub telemetry event the runtime forwards to a host connection that opted into telemetry forwarding for the session.",
+      "title": "GitHubTelemetryNotification",
+      "stability": "experimental"
     },
     "HandlePendingToolCallRequest": {
       "type": "object",
@@ -14905,6 +15245,10 @@
         "reasoningEffort": {
           "type": "boolean",
           "description": "Whether this model supports reasoning effort configuration"
+        },
+        "adaptive_thinking": {
+          "$ref": "#/definitions/AdaptiveThinkingSupport",
+          "description": "Resolved Anthropic adaptive-thinking capability — unsupported / optional / required. 'required' models reject thinking.type='enabled' with HTTP 400 (e.g. opus-4.7/4.8)."
         }
       },
       "additionalProperties": false,
@@ -14921,6 +15265,10 @@
         "reasoningEffort": {
           "type": "boolean",
           "description": "Whether this model supports reasoning effort configuration"
+        },
+        "adaptive_thinking": {
+          "$ref": "#/definitions/AdaptiveThinkingSupport",
+          "description": "Resolved Anthropic adaptive-thinking capability — unsupported / optional / required. 'required' models reject thinking.type='enabled' with HTTP 400 (e.g. opus-4.7/4.8)."
         }
       },
       "additionalProperties": false,
@@ -19199,7 +19547,7 @@
       "properties": {
         "eventType": {
           "type": "string",
-          "description": "The event type the consumer wants the runtime to treat as 'observed' for behavior-switching gating. Some runtime code paths inspect whether any consumer is interested in a specific event type and choose a different implementation accordingly (e.g. `mcp.oauth_required`: when interest is registered the runtime delegates the full interactive OAuth flow to the consumer; when no interest is registered the runtime installs a browserless fallback that silently reuses cached tokens). SDK clients that long-poll events do NOT automatically appear as listeners to these gating checks — they must explicitly call `registerInterest` for each event type they want the runtime to count as having a consumer. Multiple registrations for the same event type from the same or different consumers are tracked independently and must each be released. See: `mcp.oauth_required`, `sampling.requested`, `auto_mode_switch.requested`, `user_input.requested`, `elicitation.requested`, `command.queued`, `exit_plan_mode.requested`."
+          "description": "The event type the consumer wants the runtime to treat as 'observed' for behavior-switching gating. Some runtime code paths inspect whether any consumer is interested in a specific event type and choose a different implementation accordingly (e.g. `mcp.oauth_required`: when interest is registered the runtime delegates the full interactive OAuth flow to the consumer; when no interest is registered the runtime installs a browserless fallback that silently reuses cached tokens). SDK clients that long-poll events do NOT automatically appear as listeners to these gating checks — they must explicitly call `registerInterest` for each event type they want the runtime to count as having a consumer. Multiple registrations for the same event type from the same or different consumers are tracked independently and must each be released. See: `mcp.oauth_required`, `sampling.requested`, `auto_mode_switch.requested`, `session_limits_exhausted.requested`, `user_input.requested`, `elicitation.requested`, `command.queued`, `exit_plan_mode.requested`."
         }
       },
       "required": [
@@ -19745,19 +20093,6 @@
       "additionalProperties": false,
       "description": "Repository context for the remote session.",
       "title": "RemoteSessionRepository"
-    },
-    "ResponseLimitsConfig": {
-      "type": "object",
-      "properties": {
-        "maxAiCredits": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Maximum AI Credits allowed while responding to one top-level user message."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Optional response limits.",
-      "title": "ResponseLimitsConfig"
     },
     "SandboxConfig": {
       "type": "object",
@@ -20393,6 +20728,39 @@
         "mcp-apps": "MCP Apps UI passthrough.",
         "canvas-renderer": "Host-provided canvas rendering support."
       }
+    },
+    "SessionCompletionItem": {
+      "type": "object",
+      "properties": {
+        "insertText": {
+          "type": "string",
+          "description": "Text spliced into the composer when the item is accepted."
+        },
+        "rangeStart": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start of the replacement range in `text`, in UTF-16 code units."
+        },
+        "rangeEnd": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "End (exclusive) of the replacement range in `text`, in UTF-16 code units."
+        },
+        "label": {
+          "type": "string",
+          "description": "Primary display label for the picker row. Falls back to `insertText` when absent."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Render-kind hint for the picker row (e.g. `\"document\"`, `\"directory\"`), derived from the host's display kind."
+        }
+      },
+      "required": [
+        "insertText"
+      ],
+      "additionalProperties": false,
+      "description": "A single host-driven completion. Accepting an item replaces `[rangeStart, rangeEnd)` (UTF-16 code units) in the composer with `insertText`; when the range is absent, the active token around the cursor is replaced.",
+      "title": "SessionCompletionItem"
     },
     "SessionContext": {
       "type": "object",
@@ -21227,6 +21595,19 @@
       "description": "Schema for the `SessionInstalledPluginSourceUrl` type.",
       "title": "SessionInstalledPluginSourceUrl"
     },
+    "SessionLimitsConfig": {
+      "type": "object",
+      "properties": {
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum AI Credits allowed across the session's current accounting window."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional session limits.",
+      "title": "SessionLimitsConfig"
+    },
     "SessionList": {
       "type": "object",
       "properties": {
@@ -21382,17 +21763,17 @@
           "type": "string",
           "description": "Currently selected model identifier, if any"
         },
-        "responseLimits": {
+        "sessionLimits": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ResponseLimitsConfig",
-              "description": "Optional response limits."
+              "$ref": "#/definitions/SessionLimitsConfig",
+              "description": "Optional session limits."
             },
             {
               "type": "null"
             }
           ],
-          "description": "Current response limits for the session, or null when no limits are active"
+          "description": "Current session limits, or null when no limits are active"
         },
         "workspace": {
           "$ref": "#/definitions/WorkspaceSummary",
@@ -21408,7 +21789,7 @@
         "workspacePath",
         "workingDirectory",
         "currentMode",
-        "responseLimits",
+        "sessionLimits",
         "workspace"
       ],
       "additionalProperties": false,
@@ -21582,6 +21963,13 @@
           },
           "description": "Denylist of tool names."
         },
+        "excludedBuiltinAgents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Built-in subagent names to exclude from this session. Excluded built-ins are hidden from agent discovery and cannot be dispatched unless a custom agent with the same name is available."
+        },
         "enableScriptSafety": {
           "type": "boolean",
           "description": "Whether shell-script safety heuristics are enabled."
@@ -21695,9 +22083,9 @@
           "$ref": "#/definitions/ModelCapabilitiesOverride",
           "description": "Initial model capability overrides."
         },
-        "responseLimits": {
-          "$ref": "#/definitions/ResponseLimitsConfig",
-          "description": "Initial response limits for the session."
+        "sessionLimits": {
+          "$ref": "#/definitions/SessionLimitsConfig",
+          "description": "Initial session limits."
         },
         "agentContext": {
           "type": "string",
@@ -23024,6 +23412,13 @@
           },
           "description": "Denylist of tool names for this session."
         },
+        "excludedBuiltinAgents": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Built-in subagent names to exclude from this session. Excluded built-ins are hidden from agent discovery and cannot be dispatched unless a custom agent with the same name is available."
+        },
         "toolFilterPrecedence": {
           "$ref": "#/definitions/OptionsUpdateToolFilterPrecedence",
           "description": "Controls how availableTools (allowlist) and excludedTools (denylist) combine when both are set."
@@ -23196,17 +23591,17 @@
           "$ref": "#/definitions/OptionsUpdateContextTier",
           "description": "Context tier for models with tiered pricing. The session uses this to derive effective `modelCapabilitiesOverrides` so compaction, truncation, token display, and request limits honor the selected tier."
         },
-        "responseLimits": {
+        "sessionLimits": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ResponseLimitsConfig",
-              "description": "Optional response limits."
+              "$ref": "#/definitions/SessionLimitsConfig",
+              "description": "Optional session limits."
             },
             {
               "type": "null"
             }
           ],
-          "description": "Optional response limits. Pass null to clear the response limits."
+          "description": "Optional session limits. Pass null to clear the session limits."
         }
       },
       "additionalProperties": false,
@@ -24081,13 +24476,13 @@
             "maxConcurrency": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 32,
+              "maximum": 128,
               "description": "Maximum number of subagents that can run concurrently; applies to usage-based billing users only"
             },
             "maxDepth": {
               "type": "integer",
               "minimum": 1,
-              "maximum": 256,
+              "maximum": 128,
               "description": "Maximum subagent nesting depth; applies to usage-based billing users only"
             }
           },
@@ -25647,6 +26042,27 @@
       "title": "UIHandlePendingSamplingResponse",
       "x-opaque-json": true
     },
+    "UIHandlePendingSessionLimitsExhaustedRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "The unique request ID from the session_limits_exhausted.requested event"
+        },
+        "response": {
+          "$ref": "#/definitions/UISessionLimitsExhaustedResponse",
+          "description": "The selected session-limit action."
+        }
+      },
+      "required": [
+        "requestId",
+        "response"
+      ],
+      "additionalProperties": false,
+      "description": "Request ID of a pending `session_limits_exhausted.requested` event and the user's selected limit action.",
+      "title": "UIHandlePendingSessionLimitsExhaustedRequest",
+      "stability": "experimental"
+    },
     "UIHandlePendingUserInputRequest": {
       "type": "object",
       "properties": {
@@ -25682,6 +26098,48 @@
       "additionalProperties": false,
       "description": "Register an in-process handler for `auto_mode_switch.requested` events. The caller still attaches the actual listener via the standard event-subscription mechanism; this registration solely tells the server bridge to skip its own dispatch (so a remote client doesn't race the in-process handler for the same requestId).",
       "title": "UIRegisterDirectAutoModeSwitchHandlerResult"
+    },
+    "UISessionLimitsExhaustedResponse": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/UISessionLimitsExhaustedResponseAction",
+          "description": "Action selected by the user."
+        },
+        "additionalAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "AI Credits to add to the current max when action is 'add'."
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "New absolute max AI Credits when action is 'set'."
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
+      "description": "The user's selected action for an exhausted session limit.",
+      "title": "UISessionLimitsExhaustedResponse"
+    },
+    "UISessionLimitsExhaustedResponseAction": {
+      "type": "string",
+      "enum": [
+        "add",
+        "set",
+        "unset",
+        "cancel"
+      ],
+      "description": "User action selected for an exhausted session limit.",
+      "title": "UISessionLimitsExhaustedResponseAction",
+      "x-enumDescriptions": {
+        "add": "Increase the current max by an exact AI Credits amount.",
+        "set": "Set a new absolute max AI Credits value.",
+        "unset": "Remove the current session limit.",
+        "cancel": "Leave the limit unchanged and cancel the blocked model request."
+      }
     },
     "UIUnregisterDirectAutoModeSwitchHandlerRequest": {
       "type": "object",
