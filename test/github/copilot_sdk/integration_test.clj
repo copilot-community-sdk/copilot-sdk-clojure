@@ -2451,7 +2451,11 @@
                     (merge {:on-permission-request sdk/approve-all} opts))))
     (is (s/valid? ::specs/session-limits {:max-ai-credits 100}))
     (is (s/valid? ::specs/session-limits {})
-        "empty :session-limits map is valid (:max-ai-credits is optional)")))
+        "empty :session-limits map is valid (:max-ai-credits is optional)")
+    (is (not (s/valid? ::specs/session-limits {:max-ai-credits 0}))
+        ":max-ai-credits must be positive (wire exclusiveMinimum 0)")
+    (is (not (s/valid? ::specs/session-limits {:max-ai-credits -5}))
+        ":max-ai-credits rejects negative values")))
 
 (deftest test-v1-0-5-session-limits-events
   (testing "session.response_limits_changed renamed to session.session_limits_changed (upstream schema 1.0.67)"

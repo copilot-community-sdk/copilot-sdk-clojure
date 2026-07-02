@@ -768,9 +768,8 @@
 ;; enableCitations (@experimental): enable native model citations.
 (s/def ::enable-citations boolean?)
 ;; sessionLimits (@experimental): per-session accounting limits. maxAiCredits
-;; has exclusiveMinimum 0 on the wire; the generated wire spec enforces the
-;; numeric shape, so the idiom spec stays permissive (number?).
-(s/def ::max-ai-credits number?)
+;; carries exclusiveMinimum 0 on the wire, enforced here as a positive number.
+(s/def ::max-ai-credits (s/and number? pos?))
 (s/def ::session-limits (s/keys :opt-un [::max-ai-credits]))
 
 (def session-config-keys
