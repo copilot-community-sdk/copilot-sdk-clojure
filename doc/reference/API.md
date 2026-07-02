@@ -1550,8 +1550,8 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
 | `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
 | `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :previous-allow-all-permissions boolean}` (upstream schema 1.0.56). |
-| `:copilot/session.session_limits_changed` | Session limits updated; `nil` data clears the limits (upstream schema 1.0.67) |
-| `:copilot/session.usage_checkpoint` | Session usage checkpoint emitted; ephemeral observable event (upstream schema 1.0.67) |
+| `:copilot/session.session_limits_changed` | Session limits changed; data: `{:session-limits {:max-ai-credits <number>}}`, where a `nil` `:session-limits` clears the active limits (upstream schema 1.0.67) |
+| `:copilot/session.usage_checkpoint` | Durable usage checkpoint for reconstructing aggregate accounting on resume; data: `{:total-nano-aiu <number>}` with optional `:total-premium-requests <number>` (upstream schema 1.0.67) |
 | `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
 | `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
 | `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |
