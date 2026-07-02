@@ -2017,6 +2017,17 @@
       (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
       true (assoc :request-permission true)
       (:capi config) (assoc :capi (util/clj->wire (:capi config)))
+
+      ;; Session options (upstream PR #1865).
+      (:excluded-builtin-agents config)
+      (assoc :excluded-builtin-agents (:excluded-builtin-agents config))
+
+      (some? (:enable-citations config))
+      (assoc :enable-citations (:enable-citations config))
+
+      (:session-limits config)
+      (assoc :session-limits (util/clj->wire (:session-limits config)))
+
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
@@ -2174,6 +2185,17 @@
                   (not (identical? (:on-permission-request config)
                                    default-join-session-permission-handler)))
       (:capi config) (assoc :capi (util/clj->wire (:capi config)))
+
+      ;; Session options (upstream PR #1865).
+      (:excluded-builtin-agents config)
+      (assoc :excluded-builtin-agents (:excluded-builtin-agents config))
+
+      (some? (:enable-citations config))
+      (assoc :enable-citations (:enable-citations config))
+
+      (:session-limits config)
+      (assoc :session-limits (util/clj->wire (:session-limits config)))
+
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
@@ -2460,6 +2482,12 @@
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)
+   - :excluded-builtin-agents - Vector of strings. Names of built-in agents to exclude/hide from the
+                                session. Forwarded as `excludedBuiltinAgents`. (upstream PR #1865)
+   - :enable-citations - Boolean (@experimental). Enable native model citations. Forwarded as
+                         `enableCitations`. (upstream PR #1865)
+   - :session-limits     - Map (@experimental). Per-session accounting limits, e.g.
+                           {:max-ai-credits 100}. Forwarded as `sessionLimits`. (upstream PR #1865)
    - :remote-session     - Keyword. Per-session Mission Control remote mode: :off, :export, or :on.
                            Forwarded as `remoteSession` on session.create. When omitted, the CLI
                            applies its default. (upstream PR #1295, CLI 1.0.48)
@@ -2614,6 +2642,9 @@
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)
    - :enable-session-telemetry? - Boolean. See `create-session` (upstream PR #1224).
+   - :excluded-builtin-agents - Vector of strings. See `create-session` (upstream PR #1865).
+   - :enable-citations - Boolean (@experimental). See `create-session` (upstream PR #1865).
+   - :session-limits     - Map (@experimental). See `create-session` (upstream PR #1865).
    - :on-exit-plan-mode  - Handler for exitPlanMode.request RPCs. See `create-session`
                            (upstream PR #1228).
    - :on-auto-mode-switch - Handler for autoModeSwitch.request RPCs. See `create-session`
