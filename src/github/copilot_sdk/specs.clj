@@ -85,6 +85,10 @@
 ;; Trace context provider: 0-arity fn returning {:traceparent ... :tracestate ...}
 (s/def ::on-get-trace-context fn?)
 
+;; GitHub telemetry forwarding callback (upstream PR #1835). @experimental /
+;; Internal: a 1-arg fn invoked with each forwarded telemetry notification.
+(s/def ::on-github-telemetry fn?)
+
 ;; Session filesystem provider (upstream PR #917)
 (s/def ::initial-cwd ::non-blank-string)
 (s/def ::session-state-path ::non-blank-string)
@@ -209,6 +213,7 @@
     :notification-queue-size :router-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
+    :on-github-telemetry
     :session-fs :copilot-home :tcp-connection-token :remote?
     :session-idle-timeout-seconds
     :mode})
@@ -221,12 +226,47 @@
                      ::notification-queue-size ::router-queue-size
                      ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
                      ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
+                     ::on-github-telemetry
                      ::session-fs ::copilot-home ::tcp-connection-token ::remote?
                      ::session-idle-timeout-seconds])
     client-options-keys)
    (fn [m]
      (or (not (contains? m :mode))
          (s/valid? ::client-mode (:mode m))))))
+
+;; -----------------------------------------------------------------------------
+;; GitHub telemetry forwarding (upstream PR #1835) — @experimental / Internal
+;; -----------------------------------------------------------------------------
+;; Idiom-shaped specs for the forwarded telemetry notification. All maps are
+;; open (`s/keys`) so upstream additions pass through without a spec change
+;; (Key Principle #6). The `:properties`, `:metrics`, and `:features` sub-maps
+;; are OPAQUE source-defined data: their keys are preserved verbatim by the
+;; protocol escape hatch, so they are typed as plain maps rather than enumerated.
+
+(s/def ::restricted boolean?)
+(s/def ::properties map?)
+(s/def ::metrics map?)
+(s/def ::features map?)
+
+;; Descriptive standalone spec for the nested `:client` map (open). Not wired
+;; into `::github-telemetry-event`'s `:opt-un`: the unqualified key would be
+;; `:client`, which already names the client-record spec in this namespace.
+;; The event map is open, so `:client` passes through unvalidated.
+(s/def ::github-telemetry-client-info map?)
+
+(s/def ::github-telemetry-event
+  ;; Scalar keys (`:kind`, `:created-at`, `:model-call-id`, `:session-id`,
+  ;; `:copilot-tracking-id`, `:exp-assignment-context`) are kebab-cased from the
+  ;; wire snake_case. `:client`, when present, is an open client-info map
+  ;; (see ::github-telemetry-client-info). `:properties`/`:metrics`/`:features`
+  ;; are opaque verbatim passthrough.
+  (s/keys :opt-un [::properties ::metrics ::features]))
+
+(s/def ::event ::github-telemetry-event)
+
+(s/def ::github-telemetry-notification
+  ;; `:event`, when present, holds a ::github-telemetry-event map.
+  (s/keys :opt-un [::session-id ::restricted ::event]))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool definitions

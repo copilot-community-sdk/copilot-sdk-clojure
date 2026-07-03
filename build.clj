@@ -7,7 +7,7 @@
   (:import [java.io File]))
 
 (def lib 'io.github.copilot-community-sdk/copilot-sdk-clojure)
-(def version "1.0.5.0")
+(def version "1.0.6-preview.1.0")
 (def class-dir "target/classes")
 
 (defn- try-sh
@@ -259,13 +259,13 @@
   (println "Updated: build.clj," (str/join ", " install-doc-files)))
 
 (def ^:private upstream-version-re
-  "Matches an upstream version: X.Y.Z or X.Y.Z-(alpha|beta|rc).N."
-  #"^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[0-9]+)?$")
+  "Matches an upstream version: X.Y.Z or X.Y.Z-(alpha|beta|preview|rc).N."
+  #"^[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|preview|rc)\.[0-9]+)?$")
 
 (def ^:private full-version-re
   "Matches a full Clojure-SDK version: <upstream>.<clj-patch>(-SNAPSHOT)?.
    Group 1 captures the upstream portion; group 2 captures the Clojure patch."
-  #"^([0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|rc)\.[0-9]+)?)\.([0-9]+)(-SNAPSHOT)?$")
+  #"^([0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta|preview|rc)\.[0-9]+)?)\.([0-9]+)(-SNAPSHOT)?$")
 
 (defn- parse-version
   "Parse a version string into [upstream-string clj-patch].
@@ -295,7 +295,7 @@
   (when-not upstream
     (throw (ex-info "Required: :upstream version (e.g., :upstream '\"0.1.22\"' or '\"1.0.0-beta.3\"')" {})))
   (when-not (re-matches upstream-version-re upstream)
-    (throw (ex-info "Upstream version must match X.Y.Z or X.Y.Z-(alpha|beta|rc).N (e.g., \"0.1.22\" or \"1.0.0-beta.3\")"
+    (throw (ex-info "Upstream version must match X.Y.Z or X.Y.Z-(alpha|beta|preview|rc).N (e.g., \"0.1.22\" or \"1.0.6-preview.1\")"
                     {:upstream upstream})))
   (let [new-version (str upstream ".0" (when snapshot "-SNAPSHOT"))]
     (update-version-in-files! new-version)

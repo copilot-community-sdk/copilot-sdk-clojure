@@ -135,6 +135,7 @@ Get information about the current shared client state. Returns `nil` if no share
 | `:on-list-models` | fn | nil | Zero-arg function returning model info maps. Bypasses `models.list` RPC; does not require `start!`. Results are cached the same way as RPC results |
 | `:telemetry` | map | nil | OpenTelemetry export config, applied as environment variables to the **spawned** CLI (ignored when connecting to an existing server via `:cli-url` or a parent process via `:is-child-process?`, since no CLI is spawned). When present, enables OTel. Keys (all optional): `:otlp-endpoint` (OTLP HTTP endpoint), `:otlp-protocol` (`"http/json"` or `"http/protobuf"` — sets `OTEL_EXPORTER_OTLP_PROTOCOL`), `:file-path` (write spans to a file), `:exporter-type` (exporter selection), `:source-name` (service/source name), `:capture-content?` (boolean — capture prompt/response content; **off by default for privacy**). See [Observability](#observability). (upstream PR #785, [PR #1648](https://github.com/github/copilot-sdk/pull/1648)) |
 | `:on-get-trace-context` | fn | nil | Zero-arg function returning `{:traceparent "..." :tracestate "..."}`, called per request (session create/resume and each message send) to propagate a distributed-trace context. Only `:traceparent` and `:tracestate` are forwarded. See [Observability](#observability) |
+| `:on-github-telemetry` | fn | nil | **@experimental / Internal.** One-arg callback receiving each forwarded GitHub telemetry notification. Registering it adds `enableGitHubTelemetryForwarding: true` to the wire params of `session.create` and `session.resume`; the runtime then emits connection-global `gitHubTelemetry.event` notifications. A throwing handler is caught and logged (WARN) and cannot corrupt dispatch. Not a stable public SDK surface. See [Observability](#observability). ([PR #1835](https://github.com/github/copilot-sdk/pull/1835)) |
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
 | `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 10 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
@@ -1746,6 +1747,57 @@ send — forwarding only `:traceparent` and `:tracestate`:
      (fn [] {:traceparent "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
              :tracestate  "rojo=00f067aa0ba902b7"})}))
 ```
+
+### GitHub telemetry forwarding (`:on-github-telemetry`)
+
+> **@experimental / Internal.** This mirrors the official SDK's option set but is
+> not a stable public surface. Shapes may change upstream.
+
+Register a one-arg `:on-github-telemetry` callback in the **client** options to
+receive the runtime's forwarded GitHub telemetry. Registering the callback is what
+opts in: the SDK adds `enableGitHubTelemetryForwarding: true` to the wire params of
+both `session.create` and `session.resume` (the flag is omitted entirely when no
+callback is set — `false` is never sent). The runtime then emits connection-global
+`gitHubTelemetry.event` notifications, each passed to the callback:
+
+```clojure
+(def client
+  (copilot/client
+    {:on-github-telemetry
+     (fn [notification]
+       ;; notification => {:session-id "..." :restricted false :event {...}}
+       (tap> notification))}))
+```
+
+The callback runs on the client's notification loop. A throwing callback is caught
+and logged (WARN) — it cannot corrupt JSON-RPC dispatch. No reply is sent (these are
+notifications, not requests).
+
+**Notification shape:**
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:session-id` | string | Session the event originated from |
+| `:restricted` | boolean | Whether the event is restricted |
+| `:event` | map | The telemetry event (see below) |
+
+**Event shape** — scalar keys are kebab-cased from the wire (`:kind`, `:created-at`,
+`:model-call-id`, `:session-id`, `:copilot-tracking-id`, `:exp-assignment-context`),
+plus an optional `:client` map of client-info scalars (`:cli-version`, `:os-platform`,
+`:os-version`, `:os-arch`, `:node-version`, `:copilot-plan`, `:client-type`,
+`:client-name`, `:is-staff`, `:dev-device-id`).
+
+Three event sub-maps are **opaque source-defined data** and pass through **verbatim** —
+their keys are **not** kebab-cased:
+
+| Sub-map | Wire value type | Note |
+|---------|-----------------|------|
+| `:properties` | string → string | Keys preserved exactly as sent |
+| `:metrics` | string → number | Keys preserved exactly as sent |
+| `:features` | string → string | Keys preserved exactly as sent |
+
+Do not rely on those keys being Clojure-idiomatic; treat them as an opaque bag keyed
+by the upstream-defined strings-as-keywords. (upstream [PR #1835](https://github.com/github/copilot-sdk/pull/1835))
 
 ### Internal session telemetry (`:enable-session-telemetry?`)
 
