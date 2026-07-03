@@ -919,20 +919,6 @@
         },
         "stability": "experimental"
       },
-      "pollSpawnedSessions": {
-        "rpcMethod": "sessions.pollSpawnedSessions",
-        "description": "Cursor-based long-poll for sessions spawned by the runtime (e.g. in response to a Mission Control `start_session` command). The cursor is an opaque token; pass it back to receive only spawn events that occurred AFTER the cursor was issued. Omit the cursor on the first call to receive any events buffered since the runtime started. Internal: this is a CLI background-daemon plumbing primitive. SDK consumers that need to react to runtime-spawned sessions should subscribe to a higher-level event stream rather than driving a long-poll loop.",
-        "params": {
-          "$ref": "#/definitions/SessionsPollSpawnedSessionsRequest",
-          "description": "Cursor and optional long-poll wait for polling runtime-spawned sessions."
-        },
-        "result": {
-          "$ref": "#/definitions/PollSpawnedSessionsResult",
-          "description": "Batch of spawn events plus a cursor for follow-up polls."
-        },
-        "stability": "experimental",
-        "visibility": "internal"
-      },
       "registerExtensionToolsOnSession": {
         "rpcMethod": "sessions.registerExtensionToolsOnSession",
         "description": "Registers extension-provided tools on the given session, gated by an optional `enabled` callback. Returns an opaque unsubscribe function the caller must invoke to deregister the tools when the extension is torn down. Marked internal because `loader`, `enabled`, and the returned `unsubscribe` are in-process handles that cannot cross the JSON-RPC boundary. Disappears once extension discovery / launch / tool registration are owned by the runtime: SDK consumers will pass pure config (search paths, disabled ids) via `SessionOptions` and the runtime will resolve, launch, register, and tear down extensions itself.",
@@ -5825,6 +5811,59 @@
         },
         "stability": "experimental"
       },
+      "getContextAttribution": {
+        "rpcMethod": "session.metadata.getContextAttribution",
+        "description": "Returns the experimental per-source attribution breakdown of the session's current context window as a flat list of entries (skills, subagents, MCP servers, built-in tools, plugin rollups, system/tool-definition costs, with nesting via parentId), plus the successful compaction count. The heaviest individual messages are available separately via `metadata.getContextHeaviestMessages`. Returns null until the session has initialized its system prompt and tool metadata.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/MetadataContextAttributionResult",
+          "description": "Per-source attribution breakdown for the session's current context window, or null if uninitialized."
+        },
+        "stability": "experimental"
+      },
+      "getContextHeaviestMessages": {
+        "rpcMethod": "session.metadata.getContextHeaviestMessages",
+        "description": "Returns the largest individual messages currently in the session's context window, most-expensive first. Companion to `metadata.getContextAttribution`. Returns an empty list until the session has initialized.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Maximum number of messages to return, most-expensive first. Omit for the server default."
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for the heaviest-messages query.",
+          "title": "MetadataContextHeaviestMessagesRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/MetadataContextHeaviestMessagesResult",
+          "description": "The heaviest individual messages in the session's context window, most-expensive first."
+        },
+        "stability": "experimental"
+      },
       "recordContextChange": {
         "rpcMethod": "session.metadata.recordContextChange",
         "description": "Records a working-directory/git context change and emits a `session.context_changed` event.",
@@ -9890,6 +9929,37 @@
         "hidden_characters": "Remove characters that can hide directives."
       }
     },
+    "ContextHeaviestMessage": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for this message within the snapshot."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable source label, e.g. `tool: bash` or `skill: tmux`. Presentation-only."
+        },
+        "role": {
+          "type": "string",
+          "description": "Role of the chat message (`user`, `assistant`, or `tool`)."
+        },
+        "tokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Token count currently in context for this individual message."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "role",
+        "tokens"
+      ],
+      "additionalProperties": false,
+      "description": "A single large message currently in context.",
+      "title": "ContextHeaviestMessage"
+    },
     "ContextTier": {
       "type": "string",
       "enum": [
@@ -10999,6 +11069,13 @@
             "description": "A content block within a tool result, which may be text, terminal output, image, audio, or a resource"
           },
           "description": "Structured content blocks from the tool"
+        },
+        "toolReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tool references returned by a tool-search override: names of deferred tools to surface to the model. When set, the tool result is materialized as `tool_reference` content blocks (rather than plain text) so the model knows which deferred tools are now available."
         }
       },
       "required": [
@@ -14689,6 +14766,60 @@
       "description": "Memory configuration for this session.",
       "title": "MemoryConfiguration"
     },
+    "MetadataContextAttributionResult": {
+      "type": "object",
+      "properties": {
+        "contextAttribution": {
+          "$ref": "#/definitions/SessionContextAttribution",
+          "description": "Per-source context-window attribution, or null if the session has not yet been initialized (no system prompt or tool metadata cached)."
+        }
+      },
+      "required": [
+        "contextAttribution"
+      ],
+      "additionalProperties": false,
+      "description": "Per-source attribution breakdown for the session's current context window, or null if uninitialized.",
+      "title": "MetadataContextAttributionResult"
+    },
+    "MetadataContextHeaviestMessagesRequest": {
+      "type": "object",
+      "properties": {
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of messages to return, most-expensive first. Omit for the server default."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Parameters for the heaviest-messages query.",
+      "title": "MetadataContextHeaviestMessagesRequest",
+      "stability": "experimental"
+    },
+    "MetadataContextHeaviestMessagesResult": {
+      "type": "object",
+      "properties": {
+        "totalTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total token count of the current context window, so callers can compute each message's share without a second call."
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ContextHeaviestMessage",
+            "description": "A single large message currently in context."
+          },
+          "description": "Heaviest messages, most-expensive first."
+        }
+      },
+      "required": [
+        "totalTokens",
+        "messages"
+      ],
+      "additionalProperties": false,
+      "description": "The heaviest individual messages in the session's context window, most-expensive first.",
+      "title": "MetadataContextHeaviestMessagesResult"
+    },
     "MetadataContextInfoRequest": {
       "type": "object",
       "properties": {
@@ -18288,29 +18419,6 @@
       "description": "Result of updating a single plugin.",
       "title": "PluginUpdateResult"
     },
-    "PollSpawnedSessionsResult": {
-      "type": "object",
-      "properties": {
-        "events": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/SessionsPollSpawnedSessionsEvent"
-          },
-          "description": "Spawn events emitted since the supplied cursor."
-        },
-        "cursor": {
-          "type": "string",
-          "description": "Opaque cursor to pass back to receive only events after this batch."
-        }
-      },
-      "required": [
-        "events",
-        "cursor"
-      ],
-      "additionalProperties": false,
-      "description": "Batch of spawn events plus a cursor for follow-up polls.",
-      "title": "PollSpawnedSessionsResult"
-    },
     "ProviderAddRequest": {
       "type": "object",
       "properties": {
@@ -20793,6 +20901,91 @@
       "description": "Pre-resolved working-directory context for session startup.",
       "title": "SessionContext"
     },
+    "SessionContextAttribution": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "totalTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total token count of the current context window the entries are measured against (system message + conversation messages + tool definitions — the same total reported by /context). Divide an entry's `tokens` by this to derive its share."
+            },
+            "entries": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "kind": {
+                    "type": "string",
+                    "description": "Source category for this entry. Not a closed set — tolerate unknown values. Known values today: `skill`, `subagent`, `mcpServer`, `tool`, `system`, `toolDefinition`, `plugin`."
+                  },
+                  "id": {
+                    "type": "string",
+                    "description": "Identifier for this entry, formed by joining its `kind` and source name (e.g. `tool:bash`, `skill:tmux`, `toolDefinition:bash`); unique within the snapshot. Use it to match the same entry across snapshots, to correlate with other APIs (skill/agent/MCP registries), and as the `parentId` target for nesting. Distinct from the human-facing `label`."
+                  },
+                  "label": {
+                    "type": "string",
+                    "description": "Human-readable display label, e.g. `bash` or `skill: tmux`. Presentation-only; may be localized/reformatted without notice — do not key off it."
+                  },
+                  "tokens": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "description": "Token count currently in context attributable to this entry."
+                  },
+                  "parentId": {
+                    "type": "string",
+                    "description": "Optional `id` of the parent entry: e.g. a `plugin` entry parenting its `skill`/`mcpServer` entries, or the `system` entry parenting `toolDefinition` entries. Omitted for top-level entries."
+                  },
+                  "attributes": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "Supplementary per-entry metadata (e.g. `messageCount`, `role`, `evictable`, `pluginSource`). Values are stringified; parse as needed and ignore unrecognized keys."
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "label",
+                  "tokens"
+                ],
+                "additionalProperties": false
+              },
+              "description": "Flat list of per-source attribution entries. Group by `kind` and render unrecognized kinds generically. Nesting and rollups are expressed via `parentId`."
+            },
+            "compactions": {
+              "type": "object",
+              "properties": {
+                "count": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Number of successful compactions in this session."
+                }
+              },
+              "required": [
+                "count"
+              ],
+              "additionalProperties": false,
+              "description": "Successful compaction history for the session."
+            }
+          },
+          "required": [
+            "totalTokens",
+            "entries",
+            "compactions"
+          ],
+          "additionalProperties": false,
+          "description": "Per-source token attribution snapshot for the current context window. The heaviest individual messages are available separately via `metadata.getContextHeaviestMessages`."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Per-source context-window attribution, or null if the session has not yet been initialized (no system prompt or tool metadata cached).",
+      "title": "SessionContextAttribution"
+    },
     "SessionContextHostType": {
       "type": "string",
       "enum": [
@@ -23075,47 +23268,6 @@
         "all": "Return both local and remote sessions."
       }
     },
-    "SessionsPollSpawnedSessionsEvent": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string",
-          "description": "Session id of the newly-spawned session."
-        }
-      },
-      "required": [
-        "sessionId"
-      ],
-      "additionalProperties": false,
-      "description": "Schema for the `SessionsPollSpawnedSessionsEvent` type.",
-      "title": "SessionsPollSpawnedSessionsEvent"
-    },
-    "SessionsPollSpawnedSessionsRequest": {
-      "anyOf": [
-        {
-          "not": {}
-        },
-        {
-          "type": "object",
-          "properties": {
-            "cursor": {
-              "type": "string",
-              "description": "Opaque cursor returned by a previous poll. Omit on the first call to receive any spawn events buffered since the runtime started."
-            },
-            "waitMs": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 60000,
-              "format": "duration",
-              "description": "Milliseconds to wait for new spawn events when the cursor is at the tail. 0 (default) returns immediately even if no events are buffered. Capped at 60000ms."
-            }
-          },
-          "additionalProperties": false
-        }
-      ],
-      "description": "Cursor and optional long-poll wait for polling runtime-spawned sessions.",
-      "title": "SessionsPollSpawnedSessionsRequest"
-    },
     "SessionsPruneOldRequest": {
       "type": "object",
       "properties": {
@@ -24294,6 +24446,14 @@
           "type": "string",
           "description": "Hint to display when command input has not been provided"
         },
+        "choices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SlashCommandInputChoice",
+            "description": "A literal choice the command input accepts, with a human-facing description"
+          },
+          "description": "Optional literal choices the input accepts, each with a human-facing description; clients may render these as selectable options"
+        },
         "required": {
           "type": "boolean",
           "description": "When true, the command requires non-empty input; clients should render the input hint as required"
@@ -24313,6 +24473,26 @@
       "additionalProperties": false,
       "description": "Optional unstructured input hint",
       "title": "SlashCommandInput"
+    },
+    "SlashCommandInputChoice": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The literal choice value (e.g. 'on', 'off', 'show')"
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable description shown alongside the choice"
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "additionalProperties": false,
+      "description": "A literal choice the command input accepts, with a human-facing description",
+      "title": "SlashCommandInputChoice"
     },
     "SlashCommandInputCompletion": {
       "type": "string",
