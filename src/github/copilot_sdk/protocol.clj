@@ -387,6 +387,25 @@
                       (get-in msg [:result :openCanvases])
                       (get-in converted [:result :open-canvases])))
 
+      ;; Upstream PR #1835: GitHub telemetry forwarding notifications carry
+      ;; three OPAQUE source-defined sub-maps whose keys must survive verbatim
+      ;; (NOT kebab-cased): `:properties` (string->string), `:metrics`
+      ;; (string->number), `:features` (string->string). The remaining event
+      ;; scalars and the optional `:client` sub-map ARE snake->kebab-cased.
+      ;; Notification-only path — telemetry events are never replayed via
+      ;; `session.getMessages`, so no response-path hatch is needed.
+      (and (= "gitHubTelemetry.event" method) (map? (:event params)))
+      (let [raw-event (:event params)]
+        (cond-> converted
+          (map? (:properties raw-event))
+          (assoc-in [:params :event :properties] (:properties raw-event))
+
+          (map? (:metrics raw-event))
+          (assoc-in [:params :event :metrics] (:metrics raw-event))
+
+          (map? (:features raw-event))
+          (assoc-in [:params :event :features] (:features raw-event))))
+
       :else
       converted)))
 

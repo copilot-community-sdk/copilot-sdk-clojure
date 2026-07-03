@@ -230,6 +230,14 @@
     - :on-list-models - Zero-arg fn returning a seq of model info maps; bypasses the RPC call and does not require start!
     - :telemetry     - OpenTelemetry config map with optional keys :otlp-endpoint, :otlp-protocol, :file-path, :exporter-type, :source-name, :capture-content?. :otlp-protocol is \"http/json\" or \"http/protobuf\" and sets OTEL_EXPORTER_OTLP_PROTOCOL.
     - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
+    - :on-github-telemetry - **Experimental / Internal**. One-arg fn invoked with each GitHub telemetry
+                       notification (upstream PR #1835). Registering a handler opts the connection into
+                       `enableGitHubTelemetryForwarding` on both `session.create` and `session.resume`;
+                       the runtime then emits connection-global `gitHubTelemetry.event` notifications,
+                       each passed to this handler. The notification is an idiom-shaped map with keys
+                       :session-id, :restricted, and :event; the event's :properties, :metrics, and
+                       :features sub-maps are opaque and preserved verbatim. Not a stable public SDK
+                       surface. A throwing handler is caught and logged (WARN) and cannot corrupt dispatch.
     - :session-idle-timeout-seconds - Server-wide session idle timeout in seconds. When > 0,
                        the SDK appends `--session-idle-timeout <n>` to the spawned CLI so idle
                        sessions are cleaned up after the given duration. Default: disabled.
@@ -361,7 +369,9 @@
        (:on-get-trace-context opts)
        (assoc :on-get-trace-context (:on-get-trace-context opts))
        (:session-fs opts)
-       (assoc :session-fs (:session-fs opts))))))
+       (assoc :session-fs (:session-fs opts))
+       (:on-github-telemetry opts)
+       (assoc :on-github-telemetry (:on-github-telemetry opts))))))
 
 (defn state
   "Get the current connection state."
@@ -706,6 +716,21 @@
                     (handler lifecycle-event)
                     (catch Exception e
                       (log/error "Lifecycle handler error: " (ex-message e)))))))
+
+            ;; GitHub telemetry forwarding (upstream PR #1835, @experimental).
+            ;; Client-global, id-less notification. `:params` is already
+            ;; idiom-shaped with opaque `:properties`/`:metrics`/`:features`
+            ;; preserved verbatim by `protocol/normalize-incoming`. Invoke the
+            ;; registered callback in try/catch so a throwing consumer can't
+            ;; corrupt JSON-RPC dispatch. Not surfaced on the public
+            ;; `notifications` channel (mirrors Node/Python).
+            "gitHubTelemetry.event"
+            (when-let [handler (:on-github-telemetry client)]
+              (try
+                (handler (:params notif))
+                (catch Throwable e
+                  (log/warn "Error handling gitHubTelemetry.event notification: "
+                            (ex-message e)))))
 
             ;; default: other notifications go to the router queue
             (when-not (.offer router-queue notif)
@@ -1869,11 +1894,16 @@
    2. In `:empty` mode, normalize `:system-message` so the
       `environment_context` section is stripped unless the app has taken
       control of it (see `apply-empty-mode-system-message`).
-   No-op in `:copilot-cli` mode beyond returning the caller config as-is."
+   3. Stamp `:enable-github-telemetry-forwarding? true` when the client
+      carries an `:on-github-telemetry` handler (upstream PR #1835), so both
+      `session.create` and `session.resume` builders emit the wire opt-in.
+   Steps 1 and 3 apply in every mode; step 2 fires only in `:empty` mode."
   [client config]
-  (->> config
-       (merge (config-defaults-for-mode (-> client options :mode)))
-       (apply-empty-mode-system-message client)))
+  (cond-> (->> config
+               (merge (config-defaults-for-mode (-> client options :mode)))
+               (apply-empty-mode-system-message client))
+    (some? (:on-github-telemetry client))
+    (assoc :enable-github-telemetry-forwarding? true)))
 
 (defn- build-session-options-update-patch
   "Compute the params for session.options.update (upstream PR #1428).
@@ -2091,6 +2121,11 @@
                   (if (some? (:include-sub-agent-streaming-events? config))
                     (:include-sub-agent-streaming-events? config)
                     true))
+      ;; csk camelCases "github" -> "Github", but upstream expects the
+      ;; "GitHub" acronym (enableGitHubTelemetryForwarding). Assoc the exact
+      ;; wire keyword; clj->wire's camelCasing is idempotent on it.
+      (some? (:enable-github-telemetry-forwarding? config))
+      (assoc :enableGitHubTelemetryForwarding (:enable-github-telemetry-forwarding? config))
       true (assoc :env-value-mode "direct"))))
 
 (defn- stringify-keys-deep
@@ -2265,6 +2300,11 @@
                   (if (some? (:include-sub-agent-streaming-events? config))
                     (:include-sub-agent-streaming-events? config)
                     true))
+      ;; csk camelCases "github" -> "Github", but upstream expects the
+      ;; "GitHub" acronym (enableGitHubTelemetryForwarding). Assoc the exact
+      ;; wire keyword; clj->wire's camelCasing is idempotent on it.
+      (some? (:enable-github-telemetry-forwarding? config))
+      (assoc :enableGitHubTelemetryForwarding (:enable-github-telemetry-forwarding? config))
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
