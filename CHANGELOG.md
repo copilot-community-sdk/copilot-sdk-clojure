@@ -5,8 +5,22 @@ All notable changes to this project will be documented in this file. This change
 
 ### Added (v1.0.5-preview.0 sync)
 Ported from upstream `github/copilot-sdk` v1.0.4 → v1.0.5-preview.0 (`@github/copilot`
-1.0.65 → 1.0.66-2). Schema bumped to 1.0.66-2. **Preview sync**: the CLI is a
+1.0.65 → 1.0.67). Schema bumped to 1.0.67. **Preview sync**: the CLI is a
 prerelease and these additions are `@experimental` upstream.
+- **New `SessionConfigBase` session options** — port of upstream
+  [PR #1865](https://github.com/github/copilot-sdk/pull/1865). `create-session` and
+  `resume-session` accept three new optional keys, all wire-forwarded on both
+  `session.create` and `session.resume`:
+  - `:excluded-builtin-agents` — a vector of built-in agent names to hide from the
+    session. Wire-encoded as `excludedBuiltinAgents`. Added `::excluded-builtin-agents`
+    spec.
+  - `:enable-citations` (`@experimental`) — a boolean opting into native model
+    citations. Gated on `some?`, so an explicit `false` is forwarded and an absent
+    key is omitted. Wire-encoded as `enableCitations`. Added `::enable-citations`
+    spec.
+  - `:session-limits` (`@experimental`) — a map `{:max-ai-credits <number>}` capping
+    session AI-credit spend. Wire-encoded as `sessionLimits.maxAiCredits`. Added
+    `::session-limits` and `::max-ai-credits` specs.
 - **`:on-mcp-auth-request` handler** — port of upstream
   [PR #1669](https://github.com/github/copilot-sdk/pull/1669) (`@experimental`).
   `create-session` and `resume-session` accept an optional `:on-mcp-auth-request`
@@ -27,11 +41,16 @@ prerelease and these additions are `@experimental` upstream.
   change required. The `providerToken.getToken` callback already receives
   `{:provider-name ... :session-id ...}` (since the v1.0.4 sync), matching upstream's
   rename of `getBearerToken` → `bearerTokenProvider` and its `sessionId` argument.
-- **New session-event types** (schema 1.0.66) — schema-driven event types added to
-  the generated wire specs: `assistant.idle`, `session.response_limits_changed`,
+- **New session-event types** (schema 1.0.66 → 1.0.67) — schema-driven event types
+  added to the generated wire specs: `assistant.idle`,
+  `session.session_limits_changed`, `session.usage_checkpoint`,
+  `session_limits_exhausted.requested`, `session_limits_exhausted.completed`,
   `mcp.headers_refresh_required`, and `mcp.headers_refresh_completed`. Public
   `event-types` / `session-events` / `assistant-events` / `interaction-events`
-  entries added where upstream exposes a public SDK event.
+  entries added where upstream exposes a public SDK event: `session_limits_changed`
+  and `usage_checkpoint` join `session-events`; `session_limits_exhausted.requested`
+  / `.completed` join `interaction-events` (mirroring `sampling.requested` /
+  `sampling.completed`).
 
 ### Added (v1.0.4 sync)
 Ported from upstream `github/copilot-sdk` v1.0.1 → v1.0.4 (`@github/copilot`

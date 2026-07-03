@@ -152,12 +152,17 @@
     :copilot/session.canvas.removed
     :copilot/session.canvas.unavailable
     :copilot/session.schedule_rearmed
-    ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2). assistant.idle marks the
-    ;; assistant becoming idle within a turn; response_limits_changed reports
-    ;; updated response-limit budgets; the mcp.headers_refresh_* pair brackets a
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.67). assistant.idle marks the
+    ;; assistant becoming idle within a turn; session_limits_changed reports
+    ;; updated session-limit budgets; usage_checkpoint reports incremental usage;
+    ;; session_limits_exhausted.requested/completed brackets an interactive prompt
+    ;; when a session limit is hit; the mcp.headers_refresh_* pair brackets a
     ;; dynamic-header refresh on an MCP server connection.
     :copilot/assistant.idle
-    :copilot/session.response_limits_changed
+    :copilot/session.session_limits_changed
+    :copilot/session.usage_checkpoint
+    :copilot/session_limits_exhausted.requested
+    :copilot/session_limits_exhausted.completed
     :copilot/mcp.headers_refresh_required
     :copilot/mcp.headers_refresh_completed})
 
@@ -201,8 +206,10 @@
     :copilot/session.permissions_changed
     ;; v1.0.4 sync (pinned schema 1.0.65): recurring schedule re-arm event.
     :copilot/session.schedule_rearmed
-    ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): updated response-limit budgets.
-    :copilot/session.response_limits_changed})
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.67): updated session-limit budgets
+    ;; and incremental usage checkpoints.
+    :copilot/session.session_limits_changed
+    :copilot/session.usage_checkpoint})
 
 (def assistant-events
   "Assistant response events."
@@ -240,7 +247,10 @@
     :copilot/commands.changed
     :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
     :copilot/auto_mode_switch.requested :copilot/auto_mode_switch.completed
-    :copilot/sampling.requested :copilot/sampling.completed})
+    :copilot/sampling.requested :copilot/sampling.completed
+    ;; v1.0.5-preview.0 sync (pinned schema 1.0.67): interactive prompt when a
+    ;; session limit is exhausted (mirrors the sampling request/complete pair).
+    :copilot/session_limits_exhausted.requested :copilot/session_limits_exhausted.completed})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.

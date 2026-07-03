@@ -255,6 +255,10 @@
           "type": "string",
           "description": "Readable reasoning text from the model's extended thinking"
         },
+        "reasoningWireField": {
+          "type": "string",
+          "description": "OpenAI-compatible wire field the provider used for reasoning (e.g. reasoning_content/reasoning). Populated only when non-canonical, so the dialect round-trips across turns."
+        },
         "encryptedContent": {
           "type": "string",
           "description": "Encrypted reasoning content from OpenAI models. Session-bound and stripped on resume."
@@ -8562,6 +8566,14 @@
         "path": {
           "type": "string",
           "description": "Path of the file or directory being read"
+        },
+        "requestSandboxBypass": {
+          "type": "boolean",
+          "description": "True when the model has requested to run this search outside the sandbox (it set requestSandboxBypass: true and the host opted in via sandbox.allowBypass). This is a request, not a grant: the search runs unsandboxed only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
+        },
+        "requestSandboxBypassReason": {
+          "type": "string",
+          "description": "Model-provided justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
         }
       },
       "required": [
@@ -9125,96 +9137,6 @@
       "description": "Session event \"session.remote_steerable_changed\". Notifies that the session's remote steering capability has changed",
       "title": "RemoteSteerableChangedEvent"
     },
-    "ResponseLimitsChangedData": {
-      "type": "object",
-      "properties": {
-        "responseLimits": {
-          "anyOf": [
-            {
-              "$ref": "#/definitions/ResponseLimitsConfig",
-              "description": "Optional response limits."
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "Current response limits for the session, or null when no limits are active"
-        }
-      },
-      "required": [
-        "responseLimits"
-      ],
-      "additionalProperties": false,
-      "description": "Response limits update details. Null clears the limits.",
-      "title": "ResponseLimitsChangedData"
-    },
-    "ResponseLimitsChangedEvent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "ISO 8601 timestamp when the event was created"
-        },
-        "parentId": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "uuid"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
-        },
-        "ephemeral": {
-          "type": "boolean",
-          "description": "When true, the event is transient and not persisted to the session event log on disk"
-        },
-        "agentId": {
-          "type": "string",
-          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
-        },
-        "type": {
-          "type": "string",
-          "const": "session.response_limits_changed",
-          "description": "Type discriminator. Always \"session.response_limits_changed\"."
-        },
-        "data": {
-          "$ref": "#/definitions/ResponseLimitsChangedData",
-          "description": "Response limits update details. Null clears the limits."
-        }
-      },
-      "required": [
-        "id",
-        "timestamp",
-        "parentId",
-        "type",
-        "data"
-      ],
-      "additionalProperties": false,
-      "description": "Session event \"session.response_limits_changed\". Response limits update details. Null clears the limits.",
-      "title": "ResponseLimitsChangedEvent"
-    },
-    "ResponseLimitsConfig": {
-      "type": "object",
-      "properties": {
-        "maxAiCredits": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "description": "Maximum AI Credits allowed while responding to one top-level user message."
-        }
-      },
-      "additionalProperties": false,
-      "description": "Optional response limits.",
-      "title": "ResponseLimitsConfig"
-    },
     "ResumeData": {
       "type": "object",
       "properties": {
@@ -9256,17 +9178,17 @@
           ],
           "description": "Context tier currently selected at resume time; null when no tier is active"
         },
-        "responseLimits": {
+        "sessionLimits": {
           "anyOf": [
             {
-              "$ref": "#/definitions/ResponseLimitsConfig",
-              "description": "Optional response limits."
+              "$ref": "#/definitions/SessionLimitsConfig",
+              "description": "Optional session limits."
             },
             {
               "type": "null"
             }
           ],
-          "description": "Response limits currently configured at resume time; null when no limits are active"
+          "description": "Session limits currently configured at resume time; null when no limits are active"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -9813,8 +9735,8 @@
           "description": "Session event \"session.mode_changed\". Agent mode change details including previous and new modes"
         },
         {
-          "$ref": "#/definitions/ResponseLimitsChangedEvent",
-          "description": "Session event \"session.response_limits_changed\". Response limits update details. Null clears the limits."
+          "$ref": "#/definitions/SessionLimitsChangedEvent",
+          "description": "Session event \"session.session_limits_changed\". Session limits update details. Null clears the limits."
         },
         {
           "$ref": "#/definitions/PermissionsChangedEvent",
@@ -9847,6 +9769,10 @@
         {
           "$ref": "#/definitions/ShutdownEvent",
           "description": "Session event \"session.shutdown\". Session termination metrics including usage statistics, code changes, and shutdown reason"
+        },
+        {
+          "$ref": "#/definitions/UsageCheckpointEvent",
+          "description": "Session event \"session.usage_checkpoint\". Durable session usage checkpoint for reconstructing aggregate accounting on resume"
         },
         {
           "$ref": "#/definitions/ContextChangedEvent",
@@ -10077,6 +10003,14 @@
           "description": "Session event \"auto_mode_switch.completed\". Auto mode switch completion notification"
         },
         {
+          "$ref": "#/definitions/SessionLimitsExhaustedRequestedEvent",
+          "description": "Session event \"session_limits_exhausted.requested\". Session limit exhaustion notification requiring user action."
+        },
+        {
+          "$ref": "#/definitions/SessionLimitsExhaustedCompletedEvent",
+          "description": "Session event \"session_limits_exhausted.completed\". Session limit exhaustion prompt completion notification."
+        },
+        {
           "$ref": "#/definitions/CommandsChangedEvent",
           "description": "Session event \"commands.changed\". SDK command registration change notification"
         },
@@ -10154,6 +10088,297 @@
         }
       ],
       "description": "Union of all session event variants emitted by the Copilot CLI runtime."
+    },
+    "SessionLimitsChangedData": {
+      "type": "object",
+      "properties": {
+        "sessionLimits": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SessionLimitsConfig",
+              "description": "Optional session limits."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current session limits, or null when no limits are active"
+        }
+      },
+      "required": [
+        "sessionLimits"
+      ],
+      "additionalProperties": false,
+      "description": "Session limits update details. Null clears the limits.",
+      "title": "SessionLimitsChangedData"
+    },
+    "SessionLimitsChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.session_limits_changed",
+          "description": "Type discriminator. Always \"session.session_limits_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SessionLimitsChangedData",
+          "description": "Session limits update details. Null clears the limits."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.session_limits_changed\". Session limits update details. Null clears the limits.",
+      "title": "SessionLimitsChangedEvent"
+    },
+    "SessionLimitsConfig": {
+      "type": "object",
+      "properties": {
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Maximum AI Credits allowed across the session's current accounting window."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional session limits.",
+      "title": "SessionLimitsConfig"
+    },
+    "SessionLimitsExhaustedCompletedData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID of the resolved request; clients should dismiss any UI for this request."
+        },
+        "response": {
+          "$ref": "#/definitions/SessionLimitsExhaustedResponse",
+          "description": "The user's selected session-limit action."
+        }
+      },
+      "required": [
+        "requestId",
+        "response"
+      ],
+      "additionalProperties": false,
+      "description": "Session limit exhaustion prompt completion notification.",
+      "title": "SessionLimitsExhaustedCompletedData"
+    },
+    "SessionLimitsExhaustedCompletedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session_limits_exhausted.completed",
+          "description": "Type discriminator. Always \"session_limits_exhausted.completed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SessionLimitsExhaustedCompletedData",
+          "description": "Session limit exhaustion prompt completion notification."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session_limits_exhausted.completed\". Session limit exhaustion prompt completion notification.",
+      "title": "SessionLimitsExhaustedCompletedEvent"
+    },
+    "SessionLimitsExhaustedRequestedData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Unique identifier for this request; used to respond via session.ui.handlePendingSessionLimitsExhausted()."
+        },
+        "usedAiCredits": {
+          "type": "number",
+          "minimum": 0,
+          "description": "AI Credits already consumed in the current accounting window."
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Configured max AI Credits for the current accounting window."
+        }
+      },
+      "required": [
+        "requestId",
+        "usedAiCredits",
+        "maxAiCredits"
+      ],
+      "additionalProperties": false,
+      "description": "Session limit exhaustion notification requiring user action.",
+      "title": "SessionLimitsExhaustedRequestedData"
+    },
+    "SessionLimitsExhaustedRequestedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session_limits_exhausted.requested",
+          "description": "Type discriminator. Always \"session_limits_exhausted.requested\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SessionLimitsExhaustedRequestedData",
+          "description": "Session limit exhaustion notification requiring user action."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session_limits_exhausted.requested\". Session limit exhaustion notification requiring user action.",
+      "title": "SessionLimitsExhaustedRequestedEvent"
+    },
+    "SessionLimitsExhaustedResponse": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/SessionLimitsExhaustedResponseAction",
+          "description": "Action selected by the user."
+        },
+        "additionalAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "AI Credits to add to the current max when action is 'add'."
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "New absolute max AI Credits when action is 'set'."
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false,
+      "description": "The user's selected action for an exhausted session limit.",
+      "title": "SessionLimitsExhaustedResponse"
+    },
+    "SessionLimitsExhaustedResponseAction": {
+      "type": "string",
+      "enum": [
+        "add",
+        "set",
+        "unset",
+        "cancel"
+      ],
+      "description": "User action selected for an exhausted session limit.",
+      "title": "SessionLimitsExhaustedResponseAction",
+      "x-enumDescriptions": {
+        "add": "Increase the current max by an exact AI Credits amount.",
+        "set": "Set a new absolute max AI Credits value.",
+        "unset": "Remove the current session limit.",
+        "cancel": "Leave the limit unchanged and cancel the blocked model request."
+      }
     },
     "SessionMode": {
       "type": "string",
@@ -10869,9 +11094,9 @@
           ],
           "description": "Context tier selected at session creation time for models with tiered context pricing; null when no tier is selected (e.g., non-tiered model)"
         },
-        "responseLimits": {
-          "$ref": "#/definitions/ResponseLimitsConfig",
-          "description": "Response limits configured at session creation time, if any"
+        "sessionLimits": {
+          "$ref": "#/definitions/SessionLimitsConfig",
+          "description": "Session limits configured at session creation time, if any"
         },
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
@@ -13339,6 +13564,82 @@
       "additionalProperties": false,
       "description": "Session event \"session.truncation\". Conversation truncation statistics including token counts and removed content metrics",
       "title": "TruncationEvent"
+    },
+    "UsageCheckpointData": {
+      "type": "object",
+      "properties": {
+        "totalNanoAiu": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Session-wide accumulated nano-AI units cost at checkpoint time"
+        },
+        "totalPremiumRequests": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Total number of premium API requests used at checkpoint time",
+          "visibility": "internal"
+        }
+      },
+      "required": [
+        "totalNanoAiu"
+      ],
+      "additionalProperties": false,
+      "description": "Durable session usage checkpoint for reconstructing aggregate accounting on resume",
+      "title": "UsageCheckpointData"
+    },
+    "UsageCheckpointEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.usage_checkpoint",
+          "description": "Type discriminator. Always \"session.usage_checkpoint\"."
+        },
+        "data": {
+          "$ref": "#/definitions/UsageCheckpointData",
+          "description": "Durable session usage checkpoint for reconstructing aggregate accounting on resume"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.usage_checkpoint\". Durable session usage checkpoint for reconstructing aggregate accounting on resume",
+      "title": "UsageCheckpointEvent"
     },
     "UsageInfoData": {
       "type": "object",

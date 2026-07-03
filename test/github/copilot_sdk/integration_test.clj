@@ -2391,6 +2391,88 @@
     (is (s/valid? :github.copilot-sdk.specs/capi {})
         "empty :capi map is valid (field is optional)")))
 
+(deftest test-v1-0-5-new-session-options-wire
+  (testing ":excluded-builtin-agents, :enable-citations, :session-limits forward on both session.create and session.resume (upstream PR #1865)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          opts {:excluded-builtin-agents ["planner" "reviewer"]
+                :enable-citations true
+                :session-limits {:max-ai-credits 500}}
+          _ (sdk/create-session *test-client*
+                                (merge {:on-permission-request sdk/approve-all} opts))
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                (merge {:on-permission-request sdk/approve-all} opts))
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (= ["planner" "reviewer"] (:excludedBuiltinAgents create-params))
+          ":excluded-builtin-agents must forward under camelCase :excludedBuiltinAgents on create")
+      (is (= ["planner" "reviewer"] (:excludedBuiltinAgents resume-params))
+          ":excluded-builtin-agents must also forward on resume")
+      (is (true? (:enableCitations create-params))
+          ":enable-citations must forward as :enableCitations on create")
+      (is (true? (:enableCitations resume-params))
+          ":enable-citations must also forward on resume")
+      (is (= {:maxAiCredits 500} (:sessionLimits create-params))
+          ":session-limits {:max-ai-credits n} must forward as {:maxAiCredits n} on create")
+      (is (= {:maxAiCredits 500} (:sessionLimits resume-params))
+          ":session-limits must also forward on resume")))
+  (testing ":enable-citations is gated on some?, so an explicit false is still forwarded (not omitted)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :enable-citations false})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :enable-citations false})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (false? (:enableCitations create-params))
+          "explicit :enable-citations false must forward as :enableCitations false on create")
+      (is (false? (:enableCitations resume-params))
+          "explicit :enable-citations false must also forward on resume")))
+  (testing "new options are accepted by the session-config, resume-session-config, and join-session-config specs"
+    (let [opts {:excluded-builtin-agents ["a"]
+                :enable-citations true
+                :session-limits {:max-ai-credits 100}}]
+      (is (s/valid? ::specs/session-config
+                    (merge {:on-permission-request sdk/approve-all} opts)))
+      (is (s/valid? ::specs/resume-session-config
+                    (merge {:on-permission-request sdk/approve-all} opts)))
+      (is (s/valid? ::specs/join-session-config
+                    (merge {:on-permission-request sdk/approve-all} opts))))
+    (is (s/valid? ::specs/session-limits {:max-ai-credits 100}))
+    (is (s/valid? ::specs/session-limits {})
+        "empty :session-limits map is valid (:max-ai-credits is optional)")
+    (is (not (s/valid? ::specs/session-limits {:max-ai-credits 0}))
+        ":max-ai-credits must be positive (wire exclusiveMinimum 0)")
+    (is (not (s/valid? ::specs/session-limits {:max-ai-credits -5}))
+        ":max-ai-credits rejects negative values")))
+
+(deftest test-v1-0-5-session-limits-events
+  (testing "session.response_limits_changed renamed to session.session_limits_changed (upstream schema 1.0.67)"
+    (is (contains? sdk/event-types :copilot/session.session_limits_changed)
+        "renamed event must be in the master event-types set")
+    (is (contains? sdk/session-events :copilot/session.session_limits_changed)
+        "renamed event must be in the session-events set")
+    (is (not (contains? sdk/event-types :copilot/session.response_limits_changed))
+        "the old event name must be gone from the public sets"))
+  (testing "new usage_checkpoint and session_limits_exhausted events are public (upstream schema 1.0.67)"
+    (is (contains? sdk/event-types :copilot/session.usage_checkpoint))
+    (is (contains? sdk/session-events :copilot/session.usage_checkpoint))
+    (is (contains? sdk/event-types :copilot/session_limits_exhausted.requested))
+    (is (contains? sdk/event-types :copilot/session_limits_exhausted.completed))
+    (is (contains? sdk/interaction-events :copilot/session_limits_exhausted.requested))
+    (is (contains? sdk/interaction-events :copilot/session_limits_exhausted.completed))))
+
 (deftest test-v1-0-4-provider-transport-wire
   (testing ":provider :transport forwards on both session.create and session.resume (upstream PR #1711)"
     (let [seen (atom {})

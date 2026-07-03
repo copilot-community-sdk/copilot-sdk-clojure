@@ -762,6 +762,16 @@
 (s/def ::enable-web-socket-responses boolean?)
 (s/def ::capi (s/keys :opt-un [::enable-web-socket-responses]))
 
+;; Session options (upstream PR #1865) — shared by create + resume/join.
+;; excludedBuiltinAgents: names of built-in agents to hide from the session.
+(s/def ::excluded-builtin-agents (s/coll-of string?))
+;; enableCitations (@experimental): enable native model citations.
+(s/def ::enable-citations boolean?)
+;; sessionLimits (@experimental): per-session accounting limits. maxAiCredits
+;; carries exclusiveMinimum 0 on the wire, enforced here as a positive number.
+(s/def ::max-ai-credits (s/and number? pos?))
+(s/def ::session-limits (s/keys :opt-un [::max-ai-credits]))
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
@@ -798,6 +808,7 @@
     :coauthor-enabled
     :manage-schedule-enabled
     :capi
+    :excluded-builtin-agents :enable-citations :session-limits
     :providers :models :exp-assignments
     :include-sub-agent-streaming-events?})
 
@@ -840,6 +851,7 @@
                     ::coauthor-enabled
                     ::manage-schedule-enabled
                     ::capi
+                    ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?])
    session-config-keys))
@@ -876,6 +888,7 @@
     :coauthor-enabled
     :manage-schedule-enabled
     :capi
+    :excluded-builtin-agents :enable-citations :session-limits
     :providers :models :exp-assignments
     :include-sub-agent-streaming-events?
     ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
@@ -917,6 +930,7 @@
                     ::coauthor-enabled
                     ::manage-schedule-enabled
                     ::capi
+                    ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
                     ::open-canvases])
@@ -959,6 +973,7 @@
                     ::coauthor-enabled
                     ::manage-schedule-enabled
                     ::capi
+                    ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
                     ::open-canvases])
