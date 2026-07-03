@@ -5444,7 +5444,23 @@
                                                       (swap! seen assoc method params))))
           _ (sdk/resume-session *test-client* session-id {:on-permission-request sdk/approve-all})
           resume-params (get @seen "session.resume")]
-      (is (not (contains? resume-params :enableGitHubTelemetryForwarding))))))
+      (is (not (contains? resume-params :enableGitHubTelemetryForwarding)))))
+
+  (testing "wire builders emit enableGitHubTelemetryForwarding only for an explicit true config value (upstream PR #1835)"
+    ;; Guard the emit on `true?`, not `some?`: an explicit `false` in config
+    ;; must be omitted from the wire, never stamped as `false`.
+    (let [create @#'client/build-create-session-params
+          resume #(#'client/build-resume-session-params %1 %2)]
+      (is (true? (:enableGitHubTelemetryForwarding
+                  (create {:enable-github-telemetry-forwarding? true}))))
+      (is (not (contains? (create {:enable-github-telemetry-forwarding? false})
+                          :enableGitHubTelemetryForwarding)))
+      (is (not (contains? (create {}) :enableGitHubTelemetryForwarding)))
+      (is (true? (:enableGitHubTelemetryForwarding
+                  (resume "s-1" {:enable-github-telemetry-forwarding? true}))))
+      (is (not (contains? (resume "s-1" {:enable-github-telemetry-forwarding? false})
+                          :enableGitHubTelemetryForwarding)))
+      (is (not (contains? (resume "s-1" {}) :enableGitHubTelemetryForwarding))))))
 
 (deftest test-github-telemetry-event-invokes-callback
   (testing "gitHubTelemetry.event notification invokes :on-github-telemetry with idiom-shaped params; opaque sub-maps pass through verbatim (upstream PR #1835)"

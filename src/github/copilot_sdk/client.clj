@@ -2124,8 +2124,8 @@
       ;; csk camelCases "github" -> "Github", but upstream expects the
       ;; "GitHub" acronym (enableGitHubTelemetryForwarding). Assoc the exact
       ;; wire keyword; clj->wire's camelCasing is idempotent on it.
-      (some? (:enable-github-telemetry-forwarding? config))
-      (assoc :enableGitHubTelemetryForwarding (:enable-github-telemetry-forwarding? config))
+      (true? (:enable-github-telemetry-forwarding? config))
+      (assoc :enableGitHubTelemetryForwarding true)
       true (assoc :env-value-mode "direct"))))
 
 (defn- stringify-keys-deep
@@ -2303,8 +2303,8 @@
       ;; csk camelCases "github" -> "Github", but upstream expects the
       ;; "GitHub" acronym (enableGitHubTelemetryForwarding). Assoc the exact
       ;; wire keyword; clj->wire's camelCasing is idempotent on it.
-      (some? (:enable-github-telemetry-forwarding? config))
-      (assoc :enableGitHubTelemetryForwarding (:enable-github-telemetry-forwarding? config))
+      (true? (:enable-github-telemetry-forwarding? config))
+      (assoc :enableGitHubTelemetryForwarding true)
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
