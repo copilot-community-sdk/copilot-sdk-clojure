@@ -5376,6 +5376,138 @@
           resume-params (get @seen "session.resume")]
       (is (false? (:includeSubAgentStreamingEvents resume-params))))))
 
+;; --- GitHub telemetry forwarding (upstream PR #1835) ----------------------
+
+(defn- with-telemetry-client*
+  "Create a mock server + client (optionally with :on-github-telemetry),
+   connect them over in-memory streams, run (f server client), then tear
+   down. Used for telemetry-forwarding tests that need a client carrying an
+   :on-github-telemetry handler (the shared *test-client* has none)."
+  [client-opts f]
+  (let [server (mock/create-mock-server)
+        _ (mock/start-mock-server! server)
+        client (sdk/client (merge {:auto-start? false} client-opts))
+        [in out] (mock/client-streams server)]
+    (client/connect-with-streams! client in out)
+    (try
+      (f server client)
+      (finally
+        (try (sdk/stop! client) (catch Exception _))
+        (Thread/sleep 50)
+        (mock/stop-mock-server! server)))))
+
+(deftest test-on-github-telemetry-client-option-accepted
+  (testing ":on-github-telemetry client option is accepted and stored on the client (upstream PR #1835)"
+    (let [c (sdk/client {:auto-start? false :on-github-telemetry (fn [_])})]
+      (is (fn? (:on-github-telemetry c))))))
+
+(deftest test-github-telemetry-forwarding-flag-on-wire
+  (testing "enableGitHubTelemetryForwarding=true in session.create when handler is set (upstream PR #1835)"
+    (with-telemetry-client*
+      {:on-github-telemetry (fn [_])}
+      (fn [server client]
+        (let [seen (atom {})
+              _ (mock/set-request-hook! server (fn [method params]
+                                                 (when (= "session.create" method)
+                                                   (swap! seen assoc method params))))
+              _ (sdk/create-session client {:on-permission-request sdk/approve-all})
+              create-params (get @seen "session.create")]
+          (is (true? (:enableGitHubTelemetryForwarding create-params)))))))
+
+  (testing "enableGitHubTelemetryForwarding=true in session.resume when handler is set (upstream PR #1835)"
+    (with-telemetry-client*
+      {:on-github-telemetry (fn [_])}
+      (fn [server client]
+        (let [session-id (sdk/session-id (sdk/create-session client {:on-permission-request sdk/approve-all}))
+              seen (atom {})
+              _ (mock/set-request-hook! server (fn [method params]
+                                                 (when (= "session.resume" method)
+                                                   (swap! seen assoc method params))))
+              _ (sdk/resume-session client session-id {:on-permission-request sdk/approve-all})
+              resume-params (get @seen "session.resume")]
+          (is (true? (:enableGitHubTelemetryForwarding resume-params)))))))
+
+  (testing "enableGitHubTelemetryForwarding is omitted from session.create when no handler (upstream PR #1835)"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
+          create-params (get @seen "session.create")]
+      (is (not (contains? create-params :enableGitHubTelemetryForwarding)))))
+
+  (testing "enableGitHubTelemetryForwarding is omitted from session.resume when no handler (upstream PR #1835)"
+    (let [session-id (sdk/session-id (sdk/create-session *test-client* {:on-permission-request sdk/approve-all}))
+          seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.resume" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/resume-session *test-client* session-id {:on-permission-request sdk/approve-all})
+          resume-params (get @seen "session.resume")]
+      (is (not (contains? resume-params :enableGitHubTelemetryForwarding))))))
+
+(deftest test-github-telemetry-event-invokes-callback
+  (testing "gitHubTelemetry.event notification invokes :on-github-telemetry with idiom-shaped params; opaque sub-maps pass through verbatim (upstream PR #1835)"
+    (let [received (promise)]
+      (with-telemetry-client*
+        {:on-github-telemetry (fn [notif] (deliver received notif))}
+        (fn [server _client]
+          (mock/send-notification! server "gitHubTelemetry.event"
+                                   {:sessionId "sess-1"
+                                    :restricted false
+                                    :event {:kind "model_call"
+                                            :created_at "2024-01-01T00:00:00Z"
+                                            :model_call_id "mc-123"
+                                            :session_id "sess-1"
+                                            :copilot_tracking_id "trk-9"
+                                            :properties {:someWeirdKey "v" :another_Key "w"}
+                                            :metrics {:someMetricKey 1 :another_Metric 2}
+                                            :features {:someFeatureKey "on"}
+                                            :client {:cli_version "1.0.0"
+                                                     :os_platform "darwin"}}})
+          (let [notif (deref received 1000 :timeout)]
+            (is (not= :timeout notif) "callback should be invoked within 1s")
+            (when (map? notif)
+              ;; Top-level notification scalars: snake/camel -> kebab
+              (is (= "sess-1" (:session-id notif)))
+              (is (= false (:restricted notif)))
+              (let [event (:event notif)]
+                ;; Event scalars: snake_case -> kebab-case
+                (is (= "model_call" (:kind event)))
+                (is (= "mc-123" (:model-call-id event)))
+                (is (= "sess-1" (:session-id event)))
+                (is (= "trk-9" (:copilot-tracking-id event)))
+                ;; Opaque sub-maps: keys preserved VERBATIM (not kebab-cased)
+                (is (= {:someWeirdKey "v" :another_Key "w"} (:properties event)))
+                (is (= {:someMetricKey 1 :another_Metric 2} (:metrics event)))
+                (is (= {:someFeatureKey "on"} (:features event)))
+                ;; Nested client info: snake_case scalars -> kebab-case
+                (is (= "1.0.0" (get-in event [:client :cli-version])))
+                (is (= "darwin" (get-in event [:client :os-platform])))))))))))
+
+(deftest test-github-telemetry-handler-throwable-does-not-kill-router
+  (testing "a telemetry handler throwing a non-Exception Throwable (e.g. AssertionError) must not kill the notification router; a later notification still dispatches (upstream PR #1835, regression guard)"
+    (let [calls (atom 0)
+          second-received (promise)
+          handler (fn [_notif]
+                    (if (= 1 (swap! calls inc))
+                      ;; AssertionError is a Throwable but NOT an Exception —
+                      ;; a `catch Exception` would let it escape and unwind the
+                      ;; notification go-loop, killing dispatch for all sessions.
+                      (throw (AssertionError. "boom"))
+                      (deliver second-received :ok)))]
+      (with-telemetry-client*
+        {:on-github-telemetry handler}
+        (fn [server _client]
+          (mock/send-notification! server "gitHubTelemetry.event"
+                                   {:sessionId "s1" :restricted false :event {:kind "k"}})
+          ;; Let the router process the first (throwing) notification.
+          (Thread/sleep 50)
+          (mock/send-notification! server "gitHubTelemetry.event"
+                                   {:sessionId "s2" :restricted false :event {:kind "k"}})
+          (is (= :ok (deref second-received 1000 :timeout))
+              "router must survive a Throwable from the handler and dispatch later notifications"))))))
+
 ;; --- requestHeaders on send! (upstream PR #1094) --------------------------
 
 (deftest test-send-request-headers-on-wire
