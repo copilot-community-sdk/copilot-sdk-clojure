@@ -3,6 +3,33 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.6-preview sync)
+Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to
+1.0.68. **Preview sync**: the CLI is a prerelease and these additions are
+`@experimental` upstream.
+- **GitHub telemetry forwarding** — port of upstream
+  [PR #1835](https://github.com/github/copilot-sdk/pull/1835) (`@experimental` /
+  Internal). New client option `:on-github-telemetry`, a one-arg callback. Registering
+  it is the opt-in: the SDK adds `enableGitHubTelemetryForwarding: true` to the wire
+  params of **both** `session.create` and `session.resume` (gated on `some?`, so the
+  flag is omitted entirely when no callback is set — `false` is never sent). The
+  runtime then emits connection-global `gitHubTelemetry.event` notifications, each
+  dispatched to the callback on the client's notification loop. A throwing callback is
+  caught and logged (WARN) so it cannot corrupt JSON-RPC dispatch; no reply is sent.
+  The notification is an idiom-shaped map `{:session-id :restricted :event}`; the
+  event's `:properties`, `:metrics`, and `:features` sub-maps are **opaque
+  source-defined data** and pass through verbatim (keys not kebab-cased) via a
+  protocol escape hatch. Added `::github-telemetry-notification`,
+  `::github-telemetry-event`, `::github-telemetry-client-info`, `::on-github-telemetry`,
+  and supporting specs; `:on-github-telemetry` added to `client-options-keys`.
+- **Schema regen to 1.0.68** — port of upstream
+  [PR #1886](https://github.com/github/copilot-sdk/pull/1886). Bumped
+  `.copilot-schema-version` `1.0.67` → `1.0.68` and regenerated wire specs /
+  coercions via `bb codegen`. The new metadata RPC methods (`getContextAttribution`,
+  `getContextHeaviestMessages`) and their types exist only in the generated protocol
+  layer and are **not** surfaced on the public Node SDK, so per the API-parity rules
+  no public Clojure API is added for them. No session-event changes.
+
 ### Added (v1.0.5-preview.0 sync)
 Ported from upstream `github/copilot-sdk` v1.0.4 → v1.0.5-preview.0 (`@github/copilot`
 1.0.65 → 1.0.67). Schema bumped to 1.0.67. **Preview sync**: the CLI is a
