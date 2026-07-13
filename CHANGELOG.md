@@ -21,15 +21,19 @@ marked `@experimental` upstream.
 - **Five new session event types** — surfaced in the curated public event sets
   (`event-types` plus the relevant category set) and the idiom `::event-type` enum:
   - `:copilot/assistant.tool_call_delta` (schema 1.0.69-3) — streaming tool-call
-    argument input chunk; data `{:tool-call-id :input-delta}` with optional
+    argument input chunk; data `{:tool-call-id "..." :input-delta "..."}` with optional
     `:tool-name`, `:tool-type`.
   - `:copilot/mcp.tools.list_changed`, `:copilot/mcp.resources.list_changed`,
     `:copilot/mcp.prompts.list_changed` (schema 1.0.70) — remote MCP server
-    list-changed signals; data `{:server-name}`.
+    list-changed signals; data `{:server-name "..."}`.
   - `:copilot/session.auto_mode_resolved` (schema 1.0.70-0, `@experimental`) — auto
-    model-selection resolution; data `{:chosen-model}` with optional
+    model-selection resolution; data `{:chosen-model "..."}` with optional
     `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`,
     `:reasoning-bucket`.
+- **`session.permissions_changed` allow-all mode fields** — schema 1.0.70 added the
+  optional experimental `:allow-all-permission-mode` / `:previous-allow-all-permission-mode`
+  fields (tri-state `#{"off" "auto" "on"}`) to the existing event; surfaced in the idiom
+  `::session.permissions_changed-data` spec and API reference.
 
 ### Added (v1.0.6-preview.1 sync)
 Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to

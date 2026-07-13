@@ -5342,6 +5342,9 @@
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :time-to-first-token-ms "fast"}))
         ":time-to-first-token-ms must be a number")
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5" :time-to-first-token-ms ##NaN}))
+        ":time-to-first-token-ms rejects ##NaN (not a meaningful duration)")
     (testing "legacy :ttft-ms key still accepted for backward compatibility (older CLIs)"
       (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                     {:model "gpt-5" :ttft-ms 250}))
@@ -6464,7 +6467,17 @@
       (is (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data evt)))
     (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
                        {:allow-all-permissions "yes"
-                        :previous-allow-all-permissions false})))))
+                        :previous-allow-all-permissions false}))))
+  (testing "optional allow-all mode fields (schema 1.0.70, experimental) validate"
+    (is (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
+                  {:allow-all-permissions true
+                   :previous-allow-all-permissions false
+                   :allow-all-permission-mode "auto"
+                   :previous-allow-all-permission-mode "off"}))
+    (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
+                       {:allow-all-permissions true
+                        :previous-allow-all-permissions false
+                        :allow-all-permission-mode "sometimes"})))))
 
 (deftest test-spec-hook-progress-data
   (testing "::hook.progress-data accepts a non-blank :message string"
