@@ -2473,6 +2473,34 @@
     (is (contains? sdk/interaction-events :copilot/session_limits_exhausted.requested))
     (is (contains? sdk/interaction-events :copilot/session_limits_exhausted.completed))))
 
+(deftest test-v1-0-7-preview-new-events
+  (testing "assistant.tool_call_delta is a public assistant event (upstream schema 1.0.69-1)"
+    (is (contains? sdk/event-types :copilot/assistant.tool_call_delta)
+        "must be in the master event-types set")
+    (is (contains? sdk/assistant-events :copilot/assistant.tool_call_delta)
+        "must be categorized under assistant-events"))
+  (testing "mcp list_changed events are public MCP interaction events (upstream schema 1.0.70)"
+    (doseq [ev [:copilot/mcp.tools.list_changed
+                :copilot/mcp.resources.list_changed
+                :copilot/mcp.prompts.list_changed]]
+      (is (contains? sdk/event-types ev)
+          (str ev " must be in the master event-types set"))
+      (is (contains? sdk/interaction-events ev)
+          (str ev " must be categorized under interaction-events"))))
+  (testing "session.auto_mode_resolved is a public session event (upstream schema 1.0.70)"
+    (is (contains? sdk/event-types :copilot/session.auto_mode_resolved)
+        "must be in the master event-types set")
+    (is (contains? sdk/session-events :copilot/session.auto_mode_resolved)
+        "must be categorized under session-events"))
+  (testing "new event types validate against the idiom ::event-type enum"
+    (doseq [ev [:copilot/assistant.tool_call_delta
+                :copilot/mcp.tools.list_changed
+                :copilot/mcp.resources.list_changed
+                :copilot/mcp.prompts.list_changed
+                :copilot/session.auto_mode_resolved]]
+      (is (s/valid? ::specs/event-type ev)
+          (str ev " must be accepted by the idiom ::event-type spec")))))
+
 (deftest test-v1-0-4-provider-transport-wire
   (testing ":provider :transport forwards on both session.create and session.resume (upstream PR #1711)"
     (let [seen (atom {})

@@ -3,7 +3,32 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-### Added (v1.0.6-preview sync)
+### Added (v1.0.7-preview.2 sync)
+Ported from upstream `github/copilot-sdk` v1.0.6-preview.1 → v1.0.7-preview.2
+(`@github/copilot` 1.0.68 → 1.0.70). Schema bumped to 1.0.70. **Preview sync**: the
+CLI is a prerelease. Of the new events below, only `session.auto_mode_resolved` is
+marked `@experimental` upstream.
+- **Schema regen to 1.0.70** — port of upstream schema bumps
+  [PR #1908](https://github.com/github/copilot-sdk/pull/1908) (1.0.69-1),
+  [PR #1940](https://github.com/github/copilot-sdk/pull/1940) (1.0.69-3),
+  [PR #1941](https://github.com/github/copilot-sdk/pull/1941) (1.0.69),
+  [PR #1954](https://github.com/github/copilot-sdk/pull/1954) (1.0.70-0), and
+  [PR #1962](https://github.com/github/copilot-sdk/pull/1962) (1.0.70). Bumped
+  `.copilot-schema-version` `1.0.68` → `1.0.70` and regenerated wire specs /
+  coercions via `bb codegen`.
+- **Five new session event types** — surfaced in the curated public event sets
+  (`event-types` plus the relevant category set) and the idiom `::event-type` enum:
+  - `:copilot/assistant.tool_call_delta` (schema 1.0.69-3) — streaming tool-call
+    argument input chunk; data `{:tool-call-id :input-delta}` with optional
+    `:tool-name`, `:tool-type`.
+  - `:copilot/mcp.tools.list_changed`, `:copilot/mcp.resources.list_changed`,
+    `:copilot/mcp.prompts.list_changed` (schema 1.0.70) — remote MCP server
+    list-changed signals; data `{:server-name}`.
+  - `:copilot/session.auto_mode_resolved` (schema 1.0.70-0, `@experimental`) — auto
+    model-selection resolution; data `{:chosen-model}` with optional
+    `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`,
+    `:reasoning-bucket`.
+
 Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to
 1.0.68. **Preview sync**: the CLI is a prerelease and these additions are
 `@experimental` upstream.
