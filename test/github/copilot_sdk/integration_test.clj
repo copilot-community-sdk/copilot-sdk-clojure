@@ -2474,7 +2474,7 @@
     (is (contains? sdk/interaction-events :copilot/session_limits_exhausted.completed))))
 
 (deftest test-v1-0-7-preview-new-events
-  (testing "assistant.tool_call_delta is a public assistant event (upstream schema 1.0.69-1)"
+  (testing "assistant.tool_call_delta is a public assistant event (upstream schema 1.0.69-3)"
     (is (contains? sdk/event-types :copilot/assistant.tool_call_delta)
         "must be in the master event-types set")
     (is (contains? sdk/assistant-events :copilot/assistant.tool_call_delta)

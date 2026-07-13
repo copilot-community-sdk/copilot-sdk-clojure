@@ -1289,10 +1289,10 @@
     :copilot/session.canvas.opened
     :copilot/session.canvas.closed
     :copilot/session.canvas.registry_changed
-    ;; v1.0.7-preview.2 sync (pinned schema 1.0.70): streaming tool-call input
-    ;; delta, MCP list-changed notifications, and experimental auto-mode model
-    ;; resolution. (This idiom enum feeds ::session-event; keep it in step with
-    ;; the curated `github.copilot-sdk/event-types` set.)
+    ;; v1.0.7-preview.2 sync (introduced upstream schema 1.0.70): streaming tool-call
+    ;; input delta, MCP list-changed notifications, and experimental auto-mode model
+    ;; resolution. (This is the ::event-type idiom enum, a field of ::session-event;
+    ;; keep it in step with the curated `github.copilot-sdk/event-types` set.)
     :copilot/assistant.tool_call_delta
     :copilot/mcp.tools.list_changed
     :copilot/mcp.resources.list_changed

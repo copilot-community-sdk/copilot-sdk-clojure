@@ -238,7 +238,7 @@
     :copilot/assistant.usage
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): assistant idle within a turn.
     :copilot/assistant.idle
-    ;; v1.0.7-preview.2 sync (pinned schema 1.0.69-1): streaming tool-call input delta.
+    ;; v1.0.7-preview.2 sync (introduced upstream schema 1.0.69-3): streaming tool-call input delta.
     :copilot/assistant.tool_call_delta})
 
 (def tool-events

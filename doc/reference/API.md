@@ -1553,7 +1553,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :previous-allow-all-permissions boolean}` (upstream schema 1.0.56). |
 | `:copilot/session.session_limits_changed` | Session limits changed; data: `{:session-limits {:max-ai-credits <number>}}`, where a `nil` `:session-limits` clears the active limits (upstream schema 1.0.67) |
 | `:copilot/session.usage_checkpoint` | Durable usage checkpoint for reconstructing aggregate accounting on resume; data: `{:total-nano-aiu <number>}` with optional `:total-premium-requests <number>` (upstream schema 1.0.67) |
-| `:copilot/session.auto_mode_resolved` | Auto model-selection resolved a model for a turn; data includes `:chosen-model`, optional `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`, `:reasoning-bucket` (experimental; upstream schema 1.0.70-0) |
+| `:copilot/session.auto_mode_resolved` | Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes `:chosen-model`, optional `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`, `:reasoning-bucket` (experimental; upstream schema 1.0.70-0) |
 | `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
 | `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
 | `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |

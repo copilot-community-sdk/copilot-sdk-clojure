@@ -29,6 +29,7 @@ marked `@experimental` upstream.
     `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`,
     `:reasoning-bucket`.
 
+### Added (v1.0.6-preview.1 sync)
 Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to
 1.0.68. **Preview sync**: the CLI is a prerelease and these additions are
 `@experimental` upstream.
