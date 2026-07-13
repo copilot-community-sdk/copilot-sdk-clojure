@@ -812,6 +812,19 @@
 (s/def ::max-ai-credits (s/and number? pos?))
 (s/def ::session-limits (s/keys :opt-un [::max-ai-credits]))
 
+;; enableManagedSettings (upstream PR #1925) — opt-in that makes the runtime
+;; self-fetch enterprise managed settings (bypass-permissions policy) at session
+;; bootstrap using the session's github token. Forwarded on create + resume/join.
+(s/def ::enable-managed-settings? boolean?)
+
+;; canvasProvider (upstream PR #1847) — stable identity for a host/SDK connection
+;; that supplies built-in canvases, so canvases declared on a control connection
+;; survive stdio reconnect and CLI restart instead of being re-keyed per
+;; connection. `:id` is opaque and used verbatim as the canvas extension id;
+;; `:name` is an optional display name. Forwarded on create + resume/join. Reuses
+;; the generic ::id/::name specs, mirroring ::provider's nested-map convention.
+(s/def ::canvas-provider (s/keys :req-un [::id] :opt-un [::name]))
+
 (def session-config-keys
   #{:session-id :client-name :model :tools :commands :system-message
     :available-tools :excluded-tools :provider
@@ -850,7 +863,8 @@
     :capi
     :excluded-builtin-agents :enable-citations :session-limits
     :providers :models :exp-assignments
-    :include-sub-agent-streaming-events?})
+    :include-sub-agent-streaming-events?
+    :enable-managed-settings? :canvas-provider})
 
 (s/def ::session-config
   (closed-keys
@@ -893,7 +907,8 @@
                     ::capi
                     ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
-                    ::include-sub-agent-streaming-events?])
+                    ::include-sub-agent-streaming-events?
+                    ::enable-managed-settings? ::canvas-provider])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -932,7 +947,8 @@
     :providers :models :exp-assignments
     :include-sub-agent-streaming-events?
     ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
-    :open-canvases})
+    :open-canvases
+    :enable-managed-settings? :canvas-provider})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -973,7 +989,8 @@
                     ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
-                    ::open-canvases])
+                    ::open-canvases
+                    ::enable-managed-settings? ::canvas-provider])
    resume-session-config-keys))
 
 ;; join-session config: same as resume-session-config but :on-permission-request is optional.
@@ -1016,7 +1033,8 @@
                     ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
-                    ::open-canvases])
+                    ::open-canvases
+                    ::enable-managed-settings? ::canvas-provider])
    resume-session-config-keys))
 
 ;; -----------------------------------------------------------------------------

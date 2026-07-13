@@ -28,6 +28,21 @@ marked `@experimental` upstream.
     model-selection resolution; data `{:chosen-model}` with optional
     `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`,
     `:reasoning-bucket`.
+- **`:enable-managed-settings?` session config** — port of upstream
+  [PR #1925](https://github.com/github/copilot-sdk/pull/1925). Boolean forwarded on
+  `session.create`/`session.resume`/join as wire `enableManagedSettings`, gated on
+  `some?` so an explicit `false` is sent verbatim and an absent key is omitted.
+- **`:canvas-provider` session config** — port of upstream
+  [PR #1847](https://github.com/github/copilot-sdk/pull/1847). Map
+  `{:id "..." :name "..."}` (`:name` optional) forwarded on
+  `session.create`/`session.resume`/join as wire `canvasProvider`.
+- **Telemetry forwarding on the `connect` handshake** — port of upstream
+  [PR #1909](https://github.com/github/copilot-sdk/pull/1909). When
+  `:on-github-telemetry` is registered, the SDK now also sends
+  `enableGitHubTelemetryForwarding: true` on the connection-level `connect`
+  handshake, so the first session's un-replayable `session.start` telemetry is
+  forwarded. The existing per-session `session.create`/`session.resume` flag is
+  retained for older CLIs.
 
 Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to
 1.0.68. **Preview sync**: the CLI is a prerelease and these additions are

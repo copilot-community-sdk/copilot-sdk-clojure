@@ -232,7 +232,9 @@
     - :on-get-trace-context - Zero-arg fn returning {:traceparent ... :tracestate ...} for distributed trace propagation
     - :on-github-telemetry - **Experimental / Internal**. One-arg fn invoked with each GitHub telemetry
                        notification (upstream PR #1835). Registering a handler opts the connection into
-                       `enableGitHubTelemetryForwarding` on both `session.create` and `session.resume`;
+                       `enableGitHubTelemetryForwarding` on the `connect` handshake (so the first
+                       session's un-replayable `session.start` telemetry is forwarded, upstream PR #1909)
+                       as well as on `session.create` and `session.resume`;
                        the runtime then emits connection-global `gitHubTelemetry.event` notifications,
                        each passed to this handler. The notification is an idiom-shaped map with keys
                        :session-id, :restricted, and :event; the event's :properties, :metrics, and
@@ -957,7 +959,16 @@
   [client]
   (let [{:keys [connection-io process options]} @(:state client)
         token (:tcp-connection-token options)
-        connect-params (cond-> {} token (assoc :token token))
+        ;; Opt in to GitHub telemetry forwarding at the connection level when a
+        ;; handler is registered (upstream PR #1909). The runtime reads this flag
+        ;; on the `connect` handshake so the first session's un-replayable
+        ;; `session.start` telemetry is forwarded; it is also sent on
+        ;; session.create/resume for older CLIs. csk camelCases "github" ->
+        ;; "Github", so assoc the exact wire keyword (clj->wire is idempotent).
+        connect-params (cond-> {}
+                         token (assoc :token token)
+                         (some? (:on-github-telemetry client))
+                         (assoc :enableGitHubTelemetryForwarding true))
         exit-ch (:exit-chan process)
         timeout-ch (async/timeout 60000)
         await-rpc (fn [rpc-ch method-name]
@@ -2126,6 +2137,15 @@
       ;; wire keyword; clj->wire's camelCasing is idempotent on it.
       (true? (:enable-github-telemetry-forwarding? config))
       (assoc :enableGitHubTelemetryForwarding true)
+      ;; enableManagedSettings (upstream PR #1925): opt-in for runtime self-fetch
+      ;; of enterprise managed settings. Upstream spreads `config.enableManagedSettings`
+      ;; verbatim, so forward the actual boolean (an explicit false is sent).
+      (some? (:enable-managed-settings? config))
+      (assoc :enable-managed-settings (:enable-managed-settings? config))
+      ;; canvasProvider (upstream PR #1847): stable canvas-provider identity.
+      ;; The nested {:id :name} map's kebab keys are camelCased by clj->wire.
+      (:canvas-provider config)
+      (assoc :canvas-provider (:canvas-provider config))
       true (assoc :env-value-mode "direct"))))
 
 (defn- stringify-keys-deep
@@ -2305,6 +2325,12 @@
       ;; wire keyword; clj->wire's camelCasing is idempotent on it.
       (true? (:enable-github-telemetry-forwarding? config))
       (assoc :enableGitHubTelemetryForwarding true)
+      ;; enableManagedSettings + canvasProvider are SessionConfigBase fields
+      ;; (upstream PRs #1925, #1847), honored on resume/join as well as create.
+      (some? (:enable-managed-settings? config))
+      (assoc :enable-managed-settings (:enable-managed-settings? config))
+      (:canvas-provider config)
+      (assoc :canvas-provider (:canvas-provider config))
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
@@ -2528,6 +2554,13 @@
                          `enableCitations`. (upstream PR #1865)
    - :session-limits     - Map (@experimental). Per-session accounting limits, e.g.
                            {:max-ai-credits 100}. Forwarded as `sessionLimits`. (upstream PR #1865)
+   - :enable-managed-settings? - Boolean (opt-in). When true, the runtime self-fetches enterprise
+                           managed settings (bypass-permissions policy) at session bootstrap using the
+                           session's `:github-token`, which must be set (the runtime fails closed
+                           otherwise). Forwarded verbatim as `enableManagedSettings` — an explicit
+                           `false` is sent on the wire. (upstream PR #1925)
+   - :canvas-provider    - Map `{:id \"...\" :name \"...\"}` (`:name` optional). Identifies the canvas
+                           provider for the session. Forwarded as `canvasProvider`. (upstream PR #1847)
    - :remote-session     - Keyword. Per-session Mission Control remote mode: :off, :export, or :on.
                            Forwarded as `remoteSession` on session.create. When omitted, the CLI
                            applies its default. (upstream PR #1295, CLI 1.0.48)
@@ -2685,6 +2718,8 @@
    - :excluded-builtin-agents - Vector of strings. See `create-session` (upstream PR #1865).
    - :enable-citations - Boolean (@experimental). See `create-session` (upstream PR #1865).
    - :session-limits     - Map (@experimental). See `create-session` (upstream PR #1865).
+   - :enable-managed-settings? - Boolean. See `create-session` (upstream PR #1925).
+   - :canvas-provider    - Map `{:id .. :name ..}`. See `create-session` (upstream PR #1847).
    - :on-exit-plan-mode  - Handler for exitPlanMode.request RPCs. See `create-session`
                            (upstream PR #1228).
    - :on-auto-mode-switch - Handler for autoModeSwitch.request RPCs. See `create-session`
