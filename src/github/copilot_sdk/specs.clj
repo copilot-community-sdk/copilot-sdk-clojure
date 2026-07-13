@@ -1464,8 +1464,10 @@
 ;; :time-to-first-token-ms — schema renamed from :ttft-ms in CLI 1.0.51 wire schema
 ;; (property "ttftMs" → "timeToFirstTokenMs"). Both keys remain listed as :opt-un so
 ;; events from older CLI versions still validate; the new wire field is preferred.
-(s/def ::time-to-first-token-ms nat-int?)
-(s/def ::ttft-ms nat-int?)
+;; Schema 1.0.70 widened the wire type integer → number (fractional milliseconds are
+;; now valid), so the idiom spec accepts any non-negative number.
+(s/def ::time-to-first-token-ms (s/and number? (complement neg?)))
+(s/def ::ttft-ms (s/and number? (complement neg?)))
 (s/def ::copilot-usage map?)
 
 ;; :api-endpoint — open string enum, added upstream CLI 1.0.47 (PR #1286).

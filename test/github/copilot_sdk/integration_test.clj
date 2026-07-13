@@ -2487,7 +2487,7 @@
           (str ev " must be in the master event-types set"))
       (is (contains? sdk/interaction-events ev)
           (str ev " must be categorized under interaction-events"))))
-  (testing "session.auto_mode_resolved is a public session event (upstream schema 1.0.70)"
+  (testing "session.auto_mode_resolved is a public session event (upstream schema 1.0.70-0)"
     (is (contains? sdk/event-types :copilot/session.auto_mode_resolved)
         "must be in the master event-types set")
     (is (contains? sdk/session-events :copilot/session.auto_mode_resolved)
@@ -5333,12 +5333,15 @@
   (testing "assistant.usage-data accepts :time-to-first-token-ms (renamed from :ttft-ms)"
     (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                   {:model "gpt-5" :time-to-first-token-ms 250}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :time-to-first-token-ms 250.5})
+        ":time-to-first-token-ms accepts fractional ms (schema 1.0.70 widened integer -> number)")
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :time-to-first-token-ms -1}))
-        ":time-to-first-token-ms must be a non-negative integer")
+        ":time-to-first-token-ms must be a non-negative number")
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :time-to-first-token-ms "fast"}))
-        ":time-to-first-token-ms must be an integer")
+        ":time-to-first-token-ms must be a number")
     (testing "legacy :ttft-ms key still accepted for backward compatibility (older CLIs)"
       (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                     {:model "gpt-5" :ttft-ms 250}))

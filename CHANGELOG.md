@@ -15,7 +15,9 @@ marked `@experimental` upstream.
   [PR #1954](https://github.com/github/copilot-sdk/pull/1954) (1.0.70-0), and
   [PR #1962](https://github.com/github/copilot-sdk/pull/1962) (1.0.70). Bumped
   `.copilot-schema-version` `1.0.68` → `1.0.70` and regenerated wire specs /
-  coercions via `bb codegen`.
+  coercions via `bb codegen`. Schema 1.0.70 also widened `timeToFirstTokenMs`
+  from `integer` to `number`; the idiom `::time-to-first-token-ms` /
+  `::ttft-ms` specs now accept any non-negative number.
 - **Five new session event types** — surfaced in the curated public event sets
   (`event-types` plus the relevant category set) and the idiom `::event-type` enum:
   - `:copilot/assistant.tool_call_delta` (schema 1.0.69-3) — streaming tool-call
