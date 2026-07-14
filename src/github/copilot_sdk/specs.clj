@@ -1288,7 +1288,16 @@
     :copilot/session.extensions.attachments_pushed
     :copilot/session.canvas.opened
     :copilot/session.canvas.closed
-    :copilot/session.canvas.registry_changed})
+    :copilot/session.canvas.registry_changed
+    ;; v1.0.7-preview.2 sync (introduced upstream schema 1.0.70): streaming tool-call
+    ;; input delta, MCP list-changed notifications, and experimental auto-mode model
+    ;; resolution. (This is the ::event-type idiom enum, a field of ::session-event;
+    ;; keep it in step with the curated `github.copilot-sdk/event-types` set.)
+    :copilot/assistant.tool_call_delta
+    :copilot/mcp.tools.list_changed
+    :copilot/mcp.resources.list_changed
+    :copilot/mcp.prompts.list_changed
+    :copilot/session.auto_mode_resolved})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
@@ -1455,8 +1464,12 @@
 ;; :time-to-first-token-ms — schema renamed from :ttft-ms in CLI 1.0.51 wire schema
 ;; (property "ttftMs" → "timeToFirstTokenMs"). Both keys remain listed as :opt-un so
 ;; events from older CLI versions still validate; the new wire field is preferred.
-(s/def ::time-to-first-token-ms nat-int?)
-(s/def ::ttft-ms nat-int?)
+;; Schema 1.0.70 widened the wire type integer → number (fractional milliseconds are
+;; now valid), so the idiom spec accepts any non-negative number. The `<=` predicate
+;; also rejects ##NaN (which `neg?` would let through), keeping the value a meaningful
+;; duration.
+(s/def ::time-to-first-token-ms (s/and number? #(<= 0 %)))
+(s/def ::ttft-ms (s/and number? #(<= 0 %)))
 (s/def ::copilot-usage map?)
 
 ;; :api-endpoint — open string enum, added upstream CLI 1.0.47 (PR #1286).
@@ -1554,10 +1567,16 @@
 ;; Reflects toggles of the "allow all permissions" mode. The wire fields are
 ;; `allowAllPermissions` and `previousAllowAllPermissions`; no `?` suffix per
 ;; the camel-snake-kebab convention (csk does not append `?` for booleans).
+;; Schema 1.0.70 added the optional experimental `allowAllPermissionMode` /
+;; `previousAllowAllPermissionMode` fields, a tri-state string enum layered on
+;; top of the boolean flags.
 (s/def ::allow-all-permissions boolean?)
 (s/def ::previous-allow-all-permissions boolean?)
+(s/def ::allow-all-permission-mode #{"off" "auto" "on"})
+(s/def ::previous-allow-all-permission-mode #{"off" "auto" "on"})
 (s/def ::session.permissions_changed-data
-  (s/keys :req-un [::allow-all-permissions ::previous-allow-all-permissions]))
+  (s/keys :req-un [::allow-all-permissions ::previous-allow-all-permissions]
+          :opt-un [::allow-all-permission-mode ::previous-allow-all-permission-mode]))
 
 ;; Hook progress event (upstream schema 1.0.56-1, round 6 sync). Ephemeral
 ;; event emitted by hooks during long-running work. Reuses the existing

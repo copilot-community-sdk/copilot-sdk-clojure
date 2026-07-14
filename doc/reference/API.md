@@ -1550,9 +1550,10 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.schedule_created` | Scheduled prompt registered via `/every`; data: `{:id <pos-int> :interval-ms <pos-int> :prompt "..."}` (upstream schema 1.0.42) |
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
 | `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
-| `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :previous-allow-all-permissions boolean}` (upstream schema 1.0.56). |
+| `:copilot/session.permissions_changed` | Per-session permission flags changed; data: `{:allow-all-permissions boolean :previous-allow-all-permissions boolean}` with optional `:allow-all-permission-mode` / `:previous-allow-all-permission-mode` (tri-state `#{"off" "auto" "on"}`, experimental, upstream schema 1.0.70) (upstream schema 1.0.56). |
 | `:copilot/session.session_limits_changed` | Session limits changed; data: `{:session-limits {:max-ai-credits <number>}}`, where a `nil` `:session-limits` clears the active limits (upstream schema 1.0.67) |
 | `:copilot/session.usage_checkpoint` | Durable usage checkpoint for reconstructing aggregate accounting on resume; data: `{:total-nano-aiu <number>}` with optional `:total-premium-requests <number>` (upstream schema 1.0.67) |
+| `:copilot/session.auto_mode_resolved` | Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes `:chosen-model`, optional `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`, `:reasoning-bucket` (experimental; upstream schema 1.0.70-0) |
 | `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
 | `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
 | `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |
@@ -1570,6 +1571,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.turn_end` | Assistant turn completed |
 | `:copilot/assistant.usage` | Token usage for this turn; data may include optional `:content-filter-triggered` (boolean) and `:finish-reason` (string) (upstream schema 1.0.63) |
 | `:copilot/assistant.idle` | Main agent's processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) |
+| `:copilot/assistant.tool_call_delta` | Streaming tool-call argument input chunk; data includes `:tool-call-id`, `:input-delta`, optional `:tool-name`, `:tool-type` (upstream schema 1.0.69-3) |
 | `:copilot/model.call_failure` | Failed LLM API call metadata for telemetry |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
@@ -1599,6 +1601,9 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/mcp.oauth_completed` | MCP OAuth authentication completed |
 | `:copilot/mcp.headers_refresh_required` | Dynamic headers refresh request for a remote MCP server (upstream schema 1.0.66) |
 | `:copilot/mcp.headers_refresh_completed` | MCP headers refresh request completed (upstream schema 1.0.66) |
+| `:copilot/mcp.tools.list_changed` | Remote MCP server signalled its tool list changed; data includes `:server-name` (upstream schema 1.0.70) |
+| `:copilot/mcp.resources.list_changed` | Remote MCP server signalled its resource list changed; data includes `:server-name` (upstream schema 1.0.70) |
+| `:copilot/mcp.prompts.list_changed` | Remote MCP server signalled its prompt list changed; data includes `:server-name` (upstream schema 1.0.70) |
 | `:copilot/command.queued` | Command queued for execution |
 | `:copilot/command.execute` | Command execution started |
 | `:copilot/command.completed` | Command execution completed |

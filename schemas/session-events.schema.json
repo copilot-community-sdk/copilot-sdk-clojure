@@ -280,6 +280,10 @@
           "type": "string",
           "description": "GitHub request tracing ID (x-github-request-id header) for correlating with server-side logs"
         },
+        "clientRequestId": {
+          "type": "string",
+          "description": "Client-minted request id (x-request-id header) echoed by the server. Distinct from requestId (x-github-request-id) and serviceRequestId (x-copilot-service-request-id)."
+        },
         "serviceRequestId": {
           "type": "string",
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
@@ -843,12 +847,100 @@
       "description": "Session event \"assistant.streaming_delta\". Streaming response progress with cumulative byte count",
       "title": "AssistantStreamingDeltaEvent"
     },
+    "AssistantToolCallDeltaData": {
+      "type": "object",
+      "properties": {
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID this delta belongs to, matching the corresponding assistant.message tool request"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "Name of the tool being invoked, when known from the stream"
+        },
+        "toolType": {
+          "$ref": "#/definitions/AssistantMessageToolRequestType",
+          "description": "Tool call type, when known from the stream"
+        },
+        "inputDelta": {
+          "type": "string",
+          "description": "Raw provider tool input fragment to append for this tool call. Function/tool-use providers stream serialized JSON argument text (so newlines inside JSON string values may appear as escaped `\\n` until the accumulated JSON is parsed); custom tool calls stream raw custom input."
+        }
+      },
+      "required": [
+        "toolCallId",
+        "inputDelta"
+      ],
+      "additionalProperties": false,
+      "description": "Streaming tool-call input delta for incremental tool-call updates",
+      "title": "AssistantToolCallDeltaData"
+    },
+    "AssistantToolCallDeltaEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "assistant.tool_call_delta",
+          "description": "Type discriminator. Always \"assistant.tool_call_delta\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AssistantToolCallDeltaData",
+          "description": "Streaming tool-call input delta for incremental tool-call updates"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"assistant.tool_call_delta\". Streaming tool-call input delta for incremental tool-call updates",
+      "title": "AssistantToolCallDeltaEvent"
+    },
     "AssistantTurnEndData": {
       "type": "object",
       "properties": {
         "turnId": {
           "type": "string",
           "description": "Identifier of the turn that has ended, matching the corresponding assistant.turn_start event"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier used for this turn, when known"
         }
       },
       "required": [
@@ -918,6 +1010,10 @@
         "turnId": {
           "type": "string",
           "description": "Identifier for this turn within the agentic loop, typically a stringified turn number"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier used for this turn, when known"
         },
         "interactionId": {
           "type": "string",
@@ -1104,7 +1200,7 @@
           "description": "Duration of the API call in milliseconds"
         },
         "timeToFirstTokenMs": {
-          "type": "integer",
+          "type": "number",
           "minimum": 0,
           "format": "duration",
           "description": "Time to first token in milliseconds. Only available for streaming requests"
@@ -1144,6 +1240,7 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/AssistantUsageQuotaSnapshot",
+            "description": "Internal per-quota snapshot for assistant usage, including entitlement, consumed requests, overage, reset date, and remaining quota.",
             "visibility": "internal"
           },
           "description": "Per-quota resource usage snapshots, keyed by quota identifier",
@@ -1305,7 +1402,7 @@
         "remainingPercentage"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `AssistantUsageQuotaSnapshot` type.",
+      "description": "Internal per-quota snapshot for assistant usage, including entitlement, consumed requests, overage, reset date, and remaining quota.",
       "title": "AssistantUsageQuotaSnapshot",
       "visibility": "internal"
     },
@@ -2078,6 +2175,138 @@
       "description": "Start position of the selection",
       "title": "AttachmentSelectionDetailsStart"
     },
+    "AutoApprovalRecommendation": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "requireApproval",
+        "excluded",
+        "error"
+      ],
+      "description": "Outcome of the auto-approval safety judge for a permission request. Present only when auto mode is enabled; its absence means the judge did not evaluate the request (auto mode was off).",
+      "title": "AutoApprovalRecommendation",
+      "x-enumDescriptions": {
+        "approve": "The judge evaluated the request and recommends automatically approving it.",
+        "requireApproval": "The judge evaluated the request and does not recommend auto-approving it; explicit approval is required. Whether that means prompting, denying, or something else is the consumer's decision.",
+        "excluded": "Auto mode is enabled, but this request category is never auto-approvable (for example, sandbox-bypass requests), so the judge was not consulted.",
+        "error": "The judge was consulted but did not return a usable recommendation, so the request requires explicit approval."
+      },
+      "stability": "experimental"
+    },
+    "AutoModeResolvedData": {
+      "type": "object",
+      "properties": {
+        "chosenModel": {
+          "type": "string",
+          "description": "The concrete model the session will use after any intent refinement"
+        },
+        "reasoningBucket": {
+          "$ref": "#/definitions/AutoModeResolvedReasoningBucket",
+          "description": "Coarse request-difficulty bucket, for explaining why a model was chosen (\"picked X because this looks like high-reasoning work\")"
+        },
+        "categoryScores": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Per-category classifier scores (0-1) behind the bucket: the granular HYDRA capability scores (reasoning, code_gen, debugging, tool_use), or the binary needs_reasoning/no_reasoning scores when HYDRA didn't run. Lets clients show a breakdown rather than just the bucket."
+        },
+        "predictedLabel": {
+          "type": "string",
+          "description": "The predicted classifier label (e.g. `needs_reasoning`), when available"
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Classifier confidence for the predicted label, when available"
+        },
+        "candidateModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered candidate model list the router returned, when not a fallback"
+        }
+      },
+      "required": [
+        "chosenModel"
+      ],
+      "additionalProperties": false,
+      "description": "Auto Intent resolution: the concrete model the session settled on for the first prompt of an auto-mode session, and why. Lets SDK clients render the chosen model and the full reason it was picked. The core selection fields (chosenModel/reasoningBucket/categoryScores) are stable; the routing-analytics fields (predictedLabel/confidence/candidateModels) mirror the upstream intent service and may evolve, hence the event's experimental stability.",
+      "title": "AutoModeResolvedData",
+      "stability": "experimental"
+    },
+    "AutoModeResolvedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.auto_mode_resolved",
+          "description": "Type discriminator. Always \"session.auto_mode_resolved\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AutoModeResolvedData",
+          "description": "Auto Intent resolution: the concrete model the session settled on for the first prompt of an auto-mode session, and why. Lets SDK clients render the chosen model and the full reason it was picked. The core selection fields (chosenModel/reasoningBucket/categoryScores) are stable; the routing-analytics fields (predictedLabel/confidence/candidateModels) mirror the upstream intent service and may evolve, hence the event's experimental stability."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.auto_mode_resolved\". Auto Intent resolution: the concrete model the session settled on for the first prompt of an auto-mode session, and why. Lets SDK clients render the chosen model and the full reason it was picked. The core selection fields (chosenModel/reasoningBucket/categoryScores) are stable; the routing-analytics fields (predictedLabel/confidence/candidateModels) mirror the upstream intent service and may evolve, hence the event's experimental stability.",
+      "title": "AutoModeResolvedEvent",
+      "stability": "experimental"
+    },
+    "AutoModeResolvedReasoningBucket": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "description": "Coarse request-difficulty bucket for UX explainability",
+      "title": "AutoModeResolvedReasoningBucket",
+      "x-enumDescriptions": {
+        "low": "The request looks low-reasoning; a lighter model is appropriate.",
+        "medium": "The request needs a moderate amount of reasoning.",
+        "high": "The request looks high-reasoning; a stronger model is appropriate."
+      }
+    },
     "AutoModeSwitchCompletedData": {
       "type": "object",
       "properties": {
@@ -2364,7 +2593,7 @@
       "type": "object",
       "properties": {},
       "additionalProperties": false,
-      "description": "Schema for the `BackgroundTasksChangedData` type.",
+      "description": "Empty payload for `session.background_tasks_changed`, indicating background task state changed.",
       "title": "BackgroundTasksChangedData"
     },
     "BackgroundTasksChangedEvent": {
@@ -2408,7 +2637,7 @@
         },
         "data": {
           "$ref": "#/definitions/BackgroundTasksChangedData",
-          "description": "Schema for the `BackgroundTasksChangedData` type."
+          "description": "Empty payload for `session.background_tasks_changed`, indicating background task state changed."
         }
       },
       "required": [
@@ -2420,7 +2649,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.background_tasks_changed\".",
+      "description": "Session event \"session.background_tasks_changed\". Empty payload for `session.background_tasks_changed`, indicating background task state changed.",
       "title": "BackgroundTasksChangedEvent"
     },
     "BinaryAssetData": {
@@ -2618,7 +2847,7 @@
         "canvasId"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CanvasClosedData` type.",
+      "description": "Payload of `session.canvas.closed` with the closed canvas instance ID, provider ID, and canvas ID.",
       "title": "CanvasClosedData",
       "stability": "experimental"
     },
@@ -2663,7 +2892,7 @@
         },
         "data": {
           "$ref": "#/definitions/CanvasClosedData",
-          "description": "Schema for the `CanvasClosedData` type."
+          "description": "Payload of `session.canvas.closed` with the closed canvas instance ID, provider ID, and canvas ID."
         }
       },
       "required": [
@@ -2675,7 +2904,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.canvas.closed\".",
+      "description": "Session event \"session.canvas.closed\". Payload of `session.canvas.closed` with the closed canvas instance ID, provider ID, and canvas ID.",
       "title": "CanvasClosedEvent",
       "stability": "experimental"
     },
@@ -2721,7 +2950,7 @@
         "canvasId"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CanvasOpenedData` type.",
+      "description": "Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input.",
       "title": "CanvasOpenedData",
       "stability": "experimental"
     },
@@ -2766,7 +2995,7 @@
         },
         "data": {
           "$ref": "#/definitions/CanvasOpenedData",
-          "description": "Schema for the `CanvasOpenedData` type."
+          "description": "Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input."
         }
       },
       "required": [
@@ -2778,7 +3007,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.canvas.opened\".",
+      "description": "Session event \"session.canvas.opened\". Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input.",
       "title": "CanvasOpenedEvent",
       "stability": "experimental"
     },
@@ -2903,7 +3132,8 @@
         "actions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/CanvasRegistryChangedCanvasAction"
+            "$ref": "#/definitions/CanvasRegistryChangedCanvasAction",
+            "description": "A single action within a canvas declaration, with its name, optional description, and optional input schema."
           },
           "description": "Actions the agent or host may invoke"
         }
@@ -2915,7 +3145,7 @@
         "description"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CanvasRegistryChangedCanvas` type.",
+      "description": "A single canvas declaration in `session.canvas.registry_changed`, including provider IDs, display metadata, input schema, and actions.",
       "title": "CanvasRegistryChangedCanvas",
       "stability": "experimental"
     },
@@ -2939,7 +3169,7 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CanvasRegistryChangedCanvasAction` type.",
+      "description": "A single action within a canvas declaration, with its name, optional description, and optional input schema.",
       "title": "CanvasRegistryChangedCanvasAction",
       "stability": "experimental"
     },
@@ -2949,7 +3179,8 @@
         "canvases": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/CanvasRegistryChangedCanvas"
+            "$ref": "#/definitions/CanvasRegistryChangedCanvas",
+            "description": "A single canvas declaration in `session.canvas.registry_changed`, including provider IDs, display metadata, input schema, and actions."
           },
           "description": "Canvas declarations currently available"
         }
@@ -2958,7 +3189,7 @@
         "canvases"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CanvasRegistryChangedData` type.",
+      "description": "Payload of `session.canvas.registry_changed` listing the canvas declarations currently available.",
       "title": "CanvasRegistryChangedData",
       "stability": "experimental"
     },
@@ -3003,7 +3234,7 @@
         },
         "data": {
           "$ref": "#/definitions/CanvasRegistryChangedData",
-          "description": "Schema for the `CanvasRegistryChangedData` type."
+          "description": "Payload of `session.canvas.registry_changed` listing the canvas declarations currently available."
         }
       },
       "required": [
@@ -3015,7 +3246,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.canvas.registry_changed\".",
+      "description": "Session event \"session.canvas.registry_changed\". Payload of `session.canvas.registry_changed` listing the canvas declarations currently available.",
       "title": "CanvasRegistryChangedEvent",
       "stability": "experimental"
     },
@@ -3799,7 +4030,7 @@
         "name"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CommandsChangedCommand` type.",
+      "description": "A single slash command available in the session, as listed by the `commands.changed` event.",
       "title": "CommandsChangedCommand"
     },
     "CommandsChangedData": {
@@ -3808,7 +4039,8 @@
         "commands": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/CommandsChangedCommand"
+            "$ref": "#/definitions/CommandsChangedCommand",
+            "description": "A single slash command available in the session, as listed by the `commands.changed` event."
           },
           "description": "Current list of registered SDK commands"
         }
@@ -4128,6 +4360,10 @@
     "CompactionStartData": {
       "type": "object",
       "properties": {
+        "model": {
+          "type": "string",
+          "description": "Model identifier used for compaction, when known"
+        },
         "systemTokens": {
           "type": "integer",
           "minimum": 0,
@@ -4325,7 +4561,7 @@
         "userInvocable"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CustomAgentsUpdatedAgent` type.",
+      "description": "A single loaded custom agent in `session.custom_agents_updated`, with identity, source, tools, invocability, and model override.",
       "title": "CustomAgentsUpdatedAgent"
     },
     "CustomAgentsUpdatedData": {
@@ -4334,7 +4570,8 @@
         "agents": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/CustomAgentsUpdatedAgent"
+            "$ref": "#/definitions/CustomAgentsUpdatedAgent",
+            "description": "A single loaded custom agent in `session.custom_agents_updated`, with identity, source, tools, invocability, and model override."
           },
           "description": "Array of loaded custom agent metadata"
         },
@@ -4359,7 +4596,7 @@
         "errors"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `CustomAgentsUpdatedData` type.",
+      "description": "Payload of `session.custom_agents_updated` with loaded custom agents plus non-fatal warnings and fatal errors.",
       "title": "CustomAgentsUpdatedData"
     },
     "CustomAgentsUpdatedEvent": {
@@ -4403,7 +4640,7 @@
         },
         "data": {
           "$ref": "#/definitions/CustomAgentsUpdatedData",
-          "description": "Schema for the `CustomAgentsUpdatedData` type."
+          "description": "Payload of `session.custom_agents_updated` with loaded custom agents plus non-fatal warnings and fatal errors."
         }
       },
       "required": [
@@ -4415,7 +4652,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.custom_agents_updated\".",
+      "description": "Session event \"session.custom_agents_updated\". Payload of `session.custom_agents_updated` with loaded custom agents plus non-fatal warnings and fatal errors.",
       "title": "CustomAgentsUpdatedEvent"
     },
     "CustomNotificationData": {
@@ -4539,7 +4776,7 @@
       }
     },
     "ElicitationCompletedContent": {
-      "description": "Schema for the `ElicitationCompletedContent` type.",
+      "description": "Opaque JSON value submitted for one field in accepted `elicitation.completed` form content.",
       "title": "ElicitationCompletedContent",
       "x-opaque-json": true
     },
@@ -4557,7 +4794,8 @@
         "content": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/ElicitationCompletedContent"
+            "$ref": "#/definitions/ElicitationCompletedContent",
+            "description": "Opaque JSON value submitted for one field in accepted `elicitation.completed` form content."
           },
           "description": "The submitted form data when action is 'accept'; keys match the requested schema fields"
         }
@@ -4786,7 +5024,7 @@
         "blob"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `EmbeddedBlobResourceContents` type.",
+      "description": "Embedded binary resource contents identified by a URI, with an optional MIME type and a base64-encoded blob.",
       "title": "EmbeddedBlobResourceContents"
     },
     "EmbeddedTextResourceContents": {
@@ -4810,7 +5048,7 @@
         "text"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `EmbeddedTextResourceContents` type.",
+      "description": "Embedded text resource contents identified by a URI, with an optional MIME type and a text payload.",
       "title": "EmbeddedTextResourceContents"
     },
     "ErrorData": {
@@ -5132,7 +5370,7 @@
         "attachments"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ExtensionsAttachmentsPushedData` type.",
+      "description": "Payload of `session.extensions.attachments_pushed` with extension-contributed attachments for the next send.",
       "title": "ExtensionsAttachmentsPushedData"
     },
     "ExtensionsAttachmentsPushedEvent": {
@@ -5176,7 +5414,7 @@
         },
         "data": {
           "$ref": "#/definitions/ExtensionsAttachmentsPushedData",
-          "description": "Schema for the `ExtensionsAttachmentsPushedData` type."
+          "description": "Payload of `session.extensions.attachments_pushed` with extension-contributed attachments for the next send."
         }
       },
       "required": [
@@ -5188,7 +5426,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.extensions.attachments_pushed\".",
+      "description": "Session event \"session.extensions.attachments_pushed\". Payload of `session.extensions.attachments_pushed` with extension-contributed attachments for the next send.",
       "title": "ExtensionsAttachmentsPushedEvent"
     },
     "ExtensionsLoadedData": {
@@ -5197,7 +5435,8 @@
         "extensions": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/ExtensionsLoadedExtension"
+            "$ref": "#/definitions/ExtensionsLoadedExtension",
+            "description": "A single extension discovered by `session.extensions_loaded`, including qualified ID, source, and current status."
           },
           "description": "Array of discovered extensions and their status"
         }
@@ -5206,7 +5445,7 @@
         "extensions"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ExtensionsLoadedData` type.",
+      "description": "Payload of `session.extensions_loaded` listing discovered extensions and their statuses.",
       "title": "ExtensionsLoadedData"
     },
     "ExtensionsLoadedEvent": {
@@ -5250,7 +5489,7 @@
         },
         "data": {
           "$ref": "#/definitions/ExtensionsLoadedData",
-          "description": "Schema for the `ExtensionsLoadedData` type."
+          "description": "Payload of `session.extensions_loaded` listing discovered extensions and their statuses."
         }
       },
       "required": [
@@ -5262,7 +5501,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.extensions_loaded\".",
+      "description": "Session event \"session.extensions_loaded\". Payload of `session.extensions_loaded` listing discovered extensions and their statuses.",
       "title": "ExtensionsLoadedEvent"
     },
     "ExtensionsLoadedExtension": {
@@ -5292,7 +5531,7 @@
         "status"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ExtensionsLoadedExtension` type.",
+      "description": "A single extension discovered by `session.extensions_loaded`, including qualified ID, source, and current status.",
       "title": "ExtensionsLoadedExtension"
     },
     "ExtensionsLoadedExtensionSource": {
@@ -6197,7 +6436,7 @@
       "properties": {
         "ui": {
           "$ref": "#/definitions/McpAppToolCallCompleteToolMetaUI",
-          "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type."
+          "description": "MCP App tool `_meta.ui` resource URI and SEP-1865 visibility captured with an `mcp_app.tool_call_complete` result."
         }
       },
       "description": "The tool's `_meta.ui` block at the time of the call, so consumers can decide whether to forward the result to the model without re-listing tools.",
@@ -6218,7 +6457,7 @@
           "description": "Tool visibility per SEP-1865 (typically a subset of `[\"model\",\"app\"]`)"
         }
       },
-      "description": "Schema for the `McpAppToolCallCompleteToolMetaUI` type.",
+      "description": "MCP App tool `_meta.ui` resource URI and SEP-1865 visibility captured with an `mcp_app.tool_call_complete` result.",
       "title": "McpAppToolCallCompleteToolMetaUI"
     },
     "McpHeadersRefreshCompletedData": {
@@ -6412,6 +6651,21 @@
         "ttl-expired": "The previously cached dynamic headers expired.",
         "auth-failed": "The server returned 401 and stale dynamic headers were invalidated."
       }
+    },
+    "McpListChangedData": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server whose list changed"
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "title": "McpListChangedData"
     },
     "McpOauthCompletedData": {
       "type": "object",
@@ -6665,13 +6919,126 @@
       "description": "OAuth WWW-Authenticate parameters parsed from an MCP auth challenge",
       "title": "McpOauthWWWAuthenticateParams"
     },
+    "McpPromptsListChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp.prompts.list_changed",
+          "description": "Type discriminator. Always \"mcp.prompts.list_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpListChangedData",
+          "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp.prompts.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "title": "McpPromptsListChangedEvent"
+    },
+    "McpResourcesListChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp.resources.list_changed",
+          "description": "Type discriminator. Always \"mcp.resources.list_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpListChangedData",
+          "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp.resources.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "title": "McpResourcesListChangedEvent"
+    },
     "McpServersLoadedData": {
       "type": "object",
       "properties": {
         "servers": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/McpServersLoadedServer"
+            "$ref": "#/definitions/McpServersLoadedServer",
+            "description": "A single MCP server status summary in `session.mcp_servers_loaded`, including name, status, source, transport, and plugin metadata."
           },
           "description": "Array of MCP server status summaries"
         }
@@ -6680,7 +7047,7 @@
         "servers"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `McpServersLoadedData` type.",
+      "description": "Payload of `session.mcp_servers_loaded` listing MCP server status summaries.",
       "title": "McpServersLoadedData"
     },
     "McpServersLoadedEvent": {
@@ -6724,7 +7091,7 @@
         },
         "data": {
           "$ref": "#/definitions/McpServersLoadedData",
-          "description": "Schema for the `McpServersLoadedData` type."
+          "description": "Payload of `session.mcp_servers_loaded` listing MCP server status summaries."
         }
       },
       "required": [
@@ -6736,7 +7103,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.mcp_servers_loaded\".",
+      "description": "Session event \"session.mcp_servers_loaded\". Payload of `session.mcp_servers_loaded` listing MCP server status summaries.",
       "title": "McpServersLoadedEvent"
     },
     "McpServersLoadedServer": {
@@ -6776,7 +7143,7 @@
         "status"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `McpServersLoadedServer` type.",
+      "description": "A single MCP server status summary in `session.mcp_servers_loaded`, including name, status, source, transport, and plugin metadata.",
       "title": "McpServersLoadedServer"
     },
     "McpServerSource": {
@@ -6838,7 +7205,7 @@
         "status"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `McpServerStatusChangedData` type.",
+      "description": "Payload of `session.mcp_server_status_changed` for one MCP server's status and optional failure error.",
       "title": "McpServerStatusChangedData"
     },
     "McpServerStatusChangedEvent": {
@@ -6882,7 +7249,7 @@
         },
         "data": {
           "$ref": "#/definitions/McpServerStatusChangedData",
-          "description": "Schema for the `McpServerStatusChangedData` type."
+          "description": "Payload of `session.mcp_server_status_changed` for one MCP server's status and optional failure error."
         }
       },
       "required": [
@@ -6894,7 +7261,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.mcp_server_status_changed\".",
+      "description": "Session event \"session.mcp_server_status_changed\". Payload of `session.mcp_server_status_changed` for one MCP server's status and optional failure error.",
       "title": "McpServerStatusChangedEvent"
     },
     "McpServerTransport": {
@@ -6913,6 +7280,62 @@
         "sse": "Server communicates over Server-Sent Events (deprecated).",
         "memory": "Server is backed by an in-memory runtime implementation."
       }
+    },
+    "McpToolsListChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp.tools.list_changed",
+          "description": "Type discriminator. Always \"mcp.tools.list_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpListChangedData",
+          "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp.tools.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "title": "McpToolsListChangedEvent"
     },
     "ModeChangedData": {
       "type": "object",
@@ -7060,6 +7483,7 @@
           "type": "object",
           "additionalProperties": {
             "$ref": "#/definitions/AssistantUsageQuotaSnapshot",
+            "description": "Internal per-quota snapshot for assistant usage, including entitlement, consumed requests, overage, reset date, and remaining quota.",
             "visibility": "internal"
           },
           "description": "Per-quota usage snapshots parsed from the failed response's quota headers, keyed by quota identifier. Present when the error response carried quota headers (e.g. a 402 once the additional spend limit is reached) so the UI can refresh the quota display on failure.",
@@ -7227,6 +7651,14 @@
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode after the model change, if applicable"
+        },
+        "previousVerbosity": {
+          "$ref": "#/definitions/Verbosity",
+          "description": "Output verbosity level before the model change, if applicable"
+        },
+        "verbosity": {
+          "$ref": "#/definitions/Verbosity",
+          "description": "Output verbosity level after the model change, if applicable"
         },
         "contextTier": {
           "anyOf": [
@@ -7437,6 +7869,22 @@
       "description": "Session event \"pending_messages.modified\". Empty payload; the event signals that the pending message queue has changed",
       "title": "PendingMessagesModifiedEvent"
     },
+    "PermissionAllowAllMode": {
+      "type": "string",
+      "enum": [
+        "off",
+        "on",
+        "auto"
+      ],
+      "description": "Allow-all mode for the session.",
+      "title": "PermissionAllowAllMode",
+      "x-enumDescriptions": {
+        "off": "Permission requests follow the normal approval flow.",
+        "on": "Tool, path, and URL permission requests are automatically approved.",
+        "auto": "Permission requests follow the normal approval flow with an LLM advisory recommendation attached; clients may choose to auto-approve requests the judge evaluated as acceptable."
+      },
+      "stability": "experimental"
+    },
     "PermissionApproved": {
       "type": "object",
       "properties": {
@@ -7450,7 +7898,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionApproved` type.",
+      "description": "Permission response variant indicating the request was approved without persisting an approval rule.",
       "title": "PermissionApproved"
     },
     "PermissionApprovedForLocation": {
@@ -7476,7 +7924,7 @@
         "locationKey"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionApprovedForLocation` type.",
+      "description": "Permission response variant that approves a request and persists the provided approval to a project location key.",
       "title": "PermissionApprovedForLocation"
     },
     "PermissionApprovedForSession": {
@@ -7497,8 +7945,28 @@
         "approval"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionApprovedForSession` type.",
+      "description": "Permission response variant that approves a request and remembers the provided approval for the rest of the session.",
       "title": "PermissionApprovedForSession"
+    },
+    "PermissionAutoApproval": {
+      "type": "object",
+      "properties": {
+        "recommendation": {
+          "$ref": "#/definitions/AutoApprovalRecommendation",
+          "description": "The auto-approval safety judge's outcome for this request."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable reason for the judge's recommendation, when available."
+        }
+      },
+      "required": [
+        "recommendation"
+      ],
+      "additionalProperties": false,
+      "description": "Auto-approval judge information attached to a permission request. Present (non-null) only when the session's allow-all mode is \"auto\"; its absence means auto mode was off and the judge did not evaluate the request. The `recommendation` conveys the judge's disposition for this request.",
+      "title": "PermissionAutoApproval",
+      "stability": "experimental"
     },
     "PermissionCancelled": {
       "type": "object",
@@ -7517,7 +7985,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionCancelled` type.",
+      "description": "Permission response variant indicating the request was cancelled before use, with an optional reason.",
       "title": "PermissionCancelled"
     },
     "PermissionCompletedData": {
@@ -7621,7 +8089,7 @@
         "message"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionDeniedByContentExclusionPolicy` type.",
+      "description": "Permission response variant denying a path under content exclusion policy, with the path and message.",
       "title": "PermissionDeniedByContentExclusionPolicy"
     },
     "PermissionDeniedByPermissionRequestHook": {
@@ -7645,7 +8113,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionDeniedByPermissionRequestHook` type.",
+      "description": "Permission response variant denied by a permission-request hook, with optional message and interrupt flag.",
       "title": "PermissionDeniedByPermissionRequestHook"
     },
     "PermissionDeniedByRules": {
@@ -7659,7 +8127,8 @@
         "rules": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/PermissionRule"
+            "$ref": "#/definitions/PermissionRule",
+            "description": "A permission approval or denial rule matched against a tool request, identified by a rule kind with an optional argument value."
           },
           "description": "Rules that denied the request"
         }
@@ -7669,7 +8138,7 @@
         "rules"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionDeniedByRules` type.",
+      "description": "Permission response variant denied because matching approval rules explicitly blocked the request.",
       "title": "PermissionDeniedByRules"
     },
     "PermissionDeniedInteractivelyByUser": {
@@ -7693,7 +8162,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionDeniedInteractivelyByUser` type.",
+      "description": "Permission response variant denied in an interactive user prompt, with optional feedback and force-reject flag.",
       "title": "PermissionDeniedInteractivelyByUser"
     },
     "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser": {
@@ -7709,7 +8178,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser` type.",
+      "description": "Permission response variant denied because no approval rule matched and user confirmation was unavailable.",
       "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser"
     },
     "PermissionPromptRequest": {
@@ -7796,6 +8265,11 @@
         "warning": {
           "type": "string",
           "description": "Optional warning message about risks of running this command"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -7832,6 +8306,11 @@
         "args": {
           "description": "Arguments to pass to the custom tool",
           "x-opaque-json": true
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -7862,6 +8341,11 @@
         "extensionName": {
           "type": "string",
           "description": "Name of the extension being managed"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -7894,6 +8378,11 @@
             "type": "string"
           },
           "description": "Capabilities the extension is requesting"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -7928,6 +8417,11 @@
         "hookMessage": {
           "type": "string",
           "description": "Optional message from the hook explaining why confirmation is needed"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -7965,6 +8459,11 @@
         "args": {
           "description": "Arguments to pass to the MCP tool",
           "x-opaque-json": true
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8012,6 +8511,11 @@
         "reason": {
           "type": "string",
           "description": "Reason for the vote (vote only)"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8044,6 +8548,11 @@
             "type": "string"
           },
           "description": "File paths that require explicit approval"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8089,6 +8598,11 @@
         "path": {
           "type": "string",
           "description": "Path of the file or directory being read"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8119,6 +8633,19 @@
         "url": {
           "type": "string",
           "description": "URL to be fetched"
+        },
+        "requestSandboxBypass": {
+          "type": "boolean",
+          "description": "True when this URL fetch is requesting to bypass the sandbox network policy: either the model set requestSandboxBypass: true, or the tool re-issued the request as an interactive bypass after the network policy denied the approved URL (host opted in via sandbox.allowBypass). This is a request, not a grant: the fetch runs only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
+        },
+        "requestSandboxBypassReason": {
+          "type": "string",
+          "description": "Model-provided justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8161,6 +8688,11 @@
         "canOfferSessionApproval": {
           "type": "boolean",
           "description": "Whether the UI can offer session-wide approval for file write operations"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8608,7 +9140,8 @@
         "commands": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/PermissionRequestShellCommand"
+            "$ref": "#/definitions/PermissionRequestShellCommand",
+            "description": "A parsed command identifier in a shell permission request, including whether it is read-only."
           },
           "description": "Parsed command identifiers found in the command text"
         },
@@ -8622,7 +9155,8 @@
         "possibleUrls": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/PermissionRequestShellPossibleUrl"
+            "$ref": "#/definitions/PermissionRequestShellPossibleUrl",
+            "description": "A URL that may be accessed by a command in a shell permission request."
           },
           "description": "URLs that may be accessed by the command"
         },
@@ -8678,7 +9212,7 @@
         "readOnly"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionRequestShellCommand` type.",
+      "description": "A parsed command identifier in a shell permission request, including whether it is read-only.",
       "title": "PermissionRequestShellCommand"
     },
     "PermissionRequestShellPossibleUrl": {
@@ -8693,7 +9227,7 @@
         "url"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionRequestShellPossibleUrl` type.",
+      "description": "A URL that may be accessed by a command in a shell permission request.",
       "title": "PermissionRequestShellPossibleUrl"
     },
     "PermissionRequestUrl": {
@@ -8715,6 +9249,14 @@
         "url": {
           "type": "string",
           "description": "URL to be fetched"
+        },
+        "requestSandboxBypass": {
+          "type": "boolean",
+          "description": "True when this URL fetch is requesting to bypass the sandbox network policy: either the model set requestSandboxBypass: true, or the tool re-issued the request as an interactive bypass after the network policy denied the approved URL (host opted in via sandbox.allowBypass). This is a request, not a grant: the fetch runs only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
+        },
+        "requestSandboxBypassReason": {
+          "type": "string",
+          "description": "Model-provided justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
         }
       },
       "required": [
@@ -8757,6 +9299,14 @@
         "canOfferSessionApproval": {
           "type": "boolean",
           "description": "Whether the UI can offer session-wide approval for file write operations"
+        },
+        "requestSandboxBypass": {
+          "type": "boolean",
+          "description": "True when a built-in file tool (apply_patch / str_replace_editor) asked to write a path the sandbox filesystem policy would block, and the host opted in via sandbox.allowBypass. This is a request, not a grant: the write happens unsandboxed only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
+        },
+        "requestSandboxBypassReason": {
+          "type": "string",
+          "description": "Justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
         }
       },
       "required": [
@@ -8773,31 +9323,40 @@
     "PermissionResult": {
       "anyOf": [
         {
-          "$ref": "#/definitions/PermissionApproved"
+          "$ref": "#/definitions/PermissionApproved",
+          "description": "Permission response variant indicating the request was approved without persisting an approval rule."
         },
         {
-          "$ref": "#/definitions/PermissionApprovedForSession"
+          "$ref": "#/definitions/PermissionApprovedForSession",
+          "description": "Permission response variant that approves a request and remembers the provided approval for the rest of the session."
         },
         {
-          "$ref": "#/definitions/PermissionApprovedForLocation"
+          "$ref": "#/definitions/PermissionApprovedForLocation",
+          "description": "Permission response variant that approves a request and persists the provided approval to a project location key."
         },
         {
-          "$ref": "#/definitions/PermissionCancelled"
+          "$ref": "#/definitions/PermissionCancelled",
+          "description": "Permission response variant indicating the request was cancelled before use, with an optional reason."
         },
         {
-          "$ref": "#/definitions/PermissionDeniedByRules"
+          "$ref": "#/definitions/PermissionDeniedByRules",
+          "description": "Permission response variant denied because matching approval rules explicitly blocked the request."
         },
         {
-          "$ref": "#/definitions/PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser"
+          "$ref": "#/definitions/PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser",
+          "description": "Permission response variant denied because no approval rule matched and user confirmation was unavailable."
         },
         {
-          "$ref": "#/definitions/PermissionDeniedInteractivelyByUser"
+          "$ref": "#/definitions/PermissionDeniedInteractivelyByUser",
+          "description": "Permission response variant denied in an interactive user prompt, with optional feedback and force-reject flag."
         },
         {
-          "$ref": "#/definitions/PermissionDeniedByContentExclusionPolicy"
+          "$ref": "#/definitions/PermissionDeniedByContentExclusionPolicy",
+          "description": "Permission response variant denying a path under content exclusion policy, with the path and message."
         },
         {
-          "$ref": "#/definitions/PermissionDeniedByPermissionRequestHook"
+          "$ref": "#/definitions/PermissionDeniedByPermissionRequestHook",
+          "description": "Permission response variant denied by a permission-request hook, with optional message and interrupt flag."
         }
       ],
       "description": "The result of the permission request",
@@ -8823,7 +9382,7 @@
         "argument"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `PermissionRule` type.",
+      "description": "A permission approval or denial rule matched against a tool request, identified by a rule kind with an optional argument value.",
       "title": "PermissionRule"
     },
     "PermissionsChangedData": {
@@ -8836,6 +9395,16 @@
         "allowAllPermissions": {
           "type": "boolean",
           "description": "Aggregate allow-all flag after the change"
+        },
+        "previousAllowAllPermissionMode": {
+          "$ref": "#/definitions/PermissionAllowAllMode",
+          "description": "Allow-all mode before the change",
+          "stability": "experimental"
+        },
+        "allowAllPermissionMode": {
+          "$ref": "#/definitions/PermissionAllowAllMode",
+          "description": "Allow-all mode after the change",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8843,7 +9412,7 @@
         "allowAllPermissions"
       ],
       "additionalProperties": false,
-      "description": "Permissions change details carrying the aggregate allow-all boolean transition.",
+      "description": "Permissions change details carrying the aggregate allow-all transition.",
       "title": "PermissionsChangedData"
     },
     "PermissionsChangedEvent": {
@@ -8886,7 +9455,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionsChangedData",
-          "description": "Permissions change details carrying the aggregate allow-all boolean transition."
+          "description": "Permissions change details carrying the aggregate allow-all transition."
         }
       },
       "required": [
@@ -8897,7 +9466,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all boolean transition.",
+      "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all transition.",
       "title": "PermissionsChangedEvent"
     },
     "PersistedBinaryImage": {
@@ -9166,6 +9735,10 @@
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
+        },
+        "verbosity": {
+          "$ref": "#/definitions/Verbosity",
+          "description": "Output verbosity level used for model calls, if applicable (e.g. \"low\", \"medium\", \"high\")"
         },
         "contextTier": {
           "anyOf": [
@@ -9740,7 +10313,7 @@
         },
         {
           "$ref": "#/definitions/PermissionsChangedEvent",
-          "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all boolean transition."
+          "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all transition."
         },
         {
           "$ref": "#/definitions/PlanChangedEvent",
@@ -9796,7 +10369,7 @@
         },
         {
           "$ref": "#/definitions/UserMessageEvent",
-          "description": "Session event \"user.message\"."
+          "description": "Session event \"user.message\". Payload of `user.message` with displayed and model-transformed content, attachments, source/delivery metadata, mode, and telemetry IDs."
         },
         {
           "$ref": "#/definitions/PendingMessagesModifiedEvent",
@@ -9817,6 +10390,10 @@
         {
           "$ref": "#/definitions/AssistantReasoningDeltaEvent",
           "description": "Session event \"assistant.reasoning_delta\". Streaming reasoning delta for incremental extended thinking updates"
+        },
+        {
+          "$ref": "#/definitions/AssistantToolCallDeltaEvent",
+          "description": "Session event \"assistant.tool_call_delta\". Streaming tool-call input delta for incremental tool-call updates"
         },
         {
           "$ref": "#/definitions/AssistantStreamingDeltaEvent",
@@ -10011,6 +10588,10 @@
           "description": "Session event \"session_limits_exhausted.completed\". Session limit exhaustion prompt completion notification."
         },
         {
+          "$ref": "#/definitions/AutoModeResolvedEvent",
+          "description": "Session event \"session.auto_mode_resolved\". Auto Intent resolution: the concrete model the session settled on for the first prompt of an auto-mode session, and why. Lets SDK clients render the chosen model and the full reason it was picked. The core selection fields (chosenModel/reasoningBucket/categoryScores) are stable; the routing-analytics fields (predictedLabel/confidence/candidateModels) mirror the upstream intent service and may evolve, hence the event's experimental stability."
+        },
+        {
           "$ref": "#/definitions/CommandsChangedEvent",
           "description": "Session event \"commands.changed\". SDK command registration change notification"
         },
@@ -10028,43 +10609,55 @@
         },
         {
           "$ref": "#/definitions/ToolsUpdatedEvent",
-          "description": "Session event \"session.tools_updated\"."
+          "description": "Session event \"session.tools_updated\". Payload of `session.tools_updated` identifying the model whose resolved tools were updated."
         },
         {
           "$ref": "#/definitions/BackgroundTasksChangedEvent",
-          "description": "Session event \"session.background_tasks_changed\"."
+          "description": "Session event \"session.background_tasks_changed\". Empty payload for `session.background_tasks_changed`, indicating background task state changed."
         },
         {
           "$ref": "#/definitions/SkillsLoadedEvent",
-          "description": "Session event \"session.skills_loaded\"."
+          "description": "Session event \"session.skills_loaded\". Payload of `session.skills_loaded` listing resolved skill metadata."
         },
         {
           "$ref": "#/definitions/CustomAgentsUpdatedEvent",
-          "description": "Session event \"session.custom_agents_updated\"."
+          "description": "Session event \"session.custom_agents_updated\". Payload of `session.custom_agents_updated` with loaded custom agents plus non-fatal warnings and fatal errors."
         },
         {
           "$ref": "#/definitions/McpServersLoadedEvent",
-          "description": "Session event \"session.mcp_servers_loaded\"."
+          "description": "Session event \"session.mcp_servers_loaded\". Payload of `session.mcp_servers_loaded` listing MCP server status summaries."
         },
         {
           "$ref": "#/definitions/McpServerStatusChangedEvent",
-          "description": "Session event \"session.mcp_server_status_changed\"."
+          "description": "Session event \"session.mcp_server_status_changed\". Payload of `session.mcp_server_status_changed` for one MCP server's status and optional failure error."
+        },
+        {
+          "$ref": "#/definitions/McpToolsListChangedEvent",
+          "description": "Session event \"mcp.tools.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+        },
+        {
+          "$ref": "#/definitions/McpResourcesListChangedEvent",
+          "description": "Session event \"mcp.resources.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+        },
+        {
+          "$ref": "#/definitions/McpPromptsListChangedEvent",
+          "description": "Session event \"mcp.prompts.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
         },
         {
           "$ref": "#/definitions/ExtensionsLoadedEvent",
-          "description": "Session event \"session.extensions_loaded\"."
+          "description": "Session event \"session.extensions_loaded\". Payload of `session.extensions_loaded` listing discovered extensions and their statuses."
         },
         {
           "$ref": "#/definitions/CanvasOpenedEvent",
-          "description": "Session event \"session.canvas.opened\"."
+          "description": "Session event \"session.canvas.opened\". Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input."
         },
         {
           "$ref": "#/definitions/CanvasRegistryChangedEvent",
-          "description": "Session event \"session.canvas.registry_changed\"."
+          "description": "Session event \"session.canvas.registry_changed\". Payload of `session.canvas.registry_changed` listing the canvas declarations currently available."
         },
         {
           "$ref": "#/definitions/CanvasClosedEvent",
-          "description": "Session event \"session.canvas.closed\"."
+          "description": "Session event \"session.canvas.closed\". Payload of `session.canvas.closed` with the closed canvas instance ID, provider ID, and canvas ID."
         },
         {
           "$ref": "#/definitions/CanvasUnavailableEvent",
@@ -10080,7 +10673,7 @@
         },
         {
           "$ref": "#/definitions/ExtensionsAttachmentsPushedEvent",
-          "description": "Session event \"session.extensions.attachments_pushed\"."
+          "description": "Session event \"session.extensions.attachments_pushed\". Payload of `session.extensions.attachments_pushed` with extension-contributed attachments for the next send."
         },
         {
           "$ref": "#/definitions/McpAppToolCallCompleteEvent",
@@ -10451,7 +11044,8 @@
         "tokenDetails": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/ShutdownTokenDetail"
+            "$ref": "#/definitions/ShutdownTokenDetail",
+            "description": "A session-wide shutdown token-type entry storing the accumulated token count."
           },
           "description": "Session-wide per-token-type accumulated token counts"
         },
@@ -10478,7 +11072,8 @@
         "modelMetrics": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/ShutdownModelMetric"
+            "$ref": "#/definitions/ShutdownModelMetric",
+            "description": "Per-model shutdown metrics with request counts, token usage, nano-AI units, and token details."
           },
           "description": "Per-model usage breakdown, keyed by model identifier"
         },
@@ -10592,7 +11187,8 @@
         "tokenDetails": {
           "type": "object",
           "additionalProperties": {
-            "$ref": "#/definitions/ShutdownModelMetricTokenDetail"
+            "$ref": "#/definitions/ShutdownModelMetricTokenDetail",
+            "description": "A token-type entry in a shutdown model metric, storing the accumulated token count."
           },
           "description": "Token count details per type"
         }
@@ -10602,7 +11198,7 @@
         "usage"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ShutdownModelMetric` type.",
+      "description": "Per-model shutdown metrics with request counts, token usage, nano-AI units, and token details.",
       "title": "ShutdownModelMetric"
     },
     "ShutdownModelMetricRequests": {
@@ -10637,7 +11233,7 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ShutdownModelMetricTokenDetail` type.",
+      "description": "A token-type entry in a shutdown model metric, storing the accumulated token count.",
       "title": "ShutdownModelMetricTokenDetail"
     },
     "ShutdownModelMetricUsage": {
@@ -10692,7 +11288,7 @@
         "tokenCount"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ShutdownTokenDetail` type.",
+      "description": "A session-wide shutdown token-type entry storing the accumulated token count.",
       "title": "ShutdownTokenDetail"
     },
     "ShutdownType": {
@@ -10714,6 +11310,10 @@
         "name": {
           "type": "string",
           "description": "Name of the invoked skill"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier active when the skill was invoked, when known"
         },
         "path": {
           "type": "string",
@@ -10835,7 +11435,8 @@
         "skills": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/SkillsLoadedSkill"
+            "$ref": "#/definitions/SkillsLoadedSkill",
+            "description": "A single resolved skill in `session.skills_loaded`, including source, invocability, enabled state, path, and argument hint."
           },
           "description": "Array of resolved skill metadata"
         }
@@ -10844,7 +11445,7 @@
         "skills"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SkillsLoadedData` type.",
+      "description": "Payload of `session.skills_loaded` listing resolved skill metadata.",
       "title": "SkillsLoadedData"
     },
     "SkillsLoadedEvent": {
@@ -10888,7 +11489,7 @@
         },
         "data": {
           "$ref": "#/definitions/SkillsLoadedData",
-          "description": "Schema for the `SkillsLoadedData` type."
+          "description": "Payload of `session.skills_loaded` listing resolved skill metadata."
         }
       },
       "required": [
@@ -10900,7 +11501,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.skills_loaded\".",
+      "description": "Session event \"session.skills_loaded\". Payload of `session.skills_loaded` listing resolved skill metadata.",
       "title": "SkillsLoadedEvent"
     },
     "SkillsLoadedSkill": {
@@ -10943,7 +11544,7 @@
         "enabled"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SkillsLoadedSkill` type.",
+      "description": "A single resolved skill in `session.skills_loaded`, including source, invocability, enabled state, path, and argument hint.",
       "title": "SkillsLoadedSkill"
     },
     "SkillSource": {
@@ -11082,6 +11683,10 @@
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
+        },
+        "verbosity": {
+          "$ref": "#/definitions/Verbosity",
+          "description": "Output verbosity level used for model calls, if applicable (e.g. \"low\", \"medium\", \"high\")"
         },
         "contextTier": {
           "anyOf": [
@@ -11738,22 +12343,28 @@
     "SystemNotification": {
       "anyOf": [
         {
-          "$ref": "#/definitions/SystemNotificationAgentCompleted"
+          "$ref": "#/definitions/SystemNotificationAgentCompleted",
+          "description": "System notification metadata for a background agent that completed or failed, including agent ID, type, status, description, and prompt."
         },
         {
-          "$ref": "#/definitions/SystemNotificationAgentIdle"
+          "$ref": "#/definitions/SystemNotificationAgentIdle",
+          "description": "System notification metadata for a background agent that became idle, including agent ID, type, and description."
         },
         {
-          "$ref": "#/definitions/SystemNotificationNewInboxMessage"
+          "$ref": "#/definitions/SystemNotificationNewInboxMessage",
+          "description": "System notification metadata for a new inbox message, including entry ID, sender details, and summary."
         },
         {
-          "$ref": "#/definitions/SystemNotificationShellCompleted"
+          "$ref": "#/definitions/SystemNotificationShellCompleted",
+          "description": "System notification metadata for a shell session that completed, including shell ID, optional exit code, and description."
         },
         {
-          "$ref": "#/definitions/SystemNotificationShellDetachedCompleted"
+          "$ref": "#/definitions/SystemNotificationShellDetachedCompleted",
+          "description": "System notification metadata for a detached shell session that completed, including shell ID and description."
         },
         {
-          "$ref": "#/definitions/SystemNotificationInstructionDiscovered"
+          "$ref": "#/definitions/SystemNotificationInstructionDiscovered",
+          "description": "System notification metadata for an instruction file discovered during tool access, including source, trigger file, and tool."
         }
       ],
       "description": "Structured metadata identifying what triggered this notification",
@@ -11795,7 +12406,7 @@
         "status"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SystemNotificationAgentCompleted` type.",
+      "description": "System notification metadata for a background agent that completed or failed, including agent ID, type, status, description, and prompt.",
       "title": "SystemNotificationAgentCompleted"
     },
     "SystemNotificationAgentCompletedStatus": {
@@ -11838,7 +12449,7 @@
         "agentType"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SystemNotificationAgentIdle` type.",
+      "description": "System notification metadata for a background agent that became idle, including agent ID, type, and description.",
       "title": "SystemNotificationAgentIdle"
     },
     "SystemNotificationData": {
@@ -11947,7 +12558,7 @@
         "triggerTool"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SystemNotificationInstructionDiscovered` type.",
+      "description": "System notification metadata for an instruction file discovered during tool access, including source, trigger file, and tool.",
       "title": "SystemNotificationInstructionDiscovered"
     },
     "SystemNotificationNewInboxMessage": {
@@ -11983,7 +12594,7 @@
         "summary"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SystemNotificationNewInboxMessage` type.",
+      "description": "System notification metadata for a new inbox message, including entry ID, sender details, and summary.",
       "title": "SystemNotificationNewInboxMessage"
     },
     "SystemNotificationShellCompleted": {
@@ -12012,7 +12623,7 @@
         "shellId"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SystemNotificationShellCompleted` type.",
+      "description": "System notification metadata for a shell session that completed, including shell ID, optional exit code, and description.",
       "title": "SystemNotificationShellCompleted"
     },
     "SystemNotificationShellDetachedCompleted": {
@@ -12037,7 +12648,7 @@
         "shellId"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `SystemNotificationShellDetachedCompleted` type.",
+      "description": "System notification metadata for a detached shell session that completed, including shell ID and description.",
       "title": "SystemNotificationShellDetachedCompleted"
     },
     "TaskCompleteData": {
@@ -12357,10 +12968,12 @@
     "ToolExecutionCompleteContentResourceDetails": {
       "anyOf": [
         {
-          "$ref": "#/definitions/EmbeddedTextResourceContents"
+          "$ref": "#/definitions/EmbeddedTextResourceContents",
+          "description": "Embedded text resource contents identified by a URI, with an optional MIME type and a text payload."
         },
         {
-          "$ref": "#/definitions/EmbeddedBlobResourceContents"
+          "$ref": "#/definitions/EmbeddedBlobResourceContents",
+          "description": "Embedded binary resource contents identified by a URI, with an optional MIME type and a base64-encoded blob."
         }
       ],
       "description": "The embedded resource contents, either text or base64-encoded binary",
@@ -12767,7 +13380,7 @@
       "properties": {
         "ui": {
           "$ref": "#/definitions/ToolExecutionCompleteToolDescriptionMetaUI",
-          "description": "Schema for the `ToolExecutionCompleteToolDescriptionMetaUI` type."
+          "description": "MCP Apps tool `_meta.ui` resource URI and visibility captured on `tool.execution_complete`."
         }
       },
       "additionalProperties": false,
@@ -12790,7 +13403,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Schema for the `ToolExecutionCompleteToolDescriptionMetaUI` type.",
+      "description": "MCP Apps tool `_meta.ui` resource URI and visibility captured on `tool.execution_complete`.",
       "title": "ToolExecutionCompleteToolDescriptionMetaUI"
     },
     "ToolExecutionCompleteToolDescriptionMetaUIVisibility": {
@@ -12843,7 +13456,7 @@
       "properties": {
         "ui": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUI",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUI` type."
+          "description": "MCP Apps UI resource metadata for a completed tool result, including CSP, permissions, domain, and border preference."
         }
       },
       "additionalProperties": false,
@@ -12855,11 +13468,11 @@
       "properties": {
         "csp": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUICsp",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUICsp` type."
+          "description": "CSP domain allowlists for an MCP Apps UI resource, including connect, resource, frame, and base URI domains."
         },
         "permissions": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissions",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissions` type."
+          "description": "Browser permission metadata for an MCP Apps UI resource, including camera, microphone, geolocation, and clipboard-write."
         },
         "domain": {
           "type": "string"
@@ -12869,7 +13482,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUI` type.",
+      "description": "MCP Apps UI resource metadata for a completed tool result, including CSP, permissions, domain, and border preference.",
       "title": "ToolExecutionCompleteUIResourceMetaUI"
     },
     "ToolExecutionCompleteUIResourceMetaUICsp": {
@@ -12901,7 +13514,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUICsp` type.",
+      "description": "CSP domain allowlists for an MCP Apps UI resource, including connect, resource, frame, and base URI domains.",
       "title": "ToolExecutionCompleteUIResourceMetaUICsp"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissions": {
@@ -12909,47 +13522,47 @@
       "properties": {
         "camera": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsCamera",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsCamera` type."
+          "description": "Marker object for camera permission on an MCP Apps UI resource."
         },
         "microphone": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone` type."
+          "description": "Marker object for microphone permission on an MCP Apps UI resource."
         },
         "geolocation": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation` type."
+          "description": "Marker object for geolocation permission on an MCP Apps UI resource."
         },
         "clipboardWrite": {
           "$ref": "#/definitions/ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite",
-          "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite` type."
+          "description": "Marker object for clipboard-write permission on an MCP Apps UI resource."
         }
       },
       "additionalProperties": false,
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissions` type.",
+      "description": "Browser permission metadata for an MCP Apps UI resource, including camera, microphone, geolocation, and clipboard-write.",
       "title": "ToolExecutionCompleteUIResourceMetaUIPermissions"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera": {
       "type": "object",
       "properties": {},
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsCamera` type.",
+      "description": "Marker object for camera permission on an MCP Apps UI resource.",
       "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsCamera"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite": {
       "type": "object",
       "properties": {},
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite` type.",
+      "description": "Marker object for clipboard-write permission on an MCP Apps UI resource.",
       "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsClipboardWrite"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation": {
       "type": "object",
       "properties": {},
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation` type.",
+      "description": "Marker object for geolocation permission on an MCP Apps UI resource.",
       "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsGeolocation"
     },
     "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone": {
       "type": "object",
       "properties": {},
-      "description": "Schema for the `ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone` type.",
+      "description": "Marker object for microphone permission on an MCP Apps UI resource.",
       "title": "ToolExecutionCompleteUIResourceMetaUIPermissionsMicrophone"
     },
     "ToolExecutionPartialData": {
@@ -13266,7 +13879,7 @@
       "properties": {
         "ui": {
           "$ref": "#/definitions/ToolExecutionStartToolDescriptionMetaUI",
-          "description": "Schema for the `ToolExecutionStartToolDescriptionMetaUI` type."
+          "description": "MCP Apps tool `_meta.ui` resource URI and visibility captured on `tool.execution_start`."
         }
       },
       "additionalProperties": false,
@@ -13289,7 +13902,7 @@
         }
       },
       "additionalProperties": false,
-      "description": "Schema for the `ToolExecutionStartToolDescriptionMetaUI` type.",
+      "description": "MCP Apps tool `_meta.ui` resource URI and visibility captured on `tool.execution_start`.",
       "title": "ToolExecutionStartToolDescriptionMetaUI"
     },
     "ToolExecutionStartToolDescriptionMetaUIVisibility": {
@@ -13317,7 +13930,7 @@
         "model"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `ToolsUpdatedData` type.",
+      "description": "Payload of `session.tools_updated` identifying the model whose resolved tools were updated.",
       "title": "ToolsUpdatedData"
     },
     "ToolsUpdatedEvent": {
@@ -13361,7 +13974,7 @@
         },
         "data": {
           "$ref": "#/definitions/ToolsUpdatedData",
-          "description": "Schema for the `ToolsUpdatedData` type."
+          "description": "Payload of `session.tools_updated` identifying the model whose resolved tools were updated."
         }
       },
       "required": [
@@ -13373,7 +13986,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.tools_updated\".",
+      "description": "Session event \"session.tools_updated\". Payload of `session.tools_updated` identifying the model whose resolved tools were updated.",
       "title": "ToolsUpdatedEvent"
     },
     "ToolUserRequestedData": {
@@ -13993,7 +14606,7 @@
         "content"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserMessageData` type.",
+      "description": "Payload of `user.message` with displayed and model-transformed content, attachments, source/delivery metadata, mode, and telemetry IDs.",
       "title": "UserMessageData"
     },
     "UserMessageDelivery": {
@@ -14051,7 +14664,7 @@
         },
         "data": {
           "$ref": "#/definitions/UserMessageData",
-          "description": "Schema for the `UserMessageData` type."
+          "description": "Payload of `user.message` with displayed and model-transformed content, attachments, source/delivery metadata, mode, and telemetry IDs."
         }
       },
       "required": [
@@ -14062,34 +14675,42 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"user.message\".",
+      "description": "Session event \"user.message\". Payload of `user.message` with displayed and model-transformed content, attachments, source/delivery metadata, mode, and telemetry IDs.",
       "title": "UserMessageEvent"
     },
     "UserToolSessionApproval": {
       "anyOf": [
         {
-          "$ref": "#/definitions/UserToolSessionApprovalCommands"
+          "$ref": "#/definitions/UserToolSessionApprovalCommands",
+          "description": "Session-scoped tool-approval rule for specific shell command identifiers."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalRead"
+          "$ref": "#/definitions/UserToolSessionApprovalRead",
+          "description": "Session-scoped tool-approval rule for read-only filesystem operations."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalWrite"
+          "$ref": "#/definitions/UserToolSessionApprovalWrite",
+          "description": "Session-scoped tool-approval rule for filesystem write operations."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalMcp"
+          "$ref": "#/definitions/UserToolSessionApprovalMcp",
+          "description": "Session-scoped tool-approval rule for an MCP server tool, or all tools on the server when `toolName` is null."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalMemory"
+          "$ref": "#/definitions/UserToolSessionApprovalMemory",
+          "description": "Session-scoped tool-approval rule for writes to long-term memory."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalCustomTool"
+          "$ref": "#/definitions/UserToolSessionApprovalCustomTool",
+          "description": "Session-scoped tool-approval rule for a custom tool, keyed by tool name."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalExtensionManagement"
+          "$ref": "#/definitions/UserToolSessionApprovalExtensionManagement",
+          "description": "Session-scoped tool-approval rule for extension-management operations, optionally narrowed by operation."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalExtensionPermissionAccess"
+          "$ref": "#/definitions/UserToolSessionApprovalExtensionPermissionAccess",
+          "description": "Session-scoped tool-approval rule for an extension's permission-gated capability access, keyed by extension name."
         }
       ],
       "description": "The approval to add as a session-scoped rule",
@@ -14116,7 +14737,7 @@
         "commandIdentifiers"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalCommands` type.",
+      "description": "Session-scoped tool-approval rule for specific shell command identifiers.",
       "title": "UserToolSessionApprovalCommands"
     },
     "UserToolSessionApprovalCustomTool": {
@@ -14137,7 +14758,7 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalCustomTool` type.",
+      "description": "Session-scoped tool-approval rule for a custom tool, keyed by tool name.",
       "title": "UserToolSessionApprovalCustomTool"
     },
     "UserToolSessionApprovalExtensionManagement": {
@@ -14157,7 +14778,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalExtensionManagement` type.",
+      "description": "Session-scoped tool-approval rule for extension-management operations, optionally narrowed by operation.",
       "title": "UserToolSessionApprovalExtensionManagement"
     },
     "UserToolSessionApprovalExtensionPermissionAccess": {
@@ -14178,7 +14799,7 @@
         "extensionName"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalExtensionPermissionAccess` type.",
+      "description": "Session-scoped tool-approval rule for an extension's permission-gated capability access, keyed by extension name.",
       "title": "UserToolSessionApprovalExtensionPermissionAccess"
     },
     "UserToolSessionApprovalMcp": {
@@ -14207,7 +14828,7 @@
         "toolName"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalMcp` type.",
+      "description": "Session-scoped tool-approval rule for an MCP server tool, or all tools on the server when `toolName` is null.",
       "title": "UserToolSessionApprovalMcp"
     },
     "UserToolSessionApprovalMemory": {
@@ -14223,7 +14844,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalMemory` type.",
+      "description": "Session-scoped tool-approval rule for writes to long-term memory.",
       "title": "UserToolSessionApprovalMemory"
     },
     "UserToolSessionApprovalRead": {
@@ -14239,7 +14860,7 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalRead` type.",
+      "description": "Session-scoped tool-approval rule for read-only filesystem operations.",
       "title": "UserToolSessionApprovalRead"
     },
     "UserToolSessionApprovalWrite": {
@@ -14255,8 +14876,23 @@
         "kind"
       ],
       "additionalProperties": false,
-      "description": "Schema for the `UserToolSessionApprovalWrite` type.",
+      "description": "Session-scoped tool-approval rule for filesystem write operations.",
       "title": "UserToolSessionApprovalWrite"
+    },
+    "Verbosity": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "description": "Output verbosity level used for supported model calls (e.g. \"low\", \"medium\", \"high\")",
+      "title": "Verbosity",
+      "x-enumDescriptions": {
+        "low": "A terse response was requested.",
+        "medium": "A medium amount of response detail was requested.",
+        "high": "A more detailed response was requested."
+      }
     },
     "WarningData": {
       "type": "object",

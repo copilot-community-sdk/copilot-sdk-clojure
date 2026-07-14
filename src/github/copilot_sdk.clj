@@ -164,7 +164,17 @@
     :copilot/session_limits_exhausted.requested
     :copilot/session_limits_exhausted.completed
     :copilot/mcp.headers_refresh_required
-    :copilot/mcp.headers_refresh_completed})
+    :copilot/mcp.headers_refresh_completed
+    ;; v1.0.7-preview.2 sync (pinned schema 1.0.70). assistant.tool_call_delta
+    ;; streams incremental tool-call argument input; the mcp.*.list_changed
+    ;; trio fire when an MCP server's tools/resources/prompts listing changes;
+    ;; session.auto_mode_resolved (experimental) reports the model an auto-mode
+    ;; session settled on for its first prompt and why.
+    :copilot/assistant.tool_call_delta
+    :copilot/mcp.tools.list_changed
+    :copilot/mcp.resources.list_changed
+    :copilot/mcp.prompts.list_changed
+    :copilot/session.auto_mode_resolved})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -209,7 +219,10 @@
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.67): updated session-limit budgets
     ;; and incremental usage checkpoints.
     :copilot/session.session_limits_changed
-    :copilot/session.usage_checkpoint})
+    :copilot/session.usage_checkpoint
+    ;; v1.0.7-preview.2 sync (pinned schema 1.0.70): experimental auto-mode
+    ;; model resolution for the first prompt of an auto-mode session.
+    :copilot/session.auto_mode_resolved})
 
 (def assistant-events
   "Assistant response events."
@@ -224,7 +237,9 @@
     :copilot/assistant.turn_end
     :copilot/assistant.usage
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): assistant idle within a turn.
-    :copilot/assistant.idle})
+    :copilot/assistant.idle
+    ;; v1.0.7-preview.2 sync (introduced upstream schema 1.0.69-3): streaming tool-call input delta.
+    :copilot/assistant.tool_call_delta})
 
 (def tool-events
   "Tool execution events."
@@ -250,7 +265,12 @@
     :copilot/sampling.requested :copilot/sampling.completed
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.67): interactive prompt when a
     ;; session limit is exhausted (mirrors the sampling request/complete pair).
-    :copilot/session_limits_exhausted.requested :copilot/session_limits_exhausted.completed})
+    :copilot/session_limits_exhausted.requested :copilot/session_limits_exhausted.completed
+    ;; v1.0.7-preview.2 sync (pinned schema 1.0.70): an MCP server's tools /
+    ;; resources / prompts listing changed (server-initiated list_changed).
+    :copilot/mcp.tools.list_changed
+    :copilot/mcp.resources.list_changed
+    :copilot/mcp.prompts.list_changed})
 
 (defn evt
   "Convert an unqualified event keyword to a namespace-qualified event keyword.
