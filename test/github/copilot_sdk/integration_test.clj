@@ -5496,6 +5496,72 @@
                           :enableGitHubTelemetryForwarding)))
       (is (not (contains? (resume "s-1" {}) :enableGitHubTelemetryForwarding))))))
 
+(deftest test-github-telemetry-forwarding-on-connect-handshake
+  (testing "enableGitHubTelemetryForwarding=true on the `connect` handshake when a handler is set (upstream PR #1909)"
+    (with-telemetry-client*
+      {:on-github-telemetry (fn [_])}
+      (fn [server client]
+        (let [seen (atom [])
+              _ (mock/set-request-hook! server (fn [method params]
+                                                 (when (= "connect" method)
+                                                   (swap! seen conj params))))
+              _ (#'client/verify-protocol-version! client)]
+          (is (some (fn [p] (true? (:enableGitHubTelemetryForwarding p))) @seen)
+              "connect should carry the telemetry opt-in when a handler is registered")))))
+
+  (testing "enableGitHubTelemetryForwarding is omitted from `connect` when no handler is set (upstream PR #1909)"
+    (let [seen (atom [])
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "connect" method)
+                                                      (swap! seen conj params))))
+          _ (#'client/verify-protocol-version! *test-client*)]
+      (is (seq @seen) "connect should have been sent")
+      (is (not-any? #(contains? % :enableGitHubTelemetryForwarding) @seen)
+          "connect must not stamp the flag without a handler"))))
+
+(deftest test-enable-managed-settings-forwarded
+  (testing "enableManagedSettings forwarded on session.create + session.resume wire params (upstream PR #1925)"
+    (let [create @#'client/build-create-session-params
+          resume #(#'client/build-resume-session-params %1 %2)]
+      (is (true? (:enable-managed-settings (create {:enable-managed-settings? true}))))
+      (is (false? (:enable-managed-settings (create {:enable-managed-settings? false})))
+          "an explicit false is forwarded (matches upstream spread of config.enableManagedSettings)")
+      (is (not (contains? (create {}) :enable-managed-settings))
+          "omitted when the caller did not set the option")
+      (is (true? (:enable-managed-settings (resume "s-1" {:enable-managed-settings? true}))))
+      (is (false? (:enable-managed-settings (resume "s-1" {:enable-managed-settings? false}))))
+      (is (not (contains? (resume "s-1" {}) :enable-managed-settings)))))
+
+  (testing "enableManagedSettings reaches the wire (camelCase) on create when set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all
+                                               :enable-managed-settings? true})]
+      (is (true? (:enableManagedSettings (get @seen "session.create")))))))
+
+(deftest test-canvas-provider-forwarded
+  (testing "canvasProvider forwarded on session.create + session.resume wire params (upstream PR #1847)"
+    (let [create @#'client/build-create-session-params
+          resume #(#'client/build-resume-session-params %1 %2)
+          cp {:id "app:builtin:win-1" :name "My App"}]
+      (is (= cp (:canvas-provider (create {:canvas-provider cp}))))
+      (is (not (contains? (create {}) :canvas-provider)))
+      (is (= cp (:canvas-provider (resume "s-1" {:canvas-provider cp}))))
+      (is (not (contains? (resume "s-1" {}) :canvas-provider)))))
+
+  (testing "canvasProvider reaches the wire (camelCase, nested id/name) on create when set"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all
+                                               :canvas-provider {:id "app:builtin:win-1" :name "My App"}})
+          cp (:canvasProvider (get @seen "session.create"))]
+      (is (= "app:builtin:win-1" (:id cp)))
+      (is (= "My App" (:name cp))))))
+
 (deftest test-github-telemetry-event-invokes-callback
   (testing "gitHubTelemetry.event notification invokes :on-github-telemetry with idiom-shaped params; opaque sub-maps pass through verbatim (upstream PR #1835)"
     (let [received (promise)]

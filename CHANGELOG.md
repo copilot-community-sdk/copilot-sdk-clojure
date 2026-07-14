@@ -15,6 +15,7 @@ marked `@experimental` upstream.
   [PR #1954](https://github.com/github/copilot-sdk/pull/1954) (1.0.70-0), and
   [PR #1962](https://github.com/github/copilot-sdk/pull/1962) (1.0.70). Bumped
   `.copilot-schema-version` `1.0.68` → `1.0.70` and regenerated wire specs /
+  `.copilot-schema-version` `1.0.68` → `1.0.70` and regenerated wire specs /
   coercions via `bb codegen`. Schema 1.0.70 also widened `timeToFirstTokenMs`
   from `integer` to `number`; the idiom `::time-to-first-token-ms` /
   `::ttft-ms` specs now accept any non-negative number.
@@ -34,6 +35,21 @@ marked `@experimental` upstream.
   optional experimental `:allow-all-permission-mode` / `:previous-allow-all-permission-mode`
   fields (tri-state `#{"off" "auto" "on"}`) to the existing event; surfaced in the idiom
   `::session.permissions_changed-data` spec and API reference.
+- **`:enable-managed-settings?` session config** — port of upstream
+  [PR #1925](https://github.com/github/copilot-sdk/pull/1925). Boolean forwarded on
+  `session.create`/`session.resume`/join as wire `enableManagedSettings`, gated on
+  `some?` so an explicit `false` is sent verbatim and an absent key is omitted.
+- **`:canvas-provider` session config** — port of upstream
+  [PR #1847](https://github.com/github/copilot-sdk/pull/1847). Map
+  `{:id "..." :name "..."}` (`:name` optional) forwarded on
+  `session.create`/`session.resume`/join as wire `canvasProvider`.
+- **Telemetry forwarding on the `connect` handshake** — port of upstream
+  [PR #1909](https://github.com/github/copilot-sdk/pull/1909). When
+  `:on-github-telemetry` is registered, the SDK now also sends
+  `enableGitHubTelemetryForwarding: true` on the connection-level `connect`
+  handshake, so the first session's un-replayable `session.start` telemetry is
+  forwarded. The existing per-session `session.create`/`session.resume` flag is
+  retained for older CLIs.
 
 ### Added (v1.0.6-preview.1 sync)
 Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to
