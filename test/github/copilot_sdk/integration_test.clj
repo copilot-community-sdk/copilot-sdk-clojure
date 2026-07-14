@@ -2474,7 +2474,7 @@
     (is (contains? sdk/interaction-events :copilot/session_limits_exhausted.completed))))
 
 (deftest test-v1-0-7-preview-new-events
-  (testing "assistant.tool_call_delta is a public assistant event (upstream schema 1.0.69-1)"
+  (testing "assistant.tool_call_delta is a public assistant event (upstream schema 1.0.69-3)"
     (is (contains? sdk/event-types :copilot/assistant.tool_call_delta)
         "must be in the master event-types set")
     (is (contains? sdk/assistant-events :copilot/assistant.tool_call_delta)
@@ -2487,7 +2487,7 @@
           (str ev " must be in the master event-types set"))
       (is (contains? sdk/interaction-events ev)
           (str ev " must be categorized under interaction-events"))))
-  (testing "session.auto_mode_resolved is a public session event (upstream schema 1.0.70)"
+  (testing "session.auto_mode_resolved is a public session event (upstream schema 1.0.70-0)"
     (is (contains? sdk/event-types :copilot/session.auto_mode_resolved)
         "must be in the master event-types set")
     (is (contains? sdk/session-events :copilot/session.auto_mode_resolved)
@@ -5333,12 +5333,18 @@
   (testing "assistant.usage-data accepts :time-to-first-token-ms (renamed from :ttft-ms)"
     (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                   {:model "gpt-5" :time-to-first-token-ms 250}))
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5" :time-to-first-token-ms 250.5})
+        ":time-to-first-token-ms accepts fractional ms (schema 1.0.70 widened integer -> number)")
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :time-to-first-token-ms -1}))
-        ":time-to-first-token-ms must be a non-negative integer")
+        ":time-to-first-token-ms must be a non-negative number")
     (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                        {:model "gpt-5" :time-to-first-token-ms "fast"}))
-        ":time-to-first-token-ms must be an integer")
+        ":time-to-first-token-ms must be a number")
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5" :time-to-first-token-ms ##NaN}))
+        ":time-to-first-token-ms rejects ##NaN (not a meaningful duration)")
     (testing "legacy :ttft-ms key still accepted for backward compatibility (older CLIs)"
       (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
                     {:model "gpt-5" :ttft-ms 250}))
@@ -6527,7 +6533,17 @@
       (is (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data evt)))
     (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
                        {:allow-all-permissions "yes"
-                        :previous-allow-all-permissions false})))))
+                        :previous-allow-all-permissions false}))))
+  (testing "optional allow-all mode fields (schema 1.0.70, experimental) validate"
+    (is (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
+                  {:allow-all-permissions true
+                   :previous-allow-all-permissions false
+                   :allow-all-permission-mode "auto"
+                   :previous-allow-all-permission-mode "off"}))
+    (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
+                       {:allow-all-permissions true
+                        :previous-allow-all-permissions false
+                        :allow-all-permission-mode "sometimes"})))))
 
 (deftest test-spec-hook-progress-data
   (testing "::hook.progress-data accepts a non-blank :message string"

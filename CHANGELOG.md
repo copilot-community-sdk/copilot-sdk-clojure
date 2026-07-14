@@ -15,19 +15,26 @@ marked `@experimental` upstream.
   [PR #1954](https://github.com/github/copilot-sdk/pull/1954) (1.0.70-0), and
   [PR #1962](https://github.com/github/copilot-sdk/pull/1962) (1.0.70). Bumped
   `.copilot-schema-version` `1.0.68` → `1.0.70` and regenerated wire specs /
-  coercions via `bb codegen`.
+  `.copilot-schema-version` `1.0.68` → `1.0.70` and regenerated wire specs /
+  coercions via `bb codegen`. Schema 1.0.70 also widened `timeToFirstTokenMs`
+  from `integer` to `number`; the idiom `::time-to-first-token-ms` /
+  `::ttft-ms` specs now accept any non-negative number.
 - **Five new session event types** — surfaced in the curated public event sets
   (`event-types` plus the relevant category set) and the idiom `::event-type` enum:
   - `:copilot/assistant.tool_call_delta` (schema 1.0.69-3) — streaming tool-call
-    argument input chunk; data `{:tool-call-id :input-delta}` with optional
+    argument input chunk; data `{:tool-call-id "..." :input-delta "..."}` with optional
     `:tool-name`, `:tool-type`.
   - `:copilot/mcp.tools.list_changed`, `:copilot/mcp.resources.list_changed`,
     `:copilot/mcp.prompts.list_changed` (schema 1.0.70) — remote MCP server
-    list-changed signals; data `{:server-name}`.
+    list-changed signals; data `{:server-name "..."}`.
   - `:copilot/session.auto_mode_resolved` (schema 1.0.70-0, `@experimental`) — auto
-    model-selection resolution; data `{:chosen-model}` with optional
+    model-selection resolution; data `{:chosen-model "..."}` with optional
     `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`,
     `:reasoning-bucket`.
+- **`session.permissions_changed` allow-all mode fields** — schema 1.0.70 added the
+  optional experimental `:allow-all-permission-mode` / `:previous-allow-all-permission-mode`
+  fields (tri-state `#{"off" "auto" "on"}`) to the existing event; surfaced in the idiom
+  `::session.permissions_changed-data` spec and API reference.
 - **`:enable-managed-settings?` session config** — port of upstream
   [PR #1925](https://github.com/github/copilot-sdk/pull/1925). Boolean forwarded on
   `session.create`/`session.resume`/join as wire `enableManagedSettings`, gated on
@@ -44,6 +51,7 @@ marked `@experimental` upstream.
   forwarded. The existing per-session `session.create`/`session.resume` flag is
   retained for older CLIs.
 
+### Added (v1.0.6-preview.1 sync)
 Ported from upstream `github/copilot-sdk` (post-v1.0.5-preview.0). Schema bumped to
 1.0.68. **Preview sync**: the CLI is a prerelease and these additions are
 `@experimental` upstream.
