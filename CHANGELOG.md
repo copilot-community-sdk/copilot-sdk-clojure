@@ -2,6 +2,18 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Added
+- **API-surface drift guard** ([#120](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/120)) —
+  a new test (`github.copilot-sdk.api-surface-test`) locks the public contract:
+  every public var (with kind, plus `:arglists` when the var carries it — plain
+  `def` re-exports have none) in the `github.copilot-sdk` facade
+  namespace plus every curated `github.copilot-sdk.specs` spec key are snapshotted
+  to `resources/github/copilot_sdk/api_surface.edn`. The test fails on any
+  undeclared drift (added/removed/changed vars or spec keys), so accidental
+  breaking changes to the frozen GA surface are caught in CI. Intentional changes
+  regenerate the snapshot with the new `bb api-surface:update` task, making the
+  contract change reviewable as an EDN diff.
+
 ### Added (documentation)
 - **Naming and shape differences vs the official SDK** — new reference
   section in `doc/reference/API.md` documenting the handful of public
