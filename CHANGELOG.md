@@ -2,6 +2,16 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Fixed (documentation)
+- **`query-seq!` leak foot-gun documented** — the `query-seq!` docstring and the
+  API reference previously claimed "guaranteed cleanup ... even if the consumer
+  stops early," which is false: the session and its event tap are released only
+  when the lazy seq is realized to its terminal event (channel close /
+  `:copilot/session.idle` / `:copilot/session.error`). Abandoning the seq early
+  (`(first ...)`, `(take 1 ...)`), or hitting `:max-events` before a terminal
+  event, leaks the session. Rewrote the docstring and API docs to warn about this
+  and steer callers toward `query-chan` / `query` for early-stop use.
+  ([#127](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/127))
 
 ## [1.0.7-preview.2.0] - 2026-07-15
 ### Added (v1.0.7-preview.2 sync)

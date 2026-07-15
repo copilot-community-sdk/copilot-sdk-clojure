@@ -231,16 +231,28 @@
           (copilot/disconnect! sess))))))
 
 (defn query-seq!
-  "Execute a query and return a lazy sequence of events with guaranteed cleanup.
-   
-   This variant limits consumption and ensures the session is disconnected even if
-   the consumer stops early.
-   
+  "Execute a query and return a bounded lazy sequence of events.
+
+   Cleanup (session disconnect) happens only when the sequence is realized all the
+   way to a terminal channel event: the events channel closing (`nil`), or a
+   `:copilot/session.idle` / `:copilot/session.error` event. Consuming the whole
+   seq to its natural end releases the session and its event tap.
+
+   WARNING: cleanup is tied to reaching that terminal element, so a consumer that
+   abandons the seq early leaks the session and its event tap. For example
+   `(first (query-seq! ...))` or `(take 1 (query-seq! ...))` realize one element
+   and stop, so the terminal event is never reached and cleanup never runs. The
+   `:max-events` bound only caps how many events are yielded — it is not a cleanup
+   guarantee; if the bound is hit before a terminal event the session still leaks.
+   Only use `query-seq!` when you will consume the sequence to its natural end. If
+   you may stop early, prefer `query-chan` (explicit lifecycle, safe to stop
+   reading early) or `query` (single response, deterministic cleanup).
+
    Keyword options:
      :client - Client options map
      :session - Session options map
      :max-events - Maximum number of events to emit (default: 256)
-   
+
    Returns a lazy sequence of at most :max-events events."
   [prompt & {:keys [client session max-events] :or {max-events 256}}]
   (let [c (ensure-client! client)
