@@ -4,6 +4,9 @@
  {test {:doc "Run the test suite."
         :task (clojure "-M:test" "-m" "cognitect.test-runner")}
 
+  api-surface:update {:doc "Regenerate the checked-in public API-surface snapshot."
+                      :task (clojure "-M:test" "-m" "github.copilot-sdk.api-surface")}
+
   fmt {:doc "Format all Clojure files."
        :task (clojure "-M:fmt" "fix" "src" "test" "examples")}
 
