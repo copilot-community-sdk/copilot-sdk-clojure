@@ -55,8 +55,9 @@ Execute a query and return a bounded lazy sequence of events (default: 256 event
 
 **Warning:** cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a
 `:copilot/session.idle` / `:copilot/session.error` event, or the events channel closing (detected when the
-next read yields `nil`, the end-of-stream sentinel — not an emitted element). Abandoning the seq early (e.g.
-`(first ...)` or `(take 1 ...)`), or hitting a positive `:max-events` bound before that end of stream, leaks
+next read yields `nil`, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it
+reaches a terminal event (e.g. `(first ...)` or `(take 1 ...)` when the first element isn't already terminal),
+or hitting a positive `:max-events` bound before that end of stream, leaks
 the session and its event tap (the sole exception is `:max-events 0`, which disconnects
 immediately without emitting anything). Consume the whole seq, or use `query-chan` (explicit lifecycle — safe
 to stop early provided you close the returned channel) or `query` when you may stop reading early.

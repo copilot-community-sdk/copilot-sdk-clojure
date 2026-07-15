@@ -241,13 +241,15 @@
    tap.
 
    WARNING: cleanup is tied to reaching that end of stream, so a consumer that
-   abandons the seq early leaks the session and its event tap. For example
-   `(first (query-seq! ...))` or `(take 1 (query-seq! ...))` realize one element
-   and stop, so the terminal event is never reached and cleanup never runs. The
-   `:max-events` bound only caps how many events are yielded — it is not a cleanup
-   guarantee; hitting a positive bound before a terminal event still leaks the
-   session (the sole exception is `:max-events 0`, which disconnects immediately
-   without emitting anything). Only use `query-seq!` when you will consume the
+   abandons the seq before it reaches a terminal event leaks the session and its
+   event tap. For example `(first (query-seq! ...))` or `(take 1 (query-seq! ...))`
+   realize just one element: they leak unless that first element already happens
+   to be a terminal `:copilot/session.idle` / `:copilot/session.error` event
+   (realizing the terminal event runs cleanup). The `:max-events` bound only caps
+   how many events are yielded — it is not a cleanup guarantee; hitting a positive
+   bound before a terminal event still leaks the session (the sole exception is
+   `:max-events 0`, which disconnects immediately without emitting anything). Only
+   use `query-seq!` when you will consume the
    sequence to its natural end. If you may stop early, prefer `query-chan`
    (explicit lifecycle — safe to stop early *provided you close the returned
    channel*) or `query` (single response, deterministic cleanup).

@@ -6,8 +6,10 @@ All notable changes to this project will be documented in this file. This change
 - **`query-seq!` leak foot-gun documented** — the `query-seq!` docstring and the
   API reference previously claimed "guaranteed cleanup ... even if the consumer
   stops early," which is false: the session and its event tap are released only
-  when the lazy seq is realized to its terminal event (channel close /
-  `:copilot/session.idle` / `:copilot/session.error`). Abandoning the seq early
+  when the lazy seq is realized to end of stream — a `:copilot/session.idle` /
+  `:copilot/session.error` event, or the events channel closing (an end-of-stream
+  condition detected when the next read yields `nil`, not an emitted event).
+  Abandoning the seq early
   (`(first ...)`, `(take 1 ...)`), or hitting `:max-events` before a terminal
   event, leaks the session. Rewrote the docstring and API docs to warn about this
   and steer callers toward `query-chan` / `query` for early-stop use.
