@@ -231,16 +231,34 @@
           (copilot/disconnect! sess))))))
 
 (defn query-seq!
-  "Execute a query and return a lazy sequence of events with guaranteed cleanup.
-   
-   This variant limits consumption and ensures the session is disconnected even if
-   the consumer stops early.
-   
+  "Execute a query and return a bounded lazy sequence of events.
+
+   Cleanup (session disconnect) happens only when the sequence is realized all the
+   way to the end of the event stream: either a `:copilot/session.idle` /
+   `:copilot/session.error` event, or the events channel closing — detected when
+   the next read yields `nil` (the end-of-stream sentinel, not an emitted event).
+   Consuming the whole seq to its natural end releases the session and its event
+   tap.
+
+   WARNING: cleanup is tied to reaching that end of stream, so a consumer that
+   abandons the seq before it reaches a terminal event leaks the session and its
+   event tap. For example `(first (query-seq! ...))` or `(take 1 (query-seq! ...))`
+   realize just one element: they leak unless that first element already happens
+   to be a terminal `:copilot/session.idle` / `:copilot/session.error` event
+   (realizing the terminal event runs cleanup). The `:max-events` bound only caps
+   how many events are yielded — it is not a cleanup guarantee; hitting a positive
+   bound before a terminal event still leaks the session (the sole exception is
+   `:max-events 0`, which disconnects immediately without emitting anything).
+   Only use `query-seq!` when you will consume the sequence to its natural end.
+   If you may stop early, prefer `query-chan` (explicit lifecycle — safe to stop
+   early *provided you close the returned channel*) or `query` (single response,
+   deterministic cleanup).
+
    Keyword options:
      :client - Client options map
      :session - Session options map
      :max-events - Maximum number of events to emit (default: 256)
-   
+
    Returns a lazy sequence of at most :max-events events."
   [prompt & {:keys [client session max-events] :or {max-events 256}}]
   (let [c (ensure-client! client)
