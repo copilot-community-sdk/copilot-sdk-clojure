@@ -9,7 +9,7 @@
   <send! {:kind :fn, :arglists ([session opts])}
   <send-and-wait! {:kind :fn, :arglists ([session opts])}
   abort! {:kind :fn, :arglists ([session])}
-  approve-all {:kind :fn}
+  approve-all {:kind :fn, :arglists ([request ctx])}
   assistant-events {:kind :value}
   capabilities {:kind :fn, :arglists ([session])}
   client {:kind :fn, :arglists ([] [opts])}
@@ -18,7 +18,7 @@
   convert-mcp-call-tool-result {:kind :fn, :arglists ([result])}
   create-session {:kind :fn, :arglists ([client config])}
   create-session-fs-adapter {:kind :fn, :arglists ([provider])}
-  default-join-session-permission-handler {:kind :fn}
+  default-join-session-permission-handler {:kind :fn, :arglists ([request ctx])}
   define-tool {:kind :fn, :arglists ([name opts])}
   delete-session! {:kind :fn, :arglists ([client session-id])}
   destroy! {:kind :fn, :arglists ([session])}
