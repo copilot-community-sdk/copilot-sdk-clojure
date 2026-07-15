@@ -52,7 +52,7 @@ jobs:
           java-version: '21'
 
       - name: Set up Clojure
-        uses: DeLaGuardo/setup-clojure@13.5.2
+        uses: DeLaGuardo/setup-clojure@13.6.1
         with:
           cli: latest
           bb: 1.12.214
@@ -96,8 +96,8 @@ jobs:
                 echo "explicit_version must be empty when version_strategy=sync-upstream." >&2
                 exit 1
               fi
-              if [[ ! "$UPSTREAM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]]; then
-                echo "upstream_version must match X.Y.Z or X.Y.Z-(alpha|beta|rc).N (e.g., 0.1.23 or 1.0.0-beta.3)." >&2
+              if [[ ! "$UPSTREAM_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|preview|rc)\.[0-9]+)?$ ]]; then
+                echo "upstream_version must match X.Y.Z or X.Y.Z-(alpha|beta|preview|rc).N (e.g., 0.1.23 or 1.0.7-preview.2)." >&2
                 exit 1
               fi
               ;;
@@ -116,8 +116,8 @@ jobs:
                 echo "upstream_version must be empty when version_strategy=set-version." >&2
                 exit 1
               fi
-              if [[ ! "$EXPLICIT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?\.[0-9]+(-SNAPSHOT)?$ ]]; then
-                echo "explicit_version must match X.Y.Z.N or X.Y.Z-(alpha|beta|rc).M.N (with optional -SNAPSHOT). Examples: 0.1.23.1, 1.0.0-beta.3.0." >&2
+              if [[ ! "$EXPLICIT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|preview|rc)\.[0-9]+)?\.[0-9]+(-SNAPSHOT)?$ ]]; then
+                echo "explicit_version must match X.Y.Z.N or X.Y.Z-(alpha|beta|preview|rc).M.N (with optional -SNAPSHOT). Examples: 0.1.23.1, 1.0.7-preview.2.0." >&2
                 exit 1
               fi
               if [[ "$SNAPSHOT" == "true" ]]; then
