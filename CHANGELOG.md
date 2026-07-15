@@ -9,9 +9,11 @@ All notable changes to this project will be documented in this file. This change
   when the lazy seq is realized to end of stream — a `:copilot/session.idle` /
   `:copilot/session.error` event, or the events channel closing (an end-of-stream
   condition detected when the next read yields `nil`, not an emitted event).
-  Abandoning the seq early
-  (`(first ...)`, `(take 1 ...)`), or hitting `:max-events` before a terminal
-  event, leaks the session. Rewrote the docstring and API docs to warn about this
+  Abandoning the seq early — `(first ...)` / `(take 1 ...)` when that first
+  realized element is not itself a terminal event, or hitting a *positive*
+  `:max-events` bound before a terminal event (`:max-events 0` disconnects
+  immediately) — leaks the session. Rewrote the docstring and API docs to warn
+  about this
   and steer callers toward `query-chan` / `query` for early-stop use.
   ([#127](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/127))
 
