@@ -51,7 +51,16 @@ When `:session` is a CopilotSession instance, the query uses that session direct
 (h/query-seq! prompt & {:keys [client session max-events]})
 ```
 
-Execute a query and return a bounded lazy sequence of events with guaranteed cleanup (default: 256 events).
+Execute a query and return a bounded lazy sequence of events (default: 256 events).
+
+**Warning:** cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a
+`:copilot/session.idle` / `:copilot/session.error` event, or the events channel closing (detected when the
+next read yields `nil`, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it
+reaches a terminal event (e.g. `(first ...)` or `(take 1 ...)` when the first element isn't already terminal),
+or hitting a positive `:max-events` bound before that end of stream, leaks
+the session and its event tap (the sole exception is `:max-events 0`, which disconnects
+immediately without emitting anything). Consume the whole seq, or use `query-chan` (explicit lifecycle — safe
+to stop early provided you close the returned channel) or `query` when you may stop reading early.
 
 ```clojure
 (->> (h/query-seq! "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})
@@ -102,6 +111,23 @@ Get information about the current shared client state. Returns `nil` if no share
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 ```
+
+### Naming and shape differences vs the official SDK
+
+The Clojure SDK maintains strict API parity with the official Node.js SDK
+(`@github/copilot-sdk`), but a handful of names and return shapes are
+adapted to Clojure idioms. When translating Node.js examples, use this map:
+
+| Clojure | Official Node.js SDK | Notes |
+|---------|----------------------|-------|
+| `:disable-resume?` | `suppressResumeEvent` | Config key on `resume-session` / `join-session`. When true, skips emitting the `session.resume` event. Defaults to `true` in `join-session` (matching upstream), `false` elsewhere. |
+| `:max-input-tokens` | `maxPromptTokens` | BYOK provider/model config key (input/prompt token cap). Serialized back to `maxPromptTokens` on the wire. |
+| `join-session` return `{:client :session}` | `joinSession()` returns `CopilotSession` | Clojure has no implicit/global client, so it returns both so the caller can own the client lifecycle. See [`join-session`](#join-session). |
+
+These are the only cases where a public Clojure key or return value does
+not map 1:1 to the upstream name. Everything else follows the standard
+kebab-case ↔ camelCase wire convention (e.g. `:working-directory` ↔
+`workingDirectory`), which is applied automatically and needs no lookup.
 
 ### Constructor
 
@@ -398,6 +424,15 @@ Throws if `SESSION_ID` is not set in the environment.
   ;; use session...
   (copilot/stop! client))
 ```
+
+> **Return-shape difference vs the official SDK.** The Node.js
+> `joinSession(config)` returns the `CopilotSession` directly and hides the
+> client it creates internally. Clojure has no implicit/global client, so
+> `join-session` returns **both** the `:client` and the `:session`: the
+> caller owns the client's lifecycle and must call [`stop!`](#stop) on it
+> when finished. Bind the returned map's `:session` where a Node.js caller
+> would use the awaited return value, and keep the `:client` for cleanup.
+> See [Naming and shape differences vs the official SDK](#naming-and-shape-differences-vs-the-official-sdk).
 
 #### `ping`
 

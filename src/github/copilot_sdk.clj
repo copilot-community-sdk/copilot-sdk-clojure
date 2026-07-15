@@ -1310,12 +1310,12 @@
   (tools/convert-mcp-call-tool-result result))
 
 ;; Re-export permission helpers
-(def approve-all
+(def ^{:arglists '([request ctx])} approve-all
   "Permission handler that approves all requests with `{:kind :approve-once}`.
    See `github.copilot-sdk.client/approve-all`."
   client/approve-all)
 
-(def default-join-session-permission-handler
+(def ^{:arglists '([request ctx])} default-join-session-permission-handler
   "Default permission handler for resuming sessions.
   Returns `{:kind :no-result}` — the CLI handles permissions itself.
   When used with `resume-session`, sends `requestPermission: false` on the wire.
