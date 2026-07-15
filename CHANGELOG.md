@@ -5,7 +5,8 @@ All notable changes to this project will be documented in this file. This change
 ### Added
 - **API-surface drift guard** ([#120](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/120)) —
   a new test (`github.copilot-sdk.api-surface-test`) locks the public contract:
-  every public var (with kind and arglists) in the `github.copilot-sdk` facade
+  every public var (with kind, plus `:arglists` when the var carries it — plain
+  `def` re-exports have none) in the `github.copilot-sdk` facade
   namespace plus every curated `github.copilot-sdk.specs` spec key are snapshotted
   to `resources/github/copilot_sdk/api_surface.edn`. The test fails on any
   undeclared drift (added/removed/changed vars or spec keys), so accidental

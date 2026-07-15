@@ -3,9 +3,9 @@
 
    The snapshot at `resources/github/copilot_sdk/api_surface.edn` is the
    record of the public contract. Any change to the facade namespace's
-   public vars/arglists or the curated spec keys must be accompanied by a
-   deliberate snapshot regeneration (`bb api-surface:update`), which makes
-   the contract change visible in review."
+   public vars (kind, or `:arglists` where present) or the curated spec keys
+   must be accompanied by a deliberate snapshot regeneration
+   (`bb api-surface:update`), which makes the contract change visible in review."
   (:require [clojure.data :as data]
             [clojure.set :as set]
             [clojure.string :as str]

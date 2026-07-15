@@ -4,7 +4,8 @@
    Computes a deterministic snapshot of the public contract:
 
    - every public var in the `github.copilot-sdk` facade namespace, tagged
-     with its kind (`:fn` / `:macro` / `:value`) and `:arglists`
+     with its kind (`:fn` / `:macro` / `:value`) and, when the var carries it,
+     its `:arglists` (plain `def` re-exports have no `:arglists` and omit the key)
    - every registered spec key in the curated `github.copilot-sdk.specs`
      namespace (the idiom spec surface)
 
@@ -49,7 +50,9 @@
       (:arglists m) (assoc :arglists (:arglists m)))))
 
 (defn public-vars
-  "Map of `symbol -> {:kind ... :arglists ...}` for the facade namespace."
+  "Map of `symbol -> {:kind ...}` for the facade namespace. Entries also
+   carry `:arglists` when the underlying var has it; plain `def` re-exports
+   have no `:arglists` metadata, so the key is omitted for those."
   []
   (into (sorted-map)
         (map (fn [[sym v]] [sym (var-entry v)]))
