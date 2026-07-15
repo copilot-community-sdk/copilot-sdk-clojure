@@ -234,11 +234,13 @@
   "Execute a query and return a bounded lazy sequence of events.
 
    Cleanup (session disconnect) happens only when the sequence is realized all the
-   way to a terminal channel event: the events channel closing (`nil`), or a
-   `:copilot/session.idle` / `:copilot/session.error` event. Consuming the whole
-   seq to its natural end releases the session and its event tap.
+   way to the end of the event stream: either a `:copilot/session.idle` /
+   `:copilot/session.error` event, or the events channel closing — detected when
+   the next read yields `nil` (the end-of-stream sentinel, not an emitted event).
+   Consuming the whole seq to its natural end releases the session and its event
+   tap.
 
-   WARNING: cleanup is tied to reaching that terminal element, so a consumer that
+   WARNING: cleanup is tied to reaching that end of stream, so a consumer that
    abandons the seq early leaks the session and its event tap. For example
    `(first (query-seq! ...))` or `(take 1 (query-seq! ...))` realize one element
    and stop, so the terminal event is never reached and cleanup never runs. The
