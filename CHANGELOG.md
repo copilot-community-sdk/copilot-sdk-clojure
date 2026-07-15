@@ -6,8 +6,11 @@ All notable changes to this project will be documented in this file. This change
 - **Re-exported permission helpers now preserve `:arglists`** — `approve-all` and
   `default-join-session-permission-handler` in the top-level `github.copilot-sdk`
   namespace were bare `def` aliases, so editor tooltips and generated API docs showed
-  no call signature. They now carry `:arglists '([request ctx])` matching the source
-  vars. Resolves [#119](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/119).
+  no call signature. They now carry an explicit `:arglists '([request ctx])` so
+  editor tooltips and generated API docs surface the two-arg `[request ctx]` contract.
+  (The source vars name these params `_request`/`_ctx` since they ignore them; the
+  re-exports use the descriptive names for public documentation.)
+  Resolves [#119](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/119).
   (The `result-*` and `convert-mcp-call-tool-result` re-exports mentioned in that issue
   are already `defn` wrappers and were unaffected.)
 
