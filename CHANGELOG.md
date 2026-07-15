@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+## [1.0.7-preview.2.0] - 2026-07-15
 ### Added (v1.0.7-preview.2 sync)
 Ported from upstream `github/copilot-sdk` v1.0.6-preview.1 → v1.0.7-preview.2
 (`@github/copilot` 1.0.68 → 1.0.70). Schema bumped to 1.0.70. **Preview sync**: the
@@ -1723,7 +1724,8 @@ This release bumps the upstream marker from `1.0.0-beta.3` to `1.0.0-beta.4`.
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.0.0...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.0...HEAD
+[1.0.7-preview.2.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.0.0...v1.0.7-preview.2.0
 [1.0.0.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.0-beta.3.0...v1.0.0.0
 [1.0.0-beta.3.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.3.0.0-SNAPSHOT...v1.0.0-beta.3.0
 [0.3.0.0-SNAPSHOT]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.2.2.0...v0.3.0.0-SNAPSHOT
