@@ -11,6 +11,33 @@ All notable changes to this project will be documented in this file. This change
   the upstream `joinSession()` → `CopilotSession`. Resolves
   [#124](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/124).
 
+### Fixed
+- **Re-exported permission helpers now preserve `:arglists`** — `approve-all` and
+  `default-join-session-permission-handler` in the top-level `github.copilot-sdk`
+  namespace were bare `def` aliases, so editor tooltips and generated API docs showed
+  no call signature. They now carry an explicit `:arglists '([request ctx])` so
+  editor tooltips and generated API docs surface the two-arg `[request ctx]` contract.
+  (The source vars name these params `_request`/`_ctx` since they ignore them; the
+  re-exports use the descriptive names for public documentation.)
+  Resolves [#119](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/119).
+  (The `result-*` and `convert-mcp-call-tool-result` re-exports mentioned in that issue
+  are already `defn` wrappers and were unaffected.)
+
+### Fixed (documentation)
+- **`query-seq!` leak foot-gun documented** — the `query-seq!` docstring and the
+  API reference previously claimed "guaranteed cleanup ... even if the consumer
+  stops early," which is false: the session and its event tap are released only
+  when the lazy seq is realized to end of stream — a `:copilot/session.idle` /
+  `:copilot/session.error` event, or the events channel closing (an end-of-stream
+  condition detected when the next read yields `nil`, not an emitted event).
+  Abandoning the seq early — `(first ...)` / `(take 1 ...)` when that first
+  realized element is not itself a terminal event, or hitting a *positive*
+  `:max-events` bound before a terminal event (`:max-events 0` disconnects
+  immediately) — leaks the session. Rewrote the docstring and API docs to warn
+  about this
+  and steer callers toward `query-chan` / `query` for early-stop use.
+  ([#127](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/127))
+
 ## [1.0.7-preview.2.0] - 2026-07-15
 ### Added (v1.0.7-preview.2 sync)
 Ported from upstream `github/copilot-sdk` v1.0.6-preview.1 → v1.0.7-preview.2
