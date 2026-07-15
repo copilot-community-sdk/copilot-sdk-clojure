@@ -14,6 +14,21 @@ All notable changes to this project will be documented in this file. This change
   (The `result-*` and `convert-mcp-call-tool-result` re-exports mentioned in that issue
   are already `defn` wrappers and were unaffected.)
 
+### Fixed (documentation)
+- **`query-seq!` leak foot-gun documented** — the `query-seq!` docstring and the
+  API reference previously claimed "guaranteed cleanup ... even if the consumer
+  stops early," which is false: the session and its event tap are released only
+  when the lazy seq is realized to end of stream — a `:copilot/session.idle` /
+  `:copilot/session.error` event, or the events channel closing (an end-of-stream
+  condition detected when the next read yields `nil`, not an emitted event).
+  Abandoning the seq early — `(first ...)` / `(take 1 ...)` when that first
+  realized element is not itself a terminal event, or hitting a *positive*
+  `:max-events` bound before a terminal event (`:max-events 0` disconnects
+  immediately) — leaks the session. Rewrote the docstring and API docs to warn
+  about this
+  and steer callers toward `query-chan` / `query` for early-stop use.
+  ([#127](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/127))
+
 ## [1.0.7-preview.2.0] - 2026-07-15
 ### Added (v1.0.7-preview.2 sync)
 Ported from upstream `github/copilot-sdk` v1.0.6-preview.1 → v1.0.7-preview.2
