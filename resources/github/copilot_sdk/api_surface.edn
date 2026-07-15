@@ -1,0 +1,619 @@
+;; AUTO-GENERATED public API-surface snapshot. Do not edit by hand.
+;; Regenerate with `bb api-surface:update` after an intentional
+;; public-contract change. See github.copilot-sdk.api-surface.
+{:vars
+ {<create-session {:kind :fn, :arglists ([client config])}
+  <handle-pending-permission-request! {:kind :fn, :arglists ([session opts])}
+  <handle-pending-tool-call! {:kind :fn, :arglists ([session opts])}
+  <resume-session {:kind :fn, :arglists ([client session-id config])}
+  <send! {:kind :fn, :arglists ([session opts])}
+  <send-and-wait! {:kind :fn, :arglists ([session opts])}
+  abort! {:kind :fn, :arglists ([session])}
+  approve-all {:kind :fn}
+  assistant-events {:kind :value}
+  capabilities {:kind :fn, :arglists ([session])}
+  client {:kind :fn, :arglists ([] [opts])}
+  client-options {:kind :fn, :arglists ([client])}
+  confirm! {:kind :fn, :arglists ([session message])}
+  convert-mcp-call-tool-result {:kind :fn, :arglists ([result])}
+  create-session {:kind :fn, :arglists ([client config])}
+  create-session-fs-adapter {:kind :fn, :arglists ([provider])}
+  default-join-session-permission-handler {:kind :fn}
+  define-tool {:kind :fn, :arglists ([name opts])}
+  delete-session! {:kind :fn, :arglists ([client session-id])}
+  destroy! {:kind :fn, :arglists ([session])}
+  disconnect! {:kind :fn, :arglists ([session])}
+  elicitation-supported? {:kind :fn, :arglists ([session])}
+  event-types {:kind :value}
+  events {:kind :fn, :arglists ([session])}
+  events->chan {:kind :fn, :arglists ([session] [session opts])}
+  evt {:kind :fn, :arglists ([k])}
+  force-stop! {:kind :fn, :arglists ([client])}
+  get-auth-status {:kind :fn, :arglists ([client])}
+  get-current-model {:kind :fn, :arglists ([session])}
+  get-foreground-session-id {:kind :fn, :arglists ([client])}
+  get-last-session-id {:kind :fn, :arglists ([client])}
+  get-messages {:kind :fn, :arglists ([session])}
+  get-quota {:kind :fn, :arglists ([client])}
+  get-session-metadata {:kind :fn, :arglists ([client session-id])}
+  get-status {:kind :fn, :arglists ([client])}
+  handle-pending-permission-request! {:kind :fn, :arglists ([session opts])}
+  handle-pending-tool-call! {:kind :fn, :arglists ([session opts])}
+  input! {:kind :fn, :arglists ([session message] [session message opts])}
+  interaction-events {:kind :value}
+  join-session {:kind :fn, :arglists ([config])}
+  list-models {:kind :fn, :arglists ([client])}
+  list-sessions {:kind :fn, :arglists ([client] [client filter-opts])}
+  list-tools {:kind :fn, :arglists ([client] [client model])}
+  log! {:kind :fn, :arglists ([session message] [session message opts])}
+  notifications {:kind :fn, :arglists ([client])}
+  on-lifecycle-event {:kind :fn, :arglists ([client handler] [client event-type handler])}
+  open-canvases {:kind :fn, :arglists ([session])}
+  ping {:kind :fn, :arglists ([client] [client message])}
+  result-denied {:kind :fn, :arglists ([text] [text telemetry])}
+  result-failure {:kind :fn, :arglists ([text] [text error] [text error telemetry])}
+  result-rejected {:kind :fn, :arglists ([text] [text telemetry])}
+  result-success {:kind :fn, :arglists ([text] [text telemetry])}
+  resume-session {:kind :fn, :arglists ([client session-id config])}
+  select! {:kind :fn, :arglists ([session message options])}
+  send! {:kind :fn, :arglists ([session opts])}
+  send-and-wait! {:kind :fn, :arglists ([session opts] [session opts timeout-ms])}
+  send-async {:kind :fn, :arglists ([session opts])}
+  send-async-with-id {:kind :fn, :arglists ([session opts])}
+  session-config {:kind :fn, :arglists ([session])}
+  session-events {:kind :value}
+  session-id {:kind :fn, :arglists ([session])}
+  set-foreground-session-id! {:kind :fn, :arglists ([client session-id])}
+  set-model! {:kind :fn, :arglists ([session model-id] [session model-id opts])}
+  start! {:kind :fn, :arglists ([client])}
+  state {:kind :fn, :arglists ([client])}
+  stop! {:kind :fn, :arglists ([client])}
+  subscribe-events {:kind :fn, :arglists ([session])}
+  switch-model! {:kind :fn, :arglists ([session model-id] [session model-id opts])}
+  system-prompt-sections {:kind :value}
+  tool-events {:kind :value}
+  ui-elicitation! {:kind :fn, :arglists ([session params])}
+  unsubscribe-events! {:kind :fn, :arglists ([session ch])}
+  with-client {:kind :macro, :arglists ([[client-sym & [opts]] & body])}
+  with-client-session {:kind :macro, :arglists ([[a b & more] & body])}
+  with-session {:kind :macro, :arglists ([[session-sym client config] & body])}
+  workspace-path {:kind :fn, :arglists ([session])}}
+ :spec-keys
+ [:github.copilot-sdk.specs/aborted?
+  :github.copilot-sdk.specs/action
+  :github.copilot-sdk.specs/actions
+  :github.copilot-sdk.specs/actual-host
+  :github.copilot-sdk.specs/agent
+  :github.copilot-sdk.specs/agent-description
+  :github.copilot-sdk.specs/agent-display-name
+  :github.copilot-sdk.specs/agent-id
+  :github.copilot-sdk.specs/agent-infer?
+  :github.copilot-sdk.specs/agent-mode
+  :github.copilot-sdk.specs/agent-model
+  :github.copilot-sdk.specs/agent-name
+  :github.copilot-sdk.specs/agent-prompt
+  :github.copilot-sdk.specs/agent-skills
+  :github.copilot-sdk.specs/agent-tool-names
+  :github.copilot-sdk.specs/agent-tools
+  :github.copilot-sdk.specs/agents
+  :github.copilot-sdk.specs/allow-all-permission-mode
+  :github.copilot-sdk.specs/allow-all-permissions
+  :github.copilot-sdk.specs/allowed-tools
+  :github.copilot-sdk.specs/already-in-use?
+  :github.copilot-sdk.specs/api-call-id
+  :github.copilot-sdk.specs/api-endpoint
+  :github.copilot-sdk.specs/api-key
+  :github.copilot-sdk.specs/append-file
+  :github.copilot-sdk.specs/approval
+  :github.copilot-sdk.specs/approved?
+  :github.copilot-sdk.specs/assistant.message-data
+  :github.copilot-sdk.specs/assistant.message_delta-data
+  :github.copilot-sdk.specs/assistant.reasoning-data
+  :github.copilot-sdk.specs/assistant.reasoning_delta-data
+  :github.copilot-sdk.specs/assistant.streaming_delta-data
+  :github.copilot-sdk.specs/assistant.turn_start-data
+  :github.copilot-sdk.specs/assistant.usage-data
+  :github.copilot-sdk.specs/at
+  :github.copilot-sdk.specs/attachment
+  :github.copilot-sdk.specs/attachment-state
+  :github.copilot-sdk.specs/attachment-type
+  :github.copilot-sdk.specs/attachments
+  :github.copilot-sdk.specs/auth-type
+  :github.copilot-sdk.specs/authenticated?
+  :github.copilot-sdk.specs/auto-mode-switch-request
+  :github.copilot-sdk.specs/auto-mode-switch-response
+  :github.copilot-sdk.specs/auto-restart?
+  :github.copilot-sdk.specs/auto-start?
+  :github.copilot-sdk.specs/available-tools
+  :github.copilot-sdk.specs/azure-api-version
+  :github.copilot-sdk.specs/azure-options
+  :github.copilot-sdk.specs/background-compaction-threshold
+  :github.copilot-sdk.specs/base-commit
+  :github.copilot-sdk.specs/base-event
+  :github.copilot-sdk.specs/base-url
+  :github.copilot-sdk.specs/batch-size
+  :github.copilot-sdk.specs/bearer-token
+  :github.copilot-sdk.specs/bearer-token-provider
+  :github.copilot-sdk.specs/binary-results-for-llm
+  :github.copilot-sdk.specs/blob-attachment
+  :github.copilot-sdk.specs/branch
+  :github.copilot-sdk.specs/buffer
+  :github.copilot-sdk.specs/buffer-exhaustion-threshold
+  :github.copilot-sdk.specs/cache-price
+  :github.copilot-sdk.specs/cache-read-tokens
+  :github.copilot-sdk.specs/cache-write-tokens
+  :github.copilot-sdk.specs/can-offer-session-approval
+  :github.copilot-sdk.specs/canvas-id
+  :github.copilot-sdk.specs/canvas-provider
+  :github.copilot-sdk.specs/capabilities
+  :github.copilot-sdk.specs/capi
+  :github.copilot-sdk.specs/capture-content?
+  :github.copilot-sdk.specs/character
+  :github.copilot-sdk.specs/cli-args
+  :github.copilot-sdk.specs/cli-path
+  :github.copilot-sdk.specs/cli-url
+  :github.copilot-sdk.specs/client
+  :github.copilot-sdk.specs/client-mode
+  :github.copilot-sdk.specs/client-name
+  :github.copilot-sdk.specs/client-options
+  :github.copilot-sdk.specs/cloud
+  :github.copilot-sdk.specs/cloud-repository
+  :github.copilot-sdk.specs/coauthor-enabled
+  :github.copilot-sdk.specs/code-changes
+  :github.copilot-sdk.specs/command-definition
+  :github.copilot-sdk.specs/command-handler
+  :github.copilot-sdk.specs/command-name
+  :github.copilot-sdk.specs/commands
+  :github.copilot-sdk.specs/config-dir
+  :github.copilot-sdk.specs/config-directory
+  :github.copilot-sdk.specs/connection-state
+  :github.copilot-sdk.specs/content
+  :github.copilot-sdk.specs/content-filter-triggered
+  :github.copilot-sdk.specs/context
+  :github.copilot-sdk.specs/context-max
+  :github.copilot-sdk.specs/context-tier
+  :github.copilot-sdk.specs/continue-pending-work?
+  :github.copilot-sdk.specs/conventions
+  :github.copilot-sdk.specs/copilot-home
+  :github.copilot-sdk.specs/copilot-usage
+  :github.copilot-sdk.specs/cost
+  :github.copilot-sdk.specs/create-session-fs-handler
+  :github.copilot-sdk.specs/cron
+  :github.copilot-sdk.specs/current-model
+  :github.copilot-sdk.specs/custom-agent
+  :github.copilot-sdk.specs/custom-agent-info
+  :github.copilot-sdk.specs/custom-agents
+  :github.copilot-sdk.specs/custom-agents-local-only
+  :github.copilot-sdk.specs/cwd
+  :github.copilot-sdk.specs/default
+  :github.copilot-sdk.specs/default-agent
+  :github.copilot-sdk.specs/default-reasoning-effort
+  :github.copilot-sdk.specs/defer
+  :github.copilot-sdk.specs/delta-content
+  :github.copilot-sdk.specs/description
+  :github.copilot-sdk.specs/detached-from-spawning-parent-session-id
+  :github.copilot-sdk.specs/disable-resume?
+  :github.copilot-sdk.specs/disabled-skills
+  :github.copilot-sdk.specs/display-name
+  :github.copilot-sdk.specs/display-prompt
+  :github.copilot-sdk.specs/duration
+  :github.copilot-sdk.specs/duration-ms
+  :github.copilot-sdk.specs/elicitation
+  :github.copilot-sdk.specs/elicitation-action
+  :github.copilot-sdk.specs/elicitation-content
+  :github.copilot-sdk.specs/elicitation-context
+  :github.copilot-sdk.specs/elicitation-field-value
+  :github.copilot-sdk.specs/elicitation-params
+  :github.copilot-sdk.specs/elicitation-result
+  :github.copilot-sdk.specs/elicitation-source
+  :github.copilot-sdk.specs/embedding-cache-storage
+  :github.copilot-sdk.specs/enable-citations
+  :github.copilot-sdk.specs/enable-config-discovery
+  :github.copilot-sdk.specs/enable-file-hooks
+  :github.copilot-sdk.specs/enable-host-git-operations
+  :github.copilot-sdk.specs/enable-managed-settings?
+  :github.copilot-sdk.specs/enable-on-demand-instruction-discovery
+  :github.copilot-sdk.specs/enable-session-store
+  :github.copilot-sdk.specs/enable-session-telemetry?
+  :github.copilot-sdk.specs/enable-skills
+  :github.copilot-sdk.specs/enable-web-socket-responses
+  :github.copilot-sdk.specs/enabled
+  :github.copilot-sdk.specs/encrypted-content
+  :github.copilot-sdk.specs/end
+  :github.copilot-sdk.specs/entitlement-requests
+  :github.copilot-sdk.specs/env
+  :github.copilot-sdk.specs/ephemeral?
+  :github.copilot-sdk.specs/error-code
+  :github.copilot-sdk.specs/error-reason
+  :github.copilot-sdk.specs/error-type
+  :github.copilot-sdk.specs/errors
+  :github.copilot-sdk.specs/event
+  :github.copilot-sdk.specs/event-count
+  :github.copilot-sdk.specs/event-id
+  :github.copilot-sdk.specs/event-timestamp
+  :github.copilot-sdk.specs/event-type
+  :github.copilot-sdk.specs/events-ch
+  :github.copilot-sdk.specs/events-file-size-bytes
+  :github.copilot-sdk.specs/excluded-builtin-agents
+  :github.copilot-sdk.specs/excluded-tools
+  :github.copilot-sdk.specs/exists
+  :github.copilot-sdk.specs/exit-plan-mode-request
+  :github.copilot-sdk.specs/exit-plan-mode-result
+  :github.copilot-sdk.specs/exp-assignments
+  :github.copilot-sdk.specs/exporter-type
+  :github.copilot-sdk.specs/extension-id
+  :github.copilot-sdk.specs/extension-info
+  :github.copilot-sdk.specs/extension-name
+  :github.copilot-sdk.specs/extension-status
+  :github.copilot-sdk.specs/extensions
+  :github.copilot-sdk.specs/external-server?
+  :github.copilot-sdk.specs/family
+  :github.copilot-sdk.specs/features
+  :github.copilot-sdk.specs/feedback
+  :github.copilot-sdk.specs/file-or-directory-attachment
+  :github.copilot-sdk.specs/file-path
+  :github.copilot-sdk.specs/finish-reason
+  :github.copilot-sdk.specs/format
+  :github.copilot-sdk.specs/git-root
+  :github.copilot-sdk.specs/github-reference-attachment
+  :github.copilot-sdk.specs/github-telemetry-client-info
+  :github.copilot-sdk.specs/github-telemetry-event
+  :github.copilot-sdk.specs/github-telemetry-notification
+  :github.copilot-sdk.specs/github-token
+  :github.copilot-sdk.specs/handled?
+  :github.copilot-sdk.specs/head-commit
+  :github.copilot-sdk.specs/headers
+  :github.copilot-sdk.specs/hook.progress-data
+  :github.copilot-sdk.specs/hooks
+  :github.copilot-sdk.specs/host
+  :github.copilot-sdk.specs/host-type
+  :github.copilot-sdk.specs/id
+  :github.copilot-sdk.specs/inbound-attachment
+  :github.copilot-sdk.specs/inbound-attachments
+  :github.copilot-sdk.specs/include-sub-agent-streaming-events?
+  :github.copilot-sdk.specs/infinite-sessions
+  :github.copilot-sdk.specs/initial-cwd
+  :github.copilot-sdk.specs/initiator
+  :github.copilot-sdk.specs/input
+  :github.copilot-sdk.specs/input-options
+  :github.copilot-sdk.specs/input-price
+  :github.copilot-sdk.specs/input-tokens
+  :github.copilot-sdk.specs/instance-id
+  :github.copilot-sdk.specs/instant
+  :github.copilot-sdk.specs/instruction-directories
+  :github.copilot-sdk.specs/instructions
+  :github.copilot-sdk.specs/inter-token-latency-ms
+  :github.copilot-sdk.specs/interaction-id
+  :github.copilot-sdk.specs/interval-ms
+  :github.copilot-sdk.specs/is-autopilot-continuation
+  :github.copilot-sdk.specs/is-child-process?
+  :github.copilot-sdk.specs/join-session-config
+  :github.copilot-sdk.specs/json-schema
+  :github.copilot-sdk.specs/kind
+  :github.copilot-sdk.specs/large-output
+  :github.copilot-sdk.specs/last-insert-rowid
+  :github.copilot-sdk.specs/level
+  :github.copilot-sdk.specs/lifecycle-event
+  :github.copilot-sdk.specs/lifecycle-event-type
+  :github.copilot-sdk.specs/lifecycle-handler
+  :github.copilot-sdk.specs/line
+  :github.copilot-sdk.specs/line-range
+  :github.copilot-sdk.specs/location-key
+  :github.copilot-sdk.specs/log-level
+  :github.copilot-sdk.specs/log-options
+  :github.copilot-sdk.specs/login
+  :github.copilot-sdk.specs/long-context
+  :github.copilot-sdk.specs/manage-schedule-enabled
+  :github.copilot-sdk.specs/max-ai-credits
+  :github.copilot-sdk.specs/max-context-window-tokens
+  :github.copilot-sdk.specs/max-events
+  :github.copilot-sdk.specs/max-input-tokens
+  :github.copilot-sdk.specs/max-length
+  :github.copilot-sdk.specs/max-output-tokens
+  :github.copilot-sdk.specs/max-prompt-image-size
+  :github.copilot-sdk.specs/max-prompt-images
+  :github.copilot-sdk.specs/max-prompt-tokens
+  :github.copilot-sdk.specs/max-size-bytes
+  :github.copilot-sdk.specs/mcp-args
+  :github.copilot-sdk.specs/mcp-command
+  :github.copilot-sdk.specs/mcp-defer-tools
+  :github.copilot-sdk.specs/mcp-headers
+  :github.copilot-sdk.specs/mcp-http-server
+  :github.copilot-sdk.specs/mcp-loaded-server
+  :github.copilot-sdk.specs/mcp-local-server
+  :github.copilot-sdk.specs/mcp-oauth-token-storage
+  :github.copilot-sdk.specs/mcp-remote-server
+  :github.copilot-sdk.specs/mcp-server
+  :github.copilot-sdk.specs/mcp-server-name
+  :github.copilot-sdk.specs/mcp-server-status
+  :github.copilot-sdk.specs/mcp-server-type
+  :github.copilot-sdk.specs/mcp-servers
+  :github.copilot-sdk.specs/mcp-stdio-server
+  :github.copilot-sdk.specs/mcp-timeout
+  :github.copilot-sdk.specs/mcp-tool-name
+  :github.copilot-sdk.specs/mcp-tools
+  :github.copilot-sdk.specs/mcp-url
+  :github.copilot-sdk.specs/memory
+  :github.copilot-sdk.specs/memory-action
+  :github.copilot-sdk.specs/memory-direction
+  :github.copilot-sdk.specs/memory-reason
+  :github.copilot-sdk.specs/message
+  :github.copilot-sdk.specs/message-id
+  :github.copilot-sdk.specs/metrics
+  :github.copilot-sdk.specs/mime-type
+  :github.copilot-sdk.specs/min-length
+  :github.copilot-sdk.specs/mkdir
+  :github.copilot-sdk.specs/mode
+  :github.copilot-sdk.specs/model
+  :github.copilot-sdk.specs/model-billing
+  :github.copilot-sdk.specs/model-capabilities
+  :github.copilot-sdk.specs/model-id
+  :github.copilot-sdk.specs/model-info
+  :github.copilot-sdk.specs/model-limits
+  :github.copilot-sdk.specs/model-metrics
+  :github.copilot-sdk.specs/model-picker-category
+  :github.copilot-sdk.specs/model-picker-price-category
+  :github.copilot-sdk.specs/model-policy
+  :github.copilot-sdk.specs/model-supports
+  :github.copilot-sdk.specs/models
+  :github.copilot-sdk.specs/modified-time
+  :github.copilot-sdk.specs/multiplier
+  :github.copilot-sdk.specs/name
+  :github.copilot-sdk.specs/named-provider
+  :github.copilot-sdk.specs/namespaced-name
+  :github.copilot-sdk.specs/new-mode
+  :github.copilot-sdk.specs/new-model
+  :github.copilot-sdk.specs/non-blank-string
+  :github.copilot-sdk.specs/notification-queue-size
+  :github.copilot-sdk.specs/number
+  :github.copilot-sdk.specs/on-auto-mode-switch
+  :github.copilot-sdk.specs/on-elicitation-request
+  :github.copilot-sdk.specs/on-error-occurred
+  :github.copilot-sdk.specs/on-event
+  :github.copilot-sdk.specs/on-exit-plan-mode
+  :github.copilot-sdk.specs/on-get-trace-context
+  :github.copilot-sdk.specs/on-github-telemetry
+  :github.copilot-sdk.specs/on-list-models
+  :github.copilot-sdk.specs/on-mcp-auth-request
+  :github.copilot-sdk.specs/on-permission-request
+  :github.copilot-sdk.specs/on-post-tool-use
+  :github.copilot-sdk.specs/on-post-tool-use-failure
+  :github.copilot-sdk.specs/on-pre-mcp-tool-call
+  :github.copilot-sdk.specs/on-pre-tool-use
+  :github.copilot-sdk.specs/on-session-end
+  :github.copilot-sdk.specs/on-session-start
+  :github.copilot-sdk.specs/on-user-input-request
+  :github.copilot-sdk.specs/on-user-prompt-submitted
+  :github.copilot-sdk.specs/open-canvas-instance
+  :github.copilot-sdk.specs/open-canvases
+  :github.copilot-sdk.specs/operation
+  :github.copilot-sdk.specs/options
+  :github.copilot-sdk.specs/organization-custom-instructions
+  :github.copilot-sdk.specs/otlp-endpoint
+  :github.copilot-sdk.specs/otlp-protocol
+  :github.copilot-sdk.specs/output-dir
+  :github.copilot-sdk.specs/output-directory
+  :github.copilot-sdk.specs/output-price
+  :github.copilot-sdk.specs/output-tokens
+  :github.copilot-sdk.specs/overage
+  :github.copilot-sdk.specs/overage-allowed-with-exhausted-quota?
+  :github.copilot-sdk.specs/overrides-built-in-tool
+  :github.copilot-sdk.specs/owner
+  :github.copilot-sdk.specs/parameters
+  :github.copilot-sdk.specs/parent-id
+  :github.copilot-sdk.specs/path
+  :github.copilot-sdk.specs/payload
+  :github.copilot-sdk.specs/permission-kind
+  :github.copilot-sdk.specs/permission-request
+  :github.copilot-sdk.specs/permission-result
+  :github.copilot-sdk.specs/permission-result-kind
+  :github.copilot-sdk.specs/phase
+  :github.copilot-sdk.specs/plan-content
+  :github.copilot-sdk.specs/plugin-directories
+  :github.copilot-sdk.specs/plugin-name
+  :github.copilot-sdk.specs/plugin-version
+  :github.copilot-sdk.specs/policy-state
+  :github.copilot-sdk.specs/port
+  :github.copilot-sdk.specs/position
+  :github.copilot-sdk.specs/preview?
+  :github.copilot-sdk.specs/previous-allow-all-permission-mode
+  :github.copilot-sdk.specs/previous-allow-all-permissions
+  :github.copilot-sdk.specs/previous-mode
+  :github.copilot-sdk.specs/previous-model
+  :github.copilot-sdk.specs/previous-reasoning-effort
+  :github.copilot-sdk.specs/progress-message
+  :github.copilot-sdk.specs/prompt
+  :github.copilot-sdk.specs/properties
+  :github.copilot-sdk.specs/protocol-version
+  :github.copilot-sdk.specs/provider
+  :github.copilot-sdk.specs/provider-call-id
+  :github.copilot-sdk.specs/provider-model
+  :github.copilot-sdk.specs/provider-type
+  :github.copilot-sdk.specs/providers
+  :github.copilot-sdk.specs/quota-snapshot
+  :github.copilot-sdk.specs/quota-snapshots
+  :github.copilot-sdk.specs/read-file
+  :github.copilot-sdk.specs/readdir
+  :github.copilot-sdk.specs/readdir-with-types
+  :github.copilot-sdk.specs/reasoning-effort
+  :github.copilot-sdk.specs/reasoning-id
+  :github.copilot-sdk.specs/reasoning-opaque
+  :github.copilot-sdk.specs/reasoning-summary
+  :github.copilot-sdk.specs/reasoning-text
+  :github.copilot-sdk.specs/reasoning-tokens
+  :github.copilot-sdk.specs/recommended-action
+  :github.copilot-sdk.specs/recurring
+  :github.copilot-sdk.specs/reference-type
+  :github.copilot-sdk.specs/remaining-percentage
+  :github.copilot-sdk.specs/remote-enable-opts
+  :github.copilot-sdk.specs/remote-enable-result
+  :github.copilot-sdk.specs/remote-session
+  :github.copilot-sdk.specs/remote-session-id
+  :github.copilot-sdk.specs/remote-session-mode
+  :github.copilot-sdk.specs/remote-steerable
+  :github.copilot-sdk.specs/remote-steerable?
+  :github.copilot-sdk.specs/remote?
+  :github.copilot-sdk.specs/rename
+  :github.copilot-sdk.specs/repository
+  :github.copilot-sdk.specs/request-headers
+  :github.copilot-sdk.specs/request-id
+  :github.copilot-sdk.specs/requested-schema
+  :github.copilot-sdk.specs/reset-date
+  :github.copilot-sdk.specs/resolved-by-hook
+  :github.copilot-sdk.specs/restricted
+  :github.copilot-sdk.specs/result-type
+  :github.copilot-sdk.specs/resume-session-config
+  :github.copilot-sdk.specs/retry-after-seconds
+  :github.copilot-sdk.specs/rm
+  :github.copilot-sdk.specs/router-queue-size
+  :github.copilot-sdk.specs/rows-affected
+  :github.copilot-sdk.specs/rules
+  :github.copilot-sdk.specs/section-action
+  :github.copilot-sdk.specs/section-override
+  :github.copilot-sdk.specs/sections
+  :github.copilot-sdk.specs/selected-action
+  :github.copilot-sdk.specs/selection-attachment
+  :github.copilot-sdk.specs/selection-range
+  :github.copilot-sdk.specs/send-options
+  :github.copilot-sdk.specs/server-name
+  :github.copilot-sdk.specs/server-tools
+  :github.copilot-sdk.specs/servers
+  :github.copilot-sdk.specs/service-request-id
+  :github.copilot-sdk.specs/session
+  :github.copilot-sdk.specs/session-capabilities
+  :github.copilot-sdk.specs/session-config
+  :github.copilot-sdk.specs/session-context
+  :github.copilot-sdk.specs/session-event
+  :github.copilot-sdk.specs/session-fs
+  :github.copilot-sdk.specs/session-fs-capabilities
+  :github.copilot-sdk.specs/session-fs-handler
+  :github.copilot-sdk.specs/session-fs-provider
+  :github.copilot-sdk.specs/session-id
+  :github.copilot-sdk.specs/session-idle-timeout-seconds
+  :github.copilot-sdk.specs/session-limits
+  :github.copilot-sdk.specs/session-list-filter
+  :github.copilot-sdk.specs/session-log
+  :github.copilot-sdk.specs/session-metadata
+  :github.copilot-sdk.specs/session-start-time
+  :github.copilot-sdk.specs/session-state-path
+  :github.copilot-sdk.specs/session.canvas.closed-data
+  :github.copilot-sdk.specs/session.context_changed-data
+  :github.copilot-sdk.specs/session.custom_agents_updated-data
+  :github.copilot-sdk.specs/session.custom_notification-data
+  :github.copilot-sdk.specs/session.error-data
+  :github.copilot-sdk.specs/session.extensions_loaded-data
+  :github.copilot-sdk.specs/session.handoff-data
+  :github.copilot-sdk.specs/session.idle-data
+  :github.copilot-sdk.specs/session.mcp_server_status_changed-data
+  :github.copilot-sdk.specs/session.mcp_servers_loaded-data
+  :github.copilot-sdk.specs/session.mode_changed-data
+  :github.copilot-sdk.specs/session.model_change-data
+  :github.copilot-sdk.specs/session.permissions_changed-data
+  :github.copilot-sdk.specs/session.plan_changed-data
+  :github.copilot-sdk.specs/session.resume-data
+  :github.copilot-sdk.specs/session.schedule_cancelled-data
+  :github.copilot-sdk.specs/session.schedule_created-data
+  :github.copilot-sdk.specs/session.shutdown-data
+  :github.copilot-sdk.specs/session.skills_loaded-data
+  :github.copilot-sdk.specs/session.start-data
+  :github.copilot-sdk.specs/session.task_complete-data
+  :github.copilot-sdk.specs/session.title_changed-data
+  :github.copilot-sdk.specs/session.warning-data
+  :github.copilot-sdk.specs/session.workspace_file_changed-data
+  :github.copilot-sdk.specs/shutdown-type
+  :github.copilot-sdk.specs/skill-directories
+  :github.copilot-sdk.specs/skill-info
+  :github.copilot-sdk.specs/skill.invoked-data
+  :github.copilot-sdk.specs/skills
+  :github.copilot-sdk.specs/skip-custom-instructions
+  :github.copilot-sdk.specs/skip-embedding-retrieval
+  :github.copilot-sdk.specs/skip-permission?
+  :github.copilot-sdk.specs/source
+  :github.copilot-sdk.specs/source-name
+  :github.copilot-sdk.specs/sqlite-columns
+  :github.copilot-sdk.specs/sqlite-exists
+  :github.copilot-sdk.specs/sqlite-query
+  :github.copilot-sdk.specs/sqlite-query-type
+  :github.copilot-sdk.specs/sqlite-rows
+  :github.copilot-sdk.specs/stack
+  :github.copilot-sdk.specs/start
+  :github.copilot-sdk.specs/start-time
+  :github.copilot-sdk.specs/stat
+  :github.copilot-sdk.specs/state
+  :github.copilot-sdk.specs/status
+  :github.copilot-sdk.specs/status-code
+  :github.copilot-sdk.specs/status-message
+  :github.copilot-sdk.specs/stop-processing-queue?
+  :github.copilot-sdk.specs/storage-mode
+  :github.copilot-sdk.specs/streaming?
+  :github.copilot-sdk.specs/strict-timeout-ms
+  :github.copilot-sdk.specs/subagent.completed-data
+  :github.copilot-sdk.specs/subagent.failed-data
+  :github.copilot-sdk.specs/subagent.started-data
+  :github.copilot-sdk.specs/subject
+  :github.copilot-sdk.specs/success
+  :github.copilot-sdk.specs/summary
+  :github.copilot-sdk.specs/supported-media-types
+  :github.copilot-sdk.specs/supported-reasoning-efforts
+  :github.copilot-sdk.specs/supports-reasoning-effort
+  :github.copilot-sdk.specs/supports-vision
+  :github.copilot-sdk.specs/system-message
+  :github.copilot-sdk.specs/system-message-content
+  :github.copilot-sdk.specs/system-message-mode
+  :github.copilot-sdk.specs/system-message-section
+  :github.copilot-sdk.specs/system-prompt-section
+  :github.copilot-sdk.specs/tcp-connection-token
+  :github.copilot-sdk.specs/telemetry
+  :github.copilot-sdk.specs/temporary
+  :github.copilot-sdk.specs/terms
+  :github.copilot-sdk.specs/text
+  :github.copilot-sdk.specs/text-result-for-llm
+  :github.copilot-sdk.specs/time-to-first-token-ms
+  :github.copilot-sdk.specs/timeout-ms
+  :github.copilot-sdk.specs/timestamp
+  :github.copilot-sdk.specs/title
+  :github.copilot-sdk.specs/token-prices
+  :github.copilot-sdk.specs/tool
+  :github.copilot-sdk.specs/tool-call-id
+  :github.copilot-sdk.specs/tool-description
+  :github.copilot-sdk.specs/tool-handler
+  :github.copilot-sdk.specs/tool-info-entry
+  :github.copilot-sdk.specs/tool-name
+  :github.copilot-sdk.specs/tool-parameters
+  :github.copilot-sdk.specs/tool-result
+  :github.copilot-sdk.specs/tool-result-object
+  :github.copilot-sdk.specs/tool-telemetry
+  :github.copilot-sdk.specs/tool-timeout-ms
+  :github.copilot-sdk.specs/tool.execution_complete-data
+  :github.copilot-sdk.specs/tool.execution_progress-data
+  :github.copilot-sdk.specs/tool.execution_start-data
+  :github.copilot-sdk.specs/tools
+  :github.copilot-sdk.specs/total-api-duration-ms
+  :github.copilot-sdk.specs/total-premium-requests
+  :github.copilot-sdk.specs/total-response-size-bytes
+  :github.copilot-sdk.specs/total-tokens
+  :github.copilot-sdk.specs/total-tool-calls
+  :github.copilot-sdk.specs/transport
+  :github.copilot-sdk.specs/ttft-ms
+  :github.copilot-sdk.specs/turn-id
+  :github.copilot-sdk.specs/type
+  :github.copilot-sdk.specs/tz
+  :github.copilot-sdk.specs/ui
+  :github.copilot-sdk.specs/url
+  :github.copilot-sdk.specs/use-logged-in-user?
+  :github.copilot-sdk.specs/use-stdio?
+  :github.copilot-sdk.specs/used-requests
+  :github.copilot-sdk.specs/user-invocable
+  :github.copilot-sdk.specs/user-invocable?
+  :github.copilot-sdk.specs/user.message-data
+  :github.copilot-sdk.specs/vendor
+  :github.copilot-sdk.specs/version
+  :github.copilot-sdk.specs/vision-capabilities
+  :github.copilot-sdk.specs/warning-type
+  :github.copilot-sdk.specs/warnings
+  :github.copilot-sdk.specs/wire-api
+  :github.copilot-sdk.specs/wire-model
+  :github.copilot-sdk.specs/working-directory
+  :github.copilot-sdk.specs/workspace-path
+  :github.copilot-sdk.specs/write-file
+  :github.copilot-sdk.specs/xf]}
