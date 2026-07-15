@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 ### Changed
 - **Lifecycle handlers dispatched on a dedicated serial worker** — lifecycle
-  handlers registered via `on-session-lifecycle` (and the type-filtered
+  handlers registered via `on-lifecycle-event` (and the type-filtered
   variants) are now invoked on a per-client worker thread fed by a bounded
   dispatch channel, instead of inline inside the notification router's
   `go` loop. A slow or blocking lifecycle handler no longer stalls the router

@@ -638,8 +638,9 @@
         ;; worker preserves in-order, one-at-a-time delivery. A sliding buffer
         ;; bounds memory: if handlers cannot keep up, oldest lifecycle events are
         ;; dropped rather than growing without limit. The worker snapshots the
-        ;; handler map per event, so handlers registered/unregistered mid-stream
-        ;; take effect on subsequent events.
+        ;; handler map per event at dispatch time, so a handler
+        ;; registered/unregistered mid-stream affects every event dispatched
+        ;; after the change — including events already queued but not yet drained.
         lifecycle-ch (chan (async/sliding-buffer 1024))
         queue-size (or (:router-queue-size (:options client)) 4096)
         router-queue (LinkedBlockingQueue. queue-size)
@@ -735,20 +736,25 @@
                   event-type-kw (when event-type-str (keyword event-type-str))
                   lifecycle-event (-> params
                                       (dissoc :type)
-                                      (assoc :lifecycle-event-type event-type-kw))]
+                                      (assoc :lifecycle-event-type event-type-kw))
+                  dispatch-inline!
+                  (fn []
+                    (doseq [{:keys [handler event-type]} (vals (:lifecycle-handlers @(:state client)))]
+                      (when (or (nil? event-type) (= event-type event-type-kw))
+                        (try
+                          (handler lifecycle-event)
+                          (catch Throwable e
+                            (log/error "Lifecycle handler error: " (ex-message e)))))))]
               (log/debug "Lifecycle event: " event-type-kw " session=" (:session-id lifecycle-event))
               ;; Hand off to the serial lifecycle worker so a slow/blocking
-              ;; handler can't stall notification routing (issue #126). If the
-              ;; worker channel is absent (not yet started / torn down), fall
-              ;; back to inline dispatch to preserve delivery.
-              (if-let [lifecycle-ch (:lifecycle-ch @(:state client))]
-                (async/put! lifecycle-ch lifecycle-event)
-                (doseq [{:keys [handler event-type]} (vals (:lifecycle-handlers @(:state client)))]
-                  (when (or (nil? event-type) (= event-type event-type-kw))
-                    (try
-                      (handler lifecycle-event)
-                      (catch Exception e
-                        (log/error "Lifecycle handler error: " (ex-message e))))))))
+              ;; handler can't stall notification routing (issue #126). Fall
+              ;; back to inline dispatch when the worker channel is absent (not
+              ;; yet started / torn down) OR already closed — `async/put!`
+              ;; returns false on a closed channel, so honoring its result
+              ;; keeps a dropped hand-off from silently losing the event.
+              (let [lifecycle-ch (:lifecycle-ch @(:state client))]
+                (when-not (and lifecycle-ch (async/put! lifecycle-ch lifecycle-event))
+                  (dispatch-inline!))))
 
             ;; GitHub telemetry forwarding (upstream PR #1835, @experimental).
             ;; Client-global, id-less notification. `:params` is already
