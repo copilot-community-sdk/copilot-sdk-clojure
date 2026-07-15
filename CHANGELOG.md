@@ -2,6 +2,8 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+
+## [1.0.7-preview.2.1] - 2026-07-15
 ### Added
 - **API-surface drift guard** ([#120](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/120)) —
   a new test (`github.copilot-sdk.api-surface-test`) locks the public contract:
@@ -1789,7 +1791,8 @@ This release bumps the upstream marker from `1.0.0-beta.3` to `1.0.0-beta.4`.
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.0...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.1...HEAD
+[1.0.7-preview.2.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.0...v1.0.7-preview.2.1
 [1.0.7-preview.2.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.0.0...v1.0.7-preview.2.0
 [1.0.0.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.0-beta.3.0...v1.0.0.0
 [1.0.0-beta.3.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v0.3.0.0-SNAPSHOT...v1.0.0-beta.3.0
