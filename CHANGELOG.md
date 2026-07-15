@@ -2,6 +2,15 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Added (documentation)
+- **Naming and shape differences vs the official SDK** — new reference
+  section in `doc/reference/API.md` documenting the handful of public
+  Clojure names/return shapes that do not map 1:1 to the Node.js SDK:
+  `:disable-resume?` ↔ `suppressResumeEvent`, `:max-input-tokens` ↔
+  `maxPromptTokens`, and `join-session`'s `{:client :session}` return vs
+  the upstream `joinSession()` → `CopilotSession`. Resolves
+  [#124](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/124).
+
 ### Fixed
 - **Re-exported permission helpers now preserve `:arglists`** — `approve-all` and
   `default-join-session-permission-handler` in the top-level `github.copilot-sdk`
