@@ -204,6 +204,7 @@
    :stopping? false
    :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
    :lifecycle-handlers {}
+   :lifecycle-ch nil         ; serial dispatch channel for lifecycle handlers
    :stderr-buffer nil         ; atom of recent stderr lines (for error context)
    :negotiated-protocol-version 0})
 
@@ -630,6 +631,16 @@
   (let [{:keys [connection-io]} @(:state client)
         notif-ch (proto/notifications connection-io)
         router-ch (chan 1024)
+        ;; Serial lifecycle dispatch: a single per-client worker thread drains
+        ;; this channel and invokes registered lifecycle handlers off the
+        ;; notification router's go-loop. This keeps a slow or blocking handler
+        ;; from stalling ALL notification routing (issue #126), while the single
+        ;; worker preserves in-order, one-at-a-time delivery. A sliding buffer
+        ;; bounds memory: if handlers cannot keep up, oldest lifecycle events are
+        ;; dropped rather than growing without limit. The worker snapshots the
+        ;; handler map per event, so handlers registered/unregistered mid-stream
+        ;; take effect on subsequent events.
+        lifecycle-ch (chan (async/sliding-buffer 1024))
         queue-size (or (:router-queue-size (:options client)) 4096)
         router-queue (LinkedBlockingQueue. queue-size)
         router-thread (Thread.
@@ -647,11 +658,26 @@
                              (log/error "Notification router dispatcher exception: " (ex-message e)))
                            (finally
                              (log/debug "Notification router dispatcher ending")))))]
+    ;; Serial lifecycle worker — drains lifecycle-ch and dispatches to handlers.
+    ;; Terminates cleanly when lifecycle-ch is closed during teardown.
+    (async/thread
+      (loop []
+        (when-let [lifecycle-event (async/<!! lifecycle-ch)]
+          (let [event-type-kw (:lifecycle-event-type lifecycle-event)
+                handlers (vals (:lifecycle-handlers @(:state client)))]
+            (doseq [{:keys [handler event-type]} handlers]
+              (when (or (nil? event-type) (= event-type event-type-kw))
+                (try
+                  (handler lifecycle-event)
+                  (catch Throwable e
+                    (log/error "Lifecycle handler error: " (ex-message e)))))))
+          (recur))))
     ;; Store the router channel
     (swap! (:state client) assoc
            :router-ch router-ch
            :router-queue router-queue
            :router-thread router-thread
+           :lifecycle-ch lifecycle-ch
            :router-running? true)
     (.setDaemon router-thread true)
     (.setName router-thread "notification-router-dispatcher")
@@ -709,15 +735,20 @@
                   event-type-kw (when event-type-str (keyword event-type-str))
                   lifecycle-event (-> params
                                       (dissoc :type)
-                                      (assoc :lifecycle-event-type event-type-kw))
-                  handlers (vals (:lifecycle-handlers @(:state client)))]
+                                      (assoc :lifecycle-event-type event-type-kw))]
               (log/debug "Lifecycle event: " event-type-kw " session=" (:session-id lifecycle-event))
-              (doseq [{:keys [handler event-type]} handlers]
-                (when (or (nil? event-type) (= event-type event-type-kw))
-                  (try
-                    (handler lifecycle-event)
-                    (catch Exception e
-                      (log/error "Lifecycle handler error: " (ex-message e)))))))
+              ;; Hand off to the serial lifecycle worker so a slow/blocking
+              ;; handler can't stall notification routing (issue #126). If the
+              ;; worker channel is absent (not yet started / torn down), fall
+              ;; back to inline dispatch to preserve delivery.
+              (if-let [lifecycle-ch (:lifecycle-ch @(:state client))]
+                (async/put! lifecycle-ch lifecycle-event)
+                (doseq [{:keys [handler event-type]} (vals (:lifecycle-handlers @(:state client)))]
+                  (when (or (nil? event-type) (= event-type event-type-kw))
+                    (try
+                      (handler lifecycle-event)
+                      (catch Exception e
+                        (log/error "Lifecycle handler error: " (ex-message e))))))))
 
             ;; GitHub telemetry forwarding (upstream PR #1835, @experimental).
             ;; Client-global, id-less notification. `:params` is already
@@ -1196,7 +1227,9 @@
               (try (.join router-thread 500) (catch Exception _)))
             (when-let [router-ch (:router-ch @(:state client))]
               (close! router-ch))
-            (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+            (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
+        (close! lifecycle-ch))
+      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
             (let [{:keys [connection-io socket process]} @(:state client)]
               (when connection-io
                 (try (proto/disconnect connection-io) (catch Exception _)))
@@ -1237,7 +1270,9 @@
         (try (.join router-thread 500) (catch Exception _)))
       (when-let [router-ch (:router-ch @(:state client))]
         (close! router-ch))
-      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+      (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
+        (close! lifecycle-ch))
+      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
 
       ;; 1. Disconnect all sessions
       (doseq [[session-id _] sessions]
@@ -1315,7 +1350,9 @@
         (try (.join router-thread 500) (catch Exception _)))
       (when-let [router-ch (:router-ch @(:state client))]
         (close! router-ch))
-      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil)
+      (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
+        (close! lifecycle-ch))
+      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
 
       ;; Force close connection
       (when connection-io
@@ -1342,6 +1379,7 @@
           :router-queue nil
           :router-thread nil
           :router-running? false
+          :lifecycle-ch nil
           :models-cache nil
           :lifecycle-handlers {}
           :stderr-buffer nil}) ; reset caches, handlers, and stderr

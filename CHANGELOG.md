@@ -2,6 +2,21 @@
 All notable changes to this project will be documented in this file. This change log follows the conventions of [keepachangelog.com](http://keepachangelog.com/).
 
 ## [Unreleased]
+### Changed
+- **Lifecycle handlers dispatched on a dedicated serial worker** — lifecycle
+  handlers registered via `on-session-lifecycle` (and the type-filtered
+  variants) are now invoked on a per-client worker thread fed by a bounded
+  dispatch channel, instead of inline inside the notification router's
+  `go` loop. A slow or blocking lifecycle handler no longer stalls the router
+  (which also delivers session events, request/response completions, and MCP
+  callbacks). Delivery stays strictly in-order — one lifecycle event is fully
+  dispatched to all matching handlers before the next begins — and handlers
+  still see the handler map as of the moment each event is processed, so
+  late registration keeps working. The worker uses a sliding buffer (drops the
+  oldest event under sustained overload) and is torn down cleanly on `stop!` /
+  `force-stop!` / `disconnect!`. Internal dispatch change only; the public API
+  is unchanged. Resolves
+  [#126](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/126).
 
 ## [1.0.7-preview.2.0] - 2026-07-15
 ### Added (v1.0.7-preview.2 sync)
