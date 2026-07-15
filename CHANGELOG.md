@@ -9,10 +9,13 @@ All notable changes to this project will be documented in this file. This change
   dispatch channel, instead of inline inside the notification router's
   `go` loop. A slow or blocking lifecycle handler no longer stalls the router
   (which also delivers session events, request/response completions, and MCP
-  callbacks). Delivery stays strictly in-order — one lifecycle event is fully
-  dispatched to all matching handlers before the next begins — and handlers
+  callbacks). Events dispatched through the worker stay strictly in-order —
+  one lifecycle event is fully dispatched to all matching handlers before the
+  next begins — and handlers
   still see the handler map as of the moment each event is processed, so
-  late registration keeps working. The worker uses a sliding buffer (drops the
+  late registration keeps working. (Before the worker starts or after its
+  channel closes during teardown, dispatch falls back to inline on the router
+  loop.) The worker uses a sliding buffer (drops the
   oldest event under sustained overload) and is torn down cleanly on the
   per-client stop paths (`stop!` / `force-stop!`). Internal dispatch change
   only; the public API is unchanged. Resolves

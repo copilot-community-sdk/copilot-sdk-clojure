@@ -660,7 +660,9 @@
                            (finally
                              (log/debug "Notification router dispatcher ending")))))]
     ;; Serial lifecycle worker — drains lifecycle-ch and dispatches to handlers.
-    ;; Terminates cleanly when lifecycle-ch is closed during teardown.
+    ;; Observes lifecycle-ch closure between events (at the next <!!), so it
+    ;; winds down on teardown; a handler that blocks indefinitely can still keep
+    ;; this thread parked in that handler until it returns.
     (async/thread
       (loop []
         (when-let [lifecycle-event (async/<!! lifecycle-ch)]
