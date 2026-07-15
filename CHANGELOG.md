@@ -13,9 +13,9 @@ All notable changes to this project will be documented in this file. This change
   dispatched to all matching handlers before the next begins — and handlers
   still see the handler map as of the moment each event is processed, so
   late registration keeps working. The worker uses a sliding buffer (drops the
-  oldest event under sustained overload) and is torn down cleanly on `stop!` /
-  `force-stop!` / `disconnect!`. Internal dispatch change only; the public API
-  is unchanged. Resolves
+  oldest event under sustained overload) and is torn down cleanly on the
+  per-client stop paths (`stop!` / `force-stop!`). Internal dispatch change
+  only; the public API is unchanged. Resolves
   [#126](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/126).
 
 ## [1.0.7-preview.2.0] - 2026-07-15
