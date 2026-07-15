@@ -55,9 +55,10 @@ Execute a query and return a bounded lazy sequence of events (default: 256 event
 
 **Warning:** cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a
 `:copilot/session.idle` / `:copilot/session.error` event or the events channel closing. Abandoning the seq
-early (e.g. `(first ...)` or `(take 1 ...)`), or hitting `:max-events` before that terminal event, leaks the
-session and its event tap. Consume the whole seq, or use `query-chan` (explicit lifecycle, safe early stop) or
-`query` when you may stop reading early.
+early (e.g. `(first ...)` or `(take 1 ...)`), or hitting a positive `:max-events` bound before that terminal
+event, leaks the session and its event tap (the sole exception is `:max-events 0`, which disconnects
+immediately without emitting anything). Consume the whole seq, or use `query-chan` (explicit lifecycle — safe
+to stop early provided you close the returned channel) or `query` when you may stop reading early.
 
 ```clojure
 (->> (h/query-seq! "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})

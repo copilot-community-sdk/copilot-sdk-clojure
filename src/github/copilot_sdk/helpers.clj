@@ -243,10 +243,12 @@
    `(first (query-seq! ...))` or `(take 1 (query-seq! ...))` realize one element
    and stop, so the terminal event is never reached and cleanup never runs. The
    `:max-events` bound only caps how many events are yielded — it is not a cleanup
-   guarantee; if the bound is hit before a terminal event the session still leaks.
-   Only use `query-seq!` when you will consume the sequence to its natural end. If
-   you may stop early, prefer `query-chan` (explicit lifecycle, safe to stop
-   reading early) or `query` (single response, deterministic cleanup).
+   guarantee; hitting a positive bound before a terminal event still leaks the
+   session (the sole exception is `:max-events 0`, which disconnects immediately
+   without emitting anything). Only use `query-seq!` when you will consume the
+   sequence to its natural end. If you may stop early, prefer `query-chan`
+   (explicit lifecycle — safe to stop early *provided you close the returned
+   channel*) or `query` (single response, deterministic cleanup).
 
    Keyword options:
      :client - Client options map
