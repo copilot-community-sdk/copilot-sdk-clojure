@@ -23,8 +23,26 @@ All notable changes to this project will be documented in this file. This change
   the upstream `joinSession()` → `CopilotSession`. Resolves
   [#124](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/124).
 
+### Changed
+- **Lifecycle handlers dispatched on a dedicated serial worker** — lifecycle
+  handlers registered via `on-lifecycle-event` (and the type-filtered
+  variants) are now invoked on a per-client worker thread fed by a bounded
+  dispatch channel, instead of inline inside the notification router's
+  `go` loop. A slow or blocking lifecycle handler no longer stalls the router
+  (which also delivers session events, request/response completions, and MCP
+  callbacks). Events dispatched through the worker stay strictly in-order —
+  one lifecycle event is fully dispatched to all matching handlers before the
+  next begins — and handlers
+  still see the handler map as of the moment each event is processed, so
+  late registration keeps working. (Before the worker starts or after its
+  channel closes during teardown, dispatch falls back to inline on the router
+  loop.) The worker uses a sliding buffer (drops the
+  oldest event under sustained overload) and is torn down cleanly on the
+  per-client stop paths (`stop!` / `force-stop!`). Internal dispatch change
+  only; the public API is unchanged. Resolves
+  [#126](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/126).
+
 ### Fixed
-- **Re-exported permission helpers now preserve `:arglists`** — `approve-all` and
   `default-join-session-permission-handler` in the top-level `github.copilot-sdk`
   namespace were bare `def` aliases, so editor tooltips and generated API docs showed
   no call signature. They now carry an explicit `:arglists '([request ctx])` so

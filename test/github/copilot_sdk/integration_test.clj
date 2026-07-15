@@ -5624,6 +5624,40 @@
           (is (= :ok (deref second-received 1000 :timeout))
               "router must survive a Throwable from the handler and dispatch later notifications"))))))
 
+(deftest test-lifecycle-handler-blocking-does-not-stall-router
+  (testing "a slow/blocking lifecycle handler dispatched on the serial worker must not stall the notification router; non-lifecycle notifications still route promptly (issue #126)"
+    (let [release (promise)
+          started (promise)
+          fired (promise)
+          unsub (sdk/on-lifecycle-event
+                 *test-client*
+                 (fn [event]
+                   (deliver started :ok)
+                   ;; Block the serial lifecycle worker until released — this
+                   ;; simulates a slow/blocking handler. If dispatch ran inline
+                   ;; on the router go-loop, this would stall ALL routing.
+                   (deref release 2000 :timeout)
+                   (deliver fired (:lifecycle-event-type event))))]
+      (try
+        (mock/send-notification! *mock-server* "session.lifecycle"
+                                 {:type "session.created" :sessionId "s1"})
+        (is (= :ok (deref started 1000 :timeout))
+            "lifecycle handler should be invoked on the serial worker")
+        ;; While the lifecycle handler is still blocked, an unrelated
+        ;; notification must still route through the go-loop promptly.
+        (let [notif-ch (sdk/notifications *test-client*)]
+          (mock/send-notification! *mock-server* "cli.status" {:status "ok"})
+          (let [[notif _] (alts!! [notif-ch (timeout 1000)])]
+            (is (some? notif)
+                "router must not be stalled by the blocked lifecycle handler")
+            (is (= "cli.status" (:method notif)))))
+        ;; Release the handler and confirm the lifecycle event was delivered.
+        (deliver release :go)
+        (is (= :session.created (deref fired 1000 :timeout))
+            "lifecycle handler should complete once unblocked")
+        (finally
+          (unsub))))))
+
 ;; --- requestHeaders on send! (upstream PR #1094) --------------------------
 
 (deftest test-send-request-headers-on-wire
