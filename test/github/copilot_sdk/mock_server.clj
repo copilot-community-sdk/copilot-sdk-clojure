@@ -71,7 +71,8 @@
             pending-events     ; atom - events to send on next opportunity
             pending-responses  ; atom {id -> chan} - responses to server→client RPCs
             protocol-version   ; atom Long - protocol version reported by ping/connect/status
-            resume-response-extras]) ; atom map - extra fields to merge into session.resume responses
+            resume-response-extras ; atom map - extra fields to merge into session.resume responses
+            current-tool-metadata-response]) ; atom map-or-Throwable
 
 (defn- generate-id [^AtomicLong counter]
   (str "evt-" (.incrementAndGet counter)))
@@ -349,6 +350,11 @@
                  "session.commands.handlePendingCommand" {:ok true}
                  "session.commands.respondToQueuedCommand" {:success true}
                  "session.tools.handlePendingToolCall" {:ok true}
+                 "session.tools.getCurrentMetadata"
+                 (let [response @(:current-tool-metadata-response server)]
+                   (if (instance? Throwable response)
+                     (throw response)
+                     response))
                  "session.ui.handlePendingElicitation" {:ok true}
                  "session.mode.get" {:mode "interactive"}
                  "session.mode.set" {:mode (get params :mode "interactive")}
@@ -470,7 +476,8 @@
       :pending-events (atom [])
       :pending-responses (atom {})
       :protocol-version (atom DEFAULT_PROTOCOL_VERSION)
-      :resume-response-extras (atom {})})))
+      :resume-response-extras (atom {})
+      :current-tool-metadata-response (atom {:tools []})})))
 
 (defn start-mock-server!
   "Start the mock server in a background thread."
@@ -511,6 +518,11 @@
    to clear."
   [server extras]
   (reset! (:resume-response-extras server) (or extras {})))
+
+(defn set-current-tool-metadata-response!
+  "Set the response or Throwable for `session.tools.getCurrentMetadata`."
+  [server response]
+  (reset! (:current-tool-metadata-response server) response))
 
 (defn inject-tool-call!
   "Inject a tool call request from the mock server.

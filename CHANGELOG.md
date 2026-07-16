@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.7-preview.2 post-release sync)
+- **Opaque tool-definition metadata** — port of upstream
+  [PR #1864](https://github.com/github/copilot-sdk/pull/1864). `define-tool` and
+  `define-tool-from-spec` accept an optional `:metadata` map and forward its
+  host-defined contents on `session.create` and `session.resume`.
+- **Tool-search configuration and metadata** — port of upstream
+  [PR #1933](https://github.com/github/copilot-sdk/pull/1933). Session create,
+  resume, and join configs accept `:tool-search` with optional `:enabled` and
+  `:defer-threshold`. A `tool_search_tool` override receives the current tool
+  metadata snapshot in `:available-tools`: each entry has `:name` and
+  `:description`, plus optional `:namespaced-name`, `:mcp-server-name`,
+  `:mcp-tool-name`, `:input-schema`, and `:defer-loading`. Tool result maps may
+  return `:tool-references`.
+- **Schema regen to 1.0.71-2** — port of upstream schema updates
+  [`edbe6c66`](https://github.com/github/copilot-sdk/commit/edbe6c662a78216147cfae1a19c6d127f1e94797)
+  (1.0.71-0) and
+  [`9744fd52`](https://github.com/github/copilot-sdk/commit/9744fd52b2692aea35b72d263280c18319e2a6c1)
+  (1.0.71-2). Bumped `.copilot-schema-version` from `1.0.70` to `1.0.71-2`
+  and regenerated wire specs and coercions. The curated public idiom adds
+  optional canvas `:icon` paths and model-billing
+  `:promo` maps (`:ends-at`, with optional `:id`, `:discount-percent`, and
+  `:message`). No new public session event type was added.
+
 ## [1.0.7-preview.2.1] - 2026-07-15
 ### Added
 - **API-surface drift guard** ([#120](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/120)) —

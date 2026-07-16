@@ -26,14 +26,20 @@
      - :defer                   - `:auto` or `:never` (upstream PR #1632). Controls whether the tool may
                                   be deferred (loaded lazily via tool search) rather than always pre-loaded.
                                   `:auto` allows deferral; `:never` forces pre-loading. Defaults to `:auto`.
+     - :metadata                - Opaque host-defined map forwarded to the runtime.
    
    The handler (when provided) receives:
    - args       - The parsed arguments from the LLM (no key conversion)
-   - invocation - Map with :session-id, :tool-call-id, :tool-name, :arguments
+   - invocation - Map with :session-id, :tool-call-id, :tool-name, :arguments,
+                  and optional :available-tools current-tool metadata maps for
+                  `tool_search_tool`. Each metadata map has :name, :description,
+                  and optional :namespaced-name, :mcp-server-name,
+                  :mcp-tool-name, :input-schema, :defer-loading.
    
    The handler should return one of:
    - A string (treated as success)
-   - A map with :text-result-for-llm and :result-type
+   - A map with :text-result-for-llm, :result-type, and optional
+     :tool-references naming tools returned by a tool-search implementation
    - Any other value (JSON-encoded as success)
    - A core.async channel that will yield one of the above
    
@@ -57,7 +63,7 @@
    ;; Listen for :copilot/external_tool.requested events and resolve via
    ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
-  [name {:keys [description parameters handler overrides-built-in-tool defer]}]
+  [name {:keys [description parameters handler overrides-built-in-tool defer metadata]}]
   (cond-> {:tool-name name
            :tool-description description
            :tool-parameters parameters}
@@ -69,7 +75,9 @@
     (some? overrides-built-in-tool)
     (assoc :overrides-built-in-tool overrides-built-in-tool)
     (some? defer)
-    (assoc :defer defer)))
+    (assoc :defer defer)
+    (some? metadata)
+    (assoc :metadata metadata)))
 
 (defn define-tool-from-spec
   "Define a tool using a clojure.spec for parameter validation.
@@ -101,6 +109,7 @@
      - :defer                   - `:auto` or `:never` (upstream PR #1632). When `:auto` the tool may be
                                   deferred (loaded lazily via tool search); `:never` forces pre-loading.
                                   Defaults to `:auto`.
+     - :metadata                - Opaque host-defined map forwarded to the runtime.
 
    Example (with handler):
    ```clojure
@@ -125,7 +134,7 @@
    ;; Resolve pending calls via
    ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
-  [name {:keys [description spec handler overrides-built-in-tool defer]}]
+  [name {:keys [description spec handler overrides-built-in-tool defer metadata]}]
   ;; For now, we don't auto-convert spec to JSON schema
   ;; The handler should validate using the spec
   (cond-> {:tool-name name
@@ -144,7 +153,9 @@
     (some? overrides-built-in-tool)
     (assoc :overrides-built-in-tool overrides-built-in-tool)
     (some? defer)
-    (assoc :defer defer)))
+    (assoc :defer defer)
+    (some? metadata)
+    (assoc :metadata metadata)))
 
 (defn result-success
   "Create a successful tool result."

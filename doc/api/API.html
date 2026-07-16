@@ -34,7 +34,8 @@
 <h3><a href="#query-seq" id="query-seq"></a><code>query-seq!</code></h3>
 <pre><code class="language-clojure">(h/query-seq! prompt &amp; {:keys [client session max-events]})
 </code></pre>
-<p>Execute a query and return a bounded lazy sequence of events with guaranteed cleanup (default: 256 events).</p>
+<p>Execute a query and return a bounded lazy sequence of events (default: 256 events).</p>
+<p><strong>Warning:</strong> cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a <code>:copilot/session.idle</code> / <code>:copilot/session.error</code> event, or the events channel closing (detected when the next read yields <code>nil</code>, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it reaches a terminal event (e.g. <code>(first ...)</code> or <code>(take 1 ...)</code> when the first element isn’t already terminal), or hitting a positive <code>:max-events</code> bound before that end of stream, leaks the session and its event tap (the sole exception is <code>:max-events 0</code>, which disconnects immediately without emitting anything). Consume the whole seq, or use <code>query-chan</code> (explicit lifecycle — safe to stop early provided you close the returned channel) or <code>query</code> when you may stop reading early.</p>
 <pre><code class="language-clojure">(-&gt;&gt; (h/query-seq! "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})
      (filter #(= :copilot/assistant.message_delta (:type %)))
      (map #(get-in % [:data :delta-content]))
@@ -64,6 +65,19 @@
 <h2><a href="#copilotclient" id="copilotclient"></a>CopilotClient</h2>
 <pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
 </code></pre>
+<h3><a href="#naming-and-shape-differences-vs-the-official-sdk" id="naming-and-shape-differences-vs-the-official-sdk"></a>Naming and shape differences vs the official SDK</h3>
+<p>The Clojure SDK maintains strict API parity with the official Node.js SDK (<code>@github/copilot-sdk</code>), but a handful of names and return shapes are adapted to Clojure idioms. When translating Node.js examples, use this map:</p>
+<table>
+<thead>
+<tr><th> Clojure </th><th> Official Node.js SDK </th><th> Notes </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:disable-resume?</code> </td><td> <code>suppressResumeEvent</code> </td><td> Config key on <code>resume-session</code> / <code>join-session</code>. When true, skips emitting the <code>session.resume</code> event. Defaults to <code>true</code> in <code>join-session</code> (matching upstream), <code>false</code> elsewhere. </td></tr>
+<tr><td> <code>:max-input-tokens</code> </td><td> <code>maxPromptTokens</code> </td><td> BYOK provider/model config key (input/prompt token cap). Serialized back to <code>maxPromptTokens</code> on the wire. </td></tr>
+<tr><td> <code>join-session</code> return <code>{:client :session}</code> </td><td> <code>joinSession()</code> returns <code>CopilotSession</code> </td><td> Clojure has no implicit/global client, so it returns both so the caller can own the client lifecycle. See <a href="#join-session"><code>join-session</code></a>. </td></tr>
+</tbody>
+</table>
+<p>These are the only cases where a public Clojure key or return value does not map 1:1 to the upstream name. Everything else follows the standard kebab-case ↔ camelCase wire convention (e.g. <code>:working-directory</code> ↔ <code>workingDirectory</code>), which is applied automatically and needs no lookup.</p>
 <h3><a href="#constructor" id="constructor"></a>Constructor</h3>
 <pre><code class="language-clojure">(copilot/client options)
 </code></pre>
@@ -95,6 +109,7 @@
 <tr><td> <code>:on-list-models</code> </td><td> fn </td><td> nil </td><td> Zero-arg function returning model info maps. Bypasses <code>models.list</code> RPC; does not require <code>start!</code>. Results are cached the same way as RPC results </td></tr>
 <tr><td> <code>:telemetry</code> </td><td> map </td><td> nil </td><td> OpenTelemetry export config, applied as environment variables to the <strong>spawned</strong> CLI (ignored when connecting to an existing server via <code>:cli-url</code> or a parent process via <code>:is-child-process?</code>, since no CLI is spawned). When present, enables OTel. Keys (all optional): <code>:otlp-endpoint</code> (OTLP HTTP endpoint), <code>:otlp-protocol</code> (<code>"http/json"</code> or <code>"http/protobuf"</code> — sets <code>OTEL_EXPORTER_OTLP_PROTOCOL</code>), <code>:file-path</code> (write spans to a file), <code>:exporter-type</code> (exporter selection), <code>:source-name</code> (service/source name), <code>:capture-content?</code> (boolean — capture prompt/response content; <strong>off by default for privacy</strong>). See <a href="#observability">Observability</a>. (upstream PR #785, <a href="https://github.com/github/copilot-sdk/pull/1648">PR #1648</a>) </td></tr>
 <tr><td> <code>:on-get-trace-context</code> </td><td> fn </td><td> nil </td><td> Zero-arg function returning <code>{:traceparent "..." :tracestate "..."}</code>, called per request (session create/resume and each message send) to propagate a distributed-trace context. Only <code>:traceparent</code> and <code>:tracestate</code> are forwarded. See <a href="#observability">Observability</a> </td></tr>
+<tr><td> <code>:on-github-telemetry</code> </td><td> fn </td><td> nil </td><td> <strong>@experimental / Internal.</strong> One-arg callback receiving each forwarded GitHub telemetry notification. Registering it adds <code>enableGitHubTelemetryForwarding: true</code> to the <code>connect</code> handshake (so the first session’s un-replayable <code>session.start</code> telemetry is forwarded — upstream PR #1909) as well as to the wire params of <code>session.create</code> and <code>session.resume</code>; the runtime then emits connection-global <code>gitHubTelemetry.event</code> notifications. A throwing handler is caught and logged (WARN) and cannot corrupt dispatch. Not a stable public SDK surface. See <a href="#observability">Observability</a>. (<a href="https://github.com/github/copilot-sdk/pull/1835">PR #1835</a>) </td></tr>
 <tr><td> <code>:is-child-process?</code> </td><td> boolean </td><td> <code>false</code> </td><td> When <code>true</code>, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires <code>:use-stdio?</code> <code>true</code>; mutually exclusive with <code>:cli-url</code> </td></tr>
 <tr><td> <code>:session-fs</code> </td><td> map </td><td> nil </td><td> Session filesystem provider config. Keys: <code>:initial-cwd</code> (string, required), <code>:session-state-path</code> (string, required), <code>:conventions</code> (<code>"windows"</code> or <code>"posix"</code>, required). When set, the client calls <code>sessionFs.setProvider</code> on connect and routes filesystem operations through per-session handlers. See <a href="#session-filesystem">Session Filesystem</a> </td></tr>
 <tr><td> <code>:mode</code> </td><td> keyword </td><td> <code>:copilot-cli</code> </td><td> Client multitenancy mode: <code>:copilot-cli</code> (default — preserve historical CLI behavior) or <code>:empty</code> (multi-tenant SaaS hosts that must isolate sessions from local machine state). In <code>:empty</code> mode the SDK requires at least one tenant-scoped storage root (<code>:copilot-home</code>, <code>:session-fs</code>, <code>:cli-url</code>, or <code>:is-child-process?</code>), sets <code>COPILOT_DISABLE_KEYTAR=1</code> on the spawned CLI, spreads 10 safe defaults under caller session config, forces <code>installedPlugins []</code>, and normalizes <code>:system-message</code> to strip <code>environment_context</code>. See <a href="#client-mode-empty">Client Mode</a>. (upstream PR #1428) </td></tr>
@@ -175,6 +190,7 @@
 <tr><td> <code>:system-message</code> </td><td> map </td><td> System message customization (see below) </td></tr>
 <tr><td> <code>:available-tools</code> </td><td> vector </td><td> List of allowed tool names </td></tr>
 <tr><td> <code>:excluded-tools</code> </td><td> vector </td><td> List of excluded tool names </td></tr>
+<tr><td> <code>:tool-search</code> </td><td> map </td><td> Configure runtime tool search for <code>create-session</code>, <code>resume-session</code>, and <code>join-session</code>. Optional keys: <code>:enabled</code> (boolean) and <code>:defer-threshold</code> (integer). This session-level configuration is distinct from a tool definition’s <code>:defer</code> policy; omit it to use runtime defaults. </td></tr>
 <tr><td> <code>:provider</code> </td><td> map </td><td> Provider config for BYOK (see <a href="../auth/byok.html">BYOK docs</a>). Required key: <code>:base-url</code>. Optional: <code>:provider-type</code> (<code>:openai</code>/<code>:azure</code>/<code>:anthropic</code>), <code>:wire-api</code> (<code>:completions</code>/<code>:responses</code>), <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code>, <code>:headers</code> (map of HTTP header name→value, sent with each provider request — upstream PR #1094), <code>:model-id</code> (string — the model identifier to send to the provider; overrides session <code>:model</code>), <code>:wire-model</code> (string — model name as sent on the provider wire when it differs from <code>:model-id</code>), <code>:max-input-tokens</code> (integer — input/prompt token cap; serialized as wire <code>maxPromptTokens</code>), <code>:max-output-tokens</code> (integer — output token cap), <code>:transport</code> (<code>:http</code>/<code>:websockets</code> — provider transport; serialized as wire <code>transport</code> — upstream PR #1711), <code>:bearer-token-provider</code> (fn — dynamic bearer-token callback, see <a href="../auth/byok.md#dynamic-bearer-tokens">BYOK docs</a> — upstream PR #1748). The four override fields were added in upstream PR #966 </td></tr>
 <tr><td> <code>:providers</code> </td><td> vector </td><td> (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of <code>:provider</code> — <code>:base-url</code> (required), <code>:provider-type</code>, <code>:wire-api</code>, <code>:api-key</code>, <code>:bearer-token</code>, <code>:azure-options</code>, <code>:headers</code>, <code>:bearer-token-provider</code> — plus a required <code>:name</code> (the registry key, no <code>/</code>). Unlike the singular <code>:provider</code>, a named provider does <strong>not</strong> accept <code>:transport</code> or the inline model-override fields (<code>:model-id</code>, <code>:wire-model</code>, <code>:max-input-tokens</code>, <code>:max-output-tokens</code>); model overrides are declared in <code>:models</code> instead. Pairs with <code>:models</code> to declare a model catalog. Cannot be combined with the singular <code>:provider</code>. (upstream PR #1718) </td></tr>
 <tr><td> <code>:models</code> </td><td> vector </td><td> (Experimental) Model catalog referencing the <code>:providers</code> registry. Each entry: <code>:id</code> (required, provider-local model id), <code>:provider</code> (required, a <code>:name</code> in <code>:providers</code>), and optional override fields (<code>:model-id</code>, <code>:wire-model</code>, <code>:capabilities</code>, <code>:max-input-tokens</code>, <code>:max-context-window-tokens</code>, <code>:max-output-tokens</code>). The full model selection id is <code>"providerName/id"</code>. Cannot be combined with the singular <code>:provider</code>. (upstream PR #1718) </td></tr>
@@ -182,6 +198,8 @@
 <tr><td> <code>:excluded-builtin-agents</code> </td><td> vector </td><td> Names of built-in agents to hide/exclude from the session. Serialized as wire <code>excludedBuiltinAgents</code>. (upstream PR #1865) </td></tr>
 <tr><td> <code>:enable-citations</code> </td><td> boolean </td><td> (Experimental) Opt into native model citations. Gated on <code>some?</code> — an explicit <code>false</code> is forwarded; an absent key is omitted. Serialized as wire <code>enableCitations</code>. (upstream PR #1865) </td></tr>
 <tr><td> <code>:session-limits</code> </td><td> map </td><td> (Experimental) Session AI-credit limits. <code>{:max-ai-credits &lt;number&gt;}</code> — serialized as wire <code>sessionLimits.maxAiCredits</code>. (upstream PR #1865) </td></tr>
+<tr><td> <code>:enable-managed-settings?</code> </td><td> boolean </td><td> Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session’s <code>:github-token</code> (required; the runtime fails closed if omitted). Gated on <code>some?</code> — an explicit <code>false</code> is forwarded verbatim; an absent key is omitted. Serialized as wire <code>enableManagedSettings</code>. (upstream PR #1925) </td></tr>
+<tr><td> <code>:canvas-provider</code> </td><td> map </td><td> Canvas provider identity for the session. <code>{:id "..." :name "..."}</code> (<code>:name</code> optional) — serialized as wire <code>canvasProvider.{id,name}</code>. (upstream PR #1847) </td></tr>
 <tr><td> <code>:exp-assignments</code> </td><td> map </td><td> (Internal) Opaque experiment flight assignments. Keys are source-defined flight ids and are forwarded verbatim (string keys bypass kebab→camel conversion). Serialized as <code>expAssignments</code>. (upstream PR #1750) </td></tr>
 <tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by server ID (see <a href="../mcp/overview.html">MCP docs</a>). Local (stdio) servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote (HTTP/SSE) servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code>. Spec aliases: <code>::mcp-stdio-server</code> = <code>::mcp-local-server</code>, <code>::mcp-http-server</code> = <code>::mcp-remote-server</code> </td></tr>
 <tr><td> <code>:commands</code> </td><td> vector </td><td> Command definitions (slash commands). See <a href="#commands">Commands</a> </td></tr>
@@ -229,7 +247,7 @@
 <tr><td> <code>:custom-agents-local-only</code> </td><td> boolean </td><td> Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via <code>session.options.update</code>. Defaulted to <code>true</code> in <code>:empty</code> mode. (upstream PR #1428) </td></tr>
 <tr><td> <code>:coauthor-enabled</code> </td><td> boolean </td><td> Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via <code>session.options.update</code>. Defaulted to <code>false</code> in <code>:empty</code> mode. (upstream PR #1428) </td></tr>
 <tr><td> <code>:manage-schedule-enabled</code> </td><td> boolean </td><td> Enable the built-in schedule-management tools. Forwarded via <code>session.options.update</code>. Defaulted to <code>false</code> in <code>:empty</code> mode. (upstream PR #1428) </td></tr>
-<tr><td> <code>:open-canvases</code> </td><td> vector </td><td> (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry: <code>{:instance-id ... :extension-id ... :canvas-id ... :reopen bool :availability "ready"\|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}</code>. Caller-defined <code>:input</code> keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See <a href="#open-canvases"><code>open-canvases</code></a>. (upstream PR #1604) </td></tr>
+<tr><td> <code>:open-canvases</code> </td><td> vector </td><td> (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry requires <code>:instance-id</code>, <code>:extension-id</code>, and <code>:canvas-id</code>; optional keys are <code>:extension-name</code>, <code>:title</code>, <code>:status</code>, <code>:url</code>, <code>:input</code>, and <code>:icon</code> (a host-local PNG path). Caller-defined <code>:input</code> keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See <a href="#open-canvases"><code>open-canvases</code></a>. (<a href="https://github.com/github/copilot-sdk/pull/1604">upstream PR #1604</a>) </td></tr>
 <tr><td> <code>:memory</code> </td><td> map </td><td> Persistent-memory configuration. Shape: <code>{:enabled boolean}</code>. Sent on <strong>both</strong> <code>session.create</code> and <code>session.resume</code>; omitted entirely when the key is absent (never wire <code>null</code>). Wire-encoded as <code>memory</code>. In <code>:mode :empty</code> it is defaulted to <code>{:enabled false}</code> (caller can override). (upstream <a href="https://github.com/github/copilot-sdk/pull/1617">PR #1617</a>) </td></tr>
 </tbody>
 </table>
@@ -296,6 +314,9 @@
   ;; use session...
   (copilot/stop! client))
 </code></pre>
+<blockquote>
+<p><strong>Return-shape difference vs the official SDK.</strong> The Node.js <code>joinSession(config)</code> returns the <code>CopilotSession</code> directly and hides the client it creates internally. Clojure has no implicit/global client, so <code>join-session</code> returns <strong>both</strong> the <code>:client</code> and the <code>:session</code>: the caller owns the client’s lifecycle and must call <a href="#stop"><code>stop!</code></a> on it when finished. Bind the returned map’s <code>:session</code> where a Node.js caller would use the awaited return value, and keep the <code>:client</code> for cleanup. See <a href="#naming-and-shape-differences-vs-the-official-sdk">Naming and shape differences vs the official SDK</a>.</p>
+</blockquote>
 <h4><a href="#ping" id="ping"></a><code>ping</code></h4>
 <pre><code class="language-clojure">(copilot/ping client)
 (copilot/ping client message)
@@ -338,13 +359,15 @@
   :model-policy {:policy-state "enabled"
                  :terms "..."}
   :model-billing {:multiplier 1.0
-                  ;; Per-token prices (upstream PR #1633), present when the
-                  ;; model reports them; keys are optional:
                   :token-prices {:input-price 0.00000125
                                  :output-price 0.00001
                                  :cache-price 0.0000003125
                                  :long-context {:input-price 0.0000025
-                                                :output-price 0.00002}}}
+                                                :output-price 0.00002}}
+                  :promo {:ends-at "2026-08-01T00:00:00Z"
+                          :id "summer-promo"
+                          :discount-percent 25
+                          :message "25% off until August"}}
   ;; Model picker categorization (CLI 1.0.46+):
   :model-picker-category "powerful"            ;; "lightweight" | "versatile" | "powerful"
   :model-picker-price-category "very_high"     ;; "low" | "medium" | "high" | "very_high"
@@ -353,6 +376,18 @@
   :default-reasoning-effort "medium"}
  ...]
 </code></pre>
+<p>The optional <code>:promo</code> billing map contains:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Required </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:ends-at</code> </td><td> string </td><td> yes </td><td> Promotion end time </td></tr>
+<tr><td> <code>:id</code> </td><td> string </td><td> no </td><td> Promotion identifier </td></tr>
+<tr><td> <code>:discount-percent</code> </td><td> number from 0 through 100 </td><td> no </td><td> Percentage discount </td></tr>
+<tr><td> <code>:message</code> </td><td> string </td><td> no </td><td> Display message </td></tr>
+</tbody>
+</table>
 <p>List all models with their billing multiplier:</p>
 <pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
 
@@ -1004,10 +1039,10 @@
 <h3><a href="#open-canvases" id="open-canvases"></a><code>open-canvases</code></h3>
 <pre><code class="language-clojure">(copilot/open-canvases session)
 ;; =&gt; [{:instance-id "i1" :canvas-id "diff" :extension-id "ext.x"
-;;      :reopen false :availability "ready"}]
+;;      :icon "/tmp/diff.png"}]
 </code></pre>
 <p>Get the current open-canvases snapshot for <code>session</code>. Returns a vector of canvas-instance maps. The snapshot is initialized from <code>session.resume</code> and updated by <code>:copilot/session.canvas.opened</code> / <code>:copilot/session.canvas.closed</code> events. <code>session.create</code> does NOT populate it (matches upstream Node.js).</p>
-<p>Each entry has required keys <code>:instance-id</code>, <code>:extension-id</code>, <code>:canvas-id</code>, <code>:reopen</code>, <code>:availability</code> and optional <code>:extension-name</code>, <code>:title</code>, <code>:status</code>, <code>:url</code>, <code>:input</code>. Closing an instance that’s not in the snapshot is a silent no-op (idempotent); malformed payloads (missing required field, wrong type, or invalid <code>:availability</code>) log a warning and leave the snapshot unchanged — matches upstream <code>isOpenCanvasInstance</code> strictness.</p>
+<p>Each entry has required keys <code>:instance-id</code>, <code>:extension-id</code>, <code>:canvas-id</code>, and optional <code>:extension-name</code>, <code>:title</code>, <code>:status</code>, <code>:url</code>, <code>:input</code>, and <code>:icon</code> (a host-local PNG path). Closing an instance that’s not in the snapshot is a silent no-op (idempotent); malformed payloads (missing required field or wrong type) log a warning and leave the snapshot unchanged.</p>
 <p>The <code>:input</code> map (caller-defined opaque data on each canvas) is preserved verbatim through wire conversion. Keys you receive (e.g. via the canvas opened event or after a resume) round-trip back to the CLI without camelCasing — including <code>snake_case</code> and nested keys.</p>
 <h4><a href="#seeding-open-canvases-on-resume" id="seeding-open-canvases-on-resume"></a>Seeding <code>open-canvases</code> on resume</h4>
 <p>To restore canvases after reconnecting, pass <code>:open-canvases</code> to <a href="#resume-session"><code>resume-session</code></a> or <a href="#join-session"><code>join-session</code></a>. The shape mirrors what <code>(open-canvases session)</code> returned previously:</p>
@@ -1178,9 +1213,10 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.schedule_created</code> </td><td> Scheduled prompt registered via <code>/every</code>; data: <code>{:id &lt;pos-int&gt; :interval-ms &lt;pos-int&gt; :prompt "..."}</code> (upstream schema 1.0.42) </td></tr>
 <tr><td> <code>:copilot/session.schedule_cancelled</code> </td><td> Scheduled prompt cancelled from the schedule manager dialog; data: <code>{:id &lt;pos-int&gt;}</code> (upstream schema 1.0.42) </td></tr>
 <tr><td> <code>:copilot/session.autopilot_objective_changed</code> </td><td> Autopilot objective lifecycle events; data: <code>{:operation #{"create" "update" "delete"}}</code> (required) with optional <code>:id</code> (integer) and <code>:status</code> (upstream schema 1.0.56). The <code>:status</code> enum is widened to include <code>"active"</code>, <code>"paused"</code>, <code>"cap_reached"</code>, <code>"completed"</code>. </td></tr>
-<tr><td> <code>:copilot/session.permissions_changed</code> </td><td> Per-session permission flags changed; data: <code>{:allow-all-permissions boolean :previous-allow-all-permissions boolean}</code> (upstream schema 1.0.56). </td></tr>
+<tr><td> <code>:copilot/session.permissions_changed</code> </td><td> Per-session permission flags changed; data: <code>{:allow-all-permissions boolean :previous-allow-all-permissions boolean}</code> with optional <code>:allow-all-permission-mode</code> / <code>:previous-allow-all-permission-mode</code> (tri-state <code>#{"off" "auto" "on"}</code>, experimental, upstream schema 1.0.70) (upstream schema 1.0.56). </td></tr>
 <tr><td> <code>:copilot/session.session_limits_changed</code> </td><td> Session limits changed; data: <code>{:session-limits {:max-ai-credits &lt;number&gt;}}</code>, where a <code>nil</code> <code>:session-limits</code> clears the active limits (upstream schema 1.0.67) </td></tr>
 <tr><td> <code>:copilot/session.usage_checkpoint</code> </td><td> Durable usage checkpoint for reconstructing aggregate accounting on resume; data: <code>{:total-nano-aiu &lt;number&gt;}</code> with optional <code>:total-premium-requests &lt;number&gt;</code> (upstream schema 1.0.67) </td></tr>
+<tr><td> <code>:copilot/session.auto_mode_resolved</code> </td><td> Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes <code>:chosen-model</code>, optional <code>:candidate-models</code>, <code>:category-scores</code>, <code>:confidence</code>, <code>:predicted-label</code>, <code>:reasoning-bucket</code> (experimental; upstream schema 1.0.70-0) </td></tr>
 <tr><td> <code>:copilot/session.schedule_rearmed</code> </td><td> Self-paced schedule re-armed for its next run </td></tr>
 <tr><td> <code>:copilot/session.binary_asset</code> </td><td> Canonical bytes for a content-addressed binary asset shared by reference across events </td></tr>
 <tr><td> <code>:copilot/session.extensions.attachments_pushed</code> </td><td> Extension pushed attachments into the session </td></tr>
@@ -1198,6 +1234,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/assistant.turn_end</code> </td><td> Assistant turn completed </td></tr>
 <tr><td> <code>:copilot/assistant.usage</code> </td><td> Token usage for this turn; data may include optional <code>:content-filter-triggered</code> (boolean) and <code>:finish-reason</code> (string) (upstream schema 1.0.63) </td></tr>
 <tr><td> <code>:copilot/assistant.idle</code> </td><td> Main agent’s processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) </td></tr>
+<tr><td> <code>:copilot/assistant.tool_call_delta</code> </td><td> Streaming tool-call argument input chunk; data includes <code>:tool-call-id</code>, <code>:input-delta</code>, optional <code>:tool-name</code>, <code>:tool-type</code> (upstream schema 1.0.69-3) </td></tr>
 <tr><td> <code>:copilot/model.call_failure</code> </td><td> Failed LLM API call metadata for telemetry </td></tr>
 <tr><td> <code>:copilot/abort</code> </td><td> Current message aborted </td></tr>
 <tr><td> <code>:copilot/tool.user_requested</code> </td><td> Tool execution requested by user </td></tr>
@@ -1227,6 +1264,9 @@ copilot/interaction-events
 <tr><td> <code>:copilot/mcp.oauth_completed</code> </td><td> MCP OAuth authentication completed </td></tr>
 <tr><td> <code>:copilot/mcp.headers_refresh_required</code> </td><td> Dynamic headers refresh request for a remote MCP server (upstream schema 1.0.66) </td></tr>
 <tr><td> <code>:copilot/mcp.headers_refresh_completed</code> </td><td> MCP headers refresh request completed (upstream schema 1.0.66) </td></tr>
+<tr><td> <code>:copilot/mcp.tools.list_changed</code> </td><td> Remote MCP server signalled its tool list changed; data includes <code>:server-name</code> (upstream schema 1.0.70) </td></tr>
+<tr><td> <code>:copilot/mcp.resources.list_changed</code> </td><td> Remote MCP server signalled its resource list changed; data includes <code>:server-name</code> (upstream schema 1.0.70) </td></tr>
+<tr><td> <code>:copilot/mcp.prompts.list_changed</code> </td><td> Remote MCP server signalled its prompt list changed; data includes <code>:server-name</code> (upstream schema 1.0.70) </td></tr>
 <tr><td> <code>:copilot/command.queued</code> </td><td> Command queued for execution </td></tr>
 <tr><td> <code>:copilot/command.execute</code> </td><td> Command execution started </td></tr>
 <tr><td> <code>:copilot/command.completed</code> </td><td> Command execution completed </td></tr>
@@ -1351,6 +1391,43 @@ copilot/interaction-events
      (fn [] {:traceparent "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
              :tracestate  "rojo=00f067aa0ba902b7"})}))
 </code></pre>
+<h3><a href="#github-telemetry-forwarding-on-github-telemetry" id="github-telemetry-forwarding-on-github-telemetry"></a>GitHub telemetry forwarding (<code>:on-github-telemetry</code>)</h3>
+<blockquote>
+<p><strong>@experimental / Internal.</strong> This mirrors the official SDK’s option set but is not a stable public surface. Shapes may change upstream.</p>
+</blockquote>
+<p>Register a one-arg <code>:on-github-telemetry</code> callback in the <strong>client</strong> options to receive the runtime’s forwarded GitHub telemetry. Registering the callback is what opts in: the SDK adds <code>enableGitHubTelemetryForwarding: true</code> to the <code>connect</code> handshake — so the first session’s un-replayable <code>session.start</code> telemetry is forwarded (upstream PR #1909) — as well as to the wire params of both <code>session.create</code> and <code>session.resume</code> (the flag is omitted entirely when no callback is set — <code>false</code> is never sent). The runtime then emits connection-global <code>gitHubTelemetry.event</code> notifications, each passed to the callback:</p>
+<pre><code class="language-clojure">(def client
+  (copilot/client
+    {:on-github-telemetry
+     (fn [notification]
+       ;; notification =&gt; {:session-id "..." :restricted false :event {...}}
+       (tap&gt; notification))}))
+</code></pre>
+<p>The callback runs on the client’s notification loop. A throwing callback is caught and logged (WARN) — it cannot corrupt JSON-RPC dispatch. No reply is sent (these are notifications, not requests).</p>
+<p><strong>Notification shape:</strong></p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:session-id</code> </td><td> string </td><td> Session the event originated from </td></tr>
+<tr><td> <code>:restricted</code> </td><td> boolean </td><td> Whether the event is restricted </td></tr>
+<tr><td> <code>:event</code> </td><td> map </td><td> The telemetry event (see below) </td></tr>
+</tbody>
+</table>
+<p><strong>Event shape</strong> — scalar keys are kebab-cased from the wire (<code>:kind</code>, <code>:created-at</code>, <code>:model-call-id</code>, <code>:session-id</code>, <code>:copilot-tracking-id</code>, <code>:exp-assignment-context</code>), plus an optional <code>:client</code> map of client-info scalars (<code>:cli-version</code>, <code>:os-platform</code>, <code>:os-version</code>, <code>:os-arch</code>, <code>:node-version</code>, <code>:copilot-plan</code>, <code>:client-type</code>, <code>:client-name</code>, <code>:is-staff</code>, <code>:dev-device-id</code>).</p>
+<p>Three event sub-maps are <strong>opaque source-defined data</strong> and pass through <strong>verbatim</strong> — their keys are <strong>not</strong> kebab-cased:</p>
+<table>
+<thead>
+<tr><th> Sub-map </th><th> Wire value type </th><th> Note </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:properties</code> </td><td> string → string </td><td> Keys preserved exactly as sent </td></tr>
+<tr><td> <code>:metrics</code> </td><td> string → number </td><td> Keys preserved exactly as sent </td></tr>
+<tr><td> <code>:features</code> </td><td> string → string </td><td> Keys preserved exactly as sent </td></tr>
+</tbody>
+</table>
+<p>Do not rely on those keys being Clojure-idiomatic; treat them as an opaque bag keyed by the upstream-defined strings-as-keywords. (upstream <a href="https://github.com/github/copilot-sdk/pull/1835">PR #1835</a>)</p>
 <h3><a href="#internal-session-telemetry-enable-session-telemetry" id="internal-session-telemetry-enable-session-telemetry"></a>Internal session telemetry (<code>:enable-session-telemetry?</code>)</h3>
 <p><code>:enable-session-telemetry?</code> is a <strong>session</strong> config flag that controls the CLI’s own internal usage telemetry — independent of the OpenTelemetry export above. It defaults to enabled for GitHub-authenticated sessions and is <strong>always disabled</strong> when a BYOK <code>:provider</code> is configured. In <code>:mode :empty</code> it is defaulted to <code>false</code> as one of the multi-tenant hardening defaults (the caller can still set it explicitly). Set it to <code>false</code> to opt out:</p>
 <pre><code class="language-clojure">(def session
@@ -1429,9 +1506,12 @@ tool-set/isolated
 <p>The constructors enforce well-formed entries: a bare <code>"*"</code> is rejected (the SDK also rejects it in <code>:available-tools</code> / <code>:excluded-tools</code> at the session boundary — apps must explicitly opt into a source so an absent source can never silently grant access to unexpected tools). The runtime always receives <code>:tool-filter-precedence "excluded"</code> on <code>session.create</code> / <code>session.resume</code> so the ordering between allow and deny lists is deterministic.</p>
 <h3><a href="#tools" id="tools"></a>Tools</h3>
 <p>Let the CLI call back into your process when the model needs capabilities you provide:</p>
-<pre><code class="language-clojure">(def lookup-tool
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+
+(def lookup-tool
   (copilot/define-tool "lookup_issue"
     {:description "Fetch issue details from our tracker"
+     :metadata {:owner "issues-team"}
      :parameters {:type "object"
                   :properties {:id {:type "string"
                                     :description "Issue identifier"}}
@@ -1446,6 +1526,51 @@ tool-set/isolated
                 :on-permission-request copilot/approve-all}))
 </code></pre>
 <p>When Copilot invokes <code>lookup_issue</code>, the SDK automatically runs your handler and responds to the CLI.</p>
+<p>Both <code>define-tool</code> and <code>define-tool-from-spec</code> accept these common options:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Default </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:defer</code> </td><td> <code>:auto</code> or <code>:never</code> </td><td> runtime default </td><td> Per-tool lazy-loading policy; distinct from session <code>:tool-search</code> configuration </td></tr>
+<tr><td> <code>:description</code> </td><td> string or <code>nil</code> </td><td> <code>nil</code> </td><td> Human-readable tool description </td></tr>
+<tr><td> <code>:handler</code> </td><td> fn </td><td> <code>nil</code> </td><td> Two-argument function receiving parsed arguments and the invocation map </td></tr>
+<tr><td> <code>:metadata</code> </td><td> map </td><td> <code>nil</code> </td><td> Opaque host-defined metadata forwarded with the tool definition. An explicit <code>{}</code> is preserved; <code>nil</code> or an absent key is omitted </td></tr>
+<tr><td> <code>:overrides-built-in-tool</code> </td><td> boolean </td><td> <code>nil</code> </td><td> Allow this definition to replace a built-in tool with the same name </td></tr>
+</tbody>
+</table>
+<p>Use <code>:parameters</code> with <code>define-tool</code> or <code>:spec</code> with <code>define-tool-from-spec</code>. Metadata is not interpreted. String keys preserve their exact spelling; keyword keys follow the SDK’s normal kebab-case to camelCase wire conversion.</p>
+<p>The handler invocation map contains:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Required </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:session-id</code> </td><td> string </td><td> yes </td><td> Session identifier </td></tr>
+<tr><td> <code>:tool-call-id</code> </td><td> string </td><td> yes </td><td> Tool call identifier </td></tr>
+<tr><td> <code>:tool-name</code> </td><td> string </td><td> yes </td><td> Invoked tool name </td></tr>
+<tr><td> <code>:arguments</code> </td><td> any </td><td> yes </td><td> Parsed arguments, without key conversion </td></tr>
+<tr><td> <code>:available-tools</code> </td><td> vector </td><td> no </td><td> Current tool metadata snapshot, provided only to the <code>tool_search_tool</code> handler </td></tr>
+<tr><td> <code>:traceparent</code> </td><td> string </td><td> no </td><td> W3C trace parent </td></tr>
+<tr><td> <code>:tracestate</code> </td><td> string </td><td> no </td><td> W3C trace state </td></tr>
+</tbody>
+</table>
+<p>Each <code>:available-tools</code> entry contains:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Required </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:name</code> </td><td> string </td><td> yes </td><td> Tool name </td></tr>
+<tr><td> <code>:description</code> </td><td> string </td><td> yes </td><td> Human-readable description </td></tr>
+<tr><td> <code>:namespaced-name</code> </td><td> string </td><td> no </td><td> Fully qualified tool name </td></tr>
+<tr><td> <code>:mcp-server-name</code> </td><td> string </td><td> no </td><td> MCP server name </td></tr>
+<tr><td> <code>:mcp-tool-name</code> </td><td> string </td><td> no </td><td> MCP tool name </td></tr>
+<tr><td> <code>:input-schema</code> </td><td> map </td><td> no </td><td> Tool input JSON Schema </td></tr>
+<tr><td> <code>:defer-loading</code> </td><td> boolean </td><td> no </td><td> Whether the runtime deferred loading the tool </td></tr>
+</tbody>
+</table>
+<p>Failure to fetch the current metadata snapshot does not fail the tool call. The SDK invokes <code>tool_search_tool</code> without <code>:available-tools</code> instead.</p>
 <p><strong>Declaration-only tools (manual resolution):</strong></p>
 <p>The <code>:handler</code> key is <strong>optional</strong> (upstream PR #1308). When omitted, the SDK does not auto-respond to tool calls — the call surfaces as a <code>:copilot/external_tool.requested</code> event with a pending request id, and the application resolves it later via <code>handle-pending-tool-call!</code>. Useful for human-in-the-loop UIs or out-of-process tool execution.</p>
 <pre><code class="language-clojure">(def manual-tool
@@ -1491,6 +1616,21 @@ tool-set/isolated
 <tr><td> String </td><td> Automatically wrapped as success result </td></tr>
 <tr><td> Map with <code>:result-type</code> </td><td> Full control over result metadata </td></tr>
 <tr><td> core.async channel </td><td> Async result (yields string or map) </td></tr>
+</tbody>
+</table>
+<p>Object tool results contain:</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Required </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:text-result-for-llm</code> </td><td> string </td><td> yes </td><td> Text returned to the model </td></tr>
+<tr><td> <code>:result-type</code> </td><td> keyword or string </td><td> yes </td><td> One of <code>success</code>, <code>failure</code>, <code>rejected</code>, <code>denied</code>, or <code>timeout</code> </td></tr>
+<tr><td> <code>:binary-results-for-llm</code> </td><td> vector </td><td> no </td><td> Binary image or resource results </td></tr>
+<tr><td> <code>:error</code> </td><td> string </td><td> no </td><td> Error details </td></tr>
+<tr><td> <code>:session-log</code> </td><td> string </td><td> no </td><td> Session log text </td></tr>
+<tr><td> <code>:tool-telemetry</code> </td><td> map </td><td> no </td><td> Tool telemetry fields </td></tr>
+<tr><td> <code>:tool-references</code> </td><td> collection of strings </td><td> no </td><td> Tool names referenced by the result </td></tr>
 </tbody>
 </table>
 <p><strong>Result helpers:</strong></p>

@@ -766,6 +766,96 @@
       (is (= "direct" (:envValueMode create-params)))
       (is (= "direct" (:envValueMode resume-params))))))
 
+(deftest test-tool-metadata-and-tool-search-wire-shape
+  (testing "tool metadata and tool-search config are forwarded by create and resume"
+    (let [seen (atom {})
+          metadata {"github.com/copilot:safeForTelemetry"
+                    {"name" true
+                     "inputs_names" false}}
+          tools [(tools/define-tool
+                  "metadata-tool"
+                  {:description "Tool with host metadata"
+                   :metadata metadata
+                   :handler (fn [_args _invocation] "ok")})
+                 {:tool-name "empty-metadata-tool"
+                  :metadata {}
+                  :tool-handler (fn [_args _invocation] "ok")}
+                 {:tool-name "no-metadata-tool"
+                  :tool-handler (fn [_args _invocation] "ok")}]
+          config {:on-permission-request sdk/approve-all
+                  :tools tools
+                  :tool-search {:enabled true
+                                :defer-threshold 17}}
+          _ (mock/set-request-hook!
+             *mock-server*
+             (fn [method params]
+               (when (#{"session.create" "session.resume"} method)
+                 (swap! seen assoc method params))))
+          created (sdk/create-session *test-client* config)
+          _ (sdk/resume-session *test-client* (sdk/session-id created) config)]
+      (is (= metadata (:metadata (first tools))))
+      (doseq [method ["session.create" "session.resume"]]
+        (let [params (get @seen method)]
+          (is (= {:enabled true :deferThreshold 17}
+                 (:toolSearch params)))
+          (is (= {:github.com/copilot:safeForTelemetry
+                  {:name true
+                   :inputs_names false}}
+                 (get-in params [:tools 0 :metadata])))
+          (is (= {} (get-in params [:tools 1 :metadata])))
+          (is (not (contains? (get-in params [:tools 2]) :metadata)))))))
+
+  (testing "absent tool metadata and tool-search config are omitted"
+    (let [seen (atom nil)
+          _ (mock/set-request-hook!
+             *mock-server*
+             (fn [method params]
+               (when (= "session.create" method)
+                 (reset! seen params))))
+          _ (sdk/create-session
+             *test-client*
+             {:on-permission-request sdk/approve-all
+              :tools [{:tool-name "plain-tool"
+                       :tool-handler (fn [_args _invocation] "ok")}]})]
+      (is (not (contains? @seen :toolSearch)))
+      (is (not (contains? (get-in @seen [:tools 0]) :metadata))))))
+
+(deftest test-tool-search-specs
+  (testing "tool-search config uses optional boolean and integer fields"
+    (is (s/valid? ::specs/tool-search {}))
+    (is (s/valid? ::specs/tool-search {:enabled false :defer-threshold 10}))
+    (is (not (s/valid? ::specs/tool-search {:enabled "false"})))
+    (is (not (s/valid? ::specs/tool-search {:defer-threshold 0.5}))))
+
+  (testing "tool-search invocation and result fields have public specs"
+    (is (some? (s/get-spec ::specs/current-tool-metadata)))
+    (is (some? (s/get-spec ::specs/tool-invocation)))
+    (is (some? (s/get-spec ::specs/tool-references)))))
+
+(deftest test-schema-update-public-idiom-specs
+  (testing "canvas icons are represented in the public canvas snapshot spec"
+    (is (some? (s/get-spec ::specs/icon)))
+    (is (s/valid? ::specs/open-canvas-instance
+                  {:instance-id "instance-1"
+                   :extension-id "extension-1"
+                   :canvas-id "canvas-1"
+                   :icon "/tmp/canvas.png"}))
+    (is (not (s/valid? ::specs/open-canvas-instance
+                       {:instance-id "instance-1"
+                        :extension-id "extension-1"
+                        :canvas-id "canvas-1"
+                        :icon 42}))))
+
+  (testing "model billing promotions use their generated wire shape"
+    (is (some? (s/get-spec ::specs/model-billing-promo)))
+    (is (s/valid? ::specs/model-billing
+                  {:promo {:id "launch"
+                           :discount-percent 25.5
+                           :ends-at "2026-08-01T00:00:00Z"
+                           :message "Launch promotion"}}))
+    (is (not (s/valid? ::specs/model-billing
+                       {:promo {:ends-at 42}})))))
+
 (deftest test-instruction-directories-forwarded-on-wire
   (testing ":instruction-directories is forwarded to both session.create and session.resume (upstream PR #1190)"
     (let [seen (atom {})
@@ -4434,6 +4524,84 @@
 ;; Tool Result Normalization Tests (v3 broadcast path)
 ;; -----------------------------------------------------------------------------
 
+(deftest test-tool-search-invocation-metadata
+  (letfn [(invoke-tool! [tool-name metadata-response]
+            (let [requests (atom [])
+                  invocation-promise (promise)
+                  rpc-latch (java.util.concurrent.CountDownLatch. 1)
+                  _ (mock/set-current-tool-metadata-response!
+                     *mock-server*
+                     metadata-response)
+                  _ (mock/set-request-hook!
+                     *mock-server*
+                     (fn [method params]
+                       (swap! requests conj {:method method :params params})
+                       (when (= "session.tools.handlePendingToolCall" method)
+                         (.countDown rpc-latch))))
+                  session (sdk/create-session
+                           *test-client*
+                           {:on-permission-request sdk/approve-all
+                            :tools [{:tool-name tool-name
+                                     :tool-handler
+                                     (fn [_args invocation]
+                                       (deliver invocation-promise invocation)
+                                       "ok")}]})
+                  session-id (sdk/session-id session)]
+              (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+              (mock/send-v3-broadcast-event!
+               *mock-server*
+               session-id
+               "external_tool.requested"
+               {:requestId (str "request-" tool-name)
+                :toolName tool-name
+                :toolCallId (str "call-" tool-name)
+                :arguments {}})
+              (let [invocation (deref invocation-promise 5000 ::timeout)]
+                (is (not= ::timeout invocation))
+                (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+                {:invocation invocation
+                 :requests @requests})))]
+    (testing "tool_search_tool receives the current tool metadata snapshot"
+      (let [metadata [{:name "github-tool"
+                       :namespacedName "github/github-tool"
+                       :mcpServerName "github"
+                       :mcpToolName "github_tool"
+                       :description "Search GitHub"
+                       :input_schema {:type "object"}
+                       :deferLoading true}]
+            {:keys [invocation requests]}
+            (invoke-tool! "tool_search_tool" {:tools metadata})]
+        (is (= [{:name "github-tool"
+                 :namespaced-name "github/github-tool"
+                 :mcp-server-name "github"
+                 :mcp-tool-name "github_tool"
+                 :description "Search GitHub"
+                 :input-schema {:type "object"}
+                 :defer-loading true}]
+               (:available-tools invocation)))
+        (is (= 1 (count (filter #(= "session.tools.getCurrentMetadata"
+                                    (:method %))
+                               requests))))))
+
+    (testing "ordinary tools do not request current tool metadata"
+      (let [{:keys [invocation requests]}
+            (invoke-tool! "ordinary-tool"
+                          {:tools [{:name "unused"
+                                    :description "Unused"}]})]
+        (is (not (contains? invocation :available-tools)))
+        (is (empty? (filter #(= "session.tools.getCurrentMetadata"
+                                (:method %))
+                           requests)))))
+
+    (testing "metadata lookup failure does not fail tool invocation"
+      (let [{:keys [invocation requests]}
+            (invoke-tool! "tool_search_tool"
+                          (ex-info "metadata unavailable" {:code -32000}))]
+        (is (not (contains? invocation :available-tools)))
+        (is (= 1 (count (filter #(= "session.tools.getCurrentMetadata"
+                                    (:method %))
+                               requests))))))))
+
 (deftest test-tool-result-normalization
   (testing "tool handler return values are normalized into the handlePendingToolCall result"
     (doseq [[desc tool-handler req-id tc-id assert-result]
@@ -4455,7 +4623,15 @@
               (fn [result]
                 (is (= "all good" (:textResultForLlm result)))
                 (is (= "success" (:resultType result)))
-                (is (= 42 (get-in result [:toolTelemetry :latencyMs]))))]]]
+                (is (= 42 (get-in result [:toolTelemetry :latencyMs]))))]
+              ["structured ToolResultObject forwards tool references"
+               (fn [_args _inv] {:text-result-for-llm "found tools"
+                                 :result-type "success"
+                                 :tool-references ["github/search" "github/get"]})
+               "tool-req-4" "tc-4"
+               (fn [result]
+                 (is (= ["github/search" "github/get"]
+                        (:toolReferences result))))]]]
       (testing desc
         (let [requests (atom [])
               rpc-latch (java.util.concurrent.CountDownLatch. 1)

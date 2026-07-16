@@ -2927,6 +2927,10 @@
           "type": "string",
           "description": "Provider-local canvas identifier"
         },
+        "icon": {
+          "type": "string",
+          "description": "Host-local PNG path for the canvas icon, when supplied"
+        },
         "title": {
           "type": "string",
           "description": "Rendered title"
@@ -2950,7 +2954,7 @@
         "canvasId"
       ],
       "additionalProperties": false,
-      "description": "Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input.",
+      "description": "Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional icon, title, status, URL, and input.",
       "title": "CanvasOpenedData",
       "stability": "experimental"
     },
@@ -2995,7 +2999,7 @@
         },
         "data": {
           "$ref": "#/definitions/CanvasOpenedData",
-          "description": "Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input."
+          "description": "Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional icon, title, status, URL, and input."
         }
       },
       "required": [
@@ -3007,7 +3011,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.canvas.opened\". Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input.",
+      "description": "Session event \"session.canvas.opened\". Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional icon, title, status, URL, and input.",
       "title": "CanvasOpenedEvent",
       "stability": "experimental"
     },
@@ -3124,6 +3128,10 @@
           "type": "string",
           "minLength": 1,
           "description": "Short, single-sentence description shown to the agent in canvas catalogs."
+        },
+        "icon": {
+          "type": "string",
+          "description": "Host-local PNG path for the canvas icon, when supplied"
         },
         "inputSchema": {
           "description": "JSON Schema for canvas open input",
@@ -7337,6 +7345,71 @@
       "description": "Session event \"mcp.tools.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
       "title": "McpToolsListChangedEvent"
     },
+    "MemoryChangedData": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Signal-only event: the agent successfully stored a memory (store_memory) or voted on one (vote_memory). No payload — consumers should re-fetch memories to pick up the change. Used to refresh memory context (e.g. re-running the context sidekick) so newly written memories surface in subsequent turns.",
+      "title": "MemoryChangedData",
+      "visibility": "internal"
+    },
+    "MemoryChangedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.memory_changed",
+          "description": "Type discriminator. Always \"session.memory_changed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/MemoryChangedData",
+          "description": "Signal-only event: the agent successfully stored a memory (store_memory) or voted on one (vote_memory). No payload — consumers should re-fetch memories to pick up the change. Used to refresh memory context (e.g. re-running the context sidekick) so newly written memories surface in subsequent turns."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.memory_changed\". Signal-only event: the agent successfully stored a memory (store_memory) or voted on one (vote_memory). No payload — consumers should re-fetch memories to pick up the change. Used to refresh memory context (e.g. re-running the context sidekick) so newly written memories surface in subsequent turns.",
+      "title": "MemoryChangedEvent",
+      "visibility": "internal"
+    },
     "ModeChangedData": {
       "type": "object",
       "properties": {
@@ -10324,6 +10397,11 @@
           "description": "Session event \"session.todos_changed\". Signal-only event: the agent's todos or todo_deps table was written to. No payload — clients should call session.plan.readSqlTodosWithDependencies() to fetch the current state. Events arrive in order; clients can debounce on arrival if needed."
         },
         {
+          "$ref": "#/definitions/MemoryChangedEvent",
+          "description": "Session event \"session.memory_changed\". Signal-only event: the agent successfully stored a memory (store_memory) or voted on one (vote_memory). No payload — consumers should re-fetch memories to pick up the change. Used to refresh memory context (e.g. re-running the context sidekick) so newly written memories surface in subsequent turns.",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/WorkspaceFileChangedEvent",
           "description": "Session event \"session.workspace_file_changed\". Workspace file change details including path and operation type"
         },
@@ -10649,7 +10727,7 @@
         },
         {
           "$ref": "#/definitions/CanvasOpenedEvent",
-          "description": "Session event \"session.canvas.opened\". Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional title, status, URL, and input."
+          "description": "Session event \"session.canvas.opened\". Payload of `session.canvas.opened` with canvas instance and provider IDs plus optional icon, title, status, URL, and input."
         },
         {
           "$ref": "#/definitions/CanvasRegistryChangedEvent",
@@ -13177,6 +13255,11 @@
           "type": "string",
           "description": "Model identifier that generated this tool call"
         },
+        "mcpMeta": {
+          "description": "FIDES IFC label projected from tool ingress metadata (MCP `CallToolResult._meta` or synthesized built-in ingress labels). Persisted as `{ ifc: ... }` so the label survives session resume, including model-visible failure results. Experimental.",
+          "x-opaque-json": true,
+          "stability": "experimental"
+        },
         "interactionId": {
           "type": "string",
           "description": "CAPI interaction ID for correlating this tool execution with upstream telemetry"
@@ -13342,6 +13425,11 @@
             "description": "A source supplied by a tool that should be made available to the model as citable content."
           },
           "description": "Provider-neutral source material this tool makes available to the model as citable content. Persisted so it survives session resume. Experimental.",
+          "stability": "experimental"
+        },
+        "mcpMeta": {
+          "description": "FIDES IFC label projected from tool ingress metadata (MCP `CallToolResult._meta` or synthesized built-in ingress labels) — persisted as `{ ifc: ... }` (only the `ifc` key, not the whole `_meta`). Persisted so the FIDES IFC label survives session resume: the engine rehydrates accumulated taint by replaying these on load. Populated for ingress sources when FIDES IFC is on. Experimental.",
+          "x-opaque-json": true,
           "stability": "experimental"
         }
       },

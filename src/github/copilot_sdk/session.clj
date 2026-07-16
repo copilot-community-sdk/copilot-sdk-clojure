@@ -33,6 +33,18 @@
 (defn- connection-io [client]
   (:connection-io @(:state client)))
 
+(def ^:private tool-search-tool-name "tool_search_tool")
+
+(defn- current-tool-metadata
+  [client session-id]
+  (try
+    (:tools (proto/send-request! (connection-io client)
+                                 "session.tools.getCurrentMetadata"
+                                 {:session-id session-id}))
+    (catch Exception e
+      (log/debug "Failed to fetch tool metadata for tool search: " (ex-message e))
+      nil)))
+
 ;; -----------------------------------------------------------------------------
 ;; Session record - lightweight handle returned to users
 ;; Contains only immutable data + reference to client
@@ -600,10 +612,14 @@
                    :error (str "tool '" tool-name "' not supported")
                    :tool-telemetry {}}}
          (try
-           (let [invocation (cond-> {:session-id session-id
+           (let [available-tools (when (= tool-search-tool-name tool-name)
+                                   (current-tool-metadata client session-id))
+                 invocation (cond-> {:session-id session-id
                                      :tool-call-id tool-call-id
                                      :tool-name tool-name
                                      :arguments arguments}
+                              (some? available-tools)
+                              (assoc :available-tools available-tools)
                               traceparent (assoc :traceparent traceparent)
                               tracestate (assoc :tracestate tracestate))
                  result (handler arguments invocation)
@@ -2298,8 +2314,8 @@
 (defn open-canvases
   "Get the current open-canvases snapshot for `session`. Returns a vector of
   canvas-instance maps (each with `:instance-id`, `:extension-id`, `:canvas-id`,
-  plus optional `:extension-name`, `:title`, `:status`, `:url`, `:input`). The
-  snapshot is initialized from `session.resume` and updated by
+  plus optional `:extension-name`, `:icon`, `:title`, `:status`, `:url`,
+  `:input`). The snapshot is initialized from `session.resume` and updated by
   `session.canvas.opened` / `session.canvas.closed` events. `session.create`
   does NOT populate it (matches upstream Node.js behavior)."
   [session]

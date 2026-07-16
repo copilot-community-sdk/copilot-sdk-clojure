@@ -1539,7 +1539,8 @@
                    :token-prices {:input-price :output-price :cache-price
                                   :batch-size :context-max
                                   :long-context {:input-price :output-price
-                                                 :cache-price :context-max}}}
+                                                 :cache-price :context-max}}
+                   :promo {:ends-at :id :discount-percent :message}}
    :supported-reasoning-efforts :default-reasoning-effort
    :supports-reasoning-effort (legacy flat key)
    :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size} (legacy)"
@@ -1909,7 +1910,8 @@
   "Convert a single tool definition to its wire shape for session.create /
    session.resume. Shared by both builders so the two paths cannot drift.
    `:defer` (upstream PR #1632) is an idiom keyword (:auto | :never) sent as
-   its wire string."
+   its wire string. `:metadata` is opaque host-defined data and is forwarded
+   without interpretation."
   [t]
   (cond-> {:name (:tool-name t)
            :description (:tool-description t)
@@ -1919,7 +1921,9 @@
     (some? (:skip-permission? t))
     (assoc :skipPermission (:skip-permission? t))
     (some? (:defer t))
-    (assoc :defer (name (:defer t)))))
+    (assoc :defer (name (:defer t)))
+    (some? (:metadata t))
+    (assoc :metadata (:metadata t))))
 
 (defn- config-defaults-for-mode
   "Mode-specific session config defaults spread UNDER the caller's config
@@ -2092,6 +2096,7 @@
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
+      (:tool-search config) (assoc :tool-search (:tool-search config))
       ;; SDK always sends `toolFilterPrecedence: "excluded"` so callers can
       ;; compose include + exclude lists naturally (upstream PR #1428).
       ;; Behavioral change for CLI mode: prior to PR #1428 the CLI default
@@ -2275,6 +2280,7 @@
       wire-sys-msg (assoc :system-message wire-sys-msg)
       (:available-tools config) (assoc :available-tools (:available-tools config))
       (:excluded-tools config) (assoc :excluded-tools (:excluded-tools config))
+      (:tool-search config) (assoc :tool-search (:tool-search config))
       ;; SDK always sends `toolFilterPrecedence: "excluded"` (upstream PR #1428).
       ;; See `build-create-session-params` for rationale.
       true (assoc :tool-filter-precedence "excluded")
@@ -2533,6 +2539,7 @@
    - :system-message     - System message config
    - :available-tools    - List of allowed tool names
    - :excluded-tools     - List of excluded tool names
+   - :tool-search        - Tool discovery config {:enabled :defer-threshold}
    - :provider           - Custom provider config (BYOK)
    - :streaming?         - Enable streaming
    - :mcp-servers        - MCP server configs map
@@ -2730,6 +2737,7 @@
    - :system-message     - System message configuration {:mode :content}
    - :available-tools    - List of tool names to allow
    - :excluded-tools     - List of tool names to disable
+   - :tool-search        - Tool discovery config {:enabled :defer-threshold}
    - :provider           - Custom provider configuration (BYOK)
    - :streaming?         - Enable streaming responses
    - :mcp-servers        - MCP server configurations
