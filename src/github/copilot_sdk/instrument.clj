@@ -18,7 +18,8 @@
             ;; Ensure namespaces hosting public fns referenced by `register-fdef!`
             ;; are loaded before `stest/instrument` runs (otherwise the missing
             ;; var would be silently skipped, leaving an instrumentation gap).
-            [github.copilot-sdk.tool-set]))
+            [github.copilot-sdk.tool-set]
+            [github.copilot-sdk.tools]))
 
 ;; -----------------------------------------------------------------------------
 ;; Single-source registry for fdefs
@@ -561,6 +562,17 @@
 (register-fdef! github.copilot-sdk.session/remote-disable
                 :args (s/cat :session ::specs/session)
                 :ret nil?)
+
+;; Tool helper function specs
+(register-fdef! github.copilot-sdk.tools/define-tool
+                :args (s/cat :name ::specs/tool-name
+                             :opts map?)
+                :ret ::specs/tool)
+
+(register-fdef! github.copilot-sdk.tools/define-tool-from-spec
+                :args (s/cat :name ::specs/tool-name
+                             :opts map?)
+                :ret ::specs/tool)
 
 ;; convert-mcp-call-tool-result function spec (upstream PR #1049)
 (register-fdef! github.copilot-sdk.tools/convert-mcp-call-tool-result

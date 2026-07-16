@@ -471,6 +471,8 @@
    Returns a vector of model info maps with keys:
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
    :preview? :default-temperature :model-picker-priority :model-policy
+   :model-billing {:multiplier :token-prices
+                   :promo {:ends-at :id :discount-percent :message}}
    :vision-limits {:supported-media-types :max-prompt-images :max-prompt-image-size}
 
    Example:
@@ -536,6 +538,7 @@
    - :system-message       - {:mode :append/:replace :content \"...\"}
    - :available-tools      - List of allowed tool names
    - :excluded-tools       - List of excluded tool names
+   - :tool-search          - Tool discovery config {:enabled :defer-threshold}
    - :provider             - Custom provider config (BYOK)
    - :streaming?           - Enable streaming deltas
    - :mcp-servers          - MCP server configs map (keyed by server ID)
@@ -1050,7 +1053,7 @@
   events. `session.create` does NOT populate it (matches upstream Node.js).
 
   Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`
-  and optional `:extension-name`, `:title`, `:status`, `:url`, `:input`.
+  and optional `:extension-name`, `:icon`, `:title`, `:status`, `:url`, `:input`.
 
   Example:
   ```clojure
@@ -1244,10 +1247,15 @@
      - :defer                   - `:auto` or `:never` (upstream PR #1632). When `:auto` the tool may be
                                   deferred (loaded lazily via tool search); `:never` forces pre-loading.
                                   Defaults to `:auto`.
+     - :metadata                - Opaque host-defined map forwarded to the runtime
 
    The handler receives:
    - args       - The parsed arguments from the LLM
-   - invocation - Map with :session-id, :tool-call-id, :tool-name, :arguments
+   - invocation - Map with :session-id, :tool-call-id, :tool-name, :arguments,
+                 and optional :available-tools for `tool_search_tool`
+
+   Return a string, or a tool result map with `:text-result-for-llm`,
+   `:result-type`, and optional `:tool-references`.
 
    Returns: a tool definition map
 

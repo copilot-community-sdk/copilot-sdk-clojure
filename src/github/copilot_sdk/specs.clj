@@ -279,6 +279,7 @@
 (s/def ::tool-handler fn?)
 (s/def ::overrides-built-in-tool boolean?)
 (s/def ::skip-permission? boolean?)
+(s/def ::metadata map?)
 ;; Upstream PR #1632: controls whether a tool may be deferred (loaded lazily via
 ;; tool search) rather than always pre-loaded. The idiom uses keywords; the
 ;; value is sent on the wire as the corresponding string ("auto" | "never").
@@ -290,7 +291,8 @@
   ;; and the consumer resolves them via `handle-pending-tool-call!`.
   (s/keys :req-un [::tool-name]
           :opt-un [::tool-handler ::tool-description ::tool-parameters
-                   ::overrides-built-in-tool ::skip-permission? ::defer]))
+                   ::overrides-built-in-tool ::skip-permission? ::defer
+                   ::metadata]))
 
 (s/def ::tools (s/coll-of ::tool))
 
@@ -600,6 +602,11 @@
 (s/def ::plugin-directories (s/coll-of ::non-blank-string))
 (s/def ::disabled-skills (s/coll-of ::non-blank-string))
 (s/def ::enabled boolean?)
+(s/def ::defer-threshold integer?)
+(s/def ::tool-search
+  (closed-keys
+   (s/keys :opt-un [::enabled ::defer-threshold])
+   #{:enabled :defer-threshold}))
 (s/def ::max-size-bytes pos-int?)
 (s/def ::output-dir ::non-blank-string)
 ;; Upstream PR #1482: `outputDir` renamed to `outputDirectory` in the official
@@ -827,7 +834,7 @@
 
 (def session-config-keys
   #{:session-id :client-name :model :tools :commands :system-message
-    :available-tools :excluded-tools :provider
+    :available-tools :excluded-tools :tool-search :provider
     :on-permission-request :streaming? :mcp-servers
     :on-mcp-auth-request
     :custom-agents :default-agent
@@ -874,7 +881,7 @@
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
                     ::session-id ::client-name ::model ::tools ::commands ::system-message
-                    ::available-tools ::excluded-tools ::provider
+                    ::available-tools ::excluded-tools ::tool-search ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::default-agent
                     ::config-dir ::config-directory
@@ -912,7 +919,7 @@
    session-config-keys))
 
 (def ^:private resume-session-config-keys
-  #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools
+  #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools :tool-search
     :provider :streaming? :on-permission-request
     :on-mcp-auth-request
     :mcp-servers :custom-agents :default-agent
@@ -956,6 +963,7 @@
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
+                    ::tool-search
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
                     ::config-dir ::config-directory
@@ -1000,6 +1008,7 @@
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
+                    ::tool-search
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
                     ::config-dir ::config-directory
@@ -1646,7 +1655,7 @@
 
 ;; Canvas event data and snapshot entries (upstream PR #1604; v1.0.4 dropped
 ;; reopen/availability). Wire fields: instanceId, extensionId, canvasId,
-;; extensionName, status, title, url, input. csk converts to kebab-case.
+;; extensionName, status, title, url, input, icon. csk converts to kebab-case.
 ;; `:input` is opaque caller-supplied data — open map per upstream
 ;; `{ [k: string]: unknown }`.
 (s/def ::instance-id ::non-blank-string)
@@ -1654,10 +1663,11 @@
 (s/def ::canvas-id ::non-blank-string)
 (s/def ::extension-name string?)
 (s/def ::input map?)
+(s/def ::icon string?)
 
 (s/def ::open-canvas-instance
   (s/keys :req-un [::instance-id ::extension-id ::canvas-id]
-          :opt-un [::extension-name ::title ::status ::url ::input]))
+          :opt-un [::extension-name ::title ::status ::url ::input ::icon]))
 
 (s/def ::open-canvases (s/coll-of ::open-canvas-instance :kind sequential? :into []))
 
@@ -1780,6 +1790,39 @@
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
 (s/def ::tool-telemetry map?)
+(s/def ::tool-references (s/coll-of ::non-blank-string))
+
+(s/def ::current-tool-metadata
+  (s/and
+   map?
+   #(string? (:name %))
+   #(string? (:description %))
+   #(or (not (contains? % :namespaced-name))
+        (string? (:namespaced-name %)))
+   #(or (not (contains? % :mcp-server-name))
+        (string? (:mcp-server-name %)))
+   #(or (not (contains? % :mcp-tool-name))
+        (string? (:mcp-tool-name %)))
+   #(or (not (contains? % :input-schema))
+        (map? (:input-schema %)))
+   #(or (not (contains? % :defer-loading))
+        (boolean? (:defer-loading %)))))
+
+(s/def ::current-tool-metadata-list (s/coll-of ::current-tool-metadata))
+
+(s/def ::tool-invocation
+  (s/and
+   map?
+   #(s/valid? ::non-blank-string (:session-id %))
+   #(s/valid? ::non-blank-string (:tool-call-id %))
+   #(s/valid? ::non-blank-string (:tool-name %))
+   #(contains? % :arguments)
+   #(or (not (contains? % :available-tools))
+        (s/valid? ::current-tool-metadata-list (:available-tools %)))
+   #(or (not (contains? % :traceparent))
+        (string? (:traceparent %)))
+   #(or (not (contains? % :tracestate))
+        (string? (:tracestate %)))))
 
 ;; Binary result items for tool results (upstream ToolBinaryResult)
 ;; Each item has :data (base64 string), :mime-type, :type ("image"/"resource"),
@@ -1789,7 +1832,8 @@
 
 (s/def ::tool-result-object
   (s/keys :req-un [::text-result-for-llm ::result-type]
-          :opt-un [::binary-results-for-llm ::error ::session-log ::tool-telemetry]))
+          :opt-un [::binary-results-for-llm ::error ::session-log ::tool-telemetry
+                   ::tool-references]))
 
 (s/def ::tool-result
   (s/or :string string?
@@ -1910,8 +1954,17 @@
 (s/def ::token-prices
   (s/keys :opt-un [::input-price ::output-price ::cache-price ::batch-size
                    ::context-max ::long-context]))
+(s/def ::discount-percent
+  (s/and number? #(<= 0 % 100)))
+(s/def ::ends-at string?)
+(s/def ::model-billing-promo
+  (s/and (s/keys :req-un [::ends-at]
+                 :opt-un [::id ::discount-percent])
+         #(or (not (contains? % :message))
+              (string? (:message %)))))
+(s/def ::promo ::model-billing-promo)
 (s/def ::model-billing
-  (s/keys :opt-un [::multiplier ::token-prices]))
+  (s/keys :opt-un [::multiplier ::token-prices ::promo]))
 
 ;; Supported reasoning efforts
 (s/def ::supported-reasoning-efforts (s/coll-of string?))

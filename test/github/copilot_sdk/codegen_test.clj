@@ -82,6 +82,20 @@
                       [event-type consts])))
                 variants))))
 
+(def ^:private internal-event-types
+  "Event types that the protocol schema marks internal. Generated wire specs
+   cover them for forward compatibility, but they are not part of the public
+   SDK event surface."
+  (let [variants (-> schema :definitions :SessionEvent :anyOf)]
+    (into #{}
+          (keep (fn [variant]
+                  (let [variant (if-let [r (:$ref variant)]
+                                  (get-in schema (mapv keyword (rest (str/split r #"/"))))
+                                  variant)]
+                    (when (= "internal" (:visibility variant))
+                      (get-in variant [:properties :type :const])))))
+          variants)))
+
 ;; ---------------------------------------------------------------------------
 ;; Canonical wire-shape fixtures (post `util/wire->clj`, i.e. kebab-case keys).
 ;; Keep these minimal but type-correct per the upstream JSON schema.
@@ -297,10 +311,10 @@
           (str event-type " missing from gen/event-types — schema may have moved")))))
 
 (deftest public-event-types-match-generated-schema-set
-  (testing "the public curated `event-types` set covers exactly the schema's event types
-            (guards against drift between the hand-curated GA surface and the pinned schema)"
+  (testing "the public curated `event-types` set covers exactly the schema's public event types
+            (guards against drift without exposing protocol-internal events)"
     (let [curated (set (map name sdk/event-types))
-          generated gen/event-types
+          generated (clojure.set/difference gen/event-types internal-event-types)
           missing (clojure.set/difference generated curated)
           extra (clojure.set/difference curated generated)]
       (is (empty? missing)
@@ -515,4 +529,3 @@
              "would silently skip them): " (sort missing) ". Either add a "
              "minimal valid fixture in `fixtures`, or remove the hand spec "
              "from `github.copilot-sdk.specs`."))))
-

@@ -180,6 +180,8 @@
   :github.copilot-sdk.specs/create-session-fs-handler
   :github.copilot-sdk.specs/cron
   :github.copilot-sdk.specs/current-model
+  :github.copilot-sdk.specs/current-tool-metadata
+  :github.copilot-sdk.specs/current-tool-metadata-list
   :github.copilot-sdk.specs/custom-agent
   :github.copilot-sdk.specs/custom-agent-info
   :github.copilot-sdk.specs/custom-agents
@@ -189,11 +191,13 @@
   :github.copilot-sdk.specs/default-agent
   :github.copilot-sdk.specs/default-reasoning-effort
   :github.copilot-sdk.specs/defer
+  :github.copilot-sdk.specs/defer-threshold
   :github.copilot-sdk.specs/delta-content
   :github.copilot-sdk.specs/description
   :github.copilot-sdk.specs/detached-from-spawning-parent-session-id
   :github.copilot-sdk.specs/disable-resume?
   :github.copilot-sdk.specs/disabled-skills
+  :github.copilot-sdk.specs/discount-percent
   :github.copilot-sdk.specs/display-name
   :github.copilot-sdk.specs/display-prompt
   :github.copilot-sdk.specs/duration
@@ -220,6 +224,7 @@
   :github.copilot-sdk.specs/enabled
   :github.copilot-sdk.specs/encrypted-content
   :github.copilot-sdk.specs/end
+  :github.copilot-sdk.specs/ends-at
   :github.copilot-sdk.specs/entitlement-requests
   :github.copilot-sdk.specs/env
   :github.copilot-sdk.specs/ephemeral?
@@ -267,6 +272,7 @@
   :github.copilot-sdk.specs/hooks
   :github.copilot-sdk.specs/host
   :github.copilot-sdk.specs/host-type
+  :github.copilot-sdk.specs/icon
   :github.copilot-sdk.specs/id
   :github.copilot-sdk.specs/inbound-attachment
   :github.copilot-sdk.specs/inbound-attachments
@@ -339,6 +345,7 @@
   :github.copilot-sdk.specs/memory-reason
   :github.copilot-sdk.specs/message
   :github.copilot-sdk.specs/message-id
+  :github.copilot-sdk.specs/metadata
   :github.copilot-sdk.specs/metrics
   :github.copilot-sdk.specs/mime-type
   :github.copilot-sdk.specs/min-length
@@ -346,6 +353,7 @@
   :github.copilot-sdk.specs/mode
   :github.copilot-sdk.specs/model
   :github.copilot-sdk.specs/model-billing
+  :github.copilot-sdk.specs/model-billing-promo
   :github.copilot-sdk.specs/model-capabilities
   :github.copilot-sdk.specs/model-id
   :github.copilot-sdk.specs/model-info
@@ -422,6 +430,7 @@
   :github.copilot-sdk.specs/previous-model
   :github.copilot-sdk.specs/previous-reasoning-effort
   :github.copilot-sdk.specs/progress-message
+  :github.copilot-sdk.specs/promo
   :github.copilot-sdk.specs/prompt
   :github.copilot-sdk.specs/properties
   :github.copilot-sdk.specs/protocol-version
@@ -578,10 +587,13 @@
   :github.copilot-sdk.specs/tool-description
   :github.copilot-sdk.specs/tool-handler
   :github.copilot-sdk.specs/tool-info-entry
+  :github.copilot-sdk.specs/tool-invocation
   :github.copilot-sdk.specs/tool-name
   :github.copilot-sdk.specs/tool-parameters
+  :github.copilot-sdk.specs/tool-references
   :github.copilot-sdk.specs/tool-result
   :github.copilot-sdk.specs/tool-result-object
+  :github.copilot-sdk.specs/tool-search
   :github.copilot-sdk.specs/tool-telemetry
   :github.copilot-sdk.specs/tool-timeout-ms
   :github.copilot-sdk.specs/tool.execution_complete-data
