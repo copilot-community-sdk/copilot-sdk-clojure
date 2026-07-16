@@ -278,6 +278,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:system-message` | map | System message customization (see below) |
 | `:available-tools` | vector | List of allowed tool names |
 | `:excluded-tools` | vector | List of excluded tool names |
+| `:tool-search` | map | Configure runtime tool search for `create-session`, `resume-session`, and `join-session`. Optional keys: `:enabled` (boolean) and `:defer-threshold` (integer). This session-level configuration is distinct from a tool definition's `:defer` policy; omit it to use runtime defaults. |
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options`, `:headers` (map of HTTP header name→value, sent with each provider request — upstream PR #1094), `:model-id` (string — the model identifier to send to the provider; overrides session `:model`), `:wire-model` (string — model name as sent on the provider wire when it differs from `:model-id`), `:max-input-tokens` (integer — input/prompt token cap; serialized as wire `maxPromptTokens`), `:max-output-tokens` (integer — output token cap), `:transport` (`:http`/`:websockets` — provider transport; serialized as wire `transport` — upstream PR #1711), `:bearer-token-provider` (fn — dynamic bearer-token callback, see [BYOK docs](../auth/byok.md#dynamic-bearer-tokens) — upstream PR #1748). The four override fields were added in upstream PR #966 |
 | `:providers` | vector | (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of `:provider` — `:base-url` (required), `:provider-type`, `:wire-api`, `:api-key`, `:bearer-token`, `:azure-options`, `:headers`, `:bearer-token-provider` — plus a required `:name` (the registry key, no `/`). Unlike the singular `:provider`, a named provider does **not** accept `:transport` or the inline model-override fields (`:model-id`, `:wire-model`, `:max-input-tokens`, `:max-output-tokens`); model overrides are declared in `:models` instead. Pairs with `:models` to declare a model catalog. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
 | `:models` | vector | (Experimental) Model catalog referencing the `:providers` registry. Each entry: `:id` (required, provider-local model id), `:provider` (required, a `:name` in `:providers`), and optional override fields (`:model-id`, `:wire-model`, `:capabilities`, `:max-input-tokens`, `:max-context-window-tokens`, `:max-output-tokens`). The full model selection id is `"providerName/id"`. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
@@ -334,7 +335,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
 | `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 | `:manage-schedule-enabled` | boolean | Enable the built-in schedule-management tools. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
-| `:open-canvases` | vector | (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry: `{:instance-id ... :extension-id ... :canvas-id ... :reopen bool :availability "ready"\|"stale" :extension-name? ... :title? ... :status? ... :url? ... :input? {...}}`. Caller-defined `:input` keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See [`open-canvases`](#open-canvases). (upstream PR #1604) |
+| `:open-canvases` | vector | (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry requires `:instance-id`, `:extension-id`, and `:canvas-id`; optional keys are `:extension-name`, `:title`, `:status`, `:url`, `:input`, and `:icon` (a host-local PNG path). Caller-defined `:input` keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See [`open-canvases`](#open-canvases). ([upstream PR #1604](https://github.com/github/copilot-sdk/pull/1604)) |
 | `:memory` | map | Persistent-memory configuration. Shape: `{:enabled boolean}`. Sent on **both** `session.create` and `session.resume`; omitted entirely when the key is absent (never wire `null`). Wire-encoded as `memory`. In `:mode :empty` it is defaulted to `{:enabled false}` (caller can override). (upstream [PR #1617](https://github.com/github/copilot-sdk/pull/1617)) |
 
 #### `resume-session`
@@ -496,13 +497,15 @@ Requires authentication (unless `:on-list-models` is provided). Returns a vector
   :model-policy {:policy-state "enabled"
                  :terms "..."}
   :model-billing {:multiplier 1.0
-                  ;; Per-token prices (upstream PR #1633), present when the
-                  ;; model reports them; keys are optional:
                   :token-prices {:input-price 0.00000125
                                  :output-price 0.00001
                                  :cache-price 0.0000003125
                                  :long-context {:input-price 0.0000025
-                                                :output-price 0.00002}}}
+                                                :output-price 0.00002}}
+                  :promo {:ends-at "2026-08-01T00:00:00Z"
+                          :id "summer-promo"
+                          :discount-percent 25
+                          :message "25% off until August"}}
   ;; Model picker categorization (CLI 1.0.46+):
   :model-picker-category "powerful"            ;; "lightweight" | "versatile" | "powerful"
   :model-picker-price-category "very_high"     ;; "low" | "medium" | "high" | "very_high"
@@ -511,6 +514,15 @@ Requires authentication (unless `:on-list-models` is provided). Returns a vector
   :default-reasoning-effort "medium"}
  ...]
 ```
+
+The optional `:promo` billing map contains:
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:ends-at` | string | yes | Promotion end time |
+| `:id` | string | no | Promotion identifier |
+| `:discount-percent` | number from 0 through 100 | no | Percentage discount |
+| `:message` | string | no | Display message |
 
 List all models with their billing multiplier:
 
@@ -1343,7 +1355,7 @@ Get the host capabilities map reported when the session was created or resumed.
 ```clojure
 (copilot/open-canvases session)
 ;; => [{:instance-id "i1" :canvas-id "diff" :extension-id "ext.x"
-;;      :reopen false :availability "ready"}]
+;;      :icon "/tmp/diff.png"}]
 ```
 
 Get the current open-canvases snapshot for `session`. Returns a vector of
@@ -1352,11 +1364,10 @@ updated by `:copilot/session.canvas.opened` / `:copilot/session.canvas.closed`
 events. `session.create` does NOT populate it (matches upstream Node.js).
 
 Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`,
-`:reopen`, `:availability` and optional `:extension-name`, `:title`,
-`:status`, `:url`, `:input`. Closing an instance that's not in the snapshot is a
-silent no-op (idempotent); malformed payloads (missing required field, wrong
-type, or invalid `:availability`) log a warning and leave the snapshot
-unchanged — matches upstream `isOpenCanvasInstance` strictness.
+and optional `:extension-name`, `:title`, `:status`, `:url`, `:input`, and
+`:icon` (a host-local PNG path). Closing an instance that's not in the snapshot
+is a silent no-op (idempotent); malformed payloads (missing required field or
+wrong type) log a warning and leave the snapshot unchanged.
 
 The `:input` map (caller-defined opaque data on each canvas) is preserved
 verbatim through wire conversion. Keys you receive (e.g. via the canvas
@@ -1979,9 +1990,12 @@ so the ordering between allow and deny lists is deterministic.
 Let the CLI call back into your process when the model needs capabilities you provide:
 
 ```clojure
+(require '[github.copilot-sdk :as copilot])
+
 (def lookup-tool
   (copilot/define-tool "lookup_issue"
     {:description "Fetch issue details from our tracker"
+     :metadata {:owner "issues-team"}
      :parameters {:type "object"
                   :properties {:id {:type "string"
                                     :description "Issue identifier"}}
@@ -1997,6 +2011,47 @@ Let the CLI call back into your process when the model needs capabilities you pr
 ```
 
 When Copilot invokes `lookup_issue`, the SDK automatically runs your handler and responds to the CLI.
+
+Both `define-tool` and `define-tool-from-spec` accept these common options:
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:defer` | `:auto` or `:never` | runtime default | Per-tool lazy-loading policy; distinct from session `:tool-search` configuration |
+| `:description` | string or `nil` | `nil` | Human-readable tool description |
+| `:handler` | fn | `nil` | Two-argument function receiving parsed arguments and the invocation map |
+| `:metadata` | map | `nil` | Opaque host-defined metadata forwarded with the tool definition. An explicit `{}` is preserved; `nil` or an absent key is omitted |
+| `:overrides-built-in-tool` | boolean | `nil` | Allow this definition to replace a built-in tool with the same name |
+
+Use `:parameters` with `define-tool` or `:spec` with `define-tool-from-spec`.
+Metadata is not interpreted. String keys preserve their exact spelling; keyword
+keys follow the SDK's normal kebab-case to camelCase wire conversion.
+
+The handler invocation map contains:
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:session-id` | string | yes | Session identifier |
+| `:tool-call-id` | string | yes | Tool call identifier |
+| `:tool-name` | string | yes | Invoked tool name |
+| `:arguments` | any | yes | Parsed arguments, without key conversion |
+| `:available-tools` | vector | no | Current tool metadata snapshot, provided only to the `tool_search_tool` handler |
+| `:traceparent` | string | no | W3C trace parent |
+| `:tracestate` | string | no | W3C trace state |
+
+Each `:available-tools` entry contains:
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:name` | string | yes | Tool name |
+| `:description` | string | yes | Human-readable description |
+| `:namespaced-name` | string | no | Fully qualified tool name |
+| `:mcp-server-name` | string | no | MCP server name |
+| `:mcp-tool-name` | string | no | MCP tool name |
+| `:input-schema` | map | no | Tool input JSON Schema |
+| `:defer-loading` | boolean | no | Whether the runtime deferred loading the tool |
+
+Failure to fetch the current metadata snapshot does not fail the tool call. The
+SDK invokes `tool_search_tool` without `:available-tools` instead.
 
 **Declaration-only tools (manual resolution):**
 
@@ -2054,6 +2109,18 @@ The keyword is converted to the wire string (`:auto` -> `"auto"`, `:never` -> `"
 | String | Automatically wrapped as success result |
 | Map with `:result-type` | Full control over result metadata |
 | core.async channel | Async result (yields string or map) |
+
+Object tool results contain:
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `:text-result-for-llm` | string | yes | Text returned to the model |
+| `:result-type` | keyword or string | yes | One of `success`, `failure`, `rejected`, `denied`, or `timeout` |
+| `:binary-results-for-llm` | vector | no | Binary image or resource results |
+| `:error` | string | no | Error details |
+| `:session-log` | string | no | Session log text |
+| `:tool-telemetry` | map | no | Tool telemetry fields |
+| `:tool-references` | collection of strings | no | Tool names referenced by the result |
 
 **Result helpers:**
 
