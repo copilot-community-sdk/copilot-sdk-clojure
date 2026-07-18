@@ -408,6 +408,7 @@
 ;; Custom agent configuration
 ;; -----------------------------------------------------------------------------
 
+(s/def ::reasoning-effort #{"low" "medium" "high" "xhigh"})
 (s/def ::agent-name ::non-blank-string)
 (s/def ::agent-display-name string?)
 (s/def ::agent-description string?)
@@ -419,11 +420,15 @@
 ;; runtime will attempt to use this model for the agent, falling back to the
 ;; parent session model if unavailable. Upstream PR #1309.
 (s/def ::agent-model ::non-blank-string)
+;; Per-agent override of the model's reasoning effort. The nested API key keeps
+;; the established agent prefix; the wire serializer emits `reasoningEffort`.
+(s/def ::agent-reasoning-effort ::reasoning-effort)
 
 (s/def ::custom-agent
   (s/keys :req-un [::agent-name ::agent-prompt]
           :opt-un [::agent-display-name ::agent-description ::agent-tools
-                   ::mcp-servers ::agent-infer? ::agent-skills ::agent-model]))
+                   ::mcp-servers ::agent-infer? ::agent-skills ::agent-model
+                   ::agent-reasoning-effort]))
 
 (s/def ::custom-agents (s/coll-of ::custom-agent))
 
@@ -629,9 +634,6 @@
 ;; information across turns. `:enabled` is required by MemoryConfiguration.
 (s/def ::memory
   (s/keys :req-un [::enabled]))
-
-;; Reasoning effort support (PR #302)
-(s/def ::reasoning-effort #{"low" "medium" "high" "xhigh"})
 
 ;; Hooks and user input handlers (PR #269)
 (s/def ::on-user-input-request fn?)

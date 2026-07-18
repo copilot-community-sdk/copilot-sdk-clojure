@@ -291,7 +291,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:exp-assignments` | map | (Internal) Opaque experiment flight assignments. Keys are source-defined flight ids and are forwarded verbatim (string keys bypass kebab→camel conversion). Serialized as `expAssignments`. (upstream PR #1750) |
 | `:mcp-servers` | map | MCP server configs keyed by server ID (see [MCP docs](../mcp/overview.md)). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
-| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:mcp-servers` |
+| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, or `"xhigh"`), `:mcp-servers`. `:agent-reasoning-effort` is serialized as `reasoningEffort` on both `session.create` and `session.resume`. When omitted, no per-agent override is sent; the backend chooses its default rather than inheriting the parent session's effort. |
 | `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
 | `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). When omitted, permission requests are not auto-resolved; resolve them manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
@@ -2327,11 +2327,12 @@ Hide tools from the built-in/default agent while keeping them available to custo
      :tools [repo-index-tool]
      :custom-agents [{:agent-name "repo-auditor"
                       :agent-prompt "Audit repository changes."
-                      :agent-tools ["repo_index_search"]}]
+                      :agent-tools ["repo_index_search"]
+                      :agent-reasoning-effort "high"}]
      :default-agent {:excluded-tools ["repo_index_search"]}}))
 ```
 
-The default agent cannot call `repo_index_search`. The `repo-auditor` custom agent can still call it because custom-agent tool assignment is independent of `:default-agent`.
+The default agent cannot call `repo_index_search`. The `repo-auditor` custom agent can still call it because custom-agent tool assignment is independent of `:default-agent`. Its reasoning effort is overridden to `"high"`; omit `:agent-reasoning-effort` to let the backend choose its default rather than inherit the parent session's effort.
 
 ### Config Directory and Skills
 

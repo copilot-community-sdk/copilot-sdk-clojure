@@ -3,7 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-### Added (v1.0.7-preview.2 post-release sync)
+### Added (v1.0.7 sync)
 - **Opaque tool-definition metadata** — port of upstream
   [PR #1864](https://github.com/github/copilot-sdk/pull/1864). `define-tool` and
   `define-tool-from-spec` accept an optional `:metadata` map and forward its
@@ -25,6 +25,14 @@ All notable changes to this project will be documented in this file. This change
   optional canvas `:icon` paths and model-billing
   `:promo` maps (`:ends-at`, with optional `:id`, `:discount-percent`, and
   `:message`). No new public session event type was added.
+
+### Added (post-v1.0.7 sync)
+- **Per-custom-agent reasoning effort** — port of
+  [upstream PR #1981](https://github.com/github/copilot-sdk/pull/1981). Custom
+  agent maps accept optional `:agent-reasoning-effort` values `"low"`,
+  `"medium"`, `"high"`, or `"xhigh"`. Session create and resume send it as the
+  exact `reasoningEffort` wire field. When absent, the field is omitted and does
+  not inherit the session-level `:reasoning-effort`.
 
 ## [1.0.7-preview.2.1] - 2026-07-15
 ### Added

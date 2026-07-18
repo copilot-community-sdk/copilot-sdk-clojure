@@ -27,7 +27,7 @@ Add to your `deps.edn`:
 
 ```clojure
 ;; From Maven Central
-io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.7-preview.2.1"}
+io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.7.0"}
 
 ;; Or git dependency
 io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure.git"

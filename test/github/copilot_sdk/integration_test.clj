@@ -5232,6 +5232,54 @@
           agent (first (get-in @seen ["session.create" :customAgents]))]
       (is (not (contains? agent :agentModel))))))
 
+;; --- Per-agent reasoning effort (upstream PR #1981) -------------------------
+
+(deftest test-custom-agent-reasoning-effort-spec
+  (testing "::custom-agent spec validates optional :agent-reasoning-effort"
+    (is (s/valid? :github.copilot-sdk.specs/custom-agent
+                  {:agent-name "test" :agent-prompt "You are helpful"
+                   :agent-reasoning-effort "high"}))
+    (is (not (s/valid? :github.copilot-sdk.specs/custom-agent
+                       {:agent-name "test" :agent-prompt "You are helpful"
+                        :agent-reasoning-effort "max"})))))
+
+(deftest test-custom-agent-reasoning-effort-on-wire
+  (testing "reasoning effort is sent on wire in session.create and session.resume"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (#{"session.create" "session.resume"} method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "reasoning-agent"
+                                                  :agent-prompt "Hello"
+                                                  :agent-reasoning-effort "high"}]})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session *test-client* session-id
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "reasoning-agent-2"
+                                                  :agent-prompt "Hi"
+                                                  :agent-reasoning-effort "low"}]})
+          create-agent (first (get-in @seen ["session.create" :customAgents]))
+          resume-agent (first (get-in @seen ["session.resume" :customAgents]))]
+      (is (= "high" (:reasoningEffort create-agent)))
+      (is (= "low" (:reasoningEffort resume-agent)))
+      (is (not (contains? create-agent :agentReasoningEffort)))
+      (is (not (contains? resume-agent :agentReasoningEffort))))))
+
+(deftest test-custom-agent-reasoning-effort-omitted-when-not-set
+  (testing ":agent-reasoning-effort is omitted from wire when not provided"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server* (fn [method params]
+                                                    (when (= "session.create" method)
+                                                      (swap! seen assoc method params))))
+          _ (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all
+                                 :custom-agents [{:agent-name "default-reasoning"
+                                                  :agent-prompt "Hi"}]})
+          agent (first (get-in @seen ["session.create" :customAgents]))]
+      (is (not (contains? agent :reasoningEffort))))))
+
 ;; --- Default agent config (upstream PR #1098) --------------------------------
 
 (deftest test-default-agent-excluded-tools-on-wire
