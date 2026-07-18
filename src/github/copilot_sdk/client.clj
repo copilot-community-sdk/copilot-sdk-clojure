@@ -1925,6 +1925,15 @@
     (some? (:metadata t))
     (assoc :metadata (:metadata t))))
 
+(defn- custom-agent->wire
+  "Convert a custom agent to its wire shape for session.create / session.resume.
+   The idiomatic `:agent-reasoning-effort` key maps to the upstream SDK's
+   `reasoningEffort` field and is omitted when absent."
+  [agent]
+  (let [reasoning-effort (:agent-reasoning-effort agent)]
+    (cond-> (util/clj->wire (dissoc agent :agent-reasoning-effort))
+      (some? reasoning-effort) (assoc :reasoningEffort reasoning-effort))))
+
 (defn- config-defaults-for-mode
   "Mode-specific session config defaults spread UNDER the caller's config
    (caller's values always win). Mirrors upstream `configDefaultsForMode`
@@ -2067,7 +2076,7 @@
         wire-mcp-servers (when-let [servers (:mcp-servers config)]
                            (util/mcp-servers->wire servers))
         wire-custom-agents (when-let [agents (:custom-agents config)]
-                             (mapv util/clj->wire agents))
+                             (mapv custom-agent->wire agents))
         wire-default-agent (when-let [agent (:default-agent config)]
                              (util/clj->wire agent))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
@@ -2252,7 +2261,7 @@
         wire-mcp-servers (when-let [servers (:mcp-servers config)]
                            (util/mcp-servers->wire servers))
         wire-custom-agents (when-let [agents (:custom-agents config)]
-                             (mapv util/clj->wire agents))
+                             (mapv custom-agent->wire agents))
         wire-default-agent (when-let [agent (:default-agent config)]
                              (util/clj->wire agent))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]

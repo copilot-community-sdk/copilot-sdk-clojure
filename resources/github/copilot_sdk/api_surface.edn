@@ -92,6 +92,7 @@
   :github.copilot-sdk.specs/agent-model
   :github.copilot-sdk.specs/agent-name
   :github.copilot-sdk.specs/agent-prompt
+  :github.copilot-sdk.specs/agent-reasoning-effort
   :github.copilot-sdk.specs/agent-skills
   :github.copilot-sdk.specs/agent-tool-names
   :github.copilot-sdk.specs/agent-tools
