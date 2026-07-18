@@ -1930,8 +1930,10 @@
    The idiomatic `:agent-reasoning-effort` key maps to the upstream SDK's
    `reasoningEffort` field and is omitted when absent."
   [agent]
-  (let [reasoning-effort (:agent-reasoning-effort agent)]
-    (cond-> (util/clj->wire (dissoc agent :agent-reasoning-effort))
+  (let [reasoning-effort (:agent-reasoning-effort agent)
+        mcp-servers (:mcp-servers agent)]
+    (cond-> (util/clj->wire (dissoc agent :agent-reasoning-effort :mcp-servers))
+      (some? mcp-servers) (assoc :mcpServers (util/mcp-servers->wire mcp-servers))
       (some? reasoning-effort) (assoc :reasoningEffort reasoning-effort))))
 
 (defn- config-defaults-for-mode

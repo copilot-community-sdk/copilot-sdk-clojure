@@ -766,6 +766,76 @@
       (is (= "direct" (:envValueMode create-params)))
       (is (= "direct" (:envValueMode resume-params))))))
 
+(deftest test-custom-agent-mcp-server-ids-on-wire
+  (testing "custom-agent MCP server IDs and config shapes survive create and resume"
+    (let [seen (atom {})
+          _ (mock/set-request-hook! *mock-server*
+                                    (fn [method params]
+                                      (when (#{"session.create" "session.resume"} method)
+                                        (swap! seen assoc method params))))
+          _ (sdk/create-session
+             *test-client*
+             {:on-permission-request sdk/approve-all
+              :custom-agents
+              [{:agent-name "create-agent"
+                :agent-display-name "Create Agent"
+                :agent-description "Exercises keyword MCP server IDs"
+                :agent-prompt "Use the configured MCP server."
+                :agent-skills ["database"]
+                :agent-model "gpt-5.4"
+                :mcp-servers
+                {:team/srv-1 {:mcp-command "node"
+                              :mcp-args ["server.js"]
+                              :mcp-tools ["query"]
+                              :mcp-timeout 1000
+                              :cwd "/tmp/create"}}}]})
+          session-id (sdk/get-last-session-id *test-client*)
+          _ (sdk/resume-session
+             *test-client*
+             session-id
+             {:on-permission-request sdk/approve-all
+              :custom-agents
+              [{:agent-name "resume-agent"
+                :agent-display-name "Resume Agent"
+                :agent-description "Exercises string MCP server IDs"
+                :agent-prompt "Use the configured remote MCP server."
+                :agent-skills ["research"]
+                :agent-model "gpt-5.4"
+                :mcp-servers
+                {"srv-2" {:mcp-server-type :http
+                          :mcp-url "https://mcp.resume.test"
+                          :mcp-tools ["search"]
+                          :mcp-timeout 2000
+                          :mcp-defer-tools :never}}}]})
+          create-params (get @seen "session.create")
+          resume-params (get @seen "session.resume")]
+      (is (= [{:agentName "create-agent"
+               :agentDisplayName "Create Agent"
+               :agentDescription "Exercises keyword MCP server IDs"
+               :agentPrompt "Use the configured MCP server."
+               :agentSkills ["database"]
+               :agentModel "gpt-5.4"
+               :mcpServers
+               {:team/srv-1 {:command "node"
+                             :args ["server.js"]
+                             :tools ["query"]
+                             :timeout 1000
+                             :cwd "/tmp/create"}}}]
+             (:customAgents create-params)))
+      (is (= [{:agentName "resume-agent"
+               :agentDisplayName "Resume Agent"
+               :agentDescription "Exercises string MCP server IDs"
+               :agentPrompt "Use the configured remote MCP server."
+               :agentSkills ["research"]
+               :agentModel "gpt-5.4"
+               :mcpServers
+               {:srv-2 {:type "http"
+                        :url "https://mcp.resume.test"
+                        :tools ["search"]
+                        :timeout 2000
+                        :deferTools "never"}}}]
+             (:customAgents resume-params))))))
+
 (deftest test-tool-metadata-and-tool-search-wire-shape
   (testing "tool metadata and tool-search config are forwarded by create and resume"
     (let [seen (atom {})

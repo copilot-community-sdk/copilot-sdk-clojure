@@ -431,13 +431,14 @@
 
   (testing "mcp-servers->wire converts full servers map"
     (let [wire (util/mcp-servers->wire
-                {"fs" {:mcp-command "npx"
-                       :mcp-args ["-y" "@mcp/server-fs" "/tmp"]
-                       :mcp-tools ["*"]}
+                {:team/fs-server {:mcp-command "npx"
+                                  :mcp-args ["-y" "@mcp/server-fs" "/tmp"]
+                                  :mcp-tools ["*"]}
                  "api" {:mcp-server-type :http
                         :mcp-url "https://api.test"
                         :mcp-tools ["read" "write"]}})]
-      (is (= "npx" (get-in wire ["fs" :command])))
+      (is (= #{"team/fs-server" "api"} (set (keys wire))))
+      (is (= "npx" (get-in wire ["team/fs-server" :command])))
       (is (= "https://api.test" (get-in wire ["api" :url])))
       (is (= ["read" "write"] (get-in wire ["api" :tools]))))))
 
