@@ -34,6 +34,13 @@ All notable changes to this project will be documented in this file. This change
   exact `reasoningEffort` wire field. When absent, the field is omitted and does
   not inherit the session-level `:reasoning-effort`.
 
+### Fixed
+- **Custom-agent MCP server IDs** —
+  [issue #158](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/158).
+  Nested `:mcp-servers` now use the same wire serializer as session-level MCP
+  servers on both session create and resume, preserving keyword and string
+  server IDs while converting each server config to the runtime wire shape.
+
 ## [1.0.7-preview.2.1] - 2026-07-15
 ### Added
 - **API-surface drift guard** ([#120](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/120)) —
