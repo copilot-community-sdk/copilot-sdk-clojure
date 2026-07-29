@@ -893,6 +893,7 @@
                              "sessionStart" :on-session-start
                              "sessionEnd" :on-session-end
                              "errorOccurred" :on-error-occurred
+                             "agentStop" :on-agent-stop
                              nil)
                handler (when handler-key (get hooks handler-key))]
            (if-not handler

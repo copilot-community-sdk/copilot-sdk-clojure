@@ -174,7 +174,13 @@
     :copilot/mcp.tools.list_changed
     :copilot/mcp.resources.list_changed
     :copilot/mcp.prompts.list_changed
-    :copilot/session.auto_mode_resolved})
+    :copilot/session.auto_mode_resolved
+    ;; Post-v1.0.7 sync (pinned schema 1.0.73). assistant.turn_retry and
+    ;; model.call_start are generated for wire compatibility but stay internal.
+    :copilot/assistant.server_tool_progress
+    :copilot/session.managed_settings_enforced
+    :copilot/session.managed_settings_resolved
+    :copilot/tool_search.activated})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -222,7 +228,11 @@
     :copilot/session.usage_checkpoint
     ;; v1.0.7-preview.2 sync (pinned schema 1.0.70): experimental auto-mode
     ;; model resolution for the first prompt of an auto-mode session.
-    :copilot/session.auto_mode_resolved})
+    :copilot/session.auto_mode_resolved
+    ;; Post-v1.0.7 sync (pinned schema 1.0.73): enterprise managed-settings
+    ;; resolution and enforcement.
+    :copilot/session.managed_settings_enforced
+    :copilot/session.managed_settings_resolved})
 
 (def assistant-events
   "Assistant response events."
@@ -239,7 +249,9 @@
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): assistant idle within a turn.
     :copilot/assistant.idle
     ;; v1.0.7-preview.2 sync (introduced upstream schema 1.0.69-3): streaming tool-call input delta.
-    :copilot/assistant.tool_call_delta})
+    :copilot/assistant.tool_call_delta
+    ;; Post-v1.0.7 sync (pinned schema 1.0.73): server-side tool progress.
+    :copilot/assistant.server_tool_progress})
 
 (def tool-events
   "Tool execution events."

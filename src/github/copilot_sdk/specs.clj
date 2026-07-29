@@ -571,10 +571,42 @@
 (s/def ::providers (s/coll-of ::named-provider))
 (s/def ::models (s/coll-of ::provider-model))
 
-;; expAssignments (upstream PR #1750, @internal) — opaque experiment flight
-;; assignments. Keys are source-defined flight ids; forwarded verbatim, so
-;; they must be strings (bypassing kebab->camel key conversion).
-(s/def ::exp-assignments (s/map-of string? any?))
+;; expAssignments (upstream PR #2033, @internal) uses the PascalCase JSON shape
+;; returned by ExP. String keys bypass kebab->camel conversion and are forwarded
+;; verbatim to the runtime.
+(s/def ::exp-flag-value
+  (s/or :string string?
+        :number number?
+        :boolean boolean?
+        :nil nil?))
+(s/def ::exp-parameters (s/map-of string? ::exp-flag-value))
+
+(def ^:private exp-config-entry-keys #{"Id" "Parameters"})
+
+(s/def ::exp-config-entry
+  (s/and map?
+         #(= exp-config-entry-keys (set (keys %)))
+         #(string? (get % "Id"))
+         #(s/valid? ::exp-parameters (get % "Parameters"))))
+
+(def ^:private exp-assignment-required-keys
+  #{"Features" "Flights" "Configs" "AssignmentContext"})
+(def ^:private exp-assignment-keys
+  (into exp-assignment-required-keys
+        ["ParameterGroups" "FlightingVersion" "ImpressionId"]))
+
+(s/def ::exp-assignments
+  (s/and map?
+         #(set/subset? exp-assignment-required-keys (set (keys %)))
+         #(set/subset? (set (keys %)) exp-assignment-keys)
+         #(s/valid? (s/coll-of string?) (get % "Features"))
+         #(s/valid? (s/map-of string? string?) (get % "Flights"))
+         #(s/valid? (s/coll-of ::exp-config-entry) (get % "Configs"))
+         #(string? (get % "AssignmentContext"))
+         #(or (not (contains? % "FlightingVersion"))
+              (number? (get % "FlightingVersion")))
+         #(or (not (contains? % "ImpressionId"))
+              (string? (get % "ImpressionId")))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session configuration
@@ -645,11 +677,12 @@
 (s/def ::on-session-start fn?)
 (s/def ::on-session-end fn?)
 (s/def ::on-error-occurred fn?)
+(s/def ::on-agent-stop fn?)
 (s/def ::hooks
   (s/keys :opt-un [::on-pre-tool-use ::on-pre-mcp-tool-call ::on-post-tool-use
                    ::on-post-tool-use-failure
                    ::on-user-prompt-submitted ::on-session-start ::on-session-end
-                   ::on-error-occurred]))
+                   ::on-error-occurred ::on-agent-stop]))
 
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
@@ -1326,7 +1359,13 @@
     :copilot/mcp.tools.list_changed
     :copilot/mcp.resources.list_changed
     :copilot/mcp.prompts.list_changed
-    :copilot/session.auto_mode_resolved})
+    :copilot/session.auto_mode_resolved
+    ;; Post-v1.0.7 schema sync (pinned schema 1.0.73). assistant.turn_retry and
+    ;; model.call_start remain generated-only because upstream marks them internal.
+    :copilot/assistant.server_tool_progress
+    :copilot/session.managed_settings_enforced
+    :copilot/session.managed_settings_resolved
+    :copilot/tool_search.activated})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
