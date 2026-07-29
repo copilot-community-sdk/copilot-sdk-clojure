@@ -288,7 +288,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
 | `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
 | `:canvas-provider` | map | Canvas provider identity for the session. `{:id "..." :name "..."}` (`:name` optional) — serialized as wire `canvasProvider.{id,name}`. (upstream PR #1847) |
-| `:exp-assignments` | map | (Internal) Opaque experiment flight assignments. Keys are source-defined flight ids and are forwarded verbatim (string keys bypass kebab→camel conversion). Serialized as `expAssignments`. (upstream PR #1750) |
+| `:exp-assignments` | map | (`@internal`) Exact `CopilotExpAssignmentResponse` contract using PascalCase string keys. Required: `"Features"` (string vector), `"Flights"` (string-to-string map), `"Configs"` (vector of closed maps containing exactly `"Id"` (string) and `"Parameters"` (map of string keys to string, number, boolean, or `nil` values)), and `"AssignmentContext"` (string). Optional: `"ParameterGroups"` (opaque), `"FlightingVersion"` (number), and `"ImpressionId"` (string). The Clojure spec rejects unknown top-level and config-entry keys. The map is forwarded unchanged on `create-session`, `resume-session`, and `join-session` (`join-session` delegates to resume). Serialized as `expAssignments`. ([upstream PR #2033](https://github.com/github/copilot-sdk/pull/2033)) |
 | `:mcp-servers` | map | MCP server configs keyed by opaque string or keyword server IDs; keyword IDs preserve their full spelling without the leading colon (for example, `:srv-1` becomes `"srv-1"` and `:team/srv-1` becomes `"team/srv-1"`). See [MCP docs](../mcp/overview.md). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
 | `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, or `"xhigh"`), `:mcp-servers`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. `:agent-reasoning-effort` is serialized as `reasoningEffort` on both `session.create` and `session.resume`. When omitted, no per-agent override is sent; the backend chooses its default rather than inheriting the parent session's effort. |
@@ -1561,6 +1561,17 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
+For schema 1.0.73, `:copilot/assistant.server_tool_progress` also belongs to
+`copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
+`:copilot/session.managed_settings_resolved` belong to `copilot/session-events`.
+`:copilot/tool_search.activated` intentionally belongs only to the master
+`copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
+
+The generated wire schemas also contain the internal `assistant.turn_retry`
+(additional model inference metadata within an existing turn) and
+`model.call_start` (model API dispatch metadata) events. They are wire-only and
+intentionally excluded from every curated public event set.
+
 ### `evt` — Event Keyword Helper
 
 ```clojure
@@ -1602,6 +1613,8 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.session_limits_changed` | Session limits changed; data: `{:session-limits {:max-ai-credits <number>}}`, where a `nil` `:session-limits` clears the active limits (upstream schema 1.0.67) |
 | `:copilot/session.usage_checkpoint` | Durable usage checkpoint for reconstructing aggregate accounting on resume; data: `{:total-nano-aiu <number>}` with optional `:total-premium-requests <number>` (upstream schema 1.0.67) |
 | `:copilot/session.auto_mode_resolved` | Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes `:chosen-model`, optional `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`, `:reasoning-bucket` (experimental; upstream schema 1.0.70-0) |
+| `:copilot/session.managed_settings_enforced` | Experimental ephemeral enforcement of enterprise managed settings for a concrete user- or host-initiated governed action. Data: `{:action "bypass_permissions_blocked" :setting <string> :fail-closed <boolean> :message <string>}` with optional `:escalation` in `#{"allow_all" "approve_all" "auto_approval" "unrestricted_paths" "unrestricted_urls"}`. |
+| `:copilot/session.managed_settings_resolved` | Experimental ephemeral snapshot of effective enterprise managed settings and their authority, emitted when policy is applied or reapplied at session start, on resume, or on account switch. Data: `{:source #{"server" "device" "none"} :server-managed <boolean> :device-managed <boolean> :fail-closed <boolean> :bypass-permissions-disabled <boolean> :managed-keys [<string> ...]}` with optional opaque JSON `:settings`. |
 | `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
 | `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
 | `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |
@@ -1620,6 +1633,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.usage` | Token usage for this turn; data may include optional `:content-filter-triggered` (boolean) and `:finish-reason` (string) (upstream schema 1.0.63) |
 | `:copilot/assistant.idle` | Main agent's processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) |
 | `:copilot/assistant.tool_call_delta` | Streaming tool-call argument input chunk; data includes `:tool-call-id`, `:input-delta`, optional `:tool-name`, `:tool-type` (upstream schema 1.0.69-3) |
+| `:copilot/assistant.server_tool_progress` | Ephemeral live progress for a provider-hosted server tool before the finalized `serverTools` envelope arrives on the terminal `assistant.message`. Data: `{:output-index <integer> :kind <string> :status <string>}`; only `"web_search"` is currently emitted for `:kind`, and `:status` is `"in_progress"`, `"searching"`, or `"completed"`. |
 | `:copilot/model.call_failure` | Failed LLM API call metadata for telemetry |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
@@ -1627,6 +1641,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) |
+| `:copilot/tool_search.activated` | Persisted generic client-side tool activations restored when a session resumes. Data: `{:strategy <string> :tool-names [<string> ...]}`. |
 | `:copilot/subagent.started` | Subagent started; data includes :tool-call-id, :agent-name, :agent-display-name, :agent-description |
 | `:copilot/subagent.completed` | Subagent completed; data includes :tool-call-id, :agent-name, :agent-display-name, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
 | `:copilot/subagent.failed` | Subagent failed; data includes :tool-call-id, :agent-name, :agent-display-name, :error, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
@@ -2845,6 +2860,12 @@ Lifecycle hooks allow custom logic at various points during the session:
                    (println "Session ended")
                    nil)
 
+                 :on-agent-stop
+                 (fn [{:keys [stop-hook-active]} _invocation]
+                   (when-not stop-hook-active
+                     {:decision "block"
+                      :reason "Run the final validation and fix any failures."}))
+
                  :on-error-occurred
                  (fn [input invocation]
                    (println "Error:" (:error input))
@@ -2854,6 +2875,16 @@ Lifecycle hooks allow custom logic at various points during the session:
 All hooks receive an `input` map (contents vary by hook type) and an `invocation` map
 containing `{:session-id ...}`. Hooks may return `nil` to proceed normally, or in some
 cases return a modified value.
+
+`:on-agent-stop` fires when the top-level agent reaches a natural terminal stop. Its
+input contains base `:timestamp` (Unix milliseconds) and `:cwd` (string), SDK-added
+`:session-id`, and optional kebab-cased `:stop-reason`, `:transcript-path`, and
+`:stop-hook-active`; its invocation map is `{:session-id ...}`. Return
+`{:decision "block" :reason "..."}` to keep the agent running and enqueue the reason.
+Return `nil`, or throw from the handler, to let the agent stop. When
+`:stop-hook-active` is true, a previous block already forced a continuation; use it to
+avoid indefinite re-blocking.
+([upstream PR #2054](https://github.com/github/copilot-sdk/pull/2054))
 
 ### Reasoning Effort
 

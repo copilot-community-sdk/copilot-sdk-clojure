@@ -716,17 +716,18 @@ clojure -A:examples -X infinite-sessions/run :prompts '["What is Clojure?" "Who 
 **Difficulty:** Intermediate  
 **Concepts:** Hooks, callbacks, tool use monitoring
 
-Register callbacks for session lifecycle events: start/end, tool use, prompts, and errors.
+Register callbacks for session lifecycle events: start/end, agent stop, tool use, prompts, and errors.
 
 ### What It Demonstrates
 
-- Configuring `:hooks` in session config with all 6 hook types
+- Configuring seven lifecycle hooks in a session config
 - `:on-session-start` — fires when session begins
 - `:on-session-end` — fires when session ends
 - `:on-pre-tool-use` — fires before a tool runs (return `{:approved true}` to allow)
 - `:on-post-tool-use` — fires after a tool completes
 - `:on-user-prompt-submitted` — fires when user sends a prompt
 - `:on-error-occurred` — fires on errors
+- `:on-agent-stop` — fires when the top-level agent naturally stops; return `nil` to let it stop, or `{:decision "block" :reason "..."}` to request another turn. Use `:stop-hook-active` to avoid blocking repeatedly.
 - Collecting and summarizing hook events
 
 ### Usage
