@@ -105,7 +105,7 @@ foundry service status
 <tr><th> Field </th><th> Type </th><th> Default </th><th> Description </th></tr>
 </thead>
 <tbody>
-<tr><td> <code>:azure-api-version</code> </td><td> string </td><td> <code>"2024-10-21"</code> </td><td> Azure API version </td></tr>
+<tr><td> <code>:azure-api-version</code> </td><td> string </td><td> <code>nil</code> (omitted) </td><td> When set, uses Azure’s versioned deployment route. When omitted, uses the GA versionless <code>v1</code> route. </td></tr>
 </tbody>
 </table>
 <h3><a href="#wire-api-format" id="wire-api-format"></a>Wire API Format</h3>
@@ -120,7 +120,13 @@ foundry service status
 <p><strong><code>:anthropic</code></strong> — For direct Anthropic API access. Uses Claude-specific API format.</p>
 <h2><a href="#example-configurations" id="example-configurations"></a>Example Configurations</h2>
 <h3><a href="#azure-openai-native-azure-endpoint" id="azure-openai-native-azure-endpoint"></a>Azure OpenAI (Native Azure Endpoint)</h3>
-<p>Use <code>:azure</code> type for endpoints at <code>*.openai.azure.com</code>:</p>
+<p>Use <code>:azure</code> type for endpoints at <code>*.openai.azure.com</code>. Omit <code>:azure-api-version</code> to use Azure’s GA versionless <code>v1</code> route:</p>
+<pre><code class="language-clojure">{:model "gpt-5.4"
+ :provider {:provider-type :azure
+            :base-url "https://my-resource.openai.azure.com"
+            :api-key (System/getenv "AZURE_OPENAI_KEY")}}
+</code></pre>
+<p>Set <code>:azure-api-version</code> when you need an explicit versioned deployment route:</p>
 <pre><code class="language-clojure">{:model "gpt-5.4"
  :provider {:provider-type :azure
             :base-url "https://my-resource.openai.azure.com"

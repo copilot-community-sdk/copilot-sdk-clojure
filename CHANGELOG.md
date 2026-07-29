@@ -32,21 +32,17 @@ All notable changes to this project will be documented in this file. This change
   `:promo` maps (`:ends-at`, with optional `:id`, `:discount-percent`, and
   `:message`). No new public session event type was added.
 
-### Added (post-v1.0.7 sync)
+### Added (v1.0.8 sync)
 - **Per-custom-agent reasoning effort** — port of
   [upstream PR #1981](https://github.com/github/copilot-sdk/pull/1981). Custom
   agent maps accept optional `:agent-reasoning-effort` values `"low"`,
   `"medium"`, `"high"`, or `"xhigh"`. Session create and resume send it as the
-  exact `reasoningEffort` wire field. When absent, the field is omitted and does
-  not inherit the session-level `:reasoning-effort`.
+  exact `reasoningEffort` wire field. When absent, the field is omitted and the
+  runtime resolves the effective effort.
 - **Strongly typed PascalCase `:exp-assignments` contract** — port of
   [upstream PR #2033](https://github.com/github/copilot-sdk/pull/2033). Session
   create and resume configs validate the complete `CopilotExpAssignmentResponse`
   shape and forward its string-keyed PascalCase fields unchanged.
-- **`:on-agent-stop` session hook** — port of
-  [upstream PR #2054](https://github.com/github/copilot-sdk/pull/2054). Session
-  `:hooks` accept `:on-agent-stop` for runtime `agentStop` callbacks, using the
-  existing allow/block hook decision contract.
 - **Schema regen from 1.0.71-2 through 1.0.73** — port of upstream package bumps
   [PR #2035](https://github.com/github/copilot-sdk/pull/2035) and
   [PR #2055](https://github.com/github/copilot-sdk/pull/2055). Regenerated wire
@@ -56,6 +52,29 @@ All notable changes to this project will be documented in this file. This change
   `:copilot/session.managed_settings_resolved`, and
   `:copilot/tool_search.activated`; `assistant.turn_retry` and
   `model.call_start` remain generated internal-only.
+
+### Added (post-v1.0.8 sync)
+- **`:on-agent-stop` session hook** — port of
+  [upstream PR #2054](https://github.com/github/copilot-sdk/pull/2054). Session
+  `:hooks` accept `:on-agent-stop` for runtime `agentStop` callbacks, using the
+  existing allow/block hook decision contract.
+
+### Fixed (v1.0.8 sync)
+- **Completing `assistant.usage` idiom metadata** — the schema 1.0.73
+  `cacheExpiresAt` field is coerced to `java.time.Instant`, and
+  `serviceRequestId` is validated and exposed. Field descriptions align with
+  the later documentation in
+  [upstream PR #2074](https://github.com/github/copilot-sdk/pull/2074).
+
+### Fixed (post-v1.0.8 documentation)
+- **Runtime configuration semantics** — corrected custom-agent reasoning-effort
+  inheritance and Azure BYOK API-version omission behavior. The runtime inherits
+  the parent effort only for the same model, and an omitted Azure API version
+  uses the GA versionless `v1` route. Matches
+  [upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064).
+- **Subagent event fields** — documented optional `:model` metadata on
+  `subagent.started`, matching
+  [upstream PR #2072](https://github.com/github/copilot-sdk/pull/2072).
 
 ### Fixed
 - **Hook invocation response envelopes** — `hooks.invoke` now returns the

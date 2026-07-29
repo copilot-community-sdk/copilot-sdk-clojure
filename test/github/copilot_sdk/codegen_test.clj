@@ -171,7 +171,9 @@
     :delta-content "hi"}
 
    "assistant.usage"
-   {:model "gpt-4o"}
+   {:model "gpt-4o"
+    :cache-expires-at "2026-07-29T12:00:00Z"
+    :service-request-id "svc-req-1"}
 
    "tool.execution_start"
    {:tool-call-id "tc-1"

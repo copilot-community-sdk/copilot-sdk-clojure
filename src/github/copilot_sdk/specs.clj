@@ -1521,6 +1521,7 @@
   (s/keys :req-un [::total-response-size-bytes]))
 
 (s/def ::api-call-id string?)
+(s/def ::cache-expires-at ::instant)
 (s/def ::cache-read-tokens nat-int?)
 (s/def ::cache-write-tokens nat-int?)
 (s/def ::cost number?)
@@ -1557,10 +1558,12 @@
 (s/def ::assistant.usage-data
   (s/keys :req-un [::model]
           :opt-un [::api-call-id ::api-endpoint ::cache-read-tokens
-                   ::cache-write-tokens ::copilot-usage ::cost ::duration
+                   ::cache-write-tokens ::cache-expires-at ::copilot-usage
+                   ::cost ::duration
                    ::initiator ::input-tokens ::inter-token-latency-ms
                    ::output-tokens ::parent-tool-call-id ::provider-call-id
                    ::quota-snapshots ::reasoning-effort ::reasoning-tokens
+                   ::service-request-id
                    ::time-to-first-token-ms ::ttft-ms
                    ::content-filter-triggered ::finish-reason]))
 
