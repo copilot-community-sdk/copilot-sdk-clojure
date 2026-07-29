@@ -9,7 +9,7 @@
 
 (def ^{:private true} converters "Map of [wire-tag idiom-tag] → {:wire->idiom fn :idiom->wire fn}." {[:iso-string :instant] {:wire->idiom iso-string->instant, :idiom->wire instant->iso-string}})
 
-(def field-coercions "Per-event-type field coercion table. Generated from\n   script/codegen/coercions.edn." {"session.start" {:start-time [:iso-string :instant]}})
+(def field-coercions "Per-event-type field coercion table. Generated from\n   script/codegen/coercions.edn." {"assistant.usage" {:cache-expires-at [:iso-string :instant]}, "session.start" {:start-time [:iso-string :instant]}})
 
 (defn coerce-data "Apply coercions to a `data` map for the given event-type and direction\n      (:wire->idiom or :idiom->wire). Unknown event types and unknown fields\n      pass through unchanged. Each converter is nil-safe and idempotent so\n      the same coercion can be applied twice without corruption.\n\n      If a converter throws (e.g. malformed wire payload), the exception is\n      re-thrown as ex-info with `:event-type`, `:field`, and `:direction`\n      added to ex-data so callers can diagnose without inspecting the\n      converter source." [event-type data direction] (if-let [fields (get field-coercions event-type)] (reduce-kv (fn [acc k v] (assoc acc k (if-let [tag-pair (get fields k)] (if-let [f (get-in converters [tag-pair direction])] (try (f v) (catch Exception e (throw (ex-info (str "Coercion failed for " event-type "/" k " (" direction "): " (.getMessage e)) (merge (or (ex-data e) {}) {:event-type event-type, :field k, :direction direction, :tag-pair tag-pair}) e)))) v) v))) {} data) data))
 

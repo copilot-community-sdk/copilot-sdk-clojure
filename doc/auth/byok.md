@@ -116,7 +116,7 @@ foundry service status
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `:azure-api-version` | string | `"2024-10-21"` | Azure API version |
+| `:azure-api-version` | string | `nil` (omitted) | When set, uses Azure's versioned deployment route. When omitted, uses the GA versionless `v1` route. |
 
 ### Wire API Format
 
@@ -137,7 +137,17 @@ The `:wire-api` setting determines which OpenAI API format to use:
 
 ### Azure OpenAI (Native Azure Endpoint)
 
-Use `:azure` type for endpoints at `*.openai.azure.com`:
+Use `:azure` type for endpoints at `*.openai.azure.com`. Omit `:azure-api-version`
+to use Azure's GA versionless `v1` route:
+
+```clojure
+{:model "gpt-5.4"
+ :provider {:provider-type :azure
+            :base-url "https://my-resource.openai.azure.com"
+            :api-key (System/getenv "AZURE_OPENAI_KEY")}}
+```
+
+Set `:azure-api-version` when you need an explicit versioned deployment route:
 
 ```clojure
 {:model "gpt-5.4"

@@ -5743,6 +5743,41 @@
                        {:model "gpt-5" :api-endpoint 42}))
         ":api-endpoint must be a string if present")))
 
+;; --- assistant.usage request metadata ---------------------------------------
+
+(deftest test-assistant-usage-cache-expiration-and-service-request-id
+  (testing "wire cache expiration is exposed as an Instant"
+    (let [normalize @#'protocol/normalize-incoming
+          raw-msg {:jsonrpc "2.0"
+                   :method "session.event"
+                   :params {:sessionId "abc"
+                            :event {:id "evt-usage"
+                                    :type "assistant.usage"
+                                    :timestamp "2026-07-29T12:00:01Z"
+                                    :parentId nil
+                                    :data {:model "gpt-5"
+                                           :cacheExpiresAt "2026-07-29T12:00:00Z"
+                                           :serviceRequestId "svc-req-1"}}}}
+          data (-> (normalize raw-msg)
+                   (get-in [:params :event])
+                   session/coerce+normalize-event
+                   :data)]
+      (is (= (java.time.Instant/parse "2026-07-29T12:00:00Z")
+             (:cache-expires-at data)))
+      (is (= "svc-req-1" (:service-request-id data)))
+      (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data data))))
+  (testing "the idiom spec validates both optional fields"
+    (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                  {:model "gpt-5"
+                   :cache-expires-at (java.time.Instant/parse "2026-07-29T12:00:00Z")
+                   :service-request-id "svc-req-1"}))
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5"
+                        :cache-expires-at "2026-07-29T12:00:00Z"})))
+    (is (not (s/valid? :github.copilot-sdk.specs/assistant.usage-data
+                       {:model "gpt-5"
+                        :service-request-id 42})))))
+
 ;; --- assistant.usage :time-to-first-token-ms (upstream CLI 1.0.51 schema) --
 
 (deftest test-assistant-usage-time-to-first-token-ms

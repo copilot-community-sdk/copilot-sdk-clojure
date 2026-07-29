@@ -140,6 +140,7 @@
   :github.copilot-sdk.specs/branch
   :github.copilot-sdk.specs/buffer
   :github.copilot-sdk.specs/buffer-exhaustion-threshold
+  :github.copilot-sdk.specs/cache-expires-at
   :github.copilot-sdk.specs/cache-price
   :github.copilot-sdk.specs/cache-read-tokens
   :github.copilot-sdk.specs/cache-write-tokens
