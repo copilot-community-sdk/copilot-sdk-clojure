@@ -1,7 +1,7 @@
 ---
 name: update-upstream
-description: Sync the Clojure Copilot SDK with upstream copilot-sdk changes. Runs update.sh, performs gap analysis against Node.js and Python SDKs, ports changes with red/green TDD, runs full CI (E2E tests + examples), gets parallel multi-model code reviews, updates docs, and creates a PR. Use when syncing with new upstream releases or checking for unported changes.
-compatibility: Requires copilot CLI authenticated, gh CLI, clojure CLI, bb (babashka). Upstream repo at ../copilot-sdk.
+description: Use when syncing the Clojure Copilot SDK with upstream releases or checking for unported Node.js and Python SDK changes.
+compatibility: Requires authenticated copilot and gh CLIs, Clojure CLI, bb, and a local github/copilot-sdk checkout beside the primary checkout or specified by COPILOT_SDK_UPSTREAM.
 ---
 
 # Update Upstream Skill
@@ -14,19 +14,33 @@ Sync the copilot-sdk-clojure project with upstream [github/copilot-sdk](https://
 
 ### Phase 1: Discovery
 
-1. **Sync local `main` first.** Recently-merged PRs may have already
-   ported some upstream changes, and your feature branch should sit on
-   top of the latest `main` to avoid duplicate work and rebase conflicts
-   later:
+1. **Refresh `origin/main` without leaving the current worktree branch.**
+   Recently merged PRs may have already ported upstream changes:
    ```
-   git checkout main && git pull --ff-only origin main
+   git fetch origin main
+   git rev-list --left-right --count HEAD...origin/main
    ```
-   If `main` cannot fast-forward, stop and let the maintainer resolve.
-2. Run `./update.sh` from the repo root to pull the latest upstream and list releases.
+   Never check out `main` inside a linked worktree; the primary checkout may
+   already have it checked out. If the current branch is only behind, run
+   `git merge --ff-only origin/main`. If it has diverged, use a fresh project
+   session from the default branch when available; otherwise ask the
+   maintainer before integrating `origin/main`.
+2. Resolve and fetch the upstream checkout using the tracked, worktree-safe
+   helper:
+   ```
+   UPSTREAM_REPO="$(bash .github/skills/update-upstream/scripts/resolve-upstream.sh)" &&
+   git -C "$UPSTREAM_REPO" fetch --prune --tags origin
+   ```
+   The helper derives the primary checkout from Git's common directory, so it
+   works from both normal checkouts and linked worktrees. Set
+   `COPILOT_SDK_UPSTREAM` to override the sibling checkout location. Shell
+   tool calls do not share environment, so resolve `UPSTREAM_REPO` again in
+   each call or chain dependent commands together.
 3. Check the current Clojure SDK version in `build.clj` (format: `UPSTREAM.CLJ_PATCH` — see AGENTS.md § Version Management).
 4. List upstream commits since our last synced version:
    ```
-   cd ../copilot-sdk && git log --oneline <last-tag>..HEAD -- nodejs/
+   UPSTREAM_REPO="$(bash .github/skills/update-upstream/scripts/resolve-upstream.sh)" &&
+   git -C "$UPSTREAM_REPO" log --oneline <last-tag>..origin/main -- nodejs/
    ```
 5. For each commit, classify:
    - **Port** — Code changes to `nodejs/src/` (types, client, session, generated)
@@ -36,8 +50,8 @@ Sync the copilot-sdk-clojure project with upstream [github/copilot-sdk](https://
 
 Launch three parallel explore agents to build a comprehensive inventory. Use the file mapping in `references/PROJECT.md` to locate the right files.
 
-1. **Node.js SDK** — Read upstream files listed in references/PROJECT.md (types.ts, client.ts, session.ts, index.ts, generated/). Catalog all public types, methods, event types, and event data fields.
-2. **Python SDK** — Read `python/copilot/client.py`, `session.py`, `__init__.py`, `generated/`. Note behavioral differences from Node.js.
+1. **Node.js SDK** — Resolve `$UPSTREAM_REPO`, then read the upstream files listed in references/PROJECT.md (types.ts, client.ts, session.ts, index.ts, generated/). Catalog all public types, methods, event types, and event data fields.
+2. **Python SDK** — Resolve `$UPSTREAM_REPO`, then read `python/copilot/client.py`, `session.py`, `__init__.py`, and `generated/`. Note behavioral differences from Node.js.
 3. **Clojure SDK** — Read all `src/github/copilot_sdk/*.clj`. Catalog public functions, specs, event sets, wire conversion.
 
 Compare inventories to identify gaps:
@@ -111,21 +125,20 @@ At minimum:
 
 ### Phase 8: PR Creation
 
-1. **Confirm `main` is current before branching.** Run
-   `git fetch origin main && git checkout main && git pull --ff-only` if
-   you haven't refreshed since Phase 1. A stale local `main` causes
-   rebase conflicts later, especially when prior sync PRs squash-merge.
-2. Create a feature branch: `git checkout -b upstream-sync/v<version>`
+1. **Confirm the current worktree branch is based on current `origin/main`.**
+   Run `git fetch origin main` and inspect
+   `git rev-list --left-right --count HEAD...origin/main`. Do not check out
+   local `main`.
+2. Keep using the project session's existing branch. If running outside a
+   project worktree and still on the default branch, create a feature branch
+   with the app-native branch tool when available.
 3. Commit changes in logical commits to make them easy to review commit by commit and with descriptive message and `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
 4. Push and create PR with `gh pr create`
 5. PR body should include: summary, changes list, validation results, review findings table
 
-If the maintainer asks you to rebase a stale branch onto fresh `main`,
-expect that previous round-N sync commits on your branch may already be
-present in `origin/main` under squash-merge SHAs. Use `git rebase --skip`
-for any commit whose patch is already upstream — Git will print
-"patch contents already upstream" for the others and drop them
-automatically.
+If the branch becomes stale after it has commits, do not rewrite history by
+default. Prefer a fresh project session from current `main`, or ask the
+maintainer before using an additive merge.
 
 ### Phase 9: Reflecting on code review feedback.
 
@@ -175,5 +188,7 @@ Real recurring traps when porting upstream changes:
 5. **Outbound optional fields: match upstream's omit-vs-null behavior per RPC.** Don't reflexively gate an optional wire field on `contains?` and emit JSON `null`. Some patch RPCs (e.g. `session.options.update`) genuinely accept `null` to clear a value; others (e.g. `session.model.switchTo`) have no null variant in the schema — upstream spreads `...options`, dropping `undefined`. Check the upstream call site and the request schema: if the field has no null union, compute the wire value first and gate on `(some? v)` so a `nil` option omits the key instead of sending `null`.
 
 6. **`session.create` and `session.resume` build wire params in two separate functions — keep shared sub-shapes in a named helper.** `build-create-session-params` and `build-resume-session-params` both emit tool defs, system message, provider, MCP servers, custom agents, and commands. A new field on any shape sent by both must be added to both builders, or it ships on create and silently vanishes on resume. Funnel each shared sub-shape through one `*->wire` helper (e.g. `tool-def->wire`, `util/mcp-servers->wire`) rather than duplicating a `cond->` inline.
+
+7. **Sibling repositories must be resolved from Git's common directory, not the worktree root.** In a linked worktree, `../copilot-sdk` points inside the worktree container rather than beside the primary checkout. Always use `scripts/resolve-upstream.sh`; never hard-code an absolute path or derive the sibling from `git rev-parse --show-toplevel`.
 
 For the mechanics of camelCase ↔ kebab-case conversion (including the `?`-suffix rule), see the cheat sheet in `references/PROJECT.md`.

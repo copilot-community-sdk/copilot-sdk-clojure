@@ -915,7 +915,7 @@
                                       "hooks.invoke"
                                       (let [{:keys [session-id hook-type input]} params]
                                         (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:result nil}
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
                                           (<! (session/handle-hooks-invoke! client session-id hook-type input))))
 
                                       ;; System message transform (PR #816)

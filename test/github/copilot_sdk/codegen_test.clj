@@ -146,6 +146,14 @@
    "assistant.turn_start"
    {:turn-id "t-1"}
 
+   "assistant.turn_retry"
+   {:turn-id "t-1"}
+
+   "assistant.server_tool_progress"
+   {:kind "web_search"
+    :output-index 0
+    :status "in_progress"}
+
    "assistant.reasoning"
    {:reasoning-id "r-1"
     :content "thinking"}
@@ -176,6 +184,10 @@
    "tool.execution_complete"
    {:tool-call-id "tc-1"
     :success true}
+
+   "tool_search.activated"
+   {:strategy "deferred"
+    :tool-names ["shell"]}
 
    "skill.invoked"
    {:name "my-skill"
@@ -212,6 +224,9 @@
    "session.context_changed"
    {:cwd "/tmp"}
 
+   "model.call_start"
+   {:turn-id "t-1"}
+
    "session.mode_changed"
    {:previous-mode "interactive"
     :new-mode "plan"}
@@ -230,6 +245,20 @@
    {:agents []
     :warnings []
     :errors []}
+
+   "session.managed_settings_resolved"
+   {:bypass-permissions-disabled false
+    :device-managed false
+    :fail-closed false
+    :managed-keys []
+    :server-managed false
+    :source "none"}
+
+   "session.managed_settings_enforced"
+   {:action "bypass_permissions_blocked"
+    :fail-closed false
+    :message "Bypass permissions mode is disabled"
+    :setting "permissions.disableBypassPermissionsMode"}
 
    "session.mcp_servers_loaded"
    {:servers []}
@@ -324,7 +353,7 @@
           (str "public event-types not present in the schema: " (sort extra)
                " — remove them or update the schema pin")))))
 
-(deftest generated-data-specs-reject-envelope-weakened-types
+(deftest generated-data-specs-preserve-variant-local-types
   (testing "session.schedule_created-data rejects string :id (must be positive integer)"
     (let [spec-kw :github.copilot-sdk.generated.event-specs/session.schedule_created-data]
       (is (not (s/valid? spec-kw {:id "uuid-string" :interval-ms 1000 :prompt "x"}))
@@ -332,7 +361,17 @@
   (testing "session.schedule_cancelled-data rejects string :id (must be positive integer)"
     (let [spec-kw :github.copilot-sdk.generated.event-specs/session.schedule_cancelled-data]
       (is (not (s/valid? spec-kw {:id "uuid-string"}))
-          "data spec must not accept envelope-shaped UUID :id"))))
+          "data spec must not accept envelope-shaped UUID :id")))
+  (testing "same-named data properties keep each event variant's schema"
+    (let [abort-spec :github.copilot-sdk.generated.event-specs/abort-data
+          retry-spec :github.copilot-sdk.generated.event-specs/assistant.turn_retry-data]
+      (doseq [reason ["user_initiated" "remote_command" "user_abort"]]
+        (is (s/valid? abort-spec {:reason reason})))
+      (is (not (s/valid? abort-spec {:reason "arbitrary_reason"}))
+          "abort reason must remain a closed enum")
+      (is (s/valid? retry-spec {:turn-id "turn-1"
+                                :reason "arbitrary_reason"})
+          "assistant.turn_retry reason must remain an open string"))))
 
 ;; ---------------------------------------------------------------------------
 ;; Envelope discrimination — type and data binding must be tight.

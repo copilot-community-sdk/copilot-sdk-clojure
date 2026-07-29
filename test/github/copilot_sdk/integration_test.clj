@@ -2661,6 +2661,42 @@
       (is (s/valid? ::specs/event-type ev)
           (str ev " must be accepted by the idiom ::event-type spec")))))
 
+(deftest test-post-v1-0-7-schema-events
+  (let [generated-events #{"assistant.server_tool_progress"
+                           "assistant.turn_retry"
+                           "model.call_start"
+                           "session.managed_settings_enforced"
+                           "session.managed_settings_resolved"
+                           "tool_search.activated"}
+        public-events #{:copilot/assistant.server_tool_progress
+                        :copilot/session.managed_settings_enforced
+                        :copilot/session.managed_settings_resolved
+                        :copilot/tool_search.activated}
+        internal-events #{:copilot/assistant.turn_retry
+                          :copilot/model.call_start}]
+    (testing "schema 1.0.73 generates all new wire event specs"
+      (doseq [event-type generated-events]
+        (is (contains? github.copilot-sdk.generated.event-specs/event-types event-type)
+            (str event-type " must be generated from the pinned schema"))
+        (is (s/get-spec (keyword "github.copilot-sdk.generated.event-specs"
+                                 (str event-type "-data")))
+            (str event-type " must have a generated data spec"))))
+    (testing "only upstream-public events enter the curated idiom surface"
+      (doseq [event-type public-events]
+        (is (contains? sdk/event-types event-type)
+            (str event-type " must be public"))
+        (is (s/valid? ::specs/event-type event-type)
+            (str event-type " must satisfy the idiom event-type spec")))
+      (doseq [event-type internal-events]
+        (is (not (contains? sdk/event-types event-type))
+            (str event-type " is marked internal upstream"))
+        (is (not (s/valid? ::specs/event-type event-type))
+            (str event-type " must stay outside the public idiom spec"))))
+    (testing "public events are categorized by their SDK domain"
+      (is (contains? sdk/assistant-events :copilot/assistant.server_tool_progress))
+      (is (contains? sdk/session-events :copilot/session.managed_settings_enforced))
+      (is (contains? sdk/session-events :copilot/session.managed_settings_resolved)))))
+
 (deftest test-v1-0-4-provider-transport-wire
   (testing ":provider :transport forwards on both session.create and session.resume (upstream PR #1711)"
     (let [seen (atom {})
@@ -2810,31 +2846,59 @@
                   {:providers [{:name "p" :base-url "https://x.test"}]
                    :models [{:id "m" :provider "p"}]}))))
 
-(deftest test-v1-0-4-exp-assignments-wire
-  (testing ":exp-assignments forwards verbatim on both session.create and session.resume (upstream PR #1750)"
-    (let [seen (atom {})
-          _ (mock/set-request-hook! *mock-server*
-                                    (fn [method params]
-                                      (when (#{"session.create" "session.resume"} method)
-                                        (swap! seen assoc method params))))
-          exp {"flight-abc" "treatment" "feature_x" {"enabled" true}}
-          cfg {:on-permission-request sdk/approve-all
-               :exp-assignments exp}
-          _ (sdk/create-session *test-client* cfg)
-          session-id (sdk/get-last-session-id *test-client*)
-          _ (sdk/resume-session *test-client* session-id cfg)]
-      (doseq [method ["session.create" "session.resume"]]
-        (testing method
-          (let [p (get @seen method)]
-            (is (= {:flight-abc "treatment" :feature_x {:enabled true}}
-                   (:expAssignments p))
-                ":exp-assignments forwards under wire key :expAssignments with keys preserved verbatim (no kebab->camel)"))))))
-  (testing "::exp-assignments accepts an opaque string-keyed map"
-    (is (s/valid? :github.copilot-sdk.specs/exp-assignments {"a" 1 "b" {"c" 2}}))
-    (is (false? (s/valid? :github.copilot-sdk.specs/exp-assignments {:a 1}))
-        "keys must be strings (source-defined flight ids), not keywords")
-    (is (s/valid? :github.copilot-sdk.specs/session-config
-                  {:exp-assignments {"a" 1}}))))
+(deftest test-post-v1-0-7-exp-assignments-wire
+  (let [exp {"Features" ["feature-x"]
+             "Flights" {"flight-abc" "treatment"}
+             "Configs" [{"Id" "config-a"
+                         "Parameters" {"enabled" true
+                                       "threshold" 0.5
+                                       "optional" nil}}]
+             "ParameterGroups" {"group-a" ["config-a"]}
+             "FlightingVersion" 7
+             "ImpressionId" "impression-1"
+             "AssignmentContext" "assignment-context"}]
+    (testing ":exp-assignments forwards its PascalCase contract unchanged on create and resume"
+      (let [seen (atom {})
+            _ (mock/set-request-hook! *mock-server*
+                                      (fn [method params]
+                                        (when (#{"session.create" "session.resume"} method)
+                                          (swap! seen assoc method params))))
+            cfg {:on-permission-request sdk/approve-all
+                 :exp-assignments exp}
+            _ (sdk/create-session *test-client* cfg)
+            session-id (sdk/get-last-session-id *test-client*)
+            _ (sdk/resume-session *test-client* session-id cfg)
+            expected {:Features ["feature-x"]
+                      :Flights {:flight-abc "treatment"}
+                      :Configs [{:Id "config-a"
+                                 :Parameters {:enabled true
+                                              :threshold 0.5
+                                              :optional nil}}]
+                      :ParameterGroups {:group-a ["config-a"]}
+                      :FlightingVersion 7
+                      :ImpressionId "impression-1"
+                      :AssignmentContext "assignment-context"}]
+        (doseq [method ["session.create" "session.resume"]]
+          (testing method
+            (is (= expected (:expAssignments (get @seen method)))
+                "PascalCase field names must bypass kebab-to-camel conversion")))))
+    (testing "::exp-assignments enforces CopilotExpAssignmentResponse (upstream PR #2033)"
+      (is (s/valid? ::specs/exp-assignments exp))
+      (is (s/valid? ::specs/session-config {:exp-assignments exp}))
+      (doseq [required-field ["Features" "Flights" "Configs" "AssignmentContext"]]
+        (is (not (s/valid? ::specs/exp-assignments (dissoc exp required-field)))
+            (str required-field " is required")))
+      (is (not (s/valid? ::specs/exp-assignments
+                         (assoc exp "Configs" [{"Parameters" {}}])))
+          "config Id is required")
+      (is (not (s/valid? ::specs/exp-assignments
+                         (assoc exp "Configs" [{"Id" "config-a"}])))
+          "config Parameters are required")
+      (is (not (s/valid? ::specs/exp-assignments
+                         (assoc-in exp ["Configs" 0 "Parameters" "bad"] [])))
+          "flag values are limited to string, number, boolean, or nil")
+      (is (not (s/valid? ::specs/exp-assignments {"flight-abc" "treatment"}))
+          "the former arbitrary flat-map contract is no longer valid"))))
 
 (deftest test-v1-0-4-provider-and-providers-mutually-exclusive
   (testing "combining singular :provider with the :providers registry is rejected on both create and resume (upstream ProviderTokenArgs/SessionConfig contract, PR #1718)"
@@ -4195,8 +4259,53 @@
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
       (is (= {:command "echo hi"} (get-in @handler-called [:input :tool-args])))
       (is (= session-id (get-in @handler-called [:ctx :session-id])))
-      ;; Response contains the handler's return value (wire-converted)
-      (is (= "allow" (get-in response [:result :permissionDecision]))))))
+      ;; HookInvokeResponse wraps the handler's return value under output.
+      (is (= "allow" (get-in response [:result :output :permissionDecision]))))))
+
+(deftest test-hooks-agent-stop
+  (testing "hooks.invoke agentStop calls the registered handler and returns a block decision"
+    (let [handler-called (atom nil)
+          session (sdk/create-session *test-client*
+                                      {:on-permission-request sdk/approve-all
+                                       :hooks {:on-agent-stop
+                                               (fn [input ctx]
+                                                 (reset! handler-called {:input input :ctx ctx})
+                                                 {:decision "block"
+                                                  :reason "fix the remaining findings"})}})
+          session-id (sdk/session-id session)
+          response (mock/send-rpc-request! *mock-server*
+                                           "hooks.invoke"
+                                           {:sessionId session-id
+                                            :hookType "agentStop"
+                                            :input {:stopReason "end_turn"
+                                                    :transcriptPath "/tmp/transcript.jsonl"
+                                                    :stop_hook_active true
+                                                    :timestamp 1700000000000
+                                                    :cwd "/workspace"}})]
+      (is (s/get-spec ::specs/on-agent-stop))
+      (is (= {:stop-reason "end_turn"
+              :transcript-path "/tmp/transcript.jsonl"
+              :stop-hook-active true
+              :timestamp 1700000000000
+              :cwd "/workspace"
+              :session-id session-id}
+             (:input @handler-called)))
+      (is (= {:session-id session-id} (:ctx @handler-called)))
+      (is (= {:decision "block" :reason "fix the remaining findings"}
+             (get-in response [:result :output])))))
+  (testing "nil and handler errors both let the agent stop"
+    (doseq [handler [(fn [_ _] nil)
+                     (fn [_ _] (throw (Exception. "agent-stop failed")))]]
+      (let [session (sdk/create-session *test-client*
+                                        {:on-permission-request sdk/approve-all
+                                         :hooks {:on-agent-stop handler}})
+            response (mock/send-rpc-request! *mock-server*
+                                             "hooks.invoke"
+                                             {:sessionId (sdk/session-id session)
+                                              :hookType "agentStop"
+                                              :input {:timestamp 1700000000000
+                                                      :cwd "/workspace"}})]
+        (is (= {} (:result response)))))))
 
 (deftest test-hooks-post-tool-use
   (testing "hooks.invoke postToolUse calls registered handler"
@@ -4220,8 +4329,8 @@
                                                     :cwd "/workspace"}})]
       (is (some? @handler-called))
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
-      ;; Handler returned nil, so result is nil
-      (is (nil? (:result response))))))
+      ;; Handler returned nil, so the response has no output.
+      (is (= {} (:result response))))))
 
 (deftest test-hooks-post-tool-use-failure
   (testing "hooks.invoke postToolUseFailure calls registered handler (upstream PR #1421)"
@@ -4246,13 +4355,13 @@
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
       (is (= "command exited 1" (get-in @handler-called [:input :error])))
       (is (= session-id (get-in @handler-called [:input :session-id])))
-      (is (= "noted" (get-in response [:result :additionalContext]))))))
+      (is (= "noted" (get-in response [:result :output :additionalContext]))))))
 
 (deftest test-hooks-post-tool-use-failure-no-handler
-  (testing "hooks.invoke postToolUseFailure with no handler returns nil result"
+  (testing "hooks.invoke postToolUseFailure with no handler returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
-                                       ;; Only success hook registered; failure should pass through as nil.
+                                       ;; Only success hook registered; failure should pass through without output.
                                        :hooks {:on-post-tool-use
                                                (fn [_ _] nil)}})
           session-id (sdk/session-id session)
@@ -4265,7 +4374,7 @@
                                                     :error "boom"
                                                     :timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
 
 (deftest test-hooks-session-start
   (testing "hooks.invoke sessionStart calls registered handler"
@@ -4286,10 +4395,10 @@
                                                     :cwd "/workspace"}})]
       (is (some? @handler-called))
       (is (= "new" (:source @handler-called)))
-      (is (= "welcome" (get-in response [:result :additionalContext]))))))
+      (is (= "welcome" (get-in response [:result :output :additionalContext]))))))
 
-(deftest test-hooks-unknown-type-returns-nil
-  (testing "hooks.invoke with unknown hook type returns nil result"
+(deftest test-hooks-unknown-type-returns-empty-response
+  (testing "hooks.invoke with unknown hook type returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :hooks {:on-pre-tool-use (fn [_ _] {:permission-decision "allow"})}})
@@ -4300,10 +4409,10 @@
                                             :hookType "unknownHookType"
                                             :input {:timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
 
-(deftest test-hooks-handler-exception-returns-nil
-  (testing "hooks.invoke handler exception returns nil gracefully"
+(deftest test-hooks-handler-exception-returns-empty-response
+  (testing "hooks.invoke handler exception returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :hooks {:on-pre-tool-use (fn [_ _] (throw (Exception. "oops")))}})
@@ -4316,10 +4425,10 @@
                                                     :toolArgs {}
                                                     :timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
 
 (deftest test-hooks-no-hooks-registered
-  (testing "hooks.invoke with no hooks registered returns nil"
+  (testing "hooks.invoke with no hooks registered returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
@@ -4331,7 +4440,19 @@
                                                     :toolArgs {}
                                                     :timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
+
+(deftest test-hooks-unknown-session
+  (testing "hooks.invoke with an unknown session returns an RPC error"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Unknown session: missing-session"
+         (mock/send-rpc-request! *mock-server*
+                                 "hooks.invoke"
+                                 {:sessionId "missing-session"
+                                  :hookType "agentStop"
+                                  :input {:timestamp 1700000000000
+                                          :cwd "/workspace"}})))))
 
 (deftest test-hooks-input-exposes-session-id
   (testing "hook input includes :session-id (upstream PR #1290 — BaseHookInput.sessionId)"
@@ -4459,10 +4580,10 @@
                                                     :cwd "/workspace"
                                                     :sessionId session-id}})]
       ;; The wire field name is metaToUse, NOT meta-to-use
-      (is (contains? (:result response) :metaToUse))
-      (is (not (contains? (:result response) :meta-to-use)))
+      (is (contains? (get-in response [:result :output]) :metaToUse))
+      (is (not (contains? (get-in response [:result :output]) :meta-to-use)))
       ;; Inner map preserved verbatim — inner keys NOT camelCased
-      (is (= opaque-replacement (get-in response [:result :metaToUse]))))))
+      (is (= opaque-replacement (get-in response [:result :output :metaToUse]))))))
 
 (deftest test-hooks-pre-mcp-tool-call-output-meta-to-use-null
   (testing "preMcpToolCall: :meta-to-use nil serializes as JSON null (key present with null value)"
@@ -4483,11 +4604,11 @@
                                                     :cwd "/workspace"
                                                     :sessionId session-id}})]
       ;; The metaToUse key MUST be present (not absent) and its value MUST be null.
-      (is (contains? (:result response) :metaToUse))
-      (is (nil? (get-in response [:result :metaToUse]))))))
+      (is (contains? (get-in response [:result :output]) :metaToUse))
+      (is (nil? (get-in response [:result :output :metaToUse]))))))
 
 (deftest test-hooks-pre-mcp-tool-call-output-no-meta-to-use
-  (testing "preMcpToolCall: handler returning {} or nil omits metaToUse field"
+  (testing "preMcpToolCall: handler returning {} omits metaToUse field"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :hooks {:on-pre-mcp-tool-call
@@ -4503,7 +4624,8 @@
                                                     :timestamp 12345
                                                     :cwd "/workspace"
                                                     :sessionId session-id}})]
-      (is (not (contains? (:result response) :metaToUse))))))
+      (is (= {:output {}} (:result response)))
+      (is (not (contains? (get-in response [:result :output]) :metaToUse))))))
 
 ;; -----------------------------------------------------------------------------
 ;; User Input Handler Tests (server→client RPC)
@@ -6239,14 +6361,7 @@
       (is (= "application/octet-stream"
              (:mime-type (first (:binary-results-for-llm result))))))))
 
-;; --- AbortReason / SubagentStartedData.model (upstream PR #1225 codegen) -----
-
-(deftest test-abort-reason-enum
-  (testing "wire spec for abort reason is a closed enum"
-    (is (s/valid? :github.copilot-sdk.generated.event-specs/reason "user_initiated"))
-    (is (s/valid? :github.copilot-sdk.generated.event-specs/reason "remote_command"))
-    (is (s/valid? :github.copilot-sdk.generated.event-specs/reason "user_abort"))
-    (is (not (s/valid? :github.copilot-sdk.generated.event-specs/reason "arbitrary_reason")))))
+;; --- SubagentStartedData.model (upstream PR #1225 codegen) -------------------
 
 (deftest test-subagent-started-model-field
   (testing "idiom ::subagent.started-data spec accepts optional :model"

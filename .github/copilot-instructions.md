@@ -25,7 +25,11 @@ When porting features or investigating behavior:
 
 1. **Primary reference**: [nodejs implementation](https://github.com/github/copilot-sdk/tree/main/nodejs) (JavaScript/TypeScript)
 2. **Secondary reference**: [python implementation](https://github.com/github/copilot-sdk/tree/main/python) for additional clarity
-3. **Local upstream checkout**: The upstream repo is available at `../copilot-sdk` (relative to this repo).
+3. **Local upstream checkout**: Resolve the upstream repo with
+   `bash .github/skills/update-upstream/scripts/resolve-upstream.sh`. This
+   works from normal checkouts and linked worktrees; set
+   `COPILOT_SDK_UPSTREAM` when the checkout is not beside the primary
+   `copilot-sdk-clojure` checkout.
 4. **CLI runtime**: The CLI itself is useful for understanding
    protocol behavior, but the **SDK source of truth** is always the Node.js SDK, not the CLI protocol types.
 

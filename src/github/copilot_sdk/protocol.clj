@@ -196,17 +196,15 @@
          (contains? raw-result :rows))
     (assoc wire-result :rows (:rows raw-result))
 
-    ;; Upstream PR #1366: preMcpToolCall hook output `:meta-to-use` is
-    ;; opaque MCP metadata. The inner map's keys are source-defined and
-    ;; must NOT be camelCased. `contains?` (not truthiness) is used so
-    ;; that an explicit `nil` value survives as JSON `null` (the
-    ;; tri-state contract: absent = preserve, null = remove, object =
-    ;; replace). Only preMcpToolCall hooks use this key, so unconditional
-    ;; preservation for any `hooks.invoke` response is safe.
+    ;; Upstream PR #1366: HookInvokeResponse.output may contain opaque
+    ;; preMcpToolCall metadata under `:meta-to-use`. The inner map's keys
+    ;; are source-defined and must NOT be camelCased. `contains?` (not
+    ;; truthiness) preserves an explicit `nil` as JSON `null`.
     (and (= "hooks.invoke" method)
-         (map? raw-result)
-         (contains? raw-result :meta-to-use))
-    (assoc wire-result :metaToUse (:meta-to-use raw-result))
+         (map? (:output raw-result))
+         (contains? (:output raw-result) :meta-to-use))
+    (assoc-in wire-result [:output :metaToUse]
+              (get-in raw-result [:output :meta-to-use]))
 
     :else wire-result))
 

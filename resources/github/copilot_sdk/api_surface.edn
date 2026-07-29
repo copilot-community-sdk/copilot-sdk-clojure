@@ -246,6 +246,9 @@
   :github.copilot-sdk.specs/exit-plan-mode-request
   :github.copilot-sdk.specs/exit-plan-mode-result
   :github.copilot-sdk.specs/exp-assignments
+  :github.copilot-sdk.specs/exp-config-entry
+  :github.copilot-sdk.specs/exp-flag-value
+  :github.copilot-sdk.specs/exp-parameters
   :github.copilot-sdk.specs/exporter-type
   :github.copilot-sdk.specs/extension-id
   :github.copilot-sdk.specs/extension-info
@@ -375,6 +378,7 @@
   :github.copilot-sdk.specs/non-blank-string
   :github.copilot-sdk.specs/notification-queue-size
   :github.copilot-sdk.specs/number
+  :github.copilot-sdk.specs/on-agent-stop
   :github.copilot-sdk.specs/on-auto-mode-switch
   :github.copilot-sdk.specs/on-elicitation-request
   :github.copilot-sdk.specs/on-error-occurred

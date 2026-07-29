@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (agent workflow)
+- **Worktree-safe upstream sync** — the repo-local `update-upstream` skill now
+  uses a tracked helper to resolve the sibling `github/copilot-sdk` checkout
+  through Git's common directory, and no longer switches to `main`, creates a
+  second branch, or depends on an ignored root-level `update.sh`.
+
 ### Added (v1.0.7 sync)
 - **Opaque tool-definition metadata** — port of upstream
   [PR #1864](https://github.com/github/copilot-sdk/pull/1864). `define-tool` and
@@ -33,13 +39,39 @@ All notable changes to this project will be documented in this file. This change
   `"medium"`, `"high"`, or `"xhigh"`. Session create and resume send it as the
   exact `reasoningEffort` wire field. When absent, the field is omitted and does
   not inherit the session-level `:reasoning-effort`.
+- **Strongly typed PascalCase `:exp-assignments` contract** — port of
+  [upstream PR #2033](https://github.com/github/copilot-sdk/pull/2033). Session
+  create and resume configs validate the complete `CopilotExpAssignmentResponse`
+  shape and forward its string-keyed PascalCase fields unchanged.
+- **`:on-agent-stop` session hook** — port of
+  [upstream PR #2054](https://github.com/github/copilot-sdk/pull/2054). Session
+  `:hooks` accept `:on-agent-stop` for runtime `agentStop` callbacks, using the
+  existing allow/block hook decision contract.
+- **Schema regen from 1.0.71-2 through 1.0.73** — port of upstream package bumps
+  [PR #2035](https://github.com/github/copilot-sdk/pull/2035) and
+  [PR #2055](https://github.com/github/copilot-sdk/pull/2055). Regenerated wire
+  specs and coercions. The curated public event sets now include
+  `:copilot/assistant.server_tool_progress`,
+  `:copilot/session.managed_settings_enforced`,
+  `:copilot/session.managed_settings_resolved`, and
+  `:copilot/tool_search.activated`; `assistant.turn_retry` and
+  `model.call_start` remain generated internal-only.
 
 ### Fixed
+- **Hook invocation response envelopes** — `hooks.invoke` now returns the
+  canonical `HookInvokeResponse` wire shape, wrapping non-nil handler values
+  under `output`, omitting `output` for nil values, and preserving opaque MCP
+  metadata within the nested hook output. Unknown session IDs now return an
+  RPC error instead of a successful nil result.
 - **Custom-agent MCP server IDs** —
   [issue #158](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/158).
   Nested `:mcp-servers` now use the same wire serializer as session-level MCP
   servers on both session create and resume, preserving keyword and string
   server IDs while converting each server config to the runtime wire shape.
+- **Variant-local generated validation** — the Clojure schema generator now
+  scopes same-named properties with different schemas to each data variant,
+  preserving `abort`'s closed `reason` enum while `assistant.turn_retry` accepts
+  open strings.
 
 ## [1.0.7-preview.2.1] - 2026-07-15
 ### Added

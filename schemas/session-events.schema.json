@@ -775,6 +775,87 @@
       "description": "Session event \"assistant.reasoning\". Assistant reasoning content for timeline display with complete thinking text",
       "title": "AssistantReasoningEvent"
     },
+    "AssistantServerToolProgressData": {
+      "type": "object",
+      "properties": {
+        "outputIndex": {
+          "type": "integer",
+          "description": "Position of the hosted tool call in the response output. Stable across the call's lifecycle events (unlike the provider's per-event item id, which CAPI rotates), so the host keys the live in-progress row on it."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Kind of hosted server tool that is running. Only `web_search` is emitted today."
+        },
+        "status": {
+          "type": "string",
+          "description": "Lifecycle status of the hosted call: `in_progress`, `searching`, or `completed`."
+        }
+      },
+      "required": [
+        "outputIndex",
+        "kind",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Live progress signal for a provider-hosted server tool (e.g. hosted web search) while it runs, before the finalized serverTools envelope lands on the terminal assistant.message",
+      "title": "AssistantServerToolProgressData"
+    },
+    "AssistantServerToolProgressEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "assistant.server_tool_progress",
+          "description": "Type discriminator. Always \"assistant.server_tool_progress\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AssistantServerToolProgressData",
+          "description": "Live progress signal for a provider-hosted server tool (e.g. hosted web search) while it runs, before the finalized serverTools envelope lands on the terminal assistant.message"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"assistant.server_tool_progress\". Live progress signal for a provider-hosted server tool (e.g. hosted web search) while it runs, before the finalized serverTools envelope lands on the terminal assistant.message",
+      "title": "AssistantServerToolProgressEvent"
+    },
     "AssistantStreamingDeltaData": {
       "type": "object",
       "properties": {
@@ -1004,6 +1085,86 @@
       "description": "Session event \"assistant.turn_end\". Turn completion metadata including the turn identifier",
       "title": "AssistantTurnEndEvent"
     },
+    "AssistantTurnRetryData": {
+      "type": "object",
+      "properties": {
+        "turnId": {
+          "type": "string",
+          "description": "Identifier of the turn whose model inference is being retried"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier used for this retry, when known"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Provider or runtime classification that caused the retry, when known"
+        }
+      },
+      "required": [
+        "turnId"
+      ],
+      "additionalProperties": false,
+      "description": "Metadata for an additional model inference attempt within an existing assistant turn",
+      "title": "AssistantTurnRetryData"
+    },
+    "AssistantTurnRetryEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "assistant.turn_retry",
+          "description": "Type discriminator. Always \"assistant.turn_retry\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AssistantTurnRetryData",
+          "description": "Metadata for an additional model inference attempt within an existing assistant turn"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"assistant.turn_retry\". Metadata for an additional model inference attempt within an existing assistant turn",
+      "title": "AssistantTurnRetryEvent",
+      "visibility": "internal"
+    },
     "AssistantTurnStartData": {
       "type": "object",
       "properties": {
@@ -1182,6 +1343,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Number of tokens written to prompt cache"
+        },
+        "cacheExpiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Updated prompt-cache expiration for this model call. Present only when the call establishes or refreshes known cache state."
         },
         "reasoningTokens": {
           "type": "integer",
@@ -5903,6 +6069,26 @@
         "local": "The handoff originated from a local session."
       }
     },
+    "HeaderEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "HTTP response header name as observed by the runtime."
+        },
+        "value": {
+          "type": "string",
+          "description": "HTTP response header value as observed by the runtime."
+        }
+      },
+      "required": [
+        "name",
+        "value"
+      ],
+      "additionalProperties": false,
+      "description": "Single HTTP header entry as a name/value pair.",
+      "title": "HeaderEntry"
+    },
     "HookEndData": {
       "type": "object",
       "properties": {
@@ -6316,6 +6502,248 @@
       "description": "Session event \"session.info\". Informational message for timeline display with categorization",
       "title": "InfoEvent"
     },
+    "ManagedSettingsEnforcedAction": {
+      "type": "string",
+      "enum": [
+        "bypass_permissions_blocked"
+      ],
+      "description": "The category of runtime action that enterprise managed settings governed (blocked or capped)",
+      "title": "ManagedSettingsEnforcedAction",
+      "x-enumDescriptions": {
+        "bypass_permissions_blocked": "An attempt to turn on a bypass-permissions (\"yolo\") escalation was refused or capped because policy disables bypass-permissions mode."
+      }
+    },
+    "ManagedSettingsEnforcedData": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/ManagedSettingsEnforcedAction",
+          "description": "The category of runtime action that managed policy governed."
+        },
+        "escalation": {
+          "$ref": "#/definitions/ManagedSettingsEnforcedEscalation",
+          "description": "For a `bypass_permissions_blocked` action, which permission-escalation primitive was refused. Absent for actions without a specific escalation primitive."
+        },
+        "setting": {
+          "type": "string",
+          "description": "The managed setting key responsible for the enforcement (e.g. `permissions.disableBypassPermissionsMode`)."
+        },
+        "failClosed": {
+          "type": "boolean",
+          "description": "Whether the enforcement was forced by fail-closed handling (managed policy could not be determined) rather than an explicit managed setting. When true, `setting` still names the restriction that was applied."
+        },
+        "message": {
+          "type": "string",
+          "description": "A human-readable explanation of why the action was governed, suitable for surfacing to the user."
+        }
+      },
+      "required": [
+        "action",
+        "setting",
+        "failClosed",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes.",
+      "title": "ManagedSettingsEnforcedData",
+      "stability": "experimental"
+    },
+    "ManagedSettingsEnforcedEscalation": {
+      "type": "string",
+      "enum": [
+        "allow_all",
+        "approve_all",
+        "auto_approval",
+        "unrestricted_paths",
+        "unrestricted_urls"
+      ],
+      "description": "For a `bypass_permissions_blocked` action, which permission-escalation primitive was refused",
+      "title": "ManagedSettingsEnforcedEscalation",
+      "x-enumDescriptions": {
+        "allow_all": "Full allow-all (\"/allow-all on\") permissions — auto-approving tools, paths, and URLs.",
+        "approve_all": "Auto-approval of all tool permission requests.",
+        "auto_approval": "Advisory auto-approval (\"/allow-all auto\") mode — keeps normal prompt paths and adds LLM-advised approval, distinct from full allow-all.",
+        "unrestricted_paths": "Unrestricted filesystem access outside the session's allowed directories.",
+        "unrestricted_urls": "Unrestricted URL fetch access."
+      }
+    },
+    "ManagedSettingsEnforcedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.managed_settings_enforced",
+          "description": "Type discriminator. Always \"session.managed_settings_enforced\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ManagedSettingsEnforcedData",
+          "description": "Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.managed_settings_enforced\". Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes.",
+      "title": "ManagedSettingsEnforcedEvent",
+      "stability": "experimental"
+    },
+    "ManagedSettingsResolvedData": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/ManagedSettingsResolvedSource",
+          "description": "Which channel supplied the effective managed settings (the winning layer), or `none` when no policy is in force"
+        },
+        "serverManaged": {
+          "type": "boolean",
+          "description": "Whether the server (account/org) managed-settings layer was present"
+        },
+        "deviceManaged": {
+          "type": "boolean",
+          "description": "Whether the device (MDM/plist/registry/file) managed-settings layer was present"
+        },
+        "failClosed": {
+          "type": "boolean",
+          "description": "Whether managed policy could not be determined (e.g. a failed server fetch) and the session fell back to the fail-closed restriction. When true, restrictions such as disabling bypass-permissions are enforced even though `settings` may be absent."
+        },
+        "bypassPermissionsDisabled": {
+          "type": "boolean",
+          "description": "Whether enterprise policy disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers, and forced on when `failClosed` is true."
+        },
+        "managedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The setting keys under enterprise management in the effective managed settings (e.g. `model`, `enabledPlugins`, `permissions`). Empty when no managed settings are in force."
+        },
+        "settings": {
+          "description": "The effective (resolved) managed settings values, so clients can render exactly what is enforced. Absent when no managed policy is in force.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "source",
+        "serverManaged",
+        "deviceManaged",
+        "failClosed",
+        "bypassPermissionsDisabled",
+        "managedKeys"
+      ],
+      "additionalProperties": false,
+      "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes.",
+      "title": "ManagedSettingsResolvedData",
+      "stability": "experimental"
+    },
+    "ManagedSettingsResolvedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.managed_settings_resolved",
+          "description": "Type discriminator. Always \"session.managed_settings_resolved\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ManagedSettingsResolvedData",
+          "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes.",
+      "title": "ManagedSettingsResolvedEvent",
+      "stability": "experimental"
+    },
+    "ManagedSettingsResolvedSource": {
+      "type": "string",
+      "enum": [
+        "server",
+        "device",
+        "none"
+      ],
+      "description": "Which channel supplied the effective enterprise managed settings (highest-authority present layer wins wholesale)",
+      "title": "ManagedSettingsResolvedSource",
+      "x-enumDescriptions": {
+        "server": "Account/org policy self-fetched from the GitHub managed-settings endpoint (higher authority).",
+        "device": "Device-level MDM policy discovered from plist/registry/file (lower authority).",
+        "none": "No managed policy is in force (no layer contributed)."
+      }
+    },
     "McpAppToolCallCompleteData": {
       "type": "object",
       "properties": {
@@ -6672,7 +7100,7 @@
         "serverName"
       ],
       "additionalProperties": false,
-      "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "description": "Payload identifying the MCP server associated with a list change.",
       "title": "McpListChangedData"
     },
     "McpOauthCompletedData": {
@@ -6764,6 +7192,36 @@
         "cancelled": "The request completed without an OAuth provider."
       }
     },
+    "McpOauthHttpResponse": {
+      "type": "object",
+      "properties": {
+        "statusCode": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 999,
+          "description": "HTTP status code returned with the auth challenge."
+        },
+        "headers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HeaderEntry",
+            "description": "Single HTTP header entry as a name/value pair."
+          },
+          "description": "HTTP response headers as observed by the runtime. Order and casing are transport-dependent, and duplicate header names may appear multiple times."
+        },
+        "body": {
+          "type": "string",
+          "description": "Complete UTF-8 response body for host-specific challenge handling, including an empty string for an empty body. Omitted when the complete body is not valid UTF-8; body read failures fail the HTTP operation rather than exposing a partial response."
+        }
+      },
+      "required": [
+        "statusCode",
+        "headers"
+      ],
+      "additionalProperties": false,
+      "description": "Raw HTTP response details from the OAuth auth challenge, as observed by the runtime.",
+      "title": "McpOauthHttpResponse"
+    },
     "McpOauthRequestReason": {
       "type": "string",
       "enum": [
@@ -6803,6 +7261,10 @@
         "wwwAuthenticateParams": {
           "$ref": "#/definitions/McpOauthWWWAuthenticateParams",
           "description": "OAuth WWW-Authenticate parameters parsed from the auth challenge, if available"
+        },
+        "httpResponse": {
+          "$ref": "#/definitions/McpOauthHttpResponse",
+          "description": "Raw HTTP response details from the OAuth auth challenge, as observed by the runtime. Header order and casing are transport-dependent, and duplicate header names may appear multiple times."
         },
         "resourceMetadata": {
           "type": "string",
@@ -6968,7 +7430,7 @@
         },
         "data": {
           "$ref": "#/definitions/McpListChangedData",
-          "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+          "description": "Payload identifying the MCP server associated with a list change."
         }
       },
       "required": [
@@ -6980,7 +7442,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"mcp.prompts.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "description": "Session event \"mcp.prompts.list_changed\". Payload identifying the MCP server associated with a list change.",
       "title": "McpPromptsListChangedEvent"
     },
     "McpResourcesListChangedEvent": {
@@ -7024,7 +7486,7 @@
         },
         "data": {
           "$ref": "#/definitions/McpListChangedData",
-          "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+          "description": "Payload identifying the MCP server associated with a list change."
         }
       },
       "required": [
@@ -7036,7 +7498,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"mcp.resources.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "description": "Session event \"mcp.resources.list_changed\". Payload identifying the MCP server associated with a list change.",
       "title": "McpResourcesListChangedEvent"
     },
     "McpServersLoadedData": {
@@ -7330,7 +7792,7 @@
         },
         "data": {
           "$ref": "#/definitions/McpListChangedData",
-          "description": "Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+          "description": "Payload identifying the MCP server associated with a list change."
         }
       },
       "required": [
@@ -7342,7 +7804,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"mcp.tools.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed.",
+      "description": "Session event \"mcp.tools.list_changed\". Payload identifying the MCP server associated with a list change.",
       "title": "McpToolsListChangedEvent"
     },
     "MemoryChangedData": {
@@ -7532,6 +7994,40 @@
           "format": "duration",
           "description": "Duration of the failed API call in milliseconds"
         },
+        "apiEndpoint": {
+          "$ref": "#/definitions/AssistantUsageApiEndpoint",
+          "description": "API endpoint used for this model call, matching CAPI supported_endpoints vocabulary"
+        },
+        "transport": {
+          "$ref": "#/definitions/ModelCallFailureTransport",
+          "description": "Transport used for the failed model call (http or websocket)"
+        },
+        "failureKind": {
+          "$ref": "#/definitions/ModelCallFailureKind",
+          "description": "Whether the failure originated from an API response or the request transport"
+        },
+        "maxPromptTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective maximum prompt-token limit for the failed call"
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective maximum output-token limit for the failed call"
+        },
+        "isByok": {
+          "type": "boolean",
+          "description": "Whether the failed call used a bring-your-own-key provider"
+        },
+        "isAuto": {
+          "type": "boolean",
+          "description": "Whether the session selected Auto mode for the failed call"
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Reasoning effort level used for the failed model call, if applicable"
+        },
         "source": {
           "$ref": "#/definitions/ModelCallFailureSource",
           "description": "Where the failed model call originated"
@@ -7630,6 +8126,19 @@
       "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry",
       "title": "ModelCallFailureEvent"
     },
+    "ModelCallFailureKind": {
+      "type": "string",
+      "enum": [
+        "api",
+        "transport"
+      ],
+      "description": "Boundary that produced a model call failure",
+      "title": "ModelCallFailureKind",
+      "x-enumDescriptions": {
+        "api": "The provider returned an API error response.",
+        "transport": "The request transport failed before a usable API response completed."
+      }
+    },
     "ModelCallFailureRequestFingerprint": {
       "type": "object",
       "properties": {
@@ -7694,6 +8203,95 @@
         "subagent": "Model call from a sub-agent.",
         "mcp_sampling": "Model call from MCP sampling."
       }
+    },
+    "ModelCallFailureTransport": {
+      "type": "string",
+      "enum": [
+        "http",
+        "websocket"
+      ],
+      "description": "Transport used for a failed model call",
+      "title": "ModelCallFailureTransport",
+      "x-enumDescriptions": {
+        "http": "HTTP transport, including SSE streams.",
+        "websocket": "WebSocket transport."
+      }
+    },
+    "ModelCallStartData": {
+      "type": "object",
+      "properties": {
+        "turnId": {
+          "type": "string",
+          "description": "Identifier of the assistant turn that initiated the model call"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier used for this API call, when known"
+        }
+      },
+      "required": [
+        "turnId"
+      ],
+      "additionalProperties": false,
+      "description": "Model API dispatch metadata for internal telemetry",
+      "title": "ModelCallStartData"
+    },
+    "ModelCallStartEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "model.call_start",
+          "description": "Type discriminator. Always \"model.call_start\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ModelCallStartData",
+          "description": "Model API dispatch metadata for internal telemetry"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"model.call_start\". Model API dispatch metadata for internal telemetry",
+      "title": "ModelCallStartEvent",
+      "visibility": "internal"
     },
     "ModelChangeData": {
       "type": "object",
@@ -10458,8 +11056,17 @@
           "description": "Session event \"assistant.turn_start\". Turn initialization metadata including identifier and interaction tracking"
         },
         {
+          "$ref": "#/definitions/AssistantTurnRetryEvent",
+          "description": "Session event \"assistant.turn_retry\". Metadata for an additional model inference attempt within an existing assistant turn",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/AssistantIntentEvent",
           "description": "Session event \"assistant.intent\". Agent intent description for current activity or plan"
+        },
+        {
+          "$ref": "#/definitions/AssistantServerToolProgressEvent",
+          "description": "Session event \"assistant.server_tool_progress\". Live progress signal for a provider-hosted server tool (e.g. hosted web search) while it runs, before the finalized serverTools envelope lands on the terminal assistant.message"
         },
         {
           "$ref": "#/definitions/AssistantReasoningEvent",
@@ -10506,6 +11113,11 @@
           "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry"
         },
         {
+          "$ref": "#/definitions/ModelCallStartEvent",
+          "description": "Session event \"model.call_start\". Model API dispatch metadata for internal telemetry",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/AbortEvent",
           "description": "Session event \"abort\". Turn abort information including the reason for termination"
         },
@@ -10528,6 +11140,10 @@
         {
           "$ref": "#/definitions/ToolExecutionCompleteEvent",
           "description": "Session event \"tool.execution_complete\". Tool execution completion results including success status, detailed output, and error information"
+        },
+        {
+          "$ref": "#/definitions/ToolSearchActivatedEvent",
+          "description": "Session event \"tool_search.activated\". Persisted generic client-side tool activations restored when a session resumes."
         },
         {
           "$ref": "#/definitions/SkillInvokedEvent",
@@ -10670,6 +11286,14 @@
           "description": "Session event \"session.auto_mode_resolved\". Auto Intent resolution: the concrete model the session settled on for the first prompt of an auto-mode session, and why. Lets SDK clients render the chosen model and the full reason it was picked. The core selection fields (chosenModel/reasoningBucket/categoryScores) are stable; the routing-analytics fields (predictedLabel/confidence/candidateModels) mirror the upstream intent service and may evolve, hence the event's experimental stability."
         },
         {
+          "$ref": "#/definitions/ManagedSettingsResolvedEvent",
+          "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes."
+        },
+        {
+          "$ref": "#/definitions/ManagedSettingsEnforcedEvent",
+          "description": "Session event \"session.managed_settings_enforced\". Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes."
+        },
+        {
           "$ref": "#/definitions/CommandsChangedEvent",
           "description": "Session event \"commands.changed\". SDK command registration change notification"
         },
@@ -10711,15 +11335,15 @@
         },
         {
           "$ref": "#/definitions/McpToolsListChangedEvent",
-          "description": "Session event \"mcp.tools.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+          "description": "Session event \"mcp.tools.list_changed\". Payload identifying the MCP server associated with a list change."
         },
         {
           "$ref": "#/definitions/McpResourcesListChangedEvent",
-          "description": "Session event \"mcp.resources.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+          "description": "Session event \"mcp.resources.list_changed\". Payload identifying the MCP server associated with a list change."
         },
         {
           "$ref": "#/definitions/McpPromptsListChangedEvent",
-          "description": "Session event \"mcp.prompts.list_changed\". Payload of MCP `list_changed` notification events, emitted when an MCP server announces at runtime that one of its advertised lists changed."
+          "description": "Session event \"mcp.prompts.list_changed\". Payload identifying the MCP server associated with a list change."
         },
         {
           "$ref": "#/definitions/ExtensionsLoadedEvent",
@@ -14006,6 +14630,83 @@
         "app": "Tool is callable by the MCP App view (iframe) via session.mcp.apps.callTool"
       }
     },
+    "ToolSearchActivatedData": {
+      "type": "object",
+      "properties": {
+        "strategy": {
+          "type": "string",
+          "description": "Tool-search strategy that activated the definitions."
+        },
+        "toolNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of tool definitions activated by this search invocation."
+        }
+      },
+      "required": [
+        "strategy",
+        "toolNames"
+      ],
+      "additionalProperties": false,
+      "description": "Persisted generic client-side tool activations restored when a session resumes.",
+      "title": "ToolSearchActivatedData"
+    },
+    "ToolSearchActivatedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "tool_search.activated",
+          "description": "Type discriminator. Always \"tool_search.activated\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ToolSearchActivatedData",
+          "description": "Persisted generic client-side tool activations restored when a session resumes."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"tool_search.activated\". Persisted generic client-side tool activations restored when a session resumes.",
+      "title": "ToolSearchActivatedEvent"
+    },
     "ToolsUpdatedData": {
       "type": "object",
       "properties": {
@@ -14279,6 +14980,16 @@
           "minimum": 0,
           "description": "Total number of premium API requests used at checkpoint time",
           "visibility": "internal"
+        },
+        "modelCacheState": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UsageCheckpointModelCacheState",
+            "description": "Internal prompt-cache expiration state for one model",
+            "visibility": "internal"
+          },
+          "description": "Internal per-model prompt-cache state used to restore expiration tracking on resume",
+          "visibility": "internal"
         }
       },
       "required": [
@@ -14341,6 +15052,35 @@
       "additionalProperties": false,
       "description": "Session event \"session.usage_checkpoint\". Durable session usage checkpoint for reconstructing aggregate accounting on resume",
       "title": "UsageCheckpointEvent"
+    },
+    "UsageCheckpointModelCacheState": {
+      "type": "object",
+      "properties": {
+        "modelId": {
+          "type": "string",
+          "description": "Model identifier associated with this cache state"
+        },
+        "cacheExpiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Latest known prompt-cache expiration"
+        },
+        "cacheTtlSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Retained cache lifetime in seconds, used to refresh expiration after a cache read",
+          "visibility": "internal"
+        }
+      },
+      "required": [
+        "modelId",
+        "cacheExpiresAt",
+        "cacheTtlSeconds"
+      ],
+      "additionalProperties": false,
+      "description": "Internal prompt-cache expiration state for one model",
+      "title": "UsageCheckpointModelCacheState",
+      "visibility": "internal"
     },
     "UsageInfoData": {
       "type": "object",

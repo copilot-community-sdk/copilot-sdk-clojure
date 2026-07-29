@@ -1,5 +1,5 @@
 (ns lifecycle-hooks
-  "Lifecycle hooks: register callbacks for session start/end, tool use, prompts, and errors."
+  "Lifecycle hooks: register callbacks for session start/end, agent stop, tool use, prompts, and errors."
   (:require [github.copilot-sdk :as copilot]
             [github.copilot-sdk.helpers :as h]))
 
@@ -45,7 +45,15 @@
                         :on-error-occurred
                         (fn [data _ctx]
                           (println "❌ Hook: error-occurred")
-                          (record! :on-error-occurred data))}}]
+                          (record! :on-error-occurred data))
+
+                        :on-agent-stop
+                        (fn [data _ctx]
+                          (println "🛑 Hook: agent-stop")
+                          (record! :on-agent-stop data)
+                          ;; {:decision "block" :reason "..."} keeps the agent running;
+                          ;; use :stop-hook-active to avoid blocking it repeatedly.
+                          nil)}}]
 
       (println "\nPrompt:" prompt "\n")
       (println "🤖:" (h/query prompt :session session))

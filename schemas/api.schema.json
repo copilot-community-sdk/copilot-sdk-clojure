@@ -1474,6 +1474,263 @@
         }
       }
     },
+    "factory": {
+      "run": {
+        "rpcMethod": "session.factory.run",
+        "description": "Runs a registered factory by name at the top level.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Registered factory name."
+            },
+            "args": {
+              "description": "Factory input value.",
+              "x-opaque-json": true
+            },
+            "options": {
+              "$ref": "#/definitions/RunOptions",
+              "description": "Factory invocation options."
+            }
+          },
+          "required": [
+            "sessionId",
+            "name",
+            "args"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for invoking a registered factory.",
+          "title": "FactoryRunRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryRunResult",
+          "description": "Complete current or terminal factory run envelope."
+        },
+        "stability": "experimental"
+      },
+      "getRun": {
+        "rpcMethod": "session.factory.getRun",
+        "description": "Gets the current or settled envelope for a factory run.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for retrieving a factory run.",
+          "title": "FactoryGetRunRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryRunResult",
+          "description": "Complete current or terminal factory run envelope."
+        },
+        "stability": "experimental"
+      },
+      "cancel": {
+        "rpcMethod": "session.factory.cancel",
+        "description": "Requests cancellation of a factory run and returns its run envelope.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for cancelling a factory run.",
+          "title": "FactoryCancelRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryRunResult",
+          "description": "Complete current or terminal factory run envelope."
+        },
+        "stability": "experimental"
+      },
+      "log": {
+        "rpcMethod": "session.factory.log",
+        "description": "Records a batch of ordered factory progress lines.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/FactoryLogLine",
+                "description": "One ordered factory progress line."
+              },
+              "description": "Ordered progress lines to append."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId",
+            "lines"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for recording factory progress.",
+          "title": "FactoryLogRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryAckResult",
+          "description": "Acknowledgement that a factory request was accepted."
+        },
+        "stability": "experimental"
+      },
+      "agent": {
+        "rpcMethod": "session.factory.agent",
+        "description": "Runs one factory-scoped subagent and returns its result.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "factoryRunId": {
+              "type": "string",
+              "description": "Factory run identifier that owns the subagent."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Prompt to send to the subagent."
+            },
+            "opts": {
+              "$ref": "#/definitions/FactoryAgentOptions",
+              "description": "Subagent execution options."
+            }
+          },
+          "required": [
+            "sessionId",
+            "factoryRunId",
+            "prompt",
+            "opts"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for one factory-scoped subagent call.",
+          "title": "FactoryAgentRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryAgentResult",
+          "description": "Result of one factory-scoped subagent call."
+        },
+        "stability": "experimental"
+      },
+      "journal": {
+        "get": {
+          "rpcMethod": "session.factory.journal.get",
+          "description": "Reads a memoized factory journal entry.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "runId": {
+                "type": "string",
+                "description": "Factory run identifier."
+              },
+              "key": {
+                "type": "string",
+                "description": "Namespaced journal key."
+              }
+            },
+            "required": [
+              "sessionId",
+              "runId",
+              "key"
+            ],
+            "additionalProperties": false,
+            "description": "Parameters for reading a factory journal entry.",
+            "title": "FactoryJournalGetRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/FactoryJournalGetResult",
+            "description": "Result of reading a factory journal entry."
+          },
+          "stability": "experimental"
+        },
+        "put": {
+          "rpcMethod": "session.factory.journal.put",
+          "description": "Stores a memoized factory journal entry.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "runId": {
+                "type": "string",
+                "description": "Factory run identifier."
+              },
+              "key": {
+                "type": "string",
+                "description": "Namespaced journal key."
+              },
+              "resultJson": {
+                "description": "JSON result to memoize.",
+                "x-opaque-json": true
+              }
+            },
+            "required": [
+              "sessionId",
+              "runId",
+              "key",
+              "resultJson"
+            ],
+            "additionalProperties": false,
+            "description": "Parameters for storing a factory journal entry.",
+            "title": "FactoryJournalPutRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/FactoryAckResult",
+            "description": "Acknowledgement that a factory request was accepted."
+          },
+          "stability": "experimental"
+        }
+      }
+    },
     "model": {
       "getCurrent": {
         "rpcMethod": "session.model.getCurrent",
@@ -2850,7 +3107,7 @@
       },
       "listTools": {
         "rpcMethod": "session.mcp.listTools",
-        "description": "Lists the tools exposed by a connected MCP server on this session's host.",
+        "description": "Lists the tools exposed by a connected MCP server on this session's host. This performs a live `tools/list` request. Tool UI metadata is returned independently of whether MCP Apps rendering is enabled for the session.",
         "params": {
           "type": "object",
           "properties": {
@@ -6097,7 +6354,7 @@
       },
       "recordContextChange": {
         "rpcMethod": "session.metadata.recordContextChange",
-        "description": "Records a working-directory/git context change and emits a `session.context_changed` event.",
+        "description": "Records a working-directory/git context change and emits a `session.context_changed` event. For a local session, a report whose `cwd` diverges from the session's current working directory is ignored (the call still succeeds but records nothing and emits no event): a local session's working directory is authoritative and is moved via `metadata.setWorkingDirectory` (or an SDK `session.resume` that supplies a `workingDirectory`), not by this method.",
         "params": {
           "type": "object",
           "properties": {
@@ -6121,7 +6378,7 @@
         },
         "result": {
           "$ref": "#/definitions/MetadataRecordContextChangeResult",
-          "description": "Notify the session that its working directory context has changed. Emits a `session.context_changed` event so consumers (telemetry, OTel tracker, ACP, the timeline UI) can react. Use this when the host has detected a cwd/branch/repo change outside the session's normal lifecycle (e.g., after a shell command in interactive mode)."
+          "description": "Notify the session that its working directory context has changed. Emits a `session.context_changed` event so consumers (telemetry, OTel tracker, ACP, the timeline UI) can react. Use this when the host has detected a cwd/branch/repo change outside the session's normal lifecycle (e.g., after a shell command in interactive mode). For a local session, a report whose `cwd` diverges from the session's current working directory is ignored (the call still succeeds but records nothing and emits no event); move a local session's working directory via `metadata.setWorkingDirectory` instead."
         },
         "stability": "experimental"
       },
@@ -6986,6 +7243,78 @@
         "stability": "experimental"
       }
     },
+    "factory": {
+      "execute": {
+        "rpcMethod": "factory.execute",
+        "description": "Asks the owning extension connection to execute a registered factory closure.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Registered factory name."
+            },
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            },
+            "args": {
+              "description": "Factory input value.",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "name",
+            "runId",
+            "args"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters sent to the owning extension to execute a factory closure.",
+          "title": "FactoryExecuteRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryExecuteResult",
+          "description": "Result returned by an extension factory closure."
+        },
+        "stability": "experimental"
+      },
+      "abort": {
+        "rpcMethod": "factory.abort",
+        "description": "Asks the owning extension connection to abort a running factory cooperatively.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for cooperatively aborting a factory body.",
+          "title": "FactoryAbortRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/FactoryAckResult",
+          "description": "Acknowledgement that a factory request was accepted."
+        },
+        "stability": "experimental"
+      }
+    },
     "sessionFs": {
       "readFile": {
         "rpcMethod": "sessionFs.readFile",
@@ -7597,6 +7926,24 @@
     }
   },
   "clientGlobal": {
+    "hooks": {
+      "invoke": {
+        "rpcMethod": "hooks.invoke",
+        "description": "Dispatches one SDK callback hook from the runtime to the connection that registered it. Internal transport plumbing: clients opt in through session initialization and the Rust hook processor owns ordering, policy, timeout, and callback routing.",
+        "params": {
+          "$ref": "#/definitions/HookInvokeRequest",
+          "description": "Runtime-owned wire payload for a server-to-client hook callback invocation.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/HookInvokeResponse",
+          "description": "Optional output returned by an SDK callback hook.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      }
+    },
     "llmInference": {
       "httpRequestStart": {
         "rpcMethod": "llmInference.httpRequestStart",
@@ -12107,6 +12454,475 @@
       "description": "Plain text content block",
       "title": "ExternalToolTextResultForLlmContentText"
     },
+    "FactoryAbortRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for cooperatively aborting a factory body.",
+      "title": "FactoryAbortRequest",
+      "stability": "experimental"
+    },
+    "FactoryAckResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Acknowledgement that a factory request was accepted.",
+      "title": "FactoryAckResult"
+    },
+    "FactoryAgentOptions": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Optional label distinguishing otherwise identical memoized agent calls."
+        },
+        "schema": {
+          "description": "Optional JSON Schema for structured agent output.",
+          "x-opaque-json": true
+        },
+        "model": {
+          "type": "string",
+          "description": "Optional model identifier for the subagent."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options for one factory-scoped subagent call.",
+      "title": "FactoryAgentOptions",
+      "stability": "experimental"
+    },
+    "FactoryAgentRequest": {
+      "type": "object",
+      "properties": {
+        "factoryRunId": {
+          "type": "string",
+          "description": "Factory run identifier that owns the subagent."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt to send to the subagent."
+        },
+        "opts": {
+          "$ref": "#/definitions/FactoryAgentOptions",
+          "description": "Subagent execution options."
+        }
+      },
+      "required": [
+        "factoryRunId",
+        "prompt",
+        "opts"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for one factory-scoped subagent call.",
+      "title": "FactoryAgentRequest",
+      "stability": "experimental"
+    },
+    "FactoryAgentResult": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Agent result, omitted when the agent produced no result.",
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Result of one factory-scoped subagent call.",
+      "title": "FactoryAgentResult"
+    },
+    "FactoryCancelRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for cancelling a factory run.",
+      "title": "FactoryCancelRequest",
+      "stability": "experimental"
+    },
+    "FactoryExecuteRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registered factory name."
+        },
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        },
+        "args": {
+          "description": "Factory input value.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "name",
+        "runId",
+        "args"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters sent to the owning extension to execute a factory closure.",
+      "title": "FactoryExecuteRequest",
+      "stability": "experimental"
+    },
+    "FactoryExecuteResult": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Factory result value.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "result"
+      ],
+      "additionalProperties": false,
+      "description": "Result returned by an extension factory closure.",
+      "title": "FactoryExecuteResult"
+    },
+    "FactoryGetRunRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for retrieving a factory run.",
+      "title": "FactoryGetRunRequest",
+      "stability": "experimental"
+    },
+    "FactoryJournalGetRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        },
+        "key": {
+          "type": "string",
+          "description": "Namespaced journal key."
+        }
+      },
+      "required": [
+        "runId",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for reading a factory journal entry.",
+      "title": "FactoryJournalGetRequest",
+      "stability": "experimental"
+    },
+    "FactoryJournalGetResult": {
+      "type": "object",
+      "properties": {
+        "hit": {
+          "type": "boolean",
+          "description": "Whether the journal contained the requested key."
+        },
+        "resultJson": {
+          "description": "Cached JSON result. The hit field distinguishes a cached JSON null from a miss.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "hit"
+      ],
+      "additionalProperties": false,
+      "description": "Result of reading a factory journal entry.",
+      "title": "FactoryJournalGetResult"
+    },
+    "FactoryJournalPutRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        },
+        "key": {
+          "type": "string",
+          "description": "Namespaced journal key."
+        },
+        "resultJson": {
+          "description": "JSON result to memoize.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "runId",
+        "key",
+        "resultJson"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for storing a factory journal entry.",
+      "title": "FactoryJournalPutRequest",
+      "stability": "experimental"
+    },
+    "FactoryLogLine": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic sequence number within the factory run."
+        },
+        "kind": {
+          "$ref": "#/definitions/FactoryLogLineKind",
+          "description": "Progress line kind."
+        },
+        "text": {
+          "type": "string",
+          "description": "Progress text."
+        }
+      },
+      "required": [
+        "seq",
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false,
+      "description": "One ordered factory progress line.",
+      "title": "FactoryLogLine",
+      "stability": "experimental"
+    },
+    "FactoryLogLineKind": {
+      "type": "string",
+      "enum": [
+        "log",
+        "phase"
+      ],
+      "description": "Kind of factory progress line.",
+      "title": "FactoryLogLineKind",
+      "x-enumDescriptions": {
+        "log": "A narrator log line.",
+        "phase": "A named factory phase marker."
+      }
+    },
+    "FactoryLogRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FactoryLogLine",
+            "description": "One ordered factory progress line."
+          },
+          "description": "Ordered progress lines to append."
+        }
+      },
+      "required": [
+        "runId",
+        "lines"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for recording factory progress.",
+      "title": "FactoryLogRequest",
+      "stability": "experimental"
+    },
+    "FactoryRunFailure": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "$ref": "#/definitions/FactoryRunFailureKind",
+              "description": "Resource ceiling that stopped the run."
+            },
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Approved effective ceiling that was reached."
+            },
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            },
+            "type": {
+              "type": "string",
+              "const": "factory_limit_reached"
+            }
+          },
+          "required": [
+            "type",
+            "kind",
+            "value",
+            "runId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier whose changed limits were declined."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Human-readable reason the resume did not proceed."
+            },
+            "type": {
+              "type": "string",
+              "const": "factory_resume_declined"
+            }
+          },
+          "required": [
+            "type",
+            "runId",
+            "reason"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Machine-readable factory run failure.",
+      "title": "FactoryRunFailure"
+    },
+    "FactoryRunFailureKind": {
+      "type": "string",
+      "enum": [
+        "maxTotalSubagents",
+        "timeout"
+      ],
+      "description": "Cumulative resource ceiling that stopped a factory run.",
+      "title": "FactoryRunFailureKind",
+      "x-enumDescriptions": {
+        "maxTotalSubagents": "The run admitted the approved maximum total number of subagents.",
+        "timeout": "The run reached the approved timeout deadline."
+      }
+    },
+    "FactoryRunLimits": {
+      "type": "object",
+      "properties": {
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": 0,
+          "description": "Maximum number of factory subagents that may run concurrently."
+        },
+        "maxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "exclusiveMinimum": 0,
+          "description": "Maximum total number of factory subagents that may be admitted."
+        },
+        "timeout": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Factory active-run timeout in milliseconds."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Wire-only per-invocation factory resource ceiling overrides.",
+      "title": "FactoryRunLimits",
+      "stability": "experimental"
+    },
+    "FactoryRunRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registered factory name."
+        },
+        "args": {
+          "description": "Factory input value.",
+          "x-opaque-json": true
+        },
+        "options": {
+          "$ref": "#/definitions/RunOptions",
+          "description": "Factory invocation options."
+        }
+      },
+      "required": [
+        "name",
+        "args"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for invoking a registered factory.",
+      "title": "FactoryRunRequest",
+      "stability": "experimental"
+    },
+    "FactoryRunResult": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        },
+        "status": {
+          "$ref": "#/definitions/FactoryRunStatus",
+          "description": "Current or terminal factory run status."
+        },
+        "result": {
+          "description": "Completed factory result.",
+          "x-opaque-json": true
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message for an errored run."
+        },
+        "failure": {
+          "$ref": "#/definitions/FactoryRunFailure",
+          "description": "Machine-readable failure details for an errored run."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for a halted or cancelled run."
+        },
+        "snapshot": {
+          "description": "Partial journal and progress snapshot for a halted, cancelled, or errored run.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "runId",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Complete current or terminal factory run envelope.",
+      "title": "FactoryRunResult"
+    },
+    "FactoryRunStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "halted",
+        "cancelled",
+        "error"
+      ],
+      "description": "Current or terminal state of a factory run.",
+      "title": "FactoryRunStatus",
+      "x-enumDescriptions": {
+        "pending": "The run was minted and is awaiting approval.",
+        "running": "The run is executing.",
+        "completed": "The run completed successfully.",
+        "halted": "The run was interrupted while resource budget remained.",
+        "cancelled": "The run was cancelled before completion.",
+        "error": "The factory body failed or reached a cumulative resource ceiling."
+      }
+    },
     "FilterMapping": {
       "anyOf": [
         {
@@ -12650,6 +13466,85 @@
       "description": "Authentication-info variant for GitHub-internal HMAC auth, carrying the public GitHub host and HMAC secret.",
       "title": "HMACAuthInfo"
     },
+    "HookInvokeRequest": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string"
+        },
+        "hookType": {
+          "$ref": "#/definitions/HookType"
+        },
+        "input": {
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "sessionId",
+        "hookType",
+        "input"
+      ],
+      "additionalProperties": false,
+      "description": "Runtime-owned wire payload for a server-to-client hook callback invocation.",
+      "title": "HookInvokeRequest",
+      "visibility": "internal"
+    },
+    "HookInvokeResponse": {
+      "type": "object",
+      "properties": {
+        "output": {
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional output returned by an SDK callback hook.",
+      "title": "HookInvokeResponse",
+      "visibility": "internal"
+    },
+    "HookType": {
+      "type": "string",
+      "enum": [
+        "preToolUse",
+        "preMcpToolCall",
+        "postToolUse",
+        "postToolUseFailure",
+        "userPromptSubmitted",
+        "userPromptTransformed",
+        "sessionStart",
+        "sessionEnd",
+        "postResult",
+        "prePRDescription",
+        "errorOccurred",
+        "agentStop",
+        "subagentStart",
+        "subagentStop",
+        "preCompact",
+        "permissionRequest",
+        "notification"
+      ],
+      "description": "Hook event name dispatched through the SDK callback transport.",
+      "title": "HookType",
+      "visibility": "internal",
+      "x-enumDescriptions": {
+        "preToolUse": "Runs before a tool is invoked.",
+        "preMcpToolCall": "Runs before an MCP tool is invoked.",
+        "postToolUse": "Runs after a tool completes successfully.",
+        "postToolUseFailure": "Runs after a tool fails.",
+        "userPromptSubmitted": "Runs after the user submits a prompt.",
+        "userPromptTransformed": "Runs after the runtime transforms the submitted prompt for the model, before it is added to session history.",
+        "sessionStart": "Runs when a session starts.",
+        "sessionEnd": "Runs when a session ends.",
+        "postResult": "Runs after an agent result is produced.",
+        "prePRDescription": "Runs before a pull request description is generated.",
+        "errorOccurred": "Runs when the agent encounters an error.",
+        "agentStop": "Runs when the agent stops.",
+        "subagentStart": "Runs when a subagent starts.",
+        "subagentStop": "Runs when a subagent stops.",
+        "preCompact": "Runs before conversation context is compacted.",
+        "permissionRequest": "Runs when the agent requests permission.",
+        "notification": "Runs when the agent emits a notification."
+      }
+    },
     "InstalledPlugin": {
       "type": "object",
       "properties": {
@@ -13099,6 +13994,10 @@
         "cancelReason": {
           "type": "string",
           "description": "Optional human-readable reason for the cancellation, propagated for logging."
+        },
+        "agentInvocationId": {
+          "type": "string",
+          "description": "Identity of the agent invocation (one agentic loop) this body chunk belongs to, matching the `agentInvocationId` semantics on httpRequestStart. Carried per chunk so a persistent transport can attribute successive turns correctly: when a WebSocket connection is reused across turns, the httpRequestStart identity reflects only the turn that opened the connection, so each later turn stamps its own invocation id here. Absent when the runtime has no invocation context for the request, or on the plain-HTTP transport where every request has its own httpRequestStart."
         }
       },
       "required": [
@@ -13144,11 +14043,15 @@
         },
         "agentId": {
           "type": "string",
-          "description": "Stable per-agent-instance id attributing this request to a specific agent trajectory. Present when the request originates from an agent turn; absent for requests issued outside any agent context (e.g. some SDK callers). A request with an `agentId` but no `parentAgentId` is a root-agent request; one carrying both is a subagent request. Sourced from the runtime's per-request agent context and surfaced on the envelope independently of transport, so it is available for both first-party (CAPI) and BYOK/custom-provider requests; on the CAPI transport the runtime derives the upstream `X-Agent-Task-Id` header from this same context. Consumers routing each provider call to a training trajectory should key on this rather than on lifecycle events, since it is available on the request path before sampling."
+          "description": "Stable identity of the agent trajectory that issued this request. Present when the request originates from an agent turn; absent for requests outside any agent context. This is the same identity used by lifecycle and bridged session events and remains constant across turns and retries."
         },
         "parentAgentId": {
           "type": "string",
-          "description": "Id of the parent agent that spawned the agent issuing this request. Present only for subagent requests; absent for root-agent requests and non-agent requests. Combined with `agentId`, this lets consumers attribute a call to a child trajectory versus the root. Like `agentId`, it comes from the runtime's per-request agent context independently of transport; on the CAPI transport the runtime derives the upstream `X-Parent-Agent-Id` header from this same context."
+          "description": "Stable identity of the immediate parent trajectory. Present for child trajectories such as subagents and conversation-sampling requests; absent for root-agent and non-agent requests."
+        },
+        "agentInvocationId": {
+          "type": "string",
+          "description": "Identity of the agent invocation (one agentic loop) that issued this request. It remains fixed across physical retries within the invocation and is distinct from the stable trajectory `agentId`. A caller-supplied invocation id always takes precedence (this covers auxiliary calls that have no model call id). Otherwise, first-party CAPI requests fall back to the runtime's agent task id — the same value the runtime emits as the `X-Agent-Task-Id` header — while custom-provider requests fall back to the model call id."
         },
         "interactionType": {
           "type": "string",
@@ -14625,7 +15528,7 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/McpTools",
-            "description": "MCP tool metadata with tool name and optional description."
+            "description": "MCP tool metadata with tool name, optional description, and normalized MCP Apps discovery metadata."
           },
           "description": "Tools exposed by the server."
         }
@@ -15739,14 +16642,51 @@
         "description": {
           "type": "string",
           "description": "Tool description, when provided."
+        },
+        "ui": {
+          "$ref": "#/definitions/McpToolUi",
+          "description": "Normalized MCP Apps discovery metadata. An empty object indicates that a valid `_meta.ui` block was present without recognized fields."
         }
       },
       "required": [
         "name"
       ],
       "additionalProperties": false,
-      "description": "MCP tool metadata with tool name and optional description.",
+      "description": "MCP tool metadata with tool name, optional description, and normalized MCP Apps discovery metadata.",
       "title": "McpTools"
+    },
+    "McpToolUi": {
+      "type": "object",
+      "properties": {
+        "resourceUri": {
+          "type": "string",
+          "description": "URI of the tool's MCP App resource, typically a `ui://` resource identifier. Use `session.mcp.resources.read` to fetch its HTML and resource metadata."
+        },
+        "visibility": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpToolUiVisibility",
+            "description": "Consumer allowed to call an MCP tool."
+          },
+          "description": "Tool visibility advertised by the server. When absent, MCP Apps defaults apply."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Normalized MCP Apps discovery metadata from a tool's `_meta.ui` block.",
+      "title": "McpToolUi"
+    },
+    "McpToolUiVisibility": {
+      "type": "string",
+      "enum": [
+        "model",
+        "app"
+      ],
+      "description": "Consumer allowed to call an MCP tool.",
+      "title": "McpToolUiVisibility",
+      "x-enumDescriptions": {
+        "model": "The model may call the tool.",
+        "app": "An MCP App view may call the tool."
+      }
     },
     "McpUnregisterExternalClientRequest": {
       "type": "object",
@@ -15954,7 +16894,7 @@
       "type": "object",
       "properties": {},
       "additionalProperties": false,
-      "description": "Notify the session that its working directory context has changed. Emits a `session.context_changed` event so consumers (telemetry, OTel tracker, ACP, the timeline UI) can react. Use this when the host has detected a cwd/branch/repo change outside the session's normal lifecycle (e.g., after a shell command in interactive mode).",
+      "description": "Notify the session that its working directory context has changed. Emits a `session.context_changed` event so consumers (telemetry, OTel tracker, ACP, the timeline UI) can react. Use this when the host has detected a cwd/branch/repo change outside the session's normal lifecycle (e.g., after a shell command in interactive mode). For a local session, a report whose `cwd` diverges from the session's current working directory is ignored (the call still succeeds but records nothing and emits no event); move a local session's working directory via `metadata.setWorkingDirectory` instead.",
       "title": "MetadataRecordContextChangeResult"
     },
     "MetadataSetWorkingDirectoryRequest": {
@@ -21347,6 +22287,23 @@
       "description": "Repository context for the remote session.",
       "title": "RemoteSessionRepository"
     },
+    "RunOptions": {
+      "type": "object",
+      "properties": {
+        "limits": {
+          "$ref": "#/definitions/FactoryRunLimits",
+          "description": "Per-invocation resource ceiling overrides."
+        },
+        "resumeFromRunId": {
+          "type": "string",
+          "description": "Run identifier whose journal and progress should seed this resumed run."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options controlling factory invocation.",
+      "title": "RunOptions",
+      "stability": "experimental"
+    },
     "SandboxConfig": {
       "type": "object",
       "properties": {
@@ -21361,6 +22318,14 @@
         "addCurrentWorkingDirectory": {
           "type": "boolean",
           "description": "Whether to auto-add the current working directory to readwritePaths. Default: true."
+        },
+        "gitAuth": {
+          "type": "boolean",
+          "description": "Whether to inject the Copilot GitHub token as an `http.<host>.extraheader` so authenticated HTTPS git works inside the sandbox without the shell-based credential helper the sandbox blocks. Default: false (opt-in)."
+        },
+        "ghAuth": {
+          "type": "boolean",
+          "description": "Whether to export `GH_TOKEN` so the `gh` CLI authenticates inside the sandbox without the OS keyring the sandbox blocks. Default: false (opt-in)."
         }
       },
       "required": [
@@ -21969,6 +22934,13 @@
             "description": "Server-side skill metadata, including name, description, source, enabled/invocable state, path, project path, and argument hint."
           },
           "description": "All discovered skills across all sources"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Messages for skills that failed to load (e.g. malformed SKILL.md). Empty when host skills are excluded so host-local paths are not disclosed to multitenant callers."
         }
       },
       "required": [
@@ -23267,6 +24239,14 @@
           },
           "description": "Available models, ordered with the most preferred default first. Includes both Copilot (CAPI) models and any registry BYOK models; a BYOK model appears under its provider-qualified selection id (`provider/id`)."
         },
+        "modelPriceCategories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SessionModelPriceCategory",
+            "description": "Cost-category metadata for a CAPI model."
+          },
+          "description": "Cost categories for the full CAPI catalog, including picker-disabled models that Auto may select. Metadata only; entries absent from `list` are not manually selectable."
+        },
         "quotaSnapshots": {
           "type": "object",
           "additionalProperties": {
@@ -23281,6 +24261,24 @@
       "additionalProperties": false,
       "description": "The list of models available to this session.",
       "title": "SessionModelList"
+    },
+    "SessionModelPriceCategory": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "priceCategory": {
+          "$ref": "#/definitions/ModelPickerPriceCategory"
+        }
+      },
+      "required": [
+        "id",
+        "priceCategory"
+      ],
+      "additionalProperties": false,
+      "description": "Cost-category metadata for a CAPI model.",
+      "title": "SessionModelPriceCategory"
     },
     "SessionOpenOptions": {
       "type": "object",
@@ -25333,6 +26331,11 @@
         "success": {
           "type": "boolean",
           "description": "Whether the operation succeeded"
+        },
+        "pluginHookCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of hooks loaded from installed plugins, returned when installedPlugins is updated"
         }
       },
       "required": [
@@ -28099,6 +29102,11 @@
         "usage": {
           "$ref": "#/definitions/UsageMetricsModelMetricUsage",
           "description": "Token usage metrics for this model"
+        },
+        "cacheExpiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Latest known prompt-cache expiration for this model. A timestamp in the past indicates that the observed cache has expired."
         },
         "totalNanoAiu": {
           "type": "number",
