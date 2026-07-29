@@ -4259,8 +4259,8 @@
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
       (is (= {:command "echo hi"} (get-in @handler-called [:input :tool-args])))
       (is (= session-id (get-in @handler-called [:ctx :session-id])))
-      ;; Response contains the handler's return value (wire-converted)
-      (is (= "allow" (get-in response [:result :permissionDecision]))))))
+      ;; HookInvokeResponse wraps the handler's return value under output.
+      (is (= "allow" (get-in response [:result :output :permissionDecision]))))))
 
 (deftest test-hooks-agent-stop
   (testing "hooks.invoke agentStop calls the registered handler and returns a block decision"
@@ -4292,7 +4292,7 @@
              (:input @handler-called)))
       (is (= {:session-id session-id} (:ctx @handler-called)))
       (is (= {:decision "block" :reason "fix the remaining findings"}
-             (:result response)))))
+             (get-in response [:result :output])))))
   (testing "nil and handler errors both let the agent stop"
     (doseq [handler [(fn [_ _] nil)
                      (fn [_ _] (throw (Exception. "agent-stop failed")))]]
@@ -4305,7 +4305,7 @@
                                               :hookType "agentStop"
                                               :input {:timestamp 1700000000000
                                                       :cwd "/workspace"}})]
-        (is (nil? (:result response)))))))
+        (is (= {} (:result response)))))))
 
 (deftest test-hooks-post-tool-use
   (testing "hooks.invoke postToolUse calls registered handler"
@@ -4329,8 +4329,8 @@
                                                     :cwd "/workspace"}})]
       (is (some? @handler-called))
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
-      ;; Handler returned nil, so result is nil
-      (is (nil? (:result response))))))
+      ;; Handler returned nil, so the response has no output.
+      (is (= {} (:result response))))))
 
 (deftest test-hooks-post-tool-use-failure
   (testing "hooks.invoke postToolUseFailure calls registered handler (upstream PR #1421)"
@@ -4355,13 +4355,13 @@
       (is (= "bash" (get-in @handler-called [:input :tool-name])))
       (is (= "command exited 1" (get-in @handler-called [:input :error])))
       (is (= session-id (get-in @handler-called [:input :session-id])))
-      (is (= "noted" (get-in response [:result :additionalContext]))))))
+      (is (= "noted" (get-in response [:result :output :additionalContext]))))))
 
 (deftest test-hooks-post-tool-use-failure-no-handler
-  (testing "hooks.invoke postToolUseFailure with no handler returns nil result"
+  (testing "hooks.invoke postToolUseFailure with no handler returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
-                                       ;; Only success hook registered; failure should pass through as nil.
+                                       ;; Only success hook registered; failure should pass through without output.
                                        :hooks {:on-post-tool-use
                                                (fn [_ _] nil)}})
           session-id (sdk/session-id session)
@@ -4374,7 +4374,7 @@
                                                     :error "boom"
                                                     :timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
 
 (deftest test-hooks-session-start
   (testing "hooks.invoke sessionStart calls registered handler"
@@ -4395,10 +4395,10 @@
                                                     :cwd "/workspace"}})]
       (is (some? @handler-called))
       (is (= "new" (:source @handler-called)))
-      (is (= "welcome" (get-in response [:result :additionalContext]))))))
+      (is (= "welcome" (get-in response [:result :output :additionalContext]))))))
 
-(deftest test-hooks-unknown-type-returns-nil
-  (testing "hooks.invoke with unknown hook type returns nil result"
+(deftest test-hooks-unknown-type-returns-empty-response
+  (testing "hooks.invoke with unknown hook type returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :hooks {:on-pre-tool-use (fn [_ _] {:permission-decision "allow"})}})
@@ -4409,10 +4409,10 @@
                                             :hookType "unknownHookType"
                                             :input {:timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
 
-(deftest test-hooks-handler-exception-returns-nil
-  (testing "hooks.invoke handler exception returns nil gracefully"
+(deftest test-hooks-handler-exception-returns-empty-response
+  (testing "hooks.invoke handler exception returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :hooks {:on-pre-tool-use (fn [_ _] (throw (Exception. "oops")))}})
@@ -4425,10 +4425,10 @@
                                                     :toolArgs {}
                                                     :timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
 
 (deftest test-hooks-no-hooks-registered
-  (testing "hooks.invoke with no hooks registered returns nil"
+  (testing "hooks.invoke with no hooks registered returns an empty response"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
@@ -4440,7 +4440,19 @@
                                                     :toolArgs {}
                                                     :timestamp 12345
                                                     :cwd "/workspace"}})]
-      (is (nil? (:result response))))))
+      (is (= {} (:result response))))))
+
+(deftest test-hooks-unknown-session
+  (testing "hooks.invoke with an unknown session returns an RPC error"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Unknown session: missing-session"
+         (mock/send-rpc-request! *mock-server*
+                                 "hooks.invoke"
+                                 {:sessionId "missing-session"
+                                  :hookType "agentStop"
+                                  :input {:timestamp 1700000000000
+                                          :cwd "/workspace"}})))))
 
 (deftest test-hooks-input-exposes-session-id
   (testing "hook input includes :session-id (upstream PR #1290 — BaseHookInput.sessionId)"
@@ -4568,10 +4580,10 @@
                                                     :cwd "/workspace"
                                                     :sessionId session-id}})]
       ;; The wire field name is metaToUse, NOT meta-to-use
-      (is (contains? (:result response) :metaToUse))
-      (is (not (contains? (:result response) :meta-to-use)))
+      (is (contains? (get-in response [:result :output]) :metaToUse))
+      (is (not (contains? (get-in response [:result :output]) :meta-to-use)))
       ;; Inner map preserved verbatim — inner keys NOT camelCased
-      (is (= opaque-replacement (get-in response [:result :metaToUse]))))))
+      (is (= opaque-replacement (get-in response [:result :output :metaToUse]))))))
 
 (deftest test-hooks-pre-mcp-tool-call-output-meta-to-use-null
   (testing "preMcpToolCall: :meta-to-use nil serializes as JSON null (key present with null value)"
@@ -4592,11 +4604,11 @@
                                                     :cwd "/workspace"
                                                     :sessionId session-id}})]
       ;; The metaToUse key MUST be present (not absent) and its value MUST be null.
-      (is (contains? (:result response) :metaToUse))
-      (is (nil? (get-in response [:result :metaToUse]))))))
+      (is (contains? (get-in response [:result :output]) :metaToUse))
+      (is (nil? (get-in response [:result :output :metaToUse]))))))
 
 (deftest test-hooks-pre-mcp-tool-call-output-no-meta-to-use
-  (testing "preMcpToolCall: handler returning {} or nil omits metaToUse field"
+  (testing "preMcpToolCall: handler returning {} omits metaToUse field"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all
                                        :hooks {:on-pre-mcp-tool-call
@@ -4612,7 +4624,8 @@
                                                     :timestamp 12345
                                                     :cwd "/workspace"
                                                     :sessionId session-id}})]
-      (is (not (contains? (:result response) :metaToUse))))))
+      (is (= {:output {}} (:result response)))
+      (is (not (contains? (get-in response [:result :output]) :metaToUse))))))
 
 ;; -----------------------------------------------------------------------------
 ;; User Input Handler Tests (server→client RPC)

@@ -882,7 +882,7 @@
    (fn []
      (let [hooks (:hooks (session-state client session-id))]
        (if-not hooks
-         {:result nil}
+         {:result {}}
          (let [;; Map hook type strings to handler keywords
                handler-key (case hook-type
                              "preToolUse" :on-pre-tool-use
@@ -897,7 +897,7 @@
                              nil)
                handler (when handler-key (get hooks handler-key))]
            (if-not handler
-             {:result nil}
+             {:result {}}
              (try
                (let [;; Upstream PR #1290: BaseHookInput.sessionId. Preserve the
                  ;; wire-provided :session-id when present (it may identify a
@@ -911,10 +911,11 @@
                      result (if (channel? result)
                               (<!! result)
                               result)]
-                 {:result result})
+                 {:result (cond-> {}
+                            (some? result) (assoc :output result))})
                (catch Exception e
                  (log/error "Hook handler error for session " session-id ", hook " hook-type ": " (ex-message e))
-                 {:result nil})))))))
+                 {:result {}})))))))
    :io))
 
 (defn handle-command-execute!

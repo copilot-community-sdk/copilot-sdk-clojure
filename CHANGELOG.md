@@ -52,6 +52,11 @@ All notable changes to this project will be documented in this file. This change
   `model.call_start` remain generated internal-only.
 
 ### Fixed
+- **Hook invocation response envelopes** — `hooks.invoke` now returns the
+  canonical `HookInvokeResponse` wire shape, wrapping non-nil handler values
+  under `output`, omitting `output` for nil values, and preserving opaque MCP
+  metadata within the nested hook output. Unknown session IDs now return an
+  RPC error instead of a successful nil result.
 - **Custom-agent MCP server IDs** —
   [issue #158](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/158).
   Nested `:mcp-servers` now use the same wire serializer as session-level MCP
