@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (agent workflow)
+- **Worktree-safe upstream sync** — the repo-local `update-upstream` skill now
+  uses a tracked helper to resolve the sibling `github/copilot-sdk` checkout
+  through Git's common directory, and no longer switches to `main`, creates a
+  second branch, or depends on an ignored root-level `update.sh`.
+
 ### Added (v1.0.7 sync)
 - **Opaque tool-definition metadata** — port of upstream
   [PR #1864](https://github.com/github/copilot-sdk/pull/1864). `define-tool` and

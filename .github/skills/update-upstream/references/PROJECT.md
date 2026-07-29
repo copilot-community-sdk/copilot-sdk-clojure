@@ -4,11 +4,26 @@ This reference supplements `AGENTS.md` (the canonical project reference) with sy
 
 For project structure, testing commands, version format, changelog conventions, and code quality expectations, see `AGENTS.md`.
 
+## Upstream Checkout
+
+Resolve the local upstream checkout from any normal checkout or linked
+worktree:
+
+```bash
+UPSTREAM_REPO="$(bash .github/skills/update-upstream/scripts/resolve-upstream.sh)"
+```
+
+The helper finds the primary `copilot-sdk-clojure` checkout through Git's
+common directory, then resolves its `copilot-sdk` sibling. Set
+`COPILOT_SDK_UPSTREAM` when the upstream checkout lives elsewhere. Re-resolve
+the variable in each shell tool call because shell environments do not
+persist between calls.
+
 ## Upstream ↔ Clojure File Mapping
 
 When syncing, map upstream changes to the corresponding Clojure files:
 
-### Upstream (../copilot-sdk)
+### Upstream (`$UPSTREAM_REPO`)
 
 | Upstream File | Contains |
 |---------------|----------|
