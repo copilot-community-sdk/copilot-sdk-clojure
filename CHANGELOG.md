@@ -124,11 +124,20 @@ All notable changes to this project will be documented in this file. This change
   Regenerated wire specs and coercions underlying the additions above.
 
 ### Changed (v1.0.9 sync)
+- **BREAKING: `approve-all` now respects managed policy** — when
+  `:enable-managed-settings?` or `:managed-settings` activates enterprise
+  policy, `approve-all` throws instead of bypassing the policy. Requests with
+  `:managed-approval-required true` return `{:kind :no-result}` so the host can
+  collect an explicit user decision. This is the fail-closed behavior from
+  [upstream PR #2080](https://github.com/github/copilot-sdk/pull/2080).
 - **Managed approval requirement exposed on permission requests** — port of
   [upstream PR #2080](https://github.com/github/copilot-sdk/pull/2080).
   Permission-request data now surfaces whether a request requires managed
   (host-side) approval, so an `on-permission-request` handler can distinguish
   managed-approval requests from ordinary caller-approved ones.
+- **Open-ended model promotions** — `:promo` maps no longer require
+  `:ends-at`, matching schema `1.0.79-6`, where a promotion without an expiry
+  omits the field.
 - **Version bump to `1.0.9.0`** — synced with upstream `copilot-sdk` release
   `1.0.9` via `clj -T:build sync-version`, tracked by the v1.0.9 sync entries
   above.

@@ -2159,8 +2159,7 @@
   (s/and number? #(<= 0 % 100)))
 (s/def ::ends-at string?)
 (s/def ::model-billing-promo
-  (s/and (s/keys :req-un [::ends-at]
-                 :opt-un [::id ::discount-percent])
+  (s/and (s/keys :opt-un [::ends-at ::id ::discount-percent])
          #(or (not (contains? % :message))
               (string? (:message %)))))
 (s/def ::promo ::model-billing-promo)

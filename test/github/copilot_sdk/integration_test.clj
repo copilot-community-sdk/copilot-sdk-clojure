@@ -1331,6 +1331,10 @@
                            :discount-percent 25.5
                            :ends-at "2026-08-01T00:00:00Z"
                            :message "Launch promotion"}}))
+    (is (s/valid? ::specs/model-billing
+                  {:promo {:id "open-ended"
+                           :discount-percent 10
+                           :message "Open-ended promotion"}}))
     (is (not (s/valid? ::specs/model-billing
                        {:promo {:ends-at 42}})))))
 
