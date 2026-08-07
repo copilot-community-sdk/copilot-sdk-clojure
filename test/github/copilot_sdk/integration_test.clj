@@ -8,13 +8,14 @@
             [clojure.tools.logging.test :as log-test]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
+            [github.copilot-sdk.factory :as factory]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.tools :as tools]
             [github.copilot-sdk.util :as util]
-            [github.copilot-sdk.generated.event-specs]
+            [github.copilot-sdk.generated.event-specs :as generated-events]
             [github.copilot-sdk.mock-server :as mock]))
 
 ;; Fixture to manage mock server lifecycle
@@ -41,6 +42,397 @@
           (mock/stop-mock-server! server))))))
 
 (use-fixtures :each with-mock-server)
+
+(deftest test-upstream-1-0-79-event-schema
+  (testing "generated and curated surfaces include new public events"
+    (doseq [[wire-type idiom-type]
+            [["session.context_cleared" :copilot/session.context_cleared]
+             ["factory.run_updated" :copilot/factory.run_updated]]]
+      (is (contains? generated-events/event-types wire-type))
+      (is (contains? sdk/event-types idiom-type))
+      (is (s/get-spec (keyword "github.copilot-sdk.generated.event-specs" wire-type)))
+      (is (s/valid? ::specs/event-type idiom-type)))))
+
+(deftest test-history-clear-context
+  (let [clear-context (ns-resolve 'github.copilot-sdk 'history-clear-context!)
+        seen (atom [])]
+    (is (some? clear-context))
+    (when clear-context
+      (mock/set-request-hook!
+       *mock-server*
+       (fn [method params]
+         (when (= "session.history.clearContext" method)
+           (reset! seen params))))
+      (let [copilot-session
+            (sdk/create-session *test-client*
+                                {:on-permission-request sdk/approve-all})]
+        (is (= {:messages-cleared 3}
+               (clear-context copilot-session "Start from this requirement")))
+        (is (= {:sessionId (sdk/session-id copilot-session)
+                :prompt "Start from this requirement"}
+               @seen))))))
+
+(deftest test-agent-factory-definition
+  (let [define-factory (try
+                         (requiring-resolve 'github.copilot-sdk.factory/define-factory)
+                         (catch java.io.FileNotFoundException _ nil))
+        terminal-status? (try
+                           (requiring-resolve 'github.copilot-sdk.factory/terminal-status?)
+                           (catch java.io.FileNotFoundException _ nil))]
+    (is (some? define-factory))
+    (is (some? terminal-status?))
+    (when (and define-factory terminal-status?)
+      (let [definition {:meta {:name "review"
+                               :description "Review files"
+                               :phases [{:title "Review"}]
+                               :limits {:max-concurrent-subagents 2
+                                        :max-total-subagents 4
+                                        :timeout-seconds 30.5
+                                        :max-ai-credits 2}}
+                        :run (fn [_] {"ok" true})}
+            handle (define-factory definition)]
+        (is (= (:meta definition) (:meta handle)))
+        (is (true? (terminal-status? :completed)))
+        (is (true? (terminal-status? "cancelled")))
+        (is (false? (terminal-status? :running)))
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"declared more than once"
+             (define-factory
+               (assoc-in definition [:meta :phases]
+                         [{:title "Review"} {:title "Review"}]))))
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"positive integer"
+             (define-factory
+               (assoc-in definition [:meta :limits :max-total-subagents] 0))))
+        (doseq [invalid [nil false "2"]]
+          (is (thrown? clojure.lang.ExceptionInfo
+                       (define-factory
+                         (assoc-in definition
+                                   [:meta :limits :max-concurrent-subagents]
+                                   invalid)))))
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"unknown keys"
+             (define-factory
+               (assoc-in definition [:meta :limits :max-ai-credit] 2))))))))
+
+(deftest test-agent-factory-join-wire
+  (let [handle (factory/define-factory
+                 {:meta {:name "review"
+                         :description "Review files"
+                         :phases [{:title "Review" :detail "Inspect changes"}]
+                         :limits {:max-concurrent-subagents 2}}
+                  :run (fn [_] {"ok" true})})
+        join-config {:factories [handle]}
+        wire (util/clj->wire
+              (#'client/build-resume-session-params "s-1" join-config))]
+    (is (s/valid? ::specs/join-session-config join-config))
+    (is (not (s/valid? ::specs/resume-session-config join-config)))
+    (is (= [{:name "review"
+             :description "Review files"
+             :phases [{:title "Review" :detail "Inspect changes"}]
+             :limits {:maxConcurrentSubagents 2}}]
+           (:factories wire)))
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Duplicate factory name"
+         (session/create-session
+          *test-client*
+          "duplicate-factory-session"
+          {:config {:factories [handle handle]}})))
+    (let [base (sdk/create-session *test-client*
+                                   {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id base)
+          seen (atom nil)
+          _ (mock/set-request-hook!
+             *mock-server*
+             (fn [method params]
+               (when (= "session.resume" method)
+                 (reset! seen params))))
+          _ (#'client/resume-session*
+             *test-client*
+             session-id
+             {:on-permission-request sdk/default-join-session-permission-handler
+              :factories [handle]})]
+      (is (= "review" (get-in @seen [:factories 0 :name])))
+      (is (factory/factory-handle?
+           (get-in @(:state *test-client*)
+                   [:sessions session-id :factories "review"]))))))
+
+(deftest test-agent-factory-run-api
+  (let [copilot-session
+        (sdk/create-session *test-client*
+                            {:on-permission-request sdk/approve-all})
+        seen (atom [])]
+    (mock/set-request-hook!
+     *mock-server*
+     (fn [method params]
+       (when (= "session.factory.run" method)
+         (swap! seen conj params))))
+    (let [run (factory/run! copilot-session "review"
+                            {:args {:snake_key 1}
+                             :limits {:max-ai-credits 2}})
+          null-args-run (factory/run! copilot-session "review" {:args nil})
+          async-run (<!! (factory/<run! copilot-session "review"))]
+      (is (= :completed (:status run)))
+      (is (= {:snake_key 1} (:result run)))
+      (is (= {:snapshot_key true} (:snapshot run)))
+      (is (= {:snake_key 1} (:args (first @seen))))
+      (is (= {:maxAiCredits 2} (get-in (first @seen) [:options :limits])))
+      (is (= :completed (:status null-args-run)))
+      (is (nil? (:args (second @seen))))
+      (is (= :completed (:status async-run))))
+    (is (= [{:run-id "run-1" :name "factory" :status :completed}]
+           (factory/list-runs copilot-session)))
+    (let [resumed (factory/resume! copilot-session "run-1")
+          fetched (factory/get-run copilot-session "run-1")
+          cancelled (factory/cancel! copilot-session "run-1")]
+      (is (= {:resume_snapshot_key true} (:snapshot resumed)))
+      (is (= "run-1" (:run-id fetched)))
+      (is (= {:get_snapshot_key true} (:snapshot fetched)))
+      (is (= :cancelled (:status cancelled)))
+      (is (= {:cancel_snapshot_key true} (:snapshot cancelled))))
+    (is (= [] (:phases (factory/get-run-detail copilot-session "run-1"))))
+    (is (= [] (:lines (factory/get-run-progress copilot-session "run-1"))))
+    (doseq [symbol '[<list-factory-runs
+                     <get-factory-run-detail
+                     <get-factory-run-progress
+                     <cancel-factory-run!]]
+      (is (some? (ns-resolve 'github.copilot-sdk symbol))))
+    (doseq [operation [(fn []
+                         (factory/run! copilot-session "review"
+                                       {:limits {:max-ai-credits ##NaN}}))
+                       (fn []
+                         (factory/resume! copilot-session "run-1"
+                                          {:limits {:timeout-seconds false}}))
+                       (fn []
+                         (factory/run! copilot-session "review"
+                                       {:limits {:max-ai-credit 2}}))]]
+      (is (thrown? clojure.lang.ExceptionInfo (operation))))))
+
+(deftest test-agent-factory-wait-polls-and-cancels-cleanly
+  (let [copilot-session
+        (sdk/create-session *test-client*
+                            {:on-permission-request sdk/approve-all})
+        reads (atom 0)]
+    (mock/set-request-hook!
+     *mock-server*
+     (fn [method _params]
+       (when (= "session.factory.getRun" method)
+         (let [read-number (swap! reads inc)]
+           {::mock/merge-response
+            {:status (if (< read-number 3) "running" "completed")}}))))
+    (is (= :completed
+           (:status (factory/wait-for-run!
+                     copilot-session "run-1" {:poll-interval-ms 10}))))
+    (is (<= 3 @reads))
+
+    (reset! reads 0)
+    (let [cancel-chan (chan)
+          wait-result
+          (future
+            (try
+              (factory/wait-for-run!
+               copilot-session "run-2"
+               {:cancel-chan cancel-chan :poll-interval-ms 1000})
+              (catch clojure.lang.ExceptionInfo error
+                error)))]
+      (close! cancel-chan)
+      (let [error (deref wait-result 1000 ::timeout)]
+        (is (instance? clojure.lang.ExceptionInfo error))
+        (is (= :factory-wait-cancelled (:type (ex-data error))))))))
+
+(deftest test-agent-factory-pipeline-preserves-fatal-errors-and-fanout
+  (testing "fatal pipeline failures survive nesting inside parallel"
+    (let [fatal (ex-info "factory transport failed"
+                         {:method "session.factory.agent"})]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"factory transport failed"
+           (#'session/factory-parallel
+            [(fn []
+               (#'session/factory-pipeline
+                [1]
+                (fn [_ _ _] (throw fatal))))])))))
+
+  (testing "pipeline starts all admitted items without chunk barriers"
+    (let [started (atom 0)
+          release (promise)
+          execution
+          (future
+            (#'session/factory-pipeline
+             (vec (range 64))
+             (fn [_ item _]
+               (swap! started inc)
+               @release
+               item)))]
+      (try
+        (let [deadline (+ (System/currentTimeMillis) 1000)]
+          (loop []
+            (when (and (< @started 64)
+                       (< (System/currentTimeMillis) deadline))
+              (Thread/sleep 5)
+              (recur))))
+        (is (= 64 @started))
+        (finally
+          (deliver release true)))
+      (is (= (vec (range 64)) (deref execution 2000 ::timeout))))))
+
+(deftest test-agent-factory-reverse-execution
+  (let [methods (atom [])
+        handle
+        (factory/define-factory
+          {:meta {:name "review"
+                  :description "Review files"
+                  :phases [{:title "Review"}]}
+           :run
+           (fn [{:keys [args agent step parallel pipeline phase log]}]
+             (phase "Review")
+             (log "starting")
+             (let [agent-result (agent "Review it" {:schema {"type" "object"}})
+                   step-result (step "durable" (fn [] {:step_key "cached"}))
+                   parallel-result
+                   (parallel [(fn [] "first")
+                              (fn [] (throw (Exception. "ordinary failure")))])
+                   pipeline-result
+                   (pipeline [1 2]
+                             (fn [_ item _] (* item 2))
+                             (fn [previous _ _] (inc previous)))]
+               {:input args
+                :agent agent-result
+                :step step-result
+                :parallel parallel-result
+                :pipeline pipeline-result}))})
+        session-id "factory-reverse-session"
+        _ (mock/set-request-hook! *mock-server*
+                                  (fn [method _params]
+                                    (swap! methods conj method)))
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})
+        response
+        (mock/send-rpc-request!
+         *mock-server*
+         "factory.execute"
+         {:sessionId session-id
+          :name "review"
+          :runId "run-1"
+          :executionToken "attempt-1"
+          :args {:snake_key 7}})]
+    (is (= {:input {:snake_key 7}
+            :agent {:agent_key "ok"}
+            :step {:step_key "cached"}
+            :parallel ["first" nil]
+            :pipeline [3 5]}
+           (get-in response [:result :result])))
+    (doseq [method ["session.factory.agent"
+                    "session.factory.journal.get"
+                    "session.factory.journal.put"
+                    "session.factory.log"]]
+      (is (some #{method} @methods)))))
+
+(deftest test-agent-factory-abort-closes-cancellation-channel
+  (let [started (promise)
+        handle
+        (factory/define-factory
+          {:meta {:name "wait"
+                  :description "Wait for cancellation"
+                  :phases []}
+           :run (fn [{:keys [cancel-chan]}]
+                  (deliver started true)
+                  (<!! cancel-chan)
+                  {:cancelled true})})
+        session-id "factory-abort-session"
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})
+        execution
+        (future
+          (mock/send-rpc-request!
+           *mock-server*
+           "factory.execute"
+           {:sessionId session-id
+            :name "wait"
+            :runId "run-abort"
+            :executionToken "attempt-1"
+            :args {}}))]
+    (is (true? (deref started 1000 false)))
+    (is (= {} (:result
+               (mock/send-rpc-request!
+                *mock-server*
+                "factory.abort"
+                {:sessionId session-id
+                 :runId "run-abort"}))))
+    (is (= {:cancelled true}
+           (get-in (deref execution 1000 ::timeout) [:result :result])))))
+
+(deftest test-agent-factory-overlapping-execution-cleanup-preserves-replacement
+  (let [invocations (atom 0)
+        first-started (promise)
+        first-release (promise)
+        second-started (promise)
+        handle
+        (factory/define-factory
+          {:meta {:name "overlap"
+                  :description "Exercise overlapping execution tokens"
+                  :phases []}
+           :run
+           (fn [{:keys [cancel-chan]}]
+             (case (swap! invocations inc)
+               1 (do
+                   (deliver first-started true)
+                   @first-release
+                   {:first true})
+               2 (do
+                   (deliver second-started true)
+                   (<!! cancel-chan)
+                   {:second true})))})
+        session-id "factory-overlap-session"
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})
+        params {:sessionId session-id
+                :name "overlap"
+                :runId "run-overlap"
+                :executionToken "same-token"
+                :args {}}
+        first-execution
+        (future (mock/send-rpc-request! *mock-server* "factory.execute" params))
+        _ (is (true? (deref first-started 1000 false)))
+        second-execution
+        (future (mock/send-rpc-request! *mock-server* "factory.execute" params))]
+    (is (true? (deref second-started 1000 false)))
+    (deliver first-release true)
+    (is (= {:first true}
+           (get-in (deref first-execution 1000 ::timeout) [:result :result])))
+    (mock/send-rpc-request! *mock-server* "factory.abort"
+                            {:sessionId session-id :runId "run-overlap"})
+    (is (= {:second true}
+           (get-in (deref second-execution 1000 ::timeout) [:result :result])))))
+
+(deftest test-agent-factory-invalid-result-returns-serializable-error
+  (doseq [number [##NaN ##Inf ##-Inf]]
+    (is (false? (#'session/json-value? number))))
+  (let [handle
+        (factory/define-factory
+          {:meta {:name "invalid-result"
+                  :description "Return a non-JSON value"
+                  :phases []}
+           :run (fn [_] (fn [] :not-json))})
+        session-id "factory-invalid-result-session"
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})]
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Factory result must be a JSON value"
+         (mock/send-rpc-request!
+          *mock-server*
+          "factory.execute"
+          {:sessionId session-id
+           :name "invalid-result"
+           :runId "run-invalid"
+           :executionToken "attempt-1"
+           :args {}}
+          :timeout-ms 1000)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Client Lifecycle Tests
@@ -843,10 +1235,10 @@
                     {"name" true
                      "inputs_names" false}}
           tools [(tools/define-tool
-                  "metadata-tool"
-                  {:description "Tool with host metadata"
-                   :metadata metadata
-                   :handler (fn [_args _invocation] "ok")})
+                   "metadata-tool"
+                   {:description "Tool with host metadata"
+                    :metadata metadata
+                    :handler (fn [_args _invocation] "ok")})
                  {:tool-name "empty-metadata-tool"
                   :metadata {}
                   :tool-handler (fn [_args _invocation] "ok")}
@@ -889,6 +1281,22 @@
                        :tool-handler (fn [_args _invocation] "ok")}]})]
       (is (not (contains? @seen :toolSearch)))
       (is (not (contains? (get-in @seen [:tools 0]) :metadata))))))
+
+(deftest test-terminal-tool-wire-shape
+  (let [terminal (tools/define-tool "terminal"
+                   {:description "Runs in a terminal"
+                    :is-terminal? true})
+        non-terminal (tools/define-tool-from-spec "non-terminal"
+                       {:description "Does not need a terminal"
+                        :is-terminal? false})
+        config {:tools [terminal non-terminal]}
+        create-wire (util/clj->wire (@#'client/build-create-session-params config))
+        resume-wire (util/clj->wire (#'client/build-resume-session-params "s-1" config))]
+    (is (s/valid? ::specs/tool terminal))
+    (is (s/valid? ::specs/tool non-terminal))
+    (doseq [wire [create-wire resume-wire]]
+      (is (true? (get-in wire [:tools 0 :isTerminal])))
+      (is (false? (get-in wire [:tools 1 :isTerminal]))))))
 
 (deftest test-tool-search-specs
   (testing "tool-search config uses optional boolean and integer fields"
@@ -1660,6 +2068,61 @@
     (doseq [kind [:shell :write :mcp :read :url :custom-tool]]
       (is (= {:kind :approve-once}
              (sdk/approve-all {:permission-kind kind} {:session-id "s1"}))))))
+
+(deftest test-approve-all-managed-settings
+  (testing "managed settings disable unconditional approve-all"
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"approve-all cannot be used when managed settings are enabled"
+         (sdk/approve-all {:permission-kind :shell}
+                          {:session-id "s1" :managed-settings-enabled? true}))))
+
+  (testing "managed approval requests are left for an explicit user decision"
+    (is (= {:kind :no-result}
+           (sdk/approve-all {:permission-kind :shell
+                             :managed-approval-required true}
+                            {:session-id "s1" :managed-settings-enabled? false})))
+    (is (= {:kind :approve-once}
+           (sdk/approve-all {:permission-kind :shell
+                             :managed-approval-required false}
+                            {:session-id "s1" :managed-settings-enabled? false}))))
+
+  (testing "permission handlers receive managed-settings state"
+    (doseq [config [{:enable-managed-settings? true}
+                    {:managed-settings {:permissions {:deny ["Shell(rm *)"]}}}]]
+      (let [invocation (promise)
+            copilot-session
+            (sdk/create-session
+             *test-client*
+             (assoc config
+                    :on-permission-request
+                    (fn [_ ctx]
+                      (deliver invocation ctx)
+                      {:kind :no-result})))
+            response (<!! (session/handle-permission-request!
+                           *test-client*
+                           (sdk/session-id copilot-session)
+                           {:permission-kind :shell}))]
+        (is (= {:result :no-result} response))
+        (is (true? (:managed-settings-enabled? (deref invocation 1000 nil))))))))
+
+(deftest test-factory-permission-request-spec
+  (let [request {:permission-kind :factory
+                 :operation "run"
+                 :name "review"
+                 :description "Review changed files"
+                 :phases [{:title "Review"}]
+                 :approval-key "factory:review"
+                 :can-persist-approval true
+                 :max-concurrent-subagents 0
+                 :max-total-subagents 5
+                 :timeout-seconds 30.5
+                 :max-ai-credits 2}]
+    (is (s/valid? ::specs/permission-request request))
+    (is (not (s/valid? ::specs/permission-request (dissoc request :name))))
+    (is (not (s/valid? ::specs/permission-request (dissoc request :description))))
+    (is (not (s/valid? ::specs/permission-request
+                       (assoc request :max-total-subagents -1))))))
 
 (deftest test-permission-handler-now-optional
   ;; Upstream PR #1308 made :on-permission-request optional. Previously this
@@ -3969,6 +4432,19 @@
 ;; SessionFs SQLite Tests (upstream PR #1299)
 ;; -----------------------------------------------------------------------------
 
+(defn- test-session-fs-provider [sqlite]
+  {:read-file (fn [_] "x")
+   :write-file (fn [_ _ _] nil)
+   :append-file (fn [_ _ _] nil)
+   :exists (fn [_] true)
+   :stat (fn [_] {:is-file true :is-directory false :size 1 :mtime "x" :birthtime "x"})
+   :mkdir (fn [_ _ _] nil)
+   :readdir (fn [_] [])
+   :readdir-with-types (fn [_] [])
+   :rm (fn [_ _ _] nil)
+   :rename (fn [_ _] nil)
+   :sqlite sqlite})
+
 (deftest test-create-session-fs-adapter-sqlite
   (testing "provider with nested :sqlite map is adapted to flat :sqlite-query and :sqlite-exists handler keys"
     (let [provider {:read-file (fn [_] "x")
@@ -4025,6 +4501,123 @@
           handler (session/create-session-fs-adapter provider)]
       (is (= {:rows [] :columns [] :rows-affected 0}
              ((:sqlite-query handler) {:query-type :exec :query "CREATE TABLE t (x INT)"}))))))
+
+(deftest test-create-session-fs-adapter-sqlite-transaction
+  (testing "transaction executes statements atomically and returns ordered results"
+    (let [received (atom nil)
+          handler (session/create-session-fs-adapter
+                   (test-session-fs-provider
+                    {:query (fn [_ _ _] nil)
+                     :exists (fn [] true)
+                     :transaction
+                     (fn [statements]
+                       (reset! received statements)
+                       [{:rows [{:user_id 7}]
+                         :columns ["user_id"]
+                         :rows-affected 0}
+                        {:rows [] :columns [] :rows-affected 1}])}))
+          statements [{:query-type :query
+                       :query "SELECT user_id FROM users WHERE id = $user_id"
+                       :params {:$user_id 7}}
+                      {:query-type :run
+                       :query "UPDATE users SET active = 1"}]]
+      (is (fn? (:sqlite-transaction handler)))
+      (is (= {:results [{:rows [{:user_id 7}]
+                         :columns ["user_id"]
+                         :rows-affected 0}
+                        {:rows [] :columns [] :rows-affected 1}]}
+             ((:sqlite-transaction handler) {:statements statements})))
+      (is (= statements @received))))
+
+  (testing "missing transaction support returns a classified fatal result"
+    (let [handler (session/create-session-fs-adapter
+                   (test-session-fs-provider
+                    {:query (fn [_ _ _] nil)
+                     :exists (fn [] true)}))]
+      (is (= {:results []
+              :error {:error-class "fatal"
+                      :message "SQLite transactions are not supported by this provider"}}
+             ((:sqlite-transaction handler) {:statements []})))))
+
+  (testing "public helper constructs classified transaction failures"
+    (let [ctor (ns-resolve 'github.copilot-sdk 'session-fs-sqlite-transaction-failure)
+          pred (ns-resolve 'github.copilot-sdk 'session-fs-sqlite-transaction-failure?)]
+      (is (some? ctor))
+      (is (some? pred))
+      (when (and ctor pred)
+        (let [failure (ctor "database busy" :busy-or-locked)]
+          (is (pred failure))
+          (is (= :busy-or-locked (:error-class (ex-data failure)))))))))
+
+(deftest test-session-fs-sqlite-transaction-rpc
+  (testing "transaction RPC preserves bind names and result row keys"
+    (let [received (atom nil)
+          client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})
+          copilot-session
+          (sdk/create-session
+           client-with-fs
+           {:on-permission-request sdk/approve-all
+            :create-session-fs-handler
+            (fn [_]
+              (test-session-fs-provider
+               {:query (fn [_ _ _] nil)
+                :exists (fn [] true)
+                :transaction
+                (fn [statements]
+                  (reset! received statements)
+                  [{:rows [{:user_id 7}]
+                    :columns ["user_id"]
+                    :rows-affected 0}])}))})
+          response
+          (mock/send-rpc-request!
+           *mock-server*
+           "sessionFs.sqliteTransaction"
+           {:sessionId (sdk/session-id copilot-session)
+            :statements [{:queryType "query"
+                          :query "SELECT user_id FROM users WHERE id = $user_id"
+                          :params {:$user_id 7}}]})]
+      (is (= [{:query-type :query
+               :query "SELECT user_id FROM users WHERE id = $user_id"
+               :params {:$user_id 7}}]
+             @received))
+      (is (= {:results [{:rows [{:user_id 7}]
+                         :columns ["user_id"]
+                         :rowsAffected 0}]}
+             (:result response)))
+      (is (not (contains? (get-in response [:result :results 0 :rows 0]) :userId)))))
+
+  (testing "classified provider failures are returned as result-level errors"
+    (let [client-with-fs (assoc *test-client* :session-fs {:initial-cwd "/workspace"
+                                                           :session-state-path "/state"
+                                                           :conventions "posix"
+                                                           :capabilities {:sqlite true}})
+          copilot-session
+          (sdk/create-session
+           client-with-fs
+           {:on-permission-request sdk/approve-all
+            :create-session-fs-handler
+            (fn [_]
+              (test-session-fs-provider
+               {:query (fn [_ _ _] nil)
+                :exists (fn [] true)
+                :transaction
+                (fn [_]
+                  (throw (ex-info "database busy"
+                                  {:type :session-fs-sqlite-transaction-failure
+                                   :error-class :busy-or-locked})))}))})
+          response
+          (mock/send-rpc-request!
+           *mock-server*
+           "sessionFs.sqliteTransaction"
+           {:sessionId (sdk/session-id copilot-session)
+            :statements []})]
+      (is (= {:results []
+              :error {:errorClass "busyOrLocked"
+                      :message "database busy"}}
+             (:result response))))))
 
 (deftest test-session-fs-sqlite-rpc-dispatch
   (testing "sessionFs.sqliteQuery RPC dispatches to handler with :query-type coerced to keyword"
@@ -4306,6 +4899,35 @@
                                               :input {:timestamp 1700000000000
                                                       :cwd "/workspace"}})]
         (is (= {} (:result response)))))))
+
+(deftest test-hooks-user-prompt-transformed
+  (testing "hooks.invoke userPromptTransformed calls the registered handler"
+    (let [handler-called (atom nil)
+          copilot-session
+          (sdk/create-session
+           *test-client*
+           {:on-permission-request sdk/approve-all
+            :hooks {:on-user-prompt-transformed
+                    (fn [input ctx]
+                      (reset! handler-called {:input input :ctx ctx})
+                      {:modified-transformed-prompt "rewritten prompt"})}})
+          session-id (sdk/session-id copilot-session)
+          response (mock/send-rpc-request!
+                    *mock-server*
+                    "hooks.invoke"
+                    {:sessionId session-id
+                     :hookType "userPromptTransformed"
+                     :input {:prompt "original"
+                             :transformedPrompt "generated context\noriginal"
+                             :timestamp 1700000000000
+                             :cwd "/workspace"}})]
+      (is (s/get-spec ::specs/on-user-prompt-transformed))
+      (is (= "original" (get-in @handler-called [:input :prompt])))
+      (is (= "generated context\noriginal"
+             (get-in @handler-called [:input :transformed-prompt])))
+      (is (= {:session-id session-id} (:ctx @handler-called)))
+      (is (= "rewritten prompt"
+             (get-in response [:result :output :modifiedTransformedPrompt]))))))
 
 (deftest test-hooks-post-tool-use
   (testing "hooks.invoke postToolUse calls registered handler"
@@ -4773,7 +5395,7 @@
                (:available-tools invocation)))
         (is (= 1 (count (filter #(= "session.tools.getCurrentMetadata"
                                     (:method %))
-                               requests))))))
+                                requests))))))
 
     (testing "ordinary tools do not request current tool metadata"
       (let [{:keys [invocation requests]}
@@ -4783,7 +5405,7 @@
         (is (not (contains? invocation :available-tools)))
         (is (empty? (filter #(= "session.tools.getCurrentMetadata"
                                 (:method %))
-                           requests)))))
+                            requests)))))
 
     (testing "metadata lookup failure does not fail tool invocation"
       (let [{:keys [invocation requests]}
@@ -4792,7 +5414,7 @@
         (is (not (contains? invocation :available-tools)))
         (is (= 1 (count (filter #(= "session.tools.getCurrentMetadata"
                                     (:method %))
-                               requests))))))))
+                                requests))))))))
 
 (deftest test-tool-result-normalization
   (testing "tool handler return values are normalized into the handlePendingToolCall result"
@@ -4816,14 +5438,14 @@
                 (is (= "all good" (:textResultForLlm result)))
                 (is (= "success" (:resultType result)))
                 (is (= 42 (get-in result [:toolTelemetry :latencyMs]))))]
-              ["structured ToolResultObject forwards tool references"
-               (fn [_args _inv] {:text-result-for-llm "found tools"
-                                 :result-type "success"
-                                 :tool-references ["github/search" "github/get"]})
-               "tool-req-4" "tc-4"
-               (fn [result]
-                 (is (= ["github/search" "github/get"]
-                        (:toolReferences result))))]]]
+             ["structured ToolResultObject forwards tool references"
+              (fn [_args _inv] {:text-result-for-llm "found tools"
+                                :result-type "success"
+                                :tool-references ["github/search" "github/get"]})
+              "tool-req-4" "tc-4"
+              (fn [result]
+                (is (= ["github/search" "github/get"]
+                       (:toolReferences result))))]]]
       (testing desc
         (let [requests (atom [])
               rpc-latch (java.util.concurrent.CountDownLatch. 1)
@@ -5431,9 +6053,9 @@
     (is (s/valid? :github.copilot-sdk.specs/custom-agent
                   {:agent-name "test" :agent-prompt "You are helpful"
                    :agent-reasoning-effort "high"}))
-    (is (not (s/valid? :github.copilot-sdk.specs/custom-agent
-                       {:agent-name "test" :agent-prompt "You are helpful"
-                        :agent-reasoning-effort "max"})))))
+    (is (s/valid? :github.copilot-sdk.specs/custom-agent
+                  {:agent-name "test" :agent-prompt "You are helpful"
+                   :agent-reasoning-effort "max"}))))
 
 (deftest test-custom-agent-reasoning-effort-on-wire
   (testing "reasoning effort is sent on wire in session.create and session.resume"
@@ -5991,6 +6613,67 @@
           _ (sdk/create-session *test-client* {:on-permission-request sdk/approve-all
                                                :enable-managed-settings? true})]
       (is (true? (:enableManagedSettings (get @seen "session.create")))))))
+
+(deftest test-v1-0-9-session-config-parity
+  (let [config {:enable-experimental-mode? true
+                :additional-directories []
+                :disabled-mcp-servers []
+                :github-mcp-tool-config {:enable-all-tools? true
+                                         :additional-toolsets ["repos"]
+                                         :additional-tools ["get_me"]
+                                         :enable-insiders-mode? false
+                                         :disable-form-deferral? true}
+                :managed-settings {:permissions {:disable-bypass-permissions-mode :disable
+                                                 :deny ["Shell(rm -rf *)"]
+                                                 :ask ["Shell(git push *)"]
+                                                 :allow ["Read(**)"]}}
+                :reasoning-effort "max"
+                :custom-agents-local-only false}
+        create-wire (util/clj->wire (@#'client/build-create-session-params config))
+        resume-wire (util/clj->wire (#'client/build-resume-session-params "s-1" config))]
+    (testing "new config fields are accepted on create, resume, and join"
+      (is (s/valid? ::specs/session-config config))
+      (is (s/valid? ::specs/resume-session-config config))
+      (is (s/valid? ::specs/join-session-config config)))
+
+    (testing "create and resume emit the exact upstream wire shape"
+      (doseq [wire [create-wire resume-wire]]
+        (is (true? (:isExperimentalMode wire)))
+        (is (= [] (:additionalDirectories wire)))
+        (is (= [] (:disabledMcpServers wire)))
+        (is (= {:enableAllTools true
+                :additionalToolsets ["repos"]
+                :additionalTools ["get_me"]
+                :enableInsidersMode false
+                :disableFormDeferral true}
+               (:githubMcpToolConfig wire)))
+        (is (= {:permissions {:disableBypassPermissionsMode "disable"
+                              :deny ["Shell(rm -rf *)"]
+                              :ask ["Shell(git push *)"]
+                              :allow ["Read(**)"]}}
+               (:managedSettings wire)))
+        (is (= "max" (:reasoningEffort wire)))
+        (is (false? (:customAgentsLocalOnly wire)))))
+
+    (testing "invalid enum values fail closed"
+      (is (not (s/valid? ::specs/session-config
+                         (assoc-in config
+                                   [:managed-settings :permissions :disable-bypass-permissions-mode]
+                                   :enabled))))
+      (is (not (s/valid? ::specs/session-config
+                         (assoc config :reasoning-effort "ultra")))))
+
+    (testing "empty mode supplies startup defaults while normal mode omits them"
+      (let [empty-client (sdk/client {:auto-start? false
+                                      :mode :empty
+                                      :copilot-home "/tmp/copilot-sdk-empty-mode-test"})
+            empty-config (#'client/normalize-config-for-mode empty-client {})
+            empty-wire (util/clj->wire (@#'client/build-create-session-params empty-config))
+            normal-wire (util/clj->wire (@#'client/build-create-session-params {}))]
+        (is (false? (:isExperimentalMode empty-wire)))
+        (is (true? (:customAgentsLocalOnly empty-wire)))
+        (is (not (contains? normal-wire :isExperimentalMode)))
+        (is (not (contains? normal-wire :customAgentsLocalOnly)))))))
 
 (deftest test-canvas-provider-forwarded
   (testing "canvasProvider forwarded on session.create + session.resume wire params (upstream PR #1847)"

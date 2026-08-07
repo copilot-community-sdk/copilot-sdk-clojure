@@ -27,6 +27,8 @@
                                   be deferred (loaded lazily via tool search) rather than always pre-loaded.
                                   `:auto` allows deferral; `:never` forces pre-loading. Defaults to `:auto`.
      - :metadata                - Opaque host-defined map forwarded to the runtime.
+     - :is-terminal?            - When true, a successful call ends the agent turn
+                                  instead of feeding the result back to the model.
    
    The handler (when provided) receives:
    - args       - The parsed arguments from the LLM (no key conversion)
@@ -63,7 +65,7 @@
    ;; Listen for :copilot/external_tool.requested events and resolve via
    ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
-  [name {:keys [description parameters handler overrides-built-in-tool defer metadata]}]
+  [name {:keys [description parameters handler overrides-built-in-tool defer metadata is-terminal?]}]
   (cond-> {:tool-name name
            :tool-description description
            :tool-parameters parameters}
@@ -77,7 +79,9 @@
     (some? defer)
     (assoc :defer defer)
     (some? metadata)
-    (assoc :metadata metadata)))
+    (assoc :metadata metadata)
+    (some? is-terminal?)
+    (assoc :is-terminal? is-terminal?)))
 
 (defn define-tool-from-spec
   "Define a tool using a clojure.spec for parameter validation.
@@ -110,6 +114,8 @@
                                   deferred (loaded lazily via tool search); `:never` forces pre-loading.
                                   Defaults to `:auto`.
      - :metadata                - Opaque host-defined map forwarded to the runtime.
+     - :is-terminal?            - When true, a successful call ends the agent turn
+                                  instead of feeding the result back to the model.
 
    Example (with handler):
    ```clojure
@@ -134,7 +140,7 @@
    ;; Resolve pending calls via
    ;; (copilot/handle-pending-tool-call! session {:request-id ... :result ...})
    ```"
-  [name {:keys [description spec handler overrides-built-in-tool defer metadata]}]
+  [name {:keys [description spec handler overrides-built-in-tool defer metadata is-terminal?]}]
   ;; For now, we don't auto-convert spec to JSON schema
   ;; The handler should validate using the spec
   (cond-> {:tool-name name
@@ -155,7 +161,9 @@
     (some? defer)
     (assoc :defer defer)
     (some? metadata)
-    (assoc :metadata metadata)))
+    (assoc :metadata metadata)
+    (some? is-terminal?)
+    (assoc :is-terminal? is-terminal?)))
 
 (defn result-success
   "Create a successful tool result."

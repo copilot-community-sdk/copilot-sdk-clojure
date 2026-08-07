@@ -147,6 +147,45 @@
 ;; Message Handling
 ;; -----------------------------------------------------------------------------
 
+(declare normalize-incoming)
+
+(defn- normalize-response
+  "Normalize a response using its originating method so opaque factory JSON
+   survives the protocol boundary unchanged."
+  [method msg]
+  (let [converted (normalize-incoming msg)]
+    (case method
+      ("session.factory.run" "session.factory.getRun" "session.factory.cancel")
+      (cond-> converted
+        (contains? (:result msg) :result)
+        (assoc-in [:result :result] (get-in msg [:result :result]))
+
+        (contains? (:result msg) :snapshot)
+        (assoc-in [:result :snapshot] (get-in msg [:result :snapshot])))
+
+      "session.factory.resume"
+      (cond-> converted
+        (contains? (get-in msg [:result :run]) :result)
+        (assoc-in [:result :run :result]
+                  (get-in msg [:result :run :result]))
+
+        (contains? (get-in msg [:result :run]) :snapshot)
+        (assoc-in [:result :run :snapshot]
+                  (get-in msg [:result :run :snapshot])))
+
+      ("session.factory.agent" "session.factory.journal.get")
+      (cond
+        (contains? (:result msg) :result)
+        (assoc-in converted [:result :result] (get-in msg [:result :result]))
+
+        (contains? (:result msg) :resultJson)
+        (assoc-in converted [:result :result-json]
+                  (get-in msg [:result :resultJson]))
+
+        :else converted)
+
+      converted)))
+
 (defn- handle-response!
   "Handle an incoming response message. Delivers to pending channel.
 
@@ -157,26 +196,27 @@
    sessionId) is guaranteed to complete before the next inbound message
    is dispatched. Used by `client/create-session` for the cloud-no-id
    flow (upstream PR #1479)."
-  [state-atom msg]
-  (let [id (:id msg)]
+  [state-atom raw-msg]
+  (let [id (:id raw-msg)]
     (log/debug "Received response for id=" id)
     ;; Atomically claim the pending entry so a concurrent drain-pending!
     ;; (disconnect / EOF) can never also deliver to this response channel.
-    (when-let [{:keys [ch on-response-inline]} (pop-pending! state-atom id)]
-      (if-let [error (:error msg)]
-        (do
-          (log/debug "Response error: " error)
-          (put! ch {:error error})
-          (close! ch))
-        (let [result (:result msg)]
-          (log/debug "Response success for id=" id)
-          (when on-response-inline
-            (try
-              (on-response-inline result)
-              (catch Throwable t
-                (log/error t "on-response-inline callback threw for id=" id))))
-          (put! ch {:result result})
-          (close! ch))))))
+    (when-let [{:keys [ch on-response-inline method]} (pop-pending! state-atom id)]
+      (let [msg (normalize-response method raw-msg)]
+        (if-let [error (:error msg)]
+          (do
+            (log/debug "Response error: " error)
+            (put! ch {:error error})
+            (close! ch))
+          (let [result (:result msg)]
+            (log/debug "Response success for id=" id)
+            (when on-response-inline
+              (try
+                (on-response-inline result)
+                (catch Throwable t
+                  (log/error t "on-response-inline callback threw for id=" id))))
+            (put! ch {:result result})
+            (close! ch)))))))
 
 (defn- preserve-outgoing-opaque-fields
   "Per-method outgoing escape hatch: after recursive kebab→camelCase
@@ -195,6 +235,24 @@
          (map? raw-result)
          (contains? raw-result :rows))
     (assoc wire-result :rows (:rows raw-result))
+
+    (and (= "sessionFs.sqliteTransaction" method)
+         (map? raw-result)
+         (vector? (:results raw-result)))
+    (update wire-result :results
+            (fn [wire-results]
+              (mapv (fn [index wire-entry]
+                      (let [raw-entry (get (:results raw-result) index)]
+                        (if (and (map? raw-entry) (contains? raw-entry :rows))
+                          (assoc wire-entry :rows (:rows raw-entry))
+                          wire-entry)))
+                    (range)
+                    wire-results)))
+
+    (and (= "factory.execute" method)
+         (map? raw-result)
+         (contains? raw-result :result))
+    (assoc wire-result :result (:result raw-result))
 
     ;; Upstream PR #1366: HookInvokeResponse.output may contain opaque
     ;; preMcpToolCall metadata under `:meta-to-use`. The inner map's keys
@@ -333,6 +391,23 @@
       (and (= "sessionFs.sqliteQuery" method) (map? params) (contains? params :params))
       (assoc-in converted [:params :params] (:params params))
 
+      (and (= "sessionFs.sqliteTransaction" method)
+           (vector? (:statements params)))
+      (update-in converted [:params :statements]
+                 (fn [converted-statements]
+                   (mapv (fn [index converted-statement]
+                           (let [raw-statement (get (:statements params) index)]
+                             (if (contains? raw-statement :params)
+                               (assoc converted-statement :params (:params raw-statement))
+                               converted-statement)))
+                         (range)
+                         converted-statements)))
+
+      (and (= "factory.execute" method)
+           (map? params)
+           (contains? params :args))
+      (assoc-in converted [:params :args] (:args params))
+
       ;; Upstream PR #1366: preMcpToolCall hook input has two opaque
       ;; fields that must NOT be recursively kebab-cased:
       ;; - `:arguments`: MCP tool call arguments (source-defined keys)
@@ -410,25 +485,26 @@
 (defn- dispatch-message!
   "Route incoming message to appropriate handler."
   [conn msg]
-  (let [{:keys [state-atom incoming-ch outgoing-ch]} conn
-        normalized (normalize-incoming msg)]
-    (cond
-      ;; Response (has id, no method) - deliver to pending channel
-      (and (:id normalized) (not (:method normalized)))
-      (handle-response! state-atom normalized)
+  (let [{:keys [state-atom incoming-ch outgoing-ch]} conn]
+    ;; Responses need the originating request method to restore opaque factory
+    ;; result values, so defer normalization until handle-response! claims the
+    ;; pending entry.
+    (if (and (:id msg) (not (:method msg)))
+      (handle-response! state-atom msg)
+      (let [normalized (normalize-incoming msg)]
+        (cond
+          ;; Request (has id and method) - handle and respond
+          (and (:id normalized) (:method normalized))
+          (handle-request! state-atom outgoing-ch normalized)
 
-      ;; Request (has id and method) - handle and respond
-      (and (:id normalized) (:method normalized))
-      (handle-request! state-atom outgoing-ch normalized)
+          ;; Notification (has method, no id) - put to incoming-ch for routing
+          (:method normalized)
+          (do
+            (log/debug "Received notification: method=" (:method normalized))
+            (when-not (.offer ^LinkedBlockingQueue (:notification-queue conn) normalized)
+              (log/debug "Dropping notification due to full queue")))
 
-      ;; Notification (has method, no id) - put to incoming-ch for routing
-      (:method normalized)
-      (do
-        (log/debug "Received notification: method=" (:method normalized))
-        (when-not (.offer ^LinkedBlockingQueue (:notification-queue conn) normalized)
-          (log/debug "Dropping notification due to full queue")))
-
-      :else nil)))
+          :else nil)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Reader and Writer Loops
@@ -651,6 +727,26 @@
                              {}
                              pending))))
 
+(defn- preserve-outgoing-request-opaque-fields
+  [method raw-params wire-params]
+  (case method
+    "session.factory.run"
+    (if (contains? raw-params :args)
+      (assoc wire-params :args (:args raw-params))
+      wire-params)
+
+    "session.factory.agent"
+    (if (contains? (:opts raw-params) :schema)
+      (assoc-in wire-params [:opts :schema] (get-in raw-params [:opts :schema]))
+      wire-params)
+
+    "session.factory.journal.put"
+    (if (contains? raw-params :result-json)
+      (assoc wire-params :resultJson (:result-json raw-params))
+      wire-params)
+
+    wire-params))
+
 (defn send-request
   "Send a JSON-RPC request and return a channel for the response.
    The channel delivers a single {:result ...} or {:error ...} map, then closes.
@@ -667,7 +763,9 @@
    (let [state-atom (:state-atom conn)
          id (str (java.util.UUID/randomUUID))
          ch (chan 1)
-         wire-params (when params (util/clj->wire params))
+         wire-params (when params
+                       (preserve-outgoing-request-opaque-fields
+                        method params (util/clj->wire params)))
          msg {:jsonrpc "2.0"
               :id id
               :method method

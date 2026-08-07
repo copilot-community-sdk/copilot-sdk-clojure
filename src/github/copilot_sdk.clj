@@ -22,6 +22,7 @@
    (copilot/stop! client)
    ```"
   (:require [github.copilot-sdk.client :as client]
+            [github.copilot-sdk.factory :as factory]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.tools :as tools]))
@@ -56,6 +57,7 @@
     :copilot/session.compaction_complete
     :copilot/session.shutdown
     :copilot/session.context_changed
+    :copilot/session.context_cleared
     :copilot/session.title_changed
     :copilot/session.schedule_created
     :copilot/session.schedule_cancelled
@@ -180,7 +182,9 @@
     :copilot/assistant.server_tool_progress
     :copilot/session.managed_settings_enforced
     :copilot/session.managed_settings_resolved
-    :copilot/tool_search.activated})
+    :copilot/tool_search.activated
+    ;; v1.0.9 + post-v1.0.9 sync (pinned schema 1.0.79-6).
+    :copilot/factory.run_updated})
 
 (def session-events
   "Session lifecycle and state management events."
@@ -198,6 +202,7 @@
     :copilot/session.compaction_complete
     :copilot/session.shutdown
     :copilot/session.context_changed
+    :copilot/session.context_cleared
     :copilot/session.title_changed
     :copilot/session.warning
     :copilot/session.mode_changed
@@ -1164,6 +1169,105 @@
    ```"
   [provider]
   (session/create-session-fs-adapter provider))
+
+(defn session-fs-sqlite-transaction-failure
+  "Create a classified SQLite transaction failure."
+  ([message]
+   (session/session-fs-sqlite-transaction-failure message))
+  ([message error-class]
+   (session/session-fs-sqlite-transaction-failure message error-class)))
+
+(defn session-fs-sqlite-transaction-failure?
+  "Return true for classified SQLite transaction failures."
+  [value]
+  (session/session-fs-sqlite-transaction-failure? value))
+
+(defn ^:experimental history-clear-context!
+  "Clear conversation context and set the prompt used for the new context."
+  [session prompt]
+  (session/history-clear-context! session prompt))
+
+(defn ^:experimental define-factory
+  "Define an extension-authored Agent Factory."
+  [definition]
+  (factory/define-factory definition))
+
+(defn ^:experimental factory-terminal-status?
+  "Return true when a factory run status is terminal."
+  [status]
+  (factory/terminal-status? status))
+
+(defn ^:experimental run-factory!
+  ([session name-or-handle]
+   (factory/run! session name-or-handle))
+  ([session name-or-handle options]
+   (factory/run! session name-or-handle options)))
+
+(defn ^:experimental <run-factory!
+  ([session name-or-handle]
+   (factory/<run! session name-or-handle))
+  ([session name-or-handle options]
+   (factory/<run! session name-or-handle options)))
+
+(defn ^:experimental resume-factory!
+  ([session run-id]
+   (factory/resume! session run-id))
+  ([session run-id options]
+   (factory/resume! session run-id options)))
+
+(defn ^:experimental <resume-factory!
+  ([session run-id]
+   (factory/<resume! session run-id))
+  ([session run-id options]
+   (factory/<resume! session run-id options)))
+
+(defn ^:experimental get-factory-run [session run-id]
+  (factory/get-run session run-id))
+
+(defn ^:experimental <get-factory-run [session run-id]
+  (factory/<get-run session run-id))
+
+(defn ^:experimental wait-for-factory-run!
+  ([session run-id]
+   (factory/wait-for-run! session run-id))
+  ([session run-id options]
+   (factory/wait-for-run! session run-id options)))
+
+(defn ^:experimental <wait-for-factory-run!
+  ([session run-id]
+   (factory/<wait-for-run! session run-id))
+  ([session run-id options]
+   (factory/<wait-for-run! session run-id options)))
+
+(defn ^:experimental list-factory-runs [session]
+  (factory/list-runs session))
+
+(defn ^:experimental <list-factory-runs [session]
+  (factory/<list-runs session))
+
+(defn ^:experimental get-factory-run-detail [session run-id]
+  (factory/get-run-detail session run-id))
+
+(defn ^:experimental <get-factory-run-detail [session run-id]
+  (factory/<get-run-detail session run-id))
+
+(defn ^:experimental get-factory-run-progress
+  ([session run-id]
+   (factory/get-run-progress session run-id))
+  ([session run-id options]
+   (factory/get-run-progress session run-id options)))
+
+(defn ^:experimental <get-factory-run-progress
+  ([session run-id]
+   (factory/<get-run-progress session run-id))
+  ([session run-id options]
+   (factory/<get-run-progress session run-id options)))
+
+(defn ^:experimental cancel-factory-run! [session run-id]
+  (factory/cancel! session run-id))
+
+(defn ^:experimental <cancel-factory-run! [session run-id]
+  (factory/<cancel! session run-id))
 
 (defn ^:experimental get-current-model
   "Get the current model for this session.

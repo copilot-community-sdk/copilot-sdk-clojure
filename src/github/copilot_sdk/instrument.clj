@@ -14,6 +14,7 @@
      (stest/unstrument)"
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
+            [github.copilot-sdk.factory :as factory]
             [github.copilot-sdk.specs :as specs]
             ;; Ensure namespaces hosting public fns referenced by `register-fdef!`
             ;; are loaded before `stest/instrument` runs (otherwise the missing
@@ -326,6 +327,15 @@
                 :args (s/cat :provider ::specs/session-fs-provider)
                 :ret ::specs/session-fs-handler)
 
+(register-fdef! github.copilot-sdk.session/session-fs-sqlite-transaction-failure
+                :args (s/cat :message string?
+                             :error-class (s/? ::specs/sqlite-transaction-error-class))
+                :ret #(instance? clojure.lang.ExceptionInfo %))
+
+(register-fdef! github.copilot-sdk.session/session-fs-sqlite-transaction-failure?
+                :args (s/cat :value any?)
+                :ret boolean?)
+
 (register-fdef! github.copilot-sdk.session/adapt-session-fs-handler
                 :args (s/cat :handler-or-provider (s/or :handler ::specs/session-fs-handler
                                                         :provider ::specs/session-fs-provider))
@@ -404,6 +414,119 @@
 (register-fdef! github.copilot-sdk.session/history-truncate!
                 :args (s/cat :session ::specs/session)
                 :ret map?)
+
+(register-fdef! github.copilot-sdk.session/history-clear-context!
+                :args (s/cat :session ::specs/session
+                             :prompt ::specs/non-blank-string)
+                :ret (s/keys :req-un [::specs/messages-cleared]))
+
+;; -----------------------------------------------------------------------------
+;; Function specs for Agent Factories
+;; -----------------------------------------------------------------------------
+
+(register-fdef! github.copilot-sdk.factory/define-factory
+                :args (s/cat :definition map?)
+                :ret factory/factory-handle?)
+
+(register-fdef! github.copilot-sdk.factory/factory-handle?
+                :args (s/cat :value any?)
+                :ret boolean?)
+
+(register-fdef! github.copilot-sdk.factory/factory-meta
+                :args (s/cat :handle factory/factory-handle?)
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/factory-run-function
+                :args (s/cat :handle factory/factory-handle?)
+                :ret fn?)
+
+(register-fdef! github.copilot-sdk.factory/definitions-by-name
+                :args (s/cat :handles (s/nilable sequential?))
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/terminal-status?
+                :args (s/cat :status (s/or :keyword keyword? :string string?))
+                :ret boolean?)
+
+(register-fdef! github.copilot-sdk.factory/run!
+                :args (s/cat :session ::specs/session
+                             :identifier any?
+                             :options (s/? map?))
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/resume!
+                :args (s/cat :session ::specs/session
+                             :run-id ::specs/run-id
+                             :options (s/? map?))
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/wait-for-run!
+                :args (s/cat :session ::specs/session
+                             :run-id ::specs/run-id
+                             :options (s/? map?))
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/<run!
+                :args (s/cat :session ::specs/session
+                             :identifier any?
+                             :options (s/? map?))
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/<resume!
+                :args (s/cat :session ::specs/session
+                             :run-id ::specs/run-id
+                             :options (s/? map?))
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/<wait-for-run!
+                :args (s/cat :session ::specs/session
+                             :run-id ::specs/run-id
+                             :options (s/? map?))
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/get-run
+                :args (s/cat :session ::specs/session :run-id ::specs/run-id)
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/get-run-detail
+                :args (s/cat :session ::specs/session :run-id ::specs/run-id)
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/cancel!
+                :args (s/cat :session ::specs/session :run-id ::specs/run-id)
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/<get-run
+                :args (s/cat :session ::specs/session :run-id ::specs/run-id)
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/<get-run-detail
+                :args (s/cat :session ::specs/session :run-id ::specs/run-id)
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/<cancel!
+                :args (s/cat :session ::specs/session :run-id ::specs/run-id)
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/list-runs
+                :args (s/cat :session ::specs/session)
+                :ret vector?)
+
+(register-fdef! github.copilot-sdk.factory/<list-runs
+                :args (s/cat :session ::specs/session)
+                :ret ::specs/events-ch)
+
+(register-fdef! github.copilot-sdk.factory/get-run-progress
+                :args (s/cat :session ::specs/session
+                             :run-id ::specs/run-id
+                             :options (s/? map?))
+                :ret map?)
+
+(register-fdef! github.copilot-sdk.factory/<get-run-progress
+                :args (s/cat :session ::specs/session
+                             :run-id ::specs/run-id
+                             :options (s/? map?))
+                :ret ::specs/events-ch)
 
 (register-fdef! github.copilot-sdk.session/sessions-fork!
                 :args (s/cat :session ::specs/session)

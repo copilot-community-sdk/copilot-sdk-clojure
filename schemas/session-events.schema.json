@@ -75,14 +75,16 @@
       "enum": [
         "user_initiated",
         "remote_command",
-        "user_abort"
+        "user_abort",
+        "autopilot_credit_limit"
       ],
       "description": "Finite reason code describing why the current turn was aborted",
       "title": "AbortReason",
       "x-enumDescriptions": {
         "user_initiated": "The local user requested the abort, for example by pressing Ctrl+C in the CLI.",
         "remote_command": "A remote command requested the abort.",
-        "user_abort": "An MCP server delivered a user.abort notification."
+        "user_abort": "An MCP server delivered a user.abort notification.",
+        "autopilot_credit_limit": "Autopilot stopped the run because the active objective reached its user-set --max-ai-credits limit."
       }
     },
     "AssistantIdleData": {
@@ -267,6 +269,16 @@
           "type": "string",
           "description": "Generation phase for phased-output models (e.g., thinking vs. response phases)"
         },
+        "chunkIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based position of this message within its model call's response. Absent when the response was not split into chunks."
+        },
+        "chunkCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Total messages the model call's response was split into, one per reasoning boundary. Absent for a single-message response; the last chunk is the one where chunkIndex is chunkCount - 1."
+        },
         "outputTokens": {
           "type": "integer",
           "minimum": 0,
@@ -287,6 +299,9 @@
         "serviceRequestId": {
           "type": "string",
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
+        },
+        "rte": {
+          "type": "boolean"
         },
         "apiCallId": {
           "type": "string",
@@ -635,6 +650,9 @@
         "content": {
           "type": "string",
           "description": "The complete extended thinking text from the model"
+        },
+        "rte": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1381,6 +1399,10 @@
           "type": "string",
           "description": "What initiated this API call (e.g., \"sub-agent\", \"mcp-sampling\"); absent for user-initiated calls"
         },
+        "interactionType": {
+          "type": "string",
+          "description": "Coarse classification of the interaction that produced this call, mirroring the session's per-request agent context (e.g. `conversation-agent`, `conversation-subagent`, `conversation-sampling`, `conversation-background`, `conversation-compaction`, `conversation-user`). Non-billing; lets consumers attribute a model call to a call class (e.g. sub-agent/sidekick) independently of the billing initiator. Absent when the runtime did not classify the request."
+        },
         "apiCallId": {
           "type": "string",
           "description": "Completion ID from the model provider (e.g., chatcmpl-abc123)"
@@ -1392,6 +1414,9 @@
         "serviceRequestId": {
           "type": "string",
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
+        },
+        "rte": {
+          "type": "boolean"
         },
         "apiEndpoint": {
           "$ref": "#/definitions/AssistantUsageApiEndpoint",
@@ -1419,6 +1444,32 @@
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
+        },
+        "availableToolCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tools available to the model for this call",
+          "visibility": "internal"
+        },
+        "toolTokenCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tokens used by tool definitions for this call",
+          "visibility": "internal"
+        },
+        "numToolCalls": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of tool calls returned by the model",
+          "visibility": "internal"
+        },
+        "toolCounts": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Tool-call counts keyed by tool name",
+          "visibility": "internal"
         },
         "finishReason": {
           "type": "string",
@@ -2341,6 +2392,26 @@
       "description": "Start position of the selection",
       "title": "AttachmentSelectionDetailsStart"
     },
+    "AutoApprovalJudgeFailureReason": {
+      "type": "string",
+      "enum": [
+        "timeout",
+        "abort",
+        "empty_response",
+        "model_error",
+        "parse_error"
+      ],
+      "description": "Why the auto-approval judge produced no usable recommendation. Present only alongside an `error` recommendation, where the human-readable reason is a fixed string and therefore cannot distinguish these cases. Intended to make a judge failure reportable by a consumer that has no access to the host's logs.",
+      "title": "AutoApprovalJudgeFailureReason",
+      "x-enumDescriptions": {
+        "timeout": "The judge model call exceeded its deadline.",
+        "abort": "The judge model call was cancelled before it returned.",
+        "empty_response": "The judge model call completed but returned no content.",
+        "model_error": "The judge model call failed (for example a transport, authentication, or rate-limit error).",
+        "parse_error": "The judge model replied, but the reply carried no ALLOW/DENY verdict."
+      },
+      "stability": "experimental"
+    },
     "AutoApprovalRecommendation": {
       "type": "string",
       "enum": [
@@ -2393,6 +2464,47 @@
             "type": "string"
           },
           "description": "Ordered candidate model list the router returned, when not a fallback"
+        },
+        "routingMethod": {
+          "type": "string",
+          "description": "The routing method the server applied, when Auto Intent ran"
+        },
+        "availableModels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Models offered to the router for this resolution"
+        },
+        "fallback": {
+          "type": "boolean",
+          "description": "Whether the router fell back to the standard Auto selection"
+        },
+        "fallbackReason": {
+          "type": "string",
+          "description": "Server-provided reason for falling back, when available"
+        },
+        "stickyOverride": {
+          "type": "boolean",
+          "description": "Whether a sticky model choice overrode the router result"
+        },
+        "routerLatencyMs": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "Server-reported router processing time in milliseconds"
+        },
+        "endToEndLatencyMs": {
+          "type": "number",
+          "minimum": 0.0,
+          "description": "End-to-end client wait time for the router request in milliseconds"
+        },
+        "chosenShortfall": {
+          "type": "number",
+          "description": "The chosen model's score shortfall relative to the top candidate"
+        },
+        "hasImage": {
+          "type": "boolean",
+          "description": "Whether the routed prompt contained an image"
         }
       },
       "required": [
@@ -4468,6 +4580,15 @@
           "type": "integer",
           "minimum": 0,
           "description": "For failed compaction only: the HTTP status code of the compaction LLM call failure, when it carried one. Absent for successful compaction and for failures without an HTTP status (e.g. an empty model response or a transport error)."
+        },
+        "tokenLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Model context window token limit the compaction was targeting, when known"
+        },
+        "trigger": {
+          "$ref": "#/definitions/CompactionTrigger",
+          "description": "What initiated this compaction, when known"
         }
       },
       "required": [
@@ -4552,6 +4673,20 @@
           "type": "integer",
           "minimum": 0,
           "description": "Token count from tool definitions at compaction start"
+        },
+        "currentTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total context tokens (system + conversation + tool definitions) at compaction start, when known"
+        },
+        "tokenLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Model context window token limit the compaction is targeting, when known"
+        },
+        "trigger": {
+          "$ref": "#/definitions/CompactionTrigger",
+          "description": "What initiated this compaction, when known"
         }
       },
       "additionalProperties": false,
@@ -4612,6 +4747,25 @@
       "description": "Session event \"session.compaction_start\". Context window breakdown at the start of LLM-powered conversation compaction",
       "title": "CompactionStartEvent"
     },
+    "CompactionTrigger": {
+      "type": "string",
+      "enum": [
+        "threshold",
+        "context_limit_retry",
+        "manual",
+        "memory_pressure",
+        "model_switch"
+      ],
+      "description": "What initiated a conversation compaction",
+      "title": "CompactionTrigger",
+      "x-enumDescriptions": {
+        "threshold": "Background compaction started automatically because context utilization crossed the background threshold.",
+        "context_limit_retry": "Compaction forced by a context-limit model response (e.g. HTTP 413) before retrying the request.",
+        "manual": "User-requested compaction, e.g. the /compact command or the history.compact API.",
+        "memory_pressure": "Emergency compaction triggered by high process memory usage.",
+        "model_switch": "Compaction requested while switching to a model with a smaller context window."
+      }
+    },
     "ContextChangedEvent": {
       "type": "object",
       "properties": {
@@ -4665,6 +4819,80 @@
       "additionalProperties": false,
       "description": "Session event \"session.context_changed\". Updated working directory and git context after the change",
       "title": "ContextChangedEvent"
+    },
+    "ContextClearedData": {
+      "type": "object",
+      "properties": {
+        "initialMessage": {
+          "type": "string",
+          "description": "Optional initial message set after clearing"
+        },
+        "messagesCleared": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of conversation messages that were cleared"
+        }
+      },
+      "required": [
+        "messagesCleared"
+      ],
+      "additionalProperties": false,
+      "description": "Context-cleared details emitted when the host clears the conversation (the session.history.clearContext RPC / Session.clearContextMessages)",
+      "title": "ContextClearedData"
+    },
+    "ContextClearedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.context_cleared",
+          "description": "Type discriminator. Always \"session.context_cleared\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ContextClearedData",
+          "description": "Context-cleared details emitted when the host clears the conversation (the session.history.clearContext RPC / Session.clearContextMessages)"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.context_cleared\". Context-cleared details emitted when the host clears the conversation (the session.history.clearContext RPC / Session.clearContextMessages)",
+      "title": "ContextClearedEvent"
     },
     "ContextTier": {
       "type": "string",
@@ -5912,6 +6140,146 @@
       "description": "Session event \"external_tool.requested\". External tool invocation request for client-side tool execution",
       "title": "ExternalToolRequestedEvent"
     },
+    "FactoryPermissionOperation": {
+      "type": "string",
+      "enum": [
+        "run",
+        "author"
+      ],
+      "description": "Operation gated by a factory permission request.",
+      "title": "FactoryPermissionOperation",
+      "x-enumDescriptions": {
+        "run": "Running a registered factory, which spends subagents, active time, and AI credits under the approved limits.",
+        "author": "Authoring a factory, which writes JavaScript into a session-scoped extension and loads it."
+      }
+    },
+    "FactoryPermissionPhase": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Phase title"
+        },
+        "detail": {
+          "type": "string",
+          "description": "Optional phase detail"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "A declared phase shown in a factory permission prompt.",
+      "title": "FactoryPermissionPhase"
+    },
+    "FactoryRunUpdatedData": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic revision now available for the run."
+        }
+      },
+      "required": [
+        "runId",
+        "revision"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral invalidation signal for a changed factory run.",
+      "title": "FactoryRunUpdatedData",
+      "stability": "experimental"
+    },
+    "FactoryRunUpdatedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "factory.run_updated",
+          "description": "Type discriminator. Always \"factory.run_updated\"."
+        },
+        "data": {
+          "$ref": "#/definitions/FactoryRunUpdatedData",
+          "description": "Ephemeral invalidation signal for a changed factory run."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"factory.run_updated\". Ephemeral invalidation signal for a changed factory run.",
+      "title": "FactoryRunUpdatedEvent",
+      "stability": "experimental"
+    },
+    "GitHubMcpToolConfig": {
+      "type": "object",
+      "properties": {
+        "enableAllTools": {
+          "type": "boolean",
+          "description": "Whether to use the read-write endpoint and request all toolsets"
+        },
+        "additionalToolsets": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional GitHub MCP toolsets requested by the session"
+        },
+        "additionalTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional GitHub MCP tools requested by the session"
+        },
+        "enableInsidersMode": {
+          "type": "boolean",
+          "description": "Whether to request the GitHub MCP insiders build"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-session configuration for the built-in GitHub MCP server",
+      "title": "GitHubMcpToolConfig"
+    },
     "GitHubRepoRef": {
       "type": "object",
       "properties": {
@@ -6629,7 +6997,7 @@
       "properties": {
         "source": {
           "$ref": "#/definitions/ManagedSettingsResolvedSource",
-          "description": "Which channel supplied the effective managed settings (the winning layer), or `none` when no policy is in force"
+          "description": "Channel summary: `server`, `device`, or `client` when exactly one channel contributed; `mixed` when multiple channels contributed; otherwise `none`. Consult the per-channel booleans for exact provenance."
         },
         "serverManaged": {
           "type": "boolean",
@@ -6637,7 +7005,11 @@
         },
         "deviceManaged": {
           "type": "boolean",
-          "description": "Whether the device (MDM/plist/registry/file) managed-settings layer was present"
+          "description": "Whether an actual device MDM/plist/registry/file managed-settings layer was present"
+        },
+        "clientManaged": {
+          "type": "boolean",
+          "description": "Whether a session-local permissions layer injected by the SDK host was present"
         },
         "failClosed": {
           "type": "boolean",
@@ -6646,6 +7018,10 @@
         "bypassPermissionsDisabled": {
           "type": "boolean",
           "description": "Whether enterprise policy disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers, and forced on when `failClosed` is true."
+        },
+        "permissionsAllowIntersected": {
+          "type": "boolean",
+          "description": "Whether at least two managed sources supplied permission allowlists, so enforcement intersects them and the flattened settings payload omits `permissions.allow`."
         },
         "managedKeys": {
           "type": "array",
@@ -6668,7 +7044,7 @@
         "managedKeys"
       ],
       "additionalProperties": false,
-      "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values per ordinary key, while permissions compose restrictively across device, server, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes.",
       "title": "ManagedSettingsResolvedData",
       "stability": "experimental"
     },
@@ -6713,7 +7089,7 @@
         },
         "data": {
           "$ref": "#/definitions/ManagedSettingsResolvedData",
-          "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values per ordinary key, while permissions compose restrictively across device, server, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes."
         }
       },
       "required": [
@@ -6725,7 +7101,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values per ordinary key, while permissions compose restrictively across device, server, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes.",
       "title": "ManagedSettingsResolvedEvent",
       "stability": "experimental"
     },
@@ -6734,14 +7110,18 @@
       "enum": [
         "server",
         "device",
+        "client",
+        "mixed",
         "none"
       ],
-      "description": "Which channel supplied the effective enterprise managed settings (highest-authority present layer wins wholesale)",
+      "description": "Summary of which managed-settings channels contributed to the effective session policy. Use the per-channel booleans for exact provenance.",
       "title": "ManagedSettingsResolvedSource",
       "x-enumDescriptions": {
-        "server": "Account/org policy self-fetched from the GitHub managed-settings endpoint (higher authority).",
-        "device": "Device-level MDM policy discovered from plist/registry/file (lower authority).",
-        "none": "No managed policy is in force (no layer contributed)."
+        "server": "Only the server/account channel contributed.",
+        "device": "Only the device MDM/plist/registry/file channel contributed.",
+        "client": "Only session-local SDK-host injection contributed.",
+        "mixed": "More than one channel contributed. Ordinary keys resolve device over server per key, while permissions compose restrictively across all present layers.",
+        "none": "No managed policy is in force (no channel contributed)."
       }
     },
     "McpAppToolCallCompleteData": {
@@ -7585,7 +7965,7 @@
         },
         "status": {
           "$ref": "#/definitions/McpServerStatus",
-          "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured"
+          "description": "Connection status: connected, failed, needs-auth, pending, disabled, stopped, or not_configured"
         },
         "source": {
           "$ref": "#/definitions/McpServerSource",
@@ -7641,9 +8021,10 @@
         "needs-auth",
         "pending",
         "disabled",
+        "stopped",
         "not_configured"
       ],
-      "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured",
+      "description": "Connection status: connected, failed, needs-auth, pending, disabled, stopped, or not_configured",
       "title": "McpServerStatus",
       "x-enumDescriptions": {
         "connected": "The server is connected and available.",
@@ -7651,6 +8032,7 @@
         "needs-auth": "The server requires authentication before it can connect.",
         "pending": "The server connection is still being established.",
         "disabled": "The server is configured but disabled.",
+        "stopped": "The server was intentionally stopped and can be restarted on demand when policy permits; a server quarantined by restrictive managed policy stays stopped and cannot be restarted until the policy allows it.",
         "not_configured": "The server is not configured for this session."
       }
     },
@@ -7663,7 +8045,7 @@
         },
         "status": {
           "$ref": "#/definitions/McpServerStatus",
-          "description": "Connection status: connected, failed, needs-auth, pending, disabled, or not_configured"
+          "description": "Connection status: connected, failed, needs-auth, pending, disabled, stopped, or not_configured"
         },
         "error": {
           "type": "string",
@@ -7982,6 +8364,9 @@
           "type": "string",
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
+        "rte": {
+          "type": "boolean"
+        },
         "statusCode": {
           "type": "integer",
           "minimum": 0,
@@ -8227,6 +8612,11 @@
         "model": {
           "type": "string",
           "description": "Model identifier used for this API call, when known"
+        },
+        "previousResponseId": {
+          "type": "string",
+          "description": "Previous response or interaction identifier included in the model request, when present",
+          "visibility": "internal"
         }
       },
       "required": [
@@ -8344,7 +8734,7 @@
         },
         "cause": {
           "type": "string",
-          "description": "Reason the change happened, when not user-initiated. Currently `\"rate_limit_auto_switch\"` for changes triggered by the auto-mode-switch rate-limit recovery path. UI clients can use this to render contextual copy."
+          "description": "Reason the change happened, when not user-initiated. `\"rate_limit_auto_switch\"` for changes triggered by the auto-mode-switch rate-limit recovery path, or `\"refusal_fallback\"` when the active model declined a request (content refusal) and the runtime switched to the configured refusal-fallback model. UI clients can use this to render contextual copy."
         }
       },
       "required": [
@@ -8629,6 +9019,14 @@
         "reason": {
           "type": "string",
           "description": "Human-readable reason for the judge's recommendation, when available."
+        },
+        "model": {
+          "type": "string",
+          "description": "Model id that produced the recommendation, when the judge was consulted and reported one. Absent for `excluded` (the judge was not consulted) and for failures that occurred before a model was selected."
+        },
+        "failureReason": {
+          "$ref": "#/definitions/AutoApprovalJudgeFailureReason",
+          "description": "Classified cause of an `error` recommendation. Absent for every other recommendation."
         }
       },
       "required": [
@@ -8895,6 +9293,10 @@
           "description": "Extension management permission prompt"
         },
         {
+          "$ref": "#/definitions/PermissionPromptRequestFactory",
+          "description": "Factory run or authoring permission prompt"
+        },
+        {
           "$ref": "#/definitions/PermissionPromptRequestExtensionPermissionAccess",
           "description": "Extension permission access prompt"
         }
@@ -8941,6 +9343,10 @@
           "$ref": "#/definitions/PermissionAutoApproval",
           "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
           "stability": "experimental"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
         }
       },
       "required": [
@@ -9064,6 +9470,101 @@
       "additionalProperties": false,
       "description": "Extension permission access prompt",
       "title": "PermissionPromptRequestExtensionPermissionAccess"
+    },
+    "PermissionPromptRequestFactory": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "factory",
+          "description": "Prompt kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "operation": {
+          "$ref": "#/definitions/FactoryPermissionOperation",
+          "description": "Factory operation, either run or author"
+        },
+        "name": {
+          "type": "string",
+          "description": "Factory name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Factory description"
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FactoryPermissionPhase",
+            "description": "A declared phase shown in a factory permission prompt."
+          },
+          "description": "Declared factory phases"
+        },
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective concurrent-subagent limit; omitted means unlimited"
+        },
+        "maxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective total-subagent limit; omitted means unlimited"
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "description": "Effective active-time limit in seconds; omitted means unlimited"
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "description": "Effective AI-credit limit; omitted means unlimited"
+        },
+        "declaredMaxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declaredMaxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declaredTimeoutSeconds": {
+          "type": "number"
+        },
+        "declaredMaxAiCredits": {
+          "type": "number"
+        },
+        "approvalKey": {
+          "type": "string",
+          "description": "Canonical key used for scoped factory approvals"
+        },
+        "canPersistApproval": {
+          "type": "boolean",
+          "description": "Whether this factory is eligible for persistent approval"
+        },
+        "autoApproval": {
+          "$ref": "#/definitions/PermissionAutoApproval",
+          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+          "stability": "experimental"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        }
+      },
+      "required": [
+        "kind",
+        "operation",
+        "name",
+        "description",
+        "phases",
+        "approvalKey",
+        "canPersistApproval"
+      ],
+      "additionalProperties": false,
+      "description": "Factory run or authoring permission prompt",
+      "title": "PermissionPromptRequestFactory"
     },
     "PermissionPromptRequestHook": {
       "type": "object",
@@ -9274,6 +9775,10 @@
           "$ref": "#/definitions/PermissionAutoApproval",
           "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
           "stability": "experimental"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
         }
       },
       "required": [
@@ -9305,6 +9810,10 @@
           "type": "string",
           "description": "URL to be fetched"
         },
+        "redirectedFrom": {
+          "type": "string",
+          "description": "Immediately preceding URL when this prompt is for a redirect target"
+        },
         "requestSandboxBypass": {
           "type": "boolean",
           "description": "True when this URL fetch is requesting to bypass the sandbox network policy: either the model set requestSandboxBypass: true, or the tool re-issued the request as an interactive bypass after the network policy denied the approved URL (host opted in via sandbox.allowBypass). This is a request, not a grant: the fetch runs only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
@@ -9317,6 +9826,10 @@
           "$ref": "#/definitions/PermissionAutoApproval",
           "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
           "stability": "experimental"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
         }
       },
       "required": [
@@ -9364,6 +9877,10 @@
           "$ref": "#/definitions/PermissionAutoApproval",
           "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
           "stability": "experimental"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
         }
       },
       "required": [
@@ -9414,6 +9931,10 @@
         {
           "$ref": "#/definitions/PermissionRequestExtensionManagement",
           "description": "Extension management permission request"
+        },
+        {
+          "$ref": "#/definitions/PermissionRequestFactory",
+          "description": "Factory run or authoring permission request"
         },
         {
           "$ref": "#/definitions/PermissionRequestExtensionPermissionAccess",
@@ -9471,6 +9992,10 @@
         "promptRequest": {
           "$ref": "#/definitions/PermissionPromptRequest",
           "description": "Derived user-facing permission prompt details for UI consumers"
+        },
+        "riskAssessment": {
+          "description": "Neutral risk metadata supplied by the tool host. Consumers may display this value but must not use it to bypass the permission decision.",
+          "x-opaque-json": true
         },
         "resolvedByHook": {
           "type": "boolean",
@@ -9600,6 +10125,92 @@
       "additionalProperties": false,
       "description": "Extension permission access request",
       "title": "PermissionRequestExtensionPermissionAccess"
+    },
+    "PermissionRequestFactory": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "factory",
+          "description": "Permission kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "operation": {
+          "$ref": "#/definitions/FactoryPermissionOperation",
+          "description": "Factory operation, either run or author"
+        },
+        "name": {
+          "type": "string",
+          "description": "Factory name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Factory description"
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FactoryPermissionPhase",
+            "description": "A declared phase shown in a factory permission prompt."
+          },
+          "description": "Declared factory phases"
+        },
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective concurrent-subagent limit; omitted means unlimited"
+        },
+        "maxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective total-subagent limit; omitted means unlimited"
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "description": "Effective active-time limit in seconds; omitted means unlimited"
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "description": "Effective AI-credit limit; omitted means unlimited"
+        },
+        "declaredMaxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declaredMaxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "declaredTimeoutSeconds": {
+          "type": "number"
+        },
+        "declaredMaxAiCredits": {
+          "type": "number"
+        },
+        "approvalKey": {
+          "type": "string",
+          "description": "Canonical key used for scoped factory approvals"
+        },
+        "canPersistApproval": {
+          "type": "boolean",
+          "description": "Whether this factory is eligible for persistent approval"
+        }
+      },
+      "required": [
+        "kind",
+        "operation",
+        "name",
+        "description",
+        "phases",
+        "approvalKey",
+        "canPersistApproval"
+      ],
+      "additionalProperties": false,
+      "description": "Factory run or authoring permission request",
+      "title": "PermissionRequestFactory"
     },
     "PermissionRequestHook": {
       "type": "object",
@@ -9762,6 +10373,10 @@
           "type": "string",
           "description": "Tool call ID that triggered this permission request"
         },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        },
         "intention": {
           "type": "string",
           "description": "Human-readable description of why the file is being read"
@@ -9800,6 +10415,10 @@
           "type": "string",
           "description": "Tool call ID that triggered this permission request"
         },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        },
         "fullCommandText": {
           "type": "string",
           "description": "The complete shell command text to be executed"
@@ -9815,6 +10434,14 @@
             "description": "A parsed command identifier in a shell permission request, including whether it is read-only."
           },
           "description": "Parsed command identifiers found in the command text"
+        },
+        "commandSegments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PermissionRequestShellCommandSegment",
+            "description": "A parsed shell command segment used for argument-aware managed policy matching."
+          },
+          "description": "Parsed command segments, including arguments, used for managed policy matching"
         },
         "possiblePaths": {
           "type": "array",
@@ -9886,6 +10513,26 @@
       "description": "A parsed command identifier in a shell permission request, including whether it is read-only.",
       "title": "PermissionRequestShellCommand"
     },
+    "PermissionRequestShellCommandSegment": {
+      "type": "object",
+      "properties": {
+        "identifier": {
+          "type": "string",
+          "description": "Command identifier (e.g., executable name)"
+        },
+        "fullCommandText": {
+          "type": "string",
+          "description": "Full text of this command segment, including arguments"
+        }
+      },
+      "required": [
+        "identifier",
+        "fullCommandText"
+      ],
+      "additionalProperties": false,
+      "description": "A parsed shell command segment used for argument-aware managed policy matching.",
+      "title": "PermissionRequestShellCommandSegment"
+    },
     "PermissionRequestShellPossibleUrl": {
       "type": "object",
       "properties": {
@@ -9913,6 +10560,10 @@
           "type": "string",
           "description": "Tool call ID that triggered this permission request"
         },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        },
         "intention": {
           "type": "string",
           "description": "Human-readable description of why the URL is being accessed"
@@ -9920,6 +10571,10 @@
         "url": {
           "type": "string",
           "description": "URL to be fetched"
+        },
+        "redirectedFrom": {
+          "type": "string",
+          "description": "Immediately preceding URL when this request is for a redirect target"
         },
         "requestSandboxBypass": {
           "type": "boolean",
@@ -9950,6 +10605,10 @@
         "toolCallId": {
           "type": "string",
           "description": "Tool call ID that triggered this permission request"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
         },
         "intention": {
           "type": "string",
@@ -10444,7 +11103,7 @@
         },
         "sessionWasActive": {
           "type": "boolean",
-          "description": "True when this resume attached to a session that the runtime already had running in-memory (for example, an extension joining a session another client was actively driving). False (or omitted) for cold resumes — the runtime had to reconstitute the session from its persisted event log."
+          "description": "True when this resume passively joined a session that already had live work running in the runtime - an agent turn, a native queue run, a queued resume continuation, or an in-flight send (for example, an extension joining a session another client was actively driving). False (or omitted) when the session had no live work or when the resume explicitly abandoned pending work, including cold resumes and suspended sessions that remain resident in memory."
         },
         "remoteSteerable": {
           "type": "boolean",
@@ -10452,7 +11111,7 @@
         },
         "continuePendingWork": {
           "type": "boolean",
-          "description": "When true, tool calls and permission requests left in flight by the previous session lifetime remain pending after resume and the agentic loop awaits their results. User sends are queued behind the pending work until all such requests reach a terminal state. When false (the default), any such tool calls and permission requests are immediately marked as interrupted on resume."
+          "description": "When true, tool calls and permission requests left in flight by the previous session lifetime remain pending after resume and the agentic loop awaits their results. User sends are queued behind the pending work until all such requests reach a terminal state. When false or omitted, pending work is normally marked as interrupted unless the resume passively joined live work owned by another client; sessionWasActive distinguishes that case."
         }
       },
       "required": [
@@ -10780,6 +11439,10 @@
         "displayPrompt": {
           "type": "string",
           "description": "Optional user-facing label shown in the timeline instead of the actual prompt (e.g. `/skill-name args` when the prompt is a skill invocation expansion)"
+        },
+        "origin": {
+          "$ref": "#/definitions/ScheduleOrigin",
+          "description": "Who created the schedule (`user` or `model`). Persisted so a resumed session keeps gating non-user schedules from firing skills that opted out of model invocation. Absent on entries created before this field existed; a missing origin fails closed (treated the same as a non-user origin), so such a schedule may not resolve a `disable-model-invocation` skill."
         }
       },
       "required": [
@@ -10843,6 +11506,19 @@
       "additionalProperties": false,
       "description": "Session event \"session.schedule_created\". Scheduled prompt registered via /every or /after",
       "title": "ScheduleCreatedEvent"
+    },
+    "ScheduleOrigin": {
+      "type": "string",
+      "enum": [
+        "user",
+        "model"
+      ],
+      "description": "Who created the schedule: `user` (an explicit user action such as `/every` or `/after`) or `model` (the agent via the `manage_schedule` tool). Gates whether a scheduled skill that opted out of model invocation may fire: only user-created schedules may.",
+      "title": "ScheduleOrigin",
+      "x-enumDescriptions": {
+        "user": "The schedule was created by an explicit user action, such as `/every` or `/after`.",
+        "model": "The schedule was created by the agent via the `manage_schedule` tool."
+      }
     },
     "ScheduleRearmedData": {
       "type": "object",
@@ -11030,6 +11706,10 @@
         {
           "$ref": "#/definitions/UsageInfoEvent",
           "description": "Session event \"session.usage_info\". Current context window usage statistics including token and message counts"
+        },
+        {
+          "$ref": "#/definitions/ContextClearedEvent",
+          "description": "Session event \"session.context_cleared\". Context-cleared details emitted when the host clears the conversation (the session.history.clearContext RPC / Session.clearContextMessages)"
         },
         {
           "$ref": "#/definitions/CompactionStartEvent",
@@ -11287,7 +11967,7 @@
         },
         {
           "$ref": "#/definitions/ManagedSettingsResolvedEvent",
-          "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and where they came from, so SDK clients can show users what is enterprise-managed and by which authority. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted; for a session-independent pull, use the SDK `getManagedSettings()` API, which returns the identical payload. Managed settings have a single authoritative source, so the highest-authority present layer (server > device) wins wholesale; `bypassPermissionsDisabled` is deny-wins across layers. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values per ordinary key, while permissions compose restrictively across device, server, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes."
         },
         {
           "$ref": "#/definitions/ManagedSettingsEnforcedEvent",
@@ -11316,6 +11996,10 @@
         {
           "$ref": "#/definitions/BackgroundTasksChangedEvent",
           "description": "Session event \"session.background_tasks_changed\". Empty payload for `session.background_tasks_changed`, indicating background task state changed."
+        },
+        {
+          "$ref": "#/definitions/FactoryRunUpdatedEvent",
+          "description": "Session event \"factory.run_updated\". Ephemeral invalidation signal for a changed factory run."
         },
         {
           "$ref": "#/definitions/SkillsLoadedEvent",
@@ -12213,6 +12897,10 @@
           "type": "string",
           "description": "Unique identifier for the skill"
         },
+        "commandName": {
+          "type": "string",
+          "description": "Canonical slash command name used to invoke the skill, without the leading '/'"
+        },
         "description": {
           "type": "string",
           "description": "Description of what the skill does"
@@ -12408,6 +13096,10 @@
         "context": {
           "$ref": "#/definitions/WorkingDirectoryContext",
           "description": "Working directory and git context at session start"
+        },
+        "githubMcpToolConfig": {
+          "$ref": "#/definitions/GitHubMcpToolConfig",
+          "description": "Per-session GitHub MCP override persisted for cold resume"
         },
         "alreadyInUse": {
           "type": "boolean",
@@ -12935,6 +13627,10 @@
           "type": "string",
           "description": "The system or developer prompt text sent as model input"
         },
+        "interactionId": {
+          "type": "string",
+          "description": "Logical interaction identifier for the model run receiving this prompt"
+        },
         "role": {
           "$ref": "#/definitions/SystemMessageRole",
           "description": "Message role: \"system\" for system prompts, \"developer\" for developer-injected instructions"
@@ -13067,6 +13763,14 @@
         {
           "$ref": "#/definitions/SystemNotificationInstructionDiscovered",
           "description": "System notification metadata for an instruction file discovered during tool access, including source, trigger file, and tool."
+        },
+        {
+          "$ref": "#/definitions/SystemNotificationFactoryCompleted",
+          "description": "System notification metadata for a factory execution attempt that reached a terminal state."
+        },
+        {
+          "$ref": "#/definitions/SystemNotificationUnclassified",
+          "description": "System notification metadata from an external host that does not match a runtime-owned notification kind."
         }
       ],
       "description": "Structured metadata identifying what triggered this notification",
@@ -13228,6 +13932,91 @@
       "description": "Session event \"system.notification\". System-generated notification for runtime events like background task completion",
       "title": "SystemNotificationEvent"
     },
+    "SystemNotificationFactoryCompleted": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "factory_completed",
+          "description": "Type discriminator. Always \"factory_completed\"."
+        },
+        "runId": {
+          "type": "string",
+          "description": "Factory run identifier."
+        },
+        "factoryName": {
+          "type": "string",
+          "description": "Persisted factory name."
+        },
+        "status": {
+          "$ref": "#/definitions/SystemNotificationFactoryCompletedStatus",
+          "description": "Terminal status reached by this execution attempt."
+        },
+        "consumedSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Subagents consumed by the run across all attempts."
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Accumulated active execution time in milliseconds."
+        },
+        "consumedNanoAiu": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Consumed AI usage in nano-AIU."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Execution attempt that reached this terminal state."
+        },
+        "resultPreview": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Bounded prompt-safe preview of the completed result."
+        },
+        "failure": {
+          "description": "Machine-readable terminal failure details, when present.",
+          "x-opaque-json": true
+        },
+        "retryGuidance": {
+          "type": "string",
+          "description": "Actionable run_factory resume guidance for a resource-limit failure."
+        }
+      },
+      "required": [
+        "type",
+        "runId",
+        "factoryName",
+        "status",
+        "consumedSubagents",
+        "elapsedMs",
+        "consumedNanoAiu",
+        "attempt"
+      ],
+      "additionalProperties": false,
+      "description": "System notification metadata for a factory execution attempt that reached a terminal state.",
+      "title": "SystemNotificationFactoryCompleted"
+    },
+    "SystemNotificationFactoryCompletedStatus": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "halted",
+        "cancelled",
+        "error"
+      ],
+      "description": "Terminal status reached by a factory execution attempt.",
+      "title": "SystemNotificationFactoryCompletedStatus",
+      "x-enumDescriptions": {
+        "completed": "The factory completed successfully.",
+        "halted": "The factory was halted.",
+        "cancelled": "The factory was cancelled.",
+        "error": "The factory failed."
+      }
+    },
     "SystemNotificationInstructionDiscovered": {
       "type": "object",
       "properties": {
@@ -13353,6 +14142,26 @@
       "description": "System notification metadata for a detached shell session that completed, including shell ID and description.",
       "title": "SystemNotificationShellDetachedCompleted"
     },
+    "SystemNotificationUnclassified": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "unclassified",
+          "description": "Type discriminator. Always \"unclassified\"."
+        },
+        "metadata": {
+          "description": "Opaque metadata supplied by the external host, when present.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "System notification metadata from an external host that does not match a runtime-owned notification kind.",
+      "title": "SystemNotificationUnclassified"
+    },
     "TaskCompleteData": {
       "type": "object",
       "properties": {
@@ -13363,7 +14172,19 @@
         },
         "success": {
           "type": "boolean",
-          "description": "Whether the tool call succeeded. False when validation failed (e.g., invalid arguments)"
+          "description": "Whether the task was accepted as complete. False when validation failed or completion was rejected or blocked by the reviewer"
+        },
+        "outcome": {
+          "$ref": "#/definitions/TaskCompletionOutcome",
+          "description": "Semantic completion decision. Absent on legacy events and invalid tool calls"
+        },
+        "reason": {
+          "type": "string",
+          "description": "Label-safe runtime rationale for the completion decision (e.g. a cancellation or pause/resume downgrade), when one applies. Reviewer-authored rationale is intentionally omitted here because this event has no IFC label channel; the reviewer's findings remain available through its own labeled sub-agent events"
+        },
+        "objectiveId": {
+          "type": "integer",
+          "description": "Active autopilot objective ID evaluated by the completion reviewer"
         }
       },
       "additionalProperties": false,
@@ -13423,6 +14244,21 @@
       "additionalProperties": false,
       "description": "Session event \"session.task_complete\". Task completion notification with summary from the agent",
       "title": "TaskCompleteEvent"
+    },
+    "TaskCompletionOutcome": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "continue",
+        "blocked"
+      ],
+      "description": "Semantic result of evaluating a task completion request",
+      "title": "TaskCompletionOutcome",
+      "x-enumDescriptions": {
+        "completed": "The completion request was accepted and the objective is complete.",
+        "continue": "The completion request was rejected because more work or validation remains.",
+        "blocked": "Completion cannot proceed without intervention; the active objective is paused when one is identified."
+      }
     },
     "TitleChangedData": {
       "type": "object",
@@ -13887,6 +14723,9 @@
         "interactionId": {
           "type": "string",
           "description": "CAPI interaction ID for correlating this tool execution with upstream telemetry"
+        },
+        "rte": {
+          "type": "boolean"
         },
         "isUserRequested": {
           "type": "boolean",
@@ -14452,6 +15291,9 @@
           "type": "string",
           "description": "Model identifier that generated this tool call"
         },
+        "rte": {
+          "type": "boolean"
+        },
         "mcpServerName": {
           "type": "string",
           "description": "Name of the MCP server hosting this tool, when the tool is an MCP tool"
@@ -14553,6 +15395,11 @@
         "hasWriteFileRedirection": {
           "type": "boolean",
           "description": "Whether the command includes a file write redirection (e.g., > or >>)."
+        },
+        "displayCommand": {
+          "type": "string",
+          "description": "The command with a redundant leading `cd` into the working directory removed, present only when there was one to remove. Computed with the same routine the shell driver applies before spawning, so a surface that renders this shows the text that actually runs. Consumers that display it should keep the original tool arguments available on demand.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -15407,7 +16254,7 @@
         },
         "source": {
           "type": "string",
-          "description": "Origin of this message, used for timeline filtering (e.g., \"skill-pdf\" for skill-injected messages that should be hidden from the user)"
+          "description": "Origin of this message, used for timeline filtering and attribution (e.g., `skill-pdf` for hidden skill injection or `agent-<agent-id>` for an inter-agent prompt)"
         },
         "delivery": {
           "$ref": "#/definitions/UserMessageDelivery",
@@ -15537,6 +16384,10 @@
           "description": "Session-scoped tool-approval rule for extension-management operations, optionally narrowed by operation."
         },
         {
+          "$ref": "#/definitions/UserToolSessionApprovalFactory",
+          "description": "Session-scoped factory approval, optionally narrowed by approval key."
+        },
+        {
           "$ref": "#/definitions/UserToolSessionApprovalExtensionPermissionAccess",
           "description": "Session-scoped tool-approval rule for an extension's permission-gated capability access, keyed by extension name."
         }
@@ -15629,6 +16480,26 @@
       "additionalProperties": false,
       "description": "Session-scoped tool-approval rule for an extension's permission-gated capability access, keyed by extension name.",
       "title": "UserToolSessionApprovalExtensionPermissionAccess"
+    },
+    "UserToolSessionApprovalFactory": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "factory",
+          "description": "Factory approval kind"
+        },
+        "approvalKey": {
+          "type": "string",
+          "description": "Optional factory operation name or canonical approval key"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Session-scoped factory approval, optionally narrowed by approval key.",
+      "title": "UserToolSessionApprovalFactory"
     },
     "UserToolSessionApprovalMcp": {
       "type": "object",
@@ -15834,6 +16705,10 @@
         "baseCommit": {
           "type": "string",
           "description": "Base commit of current git branch at session start time"
+        },
+        "pendingGitContext": {
+          "type": "boolean",
+          "description": "Set on the immediate preliminary event of a working-directory change, before the git context is resolved. A settled follow-up event (enriched with git context, or cwd-only for a non-repository) is always emitted afterward, so observers may defer to it. Absent on standalone/final events (e.g. relay context changes)."
         }
       },
       "required": [

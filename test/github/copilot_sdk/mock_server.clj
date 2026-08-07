@@ -387,6 +387,38 @@
                  "session.compaction.compact" {:success true}
                  "session.history.compact" {:success true}
                  "session.history.truncate" {:success true}
+                 "session.history.clearContext" {:messagesCleared 3}
+                 "session.factory.run" {:runId "run-1"
+                                        :name (or (:name params) "factory")
+                                        :status "completed"
+                                        :result {:snake_key 1}
+                                        :snapshot {:snapshot_key true}}
+                 "session.factory.resume" {:run {:runId (:runId params)
+                                                 :name "factory"
+                                                 :status "completed"
+                                                 :result {:resumed_key true}
+                                                 :snapshot {:resume_snapshot_key true}}}
+                 "session.factory.getRun" {:runId (:runId params)
+                                           :name "factory"
+                                           :status "completed"
+                                           :result {:durable_key true}
+                                           :snapshot {:get_snapshot_key true}}
+                 "session.factory.listRuns" {:runs [{:runId "run-1"
+                                                     :name "factory"
+                                                     :status "completed"}]}
+                 "session.factory.getRunDetail" {:runId (:runId params)
+                                                 :phases []
+                                                 :agents []
+                                                 :progress {:lines []}}
+                 "session.factory.getRunProgress" {:lines [] :hasMore false}
+                 "session.factory.cancel" {:runId (:runId params)
+                                           :name "factory"
+                                           :status "cancelled"
+                                           :snapshot {:cancel_snapshot_key true}}
+                 "session.factory.log" {}
+                 "session.factory.agent" {:result {:agent_key "ok"}}
+                 "session.factory.journal.get" {:hit false}
+                 "session.factory.journal.put" {}
                  "sessions.fork" {:sessionId (str (java.util.UUID/randomUUID))}
                  "session.shell.exec" {:exitCode 0 :stdout "" :stderr ""}
                  "session.shell.kill" {:success true}
