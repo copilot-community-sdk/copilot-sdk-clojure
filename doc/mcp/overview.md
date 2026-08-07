@@ -126,6 +126,56 @@ Here's a complete working example using the official [`@modelcontextprotocol/ser
 | `:mcp-defer-tools` | keyword | No | Tool-deferral policy: `:auto` or `:never`. Wire-encoded as `deferTools` (upstream schema 1.0.63) |
 | `:mcp-headers` | map | No | HTTP headers (e.g., for authentication) |
 
+### Disabling MCP Servers
+
+Disable specific servers for a session without removing their `:mcp-servers` entry:
+
+```clojure
+(copilot/with-client-session [session
+                              {:on-permission-request copilot/approve-all
+                               :mcp-servers {"filesystem" {:mcp-command "npx"
+                                                            :mcp-args ["-y" "@modelcontextprotocol/server-filesystem" "/tmp"]
+                                                            :mcp-tools ["*"]}
+                                             "github" {:mcp-server-type :http
+                                                       :mcp-url "https://api.githubcopilot.com/mcp/"
+                                                       :mcp-tools ["*"]}}
+                               :disabled-mcp-servers ["github"]}]
+  ;; Only "filesystem" starts; "github" is neither started nor authenticated.
+  (println (h/query "List files in /tmp" :session session)))
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:disabled-mcp-servers` | vector of strings | `nil` (none disabled) | Exact `:mcp-servers` names to disable. Wire key: `disabledMcpServers` |
+
+`:disabled-mcp-servers` names servers that are not started or authenticated when creating or cold-resuming a session. Supplying it on a **resident** (warm) resume cannot stop servers that are already running — only `create-session` or a cold resume actually prevent startup.
+
+Passing `[]` explicitly differs on the wire from omitting the key: `[]` sends an empty `disabledMcpServers` vector, while omission sends no field. Supported identically on `create-session`, `resume-session`, and `join-session` (which resumes internally).
+
+### Built-in GitHub MCP Tool Configuration
+
+`:github-mcp-tool-config` tunes the runtime's **built-in** GitHub MCP server. It is independent of manually configuring a `"github"` entry under `:mcp-servers`, as in [Remote MCP Server (HTTP)](#remote-mcp-server-http) above:
+
+```clojure
+(copilot/with-client-session [session
+                              {:on-permission-request copilot/approve-all
+                               :github-mcp-tool-config {:enable-all-tools? true
+                                                         :additional-toolsets ["security"]}}]
+  (println (h/query "List my recent GitHub notifications" :session session)))
+```
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:enable-all-tools?` | boolean | `false` | Use the read-write endpoint and request all toolsets. Wire key: `enableAllTools` |
+| `:additional-toolsets` | vector of strings | `nil` (none added) | Additional GitHub MCP toolsets requested. Wire key: `additionalToolsets` |
+| `:additional-tools` | vector of strings | `nil` (none added) | Additional GitHub MCP tools requested. Wire key: `additionalTools` |
+| `:enable-insiders-mode?` | boolean | `false` | Request the GitHub MCP insiders build. Wire key: `enableInsidersMode` |
+| `:disable-form-deferral?` | boolean | `false` | Make form-backed GitHub write tools execute directly instead of returning an awaiting-form stub. Only applies to the built-in GitHub MCP server, and only has an effect when MCP Apps and form-backed GitHub tools are enabled for the session. Wire key: `disableFormDeferral` |
+
+No other keys are accepted in the `:github-mcp-tool-config` map. Supply it on each `create-session`, `resume-session`, or `join-session` call that needs the configuration.
+
+Omitting the key (or passing `nil`) sends nothing on the wire. Passing `{}` sends `githubMcpToolConfig: {}` (every sub-field defaults). Within the map, `:additional-toolsets` and `:additional-tools` follow the same explicit-`[]`-vs-omitted rule as `:disabled-mcp-servers`: an explicit `[]` is sent distinctly from omitting the key, while the boolean keys simply omit their wire field when `nil`.
+
 ### Key Naming Convention
 
 MCP server config keys use an `:mcp-` prefix in Clojure (e.g., `:mcp-command`, `:mcp-args`, `:mcp-tools`) to distinguish them from other configuration options. On the wire, the SDK automatically strips this prefix to match the upstream protocol (e.g., `command`, `args`, `tools`).

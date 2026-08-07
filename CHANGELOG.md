@@ -59,6 +59,109 @@ All notable changes to this project will be documented in this file. This change
   `:hooks` accept `:on-agent-stop` for runtime `agentStop` callbacks, using the
   existing allow/block hook decision contract.
 
+### Added (v1.0.9 sync)
+- **Agent Factories authoring surface** — port of
+  [upstream PR #2114](https://github.com/github/copilot-sdk/pull/2114). New
+  `github.copilot-sdk.factory` namespace: `define-factory` declares a
+  `:name`/`:description`/`:phases` factory (optional `:limits` with
+  `:max-concurrent-subagents`, `:max-total-subagents`, `:max-ai-credits`,
+  `:timeout-seconds`); `join-session` accepts `:factories`; and
+  `run!`/`resume!`/`get-run`/`wait-for-run!`/`list-runs`/`get-run-detail`/
+  `get-run-progress`/`cancel!` drive factory execution, with reverse-RPC
+  handlers for `context.agent`/`step`/`phase`/`log`, `parallel`/`pipeline`, and
+  journaling/replay/cancellation semantics. Permission requests gain a
+  `:factory` `:permission-kind`, and the new `:copilot/factory.run_updated`
+  event reports `:run-id`/`:revision` progress. Marked `@experimental` upstream
+  and marked experimental.
+- **Disabled MCP servers** — port of
+  [upstream PR #2260](https://github.com/github/copilot-sdk/pull/2260). Session
+  create and resume configs accept `:disabled-mcp-servers`, a vector of MCP
+  server names to keep stopped for the session without mutating global
+  settings — covers both plugin and built-in GitHub MCP servers.
+- **`:github-mcp-tool-config`** — port of
+  [upstream PR #2112](https://github.com/github/copilot-sdk/pull/2112). Session
+  create and resume configs accept `:github-mcp-tool-config` with
+  `:enable-all-tools?`, `:additional-toolsets`, `:additional-tools`,
+  `:enable-insiders-mode?`, and `:disable-form-deferral?`, forwarded to the
+  runtime's built-in GitHub MCP server as `githubMcpToolConfig`.
+  `:disable-form-deferral?` lets autonomous workflows opt out of MCP App form
+  deferral so form-backed GitHub write tools execute directly.
+- **`:additional-directories` in session config** — port of
+  [upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180). Session
+  create and resume configs accept `:additional-directories`, a vector of
+  extra directories forwarded to the runtime alongside `:working-directory`.
+- **`:enable-experimental-mode?` session config** — port of
+  [upstream PR #1600](https://github.com/github/copilot-sdk/pull/1600). Session
+  create and resume configs accept `:enable-experimental-mode?`, sent as the
+  `isExperimentalMode` wire field. In `"empty"` mode it defaults to `false`
+  unless explicitly set; in `"copilot-cli"` mode it is omitted from the wire
+  when unset, letting the runtime decide.
+- **`"max"` reasoning effort** — port of
+  [upstream PR #2228](https://github.com/github/copilot-sdk/pull/2228).
+  `:reasoning-effort` and per-custom-agent `:agent-reasoning-effort` now accept
+  `"max"` alongside `"low"`, `"medium"`, `"high"`, and `"xhigh"`.
+- **`:on-user-prompt-transformed` hook** — port of
+  [upstream PR #2254](https://github.com/github/copilot-sdk/pull/2254). Session
+  `:hooks` accept `:on-user-prompt-transformed`, invoked after a submitted
+  prompt has been transformed (e.g. by slash-command or skill expansion).
+- **SQLite transaction support in the session filesystem provider** — port of
+  upstream schema update
+  [PR #2140](https://github.com/github/copilot-sdk/pull/2140) (`1.0.76-5`).
+  A session filesystem provider's `:sqlite` sub-map may include an optional
+  1-arg `:transaction` function; `::sqlite-transaction-error-class` covers
+  `:busy-or-locked`, `:post-commit-ambiguous`, and `:fatal` outcomes.
+- **`:custom-agents-local-only` forwarded on create/resume** — port of
+  [upstream PR #1899](https://github.com/github/copilot-sdk/pull/1899).
+  `:custom-agents-local-only` is now sent directly on `session.create` and
+  `session.resume` (previously only reached the runtime via a later
+  `session.options.update` call, after agent discovery had already run), and
+  defaults to `true` in `"empty"` mode.
+- **Schema regen through 1.0.78** — port of upstream package bumps
+  [PR #2140](https://github.com/github/copilot-sdk/pull/2140) (`1.0.76-5`),
+  [PR #2183](https://github.com/github/copilot-sdk/pull/2183) (`1.0.77`),
+  [PR #2193](https://github.com/github/copilot-sdk/pull/2193) (`1.0.78-2`), and
+  [PR #2239](https://github.com/github/copilot-sdk/pull/2239) (`1.0.78`).
+  Regenerated wire specs and coercions underlying the additions above.
+
+### Changed (v1.0.9 sync)
+- **Managed approval requirement exposed on permission requests** — port of
+  [upstream PR #2080](https://github.com/github/copilot-sdk/pull/2080).
+  Permission-request data now surfaces whether a request requires managed
+  (host-side) approval, so an `on-permission-request` handler can distinguish
+  managed-approval requests from ordinary caller-approved ones.
+- **Version bump to `1.0.9.0`** — synced with upstream `copilot-sdk` release
+  `1.0.9` via `clj -T:build sync-version`, tracked by the v1.0.9 sync entries
+  above.
+
+### Added (post-v1.0.9 sync)
+- **`history.clearContext` and terminal tools** — port of
+  [upstream PR #2129](https://github.com/github/copilot-sdk/pull/2129).
+  `define-tool` and `define-tool-from-spec` accept an optional `:is-terminal?`
+  flag: a successful call from a terminal tool ends the agent turn without
+  feeding the result back to the model. Clearing session history now emits the
+  `:copilot/session.context_cleared` event, with required `:messages-cleared`
+  and optional `:initial-message`.
+- **Structured `:managed-settings` session config** — port of
+  [upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139). Session
+  create, resume, and join configs accept `:managed-settings` with a nested
+  `:permissions` map (`:disable-bypass-permissions-mode`, `:deny`, `:ask`,
+  `:allow`), forwarded to the runtime as `managedSettings`. This is distinct
+  from the existing boolean `:enable-managed-settings?` flag and from the
+  managed-approval-request exposure above.
+- **Schema regen to 1.0.79-6** — port of upstream package bumps
+  [PR #2282](https://github.com/github/copilot-sdk/pull/2282) (`1.0.79-5`) and
+  [PR #2287](https://github.com/github/copilot-sdk/pull/2287) (`1.0.79-6`,
+  matching `.copilot-schema-version`). Regenerated wire specs and coercions.
+  `session.task_complete` data gains `:outcome` (`"completed"`, `"continue"`,
+  or `"blocked"`), `:objective-id`, `:reason`, and `:success`; new
+  `session.compaction_start` (`:model`, `:current-tokens`, `:token-limit`,
+  `:trigger`) and `session.compaction_complete` (`:success`, `:error`,
+  `:status-code`, `:token-limit`, `:trigger`) event data, with `:trigger`
+  values `"threshold"`, `"context_limit_retry"`, `"manual"`,
+  `"memory_pressure"`, and `"model_switch"`; and streaming/chunking metadata
+  (`:chunk-index`, `:chunk-count`, `:rte`, `:interaction-type`) on
+  `assistant.message`, `assistant.reasoning`, and `assistant.usage` data.
+
 ### Fixed (v1.0.8 sync)
 - **Completing `assistant.usage` idiom metadata** — the schema 1.0.73
   `cacheExpiresAt` field is coerced to `java.time.Instant`, and

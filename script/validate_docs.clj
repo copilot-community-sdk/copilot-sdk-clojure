@@ -40,6 +40,7 @@
   "Known public namespaces in the SDK."
   #{"github.copilot-sdk.client"
     "github.copilot-sdk.session"
+    "github.copilot-sdk.factory"
     "github.copilot-sdk.helpers"
     "github.copilot-sdk.specs"
     "github.copilot-sdk.instrument"
