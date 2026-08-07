@@ -12,6 +12,7 @@
             [clojure.string :as str]
             [clojure.data.json :as json]
             [github.copilot-sdk.protocol :as proto]
+            [github.copilot-sdk.factory :as factory]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util]
@@ -68,7 +69,8 @@
                              on-exit-plan-mode on-auto-mode-switch on-mcp-auth-request
                              hooks workspace-path on-event config commands]}]
   (log/debug "Creating session: " session-id)
-  (let [event-chan (chan (async/sliding-buffer 4096))
+  (let [factory-definitions (factory/definitions-by-name (:factories config))
+        event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
         send-lock (doto (chan 1) (>!! :token))
         ;; Upstream PR #1308: declaration-only tools (no :tool-handler) are
@@ -94,6 +96,11 @@
                             :exit-plan-mode-handler on-exit-plan-mode
                             :auto-mode-switch-handler on-auto-mode-switch
                             :hooks hooks
+                            :factories factory-definitions
+                            :factory-executions {}
+                            :managed-settings-enabled?
+                            (or (true? (:enable-managed-settings? config))
+                                (some? (:managed-settings config)))
                             :destroyed? false
                             :workspace-path workspace-path
                             :capabilities {}
@@ -291,6 +298,41 @@
     {:code code
      :message (or (ex-message err) (str err))}))
 
+(defn session-fs-sqlite-transaction-failure
+  "Create a classified SQLite transaction failure.
+
+   Error class is one of :busy-or-locked, :post-commit-ambiguous, or :fatal."
+  ([message]
+   (session-fs-sqlite-transaction-failure message :fatal))
+  ([message error-class]
+   (when-not (s/valid? ::specs/sqlite-transaction-error-class error-class)
+     (throw (ex-info "Invalid SQLite transaction error class"
+                     {:error-class error-class})))
+   (ex-info message
+            {:type :session-fs-sqlite-transaction-failure
+             :error-class error-class})))
+
+(defn session-fs-sqlite-transaction-failure?
+  "Return true when value is a classified SQLite transaction failure."
+  [value]
+  (and (instance? clojure.lang.ExceptionInfo value)
+       (= :session-fs-sqlite-transaction-failure (:type (ex-data value)))
+       (s/valid? ::specs/sqlite-transaction-error-class
+                 (:error-class (ex-data value)))))
+
+(defn- sqlite-transaction-error-class->wire [error-class]
+  (case error-class
+    :busy-or-locked "busyOrLocked"
+    :post-commit-ambiguous "postCommitAmbiguous"
+    "fatal"))
+
+(defn- sqlite-transaction-error [error]
+  {:error-class
+   (sqlite-transaction-error-class->wire
+    (when (session-fs-sqlite-transaction-failure? error)
+      (:error-class (ex-data error))))
+   :message (or (ex-message error) (str error))})
+
 (defn- await-session-fs-result
   [result]
   (cond
@@ -435,6 +477,18 @@
                (let [result (await-session-fs-result ((:query sql) query-type query params))]
                  (or result {:rows [] :columns [] :rows-affected 0})))
 
+             :sqlite-transaction
+             (fn [{:keys [statements]}]
+               (if-let [transaction (:transaction sql)]
+                 (try
+                   {:results (mapv identity
+                                   (await-session-fs-result (transaction statements)))}
+                   (catch Throwable t
+                     {:results [] :error (sqlite-transaction-error t)}))
+                 {:results []
+                  :error {:error-class "fatal"
+                          :message "SQLite transactions are not supported by this provider"}}))
+
              :sqlite-exists
              (fn [_params]
                {:exists (boolean (await-session-fs-result ((:exists sql))))}))
@@ -492,10 +546,13 @@
       {}
       sections)}))
 
+(declare cancel-all-factory-executions!)
+
 (defn remove-session!
   "Remove a session from client state. Called on RPC failure during pre-registration."
   [client session-id]
   (let [event-chan (get-in @(:state client) [:session-io session-id :event-chan])]
+    (cancel-all-factory-executions! client session-id)
     (swap! (:state client) (fn [s]
                              (-> s
                                  (update :sessions dissoc session-id)
@@ -560,6 +617,7 @@
    ;; Upstream PR #1299: SQLite operations. Handlers are optional — provider
    ;; opts in by exposing a nested :sqlite {:query :exists} sub-provider.
    "sessionFs.sqliteQuery"     :sqlite-query
+   "sessionFs.sqliteTransaction" :sqlite-transaction
    "sessionFs.sqliteExists"    :sqlite-exists})
 
 (defn- coerce-sqlite-params
@@ -567,11 +625,310 @@
    expected by adapted handlers. The wire `queryType` is a literal string —
    convert to keyword so handlers receive `:exec`, `:query`, or `:run`."
   [method params]
-  (if (= method "sessionFs.sqliteQuery")
+  (case method
+    "sessionFs.sqliteQuery"
     (cond-> params
       (string? (:query-type params))
       (update :query-type keyword))
+
+    "sessionFs.sqliteTransaction"
+    (update params :statements
+            (fn [statements]
+              (mapv (fn [statement]
+                      (cond-> statement
+                        (string? (:query-type statement))
+                        (update :query-type keyword)))
+                    statements)))
+
     params))
+
+(def ^:private max-factory-fanout 4096)
+
+(defn- factory-aborted-error [run-id]
+  (ex-info "Factory run was aborted"
+           {:type :factory-aborted
+            :run-id run-id}))
+
+(defn- throw-if-factory-aborted! [{:keys [cancelled? run-id]}]
+  (when @cancelled?
+    (throw (factory-aborted-error run-id))))
+
+(defn- factory-rpc!
+  [client execution method params]
+  (throw-if-factory-aborted! execution)
+  (let [response-chan (proto/send-request (connection-io client) method params)
+        [response port] (alts!! [(:cancel-chan execution) response-chan] :priority true)]
+    (if (= port (:cancel-chan execution))
+      (throw (factory-aborted-error (:run-id execution)))
+      (cond
+        (nil? response)
+        (throw (ex-info "Factory RPC response channel closed" {:method method}))
+
+        (:error response)
+        (throw (ex-info (get-in response [:error :message] "Factory RPC error")
+                        {:method method :error (:error response)}))
+
+        :else
+        (:result response)))))
+
+(defn- factory-fatal-error? [error]
+  (let [{:keys [type method]} (ex-data error)]
+    (or (= :factory-aborted type)
+        (and (string? method) (str/starts-with? method "session.factory.")))))
+
+(defn- await-factory-value [value]
+  (cond
+    (channel? value) (<!! value)
+    (or (instance? java.util.concurrent.Future value)
+        (instance? clojure.lang.IPending value)) @value
+    :else value))
+
+(defn- json-value? [value]
+  (cond
+    (nil? value) true
+    (or (string? value) (boolean? value)) true
+    (number? value) (if (or (float? value) (double? value))
+                      (Double/isFinite (double value))
+                      true)
+    (vector? value) (every? json-value? value)
+    (map? value) (and (every? #(or (string? %) (keyword? %)) (keys value))
+                      (every? json-value? (vals value)))
+    :else false))
+
+(defn- assert-factory-json! [value label]
+  (when-not (json-value? value)
+    (throw (ex-info (str label " must be a JSON value")
+                    {:value-type (some-> value class .getName)})))
+  value)
+
+(defn- serializable-ex-data [error]
+  (into {}
+        (filter (fn [[key value]]
+                  (and (keyword? key) (json-value? value))))
+        (ex-data error)))
+
+(defn- factory-parallel [thunks]
+  (when-not (and (vector? thunks) (every? fn? thunks))
+    (throw (ex-info "parallel expects a vector of functions" {:value thunks})))
+  (when (> (count thunks) max-factory-fanout)
+    (throw (ex-info (str "parallel accepts at most " max-factory-fanout " items")
+                    {:count (count thunks)})))
+  (let [results (mapv (fn [thunk]
+                        (future
+                          (try
+                            {:value (await-factory-value (thunk))}
+                            (catch Throwable error
+                              {:error error}))))
+                      thunks)]
+    (mapv (fn [result]
+            (let [{:keys [value error]} @result]
+              (if error
+                (if (factory-fatal-error? error)
+                  (throw error)
+                  nil)
+                value)))
+          results)))
+
+(defn- factory-pipeline [items & stages]
+  (when-not (vector? items)
+    (throw (ex-info "pipeline items must be a vector" {:value items})))
+  (when-not (every? fn? stages)
+    (throw (ex-info "pipeline stages must be functions" {:value stages})))
+  (when (> (count items) max-factory-fanout)
+    (throw (ex-info (str "pipeline accepts at most " max-factory-fanout " items")
+                    {:count (count items)})))
+  (let [futures
+        (mapv
+         (fn [index item]
+           (future
+             (loop [previous item
+                    remaining stages]
+               (if-let [stage (first remaining)]
+                 (let [outcome (try
+                                 {:value (await-factory-value
+                                          (stage previous item index))}
+                                 (catch Throwable error
+                                   {:error error}))]
+                   (if-let [error (:error outcome)]
+                     (if (factory-fatal-error? error)
+                       {:error error}
+                       {:value nil})
+                     (recur (:value outcome) (next remaining))))
+                 {:value previous}))))
+         (range)
+         items)]
+    (mapv (fn [future-result]
+            (let [{:keys [value error]} @future-result]
+              (if error
+                (throw error)
+                value)))
+          futures)))
+
+(defn- register-factory-execution! [client session-id run-id execution-token]
+  (let [execution {:run-id run-id
+                   :execution-token execution-token
+                   :cancelled? (atom false)
+                   :cancel-chan (chan)}]
+    (swap! (:state client)
+           assoc-in
+           [:sessions session-id :factory-executions run-id execution-token]
+           execution)
+    execution))
+
+(defn- remove-factory-execution!
+  [client session-id run-id execution-token execution]
+  (swap! (:state client)
+         (fn [state]
+           (let [path [:sessions session-id :factory-executions run-id]
+                 current (get-in state (conj path execution-token))]
+             (if-not (identical? current execution)
+               state
+               (let [remaining (dissoc (get-in state path) execution-token)]
+                 (if (seq remaining)
+                   (assoc-in state path remaining)
+                   (update-in state
+                              [:sessions session-id :factory-executions]
+                              dissoc
+                              run-id))))))))
+
+(defn- cancel-factory-executions! [client session-id run-id]
+  (doseq [{:keys [cancelled? cancel-chan]}
+          (vals (get-in @(:state client)
+                        [:sessions session-id :factory-executions run-id]))]
+    (reset! cancelled? true)
+    (close! cancel-chan)))
+
+(defn- cancel-all-factory-executions! [client session-id]
+  (doseq [run-id (keys (get-in @(:state client)
+                               [:sessions session-id :factory-executions]))]
+    (cancel-factory-executions! client session-id run-id)))
+
+(defn- factory-context
+  [client session-id {:keys [run-id execution-token args] :as _params} execution]
+  (let [progress (atom {:next-seq 0 :pending []})
+        enqueue! (fn [kind text]
+                   (throw-if-factory-aborted! execution)
+                   (swap! progress
+                          (fn [{:keys [next-seq pending]}]
+                            {:next-seq (inc next-seq)
+                             :pending (conj pending
+                                            {:seq next-seq :kind kind :text text})})))
+        flush! (fn []
+                 (let [[old _] (swap-vals! progress assoc :pending [])
+                       lines (:pending old)]
+                   (when (seq lines)
+                     (factory-rpc! client execution "session.factory.log"
+                                   {:session-id session-id
+                                    :run-id run-id
+                                    :execution-token execution-token
+                                    :lines lines}))))
+        agent! (fn agent!
+                 ([prompt] (agent! prompt {}))
+                 ([prompt options]
+                  (flush!)
+                  (:result
+                   (factory-rpc! client execution "session.factory.agent"
+                                 {:session-id session-id
+                                  :factory-run-id run-id
+                                  :execution-token execution-token
+                                  :prompt prompt
+                                  :opts (select-keys options [:label :schema :model])}))))
+        step! (fn step!
+                ([key producer] (step! key producer {}))
+                ([key producer {:keys [volatile?]}]
+                 (flush!)
+                 (if volatile?
+                   (do
+                     (throw-if-factory-aborted! execution)
+                     (assert-factory-json!
+                      (await-factory-value (producer))
+                      (str "step " (pr-str key) " result")))
+                   (let [cached (factory-rpc! client execution
+                                              "session.factory.journal.get"
+                                              {:session-id session-id
+                                               :run-id run-id
+                                               :execution-token execution-token
+                                               :key key})]
+                     (if (:hit cached)
+                       (if (contains? cached :result-json)
+                         (assert-factory-json! (:result-json cached)
+                                               (str "step " (pr-str key) " result"))
+                         (throw (ex-info "Factory journal hit omitted its result"
+                                         {:key key})))
+                       (let [result (assert-factory-json!
+                                     (await-factory-value (producer))
+                                     (str "step " (pr-str key) " result"))]
+                         (factory-rpc! client execution
+                                       "session.factory.journal.put"
+                                       {:session-id session-id
+                                        :run-id run-id
+                                        :execution-token execution-token
+                                        :key key
+                                        :result-json result})
+                         result))))))]
+    {:run-id run-id
+     :args args
+     :session (->CopilotSession session-id client)
+     :cancel-chan (:cancel-chan execution)
+     :cancelled? #(deref (:cancelled? execution))
+     :agent agent!
+     :step step!
+     :parallel factory-parallel
+     :pipeline factory-pipeline
+     :phase #(enqueue! "phase" %)
+     :log #(enqueue! "log" %)
+     :factory (fn [& _]
+                (throw (ex-info "nested factories are not supported" {})))
+     ::flush-progress! flush!}))
+
+(defn handle-factory-execute!
+  "Execute an extension-authored factory for a runtime reverse RPC."
+  [client session-id {:keys [name run-id execution-token] :as params}]
+  (async/thread-call
+   (fn []
+     (if-let [handle (get-in @(:state client) [:sessions session-id :factories name])]
+       (let [execution (register-factory-execution!
+                        client session-id run-id execution-token)
+             context (factory-context client session-id params execution)
+             flush! (::flush-progress! context)]
+         (try
+           (let [result (await-factory-value
+                         ((factory/factory-run-function handle)
+                          (dissoc context ::flush-progress!)))]
+             (flush!)
+             (cond
+               (nil? result) {:result {}}
+               (identical? factory/json-null result) {:result {:result nil}}
+               :else (do
+                       (assert-factory-json! result "Factory result")
+                       {:result {:result result}})))
+           (catch Throwable error
+             {:error {:code -32603
+                      :message (or (ex-message error) (str error))
+                      :data (serializable-ex-data error)}})
+           (finally
+             (try
+               (flush!)
+               (catch Throwable error
+                 (log/warn "Failed to flush final factory progress"
+                           {:session-id session-id
+                            :run-id run-id
+                            :error (ex-message error)})))
+             (remove-factory-execution!
+              client session-id run-id execution-token execution))))
+       {:error {:code -32602
+                :message (str "No factory registered with name " (pr-str name))
+                :data {:code "factory_not_found" :name name}}}))
+   :io))
+
+(defn handle-factory-abort!
+  "Cooperatively cancel active executions for a durable factory run."
+  [client session-id run-id]
+  (cancel-factory-executions! client session-id run-id)
+  (let [result (chan 1)]
+    (put! result {:result {}})
+    (close! result)
+    result))
 
 (defn handle-session-fs-request!
   "Handle an incoming sessionFs.* RPC request. Dispatches to the session's
@@ -711,7 +1068,11 @@
        (if-not handler
          {:result {:kind :user-not-available}}
          (try
-           (let [result (handler request {:session-id session-id})
+           (let [result (handler request
+                                 {:session-id session-id
+                                  :managed-settings-enabled?
+                                  (:managed-settings-enabled?
+                                   (session-state client session-id))})
                  ;; If handler returns a channel, await it
                  result (if (channel? result)
                           (<!! result)
@@ -777,11 +1138,11 @@
          {:kind "cancelled"}
          (try
            (let [result (handler request {:session-id session-id})
-                result (if (channel? result) (<!! result) result)]
-              (mcp-auth-result->wire result))
+                 result (if (channel? result) (<!! result) result)]
+             (mcp-auth-result->wire result))
            (catch Exception e
-              (log/error "MCP auth handler error for session " session-id ": " (ex-message e))
-              {:kind "cancelled"})))))
+             (log/error "MCP auth handler error for session " session-id ": " (ex-message e))
+             {:kind "cancelled"})))))
    :io))
 
 (defn handle-user-input-request!
@@ -890,6 +1251,7 @@
                              "postToolUse" :on-post-tool-use
                              "postToolUseFailure" :on-post-tool-use-failure
                              "userPromptSubmitted" :on-user-prompt-submitted
+                             "userPromptTransformed" :on-user-prompt-transformed
                              "sessionStart" :on-session-start
                              "sessionEnd" :on-session-end
                              "errorOccurred" :on-error-occurred
@@ -1690,6 +2052,7 @@
                                  (assoc-in s [:sessions session-id :destroyed?] true))))]
      (when-not (get-in old [:sessions session-id :destroyed?])
        (let [conn (connection-io client)]
+         (cancel-all-factory-executions! client session-id)
          ;; Try to notify server, but don't block forever if connection is broken
          (try
            (proto/send-request! conn "session.destroy" {:session-id session-id} 5000)
@@ -1701,6 +2064,8 @@
                           :tool-handlers {}
                           :permission-handler nil
                           :user-input-handler nil
+                          :factories {}
+                          :factory-executions {}
                           :hooks {}
                           :config nil)
          ;; Close the event source channel - this propagates to all tapped channels
@@ -2030,6 +2395,17 @@
         conn (connection-io client)]
     (util/wire->clj
      (proto/send-request! conn "session.history.truncate" {:sessionId session-id}))))
+
+(defn ^:experimental history-clear-context!
+  "Clear conversation context and set the prompt used to start the new context.
+   Returns `{:messages-cleared n}` (upstream PR #2129)."
+  [session prompt]
+  (let [{:keys [session-id client]} session
+        conn (connection-io client)]
+    (util/wire->clj
+     (proto/send-request! conn "session.history.clearContext"
+                          {:sessionId session-id
+                           :prompt prompt}))))
 
 (defn ^:experimental sessions-fork!
   "Fork the current session (upstream #1039).

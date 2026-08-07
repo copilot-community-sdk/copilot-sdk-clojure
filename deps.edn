@@ -22,4 +22,5 @@
   :fmt {:extra-deps {dev.weavejester/cljfmt {:mvn/version "0.13.0"}}
         :main-opts ["-m" "cljfmt.main"]}
   :examples {:extra-paths ["examples"]
-             :extra-deps {org.slf4j/slf4j-simple {:mvn/version "2.0.16"}}}}}
+             :extra-deps {org.slf4j/slf4j-simple {:mvn/version "2.0.16"}}
+             :exec-fn agent-factories/run}}}

@@ -226,6 +226,9 @@
    "session.context_changed"
    {:cwd "/tmp"}
 
+   "session.context_cleared"
+   {:messages-cleared 3}
+
    "model.call_start"
    {:turn-id "t-1"}
 
@@ -242,6 +245,16 @@
 
    "session.task_complete"
    {}
+
+   "session.compaction_start"
+   {}
+
+   "session.compaction_complete"
+   {:success true}
+
+   "factory.run_updated"
+   {:run-id "run-1"
+    :revision 1}
 
    "session.custom_agents_updated"
    {:agents []

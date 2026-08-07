@@ -34,7 +34,7 @@ copilot --version
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.8.0"}}}
+{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.9.0"}}}
 ```
 
 Or use as a Git dependency:
@@ -254,7 +254,8 @@ Each model map includes `:id`, `:name`, `:vendor`, `:family`, `:max-input-tokens
 
 Now that you have the basics, explore these topics:
 
-- **[API Reference](./reference/API.md)** — Complete API documentation
+- **[API Reference](./reference/API.md)** — Complete API documentation, plus new v1.0.9 options like `:enable-managed-settings?` for enterprise-managed permissions
+- **[Agent Factories](./guides/agent-factories.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-factory` / `run-factory!`
 - **[Authentication](./auth/index.md)** — All auth methods including BYOK
 - **[MCP Servers](./mcp/overview.md)** — Connect to external tools via MCP
 - **[Examples](../examples/README.md)** — More working examples

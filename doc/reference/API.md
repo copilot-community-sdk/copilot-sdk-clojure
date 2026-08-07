@@ -287,22 +287,26 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:enable-citations` | boolean | (Experimental) Opt into native model citations. Gated on `some?` — an explicit `false` is forwarded; an absent key is omitted. Serialized as wire `enableCitations`. (upstream PR #1865) |
 | `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
 | `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
+| `:managed-settings` | map | Structured enterprise managed-settings payload, supplied by the caller instead of (or alongside) `:enable-managed-settings?`. Optional key `:permissions`: `{:disable-bypass-permissions-mode :disable, :deny [...], :ask [...], :allow [...]}` — `:disable-bypass-permissions-mode` is serialized as wire `permissions.disableBypassPermissionsMode` (string `"disable"`); `:deny`/`:ask`/`:allow` are vectors of non-blank permission-rule strings forwarded verbatim. Presence of this key (or `:enable-managed-settings? true`) sets the permission-handler context's `:managed-settings-enabled?` to `true` — see [`approve-all`](#approve-all). Valid on `create-session`, `resume-session`, and `join-session`. ([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139)) |
 | `:canvas-provider` | map | Canvas provider identity for the session. `{:id "..." :name "..."}` (`:name` optional) — serialized as wire `canvasProvider.{id,name}`. (upstream PR #1847) |
 | `:exp-assignments` | map | (`@internal`) Exact `CopilotExpAssignmentResponse` contract using PascalCase string keys. Required: `"Features"` (string vector), `"Flights"` (string-to-string map), `"Configs"` (vector of closed maps containing exactly `"Id"` (string) and `"Parameters"` (map of string keys to string, number, boolean, or `nil` values)), and `"AssignmentContext"` (string). Optional: `"ParameterGroups"` (opaque), `"FlightingVersion"` (number), and `"ImpressionId"` (string). The Clojure spec rejects unknown top-level and config-entry keys. The map is forwarded unchanged on `create-session`, `resume-session`, and `join-session` (`join-session` delegates to resume). Serialized as `expAssignments`. ([upstream PR #2033](https://github.com/github/copilot-sdk/pull/2033)) |
 | `:mcp-servers` | map | MCP server configs keyed by opaque string or keyword server IDs; keyword IDs preserve their full spelling without the leading colon (for example, `:srv-1` becomes `"srv-1"` and `:team/srv-1` becomes `"team/srv-1"`). See [MCP docs](../mcp/overview.md). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
+| `:disabled-mcp-servers` | vector | Names of configured MCP servers (from `:mcp-servers` or on-disk `.mcp.json`) to suppress for this session. Vector of non-blank strings. Serialized as wire `disabledMcpServers`. ([upstream PR #2260](https://github.com/github/copilot-sdk/pull/2260)) |
+| `:github-mcp-tool-config` | map | Configures the built-in GitHub MCP server's tool surface. Optional keys: `:enable-all-tools?` (boolean, gated on `some?`), `:additional-toolsets` (vector of strings), `:additional-tools` (vector of strings), `:enable-insiders-mode?` (boolean, gated on `some?`), `:disable-form-deferral?` (boolean, gated on `some?`). Serialized as wire `githubMcpToolConfig.{enableAllTools,additionalToolsets,additionalTools,enableInsidersMode,disableFormDeferral}`. ([upstream PR #2112](https://github.com/github/copilot-sdk/pull/2112)) |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
-| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, or `"xhigh"`), `:mcp-servers`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. `:agent-reasoning-effort` is serialized as `reasoningEffort` on both `session.create` and `session.resume`. When omitted, the runtime resolves effort from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
+| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"`), `:mcp-servers`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. `:agent-reasoning-effort` is serialized as `reasoningEffort` on both `session.create` and `session.resume`. When omitted, the runtime resolves effort from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
 | `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
 | `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). When omitted, permission requests are not auto-resolved; resolve them manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
 | `:instruction-directories` | vector | Additional directories to search for custom instruction files. Forwarded as `instructionDirectories` on `session.create` and `session.resume`. (upstream PR #1190) |
+| `:additional-directories` | vector | Extra directories the runtime is allowed to read/write outside the session's working directory. Vector of non-blank strings. Serialized as wire `additionalDirectories`. Re-supply the vector when resuming a session. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
 | `:disabled-skills` | vector | Disable specific skills by name |
 | `:large-output` | map | (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. |
 | `:working-directory` | string | Working directory for the session (tool operations relative to this) |
 | `:infinite-sessions` | map | Infinite session config (see below) |
-| `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, or `"xhigh"` |
+| `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"` ([upstream PR #2228](https://github.com/github/copilot-sdk/pull/2228)) |
 | `:github-token` | string | GitHub token for this session. Sent as `gitHubToken` on `session.create`; use this for per-session authentication when one client manages sessions for different GitHub users |
 | `:on-user-input-request` | fn | Handler for `ask_user` requests (see below) |
 | `:hooks` | map | Lifecycle hooks (see below) |
@@ -315,6 +319,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set; defaulted to `false` in `:mode :empty` (caller can override). Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
 | `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
+| `:enable-experimental-mode?` | boolean | Opt into CLI-side experimental features. Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `isExperimentalMode`. Defaulted to `false` in `:empty` mode. ([upstream PR #1600](https://github.com/github/copilot-sdk/pull/1600)) |
 | `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
 | `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
@@ -332,7 +337,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:reasoning-summary` | string | `"none"` / `"concise"` / `"detailed"`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. String-valued for consistency with `:reasoning-effort`. |
 | `:context-tier` | keyword \| `nil` | `#{:default :long-context}` selects the long-context model variant; `nil` explicitly clears any prior tier (wire-encoded as JSON `null`). Omit the key entirely to leave the current setting untouched. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
 | `:skip-custom-instructions` | boolean | Skip loading user-level custom instruction files. Forwarded via `session.options.update` (NOT `session.create`). Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
-| `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
+| `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`, and — since ([upstream PR #1899](https://github.com/github/copilot-sdk/pull/1899)) — also sent directly (gated on `some?`) on `session.create` and `session.resume` as wire `custom-agents-local-only`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
 | `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 | `:manage-schedule-enabled` | boolean | Enable the built-in schedule-management tools. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
 | `:open-canvases` | vector | (resume-session / join-session only) Seed the open-canvases snapshot when reconnecting. Each entry requires `:instance-id`, `:extension-id`, and `:canvas-id`; optional keys are `:extension-name`, `:title`, `:status`, `:url`, `:input`, and `:icon` (a host-local PNG path). Caller-defined `:input` keys are preserved verbatim through wire conversion (no kebab→camel re-casing). See [`open-canvases`](#open-canvases). ([upstream PR #1604](https://github.com/github/copilot-sdk/pull/1604)) |
@@ -417,6 +422,12 @@ Join the current foreground session from an extension running as a child process
 Returns a map with `:client` and `:session` keys. The caller is responsible for stopping the client when done.
 
 Throws if `SESSION_ID` is not set in the environment.
+
+In addition to the `resume-session` config options, `join-session` accepts:
+
+| Option | Type | Description |
+|---|---|---|
+| `:factories` | vector | `define-factory` handles to register as [Agent Factories (Experimental)](#agent-factories-experimental) for this session. Join-only — not accepted by `create-session` or `resume-session`. |
 
 ```clojure
 (let [{:keys [client session]} (copilot/join-session
@@ -1027,7 +1038,7 @@ Get the current model for this session. Returns the model ID string, or nil if n
 Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
 
 Optional opts map:
-- `:reasoning-effort` — Reasoning effort level ("low", "medium", "high", "xhigh")
+- `:reasoning-effort` — Reasoning effort level ("low", "medium", "high", "xhigh", or "max")
 - `:reasoning-summary` — Reasoning summary mode ("none", "concise", "detailed"). Wire-encoded as `reasoningSummary`.
 - `:context-tier` — Context window tier for models that support it: `:default` or `:long-context` (upstream PR #1522). Wire-encoded as `contextTier` with values `"default"` / `"long_context"`.
 - `:model-capabilities` — Model capabilities override map, e.g. `{:model-supports {:supports-vision true}}`
@@ -1258,9 +1269,18 @@ and `:command`. Clients respond via `respond-to-queued-command!`:
 | `session/plugins-list` | List plugins. |
 | `session/compaction-compact!` | Trigger manual context compaction (uses `session.history.compact` RPC). |
 | `session/history-truncate!` | Trigger manual context truncation. |
+| `session/history-clear-context!` | Clear conversation context and start a new one with a given prompt. Also available as the top-level `copilot/history-clear-context!` facade wrapper. |
 | `session/sessions-fork!` | Fork the current session. |
 | `session/shell-exec!` | Execute a shell command. |
 | `session/shell-kill!` | Kill a running shell process. |
+
+```clojure
+;; session/history-clear-context! or copilot/history-clear-context!
+(session/history-clear-context! my-session "Let's start fresh: focus on the auth module.")
+;; => {:messages-cleared 42}
+```
+
+([upstream PR #2129](https://github.com/github/copilot-sdk/pull/2129))
 
 **Session Name**
 
@@ -1599,12 +1619,13 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.shutdown` | Session is shutting down |
 | `:copilot/session.truncation` | Context window truncated |
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
-| `:copilot/session.compaction_start` | Context compaction started (infinite sessions) |
-| `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions) |
+| `:copilot/session.context_cleared` | Conversation context cleared and restarted with a new prompt (via `history-clear-context!`); data: `{:messages-cleared N}` (required) with optional `:initial-message` (the prompt used to start the new context) (upstream PR #2129) |
+| `:copilot/session.compaction_start` | Context compaction started (infinite sessions); data: `{:model "..." :current-tokens N :token-limit N :trigger "..."}` (all optional). `:trigger` is one of `"threshold"`, `"context_limit_retry"`, `"manual"`, `"memory_pressure"`, `"model_switch"` (upstream schema 1.0.79-5/6) |
+| `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions); data: `{:success bool}` (required) with optional `:error "..."`, `:status-code N`, `:token-limit N`, `:trigger "..."` (same `:trigger` enum as `compaction_start`) (upstream schema 1.0.79-5/6) |
 | `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
 | `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
 | `:copilot/session.workspace_file_changed` | Workspace file created or updated; data: `{:path "...", :operation "create"/"update"}` |
-| `:copilot/session.task_complete` | Task completed by the session agent; data: `{:summary "..." :aborted? false}` (both optional) |
+| `:copilot/session.task_complete` | Task completed by the session agent; data (all optional): `:summary "..."`, `:aborted? false`, `:outcome` (`"completed"`, `"continue"`, or `"blocked"`), `:objective-id`, `:reason`, `:success` (upstream schema 1.0.79-5/6) |
 | `:copilot/session.todos_changed` | Signal-only: the agent's todos / todo-deps table was written. **No payload.** Events arrive in order; debounce on arrival if needed (upstream schema 1.0.63) |
 | `:copilot/session.schedule_created` | Scheduled prompt registered via `/every`; data: `{:id <pos-int> :interval-ms <pos-int> :prompt "..."}` (upstream schema 1.0.42) |
 | `:copilot/session.schedule_cancelled` | Scheduled prompt cancelled from the schedule manager dialog; data: `{:id <pos-int>}` (upstream schema 1.0.42) |
@@ -1623,14 +1644,14 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/pending_messages.modified` | Pending message queue updated |
 | `:copilot/assistant.turn_start` | Assistant turn started |
 | `:copilot/assistant.intent` | Assistant intent update |
-| `:copilot/assistant.reasoning` | Model reasoning (if supported) |
+| `:copilot/assistant.reasoning` | Model reasoning (if supported); optional data: `:rte` (opaque round-trip encrypted reasoning token, for providers that require it to be replayed back) (upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
 | `:copilot/assistant.message_start` | Streaming assistant message start metadata |
-| `:copilot/assistant.message` | Complete assistant response |
+| `:copilot/assistant.message` | Complete assistant response; optional data: `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:rte` (upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
-| `:copilot/assistant.usage` | Token usage and cost for an individual API call. Required: `:model` (string). Optional: `:input-tokens`, `:output-tokens`, `:reasoning-tokens`, `:cache-read-tokens`, `:cache-write-tokens`, `:cache-expires-at` (`java.time.Instant` — when the prompt cache expires), `:service-request-id` (string — `x-copilot-service-request-id` for CAPI log correlation), `:api-endpoint`, `:api-call-id`, `:provider-call-id`, `:content-filter-triggered` (boolean), `:finish-reason` (string), `:cost`, `:duration`, `:time-to-first-token-ms`, `:ttft-ms`, `:inter-token-latency-ms`, `:reasoning-effort`, `:initiator`, `:parent-tool-call-id` (deprecated), `:copilot-usage`, `:quota-snapshots`. ([upstream PR #2074](https://github.com/github/copilot-sdk/pull/2074)) |
+| `:copilot/assistant.usage` | Token usage and cost for an individual API call. Required: `:model` (string). Optional: `:input-tokens`, `:output-tokens`, `:reasoning-tokens`, `:cache-read-tokens`, `:cache-write-tokens`, `:cache-expires-at` (`java.time.Instant` — when the prompt cache expires), `:service-request-id` (string — `x-copilot-service-request-id` for CAPI log correlation), `:api-endpoint`, `:api-call-id`, `:provider-call-id`, `:content-filter-triggered` (boolean), `:finish-reason` (string), `:cost`, `:duration`, `:time-to-first-token-ms`, `:ttft-ms`, `:inter-token-latency-ms`, `:reasoning-effort`, `:initiator`, `:parent-tool-call-id` (deprecated), `:copilot-usage`, `:quota-snapshots`, `:interaction-type`, `:rte` ([upstream PR #2074](https://github.com/github/copilot-sdk/pull/2074); `:interaction-type`/`:rte` added in upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.idle` | Main agent's processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) |
 | `:copilot/assistant.tool_call_delta` | Streaming tool-call argument input chunk; data includes `:tool-call-id`, `:input-delta`, optional `:tool-name`, `:tool-type` (upstream schema 1.0.69-3) |
 | `:copilot/assistant.server_tool_progress` | Ephemeral live progress for a provider-hosted server tool before the finalized `serverTools` envelope arrives on the terminal `assistant.message`. Data: `{:output-index <integer> :kind <string> :status <string>}`; only `"web_search"` is currently emitted for `:kind`, and `:status` is `"in_progress"`, `"searching"`, or `"completed"`. |
@@ -1695,6 +1716,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.canvas.registry_changed` | The set of canvases the host can offer changed; ephemeral. |
 | `:copilot/session.canvas.unavailable` | An open canvas instance's provider dropped (e.g. the extension is reloading mid-session); ephemeral. The host should keep the panel mounted and surface a reconnecting state. (upstream schema 1.0.66) |
 | `:copilot/session.canvas.recorded` | Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient `:url` and `:availability`. |
+| `:copilot/factory.run_updated` | An [Agent Factory](#agent-factories-experimental) run's status changed; data: `{:run-id "..." :revision N}` (both required). Consumed internally by `wait-for-run!`/`<wait-for-run!` to detect terminal status. (upstream PR #2114) |
 | `:copilot/session.canvas.removed` | Durable record that a canvas instance was closed, superseding a prior `canvas.recorded` during resume replay. |
 
 ### Example: Handling Events
@@ -2034,6 +2056,7 @@ Both `define-tool` and `define-tool-from-spec` accept these common options:
 | `:defer` | `:auto` or `:never` | runtime default | Per-tool lazy-loading policy; distinct from session `:tool-search` configuration |
 | `:description` | string or `nil` | `nil` | Human-readable tool description |
 | `:handler` | fn | `nil` | Two-argument function receiving parsed arguments and the invocation map |
+| `:is-terminal?` | boolean | `nil` | When true, a successful call ends the agent turn instead of feeding the tool result back to the model. A failed call leaves the loop running so the model can inspect the error and retry. Gated on `some?`; explicit `false` is forwarded and an absent key is omitted. Serialized as wire `isTerminal`. ([upstream PR #2129](https://github.com/github/copilot-sdk/pull/2129)) |
 | `:metadata` | map | `nil` | Opaque host-defined metadata forwarded with the tool definition. An explicit `{}` is preserved; `nil` or an absent key is omitted |
 | `:overrides-built-in-tool` | boolean | `nil` | Allow this definition to replace a built-in tool with the same name |
 
@@ -2460,6 +2483,176 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
       (recur))))
 ```
 
+### Agent Factories (Experimental)
+
+> **Note:** Agent Factories are `@experimental` upstream
+> ([upstream PR #2114](https://github.com/github/copilot-sdk/pull/2114)).
+> The API may change in future releases.
+
+An Agent Factory is an extension-authored, named workflow that a session can run: it
+declares its own phases and limits, executes with reverse-RPC access to the parent
+session (spawn nested agent turns, run journaled/idempotent steps, fan out work in
+parallel or as a pipeline), and reports durable, resumable progress back to the CLI.
+Factories are registered per-session via [`join-session`](#join-session)'s
+`:factories` option and approved via the [`:factory` permission kind](#permission-handling).
+
+Most of this API is namespace-qualified only — require the namespace directly:
+
+```clojure
+(require '[github.copilot-sdk.factory :as factory]
+         '[github.copilot-sdk.session :as session])
+```
+
+**Defining a factory**
+
+```clojure
+(def summarize-repo
+  (factory/define-factory
+    {:meta {:name "summarize-repo"
+            :description "Summarize a repository's structure and recent activity"
+            :phases [{:title "Scan" :detail "List top-level files and directories"}
+                     {:title "Summarize"}]
+            :limits {:max-concurrent-subagents 4
+                     :timeout-seconds 300}}
+     :run (fn [{:keys [args phase log step agent parallel] session :session}]
+            (phase "Scan")
+            (let [files (step "list-files" #(session/workspace-list-files session))]
+              (log (str "Found " (count (:files files)) " files"))
+              (phase "Summarize")
+              (let [summaries (parallel
+                                (mapv (fn [f]
+                                        #(agent (str "Summarize " f)))
+                                      (:files files)))]
+                {:file-count (count (:files files))
+                 :summaries summaries})))}))
+```
+
+`define-factory` is also exposed as a top-level facade, `copilot/define-factory`
+(synchronous only — no `<define-factory` twin, since validation does no I/O).
+
+`:meta` is validated eagerly by `define-factory`:
+
+| Field | Type | Required? | Notes |
+|-------|------|-----------|-------|
+| `:name` | string | yes | Non-blank. Must be unique within a `join-session` call's `:factories` vector. |
+| `:description` | string | yes | Non-blank. |
+| `:phases` | vector of maps | yes | Each phase is `{:title string :detail string (optional)}`. `:title` must be non-blank and unique across phases. |
+| `:limits` | map (optional) | no | Validated only when present; see below. |
+
+| Limit key | Type | Constraint |
+|-----------|------|------------|
+| `:max-concurrent-subagents` | positive integer | — |
+| `:max-total-subagents` | positive integer | — |
+| `:timeout-seconds` | positive finite number | ≤ `2147483.647` |
+| `:max-ai-credits` | positive finite number | must round to a positive nano-AIU value |
+
+`:run` must be a function of one argument, the [context map](#the-run-context-map)
+described below, and returns (directly or via a core.async channel, `Future`, promise,
+or delay) a JSON-safe value — `nil`, a string, boolean, finite number, or a nested
+vector/map thereof. Return `factory/json-null` to report an explicit JSON `null`
+result (as opposed to `nil`, which means "no result").
+
+Other namespace-qualified-only helpers:
+
+| Function | Description |
+|----------|-------------|
+| `factory/factory-handle?` | Return true when `value` is a handle created by `define-factory`. |
+| `factory/factory-meta` | Return a handle's `:meta` map. |
+| `factory/terminal-status?` | Return true when a run `:status` (keyword or string) is terminal (`:completed`, `:halted`, `:cancelled`, `:error`). Also exposed as `copilot/factory-terminal-status?`. |
+| `factory/json-null` | Sentinel value for an explicit JSON `null` factory result. |
+
+**Driving factory execution**
+
+Register handles via `join-session`'s `:factories` option, then drive execution from any
+client connected to that session (typically the parent CLI, but any joined client can
+call these). Each function has a top-level `copilot` facade wrapper (all `^:experimental`)
+and an async `<`-prefixed twin returning a core.async channel:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+;; By name (the factory must be registered on the joined session) or by handle:
+(copilot/run-factory! session "summarize-repo" {:args {:path "."}})
+;; => {:run-id "..." :status :completed :result {...} ...}
+
+;; Async twin — channel yields the result, or the caught Throwable directly:
+(let [ch (copilot/<run-factory! session "summarize-repo" {:args {:path "."}})]
+  (let [result (<!! ch)]
+    (if (instance? Throwable result)
+      (throw result)
+      result)))
+```
+
+| Sync function (`factory/...`) | Top-level facade | Wire method | Description |
+|--------------------------------|-------------------|-------------|-------------|
+| `run!` | `run-factory!` | `session.factory.run` | Start a factory by name or handle. 2-arity `[session name-or-handle]` or 3-arity with an options map: `:args` (passed to `:run` as `:args`), `:limits` (overrides declared limits, re-validated), `:resume-from-run-id` (delegates to `resume!`). Waits for terminal status via `wait-for-run!` if the initial response is non-terminal. |
+| `resume!` | `resume-factory!` | `session.factory.resume` | Resume a durable, previously-started run by `run-id`. 2-arity `[session run-id]` or 3-arity with `{:limits ...}`. See [error classification](#resume-error-classification) below. |
+| `get-run` | `get-factory-run` | `session.factory.getRun` | Read the latest durable envelope for a run. `[session run-id]`. |
+| `wait-for-run!` | `wait-for-factory-run!` | (polls `get-run` + listens for `:copilot/factory.run_updated`) | Block until a run reaches a terminal status. 2-arity or 3-arity with `{:cancel-chan :poll-interval-ms}` (`:poll-interval-ms` default `5000`; `:cancel-chan` aborts the *wait*, not the run, throwing `ex-info` `{:type :factory-wait-cancelled :run-id ...}`). Requires the session to be connected (has an active event stream). |
+| `list-runs` | `list-factory-runs` | `session.factory.listRuns` | List all durable runs for the session, in creation order. `[session]`. |
+| `get-run-detail` | `get-factory-run-detail` | `session.factory.getRunDetail` | Read durable phases, agent turns, and recent progress for a run. `[session run-id]`. |
+| `get-run-progress` | `get-factory-run-progress` | `session.factory.getRunProgress` | Page durable progress lines. 2-arity or 3-arity with an options map merged into the wire params (e.g. pagination cursors). |
+| `cancel!` | `cancel-factory-run!` | `session.factory.cancel` | Request cancellation from the CLI. The runtime's reverse `factory.abort` request then marks active local executions cancelled and closes their `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
+
+All of the above return a run envelope map with at least `:run-id` and a keywordized
+`:status` (one of `:running`, `:completed`, `:halted`, `:cancelled`, `:error`, or other
+non-terminal statuses reported by the CLI).
+
+**Async twins**: every function above has a `<`-prefixed twin (e.g. `factory/<run!`,
+`copilot/<run-factory!`) with the same arities, running the call on a thread pool and
+returning a core.async channel. The channel yields the successful result **or the
+caught `Throwable` directly** (not wrapped) — always check `(instance? Throwable result)`
+before using the value.
+
+#### Resume error classification
+
+`resume!`/`<resume!`/`resume-factory!`/`<resume-factory!` reclassify specific wire
+error codes into a stable `ex-info` shape: `{:type :factory-resume-error :code <kebab-keyword>}`
+(original exception preserved as the cause). Other errors are rethrown unchanged.
+
+| Wire code | `:code` |
+|-----------|---------|
+| `"not_found"` | `:not-found` |
+| `"non_resumable"` | `:non-resumable` |
+| `"already_active"` | `:already-active` |
+| `"reapproval_declined"` | `:reapproval-declined` |
+| `"no_approval_provider"` | `:no-approval-provider` |
+
+```clojure
+(try
+  (factory/resume! session run-id)
+  (catch clojure.lang.ExceptionInfo e
+    (case (:code (ex-data e))
+      :reapproval-declined (println "Approver declined re-approval")
+      :non-resumable (println "This run cannot be resumed")
+      (throw e))))
+```
+
+#### The `:run` context map
+
+Every factory's `:run` function receives a single context map, built fresh per
+execution:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:run-id` | string | The durable run's ID. |
+| `:args` | JSON value | The original `run!` arguments (default `{}`), persisted across `resume!`. |
+| `:session` | `CopilotSession` | The session the factory is running within. |
+| `:cancel-chan` | channel | Closes when the run is cancelled/aborted. |
+| `:cancelled?` | `(fn [])` | Returns true once the run has been cancelled/aborted. |
+| `:agent` | `(fn [prompt] ...)` / `(fn [prompt options] ...)` | Runs a nested agent turn and returns its result. `options` may include `:label`, `:schema`, `:model`. |
+| `:step` | `(fn [key producer] ...)` / `(fn [key producer options] ...)` | Runs `producer` (a 0-arg fn) once per unique `key` and journals the JSON-safe result for replay on resume; a repeated `key` returns the cached result without re-running `producer`. Pass `{:volatile? true}` to skip journaling/caching entirely. |
+| `:parallel` | `(fn [thunks] ...)` | Runs a vector of 0-arg thunks concurrently (bounded at 4096 items) and returns their results in order; a non-fatal thunk error yields `nil` in its slot, a fatal error (abort, or an inner `:agent`/`:step` RPC failure) rethrows. |
+| `:pipeline` | `(fn [items & stages] ...)` | Threads each item in `items` (bounded at 4096) sequentially through `stages`, each called as `(stage previous-value original-item index)`; same fatal/non-fatal error semantics as `:parallel`. |
+| `:phase` | `(fn [text] ...)` | Buffers a phase-transition progress line; the SDK flushes before `:agent`/`:step` calls and when the run finishes. |
+| `:log` | `(fn [text] ...)` | Buffers a log progress line; the SDK flushes before `:agent`/`:step` calls and when the run finishes. |
+
+`:agent`, `:step`, `:parallel`, and `:pipeline` all throw `ex-info` with
+`{:type :factory-aborted :run-id ...}` if the run is cancelled while they're executing.
+Values returned from `:step` producers and from `:run` itself are validated as JSON-safe
+before being journaled or returned; a non-JSON-safe value throws `ex-info` with
+`{:value-type "..."}`.
+
 ### Permission Handling
 
 The SDK uses a **deny-by-default** permission model. All permission requests
@@ -2490,6 +2683,7 @@ The `:permission-kind` field in permission requests identifies the type of actio
 | `:custom-tool` | SDK-registered custom tool invocation |
 | `:memory` | Memory storage operation (subject, fact, citations) |
 | `:hook` | Hook-triggered permission check |
+| `:factory` | Agent Factory run or authoring approval (see [Agent Factories (Experimental)](#agent-factories-experimental)) |
 
 Memory permission events include additional data fields (specs `::memory-action`, `::memory-direction`, `::memory-reason`):
 
@@ -2499,11 +2693,36 @@ Memory permission events include additional data fields (specs `::memory-action`
 | `:memory-direction` | `:upvote` or `:downvote` | Vote direction (when action is `:vote`) |
 | `:memory-reason` | string | Reason for the memory operation |
 
+Factory permission requests (`:permission-kind :factory`) include additional data fields describing the run or authoring request awaiting approval ([upstream PR #2114](https://github.com/github/copilot-sdk/pull/2114)):
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `:operation` | `"run"` or `"author"` | Whether the factory is being run or authored |
+| `:name` | string | Factory name |
+| `:description` | string | Factory description |
+| `:phases` | vector of maps | `{:title string, :detail string (optional)}` — the phases the factory declares |
+| `:approval-key` | string | Stable key for persisting an approval decision across runs |
+| `:can-persist-approval` | boolean | Whether `:approve-for-session`/`:approve-for-location` are meaningful for this request |
+| `:max-concurrent-subagents`, `:max-total-subagents`, `:timeout-seconds`, `:max-ai-credits` | number (optional) | Effective runtime limits for this run |
+| `:declared-max-concurrent-subagents`, `:declared-max-total-subagents`, `:declared-timeout-seconds`, `:declared-max-ai-credits` | number (optional) | The limits as declared by the factory definition, shown to approvers alongside the effective limits above |
+
 For fine-grained control, provide your own handler. When the CLI needs
 approval, it sends a JSON-RPC `permission.request` to the SDK. Your
 `:on-permission-request` callback must return a map compatible with the
 permission result payload; the SDK wraps this into the JSON-RPC response
 as `{:result <your-map>}`:
+
+Your handler receives two arguments: the `request` map (the permission
+request payload) and a `ctx` map with:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:session-id` | string | The session the request originated from |
+| `:managed-settings-enabled?` | boolean | `true` when the session has enterprise-managed settings active (`:managed-settings` config or `:enable-managed-settings?`); `false` otherwise |
+
+`ctx` is passed to every `:on-permission-request` handler, including
+`approve-all` and `default-join-session-permission-handler`.
+([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139))
 
 The `permission_bash.clj` example demonstrates both an allowed and a denied
 shell command and prints the full permission request payload so you can inspect
@@ -2555,6 +2774,17 @@ for observability.
 A convenience permission handler that approves all permission requests by
 returning `{:kind :approve-once}`. Equivalent to the upstream Node.js SDK
 `approveAll` export.
+
+**Fail-closed under managed settings**: when `ctx` reports
+`:managed-settings-enabled? true` (see `:managed-settings` /
+`:enable-managed-settings?` in the session-config table), `approve-all`
+*throws* `ex-info` with message `"approve-all cannot be used when managed
+settings are enabled"` and `{:session-id (:session-id ctx)}` — host-side
+auto-approval must not bypass managed policy. When the request itself sets
+`:managed-approval-required true` (or omits `false`), `approve-all` returns
+`{:kind :no-result}` instead of approving, deferring the decision to managed
+approval. Otherwise it returns `{:kind :approve-once}` as before.
+([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139))
 
 Pass as the `:on-permission-request` value in session config:
 
@@ -2725,7 +2955,7 @@ Use `create-session-fs-adapter` when you need the low-level handler map explicit
   (copilot/create-session-fs-adapter provider))
 ```
 
-The low-level handler map requires the 10 core FS operations below. The two
+The low-level handler map requires the 10 core FS operations below. The three
 `:sqlite-*` keys are optional and only required when the client advertises
 `:capabilities {:sqlite true}` on its `:session-fs` config (see
 [SQLite support](#sqlite-support-optional)).
@@ -2744,6 +2974,7 @@ The low-level handler map requires the 10 core FS operations below. The two
 | `:rename` | `{:session-id :src :dest}` | nil |
 | `:sqlite-query` _(optional)_ | `{:session-id :query-type :query :params}` | `{:rows [...] :columns [...] :rows-affected n}` |
 | `:sqlite-exists` _(optional)_ | `{:session-id}` | `{:exists true/false}` |
+| `:sqlite-transaction` _(optional)_ | `{:session-id :statements [...]}` | `{:results [...]}` or `{:results [] :error {:error-class ... :message ...}}` ([upstream PR #2140](https://github.com/github/copilot-sdk/pull/2140)) |
 
 Handler functions may return values directly or via core.async channels.
 
@@ -2770,8 +3001,41 @@ client config:
                           ;; query-type is one of :exec, :query, :run
                           ;; params is the raw bind-parameter map (keys preserved verbatim, e.g. :$userId)
                           {:rows [{:n 1}] :columns ["n"] :rows-affected 0})
-                 :exists (fn [] true)}})}))
+                 :exists (fn [] true)
+                 :transaction (fn [statements]
+                                ;; statements is a vector of
+                                ;; {:query-type :query :query :params} maps to
+                                ;; run atomically; return one result map per statement.
+                                ;; Throw github.copilot-sdk.session/session-fs-sqlite-transaction-failure
+                                ;; to report a classified failure (see below).
+                                (mapv (fn [_stmt] {:rows [] :columns [] :rows-affected 1})
+                                      statements))}})}))
 ```
+
+`:transaction` is optional — a provider that omits it responds to
+`sessionFs.sqliteTransaction` with `{:results [] :error {:error-class "fatal"
+:message "SQLite transactions are not supported by this provider"}}`.
+
+Use `session-fs-sqlite-transaction-failure` to report a classified failure from
+inside a `:transaction` handler, and `session-fs-sqlite-transaction-failure?` to
+recognize one:
+
+```clojure
+(require '[github.copilot-sdk.session :as session])
+
+(session/session-fs-sqlite-transaction-failure
+  "database is locked" :busy-or-locked)
+;; => an ex-info the handler can throw; ex-data has
+;;    {:type :session-fs-sqlite-transaction-failure :error-class :busy-or-locked}
+
+(session/session-fs-sqlite-transaction-failure? some-exception) ;; => true/false
+```
+
+`error-class` is one of `:busy-or-locked`, `:post-commit-ambiguous`, or the
+default `:fatal` (single-arity call). Classified failures are wire-mapped to
+`"busyOrLocked"`, `"postCommitAmbiguous"`, and `"fatal"` respectively; any
+uncaught exception thrown from `:transaction` is also reported as `"fatal"`
+with its message. ([upstream PR #2140](https://github.com/github/copilot-sdk/pull/2140))
 
 Notes:
 
@@ -2850,6 +3114,19 @@ Lifecycle hooks allow custom logic at various points during the session:
                    (println "User prompt:" (:prompt input))
                    nil)
 
+                 :on-user-prompt-transformed
+                 (fn [input invocation]
+                   ;; Called after the runtime transforms a submitted prompt
+                   ;; (e.g. slash-command/skill expansion) but before it is sent
+                   ;; to the model (upstream PR #2254).
+                   ;; input contains {:prompt "..." :transformed-prompt "..."
+                   ;;                 :timestamp 12345 :cwd "..."}
+                   ;; Return {:modified-transformed-prompt "..."} (wire
+                   ;; modifiedTransformedPrompt) to further rewrite the prompt
+                   ;; actually sent to the model, or nil to leave it as-is.
+                   (println "Transformed prompt:" (:transformed-prompt input))
+                   nil)
+
                  :on-session-start
                  (fn [input invocation]
                    (println "Session started")
@@ -2903,7 +3180,7 @@ For models that support reasoning (like o1), you can control the reasoning effor
 (def session (copilot/create-session client
                {:model "o1"
                 :reasoning-effort "high"
-                :on-permission-request copilot/approve-all})) ; "low", "medium", "high", or "xhigh"
+                :on-permission-request copilot/approve-all})) ; "low", "medium", "high", "xhigh", or "max"
 ```
 
 ### Multiple Sessions

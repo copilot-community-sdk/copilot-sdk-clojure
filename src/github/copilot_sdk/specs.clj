@@ -128,11 +128,12 @@
 ;; provider opts in to SQLite support via nested :sqlite {:query :exists}.
 (s/def ::sqlite-query fn?)
 (s/def ::sqlite-exists fn?)
+(s/def ::sqlite-transaction fn?)
 
 (s/def ::session-fs-handler
   (s/keys :req-un [::read-file ::write-file ::append-file ::exists ::stat
                    ::mkdir ::readdir ::readdir-with-types ::rm ::rename]
-          :opt-un [::sqlite-query ::sqlite-exists]))
+          :opt-un [::sqlite-query ::sqlite-exists ::sqlite-transaction]))
 
 (defn- fn-accepts-arity?
   [f n]
@@ -166,17 +167,20 @@
        (every? (fn [[operation arity]]
                  (fn-accepts-arity? (get provider operation) arity))
                session-fs-provider-arities)
-       ;; Optional :sqlite sub-provider (upstream PR #1299) — when present must
-       ;; be a map of {:query 3-arg-fn :exists 0-arg-fn}.
+       ;; Optional :sqlite sub-provider — transaction support is optional.
        (let [sql (:sqlite provider)]
          (or (nil? sql)
              (and (map? sql)
                   (fn-accepts-arity? (:query sql) 3)
-                  (fn-accepts-arity? (:exists sql) 0))))))
+                  (fn-accepts-arity? (:exists sql) 0)
+                  (or (nil? (:transaction sql))
+                      (fn-accepts-arity? (:transaction sql) 1)))))))
 
 ;; SQLite query type passed to the sqlite provider's :query function.
 ;; Wire form is the literal string; we expose idiomatic keywords to handlers.
 (s/def ::sqlite-query-type #{:exec :query :run})
+(s/def ::sqlite-transaction-error-class
+  #{:busy-or-locked :post-commit-ambiguous :fatal})
 
 ;; Shape returned by an adapted sqlite-query handler (and the wire shape after
 ;; clj->wire conversion). Mirrors generated SessionFsSqliteQueryResult.
@@ -279,6 +283,7 @@
 (s/def ::tool-handler fn?)
 (s/def ::overrides-built-in-tool boolean?)
 (s/def ::skip-permission? boolean?)
+(s/def ::is-terminal? boolean?)
 (s/def ::metadata map?)
 ;; Upstream PR #1632: controls whether a tool may be deferred (loaded lazily via
 ;; tool search) rather than always pre-loaded. The idiom uses keywords; the
@@ -292,7 +297,7 @@
   (s/keys :req-un [::tool-name]
           :opt-un [::tool-handler ::tool-description ::tool-parameters
                    ::overrides-built-in-tool ::skip-permission? ::defer
-                   ::metadata]))
+                   ::metadata ::is-terminal?]))
 
 (s/def ::tools (s/coll-of ::tool))
 
@@ -408,7 +413,7 @@
 ;; Custom agent configuration
 ;; -----------------------------------------------------------------------------
 
-(s/def ::reasoning-effort #{"low" "medium" "high" "xhigh"})
+(s/def ::reasoning-effort #{"low" "medium" "high" "xhigh" "max"})
 (s/def ::agent-name ::non-blank-string)
 (s/def ::agent-display-name string?)
 (s/def ::agent-description string?)
@@ -674,6 +679,7 @@
 (s/def ::on-post-tool-use fn?)
 (s/def ::on-post-tool-use-failure fn?)
 (s/def ::on-user-prompt-submitted fn?)
+(s/def ::on-user-prompt-transformed fn?)
 (s/def ::on-session-start fn?)
 (s/def ::on-session-end fn?)
 (s/def ::on-error-occurred fn?)
@@ -681,7 +687,8 @@
 (s/def ::hooks
   (s/keys :opt-un [::on-pre-tool-use ::on-pre-mcp-tool-call ::on-post-tool-use
                    ::on-post-tool-use-failure
-                   ::on-user-prompt-submitted ::on-session-start ::on-session-end
+                   ::on-user-prompt-submitted ::on-user-prompt-transformed
+                   ::on-session-start ::on-session-end
                    ::on-error-occurred ::on-agent-stop]))
 
 ;; Disable resume flag
@@ -859,6 +866,70 @@
 ;; bootstrap using the session's github token. Forwarded on create + resume/join.
 (s/def ::enable-managed-settings? boolean?)
 
+;; v1.0.9 session configuration additions.
+(s/def ::enable-experimental-mode? boolean?)
+(s/def ::additional-directories (s/coll-of ::non-blank-string :kind vector?))
+(s/def ::disabled-mcp-servers (s/coll-of ::non-blank-string :kind vector?))
+
+(s/def ::enable-all-tools? boolean?)
+(s/def ::additional-toolsets (s/coll-of ::non-blank-string :kind vector?))
+(s/def ::additional-tools (s/coll-of ::non-blank-string :kind vector?))
+(s/def ::enable-insiders-mode? boolean?)
+(s/def ::disable-form-deferral? boolean?)
+(def ^:private github-mcp-tool-config-keys
+  #{:enable-all-tools? :additional-toolsets :additional-tools
+    :enable-insiders-mode? :disable-form-deferral?})
+(s/def ::github-mcp-tool-config
+  (closed-keys
+   (s/keys :opt-un [::enable-all-tools? ::additional-toolsets ::additional-tools
+                    ::enable-insiders-mode? ::disable-form-deferral?])
+   github-mcp-tool-config-keys))
+
+(s/def ::disable-bypass-permissions-mode #{:disable})
+(s/def ::deny (s/coll-of ::non-blank-string :kind vector?))
+(s/def ::ask (s/coll-of ::non-blank-string :kind vector?))
+(s/def ::allow (s/coll-of ::non-blank-string :kind vector?))
+(def ^:private managed-settings-permissions-keys
+  #{:disable-bypass-permissions-mode :deny :ask :allow})
+(s/def ::managed-settings-permissions
+  (closed-keys
+   (s/keys :opt-un [::disable-bypass-permissions-mode ::deny ::ask ::allow])
+   managed-settings-permissions-keys))
+(s/def ::permissions ::managed-settings-permissions)
+(s/def ::managed-settings
+  (closed-keys
+   (s/keys :opt-un [::permissions])
+   #{:permissions}))
+
+(s/def ::factories (s/coll-of any? :kind vector?))
+
+(s/def ::max-concurrent-subagents pos-int?)
+(s/def ::max-total-subagents pos-int?)
+(s/def ::timeout-seconds (s/and number? pos? #(<= % 2147483.647)))
+(s/def ::factory-limits
+  (closed-keys
+   (s/keys :opt-un [::max-concurrent-subagents ::max-total-subagents
+                    ::max-ai-credits ::timeout-seconds])
+   #{:max-concurrent-subagents :max-total-subagents
+     :max-ai-credits :timeout-seconds}))
+(s/def ::detail string?)
+(s/def ::factory-phase
+  (closed-keys
+   (s/keys :req-un [::title] :opt-un [::detail])
+   #{:title :detail}))
+(s/def ::phases (s/coll-of ::factory-phase :kind vector?))
+(s/def ::limits ::factory-limits)
+(s/def ::factory-meta
+  (closed-keys
+   (s/keys :req-un [::name ::description ::phases]
+           :opt-un [::limits])
+   #{:name :description :phases :limits}))
+(s/def ::factory-run-status
+  #{:pending :running :completed :halted :cancelled :error})
+(s/def ::factory-resume-error-code
+  #{:not-found :non-resumable :already-active
+    :reapproval-declined :no-approval-provider})
+
 ;; canvasProvider (upstream PR #1847) — stable identity for a host/SDK connection
 ;; that supplies built-in canvases, so canvases declared on a control connection
 ;; survive stdio reconnect and CLI restart instead of being re-keyed per
@@ -906,7 +977,10 @@
     :excluded-builtin-agents :enable-citations :session-limits
     :providers :models :exp-assignments
     :include-sub-agent-streaming-events?
-    :enable-managed-settings? :canvas-provider})
+    :enable-managed-settings? :managed-settings
+    :enable-experimental-mode? :additional-directories :disabled-mcp-servers
+    :github-mcp-tool-config
+    :canvas-provider})
 
 (s/def ::session-config
   (closed-keys
@@ -950,7 +1024,10 @@
                     ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
-                    ::enable-managed-settings? ::canvas-provider])
+                    ::enable-managed-settings? ::managed-settings
+                    ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
+                    ::github-mcp-tool-config
+                    ::canvas-provider])
    session-config-keys))
 
 (def ^:private resume-session-config-keys
@@ -990,7 +1067,10 @@
     :include-sub-agent-streaming-events?
     ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
     :open-canvases
-    :enable-managed-settings? :canvas-provider})
+    :enable-managed-settings? :managed-settings
+    :enable-experimental-mode? :additional-directories :disabled-mcp-servers
+    :github-mcp-tool-config
+    :canvas-provider})
 
 (s/def ::resume-session-config
   (closed-keys
@@ -1033,11 +1113,16 @@
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
                     ::open-canvases
-                    ::enable-managed-settings? ::canvas-provider])
+                    ::enable-managed-settings? ::managed-settings
+                    ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
+                    ::github-mcp-tool-config
+                    ::canvas-provider])
    resume-session-config-keys))
 
-;; join-session config: same as resume-session-config but :on-permission-request is optional.
+;; join-session config extends resume with extension-authored Agent Factories.
 ;; When omitted, join-session defaults to a handler that returns {:kind :no-result}.
+(def ^:private join-session-config-keys
+  (conj resume-session-config-keys :factories))
 (s/def ::join-session-config
   (closed-keys
    (s/keys :opt-un [::on-permission-request
@@ -1078,8 +1163,12 @@
                     ::providers ::models ::exp-assignments
                     ::include-sub-agent-streaming-events?
                     ::open-canvases
-                    ::enable-managed-settings? ::canvas-provider])
-   resume-session-config-keys))
+                    ::enable-managed-settings? ::managed-settings
+                    ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
+                    ::github-mcp-tool-config
+                    ::canvas-provider
+                    ::factories])
+   join-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
 ;; Message options
@@ -1289,7 +1378,7 @@
     :copilot/session.info :copilot/session.model_change :copilot/session.handoff
     :copilot/session.truncation :copilot/session.snapshot_rewind :copilot/session.usage_info
     :copilot/session.compaction_start :copilot/session.compaction_complete
-    :copilot/session.shutdown :copilot/session.task_complete
+    :copilot/session.shutdown :copilot/session.task_complete :copilot/session.context_cleared
     :copilot/session.title_changed :copilot/session.warning :copilot/session.context_changed
     :copilot/session.mode_changed :copilot/session.plan_changed :copilot/session.todos_changed
     :copilot/session.workspace_file_changed
@@ -1365,7 +1454,9 @@
     :copilot/assistant.server_tool_progress
     :copilot/session.managed_settings_enforced
     :copilot/session.managed_settings_resolved
-    :copilot/tool_search.activated})
+    :copilot/tool_search.activated
+    ;; v1.0.9 + post-v1.0.9 sync (pinned schema 1.0.79-6).
+    :copilot/factory.run_updated})
 
 ;; Session events
 (s/def ::already-in-use? boolean?)
@@ -1491,12 +1582,17 @@
 ;; x-copilot-service-request-id header for CAPI log correlation.
 (s/def ::server-tools map?)
 (s/def ::service-request-id string?)
+(s/def ::chunk-index nat-int?)
+(s/def ::chunk-count pos-int?)
+(s/def ::rte boolean?)
+(s/def ::interaction-type string?)
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
                    ::interaction-id ::output-tokens ::phase ::reasoning-opaque
                    ::reasoning-text ::request-id ::api-call-id
-                   ::server-tools ::service-request-id ::turn-id ::model]))
+                   ::server-tools ::service-request-id ::turn-id ::model
+                   ::chunk-index ::chunk-count ::rte]))
 
 (s/def ::total-response-size-bytes nat-int?)
 (s/def ::turn-id ::non-blank-string)
@@ -1506,7 +1602,8 @@
           :opt-un [::interaction-id]))
 
 (s/def ::assistant.reasoning-data
-  (s/keys :req-un [::reasoning-id ::content]))
+  (s/keys :req-un [::reasoning-id ::content]
+          :opt-un [::rte]))
 
 (s/def ::delta-content string?)
 
@@ -1560,12 +1657,12 @@
           :opt-un [::api-call-id ::api-endpoint ::cache-read-tokens
                    ::cache-write-tokens ::cache-expires-at ::copilot-usage
                    ::cost ::duration
-                   ::initiator ::input-tokens ::inter-token-latency-ms
+                   ::initiator ::interaction-type ::input-tokens ::inter-token-latency-ms
                    ::output-tokens ::parent-tool-call-id ::provider-call-id
                    ::quota-snapshots ::reasoning-effort ::reasoning-tokens
                    ::service-request-id
                    ::time-to-first-token-ms ::ttft-ms
-                   ::content-filter-triggered ::finish-reason]))
+                   ::content-filter-triggered ::finish-reason ::rte]))
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
@@ -1671,8 +1768,36 @@
 
 ;; Session task complete event
 (s/def ::aborted? boolean?)
+(s/def ::outcome #{"completed" "continue" "blocked"})
+(s/def ::objective-id integer?)
+(s/def ::reason string?)
 (s/def ::session.task_complete-data
-  (s/keys :opt-un [::summary ::aborted?]))
+  (s/keys :opt-un [::summary ::aborted? ::success
+                   ::outcome ::objective-id ::reason]))
+
+;; Conversation compaction metadata added through schema 1.0.79-6.
+(s/def ::trigger
+  #{"threshold" "context_limit_retry" "manual" "memory_pressure" "model_switch"})
+(s/def ::current-tokens nat-int?)
+(s/def ::token-limit nat-int?)
+(s/def ::session.compaction_start-data
+  (s/keys :opt-un [::model ::current-tokens ::token-limit ::trigger]))
+(s/def ::session.compaction_complete-data
+  (s/keys :req-un [::success]
+          :opt-un [::error ::status-code ::token-limit ::trigger]))
+
+;; Context-cleared event (upstream PR #2129).
+(s/def ::messages-cleared nat-int?)
+(s/def ::initial-message string?)
+(s/def ::session.context_cleared-data
+  (s/keys :req-un [::messages-cleared]
+          :opt-un [::initial-message]))
+
+;; Agent Factory run invalidation event (upstream PR #2114).
+(s/def ::run-id ::non-blank-string)
+(s/def ::revision nat-int?)
+(s/def ::factory.run_updated-data
+  (s/keys :req-un [::run-id ::revision]))
 
 ;; Schedule events (upstream schema 1.0.42; v1.0.1 added cron/at variants —
 ;; upstream PR #1597). `:interval-ms` is now optional; cron-only and one-shot
@@ -1888,17 +2013,49 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory :hook
-                           :extension-management :extension-permission-access})
+                           :extension-management :extension-permission-access :factory})
 
 ;; Memory permission event data fields (CLI 1.0.22, upstream PR #1055)
 (s/def ::memory-action #{:store :vote})
 (s/def ::memory-direction #{:upvote :downvote})
 (s/def ::memory-reason string?)
+(s/def ::managed-approval-required boolean?)
+(s/def ::command-segments (s/coll-of map? :kind vector?))
+(s/def ::redirected-from string?)
+(s/def ::factory-operation #{"run" "author"})
+(s/def ::factory-permission-phases (s/coll-of ::factory-phase :kind vector?))
+(s/def ::approval-key ::non-blank-string)
+(s/def ::can-persist-approval boolean?)
+(s/def ::declared-max-concurrent-subagents nat-int?)
+(s/def ::declared-max-total-subagents nat-int?)
+(s/def ::declared-timeout-seconds number?)
+(s/def ::declared-max-ai-credits number?)
 
 (s/def ::permission-request
-  (s/keys :req-un [::permission-kind]
-          :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason
-                   ::can-offer-session-approval]))
+  (s/and
+   (s/keys :req-un [::permission-kind]
+           :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason
+                    ::can-offer-session-approval ::managed-approval-required
+                    ::command-segments ::redirected-from
+                    ::name ::description ::phases ::approval-key ::can-persist-approval
+                    ::declared-max-concurrent-subagents
+                    ::declared-max-total-subagents
+                    ::declared-timeout-seconds ::declared-max-ai-credits])
+   #(or (not= :factory (:permission-kind %))
+        (and (s/valid? ::factory-operation (:operation %))
+             (s/valid? ::non-blank-string (:name %))
+             (s/valid? ::non-blank-string (:description %))
+             (s/valid? ::factory-permission-phases (:phases %))
+             (s/valid? ::non-blank-string (:approval-key %))
+             (boolean? (:can-persist-approval %))
+             (or (not (contains? % :max-concurrent-subagents))
+                 (nat-int? (:max-concurrent-subagents %)))
+             (or (not (contains? % :max-total-subagents))
+                 (nat-int? (:max-total-subagents %)))
+             (or (not (contains? % :timeout-seconds))
+                 (number? (:timeout-seconds %)))
+             (or (not (contains? % :max-ai-credits))
+                 (number? (:max-ai-credits %)))))))
 
 (s/def ::permission-result-kind
   #{:approve-once
@@ -2002,8 +2159,7 @@
   (s/and number? #(<= 0 % 100)))
 (s/def ::ends-at string?)
 (s/def ::model-billing-promo
-  (s/and (s/keys :req-un [::ends-at]
-                 :opt-un [::id ::discount-percent])
+  (s/and (s/keys :opt-un [::ends-at ::id ::discount-percent])
          #(or (not (contains? % :message))
               (string? (:message %)))))
 (s/def ::promo ::model-billing-promo)

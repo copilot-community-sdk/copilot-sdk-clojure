@@ -11,10 +11,12 @@ Key features:
 - **Custom tools** — Let the LLM call back into your application
 - **Streaming** — Incremental response deltas via `:assistant.message_delta` events
 - **Multi-session support** — Run multiple independent conversations concurrently
+- **[Agent Factories](./doc/guides/agent-factories.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-factory` / `run-factory!`
 - **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
 - **User input handling** — Handle `ask_user` requests from the agent
 - **Event callbacks** — Register `:on-event` handlers to receive all session events
 - **Child process mode** — Join existing sessions via `join-session` for extensions
+- **Enterprise & workspace policy** — New config options like `:enable-managed-settings?`, `:additional-directories`, and `:disabled-mcp-servers`
 - **Authentication options** — GitHub token auth or logged-in user
 
 See [`examples/`](./examples/) for working code demonstrating common patterns.
@@ -27,7 +29,7 @@ Add to your `deps.edn`:
 
 ```clojure
 ;; From Maven Central
-io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.8.0"}
+io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.9.0"}
 
 ;; Or git dependency
 io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure.git"
@@ -195,7 +197,7 @@ For fine-grained control, provide a custom handler:
 ```
 
 Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,
-`:custom-tool`, `:memory`, `:hook` (arrive as strings from the wire; use `keyword`
+`:custom-tool`, `:memory`, `:hook`, `:factory` (arrive as strings from the wire; use `keyword`
 to match).
 
 See [Permission Handling](./doc/reference/API.md#permission-handling) in the

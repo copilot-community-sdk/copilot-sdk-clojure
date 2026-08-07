@@ -91,6 +91,9 @@ clojure -A:examples -X empty-mode/run
 
 # Manual tool resume (declaration-only tool, manual pending-call resolution)
 clojure -A:examples -X manual-tool-resume/run
+
+# Agent Factories (experimental; launch as a child extension, see Example 22)
+clojure -A:examples -X agent-factories/run
 ```
 
 Or run all examples:
@@ -100,6 +103,7 @@ Or run all examples:
 
 > **Note:** `run-all-examples.sh` runs 18 example files that need only the Copilot CLI (examples 1–9, 12–19, and 21) — 19 runs in total, since `helpers-query` runs twice (`run` and `run-multi`).
 > Examples 10 (BYOK), 11 (MCP), and 20 (empty-mode — uses BYOK) require external dependencies (API keys, Node.js) and are run manually.
+> Example 22 (agent-factories) requires `SESSION_ID` — it only runs as a child extension process of a live Copilot CLI session, not standalone, so it too is run manually.
 
 With a custom CLI path:
 ```bash
@@ -961,6 +965,52 @@ clojure -A:examples -X manual-tool-resume/run :model '"gpt-5.4"'
 
 See [`doc/reference/API.md`](../doc/reference/API.md) for
 `handle-pending-permission-request!` and `handle-pending-tool-call!`.
+
+---
+
+## Example 22: Agent Factories (`agent_factories.clj`)
+
+**Difficulty:** Advanced
+**Concepts:** Experimental Agent Factories API, reverse-RPC extensions, joining a parent CLI session
+
+An **Agent Factory** is a named, reusable multi-step routine — with declared
+phases and resource limits — that an extension registers when it joins a
+running Copilot CLI session. The parent session (or another script driving
+it) triggers runs of the factory by name; this example only *defines and
+services* runs — it never triggers one itself. This is the experimental
+extension side of the API: `copilot/define-factory` + `copilot/join-session`.
+
+### What It Demonstrates
+
+- Defining a factory with `copilot/define-factory`: `:meta` (`:name`,
+  `:description`, `:phases`), optional `:limits`
+  (`:max-concurrent-subagents`, `:max-total-subagents`,
+  `:timeout-seconds`, `:max-ai-credits`), and a `:run` function
+- Validating a factory's own runtime `:args` map (distinct from the
+  `:meta`/`:limits` validation `define-factory` already performs)
+- Using `phase`, `log`, `agent`, `step`, and `parallel` from the factory
+  execution context to structure and narrate a multi-step run
+- Joining the parent session as a child extension via
+  `copilot/join-session` with `:factories`
+- Cleaning up exactly once via a JVM shutdown hook (`stop!` with a
+  `force-stop!` fallback) and an `on-lifecycle-event :session.deleted`
+  handler for graceful exit when the parent session ends
+
+### Prerequisites
+
+The Copilot CLI must launch this command as a child extension process. It
+provides `SESSION_ID` and the parent JSON-RPC connection over stdio. Setting
+`SESSION_ID` manually in a standalone terminal is not sufficient.
+
+### Usage
+
+```bash
+clojure -A:examples -X agent-factories/run
+```
+
+Trigger the registered `"clj-example-review"` factory from the parent
+session (or another script) with `copilot/run-factory!`; this process
+stays alive to service the run and exits when the parent session ends.
 
 ---
 

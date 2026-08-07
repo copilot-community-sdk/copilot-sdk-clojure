@@ -5,6 +5,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.data.json :as json]
+            [github.copilot-sdk.factory :as factory]
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.specs :as specs]
@@ -918,6 +919,20 @@
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
                                           (<! (session/handle-hooks-invoke! client session-id hook-type input))))
 
+                                      "factory.execute"
+                                      (let [{:keys [session-id]} params]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-factory-execute!
+                                               client session-id params))))
+
+                                      "factory.abort"
+                                      (let [{:keys [session-id run-id]} params]
+                                        (if-not (get-in @(:state client) [:sessions session-id])
+                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
+                                          (<! (session/handle-factory-abort!
+                                               client session-id run-id))))
+
                                       ;; System message transform (PR #816)
                                       "systemMessage.transform"
                                       (let [{:keys [session-id sections]} params]
@@ -931,7 +946,9 @@
                                                             "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
                                                             "sessionFs.readdir" "sessionFs.readdirWithTypes"
                                                             "sessionFs.rm" "sessionFs.rename"
-                                                            "sessionFs.sqliteQuery" "sessionFs.sqliteExists")
+                                                            "sessionFs.sqliteQuery"
+                                                            "sessionFs.sqliteTransaction"
+                                                            "sessionFs.sqliteExists")
                                       (let [{:keys [session-id]} params]
                                         (if-not (get-in @(:state client) [:sessions session-id])
                                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}
@@ -1113,12 +1130,20 @@
 
     (copilot/create-session client {:on-permission-request copilot/approve-all})
 
-  Returns `{:kind :approve-once}`, matching the upstream `approveAll`
-  permission decision.
+  Throws when managed settings are active because host-side auto-approval
+  cannot bypass managed policy. Returns `{:kind :no-result}` when a request
+  explicitly requires managed approval; otherwise returns
+  `{:kind :approve-once}`.
 
   For fine-grained control, provide your own handler function instead."
-  [_request _ctx]
-  {:kind :approve-once})
+  [request ctx]
+  (when (:managed-settings-enabled? ctx)
+    (throw (ex-info "approve-all cannot be used when managed settings are enabled"
+                    {:session-id (:session-id ctx)})))
+  (if (and (contains? request :managed-approval-required)
+           (not= false (:managed-approval-required request)))
+    {:kind :no-result}
+    {:kind :approve-once}))
 
 (defn default-join-session-permission-handler
   "Default permission handler for resuming sessions.
@@ -1236,8 +1261,8 @@
             (when-let [router-ch (:router-ch @(:state client))]
               (close! router-ch))
             (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
-        (close! lifecycle-ch))
-      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
+              (close! lifecycle-ch))
+            (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
             (let [{:keys [connection-io socket process]} @(:state client)]
               (when connection-io
                 (try (proto/disconnect connection-io) (catch Exception _)))
@@ -1923,7 +1948,9 @@
     (some? (:defer t))
     (assoc :defer (name (:defer t)))
     (some? (:metadata t))
-    (assoc :metadata (:metadata t))))
+    (assoc :metadata (:metadata t))
+    (some? (:is-terminal? t))
+    (assoc :isTerminal (:is-terminal? t))))
 
 (defn- custom-agent->wire
   "Convert a custom agent to its wire shape for session.create / session.resume.
@@ -1935,6 +1962,36 @@
     (cond-> (util/clj->wire (dissoc agent :agent-reasoning-effort :mcp-servers))
       (some? mcp-servers) (assoc :mcpServers (util/mcp-servers->wire mcp-servers))
       (some? reasoning-effort) (assoc :reasoningEffort reasoning-effort))))
+
+(defn- github-mcp-tool-config->wire
+  "Convert the built-in GitHub MCP configuration to its exact wire shape."
+  [config]
+  (cond-> {}
+    (some? (:enable-all-tools? config))
+    (assoc :enableAllTools (:enable-all-tools? config))
+    (contains? config :additional-toolsets)
+    (assoc :additionalToolsets (:additional-toolsets config))
+    (contains? config :additional-tools)
+    (assoc :additionalTools (:additional-tools config))
+    (some? (:enable-insiders-mode? config))
+    (assoc :enableInsidersMode (:enable-insiders-mode? config))
+    (some? (:disable-form-deferral? config))
+    (assoc :disableFormDeferral (:disable-form-deferral? config))))
+
+(defn- managed-settings->wire
+  "Convert host-injected managed settings to the runtime wire shape."
+  [settings]
+  (cond-> {}
+    (contains? settings :permissions)
+    (assoc :permissions
+           (let [permissions (:permissions settings)]
+             (cond-> {}
+               (some? (:disable-bypass-permissions-mode permissions))
+               (assoc :disableBypassPermissionsMode
+                      (name (:disable-bypass-permissions-mode permissions)))
+               (contains? permissions :deny) (assoc :deny (:deny permissions))
+               (contains? permissions :ask) (assoc :ask (:ask permissions))
+               (contains? permissions :allow) (assoc :allow (:allow permissions)))))))
 
 (defn- config-defaults-for-mode
   "Mode-specific session config defaults spread UNDER the caller's config
@@ -1957,6 +2014,8 @@
      :enable-host-git-operations false
      :enable-session-store false
      :enable-skills false
+     :enable-experimental-mode? false
+     :custom-agents-local-only true
      :memory {:enabled false}}
     {}))
 
@@ -2118,6 +2177,8 @@
       wire-providers (assoc :providers wire-providers)
       wire-models (assoc :models wire-models)
       (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
+      (some? (:enable-experimental-mode? config))
+      (assoc :isExperimentalMode (:enable-experimental-mode? config))
       true (assoc :request-permission true)
       (:capi config) (assoc :capi (util/clj->wire (:capi config)))
 
@@ -2133,7 +2194,14 @@
 
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
+      (contains? config :disabled-mcp-servers)
+      (assoc :disabled-mcp-servers (:disabled-mcp-servers config))
+      (:github-mcp-tool-config config)
+      (assoc :githubMcpToolConfig
+             (github-mcp-tool-config->wire (:github-mcp-tool-config config)))
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
+      (some? (:custom-agents-local-only config))
+      (assoc :custom-agents-local-only (:custom-agents-local-only config))
       wire-default-agent (assoc :default-agent wire-default-agent)
       config-dir (assoc :config-dir config-dir)
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
@@ -2142,6 +2210,8 @@
       (:plugin-directories config) (assoc :plugin-directories (:plugin-directories config))
       wire-large-output (assoc :large-output wire-large-output)
       (:working-directory config) (assoc :working-directory (:working-directory config))
+      (contains? config :additional-directories)
+      (assoc :additional-directories (:additional-directories config))
       wire-infinite-sessions (assoc :infinite-sessions wire-infinite-sessions)
       wire-memory (assoc :memory wire-memory)
       (:reasoning-effort config) (assoc :reasoning-effort (:reasoning-effort config))
@@ -2204,6 +2274,8 @@
       ;; verbatim, so forward the actual boolean (an explicit false is sent).
       (some? (:enable-managed-settings? config))
       (assoc :enable-managed-settings (:enable-managed-settings? config))
+      (:managed-settings config)
+      (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
       ;; canvasProvider (upstream PR #1847): stable canvas-provider identity.
       ;; The nested {:id :name} map's kebab keys are camelCased by clj->wire.
       (:canvas-provider config)
@@ -2281,7 +2353,9 @@
         wire-providers (when-let [ps (:providers config)]
                          (mapv named-provider->wire ps))
         wire-models (when-let [ms (:models config)]
-                      (mapv provider-model->wire ms))]
+                      (mapv provider-model->wire ms))
+        wire-factories (when (contains? config :factories)
+                         (mapv factory/factory-meta (:factories config)))]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
@@ -2298,7 +2372,10 @@
       wire-provider (assoc :provider wire-provider)
       wire-providers (assoc :providers wire-providers)
       wire-models (assoc :models wire-models)
+      wire-factories (assoc :factories wire-factories)
       (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
+      (some? (:enable-experimental-mode? config))
+      (assoc :isExperimentalMode (:enable-experimental-mode? config))
       true (assoc :request-permission
                   (not (identical? (:on-permission-request config)
                                    default-join-session-permission-handler)))
@@ -2316,7 +2393,14 @@
 
       (:streaming? config) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
+      (contains? config :disabled-mcp-servers)
+      (assoc :disabled-mcp-servers (:disabled-mcp-servers config))
+      (:github-mcp-tool-config config)
+      (assoc :githubMcpToolConfig
+             (github-mcp-tool-config->wire (:github-mcp-tool-config config)))
       wire-custom-agents (assoc :custom-agents wire-custom-agents)
+      (some? (:custom-agents-local-only config))
+      (assoc :custom-agents-local-only (:custom-agents-local-only config))
       wire-default-agent (assoc :default-agent wire-default-agent)
       config-dir (assoc :config-dir config-dir)
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
@@ -2337,6 +2421,8 @@
       true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
       true (assoc :hooks (boolean (:hooks config)))
       (:working-directory config) (assoc :working-directory (:working-directory config))
+      (contains? config :additional-directories)
+      (assoc :additional-directories (:additional-directories config))
       (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
       (some? (:continue-pending-work? config))
       (assoc :continue-pending-work (:continue-pending-work? config))
@@ -2392,6 +2478,8 @@
       ;; (upstream PRs #1925, #1847), honored on resume/join as well as create.
       (some? (:enable-managed-settings? config))
       (assoc :enable-managed-settings (:enable-managed-settings? config))
+      (:managed-settings config)
+      (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
       (:canvas-provider config)
       (assoc :canvas-provider (:canvas-provider config))
       true (assoc :env-value-mode "direct"))))
@@ -2732,6 +2820,33 @@
             (session/remove-session! client session-id)
             (throw t)))))))
 
+(defn- resume-session*
+  [client session-id config]
+  (validate-provider-config! config)
+  (validate-tool-filters! config)
+  (validate-empty-mode-session-requirements! client config)
+  (ensure-connected! client)
+  (ensure-session-fs-handler-factory! client config)
+  (let [config (normalize-config-for-mode client config)
+        {:keys [connection-io]} @(:state client)
+        trace-ctx (get-trace-context (:on-get-trace-context client))
+        {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
+        params (merge trace-ctx (build-resume-session-params session-id config))
+        session (pre-register-session client session-id config)]
+    (session/register-transform-callbacks! client session-id transform-callbacks)
+    (try
+      (install-session-fs-handler! client session-id session config)
+      (register-mcp-auth-interest! client session-id config)
+      (let [result (proto/send-request! connection-io "session.resume" params)]
+        (session/set-workspace-path! client session-id (:workspace-path result))
+        (session/set-capabilities! client session-id (:capabilities result))
+        (session/set-open-canvases! client session-id (:open-canvases result))
+        (apply-session-options-update! client session config)
+        session)
+      (catch Throwable t
+        (session/remove-session! client session-id)
+        (throw t)))))
+
 (defn resume-session
   "Resume an existing session by ID.
    
@@ -2797,36 +2912,7 @@
       (throw (ex-info "Invalid resume session config"
                       {:config safe-config
                        :explain (s/explain-data ::specs/resume-session-config safe-config)}))))
-  (validate-provider-config! config)
-  (validate-tool-filters! config)
-  (validate-empty-mode-session-requirements! client config)
-  (ensure-connected! client)
-  (ensure-session-fs-handler-factory! client config)
-  (let [config (normalize-config-for-mode client config)
-        {:keys [connection-io]} @(:state client)
-        trace-ctx (get-trace-context (:on-get-trace-context client))
-        {:keys [transform-callbacks]} (extract-transform-callbacks (:system-message config))
-        params (merge trace-ctx (build-resume-session-params session-id config))
-        ;; Pre-register session before RPC so early events are captured
-        session (pre-register-session client session-id config)]
-    ;; Register transform callbacks on session before RPC
-    (session/register-transform-callbacks! client session-id transform-callbacks)
-    (try
-      (install-session-fs-handler! client session-id session config)
-      ;; Register MCP-auth interest BEFORE session.resume (upstream
-      ;; client.ts:1578) so OAuth the runtime needs while processing resume
-      ;; reaches the handler instead of silently falling back to a cached token.
-      (register-mcp-auth-interest! client session-id config)
-      (let [result (proto/send-request! connection-io "session.resume" params)]
-        (session/set-workspace-path! client session-id (:workspace-path result))
-        (session/set-capabilities! client session-id (:capabilities result))
-        (session/set-open-canvases! client session-id (:open-canvases result))
-        ;; Mode-specific post-resume options patch (upstream PR #1428).
-        (apply-session-options-update! client session config)
-        session)
-      (catch Throwable t
-        (session/remove-session! client session-id)
-        (throw t)))))
+  (resume-session* client session-id config))
 
 (defn <create-session
   "Async version of create-session. Returns a channel that delivers a CopilotSession.
@@ -3018,24 +3104,24 @@
         (if (instance? Throwable reg)
           reg
           (let [response (<! (proto/send-request connection-io "session.resume" params))]
-        (if (nil? response)
+            (if (nil? response)
           ;; Channel closed without response — clean up pre-registered session
-          (do (session/remove-session! client session-id)
-              (ex-info "Session resume failed: RPC channel closed"
-                       {:session-id session-id}))
-          (if-let [err (:error response)]
-            (do (log/error "<resume-session RPC error: " err)
-                (session/remove-session! client session-id)
-                (ex-info (str "Failed to resume session: " (:message err))
-                         {:error err :session-id session-id}))
-            (let [result (:result response)]
-              (session/set-workspace-path! client session-id (:workspace-path result))
-              (session/set-capabilities! client session-id (:capabilities result))
-              (session/set-open-canvases! client session-id (:open-canvases result))
-              (let [r (<! (<apply-session-options-update! client session config))]
-                (if (instance? Throwable r)
-                  r
-                  session)))))))))))
+              (do (session/remove-session! client session-id)
+                  (ex-info "Session resume failed: RPC channel closed"
+                           {:session-id session-id}))
+              (if-let [err (:error response)]
+                (do (log/error "<resume-session RPC error: " err)
+                    (session/remove-session! client session-id)
+                    (ex-info (str "Failed to resume session: " (:message err))
+                             {:error err :session-id session-id}))
+                (let [result (:result response)]
+                  (session/set-workspace-path! client session-id (:workspace-path result))
+                  (session/set-capabilities! client session-id (:capabilities result))
+                  (session/set-open-canvases! client session-id (:open-canvases result))
+                  (let [r (<! (<apply-session-options-update! client session config))]
+                    (if (instance? Throwable r)
+                      r
+                      session)))))))))))
 (defn join-session
   "Join the current foreground session from an extension running as a child process.
 
@@ -3053,6 +3139,11 @@
 
    Throws if SESSION_ID is not set in the environment."
   [config]
+  (when-not (s/valid? ::specs/join-session-config config)
+    (throw (ex-info "Invalid join session config"
+                    {:config (redact-secrets config)
+                     :explain (s/explain-data ::specs/join-session-config
+                                              (redact-secrets config))})))
   (let [session-id (System/getenv "SESSION_ID")]
     (when-not session-id
       (throw (ex-info (str "join-session is intended for extensions running as child processes "
@@ -3065,7 +3156,7 @@
                           (not (contains? config :disable-resume?))
                           (assoc :disable-resume? true))]
       (try
-        (let [sess (resume-session c session-id merged-config)]
+        (let [sess (resume-session* c session-id merged-config)]
           {:client c :session sess})
         (catch Throwable t
           (try (stop! c) (catch Throwable _))
