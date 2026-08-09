@@ -10,7 +10,7 @@
   (let [deadline (async/timeout 500)
         [value port] (async/alts!! [ch deadline])]
     {:value value
-     :closed? (= port ch)}))
+     :closed? (and (= port ch) (nil? value))}))
 
 (deftest force-stop-releases-session-owned-resources-without-rpcs
   (let [client (sdk/client {:auto-start? false})
