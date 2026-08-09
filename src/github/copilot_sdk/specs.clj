@@ -48,6 +48,8 @@
 (s/def ::auto-restart? boolean?)
 (s/def ::notification-queue-size pos-int?)
 (s/def ::router-queue-size pos-int?)
+(s/def ::request-handler-threads pos-int?)
+(s/def ::request-handler-queue-size pos-int?)
 (s/def ::tool-timeout-ms pos-int?)
 (s/def ::env (s/map-of string? (s/nilable string?)))
 ;; Authentication options (PR #237)
@@ -215,6 +217,7 @@
   #{:cli-path :cli-args :cli-url :cwd :port
     :use-stdio? :log-level :auto-start? :auto-restart?
     :notification-queue-size :router-queue-size
+    :request-handler-threads :request-handler-queue-size
     :tool-timeout-ms :env :github-token :use-logged-in-user?
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
     :on-github-telemetry
@@ -228,6 +231,7 @@
     (s/keys :opt-un [::cli-path ::cli-args ::cli-url ::cwd ::port
                      ::use-stdio? ::log-level ::auto-start? ::auto-restart?
                      ::notification-queue-size ::router-queue-size
+                     ::request-handler-threads ::request-handler-queue-size
                      ::tool-timeout-ms ::env ::github-token ::use-logged-in-user?
                      ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
                      ::on-github-telemetry
