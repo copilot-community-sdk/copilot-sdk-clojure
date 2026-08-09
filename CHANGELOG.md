@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (lifecycle)
+- **Force-stop session teardown** — `force-stop!` now marks active sessions
+  terminal, cancels local factory executions, closes event subscriptions and
+  send locks, then drops client ownership without issuing `session.destroy` or
+  `runtime.shutdown` RPCs.
+
 ### Changed (agent workflow)
 - **Worktree-safe upstream sync** — the repo-local `update-upstream` skill now
   uses a tracked helper to resolve the sibling `github/copilot-sdk` checkout

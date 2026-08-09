@@ -363,7 +363,10 @@
   (client/stop! client))
 
 (defn force-stop!
-  "Force stop the CLI server without graceful cleanup.
+  "Force stop the CLI server without graceful RPCs.
+
+   Releases local session resources before terminating the transport and any
+   SDK-owned process.
    Use when stop! takes too long."
   [client]
   (client/force-stop! client))
