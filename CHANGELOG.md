@@ -3,6 +3,9 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed
+- Restore the green formatting gate by correcting the formatter-prescribed indentation in `src/github/copilot_sdk/util.clj`.
+
 ### Changed (agent workflow)
 - **Worktree-safe upstream sync** — the repo-local `update-upstream` skill now
   uses a tracked helper to resolve the sibling `github/copilot-sdk` checkout
