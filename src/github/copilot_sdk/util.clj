@@ -127,8 +127,8 @@
    Each server value has :mcp-* prefixed keys stripped before camelCase conversion."
   [servers]
   (into {} (map (fn [[k v]] [(if (keyword? k) (subs (str k) 1) k)
-                              (mcp-server->wire v)]))
-                servers))
+                             (mcp-server->wire v)]))
+        servers))
 
 ;; -----------------------------------------------------------------------------
 ;; Attachment wire conversion
