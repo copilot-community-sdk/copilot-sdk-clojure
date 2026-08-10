@@ -209,7 +209,9 @@ the process is left running. (upstream [PR #1667](https://github.com/github/copi
 (copilot/force-stop! client)
 ```
 
-Force stop the CLI server without graceful cleanup. Use when `stop!` takes too long.
+Force stop the CLI server without graceful RPCs. It closes local session event
+subscriptions and releases in-flight session work before closing the transport
+and terminating an SDK-owned process. Use when `stop!` takes too long.
 
 #### `client-options`
 

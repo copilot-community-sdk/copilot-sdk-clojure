@@ -1402,13 +1402,19 @@
       @errors)))
 
 (defn force-stop!
-  "Force stop the CLI server without graceful cleanup."
-  [client]
-  (swap! (:state client) assoc :stopping? true)
+  "Force stop the CLI server without graceful RPCs.
 
-  (let [{:keys [connection-io socket process]} @(:state client)]
+   Releases locally-owned session resources before dropping client ownership, then
+   closes the transport and terminates an SDK-owned process."
+  [client]
+  (swap! (:state client) assoc :stopping? true :lifecycle-handlers {})
+
+  (let [{:keys [connection-io socket process sessions]} @(:state client)
+        session-ids (keys sessions)]
     (try
-      ;; Clear sessions without destroying
+      ;; Release event roots and send locks while their state is still reachable.
+      (doseq [session-id session-ids]
+        (session/teardown-local! client session-id))
       (swap! (:state client) assoc :sessions {} :session-io {})
 
       ;; Stop notification routing

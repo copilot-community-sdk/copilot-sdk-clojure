@@ -1,8 +1,8 @@
 (ns github.copilot-sdk.reverse-rpc-test
-  "Reverse-RPC (server→client request) execution policy.
+  "Reverse-RPC (server-to-client request) execution policy.
 
-   These tests drive the real NIO/JSON-RPC transport over piped streams — no
-   protocol mocking — and assert the bounded worker contract:
+   These tests drive the real NIO/JSON-RPC transport over piped streams -- no
+   protocol mocking -- and assert the bounded worker contract:
 
    - arbitrary handler code runs on the connection's own bounded worker pool,
      never on core.async `go` dispatch
@@ -122,8 +122,8 @@
    answers. `entered` counts handlers currently inside the handler body;
    `peak` records the high-water mark; `threads` records the thread names.
 
-   The count is decremented in a `finally` so an interrupted handler — the
-   `disconnect` path — is observed to unwind."
+   The count is decremented in a `finally` so an interrupted handler -- the
+   `disconnect` path -- is observed to unwind."
   [{:keys [entered peak threads release]}]
   (fn [_method _params]
     (when threads (swap! threads conj (.getName (Thread/currentThread))))
@@ -136,7 +136,7 @@
     (delivered {:result {}})))
 
 ;; -----------------------------------------------------------------------------
-;; ASY-004 — bounded execution policy
+;; ASY-004 -- bounded execution policy
 ;; -----------------------------------------------------------------------------
 
 (deftest test-handler-runs-on-bounded-worker-not-go-dispatch
@@ -360,7 +360,7 @@
           (.countDown release))))))
 
 ;; -----------------------------------------------------------------------------
-;; ASY-003 — notification-queue overflow is observable
+;; ASY-003 -- notification-queue overflow is observable
 ;; -----------------------------------------------------------------------------
 
 (deftest test-notification-overflow-is-counted-and-warned

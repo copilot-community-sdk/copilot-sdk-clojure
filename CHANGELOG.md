@@ -22,7 +22,7 @@ All notable changes to this project will be documented in this file. This change
   `-32000` error with `data.code` `request_handler_saturated` (including
   `method`, `maxConcurrency`, and `queueSize`) instead of the request being
   queued indefinitely. Nothing is silently dropped, and no timeout was added
-  around handler execution — a wedged handler occupies exactly one worker and
+  around handler execution -- a wedged handler occupies exactly one worker and
   is surfaced through the overload error and the new counters.
 - `disconnect` now shuts the handler pool down explicitly, interrupting blocked
   handlers, and warns if workers fail to terminate rather than leaking them.
@@ -44,6 +44,12 @@ All notable changes to this project will be documented in this file. This change
   is reachable and observable; it does **not** demonstrate that a terminal
   session event can be lost, so no event prioritization or transport change was
   made.
+
+### Fixed (lifecycle)
+- **Force-stop session teardown** -- `force-stop!` now marks active sessions
+  terminal, cancels local factory executions, closes event subscriptions and
+  send locks, then drops client ownership without issuing `session.destroy` or
+  `runtime.shutdown` RPCs.
 
 ### Fixed
 - Restore the green formatting gate by correcting the formatter-prescribed indentation in `src/github/copilot_sdk/util.clj`.

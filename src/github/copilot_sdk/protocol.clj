@@ -32,7 +32,7 @@
   "Thread-name prefix for a connection's reverse-request worker pool.
 
    Reverse request handlers are arbitrary caller code, so they always run on a
-   thread with this prefix — never on core.async `go` dispatch. In core.async
+   thread with this prefix -- never on core.async `go` dispatch. In core.async
    1.8 `go` dispatch shares the process-wide unbounded cached `:io` executor,
    so blocking there grows that pool without bound."
   "jsonrpc-request-worker-")
@@ -176,12 +176,12 @@
   "Snapshot of a connection's worker and queue counters, for diagnostics and
    tests.
 
-   - `:dropped-notifications` — notifications discarded because the bounded
+   - `:dropped-notifications` -- notifications discarded because the bounded
      notification queue was full
-   - `:rejected-requests` — reverse requests answered with an overload error
+   - `:rejected-requests` -- reverse requests answered with an overload error
      because the handler pool was saturated
-   - `:active-request-workers` / `:queued-requests` — current pool occupancy
-   - `:request-workers-terminated?` — whether the handler pool has shut down"
+   - `:active-request-workers` / `:queued-requests` -- current pool occupancy
+   - `:request-workers-terminated?` -- whether the handler pool has shut down"
   [conn]
   (let [^ThreadPoolExecutor executor (:request-executor conn)]
     {:dropped-notifications (.get ^AtomicLong (:dropped-notifications conn))
@@ -816,7 +816,7 @@
 
    Blocked handlers are interrupted so a wedged handler cannot delay disconnect
    indefinitely. A pool that still has not terminated is reported rather than
-   silently ignored — a handler that swallows interruption is real diagnostic
+   silently ignored -- a handler that swallows interruption is real diagnostic
    information. Idempotent.
 
    An interrupted wait is re-flagged on the calling thread rather than
