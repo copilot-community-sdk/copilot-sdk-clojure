@@ -3,7 +3,8 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
-### Fixed (cleanup diagnostics and failed-connect teardown)- **A rejected handshake no longer retains transport resources** --
+### Fixed (cleanup diagnostics and failed-connect teardown)
+- **A rejected handshake no longer retains transport resources** --
   `connect-with-streams!` set `:status :error` and rethrew without releasing
   anything it had built, so a rejected protocol version left the JSON-RPC
   connection, its reader/writer/dispatcher threads, and the reverse-request
