@@ -28,8 +28,17 @@
 (defn- session-io [client session-id]
   (get-in @(:state client) [:session-io session-id]))
 
+(defn- session-disconnected?
+  [client session-id]
+  (not (false? (:destroyed? (session-state client session-id)))))
+
 (defn- update-session! [client session-id f & args]
-  (apply swap! (:state client) update-in [:sessions session-id] f args))
+  (swap! (:state client)
+         (fn [state]
+           (let [session (get-in state [:sessions session-id])]
+             (if (and session (not (:destroyed? session)))
+               (apply update-in state [:sessions session-id] f args)
+               state)))))
 
 (defn- connection-io [client]
   (:connection-io @(:state client)))
@@ -83,33 +92,42 @@
                                      tools))
         command-handlers (into {} (map (fn [c] [(:name c) (:command-handler c)]) commands))]
     ;; Store session state and IO in client's atom
-    (swap! (:state client)
-           (fn [state]
-             (-> state
-                 (assoc-in [:sessions session-id]
-                           {:tool-handlers tool-handlers
-                            :command-handlers command-handlers
-                            :permission-handler on-permission-request
-                            :mcp-auth-handler on-mcp-auth-request
-                            :user-input-handler on-user-input-request
-                            :elicitation-handler on-elicitation-request
-                            :exit-plan-mode-handler on-exit-plan-mode
-                            :auto-mode-switch-handler on-auto-mode-switch
-                            :hooks hooks
-                            :factories factory-definitions
-                            :factory-executions {}
-                            :managed-settings-enabled?
-                            (or (true? (:enable-managed-settings? config))
-                                (some? (:managed-settings config)))
-                            :destroyed? false
-                            :workspace-path workspace-path
-                            :capabilities {}
-                            :open-canvases []
-                            :config config})
-                 (assoc-in [:session-io session-id]
-                           {:event-chan event-chan
-                            :event-mult event-mult
-                            :send-lock send-lock}))))
+    (let [[_ registered-state]
+          (swap-vals! (:state client)
+                      (fn [state]
+                        (if (:stopping? state)
+                          state
+                          (-> state
+                              (assoc-in [:sessions session-id]
+                                        {:tool-handlers tool-handlers
+                                         :command-handlers command-handlers
+                                         :permission-handler on-permission-request
+                                         :mcp-auth-handler on-mcp-auth-request
+                                         :user-input-handler on-user-input-request
+                                         :elicitation-handler on-elicitation-request
+                                         :exit-plan-mode-handler on-exit-plan-mode
+                                         :auto-mode-switch-handler on-auto-mode-switch
+                                         :hooks hooks
+                                         :factories factory-definitions
+                                         :factory-executions {}
+                                         :managed-settings-enabled?
+                                         (or (true? (:enable-managed-settings? config))
+                                             (some? (:managed-settings config)))
+                                         :destroyed? false
+                                         :workspace-path workspace-path
+                                         :capabilities {}
+                                         :open-canvases []
+                                         :config config})
+                              (assoc-in [:session-io session-id]
+                                        {:event-chan event-chan
+                                         :event-mult event-mult
+                                         :send-lock send-lock})))))]
+      (when-not (identical? event-chan
+                            (get-in registered-state [:session-io session-id :event-chan]))
+        (close! event-chan)
+        (close! send-lock)
+        (throw (ex-info "Client is stopping; cannot create session"
+                        {:session-id session-id}))))
     ;; If an on-event handler is provided, tap and forward events to it.
     ;; Uses async/thread to avoid blocking core.async dispatch threads,
     ;; since user handlers may perform blocking I/O.
@@ -139,12 +157,12 @@
   "Update the workspace path in session state. Called after RPC response."
   [client session-id workspace-path]
   (when workspace-path
-    (swap! (:state client) assoc-in [:sessions session-id :workspace-path] workspace-path)))
+    (update-session! client session-id assoc :workspace-path workspace-path)))
 
 (defn set-capabilities!
   "Store host capabilities in session state. Called after session.create/session.resume RPC."
   [client session-id capabilities]
-  (swap! (:state client) assoc-in [:sessions session-id :capabilities] (or capabilities {})))
+  (update-session! client session-id assoc :capabilities (or capabilities {})))
 
 ;; --- Open canvas snapshot (upstream PR #1604) -------------------------------
 ;; The CLI host can open auxiliary UI canvases inside a session. The SDK keeps
@@ -184,8 +202,7 @@
       (log/warn "dropping invalid entries from session.resume openCanvases"
                 {:session-id session-id
                  :dropped-count (count invalid)}))
-    (swap! (:state client) assoc-in [:sessions session-id :open-canvases]
-           (vec valid))))
+    (update-session! client session-id assoc :open-canvases (vec valid))))
 
 (defn upsert-open-canvas!
   "Apply a `session.canvas.opened` event payload to the snapshot. If an entry
@@ -198,15 +215,15 @@
     (log/warn "failed to deserialize session.canvas.opened payload"
               {:session-id session-id})
     (let [iid (:instance-id data)]
-      (swap! (:state client) update-in [:sessions session-id :open-canvases]
-             (fn [canvases]
-               (let [canvases (vec (or canvases []))
-                     idx (first (keep-indexed
-                                 (fn [i c] (when (= (:instance-id c) iid) i))
-                                 canvases))]
-                 (if idx
-                   (assoc canvases idx data)
-                   (conj canvases data))))))))
+      (update-session! client session-id update :open-canvases
+                       (fn [canvases]
+                         (let [canvases (vec (or canvases []))
+                               idx (first (keep-indexed
+                                           (fn [i c] (when (= (:instance-id c) iid) i))
+                                           canvases))]
+                           (if idx
+                             (assoc canvases idx data)
+                             (conj canvases data))))))))
 
 (defn remove-open-canvas!
   "Apply a `session.canvas.closed` event payload to the snapshot — removes the
@@ -218,9 +235,9 @@
     (if-not (and (string? iid) (not (str/blank? iid)))
       (log/warn "failed to deserialize session.canvas.closed payload"
                 {:session-id session-id})
-      (swap! (:state client) update-in [:sessions session-id :open-canvases]
-             (fn [canvases]
-               (filterv #(not= (:instance-id %) iid) (or canvases [])))))))
+      (update-session! client session-id update :open-canvases
+                       (fn [canvases]
+                         (filterv #(not= (:instance-id %) iid) (or canvases [])))))))
 
 (defn register-transform-callbacks!
   "Store system message transform callbacks on a session.
@@ -228,7 +245,7 @@
    that receive current content and return transformed content."
   [client session-id callbacks]
   (when callbacks
-    (swap! (:state client) assoc-in [:sessions session-id :transform-callbacks] callbacks)))
+    (update-session! client session-id assoc :transform-callbacks callbacks)))
 
 (defn- validate-session-fs-handler!
   [handler context]
@@ -268,7 +285,7 @@
               {:session-id session-id
                :capabilities (get-in client [:session-fs :capabilities])
                :missing-handlers (vec missing)})))
-    (swap! (:state client) assoc-in [:sessions session-id :session-fs-handler] validated)))
+    (update-session! client session-id assoc :session-fs-handler validated)))
 
 (defn- channel?
   "Check if x is a core.async channel."
@@ -769,11 +786,19 @@
                    :execution-token execution-token
                    :cancelled? (atom false)
                    :cancel-chan (chan)}]
-    (swap! (:state client)
-           assoc-in
-           [:sessions session-id :factory-executions run-id execution-token]
-           execution)
-    execution))
+    (when (identical?
+           execution
+           (get-in
+            (swap! (:state client)
+                   (fn [state]
+                     (let [session (get-in state [:sessions session-id])]
+                       (if (and session (not (:destroyed? session)))
+                         (assoc-in state
+                                   [:sessions session-id :factory-executions run-id execution-token]
+                                   execution)
+                         state))))
+            [:sessions session-id :factory-executions run-id execution-token]))
+      execution)))
 
 (defn- remove-factory-execution!
   [client session-id run-id execution-token execution]
@@ -791,17 +816,60 @@
                               dissoc
                               run-id))))))))
 
-(defn- cancel-factory-executions! [client session-id run-id]
+(defn- cancel-executions! [executions]
   (doseq [{:keys [cancelled? cancel-chan]}
-          (vals (get-in @(:state client)
-                        [:sessions session-id :factory-executions run-id]))]
+          executions]
     (reset! cancelled? true)
     (close! cancel-chan)))
 
+(defn- cancel-factory-executions! [client session-id run-id]
+  (cancel-executions!
+   (vals (get-in @(:state client)
+                 [:sessions session-id :factory-executions run-id]))))
+
 (defn- cancel-all-factory-executions! [client session-id]
-  (doseq [run-id (keys (get-in @(:state client)
-                               [:sessions session-id :factory-executions]))]
-    (cancel-factory-executions! client session-id run-id)))
+  (cancel-executions!
+   (mapcat vals
+           (vals (get-in @(:state client)
+                         [:sessions session-id :factory-executions])))))
+
+(defn ^:no-doc teardown-local!
+  "Mark a session terminal and release resources without contacting the runtime."
+  [client session-id]
+  (let [[old _] (swap-vals! (:state client)
+                            (fn [state]
+                              (let [session (get-in state [:sessions session-id])]
+                                (if (or (nil? session) (:destroyed? session))
+                                  state
+                                  (assoc-in state
+                                            [:sessions session-id]
+                                            (assoc session
+                                                   :destroyed? true
+                                                   :tool-handlers {}
+                                                   :permission-handler nil
+                                                   :user-input-handler nil
+                                                   :factories {}
+                                                   :factory-executions {}
+                                                   :hooks {}
+                                                   :config nil))))))]
+    (cond
+      (nil? (get-in old [:sessions session-id]))
+      :absent
+
+      (get-in old [:sessions session-id :destroyed?])
+      :already-destroyed
+
+      :else
+      (do
+        (cancel-executions!
+         (mapcat vals
+                 (vals (get-in old [:sessions session-id :factory-executions]))))
+        (let [{:keys [event-chan send-lock]} (get-in old [:session-io session-id])]
+          (when event-chan
+            (close! event-chan))
+          (when send-lock
+            (close! send-lock)))
+        :claimed))))
 
 (defn- factory-context
   [client session-id {:keys [run-id execution-token args] :as _params} execution]
@@ -887,35 +955,37 @@
   (async/thread-call
    (fn []
      (if-let [handle (get-in @(:state client) [:sessions session-id :factories name])]
-       (let [execution (register-factory-execution!
-                        client session-id run-id execution-token)
-             context (factory-context client session-id params execution)
-             flush! (::flush-progress! context)]
-         (try
-           (let [result (await-factory-value
-                         ((factory/factory-run-function handle)
-                          (dissoc context ::flush-progress!)))]
-             (flush!)
-             (cond
-               (nil? result) {:result {}}
-               (identical? factory/json-null result) {:result {:result nil}}
-               :else (do
-                       (assert-factory-json! result "Factory result")
-                       {:result {:result result}})))
-           (catch Throwable error
-             {:error {:code -32603
-                      :message (or (ex-message error) (str error))
-                      :data (serializable-ex-data error)}})
-           (finally
-             (try
+       (if-let [execution (register-factory-execution!
+                           client session-id run-id execution-token)]
+         (let [context (factory-context client session-id params execution)
+               flush! (::flush-progress! context)]
+           (try
+             (let [result (await-factory-value
+                           ((factory/factory-run-function handle)
+                            (dissoc context ::flush-progress!)))]
                (flush!)
-               (catch Throwable error
-                 (log/warn "Failed to flush final factory progress"
-                           {:session-id session-id
-                            :run-id run-id
-                            :error (ex-message error)})))
-             (remove-factory-execution!
-              client session-id run-id execution-token execution))))
+               (cond
+                 (nil? result) {:result {}}
+                 (identical? factory/json-null result) {:result {:result nil}}
+                 :else (do
+                         (assert-factory-json! result "Factory result")
+                         {:result {:result result}})))
+             (catch Throwable error
+               {:error {:code -32603
+                        :message (or (ex-message error) (str error))
+                        :data (serializable-ex-data error)}})
+             (finally
+               (try
+                 (flush!)
+                 (catch Throwable error
+                   (log/warn "Failed to flush final factory progress"
+                             {:session-id session-id
+                              :run-id run-id
+                              :error (ex-message error)})))
+               (remove-factory-execution!
+                client session-id run-id execution-token execution))))
+         {:error {:code -32001
+                  :message (str "Session has been disconnected: " session-id)}})
        {:error {:code -32602
                 :message (str "No factory registered with name " (pr-str name))
                 :data {:code "factory_not_found" :name name}}}))
@@ -1441,8 +1511,8 @@
   "Deep-merge capability changes into the session's capabilities map.
    Called when a capabilities.changed broadcast event is received."
   [client session-id capability-changes]
-  (swap! (:state client) update-in [:sessions session-id :capabilities]
-         (fn [caps] (deep-merge (or caps {}) capability-changes))))
+  (update-session! client session-id update :capabilities
+                   (fn [caps] (deep-merge (or caps {}) capability-changes))))
 
 ;; -----------------------------------------------------------------------------
 ;; Public API - functions that take CopilotSession handle
@@ -1484,7 +1554,7 @@
                      :explain (s/explain-data ::specs/send-options opts)})))
   (let [{:keys [session-id client]} session]
     (log/debug "send! called for session " session-id " with prompt: " (subs (str (:prompt opts)) 0 (min 50 (count (str (:prompt opts))))) "...")
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)
           wire-attachments (when (:attachments opts)
@@ -1521,7 +1591,7 @@
   ([session opts timeout-ms]
    (let [{:keys [session-id client]} session]
      (log/debug "send-and-wait! called for session " session-id)
-     (when (:destroyed? (session-state client session-id))
+     (when (session-disconnected? client session-id)
        (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
      (let [event-ch (chan 1024)
@@ -1590,7 +1660,7 @@
    (send-async* session opts nil))
   ([session opts timeout-ms]
    (let [{:keys [session-id client]} session]
-     (when (:destroyed? (session-state client session-id))
+     (when (session-disconnected? client session-id)
        (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
      (let [out-ch (chan 1024)
@@ -1668,7 +1738,7 @@
    Returns events-ch immediately; events flow once the go block completes setup."
   [session opts timeout-ms]
   (let [{:keys [session-id client]} session]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [out-ch (chan 1024)
           event-ch (chan 1024)
@@ -1848,7 +1918,7 @@
   "Abort the currently processing message in this session."
   [session]
   (let [{:keys [session-id client]} session]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)]
       (proto/send-request! conn "session.abort" {:session-id session-id})
@@ -1880,7 +1950,7 @@
   "Get all events/messages from this session's history."
   [session]
   (let [{:keys [session-id client]} session]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (let [conn (connection-io client)
           result (proto/send-request! conn "session.getMessages" {:session-id session-id})]
@@ -1945,7 +2015,7 @@
    core.async variant."
   [session {:keys [request-id result error] :as opts}]
   (let [{:keys [session-id client]} session]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (check-pending-request-id! request-id opts)
     (when-not (or (contains? opts :result) (contains? opts :error))
@@ -1966,7 +2036,7 @@
   [session opts]
   (let [{:keys [session-id client]} session
         {:keys [request-id result error]} opts]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (check-pending-request-id! request-id opts)
     (when-not (or (contains? opts :result) (contains? opts :error))
@@ -2004,7 +2074,7 @@
    for the core.async variant."
   [session {:keys [request-id result] :as opts}]
   (let [{:keys [session-id client]} session]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (check-pending-request-id! request-id opts)
     (check-pending-permission-result! result opts)
@@ -2020,7 +2090,7 @@
   [session opts]
   (let [{:keys [session-id client]} session
         {:keys [request-id result]} opts]
-    (when (:destroyed? (session-state client session-id))
+    (when (session-disconnected? client session-id)
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     (check-pending-request-id! request-id opts)
     (check-pending-permission-result! result opts)
@@ -2042,37 +2112,15 @@
    (disconnect! (:client session) (:session-id session)))
   ([client session-id]
    (log/debug "Disconnecting session: " session-id)
-   ;; Atomically claim the teardown: only the caller that flips :destroyed?
-   ;; from falsey to true proceeds. Concurrent disconnect! calls on the same
-   ;; session then no-op instead of sending a second session.destroy RPC.
-   (let [[old _] (swap-vals! (:state client)
-                             (fn [s]
-                               (if (get-in s [:sessions session-id :destroyed?])
-                                 s
-                                 (assoc-in s [:sessions session-id :destroyed?] true))))]
-     (when-not (get-in old [:sessions session-id :destroyed?])
-       (let [conn (connection-io client)]
-         (cancel-all-factory-executions! client session-id)
-         ;; Try to notify server, but don't block forever if connection is broken
-         (try
-           (proto/send-request! conn "session.destroy" {:session-id session-id} 5000)
-           (catch Exception _
-             ;; Ignore errors - we're cleaning up anyway
-             nil))
-         ;; Clear handlers and closures to aid GC (:destroyed? already set above)
-         (update-session! client session-id assoc
-                          :tool-handlers {}
-                          :permission-handler nil
-                          :user-input-handler nil
-                          :factories {}
-                          :factory-executions {}
-                          :hooks {}
-                          :config nil)
-         ;; Close the event source channel - this propagates to all tapped channels
-         (when-let [{:keys [event-chan]} (session-io client session-id)]
-           (close! event-chan))
-         (log/debug "Session disconnected: " session-id)
-         nil)))))
+   (when-not (= :already-destroyed (teardown-local! client session-id))
+     ;; Try to notify server, but don't block forever if connection is broken.
+     (try
+       (proto/send-request! (connection-io client) "session.destroy" {:session-id session-id} 5000)
+       (catch Exception _
+         ;; Ignore errors - we're cleaning up anyway.
+         nil))
+     (log/debug "Session disconnected: " session-id))
+   nil))
 
 (defn destroy!
   "Deprecated: Use disconnect! instead. This function will be removed in a future release.
