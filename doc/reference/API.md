@@ -149,6 +149,8 @@ kebab-case ↔ camelCase wire convention (e.g. `:working-directory` ↔
 | `:auto-restart?` | boolean | `true` | Auto-restart on crash |
 | `:notification-queue-size` | number | `4096` | Max queued protocol notifications |
 | `:router-queue-size` | number | `4096` | Max queued non-session notifications |
+| `:request-handler-threads` | number | `16` | Max reverse-RPC handlers (hooks, sessionFs, factories, user input, etc.) executing concurrently. Handlers run on a bounded worker pool owned by the connection, never on core.async dispatch |
+| `:request-handler-queue-size` | number | `256` | Max reverse RPCs queued once every worker is busy. Beyond `threads + queue-size` outstanding requests the runtime receives an explicit `-32000` `request_handler_saturated` error |
 | `:tool-timeout-ms` | number | `120000` | Timeout for tool handlers returning channels |
 | `:cwd` | string | nil | Working directory for CLI process |
 | `:env` | map | nil | Environment variables |

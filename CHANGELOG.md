@@ -3,6 +3,48 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (reverse-RPC execution policy)
+- **Reverse request handlers run on a bounded worker pool** -- server-to-client RPC
+  handlers (hooks, `sessionFs.*`, factories, user input, provider tokens,
+  `systemMessage.transform`, etc.) are arbitrary caller code that may block, and
+  were previously invoked from inside a core.async `go` block. In core.async
+  1.8 `go` dispatch is backed by the same process-wide unbounded cached `:io`
+  executor as `thread-call`, so blocking handlers grew that shared pool without
+  limit: a 32-request reproducer entered all 32 handlers concurrently on
+  `async-io-*` threads. Handlers now execute on a bounded `ThreadPoolExecutor`
+  owned by the connection, on threads named `jsonrpc-request-worker-*`, and the
+  same reproducer now caps at the configured bound. The reader thread only
+  submits work, so it keeps routing responses and notifications while every
+  worker is busy.
+- **BREAKING (behavior)**: when more than
+  `:request-handler-threads` + `:request-handler-queue-size` reverse requests
+  are outstanding, the runtime now receives an explicit JSON-RPC
+  `-32000` error with `data.code` `request_handler_saturated` (including
+  `method`, `maxConcurrency`, and `queueSize`) instead of the request being
+  queued indefinitely. Nothing is silently dropped, and no timeout was added
+  around handler execution -- a wedged handler occupies exactly one worker and
+  is surfaced through the overload error and the new counters.
+- `disconnect` now shuts the handler pool down explicitly, interrupting blocked
+  handlers, and warns if workers fail to terminate rather than leaking them.
+
+### Added (reverse-RPC execution policy)
+- `:request-handler-threads` (default `16`) and `:request-handler-queue-size`
+  (default `256`) client options bound reverse-handler concurrency. Defaults are
+  well above realistic reverse-RPC concurrency, so existing hosts are unaffected.
+  These are the only new public keys; the worker/queue counters that back them
+  (`:dropped-notifications`, `:rejected-requests`, `:active-request-workers`,
+  `:queued-requests`, `:request-workers-terminated?`) are protocol-internal
+  diagnostics, not public API.
+
+### Fixed (observability)
+- **Notification-queue overflow is no longer silent** -- `dispatch-message!`
+  dropped notifications with a `debug` log and no counter. Drops are now logged
+  at `warn` with the method and a running total, and counted in
+  `protocol/connection-stats`. A deterministic saturation test proves the branch
+  is reachable and observable; it does **not** demonstrate that a terminal
+  session event can be lost, so no event prioritization or transport change was
+  made.
+
 ### Fixed (lifecycle)
 - **Force-stop session teardown** -- `force-stop!` now marks active sessions
   terminal, cancels local factory executions, closes event subscriptions and

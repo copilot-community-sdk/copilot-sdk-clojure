@@ -6,12 +6,14 @@
    - core.async channels for message flow
    - Single reader thread puts to incoming-ch
    - Writer go-loop takes from outgoing-ch
+   - Reverse requests run on a bounded worker pool owned by the connection
    - State is managed externally (passed in as atom)
    
    This design allows clean shutdown: closing NIO channels causes
    reader to throw AsynchronousCloseException and exit gracefully."
   (:require [clojure.data.json :as json]
-            [clojure.core.async :as async :refer [go go-loop <! >! >!! <!! chan close! put!]]
+            [clojure.core.async :as async :refer [go-loop <! >!! <!! chan close! put!]]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.string :as str]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.util :as util])
@@ -20,9 +22,33 @@
            [java.nio.channels Channels ReadableByteChannel WritableByteChannel ClosedChannelException]
            [java.nio.channels AsynchronousCloseException]
            [java.nio.charset StandardCharsets]
-           [java.util.concurrent LinkedBlockingQueue TimeUnit]))
+           [java.util.concurrent ArrayBlockingQueue LinkedBlockingQueue
+            RejectedExecutionException ThreadFactory ThreadPoolExecutor
+            ThreadPoolExecutor$AbortPolicy TimeUnit]
+           [java.util.concurrent.atomic AtomicLong]))
 
 (def ^:private content-length-header "Content-Length: ")
+
+(def ^:private request-worker-thread-name-prefix
+  "Thread-name prefix for a connection's reverse-request worker pool.
+
+   Reverse request handlers are arbitrary caller code, so they always run on a
+   thread with this prefix -- never on core.async `go` dispatch. In core.async
+   1.8 `go` dispatch shares the process-wide unbounded cached `:io` executor,
+   so blocking there grows that pool without bound."
+  "jsonrpc-request-worker-")
+
+(def ^:no-doc default-request-handler-threads
+  "Default cap on concurrently executing reverse request handlers.
+
+   Implementation support for `client`'s option defaults, not documented API."
+  16)
+
+(def ^:no-doc default-request-handler-queue-size
+  "Default number of reverse requests queued before overload is reported.
+
+   Implementation support for `client`'s option defaults, not documented API."
+  256)
 
 ;; -----------------------------------------------------------------------------
 ;; NIO-based Message Framing (Content-Length based, vscode-jsonrpc compatible)
@@ -116,7 +142,54 @@
             outgoing-ch                   ; channel for outgoing messages
             notification-queue            ; queue for notifications to avoid blocking reader
             notification-thread           ; Thread
-            read-thread])                 ; Thread
+            read-thread                   ; Thread
+            request-executor              ; bounded pool running reverse request handlers
+            rejected-requests             ; AtomicLong of overload-rejected reverse requests
+            dropped-notifications])       ; AtomicLong of notifications dropped on a full queue
+
+(defn- request-worker-thread-factory
+  []
+  (let [counter (AtomicLong.)]
+    (reify ThreadFactory
+      (newThread [_ runnable]
+        (doto (Thread. ^Runnable runnable
+                       (str request-worker-thread-name-prefix (.incrementAndGet counter)))
+          (.setDaemon true))))))
+
+(defn- make-request-executor
+  "Bounded worker pool that executes reverse request handlers.
+
+   Handlers are arbitrary caller code that may block, so they must not run on
+   core.async `go` dispatch. Concurrency is capped at `threads`, bursts are
+   absorbed by a bounded queue, and further submissions are rejected so the
+   caller can answer with an explicit overload error instead of blocking the
+   reader thread or silently discarding the request. Core threads time out, so
+   an idle connection holds no worker threads."
+  ^ThreadPoolExecutor [threads queue-size]
+  (doto (ThreadPoolExecutor. (int threads) (int threads)
+                             60 TimeUnit/SECONDS
+                             (ArrayBlockingQueue. (int queue-size))
+                             (request-worker-thread-factory)
+                             (ThreadPoolExecutor$AbortPolicy.))
+    (.allowCoreThreadTimeOut true)))
+
+(defn- connection-stats
+  "Snapshot of a connection's worker and queue counters, for diagnostics and
+   tests.
+
+   - `:dropped-notifications` -- notifications discarded because the bounded
+     notification queue was full
+   - `:rejected-requests` -- reverse requests answered with an overload error
+     because the handler pool was saturated
+   - `:active-request-workers` / `:queued-requests` -- current pool occupancy
+   - `:request-workers-terminated?` -- whether the handler pool has shut down"
+  [conn]
+  (let [^ThreadPoolExecutor executor (:request-executor conn)]
+    {:dropped-notifications (.get ^AtomicLong (:dropped-notifications conn))
+     :rejected-requests (.get ^AtomicLong (:rejected-requests conn))
+     :active-request-workers (.getActiveCount executor)
+     :queued-requests (.size (.getQueue executor))
+     :request-workers-terminated? (.isTerminated executor)}))
 
 ;; State path helpers
 (defn- conn-state [state-atom] (get @state-atom :connection))
@@ -266,36 +339,103 @@
 
     :else wire-result))
 
+(defn- run-request-handler!
+  "Execute one reverse request and answer the peer.
+
+   Runs on a worker thread, never inside `go`: `request-handler` is arbitrary
+   caller code that may perform ordinary blocking Clojure or Java work before
+   it returns its result channel.
+
+   There is deliberately no timeout around the handler's result. A wedged
+   handler occupies exactly one worker; the pool bound and the overload error
+   in [[handle-request!]] are what make that visible, rather than a fallback
+   that hides it."
+  [request-handler outgoing-ch method id params]
+  (try
+    (let [result (if request-handler
+                   (let [result-ch (request-handler method params)]
+                     (when-not (satisfies? async-protocols/ReadPort result-ch)
+                       (throw (ex-info "Request handler must return a core.async channel"
+                                       {:method method
+                                        :returned-type (some-> result-ch class str)})))
+                     (<!! result-ch))
+                   {:error {:code -32601 :message "Method not found"}})]
+      (if-let [error (:error result)]
+        (do
+          (log/debug "Request error response: " error)
+          (put! outgoing-ch {:jsonrpc "2.0" :id id :error (util/clj->wire error)}))
+        (do
+          (log/debug "Request success response for id=" id)
+          (put! outgoing-ch {:jsonrpc "2.0" :id id
+                             :result (preserve-outgoing-opaque-fields
+                                      method
+                                      (:result result)
+                                      (util/clj->wire (:result result)))}))))
+    (catch InterruptedException _
+      ;; Expected: `disconnect` interrupts workers still inside a handler.
+      (.interrupt (Thread/currentThread))
+      (log/debug "Reverse request worker interrupted for id=" id))
+    (catch Exception t
+      (log/error "Request handler exception for method=" method " id=" id ": " (ex-message t))
+      (put! outgoing-ch {:jsonrpc "2.0"
+                         :id id
+                         :error {:code -32603
+                                 :message (str "Internal error: " (ex-message t))}}))))
+
+(defn- reject-request!
+  "Answer a reverse request that the worker pool refused.
+
+   Saturation and shutdown are reported as explicit JSON-RPC errors. The
+   reader thread never blocks waiting for capacity."
+  [^ThreadPoolExecutor executor ^AtomicLong rejected-requests outgoing-ch method id]
+  (if (.isShutdown executor)
+    (do
+      (log/debug "Rejecting request during shutdown: method=" method " id=" id)
+      (put! outgoing-ch
+            {:jsonrpc "2.0"
+             :id id
+             :error {:code -32000
+                     :message "Connection closed"
+                     :data (util/clj->wire {:code "connection_closed"
+                                            :method method})}}))
+    (let [queue (.getQueue executor)
+          max-concurrency (.getMaximumPoolSize executor)
+          queue-size (+ (.size queue) (.remainingCapacity queue))
+          total (.incrementAndGet rejected-requests)]
+      (log/warn "Reverse request handler pool saturated, rejecting request: method=" method
+                " id=" id " max-concurrency=" max-concurrency
+                " queue-size=" queue-size " rejected-total=" total)
+      (put! outgoing-ch
+            {:jsonrpc "2.0"
+             :id id
+             :error {:code -32000
+                     :message "Reverse request handler pool saturated"
+                     :data (util/clj->wire {:code "request_handler_saturated"
+                                            :method method
+                                            :max-concurrency max-concurrency
+                                            :queue-size queue-size})}}))))
+
 (defn- handle-request!
-  "Handle an incoming request message (e.g., tool.call). Sends response via outgoing-ch."
-  [state-atom outgoing-ch msg]
-  (go
-    (let [request-handler (:request-handler (conn-state state-atom))
-          id (:id msg)
-          method (:method msg)
-          params (:params msg)]
-      (log/debug "Received request: method=" method " id=" id)
-      (try
-        (let [result (if request-handler
-                       (<! (request-handler method params))
-                       {:error {:code -32601 :message "Method not found"}})]
-          (if (:error result)
-            (do
-              (log/debug "Request error response: " (:error result))
-              (>! outgoing-ch {:jsonrpc "2.0" :id id :error (util/clj->wire (:error result))}))
-            (do
-              (log/debug "Request success response for id=" id)
-              (>! outgoing-ch {:jsonrpc "2.0" :id id
-                               :result (preserve-outgoing-opaque-fields
-                                        method
-                                        (:result result)
-                                        (util/clj->wire (:result result)))}))))
-        (catch Exception e
-          (log/error "Request handler exception: " (ex-message e))
-          (>! outgoing-ch {:jsonrpc "2.0"
-                           :id id
-                           :error {:code -32603
-                                   :message (str "Internal error: " (ex-message e))}}))))))
+  "Submit an incoming request message (e.g. hooks.invoke) to the connection's
+   bounded reverse-request worker pool.
+
+   Called on the reader thread. Submission is non-blocking, so the reader keeps
+   routing responses and notifications while handlers run."
+  [conn msg]
+  (let [{:keys [state-atom outgoing-ch]} conn
+        ^ThreadPoolExecutor executor (:request-executor conn)
+        request-handler (:request-handler (conn-state state-atom))
+        id (:id msg)
+        method (:method msg)
+        params (:params msg)]
+    (log/debug "Received request: method=" method " id=" id)
+    (try
+      (.execute executor
+                ^Runnable (fn []
+                            (run-request-handler! request-handler outgoing-ch
+                                                  method id params)))
+      (catch RejectedExecutionException _
+        (reject-request! executor (:rejected-requests conn) outgoing-ch method id)))))
 
 (defn- restore-extension-context-payloads
   "Restore the opaque `:payload` of each `extension_context` attachment from
@@ -485,7 +625,7 @@
 (defn- dispatch-message!
   "Route incoming message to appropriate handler."
   [conn msg]
-  (let [{:keys [state-atom incoming-ch outgoing-ch]} conn]
+  (let [{:keys [state-atom]} conn]
     ;; Responses need the originating request method to restore opaque factory
     ;; result values, so defer normalization until handle-response! claims the
     ;; pending entry.
@@ -493,16 +633,18 @@
       (handle-response! state-atom msg)
       (let [normalized (normalize-incoming msg)]
         (cond
-          ;; Request (has id and method) - handle and respond
+          ;; Request (has id and method) - hand off to the bounded worker pool
           (and (:id normalized) (:method normalized))
-          (handle-request! state-atom outgoing-ch normalized)
+          (handle-request! conn normalized)
 
           ;; Notification (has method, no id) - put to incoming-ch for routing
           (:method normalized)
           (do
             (log/debug "Received notification: method=" (:method normalized))
             (when-not (.offer ^LinkedBlockingQueue (:notification-queue conn) normalized)
-              (log/debug "Dropping notification due to full queue")))
+              (let [total (.incrementAndGet ^AtomicLong (:dropped-notifications conn))]
+                (log/warn "Dropping notification due to full queue: method="
+                          (:method normalized) " dropped-total=" total))))
 
           :else nil)))))
 
@@ -629,7 +771,8 @@
         write-ch (Channels/newChannel out)
         incoming-ch (chan 1024)
         outgoing-ch (chan 1024)
-        queue-size (or (get-in @state-atom [:options :notification-queue-size]) 4096)
+        options (get @state-atom :options)
+        queue-size (or (:notification-queue-size options) 4096)
         notification-queue (LinkedBlockingQueue. queue-size)
         conn (map->Connection
               {:read-channel read-ch
@@ -640,7 +783,14 @@
                :outgoing-ch outgoing-ch
                :notification-queue notification-queue
                :notification-thread nil
-               :read-thread nil})]
+               :read-thread nil
+               :request-executor (make-request-executor
+                                  (or (:request-handler-threads options)
+                                      default-request-handler-threads)
+                                  (or (:request-handler-queue-size options)
+                                      default-request-handler-queue-size))
+               :rejected-requests (AtomicLong.)
+               :dropped-notifications (AtomicLong.)})]
 
     ;; Start writer loop
     (start-write-loop! conn)
@@ -674,6 +824,30 @@
       (log/debug "JSON-RPC connection established")
       (assoc conn :read-thread thread))))
 
+(defn- shutdown-request-executor!
+  "Stop the reverse-request worker pool.
+
+   Blocked handlers are interrupted so a wedged handler cannot delay disconnect
+   indefinitely. A pool that still has not terminated is reported rather than
+   silently ignored -- a handler that swallows interruption is real diagnostic
+   information. Idempotent.
+
+   An interrupted wait is re-flagged on the calling thread rather than
+   swallowed, but is never propagated: `disconnect` must always reach the
+   channel closes and thread joins that follow it. A later teardown join may
+   legitimately consume the flag."
+  [^ThreadPoolExecutor executor]
+  (when executor
+    (.shutdownNow executor)
+    (let [terminated? (try
+                        (.awaitTermination executor 1000 TimeUnit/MILLISECONDS)
+                        (catch InterruptedException _
+                          (.interrupt (Thread/currentThread))
+                          false))]
+      (when-not terminated?
+        (log/warn "Reverse request handler pool did not terminate within 1000ms; "
+                  (.getActiveCount executor) " handler(s) still running")))))
+
 (defn disconnect
   "Close the connection gracefully.
    Closes NIO channels which causes reader thread to exit via AsynchronousCloseException."
@@ -688,6 +862,11 @@
     ;; clearing :running? so a concurrent send-request fails fast rather than
     ;; registering a new entry we'd miss.
     (drain-pending! state-atom {:code -32000 :message "Connection closed"})
+
+    ;; Interrupt running handlers and abandon queued reverse requests before
+    ;; closing outgoing-ch. A request rejected during this shutdown window gets
+    ;; a best-effort connection-closed response.
+    (shutdown-request-executor! (:request-executor conn))
 
     ;; Close outgoing channel first to stop write go-loop
     (close! (:outgoing-ch conn))

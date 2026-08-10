@@ -541,6 +541,8 @@
   :github.copilot-sdk.specs/remote?
   :github.copilot-sdk.specs/rename
   :github.copilot-sdk.specs/repository
+  :github.copilot-sdk.specs/request-handler-queue-size
+  :github.copilot-sdk.specs/request-handler-threads
   :github.copilot-sdk.specs/request-headers
   :github.copilot-sdk.specs/request-id
   :github.copilot-sdk.specs/requested-schema

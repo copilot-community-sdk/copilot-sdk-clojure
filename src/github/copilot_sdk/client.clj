@@ -159,6 +159,8 @@
    :auto-restart? false
    :notification-queue-size 4096
    :router-queue-size 4096
+   :request-handler-threads proto/default-request-handler-threads
+   :request-handler-queue-size proto/default-request-handler-queue-size
    :tool-timeout-ms 120000
    :env nil})
 
@@ -224,6 +226,14 @@
     - :auto-restart? - **DEPRECATED**: This option has no effect and will be removed in a future release.
     - :notification-queue-size - Max queued protocol notifications (default: 4096)
     - :router-queue-size - Max queued non-session notifications (default: 4096)
+    - :request-handler-threads - Max reverse-RPC handlers (hooks, sessionFs, factories,
+                       user input, etc.) executing concurrently (default: 16). Handlers run on
+                       a bounded worker pool owned by the connection, never on core.async
+                       dispatch, so a handler that blocks cannot grow threads without limit.
+    - :request-handler-queue-size - Max reverse RPCs queued once every worker is busy
+                       (default: 256). Beyond `threads + queue-size` outstanding requests the
+                       runtime receives an explicit `-32000` `request_handler_saturated`
+                       error rather than the request being dropped or stalled.
     - :tool-timeout-ms - Timeout for tool calls that return a channel (default: 120000)
     - :env           - Environment variables map
     - :github-token  - GitHub token for authentication (sets COPILOT_SDK_AUTH_TOKEN env var)
@@ -315,6 +325,14 @@
    (when-let [size (:router-queue-size opts)]
      (when (<= size 0)
        (throw (ex-info "router-queue-size must be > 0" {:router-queue-size size}))))
+   (when-let [threads (:request-handler-threads opts)]
+     (when (<= threads 0)
+       (throw (ex-info "request-handler-threads must be > 0"
+                       {:request-handler-threads threads}))))
+   (when-let [size (:request-handler-queue-size opts)]
+     (when (<= size 0)
+       (throw (ex-info "request-handler-queue-size must be > 0"
+                       {:request-handler-queue-size size}))))
    (when-let [timeout (:tool-timeout-ms opts)]
      (when (<= timeout 0)
        (throw (ex-info "tool-timeout-ms must be > 0" {:tool-timeout-ms timeout}))))
@@ -862,6 +880,12 @@
       (when (seq lines)
         (str/join "\n" lines)))))
 
+(defn- delivered-chan
+  "A channel already holding `v`, matching the reverse-request handler contract
+   `(fn [method params] -> channel)`."
+  [v]
+  (doto (chan 1) (async/put! v) (async/close!)))
+
 (defn- setup-request-handler!
   "Set up handler for incoming requests (hooks, user input, sessionFs, etc.).
 
@@ -870,92 +894,103 @@
    `session.event` — see [[handle-v3-tool-requested!]] and
    [[handle-v3-permission-requested!]] — not as server→client RPCs. The v2
    `tool.call` / `permission.request` dispatcher cases were removed
-   alongside upstream PR #1378."
+   alongside upstream PR #1378.
+
+   This is a plain dispatch function, not a `go` block: `protocol` invokes it on
+   its bounded reverse-request worker pool, so branches that do ordinary
+   blocking work (e.g. `systemMessage.transform` callbacks) run under that
+   bound instead of on core.async dispatch. Branches that delegate to a
+   `session/handle-*` function return its channel directly rather than parking
+   on it."
   [client]
-  (let [{:keys [connection-io]} @(:state client)]
-    (proto/set-request-handler! connection-io
-                                (fn [method params]
-                                  (go
-                                    (case method
-                                      ;; Exit Plan Mode request (upstream PR #1228)
-                                      "exitPlanMode.request"
-                                      (let [{:keys [session-id]} params
-                                            request (dissoc params :session-id)]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-exit-plan-mode-request! client session-id request))))
+  (let [{:keys [connection-io]} @(:state client)
+        session? (fn [session-id] (get-in @(:state client) [:sessions session-id]))
+        unknown-session (fn [session-id]
+                          (delivered-chan
+                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}))]
+    (proto/set-request-handler!
+     connection-io
+     (fn [method params]
+       (case method
+         ;; Exit Plan Mode request (upstream PR #1228)
+         "exitPlanMode.request"
+         (let [{:keys [session-id]} params
+               request (dissoc params :session-id)]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-exit-plan-mode-request! client session-id request)))
 
-                                      ;; Auto Mode Switch request (upstream PR #1228)
-                                      "autoModeSwitch.request"
-                                      (let [{:keys [session-id]} params
-                                            request (dissoc params :session-id)]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-auto-mode-switch-request! client session-id request))))
+         ;; Auto Mode Switch request (upstream PR #1228)
+         "autoModeSwitch.request"
+         (let [{:keys [session-id]} params
+               request (dissoc params :session-id)]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-auto-mode-switch-request! client session-id request)))
 
-                                      ;; User input request (PR #269)
-                                      "userInput.request"
-                                      (let [{:keys [session-id question choices allow-freeform]} params]
-                                        (log/debug "User input request for session " session-id ": " question)
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-user-input-request! client session-id
-                                                                                  {:question question
-                                                                                   :choices choices
-                                                                                   :allow-freeform allow-freeform}))))
+         ;; User input request (PR #269)
+         "userInput.request"
+         (let [{:keys [session-id question choices allow-freeform]} params]
+           (log/debug "User input request for session " session-id ": " question)
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-user-input-request! client session-id
+                                                 {:question question
+                                                  :choices choices
+                                                  :allow-freeform allow-freeform})))
 
-                                      ;; Bearer-token provider request (PR #1748)
-                                      "providerToken.getToken"
-                                      (let [{:keys [session-id provider-name]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-provider-token-request!
-                                               client session-id provider-name))))
+         ;; Bearer-token provider request (PR #1748)
+         "providerToken.getToken"
+         (let [{:keys [session-id provider-name]} params]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-provider-token-request! client session-id provider-name)))
 
-                                      ;; Hooks invocation (PR #269)
-                                      "hooks.invoke"
-                                      (let [{:keys [session-id hook-type input]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-hooks-invoke! client session-id hook-type input))))
+         ;; Hooks invocation (PR #269)
+         "hooks.invoke"
+         (let [{:keys [session-id hook-type input]} params]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-hooks-invoke! client session-id hook-type input)))
 
-                                      "factory.execute"
-                                      (let [{:keys [session-id]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-factory-execute!
-                                               client session-id params))))
+         "factory.execute"
+         (let [{:keys [session-id]} params]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-factory-execute! client session-id params)))
 
-                                      "factory.abort"
-                                      (let [{:keys [session-id run-id]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-factory-abort!
-                                               client session-id run-id))))
+         "factory.abort"
+         (let [{:keys [session-id run-id]} params]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-factory-abort! client session-id run-id)))
 
-                                      ;; System message transform (PR #816)
-                                      "systemMessage.transform"
-                                      (let [{:keys [session-id sections]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          {:result (session/handle-system-message-transform
-                                                    client session-id sections)}))
+         ;; System message transform (PR #816). Runs inline on the reverse-request
+         ;; worker, so the registered transform callbacks are covered by the
+         ;; handler concurrency bound.
+         "systemMessage.transform"
+         (let [{:keys [session-id sections]} params]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (delivered-chan
+              {:result (session/handle-system-message-transform
+                        client session-id sections)})))
 
-                                      ;; SessionFs operations (upstream PR #917, sqlite added in #1299)
-                                      ("sessionFs.readFile" "sessionFs.writeFile" "sessionFs.appendFile"
-                                                            "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
-                                                            "sessionFs.readdir" "sessionFs.readdirWithTypes"
-                                                            "sessionFs.rm" "sessionFs.rename"
-                                                            "sessionFs.sqliteQuery"
-                                                            "sessionFs.sqliteTransaction"
-                                                            "sessionFs.sqliteExists")
-                                      (let [{:keys [session-id]} params]
-                                        (if-not (get-in @(:state client) [:sessions session-id])
-                                          {:error {:code -32001 :message (str "Unknown session: " session-id)}}
-                                          (<! (session/handle-session-fs-request!
-                                               client session-id method params))))
+         ;; SessionFs operations (upstream PR #917, sqlite added in #1299)
+         ("sessionFs.readFile" "sessionFs.writeFile" "sessionFs.appendFile"
+                               "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
+                               "sessionFs.readdir" "sessionFs.readdirWithTypes"
+                               "sessionFs.rm" "sessionFs.rename"
+                               "sessionFs.sqliteQuery"
+                               "sessionFs.sqliteTransaction"
+                               "sessionFs.sqliteExists")
+         (let [{:keys [session-id]} params]
+           (if-not (session? session-id)
+             (unknown-session session-id)
+             (session/handle-session-fs-request! client session-id method params)))
 
-                                      {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
+         (delivered-chan
+          {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
 
 (defn- connect-stdio!
   "Connect via stdio to the CLI process."
