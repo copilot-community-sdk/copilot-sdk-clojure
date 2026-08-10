@@ -219,6 +219,25 @@
           (.countDown release)
           (protocol/disconnect conn))))))
 
+(deftest test-shutdown-rejection-returns-connection-closed-error
+  (testing "a reverse request racing with shutdown gets a best-effort response"
+    (let [{:keys [conn <-client]} (open-connection {})]
+      (try
+        (.shutdownNow ^java.util.concurrent.ThreadPoolExecutor
+         (:request-executor conn))
+        (#'protocol/handle-request!
+         conn (request "closing" "hooks.invoke" {}))
+        (let [responses (collect-by-id! <-client 1 3000)]
+          (is (not= ::timeout responses))
+          (when (not= ::timeout responses)
+            (is (= -32000 (get-in responses ["closing" :error :code])))
+            (is (= "connection_closed"
+                   (get-in responses ["closing" :error :data :code])))
+            (is (= "hooks.invoke"
+                   (get-in responses ["closing" :error :data :method])))))
+        (finally
+          (protocol/disconnect conn))))))
+
 (deftest test-router-stays-responsive-while-workers-are-blocked
   (testing "the reader thread keeps routing while every worker is blocked"
     (let [{:keys [conn ->client]} (open-connection {:request-handler-threads 1

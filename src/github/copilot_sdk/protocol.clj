@@ -383,14 +383,21 @@
                                  :message (str "Internal error: " (ex-message t))}}))))
 
 (defn- reject-request!
-  "Answer a reverse request that the saturated worker pool refused.
+  "Answer a reverse request that the worker pool refused.
 
-   Overload is reported to the peer as an explicit JSON-RPC error: the request
-   is never silently dropped, and the reader thread is never blocked waiting
-   for capacity."
+   Saturation and shutdown are reported as explicit JSON-RPC errors. The
+   reader thread never blocks waiting for capacity."
   [^ThreadPoolExecutor executor ^AtomicLong rejected-requests outgoing-ch method id]
   (if (.isShutdown executor)
-    (log/debug "Ignoring request during shutdown: method=" method " id=" id)
+    (do
+      (log/debug "Rejecting request during shutdown: method=" method " id=" id)
+      (put! outgoing-ch
+            {:jsonrpc "2.0"
+             :id id
+             :error {:code -32000
+                     :message "Connection closed"
+                     :data (util/clj->wire {:code "connection_closed"
+                                            :method method})}}))
     (let [queue (.getQueue executor)
           max-concurrency (.getMaximumPoolSize executor)
           queue-size (+ (.size queue) (.remainingCapacity queue))
@@ -856,8 +863,9 @@
     ;; registering a new entry we'd miss.
     (drain-pending! state-atom {:code -32000 :message "Connection closed"})
 
-    ;; Release reverse-request workers before closing outgoing-ch, so a handler
-    ;; that is mid-flight can still emit its response.
+    ;; Interrupt running handlers and abandon queued reverse requests before
+    ;; closing outgoing-ch. A request rejected during this shutdown window gets
+    ;; a best-effort connection-closed response.
     (shutdown-request-executor! (:request-executor conn))
 
     ;; Close outgoing channel first to stop write go-loop
