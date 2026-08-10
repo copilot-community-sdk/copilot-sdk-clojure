@@ -232,13 +232,15 @@
 
 (defn- query-seq-source
   [prompt & {:keys [client session max-events] :or {max-events 256}}]
+  (when-not (nat-int? max-events)
+    (throw (ex-info ":max-events must be a non-negative integer"
+                    {:max-events max-events})))
   (let [c (ensure-client! client)
         session-config (build-session-config session)
         sess (copilot/create-session c session-config)
         done? (atom false)]
     (letfn [(finish! []
-              (when-not @done?
-                (reset! done? true)
+              (when (compare-and-set! done? false true)
                 (copilot/disconnect! sess)))
             (event-seq [events-ch remaining]
               (lazy-seq

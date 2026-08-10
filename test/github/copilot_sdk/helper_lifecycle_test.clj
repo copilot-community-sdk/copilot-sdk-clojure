@@ -110,6 +110,21 @@
              (h/query-seq! "setup failure")))
         (is (= 1 (count @disconnects)))))))
 
+(deftest query-seq-source-rejects-invalid-max-events-before-setup
+  (let [setup-called? (atom false)]
+    (with-redefs-fn {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
+                     (fn [_client-opts]
+                       (reset! setup-called? true)
+                       (throw (ex-info "setup should not run" {})))}
+      (fn []
+        (doseq [max-events [-1 nil "1"]]
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #":max-events must be a non-negative integer"
+               (h/with-query-seq [events "invalid" :max-events max-events]
+                 (doall events)))))))
+    (is (false? @setup-called?))))
+
 (deftest query-seq-natural-terminal-cleanup-is-idempotent
   (with-single-helper-client [copilot-client]
     (let [disconnects (atom 0)]
@@ -119,6 +134,27 @@
                       nil)]
         (let [events (doall (h/query-seq! "natural"))]
           (is (some #(= :copilot/session.idle (:type %)) events))
+          (is (= 1 @disconnects)))))))
+
+(deftest query-seq-source-finish-is-thread-safe
+  (with-single-helper-client [_copilot-client]
+    (let [source-var (requiring-resolve 'github.copilot-sdk.helpers/query-seq-source)
+          disconnects (atom 0)
+          disconnect-entered (promise)
+          release-disconnect (promise)]
+      (with-redefs [sdk/disconnect!
+                    (fn [_session]
+                      (deliver disconnect-entered true)
+                      @release-disconnect
+                      (swap! disconnects inc)
+                      nil)]
+        (let [[_events finish!] (source-var "concurrent finish")
+              first-call (future (finish!))]
+          (is (true? (deref disconnect-entered 1000 false)))
+          (let [second-call (future (finish!))]
+            (is (nil? (deref second-call 1000 ::timeout))))
+          (deliver release-disconnect true)
+          (is (nil? (deref first-call 1000 ::timeout)))
           (is (= 1 @disconnects)))))))
 
 (deftest max-events-zero-is-valid-under-instrumentation
