@@ -9170,7 +9170,7 @@
           killed? (atom false)]
       (swap! (:state *test-client*) assoc :process {:placeholder true})
       (with-redefs [proc/wait-for-exit! (fn [_ _] (reset! waited? true) true)
-                    proc/destroy! (fn [_] (reset! killed? true))]
+                    proc/destroy! (fn [_] (reset! killed? true) [])]
         (sdk/stop! *test-client*))
       (is @waited? "stop! waits for natural exit after runtime.shutdown succeeds")
       (is (not @killed?)
@@ -9180,7 +9180,7 @@
     (let [killed? (atom false)]
       (swap! (:state *test-client*) assoc :process {:placeholder true})
       (with-redefs [proc/wait-for-exit! (fn [_ _] false)
-                    proc/destroy! (fn [_] (reset! killed? true))]
+                    proc/destroy! (fn [_] (reset! killed? true) [])]
         (sdk/stop! *test-client*))
       (is @killed?
           "stop! kills the child if it does not exit within the graceful window")))
@@ -9195,7 +9195,7 @@
                         (throw (ex-info "boom" {})))
                       nil)
                     proc/wait-for-exit! (fn [_ _] (reset! waited? true) true)
-                    proc/destroy! (fn [_] (reset! killed? true))]
+                    proc/destroy! (fn [_] (reset! killed? true) [])]
         (sdk/stop! *test-client*))
       (is (not @waited?)
           "stop! does not wait for natural exit when runtime.shutdown failed")
