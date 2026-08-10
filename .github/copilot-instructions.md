@@ -191,6 +191,7 @@ src/github/copilot_sdk/
 ├── util.clj         # Wire conversion (camelCase ↔ kebab-case), MCP helpers
 ├── protocol.clj     # JSON-RPC 2.0 protocol over NIO channels
 ├── process.clj      # CLI process management (spawning, lifecycle)
+├── teardown.clj     # Shared teardown-outcome contract (expected vs unexpected cleanup failures)
 ├── logging.clj      # Logging facade via clojure.tools.logging
 └── generated/       # AUTO-GENERATED — produced by `bb codegen`. Do not edit.
     ├── event_specs.clj  # clojure.spec for upstream session events

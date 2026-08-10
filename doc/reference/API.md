@@ -203,6 +203,12 @@ timeout or error the SDK falls back to terminating the process (SIGTERM, then
 SIGKILL). Connecting to an external server (`:cli-url`) skips the shutdown RPC and
 the process is left running. (upstream [PR #1667](https://github.com/github/copilot-sdk/pull/1667))
 
+Returns a vector of any errors encountered during cleanup — a failed session
+disconnect, a failed `runtime.shutdown`, or a transport resource that could not
+be released. An empty vector means everything shut down cleanly. Errors are
+reported rather than thrown, so a single failure never leaves the rest of the
+teardown undone.
+
 #### `force-stop!`
 
 ```clojure
@@ -212,6 +218,13 @@ the process is left running. (upstream [PR #1667](https://github.com/github/copi
 Force stop the CLI server without graceful RPCs. It closes local session event
 subscriptions and releases in-flight session work before closing the transport
 and terminating an SDK-owned process. Use when `stop!` takes too long.
+
+The forced kill is confirmed rather than assumed: the child is signalled and
+then waited on for a bounded window. A child that survives is logged with its
+resource identity, and its handle is kept in client state so the host is never
+left holding no reference to a live process. The wait ends as soon as the child
+dies, so it is a worst-case bound, not a fixed delay. `force-stop!` still
+returns `nil`.
 
 #### `client-options`
 

@@ -16,6 +16,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.string :as str]
             [github.copilot-sdk.logging :as log]
+            [github.copilot-sdk.teardown :as td]
             [github.copilot-sdk.util :as util])
   (:import [java.io InputStream OutputStream IOException]
            [java.nio ByteBuffer]
@@ -714,13 +715,6 @@
                              (when-let [msg (.poll write-queue 100 java.util.concurrent.TimeUnit/MILLISECONDS)]
                                (when (and (:running? (conn-state state-atom)) (.isOpen write-channel))
                                  (try
-                                   (when (and (:id msg)
-                                              (not (:method msg))
-                                              (map? (:result msg))
-                                              (or (contains? (:result msg) :kind)
-                                                  (and (map? (:result (:result msg)))
-                                                       (contains? (:result (:result msg)) :kind))))
-                                     (log/debug "Sending permission response: " (json/write-str msg)))
                                    (log/debug "Writing message: " (if (:id msg) (str "id=" (:id msg)) "notification"))
                                    (write-message! write-channel msg)
                                    (.flush output-stream)
@@ -850,7 +844,11 @@
 
 (defn disconnect
   "Close the connection gracefully.
-   Closes NIO channels which causes reader thread to exit via AsynchronousCloseException."
+   Closes NIO channels which causes reader thread to exit via AsynchronousCloseException.
+
+   Returns a vector of `ex-info` values describing *unexpected* teardown
+   failures; expected close/interruption outcomes are not reported. Every step
+   runs even when an earlier one fails, and the whole sequence is idempotent."
   [conn]
   (log/debug "Disconnecting JSON-RPC connection")
   (let [state-atom (:state-atom conn)]
@@ -871,28 +869,33 @@
     ;; Close outgoing channel first to stop write go-loop
     (close! (:outgoing-ch conn))
 
-    ;; Interrupt writer thread if it exists
-    (when-let [^Thread writer (:writer-thread (conn-state state-atom))]
-      (.interrupt writer)
-      (try (.join writer 500) (catch Exception _)))
+    (let [failures
+          (td/collect
+           [;; Interrupt writer thread if it exists
+            (when-let [^Thread writer (:writer-thread (conn-state state-atom))]
+              (td/attempt {:operation :join :resource :writer-thread}
+                          (.interrupt writer)
+                          (.join writer 500)))
 
-    ;; Interrupt notification dispatcher thread
-    (when-let [^Thread thread (:notification-thread (conn-state state-atom))]
-      (.interrupt thread)
-      (try (.join thread 500) (catch Exception _)))
+            ;; Interrupt notification dispatcher thread
+            (when-let [^Thread thread (:notification-thread (conn-state state-atom))]
+              (td/attempt {:operation :join :resource :notification-thread}
+                          (.interrupt thread)
+                          (.join thread 500)))
 
-    ;; Close NIO channels - this unblocks any blocked reads
-    (try (.close ^ReadableByteChannel (:read-channel conn)) (catch Exception _))
-    (try (.close ^WritableByteChannel (:write-channel conn)) (catch Exception _))
+            ;; Close NIO channels - this unblocks any blocked reads
+            (td/attempt {:operation :close :resource :read-channel}
+                        (.close ^ReadableByteChannel (:read-channel conn)))
+            (td/attempt {:operation :close :resource :write-channel}
+                        (.close ^WritableByteChannel (:write-channel conn)))
 
-    ;; Wait for read thread to exit
-    (when-let [^Thread thread (:read-thread conn)]
-      (try
-        (.interrupt thread)
-        (.join thread 1000)
-        (catch Exception _)))
-
-    (log/debug "JSON-RPC connection closed")))
+            ;; Wait for read thread to exit
+            (when-let [^Thread thread (:read-thread conn)]
+              (td/attempt {:operation :join :resource :read-thread}
+                          (.interrupt thread)
+                          (.join thread 1000)))])]
+      (log/debug "JSON-RPC connection closed")
+      failures)))
 
 (defn- remove-pending-by-chan!
   "Remove a pending request entry by channel identity."

@@ -8,25 +8,48 @@
 ;; Re-export tools.logging macros for SDK use
 ;; Users can configure logging backend (SLF4J) as they prefer
 
+(defn- log-form
+  "Build the expansion for a facade logging macro.
+
+   A leading Throwable is handed to the backend as a throwable so it keeps the
+   backend's stack-trace rendering; the remaining arguments form the message.
+   Otherwise every argument is concatenated into the message as before.
+
+   Every argument is evaluated exactly once, and only after the level is known
+   to be enabled: the whole form sits inside `enabled?`, so a disabled level
+   costs nothing no matter how expensive the arguments are.
+
+   Only tools.logging's portable `(log level throwable message)` arity is used,
+   so this works on any SLF4J backend. Both `enabled?` and `log` capture the
+   calling namespace, so events stay attributed to the caller rather than to
+   this facade."
+  [level args]
+  `(when (log/enabled? ~level)
+     (let [args# [~@args]
+           throwable?# (instance? Throwable (first args#))]
+       (log/log ~level
+                (when throwable?# (first args#))
+                (apply str (if throwable?# (rest args#) args#))))))
+
 (defmacro debug
-  "Log a debug message."
+  "Log a debug message. A leading Throwable is attached to the log event."
   [& args]
-  `(log/debug (str ~@args)))
+  (log-form :debug args))
 
 (defmacro info
-  "Log an info message."
+  "Log an info message. A leading Throwable is attached to the log event."
   [& args]
-  `(log/info (str ~@args)))
+  (log-form :info args))
 
 (defmacro warn
-  "Log a warning message."
+  "Log a warning message. A leading Throwable is attached to the log event."
   [& args]
-  `(log/warn (str ~@args)))
+  (log-form :warn args))
 
 (defmacro error
-  "Log an error message."
+  "Log an error message. A leading Throwable is attached to the log event."
   [& args]
-  `(log/error (str ~@args)))
+  (log-form :error args))
 
 ;; Legacy compatibility - no-op since logging config is via SLF4J backend
 (defn set-log-level!

@@ -91,7 +91,8 @@
     (with-redefs [protocol/disconnect
                   (fn [_]
                     (reset! handlers-at-disconnect
-                            (:lifecycle-handlers @(:state client))))]
+                            (:lifecycle-handlers @(:state client)))
+                    [])]
       (sdk/force-stop! client))
     (is (= {} @handlers-at-disconnect))))
 
