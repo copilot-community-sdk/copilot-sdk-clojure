@@ -252,7 +252,7 @@
           (protocol/disconnect conn))))))
 
 (deftest test-response-and-error-delivery
-  (testing "results, handler errors, exceptions, and missing handlers all answer"
+  (testing "results, handler errors, contract violations, and exceptions all answer"
     (let [{:keys [conn ->client <-client]} (open-connection {})]
       (try
         (protocol/set-request-handler!
@@ -264,14 +264,16 @@
              "sessionFs.sqliteQuery" (delivered {:result {:rows [{:user_id 7}]
                                                           :rows-affected 0}})
              "handler-error" (delivered {:error {:code -32001 :message "nope"}})
+             "nil-handler" nil
              "boom" (throw (ex-info "handler blew up" {}))
              (delivered {:error {:code -32601 :message "Unknown method"}}))))
         (doseq [[id method] [["ok" "ok"]
                              ["sql" "sessionFs.sqliteQuery"]
                              ["err" "handler-error"]
+                             ["nil" "nil-handler"]
                              ["boom" "boom"]]]
           (write-framed! ->client (request id method {})))
-        (let [responses (collect-by-id! <-client 4 5000)]
+        (let [responses (collect-by-id! <-client 5 5000)]
           (is (not= ::timeout responses))
           (when (not= ::timeout responses)
             (is (= 1 (get-in responses ["ok" :result :someKey]))
@@ -281,6 +283,9 @@
             (is (= 0 (get-in responses ["sql" :result :rowsAffected]))
                 "sibling SDK fields are still converted")
             (is (= -32001 (get-in responses ["err" :error :code])))
+            (is (= -32603 (get-in responses ["nil" :error :code])))
+            (is (str/includes? (get-in responses ["nil" :error :message])
+                               "must return a core.async channel"))
             (is (= -32603 (get-in responses ["boom" :error :code]))
                 "a throwing handler becomes an internal error")
             (is (str/includes? (get-in responses ["boom" :error :message])

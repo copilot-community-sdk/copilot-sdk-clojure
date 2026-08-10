@@ -13,6 +13,7 @@
    reader to throw AsynchronousCloseException and exit gracefully."
   (:require [clojure.data.json :as json]
             [clojure.core.async :as async :refer [go-loop <! >!! <!! chan close! put!]]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.string :as str]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.util :as util])
@@ -352,7 +353,12 @@
   [request-handler outgoing-ch method id params]
   (try
     (let [result (if request-handler
-                   (<!! (request-handler method params))
+                   (let [result-ch (request-handler method params)]
+                     (when-not (satisfies? async-protocols/ReadPort result-ch)
+                       (throw (ex-info "Request handler must return a core.async channel"
+                                       {:method method
+                                        :returned-type (some-> result-ch class str)})))
+                     (<!! result-ch))
                    {:error {:code -32601 :message "Method not found"}})]
       (if-let [error (:error result)]
         (do
@@ -369,7 +375,7 @@
       ;; Expected: `disconnect` interrupts workers still inside a handler.
       (.interrupt (Thread/currentThread))
       (log/debug "Reverse request worker interrupted for id=" id))
-    (catch Throwable t
+    (catch Exception t
       (log/error "Request handler exception for method=" method " id=" id ": " (ex-message t))
       (put! outgoing-ch {:jsonrpc "2.0"
                          :id id
