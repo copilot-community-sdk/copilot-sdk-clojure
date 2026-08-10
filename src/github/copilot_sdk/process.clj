@@ -1,7 +1,9 @@
 (ns github.copilot-sdk.process
   "Process management for spawning and managing the Copilot CLI."
   (:require [clojure.core.async :as async :refer [chan close! >!!]]
-            [clojure.string :as str])
+            [clojure.string :as str]
+            [github.copilot-sdk.logging :as log]
+            [github.copilot-sdk.teardown :as td])
   (:import [java.lang ProcessBuilder ProcessBuilder$Redirect]
            [java.io File]
            [java.net Socket]))
@@ -163,29 +165,82 @@
         :stderr (.getErrorStream process)
         :exit-chan exit-chan}))))
 
+(def ^:private forcible-wait-timeout-ms
+  "How long to wait for a SIGKILLed child to actually disappear."
+  2000)
+
+(defn- force-kill-and-confirm!
+  "SIGKILL `p` and confirm it is gone within `forcible-wait-timeout-ms`.
+
+   Returns a vector of unexpected teardown failures: the signal call throwing,
+   the wait throwing, or the child still running once the window elapses. An
+   empty vector means the child is confirmed dead."
+  [^Process p]
+  (let [exited? (volatile! false)
+        step {:operation :wait-for-exit :resource :process
+              :stage :forcible :timeout-ms forcible-wait-timeout-ms}
+        signal-failure (td/attempt {:operation :destroy-forcibly :resource :process}
+                                   (.destroyForcibly p))
+        wait-failure (td/attempt step
+                                 (vreset! exited?
+                                          (.waitFor p forcible-wait-timeout-ms
+                                                    java.util.concurrent.TimeUnit/MILLISECONDS)))]
+    (td/collect
+     [signal-failure
+      wait-failure
+      ;; The wait returning false means the child outlived SIGKILL. Only report
+      ;; it when the wait itself did not already fail, so one condition is not
+      ;; reported twice.
+      (when (and (nil? wait-failure) (not @exited?))
+        (td/failure step))])))
+
 (defn destroy!
-  "Destroy the process gracefully with timeout."
+  "Destroy the process gracefully with timeout.
+
+   Returns a vector of `ex-info` values describing *unexpected* teardown
+   failures; an interrupted wait is re-flagged on the calling thread rather
+   than reported. Every step runs even when an earlier one fails.
+
+   A process that is still running after the forced kill window is itself an
+   unexpected failure: it is reported with `:operation :wait-for-exit`,
+   `:resource :process`, and the `:stage`/`:timeout-ms` that failed, so callers
+   never mistake a surviving child for a clean teardown."
   ([^ManagedProcess mp]
    (destroy! mp 5000))
   ([^ManagedProcess mp timeout-ms]
-   (when-let [^Process p (:process mp)]
-     (.destroy p)
-     ;; Wait for process to exit with timeout
-     (let [exited (try
-                    (.waitFor p timeout-ms java.util.concurrent.TimeUnit/MILLISECONDS)
-                    (catch Exception _ false))]
-       (when-not exited
-         ;; Force kill if still running
-         (.destroyForcibly p)
-         (try
-           (.waitFor p 2000 java.util.concurrent.TimeUnit/MILLISECONDS)
-           (catch Exception _)))))))
+   (if-let [^Process p (:process mp)]
+     (let [exited? (volatile! false)
+           graceful-step {:operation :wait-for-exit :resource :process
+                          :stage :graceful :timeout-ms timeout-ms}
+           destroy-failure (td/attempt {:operation :destroy :resource :process}
+                                       (.destroy p))
+           wait-failure (td/attempt graceful-step
+                                    (vreset! exited?
+                                             (.waitFor p timeout-ms
+                                                       java.util.concurrent.TimeUnit/MILLISECONDS)))]
+       (if @exited?
+         (td/collect [destroy-failure wait-failure])
+         ;; Still running (or the wait itself failed): force kill, then confirm.
+         (td/collect (concat [destroy-failure wait-failure]
+                             (force-kill-and-confirm! p)))))
+     [])))
 
 (defn destroy-forcibly!
-  "Force destroy the process."
+  "Force destroy the process, then confirm it is gone.
+
+   Sends SIGKILL and waits up to a bounded window for the child to disappear,
+   because a signal that was merely *sent* proves nothing: without the wait a
+   surviving child is indistinguishable from a dead one, and the caller would
+   discard its only handle to a live process.
+
+   Returns `[]` only when the child is confirmed exited; otherwise a vector of
+   identity-rich `ex-info` failures (`:operation`, `:resource`, `:stage`,
+   `:timeout-ms`). The wait ends as soon as the child dies, so the bound is a
+   worst case, not a fixed delay."
   [^ManagedProcess mp]
-  (when-let [^Process p (:process mp)]
-    (.destroyForcibly p)))
+  (if-let [^Process p (:process mp)]
+    (force-kill-and-confirm! p)
+    []))
 
 (defn alive?
   "Check if process is still running."
@@ -269,7 +324,16 @@
           (when-let [line (.readLine reader)]
             (>!! ch {:type :stderr :line line})
             (recur)))
-        (catch Exception _)
+        (catch java.io.IOException e
+          ;; Process liveness is the signal that separates the two cases: once
+          ;; the child is gone its stderr is expected to fail, but losing
+          ;; stderr while the child is still running hides its diagnostics.
+          (if (alive? mp)
+            (log/warn e "Failed to read CLI stderr while the process is still alive"
+                      " resource=stderr")
+            (log/debug "stderr reader stopped after CLI exit: " (ex-message e))))
+        (catch Exception e
+          (log/warn e "Unexpected failure reading CLI stderr resource=stderr"))
         (finally
           (close! ch))))
     ch))

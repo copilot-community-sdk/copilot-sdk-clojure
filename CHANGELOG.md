@@ -16,6 +16,103 @@ All notable changes to this project will be documented in this file. This change
   `send!`, and `:max-events 0` is accepted by the public helper specs under
   instrumentation.
 
+### Changed (v1.0.79 sync)
+- **`send-and-wait!` default idle-wait timeout is now 60000ms** (was 300000ms),
+  matching the upstream Node.js SDK (`nodejs/src/session.ts`,
+  `effectiveTimeout = timeout ?? 60_000`). The same 60-second default now applies
+  to the channel-based variants `send-async`, `send-async-with-id`, `<send!`, and
+  `<send-and-wait!`, and to `helpers/query` (previously documented as 180000ms).
+  All three previously disagreeing values (implementation 300000ms, facade
+  docstring 180000ms, `helpers/query` 180000ms) are reconciled to upstream's
+  60000ms. Passing an explicit `:timeout-ms` (or the 3-arity `timeout-ms`
+  argument) is unaffected; the timeout controls how long to wait for
+  `session.idle` and does not abort in-flight agent work. Addresses `PAR-003`.
+- **`send-and-wait!` now honors `:timeout-ms` in its 2-arity `opts`** — the
+  2-arity form previously ignored the documented `:timeout-ms` key and always
+  used the default. It now selects `(:timeout-ms opts)` when present, strips the
+  key before the underlying `session.send` (so it is never forwarded on the
+  wire), and — consistently with the async variants — treats a `nil` timeout
+  (in `opts` or as the positional argument) as "no deadline": the wait set
+  contains only the event channel rather than calling `(async/timeout nil)`. The
+  positional argument's spec is correspondingly relaxed from a strict positive
+  integer to the shared nilable `::timeout-ms`.
+
+### Added (v1.0.79 sync)
+- **Deterministic regression coverage for the `send-and-wait!` outcome race**
+  (`test/github/copilot_sdk/send_and_wait_test.clj`), porting the upstream
+  `nodejs/test/session-send-and-wait.test.ts` suite: an early `session.error`
+  observed while `session.send` is in flight is retained and surfaced once send
+  completes; an early `session.idle` is preserved but does not return before send
+  completes; a `session.send` RPC rejection wins over an earlier `session.error`;
+  the first terminal outcome (idle or error) observed wins; and the zero-timeout
+  default is asserted to be 60000ms. Tests gate the real piped-stream JSON-RPC
+  `session.send` on a latch (no fixed sleeps) and were proven to fail against a
+  tap-after-send mutant. Addresses `PAR-006`.
+- **`test-send-and-wait-serializes` is now deterministic** -- the existing
+  serialization test relied on `Thread/sleep` and on the two send futures
+  acquiring the send-lock in creation order (unspecified), so it could complete
+  the wrong future and flake (~1/6 runs). It now gates the second caller's start
+  on the first holding the lock via latches, proving the same serialization
+  contract without sleeps or timing assumptions.
+
+### Fixed (cleanup diagnostics and failed-connect teardown)
+- **A rejected handshake no longer retains transport resources** --
+  `connect-with-streams!` set `:status :error` and rethrew without releasing
+  anything it had built, so a rejected protocol version left the JSON-RPC
+  connection, its reader/writer/dispatcher threads, and the reverse-request
+  executor live. A retry then overwrote `:connection-io`, orphaning them with no
+  remaining handle. It now runs the same teardown as a failed `start!`, so a
+  caller can retry without cleanup of its own.
+- **One cleanup path** -- `start!`, `stop!`, `force-stop!`, and
+  `connect-with-streams!` each hand-rolled the same router/connection/socket/
+  process sequence (or, in one case, none of it). They now share
+  `release-transport!`, parameterized by how the child process should be
+  released. `stop!`'s RPC ordering (`runtime.shutdown` before transport
+  teardown, graceful wait before signalling) is unchanged.
+- **Expected and unexpected teardown failures are no longer conflated** --
+  closing a socket or channel and joining a finished thread are idempotent by
+  contract, so a step that throws is either an interruption of the calling
+  thread or a genuine failure that left the resource live. Blanket
+  `(catch Exception _)` branches in `protocol/disconnect`, `process/destroy!`,
+  and the client teardown paths made the second case invisible. Unexpected
+  failures now carry the operation and resource identity and reach the caller
+  through the existing contract: `stop!` returns them in its error vector,
+  `force-stop!` and a failed `start!` log them. Expected outcomes stay quiet,
+  interrupts are re-flagged rather than swallowed, and a failing step never
+  short-circuits the steps that follow it.
+- **`stderr-reader` distinguishes a closed stream from a real read failure** --
+  an `IOException` is now classified by process liveness: once the child has
+  exited its stderr is expected to fail and is logged at debug, but a stderr
+  failure while the child is still running hides its diagnostics and is warned
+  with the Throwable and resource identity instead of discarded.
+- **A child that outlives a forced kill is no longer reported as clean
+  teardown** -- `destroy!` ignored the boolean from the wait that follows
+  `destroyForcibly`, and `destroy-forcibly!` (the `force-stop!` path) sent
+  SIGKILL without waiting at all. In both cases a surviving process produced no
+  failures and the client cleared `:process`, discarding the only handle to a
+  live process. Both paths now share one confirm step: the child is signalled,
+  then waited on for a bounded window, and a survivor is reported as an
+  unexpected failure carrying `:operation :wait-for-exit`, `:resource :process`,
+  and the `:stage`/`:timeout-ms` that elapsed. The client keeps the process
+  handle whenever process teardown reported a failure. `force-stop!` still
+  returns `nil`, and the wait ends as soon as the child dies, so the bound is a
+  worst case rather than a fixed delay.
+
+### Fixed (logging)
+- **The logging facade preserves Throwable-first semantics** -- every macro
+  expanded to `(str ...)` over all arguments, so a Throwable was flattened into
+  the message text (class and message only, no stack trace) and never reached
+  the backend as a throwable. `debug`/`info`/`warn`/`error` now dispatch on the
+  first argument and pass a leading Throwable through `clojure.tools.logging`'s
+  portable `(log level throwable message)` arity, so backends render stack
+  traces again. Every argument is evaluated exactly once and only after the
+  level is known to be enabled, so a disabled level costs nothing however
+  expensive its arguments are. Message rendering for calls without a leading
+  Throwable is unchanged.
+- Removed the full `json/write-str` dump of outgoing permission responses from
+  the protocol writer's debug logging; the adjacent message-id line already
+  identifies the message without serializing its payload.
+
 ### Changed (reverse-RPC execution policy)
 - **Reverse request handlers run on a bounded worker pool** -- server-to-client RPC
   handlers (hooks, `sessionFs.*`, factories, user input, provider tokens,

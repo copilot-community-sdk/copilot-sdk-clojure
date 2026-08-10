@@ -19,7 +19,7 @@ Execute a query and return the response text.
 **Options:**
 - `:client` - Client options map (cli-path, log-level, cwd, env) OR a CopilotClient instance
 - `:session` - Session options map (model, system-prompt, tools, etc.) OR a CopilotSession instance
-- `:timeout-ms` - Timeout in milliseconds (default: 180000)
+- `:timeout-ms` - Timeout in milliseconds (default: 60000)
 
 When `:session` is a CopilotSession instance, the query uses that session directly (enabling multi-turn conversations). When `:client` is a CopilotClient instance, it uses that client directly.
 
@@ -230,6 +230,12 @@ timeout or error the SDK falls back to terminating the process (SIGTERM, then
 SIGKILL). Connecting to an external server (`:cli-url`) skips the shutdown RPC and
 the process is left running. (upstream [PR #1667](https://github.com/github/copilot-sdk/pull/1667))
 
+Returns a vector of any errors encountered during cleanup — a failed session
+disconnect, a failed `runtime.shutdown`, or a transport resource that could not
+be released. An empty vector means everything shut down cleanly. Errors are
+reported rather than thrown, so a single failure never leaves the rest of the
+teardown undone.
+
 #### `force-stop!`
 
 ```clojure
@@ -239,6 +245,13 @@ the process is left running. (upstream [PR #1667](https://github.com/github/copi
 Force stop the CLI server without graceful RPCs. It closes local session event
 subscriptions and releases in-flight session work before closing the transport
 and terminating an SDK-owned process. Use when `stop!` takes too long.
+
+The forced kill is confirmed rather than assumed: the child is signalled and
+then waited on for a bounded window. A child that survives is logged with its
+resource identity, and its handle is kept in client state so the host is never
+left holding no reference to a live process. The wait ends as soon as the child
+dies, so it is a worst-case bound, not a fixed delay. `force-stop!` still
+returns `nil`.
 
 #### `client-options`
 
@@ -880,7 +893,7 @@ Selection range is a map with `:start` and `:end` positions, each containing `:l
 (copilot/send-and-wait! session options timeout-ms)
 ```
 Send a message and block until the session becomes idle. Returns the final assistant message event.
-Default timeout is `300000` ms (5 minutes).
+Default timeout is `60000` ms (60 seconds), matching the upstream Node.js SDK. The timeout controls how long to wait for `session.idle`; it does not abort in-flight agent work.
 
 #### `send-async`
 
@@ -890,7 +903,7 @@ Default timeout is `300000` ms (5 minutes).
 
 Send a message and return a core.async channel that receives all events for this message, closing when idle.
 Safe for use inside `go` blocks — no blocking operations.
-Supports `:timeout-ms` in options (default: `300000`) to force cleanup on long-running requests.
+Supports `:timeout-ms` in options (default: `60000`) to force cleanup on long-running requests.
 
 #### `send-async-with-id`
 
@@ -899,7 +912,7 @@ Supports `:timeout-ms` in options (default: `300000`) to force cleanup on long-r
 ```
 
 Send a message and return `{:message-id :events-ch}` for correlating responses.
-Supports `:timeout-ms` in options (default: `300000`).
+Supports `:timeout-ms` in options (default: `60000`).
 
 #### `<send!`
 
@@ -908,7 +921,7 @@ Supports `:timeout-ms` in options (default: `300000`).
 ```
 
 Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final content string.
-Supports `:timeout-ms` in options (default: `300000`).
+Supports `:timeout-ms` in options (default: `60000`).
 
 Combined with `<create-session`, enables fully non-blocking pipelines:
 
@@ -927,7 +940,7 @@ Combined with `<create-session`, enables fully non-blocking pipelines:
 ```
 
 Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final assistant message **event** — the same shape as `send-and-wait!`'s successful return value (content lives under `[:data :content]`), or closes with nothing if no assistant message was received.
-Supports `:timeout-ms` in options (default: `300000`, set to `nil` to disable).
+Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
 
 Error semantics differ from `send-and-wait!`: where `send-and-wait!` throws on `:copilot/session.error` or timeout, this variant never surfaces those — the channel closes (delivering the last assistant message if one arrived, otherwise nothing), consistent with `<send!`.
 

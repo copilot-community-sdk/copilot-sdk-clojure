@@ -11,6 +11,7 @@
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.util :as util]
+            [github.copilot-sdk.teardown :as td]
             [github.copilot-sdk.logging :as log])
   (:import [java.net Socket]
            [java.util.concurrent LinkedBlockingQueue]))
@@ -1197,6 +1198,88 @@
   [_request _ctx]
   {:kind :no-result})
 
+(defn- release-router!
+  "Stop notification routing and release its thread and channels.
+
+   Returns a vector of unexpected teardown failures. Idempotent: the state keys
+   are cleared, so a second call is a no-op."
+  [client]
+  (swap! (:state client) assoc :router-running? false)
+  (let [{:keys [router-thread router-ch lifecycle-ch]} @(:state client)
+        failures (td/collect
+                  [(when-let [^Thread t router-thread]
+                     (td/attempt {:operation :join :resource :router-thread}
+                                 (.interrupt t)
+                                 (.join t 500)))])]
+    (when router-ch (close! router-ch))
+    (when lifecycle-ch (close! lifecycle-ch))
+    (swap! (:state client) assoc
+           :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
+    failures))
+
+(defn- release-transport!
+  "Release the client-owned transport: notification router, JSON-RPC
+   connection, socket, and — per `:process` — an SDK-owned child process.
+
+   `:process` is `:none` (the caller owns the process, or there is none),
+   `:graceful` (SIGTERM, then SIGKILL if it overstays), or `:forcible`
+   (SIGKILL). When `:wait-for-exit-ms` is set, a process that has already been
+   asked to shut down is first given that long to exit on its own.
+
+   Every step runs even when an earlier one fails, and the whole sequence is
+   idempotent. Returns a vector of unexpected teardown failures.
+
+   The process handle is cleared only once the child is confirmed gone: a kill
+   that failed leaves `:process` in place so the host keeps its only reference
+   to a live process."
+  [client {:keys [process wait-for-exit-ms] :or {process :none}}]
+  (let [router-failures (release-router! client)
+        state @(:state client)
+        {:keys [connection-io socket]} state
+        proc-handle (:process state)
+        own-process? (boolean (and (not= process :none)
+                                   (not (:external-server? client))
+                                   proc-handle))
+        process-failures
+        (if-not own-process?
+          []
+          (if (= process :forcible)
+            (td/attempt-collecting {:operation :destroy-forcibly :resource :process}
+                                   (proc/destroy-forcibly! proc-handle))
+            (td/attempt-collecting {:operation :destroy :resource :process}
+                                   ;; A runtime that already accepted
+                                   ;; `runtime.shutdown` gets to exit on its own
+                                   ;; before we signal it.
+                                   (if (and wait-for-exit-ms
+                                            (proc/wait-for-exit! proc-handle wait-for-exit-ms))
+                                     []
+                                     (proc/destroy! proc-handle)))))
+        failures
+        (td/collect
+         (concat
+          router-failures
+          (when connection-io
+            (td/attempt-collecting {:operation :disconnect :resource :connection}
+                                   (proto/disconnect connection-io)))
+          [(when socket
+             (td/attempt {:operation :close :resource :socket}
+                         (.close ^Socket socket)))]
+          process-failures))]
+    (swap! (:state client) assoc :connection nil :connection-io nil :socket nil)
+    ;; Only drop the process handle once the child is confirmed gone. Clearing
+    ;; it after a failed kill would discard the only reference to a live
+    ;; process, leaving the host no way to retry or report it.
+    (when (and own-process? (empty? process-failures))
+      (swap! (:state client) assoc :process nil))
+    failures))
+
+(defn- log-teardown-failures!
+  "Report teardown failures that no caller-visible return value carries."
+  [failures]
+  (doseq [^Throwable failure failures]
+    (log/warn failure "Client teardown step failed"))
+  failures)
+
 (defn start!
   "Start the CLI server and establish connection.
    Blocks until connected or throws on error.
@@ -1287,26 +1370,8 @@
           ;; left as :error (not :disconnected) so callers can distinguish a
           ;; failed start from a clean stop.
             (swap! (:state client) assoc :stopping? true)
-          ;; Tear down the notification router if it was started before the
-          ;; failure (mirrors stop!), so its dispatcher thread/channel don't leak.
-            (swap! (:state client) assoc :router-running? false)
-            (when-let [^Thread router-thread (:router-thread @(:state client))]
-              (.interrupt router-thread)
-              (try (.join router-thread 500) (catch Exception _)))
-            (when-let [router-ch (:router-ch @(:state client))]
-              (close! router-ch))
-            (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
-              (close! lifecycle-ch))
-            (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
-            (let [{:keys [connection-io socket process]} @(:state client)]
-              (when connection-io
-                (try (proto/disconnect connection-io) (catch Exception _)))
-              (when socket
-                (try (.close ^Socket socket) (catch Exception _)))
-              (when (and (not (:external-server? client)) process)
-                (try (proc/destroy! process) (catch Exception _))))
-            (swap! (:state client) assoc :status :error :connection nil
-                   :connection-io nil :socket nil :process nil :actual-port nil)
+            (log-teardown-failures! (release-transport! client {:process :graceful}))
+            (swap! (:state client) assoc :status :error :actual-port nil)
             (throw e)))))))
 
 (defn stop!
@@ -1329,18 +1394,12 @@
   (swap! (:state client) assoc :stopping? true)
   (let [errors (atom [])
         runtime-shutdown-completed? (atom false)
-        {:keys [sessions session-io process connection-io socket]} @(:state client)]
+        {:keys [sessions process connection-io]} @(:state client)]
     (try
-      ;; 0. Stop notification routing
-      (swap! (:state client) assoc :router-running? false)
-      (when-let [^Thread router-thread (:router-thread @(:state client))]
-        (.interrupt router-thread)
-        (try (.join router-thread 500) (catch Exception _)))
-      (when-let [router-ch (:router-ch @(:state client))]
-        (close! router-ch))
-      (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
-        (close! lifecycle-ch))
-      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
+      ;; 0. Stop notification routing. Done before the session disconnects and
+      ;; the runtime.shutdown RPC below; release-transport! then finds it
+      ;; already released.
+      (swap! errors into (release-router! client))
 
       ;; 1. Disconnect all sessions
       (doseq [[session-id _] sessions]
@@ -1354,7 +1413,8 @@
 
       ;; 1b. Ask SDK-owned runtimes to flush and clean up before tearing down
       ;; their transport/process. External runtimes may be shared, so we only
-      ;; close our connection to them (see step 2). Bounded by a 10s timeout.
+      ;; close our connection to them (see release-transport!). Bounded by a
+      ;; 10s timeout.
       (when (and connection-io process (not (:external-server? client)))
         (try
           (proto/send-request! connection-io "runtime.shutdown" {} 10000)
@@ -1363,36 +1423,13 @@
             (swap! errors conj
                    (ex-info "Failed to gracefully shut down runtime" {} e)))))
 
-      ;; 2. Close connection (non-blocking, may leave read thread blocked for stdio)
-      (when connection-io
-        (try
-          (proto/disconnect connection-io)
-          (catch Exception e
-            (swap! errors conj
-                   (ex-info "Failed to close connection" {} e))))
-        (swap! (:state client) assoc :connection nil :connection-io nil))
-
-      ;; 3. Close socket (TCP mode)
-      (when socket
-        (try
-          (.close ^Socket socket)
-          (catch Exception e
-            (swap! errors conj
-                   (ex-info "Failed to close socket" {} e))))
-        (swap! (:state client) assoc :socket nil))
-
-      ;; 4. Terminate the CLI process (this also unblocks any stdio read thread).
-      ;; When runtime.shutdown succeeded, give the child up to 10s to exit on its
-      ;; own first; only force-kill (SIGTERM->wait->SIGKILL) if it overstays.
-      (when (and (not (:external-server? client)) process)
-        (try
-          (when-not (and @runtime-shutdown-completed?
-                         (proc/wait-for-exit! process 10000))
-            (proc/destroy! process))
-          (catch Exception e
-            (swap! errors conj
-                   (ex-info "Failed to kill CLI process" {} e))))
-        (swap! (:state client) assoc :process nil))
+      ;; 2. Release connection, socket, and the SDK-owned process. When
+      ;; runtime.shutdown succeeded, give the child up to 10s to exit on its own
+      ;; before signalling it.
+      (swap! errors into
+             (release-transport! client
+                                 {:process :graceful
+                                  :wait-for-exit-ms (when @runtime-shutdown-completed? 10000)}))
 
       (swap! (:state client) assoc :status :disconnected :actual-port nil
              :models-cache nil :lifecycle-handlers {}
@@ -1405,49 +1442,30 @@
   "Force stop the CLI server without graceful RPCs.
 
    Releases locally-owned session resources before dropping client ownership, then
-   closes the transport and terminates an SDK-owned process."
+   closes the transport and terminates an SDK-owned process.
+
+   The forced kill is confirmed: the child is signalled and then waited on for a
+   bounded window, because a signal that was merely sent proves nothing. A child
+   that survives is logged with its resource identity and its handle is kept in
+   client state, so the host is never left holding no reference to a live
+   process. The wait ends as soon as the child dies, so it is a worst-case
+   bound rather than a fixed delay."
   [client]
   (swap! (:state client) assoc :stopping? true :lifecycle-handlers {})
 
-  (let [{:keys [connection-io socket process sessions]} @(:state client)
-        session-ids (keys sessions)]
-    (try
-      ;; Release event roots and send locks while their state is still reachable.
-      (doseq [session-id session-ids]
-        (session/teardown-local! client session-id))
-      (swap! (:state client) assoc :sessions {} :session-io {})
+  (let [session-ids (keys (:sessions @(:state client)))]
+    ;; Release event roots and send locks while their state is still reachable.
+    (doseq [session-id session-ids]
+      (session/teardown-local! client session-id))
+    (swap! (:state client) assoc :sessions {} :session-io {})
 
-      ;; Stop notification routing
-      (swap! (:state client) assoc :router-running? false)
-      (when-let [^Thread router-thread (:router-thread @(:state client))]
-        (.interrupt router-thread)
-        (try (.join router-thread 500) (catch Exception _)))
-      (when-let [router-ch (:router-ch @(:state client))]
-        (close! router-ch))
-      (when-let [lifecycle-ch (:lifecycle-ch @(:state client))]
-        (close! lifecycle-ch))
-      (swap! (:state client) assoc :router-ch nil :router-queue nil :router-thread nil :lifecycle-ch nil)
-
-      ;; Force close connection
-      (when connection-io
-        (try (proto/disconnect connection-io) (catch Exception _)))
-
-      ;; Force close socket
-      (when socket
-        (try (.close ^Socket socket) (catch Exception _)))
-
-      ;; Force kill process
-      (when (and (not (:external-server? client)) process)
-        (try (proc/destroy-forcibly! process) (catch Exception _)))
-      (finally
-        nil)))
+    (log-teardown-failures! (release-transport! client {:process :forcible})))
 
   (swap! (:state client) merge
          {:status :disconnected
           :connection nil
           :connection-io nil
           :socket nil
-          :process nil
           :actual-port nil
           :router-ch nil
           :router-queue nil
@@ -3345,5 +3363,10 @@
         (swap! (:state client) assoc :status :connected)
         nil
         (catch Exception e
+          ;; Reuse the same teardown as a failed start! so a rejected handshake
+          ;; leaves no connection, router, or reverse-request executor behind
+          ;; and the caller can retry without cleanup of its own. The streams
+          ;; belong to the caller, so no process is touched.
+          (log-teardown-failures! (release-transport! client {:process :none}))
           (swap! (:state client) assoc :status :error)
           (throw e))))))

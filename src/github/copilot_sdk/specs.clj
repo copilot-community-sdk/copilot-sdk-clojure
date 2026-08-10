@@ -1283,11 +1283,11 @@
                    ::agent-mode ::display-prompt]))
 
 ;; :timeout-ms as used in option maps for send-async / <send! /
-;; send-async-with-id allows nil to "disable" the timeout per the docstrings.
+;; send-async-with-id / send-and-wait! allows nil to "disable" the timeout per
+;; the docstrings. send-and-wait!'s positional 3-arity argument shares the same
+;; nilable contract: a nil deadline waits indefinitely rather than calling
+;; (async/timeout nil).
 (s/def ::timeout-ms (s/nilable pos-int?))
-;; send-and-wait!'s positional timeout-ms argument passes the value directly to
-;; async/timeout, so the positional form requires a strict positive integer.
-(s/def ::strict-timeout-ms pos-int?)
 
 ;; -----------------------------------------------------------------------------
 ;; Connection state
