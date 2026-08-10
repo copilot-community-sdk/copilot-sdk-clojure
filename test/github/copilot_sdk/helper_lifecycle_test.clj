@@ -45,7 +45,7 @@
   (let [copilot-client (sdk/client {:auto-start? false})
         [in out] (mock/client-streams *mock-server*)]
     (client/connect-with-streams! copilot-client in out)
-    (assoc copilot-client :external-server? false)))
+    copilot-client))
 
 (defn- call-with-single-helper-client
   [f]
