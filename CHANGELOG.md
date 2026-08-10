@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Changed (reverse-RPC execution policy)
-- **Reverse request handlers run on a bounded worker pool** — server→client RPC
+- **Reverse request handlers run on a bounded worker pool** -- server-to-client RPC
   handlers (hooks, `sessionFs.*`, factories, user input, provider tokens,
   `systemMessage.transform`, etc.) are arbitrary caller code that may block, and
   were previously invoked from inside a core.async `go` block. In core.async
@@ -37,13 +37,16 @@ All notable changes to this project will be documented in this file. This change
   diagnostics, not public API.
 
 ### Fixed (observability)
-- **Notification-queue overflow is no longer silent** — `dispatch-message!`
+- **Notification-queue overflow is no longer silent** -- `dispatch-message!`
   dropped notifications with a `debug` log and no counter. Drops are now logged
   at `warn` with the method and a running total, and counted in
   `protocol/connection-stats`. A deterministic saturation test proves the branch
   is reachable and observable; it does **not** demonstrate that a terminal
   session event can be lost, so no event prioritization or transport change was
   made.
+
+### Fixed
+- Restore the green formatting gate by correcting the formatter-prescribed indentation in `src/github/copilot_sdk/util.clj`.
 
 ### Changed (agent workflow)
 - **Worktree-safe upstream sync** — the repo-local `update-upstream` skill now
