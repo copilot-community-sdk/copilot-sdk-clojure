@@ -197,7 +197,7 @@
 (register-fdef! github.copilot-sdk.session/send-and-wait!
                 :args (s/cat :session ::specs/session
                              :opts ::specs/send-options
-                             :timeout-ms (s/? ::specs/strict-timeout-ms))
+                             :timeout-ms (s/? ::specs/timeout-ms))
                 :ret (s/nilable map?))
 
 (register-fdef! github.copilot-sdk.session/send-async

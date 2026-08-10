@@ -642,7 +642,6 @@
   :github.copilot-sdk.specs/stop-processing-queue?
   :github.copilot-sdk.specs/storage-mode
   :github.copilot-sdk.specs/streaming?
-  :github.copilot-sdk.specs/strict-timeout-ms
   :github.copilot-sdk.specs/subagent.completed-data
   :github.copilot-sdk.specs/subagent.failed-data
   :github.copilot-sdk.specs/subagent.started-data

@@ -19,7 +19,7 @@ Execute a query and return the response text.
 **Options:**
 - `:client` - Client options map (cli-path, log-level, cwd, env) OR a CopilotClient instance
 - `:session` - Session options map (model, system-prompt, tools, etc.) OR a CopilotSession instance
-- `:timeout-ms` - Timeout in milliseconds (default: 180000)
+- `:timeout-ms` - Timeout in milliseconds (default: 60000)
 
 When `:session` is a CopilotSession instance, the query uses that session directly (enabling multi-turn conversations). When `:client` is a CopilotClient instance, it uses that client directly.
 
@@ -866,7 +866,7 @@ Selection range is a map with `:start` and `:end` positions, each containing `:l
 (copilot/send-and-wait! session options timeout-ms)
 ```
 Send a message and block until the session becomes idle. Returns the final assistant message event.
-Default timeout is `300000` ms (5 minutes).
+Default timeout is `60000` ms (60 seconds), matching the upstream Node.js SDK. The timeout controls how long to wait for `session.idle`; it does not abort in-flight agent work.
 
 #### `send-async`
 
@@ -876,7 +876,7 @@ Default timeout is `300000` ms (5 minutes).
 
 Send a message and return a core.async channel that receives all events for this message, closing when idle.
 Safe for use inside `go` blocks — no blocking operations.
-Supports `:timeout-ms` in options (default: `300000`) to force cleanup on long-running requests.
+Supports `:timeout-ms` in options (default: `60000`) to force cleanup on long-running requests.
 
 #### `send-async-with-id`
 
@@ -885,7 +885,7 @@ Supports `:timeout-ms` in options (default: `300000`) to force cleanup on long-r
 ```
 
 Send a message and return `{:message-id :events-ch}` for correlating responses.
-Supports `:timeout-ms` in options (default: `300000`).
+Supports `:timeout-ms` in options (default: `60000`).
 
 #### `<send!`
 
@@ -894,7 +894,7 @@ Supports `:timeout-ms` in options (default: `300000`).
 ```
 
 Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final content string.
-Supports `:timeout-ms` in options (default: `300000`).
+Supports `:timeout-ms` in options (default: `60000`).
 
 Combined with `<create-session`, enables fully non-blocking pipelines:
 
@@ -913,7 +913,7 @@ Combined with `<create-session`, enables fully non-blocking pipelines:
 ```
 
 Async equivalent of `send-and-wait!` for use inside `go` blocks. Returns a channel that yields the final assistant message **event** — the same shape as `send-and-wait!`'s successful return value (content lives under `[:data :content]`), or closes with nothing if no assistant message was received.
-Supports `:timeout-ms` in options (default: `300000`, set to `nil` to disable).
+Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
 
 Error semantics differ from `send-and-wait!`: where `send-and-wait!` throws on `:copilot/session.error` or timeout, this variant never surfaces those — the channel closes (delivering the last assistant message if one arrived, otherwise nothing), consistent with `<send!`.
 

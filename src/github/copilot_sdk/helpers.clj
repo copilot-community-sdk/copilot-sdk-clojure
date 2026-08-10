@@ -33,7 +33,7 @@
    All query functions accept keyword arguments:
    - `:client` - Client options (cli-path, log-level, cwd, env)
    - `:session` - Session options (model, tools, streaming?, etc.)
-   - `:timeout-ms` - Timeout for blocking `query` (default: 180000)
+   - `:timeout-ms` - Timeout for blocking `query` (default: 60000)
    "
   (:require [clojure.core.async :as async :refer [go go-loop <! >! chan close! timeout alts!]]
             [github.copilot-sdk :as copilot]))
@@ -178,7 +178,7 @@
    Keyword options:
      :client - Client options map OR a CopilotClient instance
      :session - Session options map OR a CopilotSession instance
-     :timeout-ms - Timeout in milliseconds (default: 180000)
+     :timeout-ms - Timeout in milliseconds (default: 60000)
 
    When :session is a CopilotSession instance, the query uses that session
    directly (enabling multi-turn conversations). Otherwise creates a fresh session.
@@ -206,7 +206,7 @@
        (query \"What is 2+2?\" :session s)
        (query \"And 3+3?\" :session s))  ;; context preserved
    "
-  [prompt & {:keys [client session timeout-ms] :or {timeout-ms 180000}}]
+  [prompt & {:keys [client session timeout-ms] :or {timeout-ms 60000}}]
   (cond
     ;; Session instance provided - use directly
     (session-instance? session)

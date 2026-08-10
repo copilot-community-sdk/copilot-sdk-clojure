@@ -3,6 +3,45 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (v1.0.79 sync)
+- **`send-and-wait!` default idle-wait timeout is now 60000ms** (was 300000ms),
+  matching the upstream Node.js SDK (`nodejs/src/session.ts`,
+  `effectiveTimeout = timeout ?? 60_000`). The same 60-second default now applies
+  to the channel-based variants `send-async`, `send-async-with-id`, `<send!`, and
+  `<send-and-wait!`, and to `helpers/query` (previously documented as 180000ms).
+  All three previously disagreeing values (implementation 300000ms, facade
+  docstring 180000ms, `helpers/query` 180000ms) are reconciled to upstream's
+  60000ms. Passing an explicit `:timeout-ms` (or the 3-arity `timeout-ms`
+  argument) is unaffected; the timeout controls how long to wait for
+  `session.idle` and does not abort in-flight agent work. Addresses `PAR-003`.
+- **`send-and-wait!` now honors `:timeout-ms` in its 2-arity `opts`** — the
+  2-arity form previously ignored the documented `:timeout-ms` key and always
+  used the default. It now selects `(:timeout-ms opts)` when present, strips the
+  key before the underlying `session.send` (so it is never forwarded on the
+  wire), and — consistently with the async variants — treats a `nil` timeout
+  (in `opts` or as the positional argument) as "no deadline": the wait set
+  contains only the event channel rather than calling `(async/timeout nil)`. The
+  positional argument's spec is correspondingly relaxed from a strict positive
+  integer to the shared nilable `::timeout-ms`.
+
+### Added (v1.0.79 sync)
+- **Deterministic regression coverage for the `send-and-wait!` outcome race**
+  (`test/github/copilot_sdk/send_and_wait_test.clj`), porting the upstream
+  `nodejs/test/session-send-and-wait.test.ts` suite: an early `session.error`
+  observed while `session.send` is in flight is retained and surfaced once send
+  completes; an early `session.idle` is preserved but does not return before send
+  completes; a `session.send` RPC rejection wins over an earlier `session.error`;
+  the first terminal outcome (idle or error) observed wins; and the zero-timeout
+  default is asserted to be 60000ms. Tests gate the real piped-stream JSON-RPC
+  `session.send` on a latch (no fixed sleeps) and were proven to fail against a
+  tap-after-send mutant. Addresses `PAR-006`.
+- **`test-send-and-wait-serializes` is now deterministic** -- the existing
+  serialization test relied on `Thread/sleep` and on the two send futures
+  acquiring the send-lock in creation order (unspecified), so it could complete
+  the wrong future and flake (~1/6 runs). It now gates the second caller's start
+  on the first holding the lock via latches, proving the same serialization
+  contract without sleeps or timing assumptions.
+
 ### Fixed (cleanup diagnostics and failed-connect teardown)
 - **A rejected handshake no longer retains transport resources** --
   `connect-with-streams!` set `:status :error` and rethrew without releasing

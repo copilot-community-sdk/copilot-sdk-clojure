@@ -811,26 +811,47 @@
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           client (:client session)
-          send-calls (atom 0)]
+          send-calls (atom 0)
+          ;; Latches replace fixed sleeps: `send!` runs after the mult tap, so a
+          ;; caller that has entered `send!` holds the send-lock. The first call
+          ;; parks until released, deterministically proving the second call
+          ;; cannot enter `send!` until the first completes.
+          first-entered (promise)
+          release-first (promise)
+          second-entered (promise)]
       (with-redefs [session/send! (fn [_ _]
-                                    (swap! send-calls inc)
+                                    (case (long (swap! send-calls inc))
+                                      1 (do (deliver first-entered true)
+                                            @release-first)
+                                      2 (deliver second-entered true)
+                                      nil)
                                     "msg")]
-        (let [first-f (future (session/send-and-wait! session {:prompt "A"} 1000))
-              second-f (future (session/send-and-wait! session {:prompt "B"} 1000))]
-          (Thread/sleep 50)
-          (is (= 1 @send-calls))
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "first"}})
-          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
-          (is (map? (deref first-f 1000 ::timeout)))
-          (Thread/sleep 50)
-          (is (= 2 @send-calls))
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "second"}})
-          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
-          (is (map? (deref second-f 1000 ::timeout))))))))
+        (let [first-f (future (session/send-and-wait! session {:prompt "A"} 5000))]
+          ;; Gate the second start on the first caller holding the lock, so the
+          ;; first future is deterministically call 1 (lock acquisition order
+          ;; between two concurrently-started futures is otherwise unspecified).
+          (is (true? (deref first-entered 2000 ::timeout)))
+          (let [second-f (future (session/send-and-wait! session {:prompt "B"} 5000))]
+            ;; The second caller blocks on the lock and cannot enter send!.
+            (is (not (realized? second-entered)))
+            (is (= 1 @send-calls))
+            ;; Release the first send!; the tap is already installed, so events
+            ;; dispatched now buffer on the tapped channel and drive completion.
+            (deliver release-first true)
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "first"}})
+            (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+            (is (map? (deref first-f 5000 ::timeout)))
+            ;; Lock released → the second caller now enters send! (proving it was
+            ;; blocked until the first completed).
+            (is (true? (deref second-entered 2000 ::timeout)))
+            (is (= 2 @send-calls))
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "second"}})
+            (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+            (is (map? (deref second-f 5000 ::timeout)))))))))
 
 (deftest test-send-async
   (testing "Send async returns channel with events"

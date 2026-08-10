@@ -847,7 +847,10 @@
    Serialized per session to avoid mixing concurrent sends.
 
    Options: same as send!, plus:
-   - :timeout-ms   - Timeout in milliseconds (default: 180000)
+   - :timeout-ms   - Timeout in milliseconds (default: 60000). Read from `opts`
+                     in the 2-arity form; `nil` (in `opts` or as the positional
+                     argument) disables the deadline and waits indefinitely.
+                     Never forwarded on the underlying `session.send`.
 
    Example:
    ```clojure
@@ -895,7 +898,7 @@
    the final content string), this delivers the full assistant message event.
 
    Options: same as send!, plus:
-   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
+   - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)
 
    The returned channel delivers a single value (the final assistant message
    event, or nothing if none was received) then closes.
