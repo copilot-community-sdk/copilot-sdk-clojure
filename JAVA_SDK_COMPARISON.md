@@ -50,7 +50,7 @@ and the public API of each.
 | File attachments | ✅ example with custom converters | ✅ `MessageAttachmentTest` |
 | Per-session GitHub token | ✅ | ✅ `PerSessionAuthTest` |
 | Session metadata API | ✅ `get-session-metadata`, `list-sessions` | ✅ `MetadataApiTest` |
-| `query` one-liner / lazy seq / channel helpers | ✅ `helpers/query`, `query-seq!`, `query-chan` | ❌ no equivalent (must wire callbacks) |
+| `query` one-liner / scoped lazy seq / channel helpers | ✅ `helpers/query`, `with-query-seq`, `query-seq!`, `query-chan` | ❌ no equivalent (must wire callbacks) |
 | Forward compatibility for new event types | ⚠ unknown events drop through (no spec failure, since specs are input-only on send paths) | ✅ explicit `UnknownSessionEvent` as Jackson `defaultImpl` |
 | `with-client` / `with-client-session` macros | ✅ | n/a (uses try-with-resources `AutoCloseable`) |
 | Clojure spec runtime instrumentation | ✅ ~80 `s/fdef` definitions | n/a |
@@ -240,7 +240,7 @@ largest piece of upside available if the Clojure SDK adopted it.
    consumers via sliding buffers without a separate manager class.
 5. **Tool/permission/hook on `async/thread`** — architectural rule that prevents
    protocol starvation, encoded once and applied everywhere.
-6. **`helpers/query` family** — `query`, `query-seq!`, `query-chan` give three different
+6. **`helpers/query` family** — `query`, `with-query-seq`, `query-seq!`, `query-chan` give four different
    ergonomic shapes with one code path. The Java SDK has no equivalent.
 7. **4-segment versioning (`UPSTREAM.CLJ_PATCH`)** is more self-documenting than
    Java's `<upstream>-java.<n>`.

@@ -319,4 +319,3 @@
           (is (= :threw (first result)))
           (is (re-find #"Session has been disconnected" (second result))
               "the outcome must be a consistent disconnected error"))))))
-

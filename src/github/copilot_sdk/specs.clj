@@ -2202,7 +2202,7 @@
 (s/def ::events-ch any?)  ; core.async channel
 (s/def ::buffer pos-int?)
 (s/def ::xf fn?)
-(s/def ::max-events pos-int?)
+(s/def ::max-events nat-int?)
 
 ;; -----------------------------------------------------------------------------
 ;; Tool listing (tools.list RPC)

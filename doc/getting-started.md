@@ -79,9 +79,9 @@ Congratulations! You just built your first Copilot-powered app in Clojure.
 
 ## Step 3: Add Streaming Responses
 
-Right now, you wait for the complete response before seeing anything. Let's make it interactive by streaming the response as it's generated.
+Right now, you wait for the complete response before seeing anything. Stream the response as it is generated.
 
-### Using Lazy Sequences
+### Using Scope-Bound Lazy Sequences
 
 ```clojure
 (require '[github.copilot-sdk :as copilot])
@@ -95,7 +95,10 @@ Right now, you wait for the complete response before seeing anything. Let's make
 (defmethod handle-event :copilot/session.idle [_]
   (println))
 
-(run! handle-event (h/query-seq! "Tell me a short joke" :session {:on-permission-request copilot/approve-all :streaming? true}))
+(h/with-query-seq [events "Tell me a short joke"
+                   :session {:on-permission-request copilot/approve-all
+                             :streaming? true}]
+  (run! handle-event events))
 ```
 
 ### Using core.async Channels

@@ -230,6 +230,77 @@
         (finally
           (copilot/disconnect! sess))))))
 
+(defn- query-seq-source
+  [prompt & {:keys [client session max-events] :or {max-events 256}}]
+  (when-not (nat-int? max-events)
+    (throw (ex-info ":max-events must be a non-negative integer"
+                    {:max-events max-events})))
+  (let [c (ensure-client! client)
+        session-config (build-session-config session)
+        sess (copilot/create-session c session-config)
+        done? (atom false)]
+    (letfn [(finish! []
+              (when (compare-and-set! done? false true)
+                (copilot/disconnect! sess)))
+            (event-seq [events-ch remaining]
+              (lazy-seq
+               (when (pos? remaining)
+                 (let [event (async/<!! events-ch)]
+                   (cond
+                     (nil? event)
+                     (do (finish!) nil)
+
+                     (#{:copilot/session.idle :copilot/session.error} (:type event))
+                     (do (finish!) (cons event nil))
+
+                     :else
+                     (cons event (event-seq events-ch (dec remaining))))))))]
+      (try
+        (let [events-ch (copilot/subscribe-events sess)]
+          (copilot/send! sess {:prompt prompt})
+          (let [events (event-seq events-ch max-events)]
+            (when (zero? max-events) (finish!))
+            [events finish!]))
+        (catch Throwable t
+          (finish!)
+          (throw t))))))
+
+(defmacro with-query-seq
+  "Execute a query, bind a bounded lazy sequence of events, and clean up on body exit.
+
+   Use this for seq-style streaming consumption when the body may stop before the
+   session reaches a terminal event. Cleanup runs in a `finally`, so the session
+   disconnects whether the body returns normally, stops after a partial realization,
+   or throws.
+
+   Binding form:
+     [events prompt & {:keys [client session max-events]}]
+
+   Keyword options match `query-seq!`:
+     :client - Client options map
+     :session - Session options map
+     :max-events - Maximum number of events to emit (default: 256)
+
+   Examples:
+     (with-query-seq [events \"Tell me a story\"
+                      :session {:on-permission-request copilot/approve-all
+                                :streaming? true}]
+       (run! println events))"
+  [bindings & body]
+  (when-not (and (vector? bindings)
+                 (<= 2 (count bindings))
+                 (symbol? (first bindings)))
+    (throw (IllegalArgumentException.
+            "with-query-seq requires [events prompt & options] binding form")))
+  (let [events-sym (first bindings)
+        query-args (rest bindings)
+        finish-sym (gensym "finish!")]
+    `(let [[~events-sym ~finish-sym] (#'query-seq-source ~@query-args)]
+       (try
+         ~@body
+         (finally
+           (~finish-sym))))))
+
 (defn query-seq!
   "Execute a query and return a bounded lazy sequence of events.
 
@@ -250,9 +321,8 @@
    bound before a terminal event still leaks the session (the sole exception is
    `:max-events 0`, which disconnects immediately without emitting anything).
    Only use `query-seq!` when you will consume the sequence to its natural end.
-   If you may stop early, prefer `query-chan` (explicit lifecycle — safe to stop
-   early *provided you close the returned channel*) or `query` (single response,
-   deterministic cleanup).
+   If you may stop early, prefer `with-query-seq` (scope-bound seq consumption)
+   or `query` (single response, deterministic cleanup).
 
    Keyword options:
      :client - Client options map
@@ -261,32 +331,11 @@
 
    Returns a lazy sequence of at most :max-events events."
   [prompt & {:keys [client session max-events] :or {max-events 256}}]
-  (let [c (ensure-client! client)
-        session-config (build-session-config session)
-        sess (copilot/create-session c session-config)
-        events-ch (copilot/subscribe-events sess)
-        done? (atom false)]
-    (copilot/send! sess {:prompt prompt})
-    (letfn [(finish! []
-              (when-not @done?
-                (reset! done? true)
-                (copilot/disconnect! sess)))
-            (event-seq [remaining]
-              (lazy-seq
-               (when (pos? remaining)
-                 (let [event (async/<!! events-ch)]
-                   (cond
-                     (nil? event)
-                     (do (finish!) nil)
-
-                     (#{:copilot/session.idle :copilot/session.error} (:type event))
-                     (do (finish!) (cons event nil))
-
-                     :else
-                     (cons event (event-seq (dec remaining))))))))]
-      (let [events (event-seq max-events)]
-        (when (zero? max-events) (finish!))
-        events))))
+  (first (apply query-seq-source
+                prompt
+                (cond-> [:max-events max-events]
+                  (some? client) (into [:client client])
+                  (some? session) (into [:session session])))))
 
 (defn query-chan
   "Execute a query and return a core.async channel of events.

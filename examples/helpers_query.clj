@@ -38,8 +38,9 @@
   [{:keys [prompt] :or {prompt "Explain the concept of immutability in 2-3 sentences."}}]
   (println "Query:" prompt)
   (println)
-  (run! handle-event (h/query-seq! prompt :session {:on-permission-request copilot/approve-all
-                                                    :model "gpt-5.4" :streaming? true})))
+  (h/with-query-seq [events prompt :session {:on-permission-request copilot/approve-all
+                                             :model "gpt-5.4" :streaming? true}]
+    (run! handle-event events)))
 
 (defn run-async
   [{:keys [prompt] :or {prompt "Tell me a short joke."}}]

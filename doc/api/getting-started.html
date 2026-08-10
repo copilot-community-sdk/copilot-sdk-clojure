@@ -53,8 +53,8 @@ Q: How about Tokyo?
 </code></pre>
 <p>Congratulations! You just built your first Copilot-powered app in Clojure.</p>
 <h2><a href="#step-3-add-streaming-responses" id="step-3-add-streaming-responses"></a>Step 3: Add Streaming Responses</h2>
-<p>Right now, you wait for the complete response before seeing anything. Let’s make it interactive by streaming the response as it’s generated.</p>
-<h3><a href="#using-lazy-sequences" id="using-lazy-sequences"></a>Using Lazy Sequences</h3>
+<p>Right now, you wait for the complete response before seeing anything. Stream the response as it is generated.</p>
+<h3><a href="#using-scope-bound-lazy-sequences" id="using-scope-bound-lazy-sequences"></a>Using Scope-Bound Lazy Sequences</h3>
 <pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
 (require '[github.copilot-sdk.helpers :as h])
 
@@ -66,7 +66,10 @@ Q: How about Tokyo?
 (defmethod handle-event :copilot/session.idle [_]
   (println))
 
-(run! handle-event (h/query-seq! "Tell me a short joke" :session {:on-permission-request copilot/approve-all :streaming? true}))
+(h/with-query-seq [events "Tell me a short joke"
+                   :session {:on-permission-request copilot/approve-all
+                             :streaming? true}]
+  (run! handle-event events))
 </code></pre>
 <h3><a href="#using-coreasync-channels" id="using-coreasync-channels"></a>Using core.async Channels</h3>
 <pre><code class="language-clojure">(require '[clojure.core.async :refer [chan tap go-loop &lt;!]])

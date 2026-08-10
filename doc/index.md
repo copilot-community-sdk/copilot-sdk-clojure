@@ -42,7 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
-- [ADR: Add scope-bound query sequences before deprecating query-seq!](adr/2026-08-08-query-seq-scoped-lifecycle.md) -- **Proposed.** Adds `with-query-seq` as the safe default for streaming/seq-style consumption; `query-seq!` deprecation and removal are deferred, separate future steps.
+- [ADR: Add scope-bound query sequences before deprecating query-seq!](adr/2026-08-08-query-seq-scoped-lifecycle.md) -- **Accepted.** Adds `with-query-seq` as the safe default for streaming/seq-style consumption; `query-seq!` deprecation and removal are deferred, separate future steps.
 
 ## Contributing
 

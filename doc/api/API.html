@@ -31,20 +31,45 @@
     (h/query "My name is Alice." :session session)
     (h/query "What is my name?" :session session))) ;; context preserved!
 </code></pre>
+<h3><a href="#with-query-seq" id="with-query-seq"></a><code>with-query-seq</code></h3>
+<pre><code class="language-clojure">(h/with-query-seq [events prompt &amp; {:keys [client session max-events]}]
+  body)
+</code></pre>
+<p>Execute a query, bind a bounded lazy sequence of events for the dynamic extent of <code>body</code>, and disconnect the session when the body exits.</p>
+<p>Use this as the default seq-style streaming helper. Cleanup runs when <code>body</code> returns, throws, stops after a partial realization such as <code>(first events)</code>, or consumes the sequence to a terminal event.</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Default </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:client</code> </td><td> map </td><td> <code>nil</code> </td><td> Client options map </td></tr>
+<tr><td> <code>:max-events</code> </td><td> integer </td><td> <code>256</code> </td><td> Maximum number of events to emit; <code>0</code> disconnects immediately </td></tr>
+<tr><td> <code>:session</code> </td><td> map </td><td> <code>nil</code> </td><td> Session options map </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(h/with-query-seq [events "Tell me a story"
+                   :session {:on-permission-request copilot/approve-all
+                             :streaming? true}]
+  (-&gt;&gt; events
+       (filter #(= :copilot/assistant.message_delta (:type %)))
+       (map #(get-in % [:data :delta-content]))
+       (run! print)))
+</code></pre>
+<p>Do not let <code>events</code> escape the body. The session is closed when the macro exits, like <code>with-open</code>.</p>
 <h3><a href="#query-seq" id="query-seq"></a><code>query-seq!</code></h3>
 <pre><code class="language-clojure">(h/query-seq! prompt &amp; {:keys [client session max-events]})
 </code></pre>
-<p>Execute a query and return a bounded lazy sequence of events (default: 256 events).</p>
-<p><strong>Warning:</strong> cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a <code>:copilot/session.idle</code> / <code>:copilot/session.error</code> event, or the events channel closing (detected when the next read yields <code>nil</code>, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it reaches a terminal event (e.g. <code>(first ...)</code> or <code>(take 1 ...)</code> when the first element isn’t already terminal), or hitting a positive <code>:max-events</code> bound before that end of stream, leaks the session and its event tap (the sole exception is <code>:max-events 0</code>, which disconnects immediately without emitting anything). Consume the whole seq, or use <code>query-chan</code> (explicit lifecycle — safe to stop early provided you close the returned channel) or <code>query</code> when you may stop reading early.</p>
-<pre><code class="language-clojure">(-&gt;&gt; (h/query-seq! "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})
-     (filter #(= :copilot/assistant.message_delta (:type %)))
-     (map #(get-in % [:data :delta-content]))
-     (run! print))
+<p>Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported.</p>
+<p><strong>Warning:</strong> cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a <code>:copilot/session.idle</code> / <code>:copilot/session.error</code> event, or the events channel closing (detected when the next read yields <code>nil</code>, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it reaches a terminal event (e.g. <code>(first ...)</code> or <code>(take 1 ...)</code> when the first element isn’t already terminal), or hitting a positive <code>:max-events</code> bound before that end of stream, leaks the session and its event tap (the sole exception is <code>:max-events 0</code>, which disconnects immediately without emitting anything). Consume the whole seq, or use <code>with-query-seq</code> or <code>query</code> when you may stop reading early.</p>
+<pre><code class="language-clojure">(run! println
+      (h/query-seq! "Tell me a story"
+                    :session {:on-permission-request copilot/approve-all
+                              :streaming? true}))
 </code></pre>
 <h3><a href="#query-chan" id="query-chan"></a><code>query-chan</code></h3>
 <pre><code class="language-clojure">(h/query-chan prompt &amp; {:keys [client session buffer]})
 </code></pre>
-<p>Execute a query and return a core.async channel of events. Use this when you need an explicit lifecycle or want to stop reading early without leaking session resources.</p>
+<p>Execute a query and return a core.async channel of events. Use this when you want to process events with core.async.</p>
 <pre><code class="language-clojure">(let [ch (h/query-chan "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})]
   (go-loop []
     (when-let [event (&lt;! ch)]
