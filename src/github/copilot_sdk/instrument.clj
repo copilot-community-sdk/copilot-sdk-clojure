@@ -15,6 +15,7 @@
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
             [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.helpers]
             [github.copilot-sdk.specs :as specs]
             ;; Ensure namespaces hosting public fns referenced by `register-fdef!`
             ;; are loaded before `stest/instrument` runs (otherwise the missing
@@ -577,6 +578,11 @@
                 :args (s/cat :prompt string?
                              :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/timeout-ms]))
                 :ret (s/nilable string?))
+
+(register-fdef! github.copilot-sdk.helpers/query-seq-source
+                :args (s/cat :prompt string?
+                             :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/max-events]))
+                :ret (s/tuple seqable? ifn?))
 
 (register-fdef! github.copilot-sdk.helpers/query-seq!
                 :args (s/cat :prompt string?

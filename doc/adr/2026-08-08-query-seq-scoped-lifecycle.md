@@ -1,6 +1,6 @@
 # ADR: Add scope-bound query sequences before deprecating query-seq!
 
-- Status: Proposed
+- Status: Accepted
 - Deciders: @krukow
 - Related: [`doc/reference/API.md#query-seq`](../reference/API.md#query-seq),
   [`doc/reference/API.md#query-chan`](../reference/API.md#query-chan),
@@ -10,7 +10,9 @@
 ## Context
 
 `github.copilot-sdk.helpers/query-seq!` returns a bounded lazy sequence backed
-by a live session and an event tap (`src/github/copilot_sdk/helpers.clj:233-289`).
+by a live session and an event tap, now via `query-seq-source`
+(`src/github/copilot_sdk/helpers.clj:233-264`) and `query-seq!`
+(`src/github/copilot_sdk/helpers.clj:302-336`).
 Cleanup (`copilot/disconnect!`) is wired into the lazy-seq generator itself and
 only fires on one of three "natural ends": a `:copilot/session.idle` /
 `:copilot/session.error` event, the events channel closing (`nil` on the next
@@ -41,41 +43,45 @@ closeable channel/handle API, or another idiomatic design -- ruling out
 finalizers, retries, and hidden-timeout fallbacks as "success-shaped"
 non-fixes.
 
-**`query-chan`'s safety is narrower than its docstring currently states.**
-`query-chan` (`helpers.clj:291-351`) pipes events through a bounded
+**`query-chan`'s safety is narrower than the pre-remediation public guidance
+implied.**
+`query-chan` (`src/github/copilot_sdk/helpers.clj:338-398`) pipes events through a bounded
 (default 256) output channel via an internal `go-loop` that `>!` puts each
 event and disconnects once it reaches its own terminal event or `events-ch`
-closes. Its docstring claims this is "safe to stop early provided you close
-the returned channel." Verified directly (minimal core.async repros, not
-taken on faith): that claim only holds if the consumer closes the channel
-*before* the internal buffer fills and a put parks, or keeps draining. If the
-consumer stops reading and the session emits more events than the buffer
-holds before its terminal event, the producer's `>!` parks -- and **closing
-the channel after a put has already parked does not release it**
-(`close!` only makes *subsequent* puts fail fast; an in-flight parked put is
-unaffected). In that case `query-chan` leaks exactly like `query-seq!` does
-today, just at a higher event-count threshold instead of on first
-realization, and a "helpful" close called too late gives no rescue. This is a
-pre-existing, previously-undocumented gap in `query-chan`'s own contract that
-this review surfaced; it is not fixed here (out of `COR-002`'s scope, which is
-about `query-seq!`), but the tests below make the real behavior explicit
-rather than assumed, and this ADR does not claim `query-chan` as a fully safe
-answer to "may stop early."
+closes. Its source docstring does not promise early-abandonment safety, but
+the pre-remediation API/reference guidance and `query-seq!` recommendation
+described `query-chan` as safe to stop early if the returned channel is closed.
+Verified directly (minimal core.async repros, not taken on faith): that claim
+only holds if the consumer closes the channel *before* the internal buffer
+fills and a put parks, or keeps draining. If the consumer stops reading and
+the session emits more events than the buffer holds before its terminal event,
+the producer's `>!` parks -- and **closing the channel after a put has already
+parked does not release it** (`close!` only makes *subsequent* puts fail fast;
+an in-flight parked put is unaffected). In that case `query-chan` leaks
+exactly like `query-seq!` does today, just at a higher event-count threshold
+instead of on first realization, and a "helpful" close called too late gives
+no rescue. This is a pre-existing, previously-undocumented gap in
+`query-chan`'s own contract that this review surfaced. It is not fixed here
+because it is out of `COR-002`'s scope; it is deferred to `COR-003` / `R13`.
+This ADR does not claim `query-chan` as a fully safe answer to "may stop
+early."
 
 The codebase's established idiom for "create a resource, guarantee release on
-scope exit" is a `with-*` macro over `try`/`finally` -- see `with-session` and
-`with-client` (`src/github/copilot_sdk.clj:391,599-611`). There is no
+scope exit" is a `with-*` macro over `try`/`finally` -- see `with-client` and
+`with-session` (`src/github/copilot_sdk.clj:394-406,602-614`). There is no
 `Closeable`/`AutoCloseable` type anywhere in the SDK's public surface.
 `clojure.core/line-seq` is the same shape of problem in the standard library
 (a lazy seq over a live `BufferedReader`); its accepted idiom is `with-open`
 around the consuming form, not a `Closeable` `line-seq` return value.
 
 **Two related gaps found while reading the implementation, not previously
-filed:** `query-seq!` does not guard `(copilot/send! sess ...)` with
-`try`/`catch` the way `query-chan` does, so a `send!` failure before the seq
-is returned leaks the already-created session; and `::max-events` is specced
-`pos-int?` (`specs.clj:2201`), rejecting the documented, load-bearing `0`
-value -- untested only because no test today exercises
+filed:** before this remediation, `query-seq!` did not guard
+`(copilot/send! sess ...)` with `try`/`catch` the way `query-chan` does, so a
+`send!` failure before the seq was returned leaked the already-created session;
+and `::max-events` was specced `pos-int?`, rejecting the documented,
+load-bearing `0` value. It is now fixed as `nat-int?`
+(`src/github/copilot_sdk/specs.clj:2205`) and covered by tests -- previously
+untested only because no test exercised
 `query-seq!`/`query-chan`/`query` at all.
 
 ## Decision
@@ -122,17 +128,19 @@ new lifecycle-shaped API surface is added beyond the macro itself.
 ### Deprecation is a later, separate step -- not part of this change
 
 This ADR does **not** deprecate `query-seq!` yet. `query-seq!` keeps its
-current signature, behavior, and docstring unchanged when `with-query-seq`
-ships; it is refactored internally to delegate to `query-seq-source` (a
-non-observable change) but is not labeled deprecated until the replacement has
-actually shipped and proven itself. Rationale and cost, quantified rather
-than assumed:
+current signature, lifecycle behavior, and deprecation status when
+`with-query-seq` ships; its recommendation text is updated to point early-stop
+callers to `with-query-seq` / `query`, and it is refactored internally to
+delegate to `query-seq-source` (a non-observable lifecycle-behavior change).
+It is not labeled deprecated until the replacement has actually shipped and
+proven itself. Rationale and cost, quantified rather than assumed:
 
-- **In-repo exposure is small and known:** exactly one production call site
-  (`examples/helpers_query.clj:41`, the `run-streaming` example) and doc
-  mentions in four files (`doc/getting-started.md:98`, `doc/reference/API.md`,
-  `examples/README.md` -- two locations). Zero test references exist today.
-  The implementation PR owns migrating all of these to `with-query-seq`.
+- **Pre-implementation in-repo exposure was small and known:** exactly one
+  production call site (the `run-streaming` example, now migrated at
+  `examples/helpers_query.clj:41-43`) and doc mentions in four files
+  (`doc/getting-started.md:98`, `doc/reference/API.md`, `examples/README.md`
+  -- two locations). Zero test references existed. The implementation PR owns
+  migrating all of these to `with-query-seq`.
 - **External exposure is unknowable.** `query-seq!` has been published to
   Maven Central since `1.0.0` on a stable name; any number of external
   consumers may depend on it, and this repo has no visibility into that
@@ -144,7 +152,7 @@ than assumed:
   (cleanup-on-early-exit, cleanup-on-exception, cross-namespace expansion)
   have held, mark `query-seq!` deprecated in place -- docstring + doc heading,
   following the existing `destroy!` -> `disconnect!` precedent
-  (`src/github/copilot_sdk.clj:971-976`), in a *later* PR, not this one; (3)
+  (`src/github/copilot_sdk.clj:974-979`), in a *later* PR, not this one; (3)
   removal is a **separate future breaking-change decision**, not before the
   Clojure SDK's next major API release, and only after `with-query-seq` has
   been available for at least one published release with migration docs in
@@ -154,7 +162,7 @@ than assumed:
 |---|---|
 | `with-query-seq` | **New** macro; recommended default for seq-style consumption going forward. |
 | `query-seq-source` | **New**, private fn; returns `[seq finish!]`. Invoked from the macro via Var-quote. |
-| `query-seq!` | **Unchanged** signature/behavior/docstring now; internally delegates to `query-seq-source`. Deprecation is a later PR (see above). |
+| `query-seq!` | **Unchanged** signature, lifecycle behavior, and deprecation status; recommendation text now points early-stop callers to `with-query-seq` / `query`; internally delegates to `query-seq-source`. Deprecation is a later PR (see above). |
 | `query-chan`, `query` | Unchanged. |
 | `::max-events` spec | Bug fix: `pos-int?` -> accepts `0` (e.g. `nat-int?`). |
 
@@ -211,12 +219,13 @@ safety `with-query-seq` doesn't already provide.
 
 **C. Push everyone onto `query-chan` (docs-only)**, formalizing it as the
 sole prescribed path for non-full-drain consumption. Rejected as the sole
-remedy for two reasons: `query-chan`'s existing docstring already steers
-callers this way and `COR-002` was filed *after* that text existed (evidence
-docs alone don't work); and, per the corrected analysis in Context,
-`query-chan` itself is not unconditionally safe on early abandonment -- it
-depends on buffer size and close timing. `query-chan` remains unchanged as
-the async-native option, but is not treated here as a complete answer.
+remedy for two reasons: the pre-remediation public API/reference guidance and
+`query-seq!` recommendation already steered callers this way and `COR-002` was
+filed *after* that guidance existed (evidence docs alone don't work); and, per
+the corrected analysis in Context, `query-chan` itself is not unconditionally
+safe on early abandonment -- it depends on buffer size and close timing.
+`query-chan` remains unchanged as the async-native option, but is not treated
+here as a complete answer.
 
 **D. Finalizers / hidden timeouts / retry-based cleanup.** Rejected per `R8`'s
 own framing: finalizers run at GC's discretion with no deadline; a hidden
@@ -230,12 +239,11 @@ failures without making the ownership model correct.
 refactor `query-seq!` to delegate to `query-seq-source` with no observable
 change; fix `::max-events`; migrate all in-repo docs/examples listed above to
 recommend `with-query-seq` by default (`query-seq!` stays documented as an
-existing, still-working option, not yet marked deprecated). `query-chan`'s
-docstring should be corrected separately to reflect the buffer/close-timing
-nuance above -- flagged here, not fixed in this ADR's scope.
+existing, still-working option, not yet marked deprecated). `query-chan`
+remains unchanged here; its full-buffer / late-close cleanup gap is deferred
+to `COR-003` / `R13`.
 
-**Tests** (currently zero direct tests exist for
-`query`/`query-seq!`/`query-chan`):
+**Tests for this change:**
 
 - `with-query-seq`, exercised from a **separate test namespace** (as all test
   namespaces are): confirms the Var-quote expansion actually compiles and
@@ -254,13 +262,10 @@ nuance above -- flagged here, not fixed in this ADR's scope.
   disconnects exactly once (idempotency regression guard).
 - `:max-events 0` under instrumentation, for both `query-seq!` and
   `with-query-seq`.
-- `query-chan`, consumer reads some events then closes the channel *before*
-  the buffer fills: producer completes and disconnects (the documented-safe
-  path).
-- `query-chan`, consumer stops reading without closing and the session emits
-  enough events to fill the buffer: producer parks and does not disconnect
-  within a bounded wait -- documents the residual risk explicitly instead of
-  leaving it assumed-safe.
+
+`query-chan` full-buffer / consumer-close lifecycle tests are deliberately not
+part of this R8 implementation. They belong with the separate `COR-003` /
+`R13` design and remediation.
 
 **Deferred (not authorized by this ADR):** marking `query-seq!` deprecated
 (future PR, after `with-query-seq` has shipped in >=1 release and the above

@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (helper lifecycle)
+- **Scope-bound helper event sequences** -- `github.copilot-sdk.helpers/with-query-seq`
+  binds the same bounded event sequence shape as `query-seq!` for the dynamic
+  extent of a body and disconnects in `finally`, so partial realization, early
+  body return, body exceptions, and positive `:max-events` body exits clean up
+  the hidden session and event tap. `query-seq!` remains supported and is not
+  deprecated in this change.
+
+### Fixed (helper lifecycle)
+- `query-seq!` now disconnects the created session when setup fails during
+  `send!`, and `:max-events 0` is accepted by the public helper specs under
+  instrumentation.
+
 ### Changed (reverse-RPC execution policy)
 - **Reverse request handlers run on a bounded worker pool** -- server-to-client RPC
   handlers (hooks, `sessionFs.*`, factories, user input, provider tokens,

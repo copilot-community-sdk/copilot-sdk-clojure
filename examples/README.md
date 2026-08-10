@@ -163,9 +163,10 @@ Shows the simplified helpers API for one-shot queries without managing client/se
 
 ### What It Demonstrates
 
-- `query` - Simple synchronous query, returns just the answer string
-- `query-seq!` - Returns a bounded lazy sequence (default 256 events) and guarantees session cleanup  
-- `query-chan` - Returns core.async channel of events for explicit lifecycle control
+- `query` - Simple synchronous query, returns the answer string
+- `with-query-seq` - Binds a bounded lazy sequence and guarantees session cleanup on body exit
+- `query-seq!` - Returns a bounded lazy sequence (default 256 events) for callers that consume it to its natural end
+- `query-chan` - Returns a core.async channel of events
 - Automatic client management (created on first use, reused across queries)
 - Automatic cleanup via JVM shutdown hook (no manual cleanup needed)
 
@@ -178,7 +179,7 @@ clojure -A:examples -X helpers-query/run
 # With custom prompt
 clojure -A:examples -X helpers-query/run :prompt '"What is functional programming?"'
 
-# Streaming output (lazy seq)
+# Streaming output (scoped lazy seq)
 clojure -A:examples -X helpers-query/run-streaming
 
 # Streaming output (core.async)
@@ -211,8 +212,10 @@ clojure -A:examples -X helpers-query/run-multi :questions '["What is Rust?" "Wha
   (flush))
 (defmethod handle-event :copilot/assistant.message [_] (println))
 
-(run! handle-event (h/query-seq! "Tell me a joke" :session {:on-permission-request copilot/approve-all
-                                                              :model "gpt-5.4" :streaming? true}))
+(h/with-query-seq [events "Tell me a joke"
+                   :session {:on-permission-request copilot/approve-all
+                             :model "gpt-5.4" :streaming? true}]
+  (run! handle-event events))
 ```
 
 ---
@@ -1068,8 +1071,10 @@ session.on((event) => {
 (defmethod handle-event :copilot/assistant.message [{{:keys [content]} :data}]
   (println content))
 
-(run! handle-event (h/query-seq! "Hello" :session {:on-permission-request copilot/approve-all
-                                                    :model "gpt-5.4" :streaming? true}))
+(h/with-query-seq [events "Hello"
+                   :session {:on-permission-request copilot/approve-all
+                             :model "gpt-5.4" :streaming? true}]
+  (run! handle-event events))
 ```
 
 ### Tool Definition
