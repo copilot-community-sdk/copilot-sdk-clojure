@@ -15,6 +15,13 @@ All notable changes to this project will be documented in this file. This change
 - `query-seq!` now disconnects the created session when setup fails during
   `send!`, and `:max-events 0` is accepted by the public helper specs under
   instrumentation.
+- `query-chan` now treats closing its returned channel as explicit cancellation:
+  a prioritized cancellation alt releases producers parked on a full bounded
+  output, while one-shot asynchronous disconnect releases producers waiting for
+  source events. Setup failures, normal terminal completion, repeated or
+  concurrent close, and close/terminal races disconnect exactly once. Buffered
+  values accepted before cancellation remain readable; an in-flight parked event
+  may be dropped.
 
 ### Changed (v1.0.79 sync)
 - **`send-and-wait!` default idle-wait timeout is now 60000ms** (was 300000ms),
