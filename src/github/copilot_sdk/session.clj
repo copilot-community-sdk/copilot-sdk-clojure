@@ -1577,24 +1577,42 @@
       (log/debug "send! completed for session " session-id " message-id=" msg-id)
       msg-id)))
 
+(def ^:private ^:const default-send-and-wait-timeout-ms
+  "Default idle-wait timeout (ms) for the `send-and-wait!` / `send-async`
+   family when no `:timeout-ms` is supplied. Matches upstream
+   `nodejs/src/session.ts` (`effectiveTimeout = timeout ?? 60_000`). Controls
+   how long to wait for `session.idle`; it does not abort in-flight agent work."
+  60000)
+
 (defn send-and-wait!
   "Send a message and wait until the session becomes idle.
    Returns the final assistant message event, or nil if none received.
    Serialized per session to avoid mixing concurrent sends.
-   
+
    Options: same as send!
-   
+
    Additional options:
-   - :timeout-ms   - Timeout in milliseconds (default: 300000)"
+   - :timeout-ms   - Timeout in milliseconds (default: 60000). The 2-arity form
+                     reads this from `opts`; an explicit numeric value overrides
+                     the default. A `nil` value (in `opts` or as the positional
+                     3-arity argument) disables the deadline and waits
+                     indefinitely for `session.idle`/`session.error`. In every
+                     case `:timeout-ms` is stripped from `opts` before the
+                     underlying `session.send`, so it is never forwarded on the
+                     wire."
   ([session opts]
-   (send-and-wait! session opts 300000))
+   (let [timeout-ms (if (contains? opts :timeout-ms)
+                      (:timeout-ms opts)
+                      default-send-and-wait-timeout-ms)]
+     (send-and-wait! session (dissoc opts :timeout-ms) timeout-ms)))
   ([session opts timeout-ms]
    (let [{:keys [session-id client]} session]
      (log/debug "send-and-wait! called for session " session-id)
      (when (session-disconnected? client session-id)
        (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
-     (let [event-ch (chan 1024)
+     (let [send-opts (dissoc opts :timeout-ms)
+           event-ch (chan 1024)
            last-assistant-msg (atom nil)
            {:keys [event-mult send-lock]} (session-io client session-id)]
         ;; Acquire channel-based lock (blocks calling thread)
@@ -1605,17 +1623,21 @@
          (log/debug "send-and-wait! tapping event mult for session " session-id)
          (tap event-mult event-ch)
 
-         ;; Send the message
+         ;; Send the message (never forward :timeout-ms on the wire)
          (log/debug "send-and-wait! sending message")
-         (send! session opts)
+         (send! session send-opts)
 
-         ;; Wait for events with single deadline timeout
+         ;; Wait for events with a single optional deadline. A nil timeout-ms
+         ;; disables the deadline: the wait set is event-ch alone rather than
+         ;; calling (async/timeout nil).
          (log/debug "send-and-wait! waiting for result with timeout " timeout-ms "ms")
-         (let [deadline-ch (async/timeout timeout-ms)]
+         (let [deadline-ch (when timeout-ms (async/timeout timeout-ms))]
            (loop []
-             (let [[event ch] (alts!! [event-ch deadline-ch])]
+             (let [[event ch] (if deadline-ch
+                                (alts!! [event-ch deadline-ch])
+                                [(<!! event-ch) event-ch])]
                (cond
-                 (= ch deadline-ch)
+                 (and deadline-ch (= ch deadline-ch))
                  (do
                    (log/error "send-and-wait! timeout after " timeout-ms "ms for session " session-id)
                    (throw (ex-info (str "Timeout after " timeout-ms "ms waiting for session.idle")
@@ -1829,13 +1851,13 @@
    Options: same as send! (including :request-headers).
    
    Additional options:
-   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)"
+   - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)"
   [session opts]
   (when-not (s/valid? ::specs/send-options opts)
     (throw (ex-info "Invalid send options"
                     {:opts opts
                      :explain (s/explain-data ::specs/send-options opts)})))
-  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
+  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) default-send-and-wait-timeout-ms)
         opts (dissoc opts :timeout-ms)]
     (<send-async* session opts timeout-ms)))
 
@@ -1846,11 +1868,11 @@
    Options: same as send! (including :request-headers).
    
    Additional options:
-   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
+   - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)
    
    The returned channel delivers a single value (the response content) then closes."
   [session opts]
-  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
+  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) default-send-and-wait-timeout-ms)
         events-ch (send-async session (assoc opts :timeout-ms timeout-ms))
         out-ch (chan (async/sliding-buffer 1))]
     (go
@@ -1884,11 +1906,11 @@
    Options: same as send!.
 
    Additional options:
-   - :timeout-ms   - Timeout in milliseconds (default: 300000, set to nil to disable)
+   - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)
 
    The returned channel delivers at most one value then closes."
   [session opts]
-  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
+  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) default-send-and-wait-timeout-ms)
         events-ch (send-async session (assoc opts :timeout-ms timeout-ms))
         out-ch (chan (async/sliding-buffer 1))]
     (go
@@ -1910,7 +1932,7 @@
 (defn send-async-with-id
   "Send a message and return {:message-id :events-ch}."
   [session opts]
-  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) 300000)
+  (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) default-send-and-wait-timeout-ms)
         opts (dissoc opts :timeout-ms)]
     (send-async* session opts timeout-ms)))
 
