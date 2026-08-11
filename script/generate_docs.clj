@@ -1,43 +1,49 @@
 (ns generate-docs
   (:require [clojure.java.io :as io]
-            [clojure.string :as str]
-            [codox.main :as codox]))
+            [codox.main :as codox]
+            [codox.reader.plaintext :as plaintext]
+            [codox.writer.html :as html]
+            [docs-links :as links]))
 
-(defn- adr-page-names
-  [root]
-  (->> (file-seq (io/file root "doc/adr"))
-       (filter #(.isFile %))
-       (map #(.getName %))
-       (filter #(str/ends-with? % ".md"))
-       (map #(str/replace % #"\.md$" ""))
-       sort))
-
-(defn- rewrite-flattened-adr-links!
-  [root output-dir]
-  (let [page-names (adr-page-names root)]
-    (doseq [page-name page-names]
-      (when-not (.isFile (io/file output-dir (str page-name ".html")))
-        (throw (ex-info "Codox did not generate the expected ADR page"
-                        {:page page-name :output-dir (str output-dir)}))))
-    (doseq [html-file (->> (file-seq output-dir)
-                           (filter #(.isFile %))
-                           (filter #(str/ends-with? (.getName %) ".html")))]
-      (let [before (slurp html-file)
-            after (reduce (fn [html page-name]
-                            (str/replace html
-                                         (str "href=\"adr/" page-name ".html\"")
-                                         (str "href=\"" page-name ".html\"")))
-                          before
-                          page-names)]
-        (when-not (= before after)
-          (spit html-file after))))))
+(defn write-docs
+  "Delegate to Codox's HTML writer with explicit topic output identities."
+  [{:keys [topic-manifest generation-state] :as project}]
+  (let [reserved (into #{"index.html"}
+                       (map #(str (:name %) ".html"))
+                       (:namespaces project))
+        topic-manifest (links/reserve-output-identities topic-manifest reserved)]
+    (reset! generation-state {:manifest topic-manifest
+                              :reserved-output-files reserved})
+    (html/write-docs
+     (assoc project
+            :documents
+            (->> topic-manifest
+                 (sort-by (juxt :basename :source-path))
+                 (mapv (fn [{:keys [source-file output-name] :as entry}]
+                         (-> (plaintext/read-file source-file)
+                             (assoc :name output-name)
+                             (update :content #(links/rewrite-markdown-links
+                                                topic-manifest
+                                                entry
+                                                %))))))))))
 
 (defn generate-docs
-  "Generate Codox output and repair links to nested Markdown documents that
-  Codox flattens into the output root."
+  "Generate Codox output with deterministic topic identities and valid links."
   [options]
-  (codox/generate-docs options)
   (let [root (io/file (or (:root-path options)
                           (System/getProperty "user.dir")))
-        output-dir (io/file root (or (:output-path options) "target/doc"))]
-    (rewrite-flattened-adr-links! root output-dir)))
+        output-path (or (:output-path options) "target/doc")
+        output-dir (if (.isAbsolute (io/file output-path))
+                     (io/file output-path)
+                     (io/file root output-path))
+        manifest (links/build-topic-manifest root options)
+        generation-state (atom {:manifest manifest
+                                :reserved-output-files #{"index.html"}})]
+    (codox/generate-docs
+     (assoc options
+            :writer 'generate-docs/write-docs
+            :topic-manifest manifest
+            :generation-state generation-state))
+    (let [{:keys [manifest reserved-output-files]} @generation-state]
+      (links/assert-valid-output-links! manifest reserved-output-files output-dir)
+      (links/write-topic-manifest! manifest reserved-output-files output-dir))))

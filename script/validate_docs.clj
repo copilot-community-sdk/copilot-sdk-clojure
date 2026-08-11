@@ -5,7 +5,8 @@
 (ns validate-docs
   (:require [babashka.fs :as fs]
             [clojure.string :as str]
-            [clojure.edn :as edn]))
+            [clojure.edn :as edn]
+            [docs-links :as docs-links]))
 
 (def repo-root (str (fs/canonicalize ".")))
 
@@ -214,6 +215,44 @@
                    (not= normalized "github.copilot-sdk"))
           (warn! file (format "Reference to unknown namespace: %s" normalized)))))))
 
+;; --- Generated HTML Validation ---
+
+(defn validate-generated-html []
+  (try
+    (let [source-manifest (docs-links/build-topic-manifest
+                           repo-root
+                           {:doc-paths ["doc"]})
+          output-dir (fs/file repo-root "doc/api")
+          {:keys [manifest reserved-output-files]}
+          (docs-links/read-topic-manifest source-manifest output-dir)]
+      (doseq [output-file reserved-output-files]
+        (when-not (fs/regular-file? (fs/file output-dir output-file))
+          (error! output-file "Codox-owned generated output is missing")))
+      (doseq [{:keys [source-page output-page href target]}
+              (docs-links/broken-output-links manifest output-dir)]
+        (error! output-page
+                (format "Broken generated topic link from %s: %s -> %s"
+                        source-page href target)))
+      (doseq [{:keys [source-page output-page href expected]}
+              (docs-links/unresolved-output-links manifest output-dir)]
+        (error! output-page
+                (format "Unresolved generated topic link from %s: %s (expected %s)"
+                        source-page href expected)))
+      (doseq [{:keys [source-page output-page href target anchor]}
+              (docs-links/broken-output-anchors manifest output-dir)]
+        (error! output-page
+                (format "Broken generated topic anchor from %s: %s -> %s#%s"
+                        source-page href target anchor)))
+      (doseq [{:keys [source-page output-page href target]}
+              (docs-links/reserved-target-content-links
+               manifest reserved-output-files output-dir)]
+        (error! output-page
+                (format "Generated topic link from %s targets reserved output: %s -> %s"
+                        source-page href target))))
+    (catch Exception e
+      (error! "doc/api" (str "Could not validate generated topics: "
+                             (ex-message e))))))
+
 ;; --- Main ---
 
 (defn run-validation []
@@ -234,6 +273,10 @@
       (validate-code-blocks file content)
       (validate-anchor-links file content)
       (validate-namespace-refs file content)))
+  (println "done")
+
+  (print "  Checking generated HTML topic links... ")
+  (validate-generated-html)
   (println "done")
   (println)
 

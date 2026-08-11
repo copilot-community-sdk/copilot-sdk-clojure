@@ -305,7 +305,7 @@ For parallel workflows spanning multiple sessions, see the [multi-agent example]
 
 ## See Also
 
-- [API Reference — Session Configuration](../reference/API.md#session-configuration) — all session config keys
+- [API Reference — Session Configuration](../reference/API.md#create-session) — all session config keys
 - [API Reference — Event Types](../reference/API.md#event-types) — complete event type list
 - [MCP Servers](../mcp/overview.md) — MCP server configuration
 - [Multi-Agent Example](../../examples/multi_agent.clj) — working multi-agent orchestration code
