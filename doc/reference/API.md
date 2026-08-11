@@ -348,7 +348,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:tool-search` | map | Configure runtime tool search for `create-session`, `resume-session`, and `join-session`. Optional keys: `:enabled` (boolean) and `:defer-threshold` (integer). This session-level configuration is distinct from a tool definition's `:defer` policy; omit it to use runtime defaults. |
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options`, `:headers` (map of HTTP header name→value, sent with each provider request — upstream PR #1094), `:model-id` (string — the model identifier to send to the provider; overrides session `:model`), `:wire-model` (string — model name as sent on the provider wire when it differs from `:model-id`), `:max-input-tokens` (integer — input/prompt token cap; serialized as wire `maxPromptTokens`), `:max-output-tokens` (integer — output token cap), `:transport` (`:http`/`:websockets` — provider transport; serialized as wire `transport` — upstream PR #1711), `:bearer-token-provider` (fn — dynamic bearer-token callback, see [BYOK docs](../auth/byok.md#dynamic-bearer-tokens) — upstream PR #1748). The four override fields were added in upstream PR #966 |
 | `:providers` | vector | (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of `:provider` — `:base-url` (required), `:provider-type`, `:wire-api`, `:api-key`, `:bearer-token`, `:azure-options`, `:headers`, `:bearer-token-provider` — plus a required `:name` (the registry key, no `/`). Unlike the singular `:provider`, a named provider does **not** accept `:transport` or the inline model-override fields (`:model-id`, `:wire-model`, `:max-input-tokens`, `:max-output-tokens`); model overrides are declared in `:models` instead. Pairs with `:models` to declare a model catalog. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
-| `:models` | vector | (Experimental) Model catalog referencing the `:providers` registry. Each entry: `:id` (required, provider-local model id), `:provider` (required, a `:name` in `:providers`), and optional override fields (`:model-id`, `:wire-model`, `:capabilities`, `:max-input-tokens`, `:max-context-window-tokens`, `:max-output-tokens`). The full model selection id is `"providerName/id"`. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
+| `:models` | vector | (Experimental) Model catalog referencing the `:providers` registry. Each entry: `:id` (required, provider-local model id), `:provider` (required, a `:name` in `:providers`), and optional override fields (`:model-id`, `:wire-model`, `:capabilities`, `:max-input-tokens`, `:max-context-window-tokens`, `:max-output-tokens`). Prefer the canonical `:capabilities` idiom documented for `:model-capabilities`; exact string-keyed wire maps remain accepted as a deprecated compatibility escape hatch. The full model selection id is `"providerName/id"`. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
 | `:capi` | map | CAPI (Copilot API) session options. `{:enable-web-socket-responses boolean}` — serialized as wire `capi.enableWebSocketResponses`. (upstream PR #1711) |
 | `:excluded-builtin-agents` | vector | Names of built-in agents to hide/exclude from the session. Serialized as wire `excludedBuiltinAgents`. (upstream PR #1865) |
 | `:enable-citations` | boolean | (Experimental) Opt into native model citations. Gated on `some?` — an explicit `false` is forwarded; an absent key is omitted. Serialized as wire `enableCitations`. (upstream PR #1865) |
@@ -361,16 +361,16 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:disabled-mcp-servers` | vector | Names of configured MCP servers (from `:mcp-servers` or on-disk `.mcp.json`) to suppress for this session. Vector of non-blank strings. Serialized as wire `disabledMcpServers`. ([upstream PR #2260](https://github.com/github/copilot-sdk/pull/2260)) |
 | `:github-mcp-tool-config` | map | Configures the built-in GitHub MCP server's tool surface. Optional keys: `:enable-all-tools?` (boolean, gated on `some?`), `:additional-toolsets` (vector of strings), `:additional-tools` (vector of strings), `:enable-insiders-mode?` (boolean, gated on `some?`), `:disable-form-deferral?` (boolean, gated on `some?`). Serialized as wire `githubMcpToolConfig.{enableAllTools,additionalToolsets,additionalTools,enableInsidersMode,disableFormDeferral}`. ([upstream PR #2112](https://github.com/github/copilot-sdk/pull/2112)) |
 | `:commands` | vector | Command definitions (slash commands). See [Commands](#commands) |
-| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"`), `:mcp-servers`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. `:agent-reasoning-effort` is serialized as `reasoningEffort` on both `session.create` and `session.resume`. When omitted, the runtime resolves effort from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
+| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"`), `:mcp-servers`. The disambiguating Clojure prefixes are removed on the wire (`:agent-name` becomes `name`, `:agent-prompt` becomes `prompt`, and so on); `:agent-reasoning-effort` becomes `reasoningEffort`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. When reasoning effort is omitted, the runtime resolves it from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
 | `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
-| `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). When omitted, permission requests are not auto-resolved; resolve them manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
-| `:streaming?` | boolean | Enable streaming deltas |
+| `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). On create, omission sends `requestPermission: false`; providing a handler sends `true`. Resolve surfaced pending requests manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
+| `:streaming?` | boolean | Enable streaming deltas. Explicit `false` is forwarded; omission leaves the runtime default unchanged. |
 | `:config-dir` | string | Override config directory for CLI |
 | `:skill-directories` | vector | Additional skill directories to load |
 | `:instruction-directories` | vector | Additional directories to search for custom instruction files. Forwarded as `instructionDirectories` on `session.create` and `session.resume`. (upstream PR #1190) |
 | `:additional-directories` | vector | Extra directories the runtime is allowed to read/write outside the session's working directory. Vector of non-blank strings. Serialized as wire `additionalDirectories`. Re-supply the vector when resuming a session. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
 | `:disabled-skills` | vector | Disable specific skills by name |
-| `:large-output` | map | (Experimental) Tool output handling config. CLI protocol feature, not in official SDK. |
+| `:large-output` | map | Tool output handling config. Supports `:enabled`, `:max-size-bytes`, and `:output-directory` (`:output-dir` remains a deprecated alias). The official SDK exposes the same config as `largeOutput`. |
 | `:working-directory` | string | Working directory for the session (tool operations relative to this) |
 | `:infinite-sessions` | map | Infinite session config (see below) |
 | `:reasoning-effort` | string | Reasoning effort level: `"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"` ([upstream PR #2228](https://github.com/github/copilot-sdk/pull/2228)) |
@@ -387,7 +387,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
 | `:enable-experimental-mode?` | boolean | Opt into CLI-side experimental features. Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `isExperimentalMode`. Defaulted to `false` in `:empty` mode. ([upstream PR #1600](https://github.com/github/copilot-sdk/pull/1600)) |
-| `:model-capabilities` | map | Model capabilities override. DeepPartial of model capabilities, e.g. `{:model-supports {:supports-vision true}}`. (upstream PR #1029) |
+| `:model-capabilities` | map | Deep-partial model capability override forwarded verbatim (upstream `SessionConfig.modelCapabilities`, a stable public SDK field). Canonical shape: `{:supports {:vision boolean :reasoning-effort boolean :adaptive-thinking :unsupported\|:optional\|:required} :limits {:max-prompt-tokens int :max-output-tokens int :max-context-window-tokens int :vision {:supported-media-types [...] :max-prompt-images int :max-prompt-image-size int}}}`. The stable public-SDK fields are `:supports {:vision :reasoning-effort}` and `:limits {:max-prompt-tokens :max-context-window-tokens :vision {...}}`; `:adaptive-thinking` and `:max-output-tokens` are **experimental** CLI-protocol extensions (present in the runtime wire schema but not the public Node SDK type). The wire keeps `reasoningEffort` camelCase but uses `adaptive_thinking`, `max_prompt_tokens`, `max_output_tokens`, `max_context_window_tokens`, and the nested vision leaves in snake_case. The published `:model-supports` / `:model-limits` aliases remain accepted for outbound compatibility and normalize to the canonical wire shape; do not combine an alias with its canonical branch. (upstream PR #1029) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
 | `:remote-session` | keyword | Per-session Mission Control mode: `:off`, `:export`, or `:on`. When omitted, the CLI applies its default. `:off` disables remote, `:export` exports session events to Mission Control without enabling remote steering, `:on` enables both. Forwarded as `remoteSession`. (upstream PR #1295, CLI 1.0.48) |
 | `:cloud` | map | (create-session only) Creates a remote cloud session. Shape: `{:repository {:owner "octocat" :name "hello-world" :branch "main"}}` — `:owner` and `:name` are required non-blank strings; `:branch` is optional. Forwarded as `cloud.repository.*` on `session.create`. Not accepted on `resume-session` (matches upstream `ResumeSessionConfig`). When `:cloud` is set and `:session-id` is omitted, the SDK defers id assignment to the server and registers the session under the server-returned id (upstream PR #1479). (upstream PR #1306) |
@@ -402,7 +402,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:enable-skills` | boolean | Enable skills discovery and loading. (upstream PR #1474) |
 | `:plugin-directories` | vector | Extra plugin directories loaded even when `:enable-config-discovery` is `false`. Wire-encoded as `pluginDirectories`. (upstream PR #1482) |
 | `:reasoning-summary` | string | `"none"` / `"concise"` / `"detailed"`. Controls inclusion/granularity of reasoning summaries on assistant turns. Wire-encoded as `reasoningSummary`. String-valued for consistency with `:reasoning-effort`. |
-| `:context-tier` | keyword \| `nil` | `#{:default :long-context}` selects the long-context model variant; `nil` explicitly clears any prior tier (wire-encoded as JSON `null`). Omit the key entirely to leave the current setting untouched. Wire-encoded as `contextTier` with values `"default"` / `"long_context"`. |
+| `:context-tier` | keyword | `#{:default :long-context}` selects the model context tier. On create/resume, omit the key to leave the runtime default unchanged; explicit `nil` is invalid because the official session config does not expose `null`. `switch-model!` / `set-model!` retain their existing `nil` option, which omits `contextTier` from that RPC. Wire values are `"default"` / `"long_context"`. |
 | `:skip-custom-instructions` | boolean | Skip loading user-level custom instruction files. Forwarded via `session.options.update` (NOT `session.create`). Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
 | `:custom-agents-local-only` | boolean | Restrict custom-agent loading to caller-supplied configs only (no on-disk discovery). Forwarded via `session.options.update`, and — since ([upstream PR #1899](https://github.com/github/copilot-sdk/pull/1899)) — also sent directly (gated on `some?`) on `session.create` and `session.resume` as wire `custom-agents-local-only`. Defaulted to `true` in `:empty` mode. (upstream PR #1428) |
 | `:coauthor-enabled` | boolean | Add a Copilot Co-authored-by trailer to commits made by the CLI. Forwarded via `session.options.update`. Defaulted to `false` in `:empty` mode. (upstream PR #1428) |
@@ -420,9 +420,9 @@ Resume an existing session by ID. The `config` map accepts the same options as `
 
 | Option | Type | Description |
 |---|---|---|
-| `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false) |
+| `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false). Explicit `false` is forwarded as `disableResume: false`; omission leaves the runtime default unchanged. |
 | `:continue-pending-work?` | boolean | When true, the runtime re-emits any pending `permission.requested` and external tool calls so handlers can re-respond on resume; default false treats pending work as interrupted. Forwarded as `continuePendingWork` on `session.resume`. |
-| `:large-output` | map | (Experimental) Tool output handling config. Now also forwarded on `session.resume` (matching upstream `client.ts:1308`). |
+| `:large-output` | map | Tool output handling config. Forwarded on `session.resume` as the official SDK's `largeOutput` field. |
 
 When `:on-permission-request` is set to `default-join-session-permission-handler`, the SDK sends `requestPermission: false` on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends `requestPermission: true`.
 
@@ -564,14 +564,16 @@ Requires authentication (unless `:on-list-models` is provided). Returns a vector
   :max-input-tokens 128000
   :max-output-tokens 16384
   :preview? false
-  :model-capabilities {:model-supports {:supports-vision true
-                                        :supports-reasoning-effort false}
-                       :model-limits {:max-prompt-tokens 128000
-                                      :max-context-window-tokens 128000
-                                      :vision-capabilities
-                                      {:supported-media-types ["image/png" "image/jpeg"]
-                                       :max-prompt-images 10
-                                       :max-prompt-image-size 20971520}}}
+  :model-capabilities {:supports {:vision true
+                                  :reasoning-effort false
+                                  :adaptive-thinking :optional}
+                       :limits {:max-prompt-tokens 128000
+                                :max-output-tokens 16384
+                                :max-context-window-tokens 128000
+                                :vision
+                                {:supported-media-types ["image/png" "image/jpeg"]
+                                 :max-prompt-images 10
+                                 :max-prompt-image-size 20971520}}}
   :model-policy {:policy-state "enabled"
                  :terms "..."}
   :model-billing {:multiplier 1.0
@@ -1099,7 +1101,8 @@ Get the current model for this session. Returns the model ID string, or nil if n
 
 ;; With model capabilities override (upstream PR #1029):
 (copilot/switch-model! session "gpt-5.4"
-  {:model-capabilities {:model-supports {:supports-vision true}}})
+  {:model-capabilities {:supports {:vision true}
+                        :limits {:max-prompt-tokens 128000}}})
 ```
 
 Switch the model for this session mid-conversation. Returns the new model ID string, or nil.
@@ -1108,7 +1111,7 @@ Optional opts map:
 - `:reasoning-effort` — Reasoning effort level ("low", "medium", "high", "xhigh", or "max")
 - `:reasoning-summary` — Reasoning summary mode ("none", "concise", "detailed"). Wire-encoded as `reasoningSummary`.
 - `:context-tier` — Context window tier for models that support it: `:default` or `:long-context` (upstream PR #1522). Wire-encoded as `contextTier` with values `"default"` / `"long_context"`.
-- `:model-capabilities` — Model capabilities override map, e.g. `{:model-supports {:supports-vision true}}`
+- `:model-capabilities` — Model capabilities override map, e.g. `{:supports {:vision true} :limits {:max-prompt-tokens 128000}}`
 
 #### `set-model!`
 

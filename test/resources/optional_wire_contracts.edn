@@ -1,0 +1,975 @@
+{:upstream
+ {:repository "github/copilot-sdk"
+  :commit "3108e8ce26286043afa52f12781331460628baa0"
+  :canonical
+  ["nodejs/src/types.ts:2130-2793"
+   "nodejs/src/generated/rpc.ts:9672-9737"
+   "nodejs/src/client.ts:1523-1614"
+   "nodejs/src/client.ts:1768-1863"
+   "nodejs/test/client.test.ts:142-189"]
+  :secondary
+  ["python/copilot/client.py:2071-2151"
+   "python/copilot/client.py:2794-3052"]}
+
+ :proven-production-mismatches
+ [{:key :on-permission-request
+  :scope :create
+  :before {:requestPermission true}
+  :node {:requestPermission false}
+  :resolution :derive-from-handler-presence}
+  {:key :context-tier
+  :scope :shared
+  :before {:explicit-nil {:contextTier nil}}
+  :node {:explicit-nil :not-public}
+  :resolution :reject-explicit-nil-on-create-resume-preserve-switch-omit}
+  {:key :model-capabilities
+  :scope :shared
+  :before {:canonical-input :camel-cased-snake-leaves
+           :legacy-input {:modelSupports :modelLimits}}
+  :node {:top-level [:supports :limits]
+         :mixed-wire-leaves [:reasoningEffort :adaptive_thinking
+                             :max_prompt_tokens :max_output_tokens
+                             :max_context_window_tokens]}
+  :resolution :canonical-converter-with-deprecated-input-aliases}
+  {:key :custom-agents
+  :scope :shared
+  :before {:agent-name-wire "agentName"
+           :agent-prompt-wire "agentPrompt"}
+  :node {:agent-name-wire "name"
+         :agent-prompt-wire "prompt"}
+  :resolution :remove-clojure-disambiguation-prefixes}
+  {:key :hooks
+  :scope :shared
+  :before {:empty-map {:hooks true}}
+  :node {:empty-map {:hooks false}}
+  :resolution :derive-from-present-handler-values}
+  {:key :streaming?
+  :scope :shared
+  :before {:explicit-false :omitted}
+  :node {:explicit-false {:streaming false}}
+  :resolution :omit-only-nil}
+  {:key :system-message
+  :scope :shared
+  :before {:empty-map {:systemMessage {:mode "append" :content nil}}}
+  :node {:empty-map {:systemMessage {}}}
+  :resolution :preserve-omitted-optional-subfields}
+  {:key :disable-resume?
+  :scope :resume
+  :before {:explicit-false :omitted}
+  :node {:explicit-false {:disableResume false}}
+  :resolution :omit-only-nil}]
+
+ :classification
+ {:node-public-not-accepted-by-clojure
+  [{:node-key "canvases" :type-line 2211 :status :separate-parity-work}
+   {:node-key "requestCanvasRenderer" :type-line 2219 :status :separate-parity-work}
+   {:node-key "requestExtensions" :type-line 2227 :status :separate-parity-work}
+   {:node-key "extensionSdkPath" :type-line 2241 :status :separate-parity-work}
+   {:node-key "extensionInfo" :type-line 2248 :status :separate-parity-work}
+   {:node-key "enableMcpApps" :type-line 2463 :status :excluded-par-016-r3}]
+
+  :clojure-aliases
+  [{:clojure-key :config-dir
+    :node-key "configDirectory"
+    :wire-key "configDir"
+    :status :deprecated-alias}
+   {:clojure-key :large-output/output-dir
+    :node-key "largeOutput.outputDirectory"
+    :wire-key "largeOutput.outputDir"
+    :status :deprecated-alias}]
+
+  :stability-markers
+  [{:surface :model-capabilities :status :public-with-experimental-extras
+    :public-source "nodejs/src/types.ts:3269-3284"
+    :experimental-extras {:supports [:adaptive-thinking] :limits [:max-output-tokens]}
+    :experimental-source "nodejs/src/generated/rpc.ts:9672-9737"}
+   {:surface :enable-citations :status :experimental
+    :source "nodejs/src/types.ts:2359-2364"}
+   {:surface :session-limits :status :experimental
+    :source "nodejs/src/types.ts:2366-2371"}
+   {:surface :providers :status :experimental
+    :source "nodejs/src/types.ts:2323-2347"}
+   {:surface :models :status :experimental
+    :source "nodejs/src/types.ts:2338-2347"}
+   {:surface :bearer-token-provider :status :experimental
+    :source "nodejs/src/types.ts:2817-2848"}
+   {:surface :exp-assignments :status :internal
+    :source "nodejs/src/types.ts:2733-2745"}]
+
+  :clojure-cli-only-experimental
+  [{:clojure-key :mcp-servers/mcp-defer-tools
+    :wire-key "mcpServers.*.deferTools"
+    :status :not-in-node-public-mcp-config
+    :node-source "nodejs/src/types.ts:1667-1726"}]
+
+  :wire-only-not-public
+  [{:wire-key "envValueMode" :value "direct" :client-lines [1586 1843]}
+   {:wire-key "toolFilterPrecedence" :value "excluded" :client-lines [1556 1780]}
+   {:wire-key "enableGitHubTelemetryForwarding"
+    :source :client-handler
+    :client-ranges [[1581 1583] [1838 1840]]}
+   {:wire-key "requestPermission" :source :on-permission-request :client-lines [1567 1813]}
+   {:wire-key "requestUserInput" :source :on-user-input-request :client-lines [1568 1815]}
+   {:wire-key "requestElicitation" :source :on-elicitation-request :client-lines [1569 1816]}
+   {:wire-key "requestExitPlanMode" :source :on-exit-plan-mode :client-lines [1574 1821]}
+   {:wire-key "requestAutoModeSwitch" :source :on-auto-mode-switch :client-lines [1575 1822]}
+   {:wire-key "hooks" :source :hooks :client-lines [1576 1823]}]}
+
+ :contracts
+ [{:key :additional-directories
+   :scope :shared
+   :node-key "additionalDirectories"
+   :type-line 2502
+   :wire-path [:additionalDirectories]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["/workspace/shared"] :expect ["/workspace/shared"]}]}
+
+  {:key :agent
+   :scope :shared
+   :node-key "agent"
+   :type-line 2557
+   :wire-path [:agent]
+   :cases [{:name :value :value "reviewer" :expect "reviewer"}]}
+
+  {:key :available-tools
+   :scope :shared
+   :node-key "availableTools"
+   :type-line 2292
+   :wire-path [:availableTools]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["builtin:*"] :expect ["builtin:*"]}]}
+
+  {:key :canvas-provider
+   :scope :shared
+   :node-key "canvasProvider"
+   :type-line 2256
+   :wire-path [:canvasProvider]
+   :cases [{:name :value
+            :value {:id "host:matrix" :name "Matrix host"}
+            :expect {:id "host:matrix" :name "Matrix host"}}]}
+
+  {:key :capi
+   :scope :shared
+   :node-key "capi"
+   :type-line 2321
+   :wire-path [:capi]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :false
+            :value {:enable-web-socket-responses false}
+            :expect {:enableWebSocketResponses false}}]}
+
+  {:key :client-name
+   :scope :shared
+   :node-key "clientName"
+   :type-line 2140
+   :wire-path [:clientName]
+   :cases [{:name :value :value "wire-matrix" :expect "wire-matrix"}]}
+
+  {:key :coauthor-enabled
+   :scope :shared
+   :node-key "coauthorEnabled"
+   :type-line 2399
+   :mechanism :session-options-update
+   :wire-path [:coauthorEnabled]
+   :cases [{:name :false :value false :expect :absent
+            :side-effect {:method "session.options.update"
+                          :path [:coauthorEnabled]
+                          :expect false}}
+           {:name :true :value true :expect :absent
+            :side-effect {:method "session.options.update"
+                          :path [:coauthorEnabled]
+                          :expect true}}]}
+
+  {:key :commands
+   :scope :shared
+   :node-key "commands"
+   :type-line 2263
+   :wire-path [:commands]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value
+            :value [{:name "matrix" :description "Matrix command"
+                     :command-handler :fixture/handler}]
+            :expect [{:name "matrix" :description "Matrix command"}]}]}
+
+  {:key :config-dir
+   :scope :shared
+   :node-key "configDirectory"
+   :type-line 2187
+   :contract :clojure-alias
+   :wire-path [:configDir]
+   :cases [{:name :value :value "/tmp/legacy-config" :expect "/tmp/legacy-config"}]}
+
+  {:key :config-directory
+   :scope :shared
+   :node-key "configDirectory"
+   :type-line 2187
+   :wire-path [:configDir]
+   :cases [{:name :value :value "/tmp/config" :expect "/tmp/config"}]}
+
+  {:key :context-tier
+   :scope :shared
+   :node-key "contextTier"
+   :type-line 2170
+   :wire-path [:contextTier]
+   :cases [{:name :value :value :long-context :expect "long_context"}
+           {:name :explicit-nil :value nil :expect :invalid}]}
+
+  {:key :create-session-fs-handler
+   :scope :shared
+   :node-key "createSessionFsProvider"
+   :type-line 2731
+   :mechanism :client-local
+   :wire-path [:createSessionFsProvider]
+   :cases [{:name :value :value :fixture/fs-factory :expect :absent}]}
+
+  {:key :custom-agents
+   :scope :shared
+   :node-key "customAgents"
+   :type-line 2542
+   :wire-path [:customAgents]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value
+            :value [{:agent-name "matrix-agent"
+                     :agent-display-name "Matrix Agent"
+                     :agent-description "Checks the wire contract"
+                     :agent-tools nil
+                     :agent-prompt "Inspect the contract"
+                     :agent-infer? false
+                     :agent-skills ["review"]
+                     :agent-model "gpt-5.4"
+                     :agent-reasoning-effort "high"
+                     :mcp-servers
+                     {:nested {:mcp-server-type :stdio
+                               :mcp-command "echo"
+                               :mcp-args ["nested"]
+                               :mcp-tools []
+                               :cwd "/tmp/nested"}}}]
+            :expect [{:name "matrix-agent"
+                      :displayName "Matrix Agent"
+                      :description "Checks the wire contract"
+                      :tools nil
+                      :prompt "Inspect the contract"
+                      :infer false
+                      :skills ["review"]
+                      :model "gpt-5.4"
+                      :reasoningEffort "high"
+                      :mcpServers
+                      {:nested {:type "stdio"
+                                :command "echo"
+                                :args ["nested"]
+                                :tools []
+                                :cwd "/tmp/nested"}}}]}]}
+
+  {:key :custom-agents-local-only
+   :scope :shared
+   :node-key "customAgentsLocalOnly"
+   :type-line 2390
+   :wire-path [:customAgentsLocalOnly]
+   :cases [{:name :false :value false :expect false
+            :side-effect {:method "session.options.update"
+                          :path [:customAgentsLocalOnly]
+                          :expect false}}
+           {:name :true :value true :expect true
+            :side-effect {:method "session.options.update"
+                          :path [:customAgentsLocalOnly]
+                          :expect true}}]}
+
+  {:key :default-agent
+   :scope :shared
+   :node-key "defaultAgent"
+   :type-line 2550
+   :wire-path [:defaultAgent]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:excluded-tools ["shell"]}
+            :expect {:excludedTools ["shell"]}}]}
+
+  {:key :disabled-mcp-servers
+   :scope :shared
+   :node-key "disabledMcpServers"
+   :type-line 2594
+   :wire-path [:disabledMcpServers]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["github"] :expect ["github"]}]}
+
+  {:key :disabled-skills
+   :scope :shared
+   :node-key "disabledSkills"
+   :type-line 2587
+   :wire-path [:disabledSkills]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["legacy-skill"] :expect ["legacy-skill"]}]}
+
+  {:key :embedding-cache-storage
+   :scope :shared
+   :node-key "embeddingCacheStorage"
+   :type-line 2665
+   :wire-path [:embeddingCacheStorage]
+   :cases [{:name :value :value :in-memory :expect "in-memory"}]}
+
+  {:key :enable-citations
+   :scope :shared
+   :node-key "enableCitations"
+   :type-line 2364
+   :stability :experimental
+   :wire-path [:enableCitations]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-config-discovery
+   :scope :shared
+   :node-key "enableConfigDiscovery"
+   :type-line 2195
+   :wire-path [:enableConfigDiscovery]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-experimental-mode?
+   :scope :shared
+   :node-key "enableExperimentalMode"
+   :type-line 2164
+   :wire-path [:isExperimentalMode]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-file-hooks
+   :scope :shared
+   :node-key "enableFileHooks"
+   :type-line 2685
+   :wire-path [:enableFileHooks]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-host-git-operations
+   :scope :shared
+   :node-key "enableHostGitOperations"
+   :type-line 2692
+   :wire-path [:enableHostGitOperations]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-managed-settings?
+   :scope :shared
+   :node-key "enableManagedSettings"
+   :type-line 2626
+   :wire-path [:enableManagedSettings]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-on-demand-instruction-discovery
+   :scope :shared
+   :node-key "enableOnDemandInstructionDiscovery"
+   :type-line 2678
+   :wire-path [:enableOnDemandInstructionDiscovery]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-session-store
+   :scope :shared
+   :node-key "enableSessionStore"
+   :type-line 2699
+   :wire-path [:enableSessionStore]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-session-telemetry?
+   :scope :shared
+   :node-key "enableSessionTelemetry"
+   :type-line 2357
+   :wire-path [:enableSessionTelemetry]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :enable-skills
+   :scope :shared
+   :node-key "enableSkills"
+   :type-line 2706
+   :wire-path [:enableSkills]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :excluded-builtin-agents
+   :scope :shared
+   :node-key "excludedBuiltinAgents"
+   :type-line 2308
+   :wire-path [:excludedBuiltinAgents]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["planner"] :expect ["planner"]}]}
+
+  {:key :excluded-tools
+   :scope :shared
+   :node-key "excludedTools"
+   :type-line 2301
+   :wire-path [:excludedTools]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["builtin:shell"] :expect ["builtin:shell"]}]}
+
+  {:key :exp-assignments
+   :scope :shared
+   :node-key "expAssignments"
+   :type-line 2745
+   :contract :official-internal
+   :stability :internal
+   :wire-path [:expAssignments]
+   :cases [{:name :value
+            :value {"Features" ["matrix"]
+                    "Flights" {"matrix" "treatment"}
+                    "Configs" []
+                    "AssignmentContext" "matrix-context"}
+            :expect {:Features ["matrix"]
+                     :Flights {:matrix "treatment"}
+                     :Configs []
+                     :AssignmentContext "matrix-context"}}]}
+
+  {:key :github-mcp-tool-config
+   :scope :shared
+   :node-key "githubMcpToolConfig"
+   :type-line 2471
+   :wire-path [:githubMcpToolConfig]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:enable-all-tools? false
+                    :additional-toolsets []
+                    :additional-tools ["get_me"]
+                    :enable-insiders-mode? false
+                    :disable-form-deferral? true}
+            :expect {:enableAllTools false
+                     :additionalToolsets []
+                     :additionalTools ["get_me"]
+                     :enableInsidersMode false
+                     :disableFormDeferral true}}]}
+
+  {:key :github-token
+   :scope :shared
+   :node-key "gitHubToken"
+   :type-line 2618
+   :wire-path [:gitHubToken]
+   :cases [{:name :value :value "matrix-token" :expect "matrix-token"}]}
+
+  {:key :hooks
+   :scope :shared
+   :node-key "hooks"
+   :type-line 2489
+   :wire-path [:hooks]
+   :unset false
+   :cases [{:name :empty :value {} :expect false}
+           {:name :value
+            :value {:on-session-start :fixture/handler}
+            :expect true}]}
+
+  {:key :include-sub-agent-streaming-events?
+   :scope :shared
+   :node-key "includeSubAgentStreamingEvents"
+   :type-line 2522
+   :wire-path [:includeSubAgentStreamingEvents]
+   :unset true
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :infinite-sessions
+   :scope :shared
+   :node-key "infiniteSessions"
+   :type-line 2601
+   :wire-path [:infiniteSessions]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :false :value {:enabled false} :expect {:enabled false}}]}
+
+  {:key :instruction-directories
+   :scope :shared
+   :node-key "instructionDirectories"
+   :type-line 2582
+   :wire-path [:instructionDirectories]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["/tmp/instructions"] :expect ["/tmp/instructions"]}]}
+
+  {:key :large-output
+   :scope :shared
+   :node-key "largeOutput"
+   :type-line 2181
+   :wire-path [:largeOutput]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:enabled false
+                    :max-size-bytes 1024
+                    :output-directory "/tmp/output"}
+            :expect {:enabled false
+                     :maxSizeBytes 1024
+                     :outputDir "/tmp/output"}}
+           {:name :deprecated-output-dir-alias
+            :value {:output-dir "/tmp/legacy-output"}
+            :expect {:outputDir "/tmp/legacy-output"}}]}
+
+  {:key :manage-schedule-enabled
+   :scope :shared
+   :node-key "manageScheduleEnabled"
+   :type-line 2408
+   :mechanism :session-options-update
+   :wire-path [:manageScheduleEnabled]
+   :cases [{:name :false :value false :expect :absent
+            :side-effect {:method "session.options.update"
+                          :path [:manageScheduleEnabled]
+                          :expect false}}
+           {:name :true :value true :expect :absent
+            :side-effect {:method "session.options.update"
+                          :path [:manageScheduleEnabled]
+                          :expect true}}]}
+
+  {:key :managed-settings
+   :scope :shared
+   :node-key "managedSettings"
+   :type-line 2651
+   :wire-path [:managedSettings]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:permissions
+                    {:disable-bypass-permissions-mode :disable
+                     :deny []
+                     :ask ["Shell(git push *)"]
+                     :allow ["Read(**)"]}}
+            :expect {:permissions
+                     {:disableBypassPermissionsMode "disable"
+                      :deny []
+                      :ask ["Shell(git push *)"]
+                      :allow ["Read(**)"]}}}]}
+
+  {:key :mcp-oauth-token-storage
+   :scope :shared
+   :node-key "mcpOAuthTokenStorage"
+   :type-line 2531
+   :wire-path [:mcpOAuthTokenStorage]
+   :cases [{:name :value :value :in-memory :expect "in-memory"}]}
+
+  {:key :mcp-servers
+   :scope :shared
+   :node-key "mcpServers"
+   :type-line 2537
+   :wire-path [:mcpServers]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:matrix {:mcp-server-type :stdio
+                             :mcp-command "echo"
+                             :mcp-args ["matrix"]
+                             :mcp-tools []
+                             :mcp-timeout 1000
+                             :cwd "/tmp/matrix"}}
+            :expect {:matrix {:type "stdio"
+                              :command "echo"
+                              :args ["matrix"]
+                              :tools []
+                              :timeout 1000
+                              :cwd "/tmp/matrix"}}}
+            {:name :cli-only-defer-tools
+            :contract :clojure-cli-only-experimental
+            :value {:matrix {:mcp-server-type :stdio
+                             :mcp-command "echo"
+                             :mcp-tools []
+                             :mcp-defer-tools :never}}
+            :expect {:matrix {:type "stdio"
+                              :command "echo"
+                              :tools []
+                              :deferTools "never"}}}]}
+
+  {:key :memory
+   :scope :shared
+   :node-key "memory"
+   :type-line 2606
+   :wire-path [:memory]
+   :cases [{:name :false :value {:enabled false} :expect {:enabled false}}
+           {:name :true :value {:enabled true} :expect {:enabled true}}]}
+
+  {:key :model
+   :scope :shared
+   :node-key "model"
+   :type-line 2145
+   :wire-path [:model]
+   :cases [{:name :value :value "gpt-5.4" :expect "gpt-5.4"}]}
+
+  {:key :model-capabilities
+   :scope :shared
+   :node-key "modelCapabilities"
+   :type-line 2173
+   :wire-shape-source "nodejs/src/generated/rpc.ts:9672-9737"
+   :stability :experimental
+   :wire-path [:modelCapabilities]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :supports
+            :value {:supports {:vision true
+                               :reasoning-effort false
+                               :adaptive-thinking :required}}
+            :expect {:supports {:vision true
+                                :reasoningEffort false
+                                :adaptive_thinking "required"}}}
+           {:name :limits
+            :value {:limits {:max-prompt-tokens 120000
+                             :max-output-tokens 16000
+                             :max-context-window-tokens 136000
+                             :vision {:supported-media-types ["image/png"]
+                                      :max-prompt-images 5
+                                      :max-prompt-image-size 1048576}}}
+            :expect {:limits {:max_prompt_tokens 120000
+                              :max_output_tokens 16000
+                              :max_context_window_tokens 136000
+                              :vision {:supported_media_types ["image/png"]
+                                       :max_prompt_images 5
+                                       :max_prompt_image_size 1048576}}}}
+           {:name :deprecated-clojure-aliases
+            :contract :backward-compatible-alias
+            :value {:model-supports {:supports-vision true
+                                     :supports-reasoning-effort false}
+                    :model-limits {:max-prompt-tokens 120000
+                                   :max-context-window-tokens 136000
+                                   :vision-capabilities
+                                   {:supported-media-types ["image/png"]
+                                    :max-prompt-images 5
+                                    :max-prompt-image-size 1048576}}}
+            :expect {:supports {:vision true
+                                :reasoningEffort false}
+                     :limits {:max_prompt_tokens 120000
+                              :max_context_window_tokens 136000
+                              :vision {:supported_media_types ["image/png"]
+                                       :max_prompt_images 5
+                                       :max_prompt_image_size 1048576}}}}
+           {:name :ambiguous-branch-aliases
+            :value {:supports {} :model-supports {}}
+            :expect :invalid}]}
+
+  {:key :models
+   :scope :shared
+   :node-key "models"
+   :type-line 2347
+   :stability :experimental
+   :wire-path [:models]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value
+            :value [{:id "matrix-model"
+                     :provider "matrix-provider"
+                     :wire-model "wire-model"
+                     :max-input-tokens 4096
+                     :capabilities {"max_prompt_tokens" 4096}}]
+            :expect [{:id "matrix-model"
+                      :provider "matrix-provider"
+                      :wireModel "wire-model"
+                      :maxPromptTokens 4096
+                      :capabilities {:max_prompt_tokens 4096}}]}
+           {:name :canonical-capabilities
+            :value [{:id "canonical-model"
+                     :provider "matrix-provider"
+                     :capabilities
+                     {:supports {:vision true :adaptive-thinking :optional}
+                      :limits {:max-output-tokens 8192}}}]
+            :expect [{:id "canonical-model"
+                      :provider "matrix-provider"
+                      :capabilities
+                      {:supports {:vision true
+                                  :adaptive_thinking "optional"}
+                       :limits {:max_output_tokens 8192}}}]}]}
+
+  {:key :on-auto-mode-switch
+   :scope :shared
+   :node-key "onAutoModeSwitchRequest"
+   :type-line 2483
+   :wire-path [:requestAutoModeSwitch]
+   :unset false
+   :cases [{:name :value :value :fixture/handler :expect true}]}
+
+  {:key :on-elicitation-request
+   :scope :shared
+   :node-key "onElicitationRequest"
+   :type-line 2435
+   :wire-path [:requestElicitation]
+   :unset false
+   :cases [{:name :value :value :fixture/handler :expect true}]}
+
+  {:key :on-event
+   :scope :shared
+   :node-key "onEvent"
+   :type-line 2725
+   :mechanism :client-local
+   :wire-path [:onEvent]
+   :cases [{:name :value :value :fixture/handler :expect :absent}]}
+
+  {:key :on-exit-plan-mode
+   :scope :shared
+   :node-key "onExitPlanModeRequest"
+   :type-line 2477
+   :wire-path [:requestExitPlanMode]
+   :unset false
+   :cases [{:name :value :value :fixture/handler :expect true}]}
+
+  {:key :on-mcp-auth-request
+   :scope :shared
+   :node-key "onMcpAuthRequest"
+   :type-line 2422
+   :mechanism :event-interest
+   :wire-path [:onMcpAuthRequest]
+   :cases [{:name :value
+            :value :fixture/handler
+            :expect :absent
+            :side-effect {:method "session.eventLog.registerInterest"
+                          :path [:eventType]
+                          :expect "mcp.oauth_required"}}]}
+
+  {:key :on-permission-request
+   :scope :shared
+   :node-key "onPermissionRequest"
+   :type-line 2415
+   :wire-path [:requestPermission]
+   :unset {:create false :resume true}
+   :cases [{:name :value :value :fixture/permission-handler :expect true}]}
+
+  {:key :on-user-input-request
+   :scope :shared
+   :node-key "onUserInputRequest"
+   :type-line 2428
+   :wire-path [:requestUserInput]
+   :unset false
+   :cases [{:name :value :value :fixture/handler :expect true}]}
+
+  {:key :organization-custom-instructions
+   :scope :shared
+   :node-key "organizationCustomInstructions"
+   :type-line 2672
+   :wire-path [:organizationCustomInstructions]
+   :cases [{:name :empty :value "" :expect ""}
+           {:name :value :value "Follow organization policy." :expect "Follow organization policy."}]}
+
+  {:key :plugin-directories
+   :scope :shared
+   :node-key "pluginDirectories"
+   :type-line 2577
+   :wire-path [:pluginDirectories]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["/tmp/plugins"] :expect ["/tmp/plugins"]}]}
+
+  {:key :provider
+   :scope :shared
+   :node-key "provider"
+   :type-line 2314
+   :experimental-subsurfaces [:bearer-token-provider]
+   :wire-path [:provider]
+   :cases [{:name :value
+            :value {:provider-type :azure
+                    :base-url "https://example.test"
+                    :api-key "secret"
+                    :azure-options {:azure-api-version "2025-01-01"}
+                    :model-id "matrix-model"
+                    :wire-model "wire-model"
+                    :max-input-tokens 4096
+                    :max-output-tokens 1024
+                    :bearer-token-provider :fixture/token-provider}
+            :extra-config {:model "matrix-model"}
+            :expect {:type "azure"
+                     :baseUrl "https://example.test"
+                     :apiKey "secret"
+                     :azure {:apiVersion "2025-01-01"}
+                     :modelId "matrix-model"
+                     :wireModel "wire-model"
+                     :maxPromptTokens 4096
+                     :maxOutputTokens 1024
+                     :hasBearerTokenProvider true}}]}
+
+  {:key :providers
+   :scope :shared
+   :node-key "providers"
+   :type-line 2336
+   :stability :experimental
+   :wire-path [:providers]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value
+            :value [{:name "matrix-provider"
+                     :provider-type :openai
+                     :base-url "https://provider.test"
+                     :bearer-token-provider :fixture/token-provider}]
+            :expect [{:name "matrix-provider"
+                      :type "openai"
+                      :baseUrl "https://provider.test"
+                      :hasBearerTokenProvider true}]}]}
+
+  {:key :reasoning-effort
+   :scope :shared
+   :node-key "reasoningEffort"
+   :type-line 2152
+   :wire-path [:reasoningEffort]
+   :cases [{:name :value :value "max" :expect "max"}]}
+
+  {:key :reasoning-summary
+   :scope :shared
+   :node-key "reasoningSummary"
+   :type-line 2158
+   :wire-path [:reasoningSummary]
+   :cases [{:name :value :value "detailed" :expect "detailed"}]}
+
+  {:key :remote-session
+   :scope :shared
+   :node-key "remoteSession"
+   :type-line 2714
+   :wire-path [:remoteSession]
+   :cases [{:name :value :value :off :expect "off"}]}
+
+  {:key :session-limits
+   :scope :shared
+   :node-key "sessionLimits"
+   :type-line 2371
+   :stability :experimental
+   :wire-path [:sessionLimits]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value :value {:max-ai-credits 2} :expect {:maxAiCredits 2}}]}
+
+  {:key :skill-directories
+   :scope :shared
+   :node-key "skillDirectories"
+   :type-line 2562
+   :wire-path [:skillDirectories]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value :value ["/tmp/skills"] :expect ["/tmp/skills"]}]}
+
+  {:key :skip-custom-instructions
+   :scope :shared
+   :node-key "skipCustomInstructions"
+   :type-line 2381
+   :mechanism :session-options-update
+   :wire-path [:skipCustomInstructions]
+   :cases [{:name :false :value false :expect :absent
+            :side-effect {:method "session.options.update"
+                          :path [:skipCustomInstructions]
+                          :expect false}}
+           {:name :true :value true :expect :absent
+            :side-effect {:method "session.options.update"
+                          :path [:skipCustomInstructions]
+                          :expect true}}]}
+
+  {:key :skip-embedding-retrieval
+   :scope :shared
+   :node-key "skipEmbeddingRetrieval"
+   :type-line 2658
+   :wire-path [:skipEmbeddingRetrieval]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :streaming?
+   :scope :shared
+   :node-key "streaming"
+   :type-line 2511
+   :wire-path [:streaming]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :system-message
+   :scope :shared
+   :node-key "systemMessage"
+   :type-line 2269
+   :wire-path [:systemMessage]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:mode :customize
+                    :sections {:identity {:action :remove}
+                               :tone {:action :preserve}}
+                    :content "Additional instructions"}
+            :expect {:mode "customize"
+                     :sections {:identity {:action "remove"}
+                                :tone {:action "preserve"}}
+                     :content "Additional instructions"}}]}
+
+  {:key :tool-search
+   :scope :shared
+   :node-key "toolSearch"
+   :type-line 2278
+   :wire-path [:toolSearch]
+   :cases [{:name :empty :value {} :expect {}}
+           {:name :value
+            :value {:enabled false :defer-threshold 0}
+            :expect {:enabled false :deferThreshold 0}}]}
+
+  {:key :tools
+   :scope :shared
+   :node-key "tools"
+   :type-line 2202
+   :wire-path [:tools]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value
+            :value [{:tool-name "matrix-tool"
+                     :tool-description "Checks the wire"
+                     :tool-parameters {"type" "object"}
+                     :tool-handler :fixture/handler
+                     :overrides-built-in-tool false
+                     :skip-permission? false
+                     :defer :never
+                     :metadata {"opaque_key" true}
+                     :is-terminal? false}]
+            :expect [{:name "matrix-tool"
+                      :description "Checks the wire"
+                      :parameters {:type "object"}
+                      :overridesBuiltInTool false
+                      :skipPermission false
+                      :defer "never"
+                      :metadata {:opaque_key true}
+                      :isTerminal false}]}]}
+
+  {:key :working-directory
+   :scope :shared
+   :node-key "workingDirectory"
+   :type-line 2495
+   :wire-path [:workingDirectory]
+   :cases [{:name :value :value "/tmp/workspace" :expect "/tmp/workspace"}]}
+
+  {:key :cloud
+   :scope :create-only
+   :node-key "cloud"
+   :type-line 2761
+   :wire-path [:cloud]
+   :cases [{:name :empty
+            :value {}
+            :extra-config {:session-id "matrix-cloud-empty"}
+            :expect {}}
+           {:name :value
+            :value {:repository {:owner "github" :name "copilot-sdk" :branch "main"}}
+            :extra-config {:session-id "matrix-cloud-repository"}
+            :expect {:repository {:owner "github" :name "copilot-sdk" :branch "main"}}}]}
+
+  {:key :session-id
+   :scope :create-only
+   :node-key "sessionId"
+   :type-line 2755
+   :wire-path [:sessionId]
+   :unset :generated-string
+   :cases [{:name :value :value "matrix-session-id" :expect "matrix-session-id"}]}
+
+  {:key :continue-pending-work?
+   :scope :resume-only
+   :node-key "continuePendingWork"
+   :type-line 2786
+   :wire-path [:continuePendingWork]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :disable-resume?
+   :scope :resume-only
+   :node-key "suppressResumeEvent"
+   :type-line 2774
+   :wire-path [:disableResume]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}]}
+
+  {:key :open-canvases
+   :scope :resume-only
+   :node-key "openCanvases"
+   :type-line 2792
+   :wire-path [:openCanvases]
+   :cases [{:name :empty :value [] :expect []}
+           {:name :value
+            :value [{:instance-id "instance-1"
+                     :extension-id "extension-1"
+                     :canvas-id "editor"
+                     :extension-name "Editor"
+                     :title "Contract"
+                     :status "ready"
+                     :url "https://example.test/canvas"
+                     :input {:snake_key {:nestedValue 1}}}]
+            :expect [{:instanceId "instance-1"
+                      :extensionId "extension-1"
+                      :canvasId "editor"
+                      :extensionName "Editor"
+                      :title "Contract"
+                      :status "ready"
+                      :url "https://example.test/canvas"
+                      :input {:snake_key {:nestedValue 1}}}]}]}]}

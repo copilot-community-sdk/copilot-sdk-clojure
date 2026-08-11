@@ -279,7 +279,7 @@ When using BYOK, the CLI server may not know which models your provider supports
     :preview? false
     :default-temperature 1
     :model-picker-priority 1
-    :model-capabilities {:model-supports {} :model-limits {}}}])
+    :model-capabilities {:supports {} :limits {}}}])
 
 (def client
   (copilot/client {:on-list-models (fn [] my-models)}))

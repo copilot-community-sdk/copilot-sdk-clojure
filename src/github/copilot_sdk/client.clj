@@ -1541,23 +1541,12 @@
                {:model-capabilities
                 (cond-> {}
                   (:supports c)
-                  (assoc :model-supports
-                         (cond-> {}
-                           (contains? (:supports c) :vision)
-                           (assoc :supports-vision (:vision (:supports c)))
-                           (contains? (:supports c) :reasoning-effort)
-                           (assoc :supports-reasoning-effort (:reasoning-effort (:supports c)))))
+                  (assoc :supports
+                         (cond-> (:supports c)
+                           (contains? (:supports c) :adaptive-thinking)
+                           (update :adaptive-thinking keyword)))
                   (:limits c)
-                  (assoc :model-limits
-                         (cond-> {}
-                           (:max-prompt-tokens (:limits c))
-                           (assoc :max-prompt-tokens (:max-prompt-tokens (:limits c)))
-                           (:max-context-window-tokens (:limits c))
-                           (assoc :max-context-window-tokens (:max-context-window-tokens (:limits c)))
-                           (:vision (:limits c))
-                           (assoc :vision-capabilities
-                                  (select-keys (:vision (:limits c))
-                                               [:supported-media-types :max-prompt-images :max-prompt-image-size])))))})
+                  (assoc :limits (:limits c)))})
         optional (merge
                   (select-keys m [:default-temperature
                                   :model-picker-priority
@@ -1613,11 +1602,12 @@
    :id :name :vendor :family :version :max-input-tokens :max-output-tokens
    :preview? :default-temperature :model-picker-priority
    :model-picker-category :model-picker-price-category
-   :model-capabilities {:model-supports {:supports-vision :supports-reasoning-effort}
-                        :model-limits {:max-prompt-tokens :max-context-window-tokens
-                                       :vision-capabilities {:supported-media-types
-                                                             :max-prompt-images
-                                                             :max-prompt-image-size}}}
+   :model-capabilities {:supports {:vision :reasoning-effort :adaptive-thinking}
+                        :limits {:max-prompt-tokens :max-output-tokens
+                                 :max-context-window-tokens
+                                 :vision {:supported-media-types
+                                          :max-prompt-images
+                                          :max-prompt-image-size}}}
    :model-policy {:policy-state :terms}
    :model-billing {:multiplier
                    :token-prices {:input-price :output-price :cache-price
@@ -1858,7 +1848,8 @@
 
 (defn- system-message->wire
   "Convert a system-message config to wire format.
-   For :append and :replace modes, returns a simple map.
+   For :append and :replace modes, returns a simple map while preserving
+   omitted optional fields exactly.
    For :customize mode, returns only the static wire payload
    (transform callbacks are extracted separately)."
   [sm]
@@ -1866,8 +1857,10 @@
     :replace {:mode "replace" :content (:content sm)}
     :customize (let [{:keys [wire-payload]} (extract-transform-callbacks sm)]
                  wire-payload)
-    ;; default: append mode
-    {:mode "append" :content (:content sm)}))
+    :append (cond-> {:mode "append"}
+              (contains? sm :content) (assoc :content (:content sm)))
+    (cond-> {}
+      (contains? sm :content) (assoc :content (:content sm)))))
 
 (defn- apply-empty-mode-system-message
   "In :empty mode, normalize the session config's :system-message so the
@@ -1976,10 +1969,14 @@
    shape in nodejs/src/types.ts."
   [pm]
   (let [capabilities (:capabilities pm)
+        wire-capabilities (when (some? capabilities)
+                            (if (every? string? (keys capabilities))
+                              capabilities
+                              (util/model-capabilities->wire capabilities)))
         wire (rename-keys-present (util/clj->wire (dissoc pm :capabilities))
                                   {:maxInputTokens :maxPromptTokens})]
     (cond-> wire
-      (some? capabilities) (assoc :capabilities capabilities))))
+      (some? wire-capabilities) (assoc :capabilities wire-capabilities))))
 
 (defn- large-output->wire
   "Convert a :large-output config map to wire shape, accepting both the
@@ -2013,12 +2010,24 @@
 
 (defn- custom-agent->wire
   "Convert a custom agent to its wire shape for session.create / session.resume.
-   The idiomatic `:agent-reasoning-effort` key maps to the upstream SDK's
-   `reasoningEffort` field and is omitted when absent."
+   Clojure's disambiguating `:agent-*` keys map to the unprefixed upstream
+   CustomAgentConfig fields. Nested MCP servers use their shared wire adapter."
   [agent]
   (let [reasoning-effort (:agent-reasoning-effort agent)
-        mcp-servers (:mcp-servers agent)]
-    (cond-> (util/clj->wire (dissoc agent :agent-reasoning-effort :mcp-servers))
+        mcp-servers (:mcp-servers agent)
+        key-renames {:agent-name :name
+                     :agent-display-name :display-name
+                     :agent-description :description
+                     :agent-tools :tools
+                     :agent-prompt :prompt
+                     :agent-infer? :infer
+                     :agent-skills :skills
+                     :agent-model :model}
+        renamed (reduce-kv (fn [result key value]
+                             (assoc result (get key-renames key key) value))
+                           {}
+                           (dissoc agent :agent-reasoning-effort :mcp-servers))]
+    (cond-> (util/clj->wire renamed)
       (some? mcp-servers) (assoc :mcpServers (util/mcp-servers->wire mcp-servers))
       (some? reasoning-effort) (assoc :reasoningEffort reasoning-effort))))
 
@@ -2238,7 +2247,7 @@
       (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
       (some? (:enable-experimental-mode? config))
       (assoc :isExperimentalMode (:enable-experimental-mode? config))
-      true (assoc :request-permission true)
+      true (assoc :request-permission (boolean (:on-permission-request config)))
       (:capi config) (assoc :capi (util/clj->wire (:capi config)))
 
       ;; Session options (upstream PR #1865).
@@ -2251,7 +2260,7 @@
       (:session-limits config)
       (assoc :session-limits (util/clj->wire (:session-limits config)))
 
-      (:streaming? config) (assoc :streaming (:streaming? config))
+      (some? (:streaming? config)) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       (contains? config :disabled-mcp-servers)
       (assoc :disabled-mcp-servers (:disabled-mcp-servers config))
@@ -2282,7 +2291,7 @@
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :request-exit-plan-mode (boolean (:on-exit-plan-mode config)))
       true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
-      true (assoc :hooks (boolean (:hooks config)))
+      true (assoc :hooks (boolean (some identity (vals (:hooks config)))))
       (some? (:enable-config-discovery config))
       (assoc :enable-config-discovery (:enable-config-discovery config))
       (some? (:enable-session-telemetry? config))
@@ -2292,7 +2301,8 @@
       (:cloud config)
       (assoc :cloud (util/clj->wire (:cloud config)))
       (:model-capabilities config)
-      (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      (assoc :model-capabilities
+             (util/model-capabilities->wire (:model-capabilities config)))
       ;; Round 6 (upstream schema 1.0.56-1): MCP OAuth token storage mode and
       ;; embedding cache storage mode are hyphen-preserving string enums
       ;; (`"persistent"` / `"in-memory"`). The wire key for the first is
@@ -2450,7 +2460,7 @@
       (:session-limits config)
       (assoc :session-limits (util/clj->wire (:session-limits config)))
 
-      (:streaming? config) (assoc :streaming (:streaming? config))
+      (some? (:streaming? config)) (assoc :streaming (:streaming? config))
       wire-mcp-servers (assoc :mcp-servers wire-mcp-servers)
       (contains? config :disabled-mcp-servers)
       (assoc :disabled-mcp-servers (:disabled-mcp-servers config))
@@ -2478,11 +2488,11 @@
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
       true (assoc :request-exit-plan-mode (boolean (:on-exit-plan-mode config)))
       true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
-      true (assoc :hooks (boolean (:hooks config)))
+      true (assoc :hooks (boolean (some identity (vals (:hooks config)))))
       (:working-directory config) (assoc :working-directory (:working-directory config))
       (contains? config :additional-directories)
       (assoc :additional-directories (:additional-directories config))
-      (:disable-resume? config) (assoc :disable-resume (:disable-resume? config))
+      (some? (:disable-resume? config)) (assoc :disable-resume (:disable-resume? config))
       (some? (:continue-pending-work? config))
       (assoc :continue-pending-work (:continue-pending-work? config))
       (some? (:enable-config-discovery config))
@@ -2492,7 +2502,8 @@
       (:remote-session config)
       (assoc :remote-session (name (:remote-session config)))
       (:model-capabilities config)
-      (assoc :model-capabilities (util/clj->wire (:model-capabilities config)))
+      (assoc :model-capabilities
+             (util/model-capabilities->wire (:model-capabilities config)))
       ;; Round 6 (upstream schema 1.0.56-1) per-session multitenancy /
       ;; storage knobs — mirror the set forwarded on session.create. The
       ;; `mcpOAuthTokenStorage` wire key (capital `OA`) bypasses csk via
@@ -2706,8 +2717,9 @@
    - :config-dir         - Override config directory for CLI (configDir)
    - :skill-directories  - Additional skill directories to load
    - :disabled-skills    - Disable specific skills by name
-   - :large-output       - (Experimental) Tool output handling config {:enabled :max-size-bytes :output-dir}
-                           Note: CLI protocol feature, not in official SDK. outputDir may be ignored.
+   - :large-output       - Tool output handling config
+                           {:enabled :max-size-bytes :output-directory}.
+                           :output-dir remains a deprecated alias.
    - :working-directory  - Working directory for the session (tool operations relative to this)
     - :infinite-sessions  - Infinite session config for automatic context compaction
                             {:enabled (default true)
@@ -2755,7 +2767,13 @@
                                 Instruction files are always loaded regardless. (upstream PR #1044)
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
                            DeepPartial of model capabilities, e.g.
-                           {:model-supports {:supports-vision true}}
+                           {:supports {:vision true}
+                            :limits {:max-prompt-tokens 128000}}
+                           Stable public-SDK fields: :supports {:vision :reasoning-effort},
+                           :limits {:max-prompt-tokens :max-context-window-tokens :vision {..}}.
+                           :adaptive-thinking and :max-output-tokens are experimental
+                           CLI-protocol extras (not in the public Node SDK type).
+                           Deprecated :model-supports / :model-limits aliases are still accepted.
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)
@@ -2950,6 +2968,8 @@
                            Guarantees early events like session.start are not missed.
    - :enable-config-discovery - Boolean. Auto-discover .mcp.json, skills, etc. (upstream PR #1044)
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
+                           Same shape as `create-session`; :adaptive-thinking and
+                           :max-output-tokens are experimental CLI-protocol extras.
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)

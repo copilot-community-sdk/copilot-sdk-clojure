@@ -949,14 +949,21 @@ for the full Client Mode reference.
 Demonstrates the SDK-driven analogue of the upstream `manual_tool_resume`
 sample (Python/.NET): a tool declared **without** a `:handler` is
 *declaration-only* — the runtime advertises it to the model but leaves the
-call pending for the application to resolve by hand. With no
-`:on-permission-request` handler registered either, the permission prompt is
-also left pending. The pending requests are resolved across **three separate
-client lifecycles** via `resume-session` with `:continue-pending-work? true`.
+call pending for the application to resolve by hand. To keep the *permission*
+prompt pending too, lifecycle 1 creates the session with a **deferring**
+`:on-permission-request` handler that returns `{:kind :no-result}`: registering
+any handler makes `create` send `requestPermission: true` (so the runtime
+surfaces the prompt instead of auto-approving), and `:no-result` declines to
+answer, leaving it pending. The pending requests are resolved across **three
+separate client lifecycles** via `resume-session` with
+`:continue-pending-work? true`.
 
 ### What It Demonstrates
 
 - Defining a declaration-only tool (no `:handler`) — upstream PR #1308
+- Keeping the permission prompt pending with a deferring
+  `:on-permission-request` handler that returns `{:kind :no-result}` (forces
+  `requestPermission: true` on `create`, then declines to answer)
 - Resuming pending work across client lifecycles with `resume-session` +
   `:continue-pending-work? true`, resolving the **original** request ids
 - Reading the `:request-id` from `:copilot/permission.requested` and resolving
@@ -974,12 +981,20 @@ clojure -A:examples -X manual-tool-resume/run
 clojure -A:examples -X manual-tool-resume/run :model '"gpt-5.4"'
 ```
 
-> Each lifecycle ends by suspending the session with `disconnect!` rather than
-> force-killing the client. This demonstrates manual pending-work resolution
-> across graceful **suspend/resume**, not hard crash recovery: on CLI builds
-> where in-flight pending requests are persisted only during graceful teardown,
-> a SIGKILL (`force-stop!`) can drop the pending request ids before the next
-> `resume-session` can continue them.
+> Each suspending lifecycle ends with `force-stop!` (a hard SIGKILL of the
+> client), matching the upstream sample's `forceStop()`. On this CLI, force
+> stopping leaves the in-flight permission/tool call genuinely pending for the
+> next `resume-session`, whereas a graceful `disconnect!` lets the runtime
+> auto-resolve it and drop the state.
+>
+> The runtime emits each pending event **before** it finishes writing that state
+> to its on-disk session store, and there is no observable persistence signal
+> afterward. A SIGKILL in that window would drop the write, so after capturing
+> each pending event the flow calls `settle-pending!` (a 1-second wait) to let
+> the persistence complete before the stop. It then waits another second
+> (`pause!`, "Simulating time passing...") before the next client, mirroring the
+> upstream samples. `run` executes the flow **once** and fails loudly if a
+> pending request is lost — no retry or fallback.
 
 See [`doc/reference/API.md`](../doc/reference/API.md) for
 `handle-pending-permission-request!` and `handle-pending-tool-call!`.

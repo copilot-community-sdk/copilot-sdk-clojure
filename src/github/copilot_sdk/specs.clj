@@ -396,6 +396,8 @@
 (s/def ::mcp-args (s/coll-of string?))
 (s/def ::mcp-url ::non-blank-string)
 (s/def ::mcp-headers (s/map-of string? string?))
+;; Experimental CLI-only escape hatch. The runtime schema accepts deferTools,
+;; but the official Node SDK's public MCPServerConfig does not expose it.
 (s/def ::mcp-defer-tools #{:auto :never})
 
 (s/def ::mcp-local-server
@@ -551,10 +553,89 @@
    #(empty? (select-keys % [:transport :model-id :wire-model
                             :max-input-tokens :max-output-tokens]))))
 
-;; ModelCapabilitiesOverride — opaque to the SDK. Forwarded verbatim, so keys
-;; must be strings (upstream uses a mix of camelCase and snake_case wire keys
-;; that kebab->camel conversion would otherwise mangle).
-(s/def ::capabilities (s/map-of string? any?))
+;; ModelCapabilitiesOverride. The canonical idiom mirrors the upstream
+;; `supports` / `limits` branches with kebab-case leaves; the serializer keeps
+;; the runtime's mixed camelCase/snake_case wire spelling. The published
+;; :model-supports / :model-limits shape remains an accepted input alias.
+(def ^:private model-capability-top-level-keys
+  #{:supports :limits :model-supports :model-limits})
+(def ^:private model-capability-support-keys
+  #{:vision :reasoning-effort :adaptive-thinking})
+(def ^:private legacy-model-capability-support-keys
+  #{:supports-vision :supports-reasoning-effort})
+(def ^:private model-capability-limit-keys
+  #{:max-prompt-tokens :max-output-tokens :max-context-window-tokens :vision})
+(def ^:private legacy-model-capability-limit-keys
+  #{:max-prompt-tokens :max-context-window-tokens :vision-capabilities})
+(def ^:private model-capability-vision-keys
+  #{:supported-media-types :max-prompt-images :max-prompt-image-size})
+
+(defn- valid-model-capability-supports?
+  [supports legacy?]
+  (let [allowed (if legacy?
+                  legacy-model-capability-support-keys
+                  model-capability-support-keys)
+        vision-key (if legacy? :supports-vision :vision)
+        reasoning-key (if legacy? :supports-reasoning-effort :reasoning-effort)]
+    (and (map? supports)
+         (set/subset? (set (keys supports)) allowed)
+         (or (not (contains? supports vision-key))
+             (boolean? (get supports vision-key)))
+         (or (not (contains? supports reasoning-key))
+             (boolean? (get supports reasoning-key)))
+         (or legacy?
+             (not (contains? supports :adaptive-thinking))
+             (#{:unsupported :optional :required} (:adaptive-thinking supports))))))
+
+(defn- valid-model-capability-vision?
+  [vision]
+  (and (map? vision)
+       (set/subset? (set (keys vision)) model-capability-vision-keys)
+       (or (not (contains? vision :supported-media-types))
+           (and (sequential? (:supported-media-types vision))
+                (every? string? (:supported-media-types vision))))
+       (or (not (contains? vision :max-prompt-images))
+           (int? (:max-prompt-images vision)))
+       (or (not (contains? vision :max-prompt-image-size))
+           (int? (:max-prompt-image-size vision)))))
+
+(defn- valid-model-capability-limits?
+  [limits legacy?]
+  (let [allowed (if legacy?
+                  legacy-model-capability-limit-keys
+                  model-capability-limit-keys)
+        vision-key (if legacy? :vision-capabilities :vision)
+        numeric-keys (if legacy?
+                       [:max-prompt-tokens :max-context-window-tokens]
+                       [:max-prompt-tokens :max-output-tokens :max-context-window-tokens])]
+    (and (map? limits)
+         (set/subset? (set (keys limits)) allowed)
+         (every? #(or (not (contains? limits %))
+                      (int? (get limits %)))
+                 numeric-keys)
+         (or (not (contains? limits vision-key))
+             (valid-model-capability-vision? (get limits vision-key))))))
+
+(s/def ::model-capabilities
+  (s/and
+   map?
+   #(set/subset? (set (keys %)) model-capability-top-level-keys)
+   #(not (and (contains? % :supports) (contains? % :model-supports)))
+   #(not (and (contains? % :limits) (contains? % :model-limits)))
+   #(or (not (contains? % :supports))
+        (valid-model-capability-supports? (:supports %) false))
+   #(or (not (contains? % :model-supports))
+        (valid-model-capability-supports? (:model-supports %) true))
+   #(or (not (contains? % :limits))
+        (valid-model-capability-limits? (:limits %) false))
+   #(or (not (contains? % :model-limits))
+        (valid-model-capability-limits? (:model-limits %) true))))
+
+;; Provider-model capability maps historically accepted exact string-keyed wire
+;; data. Keep that escape hatch while also accepting the canonical idiom above.
+(s/def ::capabilities
+  (s/or :wire (s/map-of string? any?)
+        :idiom ::model-capabilities))
 
 ;; A model in the registry catalog. `:id` is the provider-local model id and
 ;; `:provider` is a non-blank string referencing a ::named-provider `:name`.
@@ -844,8 +925,8 @@
 
 ;; Explicit context tier for the selected model (upstream — pre-existing parity gap).
 ;; Idiom uses keywords; wire emits the underscored enum: "default" | "long_context".
-;; nil clears the previous explicit choice; missing leaves it untouched.
-(s/def ::context-tier (s/nilable #{:default :long-context}))
+;; The official SDK distinguishes a value from omission and does not expose null.
+(s/def ::context-tier #{:default :long-context})
 
 ;; CapiSessionOptions (upstream PR #1711). Per-session transport choices for the
 ;; built-in Copilot API provider. `:enable-web-socket-responses` controls whether
@@ -2119,7 +2200,8 @@
 (s/def ::login string?)
 (s/def ::status-message string?)
 
-;; Model capabilities
+;; Model capabilities. These three specs describe deprecated input aliases
+;; retained by ::model-capabilities for source compatibility.
 (s/def ::supports-vision boolean?)
 (s/def ::supports-reasoning-effort boolean?)
 (s/def ::model-supports
@@ -2134,9 +2216,6 @@
   (s/keys :opt-un [::supported-media-types ::max-prompt-images ::max-prompt-image-size]))
 (s/def ::model-limits
   (s/keys :opt-un [::max-prompt-tokens ::max-context-window-tokens ::vision-capabilities]))
-
-(s/def ::model-capabilities
-  (s/keys :opt-un [::model-supports ::model-limits]))
 
 ;; Model policy
 (s/def ::policy-state #{"enabled" "disabled" "unconfigured"})

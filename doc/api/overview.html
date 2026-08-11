@@ -99,7 +99,7 @@
 <tr><td> <code>:mcp-tools</code> </td><td> vector </td><td> Yes </td><td> Tools to enable (<code>["*"]</code> for all, <code>[]</code> for none, or specific tool names) </td></tr>
 <tr><td> <code>:mcp-server-type</code> </td><td> keyword </td><td> No </td><td> <code>:local</code> or <code>:stdio</code> (defaults to local) </td></tr>
 <tr><td> <code>:mcp-timeout</code> </td><td> number </td><td> No </td><td> Timeout in milliseconds </td></tr>
-<tr><td> <code>:mcp-defer-tools</code> </td><td> keyword </td><td> No </td><td> Tool-deferral policy: <code>:auto</code> (defer tool registration until needed) or <code>:never</code>. Wire-encoded as <code>deferTools</code> (upstream schema 1.0.63) </td></tr>
+<tr><td> <code>:mcp-defer-tools</code> </td><td> keyword </td><td> No </td><td> <strong>Experimental, CLI-only:</strong> tool-deferral policy <code>:auto</code> (defer tool registration until needed) or <code>:never</code>. Wire-encoded as <code>deferTools</code> (upstream schema 1.0.63); this field is not exposed by the official Node SDK’s <code>MCPServerConfig</code>. </td></tr>
 <tr><td> <code>:env</code> </td><td> map </td><td> No </td><td> Environment variables for the subprocess </td></tr>
 <tr><td> <code>:cwd</code> </td><td> string </td><td> No </td><td> Working directory for the subprocess </td></tr>
 </tbody>
@@ -114,7 +114,7 @@
 <tr><td> <code>:mcp-url</code> </td><td> string </td><td> Yes </td><td> Server URL </td></tr>
 <tr><td> <code>:mcp-tools</code> </td><td> vector </td><td> Yes </td><td> Tools to enable (<code>["*"]</code> for all) </td></tr>
 <tr><td> <code>:mcp-timeout</code> </td><td> number </td><td> No </td><td> Timeout in milliseconds </td></tr>
-<tr><td> <code>:mcp-defer-tools</code> </td><td> keyword </td><td> No </td><td> Tool-deferral policy: <code>:auto</code> or <code>:never</code>. Wire-encoded as <code>deferTools</code> (upstream schema 1.0.63) </td></tr>
+<tr><td> <code>:mcp-defer-tools</code> </td><td> keyword </td><td> No </td><td> <strong>Experimental, CLI-only:</strong> tool-deferral policy <code>:auto</code> or <code>:never</code>. Wire-encoded as <code>deferTools</code> (upstream schema 1.0.63); this field is not exposed by the official Node SDK’s <code>MCPServerConfig</code>. </td></tr>
 <tr><td> <code>:mcp-headers</code> </td><td> map </td><td> No </td><td> HTTP headers (e.g., for authentication) </td></tr>
 </tbody>
 </table>
@@ -166,7 +166,7 @@
 <p>Omitting the key (or passing <code>nil</code>) sends nothing on the wire. Passing <code>{}</code> sends <code>githubMcpToolConfig: {}</code> (every sub-field defaults). Within the map, <code>:additional-toolsets</code> and <code>:additional-tools</code> follow the same explicit-<code>[]</code>-vs-omitted rule as <code>:disabled-mcp-servers</code>: an explicit <code>[]</code> is sent distinctly from omitting the key, while the boolean keys simply omit their wire field when <code>nil</code>.</p>
 <h3><a href="#key-naming-convention" id="key-naming-convention"></a>Key Naming Convention</h3>
 <p>MCP server config keys use an <code>:mcp-</code> prefix in Clojure (e.g., <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>) to distinguish them from other configuration options. On the wire, the SDK automatically strips this prefix to match the upstream protocol (e.g., <code>command</code>, <code>args</code>, <code>tools</code>).</p>
-<p>Some prefixed keys map to a camelCase wire key rather than a bare strip: <code>:mcp-defer-tools</code> becomes <code>deferTools</code>, and its keyword value (<code>:auto</code>/<code>:never</code>) is stringified.</p>
+<p>The experimental CLI-only <code>:mcp-defer-tools</code> key maps to the camelCase wire key <code>deferTools</code>, and its keyword value (<code>:auto</code>/<code>:never</code>) is stringified. It is a Clojure escape hatch for the CLI protocol, not part of strict Node SDK API parity.</p>
 <p>The non-prefixed keys <code>:env</code> and <code>:cwd</code> are shared with other config types and do not have an <code>:mcp-</code> prefix.</p>
 <h2><a href="#tool-filtering" id="tool-filtering"></a>Tool Filtering</h2>
 <p>Control which tools from an MCP server are available to the model:</p>

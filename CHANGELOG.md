@@ -3,6 +3,51 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (optional session wire contracts)
+- `session.create` and `session.resume` now match the official Node SDK's
+  optional-field contract: explicit `false` is preserved for `:streaming?` and
+  `:disable-resume?`; create sends `requestPermission: false` when
+  `:on-permission-request` is omitted; empty hooks send `hooks: false`; and an
+  empty `:system-message` remains an empty wire map instead of gaining
+  `mode: "append"` and `content: null`.
+- Custom-agent maps now serialize their disambiguating Clojure keys to the
+  official unprefixed wire fields (`:agent-name` to `name`, `:agent-prompt` to
+  `prompt`, `:agent-model` to `model`, and the corresponding display,
+  description, tools, inference, and skills fields).
+- `:context-tier` now accepts only `:default` or `:long-context`; explicit
+  `nil` is rejected by create/resume because the official
+  `SessionConfigBase.contextTier` contract supports omission but not JSON
+  `null`. The existing `switch-model!` / `set-model!` option remains nilable
+  under instrumentation and omits `contextTier` from the model-switch RPC.
+- **BREAKING**: model info now exposes the canonical
+  `:model-capabilities {:supports ... :limits ...}` shape instead of the stale
+  `:model-supports` / `:model-limits` response aliases. Outbound session and
+  model-switch configs accept both shapes for compatibility, normalize both to
+  `supports` / `limits`, preserve `reasoningEffort`, and emit the runtime's
+  snake_case `adaptive_thinking` and token/vision limit leaves. Supplying both
+  names for the same branch is rejected as ambiguous.
+- `:mcp-defer-tools` is now explicitly documented and classified as an
+  experimental CLI-only Clojure escape hatch; it remains supported but is not
+  presented as part of the official Node SDK's public `MCPServerConfig`.
+- Added a machine-readable, table-driven create/resume contract matrix pinned
+  to upstream commit `3108e8ce26286043afa52f12781331460628baa0`. It covers
+  every accepted Clojure session config key through the public JSON-RPC path,
+  including aliases, empty values, false values, local-only handlers,
+  post-create option updates, unknown-key rejection, and explicit exclusions.
+  Addresses `PAR-016`.
+- Updated the `manual_tool_resume` example for the corrected create-time
+  `requestPermission` contract: it now registers a deferring
+  `:on-permission-request` handler (returns `{:kind :no-result}`) so the
+  permission prompt stays pending, and suspends with `force-stop!` (matching the
+  upstream sample's `forceStop()`) so the runtime does not auto-resolve pending
+  work on resume. Because the runtime emits each pending event before durably
+  persisting it (with no observable persistence signal), the example waits one
+  second after capturing each pending event so the write completes before the
+  SIGKILL, then a second `pause!` ("Simulating time passing...") mirrors the
+  upstream lifecycle. The flow runs once and fails loudly — no retry. Previously
+  the example relied on the pre-fix behavior where `create` always sent
+  `requestPermission: true`.
+
 ### Fixed (client lifecycle)
 - Internally managed clients now store `:external-server? false` instead of
   `nil`, preserving process ownership semantics while satisfying the public
