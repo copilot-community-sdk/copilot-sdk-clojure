@@ -53,6 +53,11 @@
   :before {:empty-map {:systemMessage {:mode "append" :content nil}}}
   :node {:empty-map {:systemMessage {}}}
   :resolution :preserve-omitted-optional-subfields}
+  {:key :system-message/content
+  :scope :shared
+  :before {:explicit-nil {:systemMessage {:content nil}}}
+  :node {:explicit-nil :not-public}
+  :resolution :omit-nil-preserve-empty-string}
   {:key :disable-resume?
   :scope :resume
   :before {:explicit-false :omitted}
@@ -860,6 +865,9 @@
    :type-line 2269
    :wire-path [:systemMessage]
    :cases [{:name :empty :value {} :expect {}}
+           {:name :explicit-nil-content
+            :value {:content nil}
+            :expect {}}
            {:name :value
             :value {:mode :customize
                     :sections {:identity {:action :remove}

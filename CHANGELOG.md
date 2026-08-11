@@ -9,7 +9,9 @@ All notable changes to this project will be documented in this file. This change
   `:disable-resume?`; create sends `requestPermission: false` when
   `:on-permission-request` is omitted; empty hooks send `hooks: false`; and an
   empty `:system-message` remains an empty wire map instead of gaining
-  `mode: "append"` and `content: null`.
+  `mode: "append"` and `content: null`. An explicitly nil nested
+  `:system-message :content` is also omitted, while an empty string is
+  preserved.
 - Custom-agent maps now serialize their disambiguating Clojure keys to the
   official unprefixed wire fields (`:agent-name` to `name`, `:agent-prompt` to
   `prompt`, `:agent-model` to `model`, and the corresponding display,

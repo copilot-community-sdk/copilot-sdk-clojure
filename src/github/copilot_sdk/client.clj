@@ -1858,9 +1858,9 @@
     :customize (let [{:keys [wire-payload]} (extract-transform-callbacks sm)]
                  wire-payload)
     :append (cond-> {:mode "append"}
-              (contains? sm :content) (assoc :content (:content sm)))
+              (some? (:content sm)) (assoc :content (:content sm)))
     (cond-> {}
-      (contains? sm :content) (assoc :content (:content sm)))))
+      (some? (:content sm)) (assoc :content (:content sm)))))
 
 (defn- apply-empty-mode-system-message
   "In :empty mode, normalize the session config's :system-message so the
