@@ -3,6 +3,15 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (testing)
+- The API-surface drift guard now covers the explicitly supported public
+  namespaces, their public vars and compatibility metadata, registered public
+  fdef forms, and curated idiom spec keys in one deterministic versioned
+  snapshot. Compiler-generated record constructors and private proxy class
+  interns are explicitly excluded, and snapshot generation preserves the
+  caller's spec-instrumentation state. The canonical `bb api-surface:update`
+  task regenerates the complete contract.
+
 ### Fixed (client lifecycle)
 - Internally managed clients now store `:external-server? false` instead of
   `nil`, preserving process ownership semantics while satisfying the public

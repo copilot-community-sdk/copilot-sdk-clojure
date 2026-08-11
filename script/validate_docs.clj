@@ -37,13 +37,14 @@
    "CHANGELOG.md"])
 
 (def source-namespaces
-  "Known public namespaces in the SDK."
+  "Known SDK namespaces referenced by documentation."
   #{"github.copilot-sdk.client"
     "github.copilot-sdk.session"
     "github.copilot-sdk.factory"
     "github.copilot-sdk.helpers"
     "github.copilot-sdk.specs"
     "github.copilot-sdk.instrument"
+    "github.copilot-sdk.logging"
     "github.copilot-sdk.tools"
     "github.copilot-sdk.tool-set"
     "github.copilot-sdk.generated.event-specs"
