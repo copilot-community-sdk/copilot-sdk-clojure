@@ -131,6 +131,12 @@
     (let [c (copilot/client {:is-child-process? true :use-stdio? true :auto-start? false})]
       (is (some? c)))))
 
+(deftest internally-managed-client-has-boolean-ownership-flag
+  (let [c (copilot/client {:auto-start? false})]
+    (is (false? (:external-server? c)))
+    (is (s/valid? ::specs/client c)
+        (s/explain-str ::specs/client c))))
+
 ;; =============================================================================
 ;; URL Parsing Tests (matching JS SDK client.test.ts)
 ;; =============================================================================

@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (client lifecycle)
+- Internally managed clients now store `:external-server? false` instead of
+  `nil`, preserving process ownership semantics while satisfying the public
+  client spec under instrumentation. External URI and child-process clients
+  remain `true`. Addresses `COR-004`.
+
 ### Added (helper lifecycle)
 - **Scope-bound helper event sequences** -- `github.copilot-sdk.helpers/with-query-seq`
   binds the same bounded event sequence shape as `query-seq!` for the dynamic
