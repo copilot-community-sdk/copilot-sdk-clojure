@@ -220,6 +220,19 @@
        (#'surface/validate-snapshot!
         {:vars {} :spec-keys []}))))
 
+(deftest unstable-edn-reports-snapshot-context
+  (let [context {:namespace 'github.copilot-sdk.helpers
+                 :var 'query}
+        error (try
+                (#'surface/assert-stable-edn! context #"not-edn")
+                nil
+                (catch clojure.lang.ExceptionInfo e
+                  e))]
+    (is (instance? clojure.lang.ExceptionInfo error))
+    (is (= context (:context (ex-data error))))
+    (is (= "#\"not-edn\"" (:printed (ex-data error))))
+    (is (instance? RuntimeException (ex-cause error)))))
+
 (deftest snapshot-contains-only-canonical-edn
   (let [snapshot-text (slurp (io/resource surface/snapshot-resource))]
     (is (not (re-find #"__\d+__auto__" snapshot-text)))

@@ -131,7 +131,14 @@
     (when (str/includes? printed "#object[")
       (throw (ex-info "Non-EDN object in API snapshot value"
                       {:context context :value value})))
-    (let [round-tripped (edn/read-string printed)]
+    (let [round-tripped
+          (try
+            (edn/read-string printed)
+            (catch RuntimeException error
+              (throw (ex-info "API snapshot value is not readable EDN"
+                              {:context context
+                               :printed printed}
+                              error))))]
       (when-not (= value round-tripped)
         (throw (ex-info "API snapshot value is not stable EDN"
                         {:context context
