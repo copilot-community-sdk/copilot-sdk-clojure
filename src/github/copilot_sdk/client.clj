@@ -357,7 +357,7 @@
                   merged)
          child-process? (:is-child-process? opts)
          cli-url? (boolean (:cli-url opts))
-         external? (or cli-url? child-process?)
+         external? (boolean (or cli-url? child-process?))
          {:keys [host port]} (when cli-url?
                                (parse-cli-url (:cli-url opts)))
          ;; tcp-connection-token (upstream PR #1176): use the user-provided
