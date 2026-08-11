@@ -618,6 +618,39 @@
             _m2 (sdk/list-models c)]
         (is (= 1 @call-count))))))
 
+(deftest test-list-models-uses-canonical-model-capabilities-shape
+  (mock/set-request-hook!
+   *mock-server*
+   (fn [method _params]
+     (when (= "models.list" method)
+       {:github.copilot-sdk.mock-server/merge-response
+        {:models [{:id "capable-model"
+                   :name "Capable Model"
+                   :capabilities
+                   {:supports {:vision true
+                               :reasoningEffort false
+                               :adaptive_thinking "required"}
+                    :limits {:max_prompt_tokens 120000
+                             :max_output_tokens 16000
+                             :max_context_window_tokens 136000
+                             :vision {:supported_media_types ["image/png"]
+                                      :max_prompt_images 5
+                                      :max_prompt_image_size 1048576}}}}]}})))
+  (let [capabilities (:model-capabilities (first (sdk/list-models *test-client*)))]
+    (is (= {:vision true
+            :reasoning-effort false
+            :adaptive-thinking :required}
+           (:supports capabilities)))
+    (is (= {:max-prompt-tokens 120000
+            :max-output-tokens 16000
+            :max-context-window-tokens 136000
+            :vision {:supported-media-types ["image/png"]
+                     :max-prompt-images 5
+                     :max-prompt-image-size 1048576}}
+           (:limits capabilities)))
+    (is (not (contains? capabilities :model-supports)))
+    (is (not (contains? capabilities :model-limits)))))
+
 ;; -----------------------------------------------------------------------------
 ;; Session Lifecycle Tests
 ;; -----------------------------------------------------------------------------
@@ -1168,13 +1201,13 @@
       (is (= "https://mcp.test" (get-in create-params [:mcpServers :srv-1 :url])))
       (is (= ["*"] (get-in create-params [:mcpServers :srv-1 :tools])))
       (is (= 1000 (get-in create-params [:mcpServers :srv-1 :timeout])))
-      (is (= "agent-1" (get-in create-params [:customAgents 0 :agentName])))
-      (is (= "Agent One" (get-in create-params [:customAgents 0 :agentDisplayName])))
+      (is (= "agent-1" (get-in create-params [:customAgents 0 :name])))
+      (is (= "Agent One" (get-in create-params [:customAgents 0 :displayName])))
       (is (= "https://resume.test" (get-in resume-params [:provider :baseUrl])))
       (is (= "sse" (get-in resume-params [:mcpServers :srv-2 :type])))
       (is (= "https://mcp.resume.test" (get-in resume-params [:mcpServers :srv-2 :url])))
       (is (= ["*"] (get-in resume-params [:mcpServers :srv-2 :tools])))
-      (is (= "agent-2" (get-in resume-params [:customAgents 0 :agentName])))
+      (is (= "agent-2" (get-in resume-params [:customAgents 0 :name])))
       ;; envValueMode is always sent as "direct" (upstream PR #484)
       (is (= "direct" (:envValueMode create-params)))
       (is (= "direct" (:envValueMode resume-params))))))
@@ -1222,12 +1255,12 @@
                           :mcp-defer-tools :never}}}]})
           create-params (get @seen "session.create")
           resume-params (get @seen "session.resume")]
-      (is (= [{:agentName "create-agent"
-               :agentDisplayName "Create Agent"
-               :agentDescription "Exercises keyword MCP server IDs"
-               :agentPrompt "Use the configured MCP server."
-               :agentSkills ["database"]
-               :agentModel "gpt-5.4"
+      (is (= [{:name "create-agent"
+               :displayName "Create Agent"
+               :description "Exercises keyword MCP server IDs"
+               :prompt "Use the configured MCP server."
+               :skills ["database"]
+               :model "gpt-5.4"
                :mcpServers
                {:team/srv-1 {:command "node"
                              :args ["server.js"]
@@ -1235,12 +1268,12 @@
                              :timeout 1000
                              :cwd "/tmp/create"}}}]
              (:customAgents create-params)))
-      (is (= [{:agentName "resume-agent"
-               :agentDisplayName "Resume Agent"
-               :agentDescription "Exercises string MCP server IDs"
-               :agentPrompt "Use the configured remote MCP server."
-               :agentSkills ["research"]
-               :agentModel "gpt-5.4"
+      (is (= [{:name "resume-agent"
+               :displayName "Resume Agent"
+               :description "Exercises string MCP server IDs"
+               :prompt "Use the configured remote MCP server."
+               :skills ["research"]
+               :model "gpt-5.4"
                :mcpServers
                {:srv-2 {:type "http"
                         :url "https://mcp.resume.test"
@@ -2161,6 +2194,12 @@
       (is (some? (sdk/resume-session *test-client* session-id {}))))))
 
 (deftest test-permission-no-result-v3
+  ;; Pins the contract the manual_tool_resume example relies on: a deferring
+  ;; :on-permission-request handler that returns {:kind :no-result} leaves the
+  ;; permission pending (no handlePendingPermissionRequest RPC), so the app can
+  ;; resolve it by hand later. (That a handler is present at all also forces
+  ;; requestPermission:true on create — pinned by the optional-wire-contract
+  ;; matrix's :on-permission-request row.)
   (testing "v3 no-result skips handlePendingPermissionRequest RPC"
     (let [requests (atom [])
           _ (mock/set-request-hook! *mock-server*
@@ -5772,6 +5811,16 @@
       (is (not (contains? create-params :enableConfigDiscovery))))))
 
 (deftest test-model-capabilities-on-wire
+  (testing "fixed-precision Long limits validate while arbitrary-precision integers do not"
+    (let [limits {:max-prompt-tokens (long 120000)
+                  :max-output-tokens (long 16000)
+                  :max-context-window-tokens (long 136000)
+                  :vision {:max-prompt-images (long 5)
+                           :max-prompt-image-size (long 1048576)}}]
+      (is (s/valid? ::specs/model-capabilities {:limits limits}))
+      (is (not (s/valid? ::specs/model-capabilities
+                         {:limits (assoc limits :max-prompt-tokens 120000N)})))))
+
   (testing "modelCapabilities is forwarded in session.create (upstream PR #1029)"
     (let [seen (atom {})
           _ (mock/set-request-hook! *mock-server* (fn [method params]
@@ -5779,9 +5828,9 @@
                                                       (swap! seen assoc method params))))
           _ (sdk/create-session *test-client*
                                 {:on-permission-request sdk/approve-all
-                                 :model-capabilities {:model-supports {:supports-vision true}}})
+                                 :model-capabilities {:supports {:vision true}}})
           create-params (get @seen "session.create")]
-      (is (= true (get-in create-params [:modelCapabilities :modelSupports :supportsVision])))))
+      (is (= true (get-in create-params [:modelCapabilities :supports :vision])))))
 
   (testing "modelCapabilities is forwarded in session.resume (upstream PR #1029)"
     (let [seen (atom {})
@@ -5791,9 +5840,9 @@
                                                       (swap! seen assoc method params))))
           _ (sdk/resume-session *test-client* session-id
                                 {:on-permission-request sdk/approve-all
-                                 :model-capabilities {:model-supports {:supports-reasoning-effort true}}})
+                                 :model-capabilities {:supports {:reasoning-effort true}}})
           resume-params (get @seen "session.resume")]
-      (is (= true (get-in resume-params [:modelCapabilities :modelSupports :supportsReasoningEffort])))))
+      (is (= true (get-in resume-params [:modelCapabilities :supports :reasoningEffort])))))
 
   (testing "modelCapabilities is omitted when not set"
     (let [seen (atom {})
@@ -5814,8 +5863,8 @@
                                         (reset! captured-params params))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/switch-model! session "gpt-5.4"
-                               {:model-capabilities {:model-supports {:supports-vision false}}})]
-      (is (= false (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision])))))
+                               {:model-capabilities {:supports {:vision false}}})]
+      (is (= false (get-in @captured-params [:modelCapabilities :supports :vision])))))
 
   (testing "set-model! forwards modelCapabilities (alias for switch-model!)"
     (let [captured-params (atom nil)
@@ -5825,8 +5874,8 @@
                                         (reset! captured-params params))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/set-model! session "gpt-5.4"
-                            {:model-capabilities {:model-supports {:supports-vision true}}})]
-      (is (= true (get-in @captured-params [:modelCapabilities :modelSupports :supportsVision]))))))
+                            {:model-capabilities {:supports {:vision true}}})]
+      (is (= true (get-in @captured-params [:modelCapabilities :supports :vision]))))))
 
 (deftest test-switch-model-with-context-tier
   (testing "switch-model! forwards contextTier (upstream PR #1522)"
@@ -5870,6 +5919,27 @@
           _ (sdk/switch-model! session "gpt-5.4" {:context-tier nil})]
       (is (not (contains? @captured-params :contextTier))
           "nil :context-tier must be omitted, not sent as contextTier: null (switchTo schema has no null tier)"))))
+
+(deftest test-model-switch-context-tier-nil-under-instrumentation
+  (let [instrument-all! (requiring-resolve 'github.copilot-sdk.instrument/instrument-all!)
+        unstrument-all! (requiring-resolve 'github.copilot-sdk.instrument/unstrument-all!)
+        captured (atom [])]
+    (mock/set-request-hook!
+     *mock-server*
+     (fn [method params]
+       (when (= method "session.model.switchTo")
+         (swap! captured conj params))))
+    (instrument-all!)
+    (try
+      (let [session (sdk/create-session *test-client*
+                                        {:on-permission-request sdk/approve-all})]
+        (sdk/switch-model! session "gpt-5.4" {:context-tier nil})
+        (sdk/set-model! session "gpt-5.4" {:context-tier nil})
+        (is (= 2 (count @captured)))
+        (is (every? #(not (contains? % :contextTier)) @captured)
+            "instrumented switch/set must accept nil and omit contextTier"))
+      (finally
+        (unstrument-all!)))))
 
 (deftest test-history-compact-rpc-name
   (testing "compaction-compact! uses session.history.compact RPC (upstream #1039)"
@@ -6018,7 +6088,7 @@
                                                   :agent-skills ["my-skill"]}]})
           create-params (get @seen "session.create")
           agent (first (:customAgents create-params))]
-      (is (= ["my-skill"] (:agentSkills agent))))))
+      (is (= ["my-skill"] (:skills agent))))))
 
 ;; --- Per-agent model field (upstream PR #1309) ------------------------------
 
@@ -6054,9 +6124,9 @@
           create-params (get @seen "session.create")
           resume-params (get @seen "session.resume")]
       (is (= "claude-haiku-4.5"
-             (get-in create-params [:customAgents 0 :agentModel])))
+             (get-in create-params [:customAgents 0 :model])))
       (is (= "gpt-5.4"
-             (get-in resume-params [:customAgents 0 :agentModel]))))))
+             (get-in resume-params [:customAgents 0 :model]))))))
 
 (deftest test-custom-agent-model-omitted-when-not-set
   (testing ":agent-model is omitted from wire when not provided"
@@ -6069,7 +6139,7 @@
                                  :custom-agents [{:agent-name "no-model"
                                                   :agent-prompt "Hi"}]})
           agent (first (get-in @seen ["session.create" :customAgents]))]
-      (is (not (contains? agent :agentModel))))))
+      (is (not (contains? agent :model))))))
 
 ;; --- Per-agent reasoning effort (upstream PR #1981) -------------------------
 

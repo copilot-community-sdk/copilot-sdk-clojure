@@ -183,6 +183,75 @@
     (throw (ex-info "Invalid :context-tier value (expected :default or :long-context)"
                     {:context-tier tier}))))
 
+(defn ^:no-doc model-capabilities->wire
+  "Convert a ModelCapabilitiesOverride from the Clojure idiom to its exact
+  mixed-case runtime shape.
+
+  Canonical input uses `:supports` / `:limits`. The deprecated
+  `:model-supports` / `:model-limits` aliases are normalized to the same wire
+  shape. Supplying both names for one branch is ambiguous and rejected."
+  [capabilities]
+  (when (and (contains? capabilities :supports)
+             (contains? capabilities :model-supports))
+    (throw (ex-info "Model capabilities cannot contain both :supports and :model-supports"
+                    {:model-capabilities capabilities})))
+  (when (and (contains? capabilities :limits)
+             (contains? capabilities :model-limits))
+    (throw (ex-info "Model capabilities cannot contain both :limits and :model-limits"
+                    {:model-capabilities capabilities})))
+  (let [legacy-supports? (contains? capabilities :model-supports)
+        legacy-limits? (contains? capabilities :model-limits)
+        supports (if legacy-supports?
+                   (:model-supports capabilities)
+                   (:supports capabilities))
+        limits (if legacy-limits?
+                 (:model-limits capabilities)
+                 (:limits capabilities))
+        vision (when limits
+                 (if legacy-limits?
+                   (:vision-capabilities limits)
+                   (:vision limits)))]
+    (cond-> {}
+      (or (contains? capabilities :supports) legacy-supports?)
+      (assoc :supports
+             (cond-> {}
+               (contains? supports (if legacy-supports? :supports-vision :vision))
+               (assoc :vision
+                      (get supports (if legacy-supports? :supports-vision :vision)))
+               (contains? supports
+                          (if legacy-supports?
+                            :supports-reasoning-effort
+                            :reasoning-effort))
+               (assoc :reasoningEffort
+                      (get supports
+                           (if legacy-supports?
+                             :supports-reasoning-effort
+                             :reasoning-effort)))
+               (and (not legacy-supports?)
+                    (contains? supports :adaptive-thinking))
+               (assoc "adaptive_thinking"
+                      (let [value (:adaptive-thinking supports)]
+                        (if (keyword? value) (name value) value)))))
+
+      (or (contains? capabilities :limits) legacy-limits?)
+      (assoc :limits
+             (cond-> {}
+               (contains? limits :max-prompt-tokens)
+               (assoc "max_prompt_tokens" (:max-prompt-tokens limits))
+               (and (not legacy-limits?) (contains? limits :max-output-tokens))
+               (assoc "max_output_tokens" (:max-output-tokens limits))
+               (contains? limits :max-context-window-tokens)
+               (assoc "max_context_window_tokens" (:max-context-window-tokens limits))
+               (contains? limits (if legacy-limits? :vision-capabilities :vision))
+               (assoc :vision
+                      (cond-> {}
+                        (contains? vision :supported-media-types)
+                        (assoc "supported_media_types" (:supported-media-types vision))
+                        (contains? vision :max-prompt-images)
+                        (assoc "max_prompt_images" (:max-prompt-images vision))
+                        (contains? vision :max-prompt-image-size)
+                        (assoc "max_prompt_image_size" (:max-prompt-image-size vision)))))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Event type normalization
 ;; -----------------------------------------------------------------------------

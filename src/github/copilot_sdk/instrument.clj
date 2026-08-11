@@ -300,22 +300,23 @@
                 :args (s/cat :session ::specs/session)
                 :ret ::specs/model-id)
 
+(s/def ::context-tier (s/nilable ::specs/context-tier))
+(s/def ::model-switch-options
+  (s/keys :opt-un [::specs/reasoning-effort
+                   ::specs/reasoning-summary
+                   ::context-tier
+                   ::specs/model-capabilities]))
+
 (register-fdef! github.copilot-sdk.session/switch-model!
                 :args (s/cat :session ::specs/session
                              :model-id string?
-                             :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
-                                                                    ::specs/reasoning-summary
-                                                                    ::specs/context-tier
-                                                                    ::specs/model-capabilities]))))
+                             :opts (s/? (s/nilable ::model-switch-options)))
                 :ret (s/nilable ::specs/model-id))
 
 (register-fdef! github.copilot-sdk.session/set-model!
                 :args (s/cat :session ::specs/session
                              :model-id string?
-                             :opts (s/? (s/nilable (s/keys :opt-un [::specs/reasoning-effort
-                                                                    ::specs/reasoning-summary
-                                                                    ::specs/context-tier
-                                                                    ::specs/model-capabilities]))))
+                             :opts (s/? (s/nilable ::model-switch-options)))
                 :ret (s/nilable ::specs/model-id))
 
 (register-fdef! github.copilot-sdk.session/log!

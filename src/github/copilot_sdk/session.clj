@@ -2253,7 +2253,10 @@
    - :context-tier          - Context window tier for models that support it
                               (:default or :long-context, upstream PR #1522)
    - :model-capabilities    - Model capabilities override map (upstream PR #1029)
-                              e.g. {:model-supports {:supports-vision true}}
+                              e.g. {:supports {:vision true}
+                                    :limits {:max-prompt-tokens 128000}}
+                              (:adaptive-thinking / :max-output-tokens are experimental
+                              CLI-protocol extras)
 
    Returns the new model ID string, or nil."
   ([session model-id] (switch-model! session model-id nil))
@@ -2267,7 +2270,8 @@
                   (:reasoning-summary opts) (assoc :reasoningSummary (:reasoning-summary opts))
                   (some? context-tier) (assoc :contextTier context-tier)
                   (:model-capabilities opts) (assoc :modelCapabilities
-                                                    (util/clj->wire (:model-capabilities opts))))
+                                                    (util/model-capabilities->wire
+                                                     (:model-capabilities opts))))
          result (proto/send-request! conn "session.model.switchTo" params)]
      (:model-id result))))
 
