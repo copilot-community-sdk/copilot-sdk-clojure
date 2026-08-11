@@ -176,8 +176,8 @@ governs the API.
 
 ## See also
 
-- [`AGENTS.md`](../AGENTS.md) — guidelines for AI agents (regeneration workflow)
-- [`JAVA_SDK_COMPARISON.md`](../JAVA_SDK_COMPARISON.md) — analysis of the Java SDK's
+- [`AGENTS.md`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/AGENTS.md) — guidelines for AI agents (regeneration workflow)
+- [`JAVA_SDK_COMPARISON.md`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/JAVA_SDK_COMPARISON.md) — analysis of the Java SDK's
   codegen pipeline that motivated this approach
-- [`script/codegen/`](../script/codegen/) — generator source
-- [`.copilot-schema-version`](../.copilot-schema-version) — pinned upstream version
+- [`script/codegen/`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/tree/main/script/codegen) — generator source
+- [`.copilot-schema-version`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/.copilot-schema-version) — pinned upstream version

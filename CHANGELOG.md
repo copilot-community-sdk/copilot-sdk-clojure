@@ -12,6 +12,20 @@ All notable changes to this project will be documented in this file. This change
   caller's spec-instrumentation state. The canonical `bb api-surface:update`
   task regenerates the complete contract.
 
+### Fixed (documentation)
+- Codox topic generation now assigns deterministic output identities from source
+  paths, preserves flat URLs for unambiguous basenames that do not collide with
+  Codox-owned pages, and rewrites relative topic links through the resulting
+  manifest. The Codox project index is no longer overwritten by `doc/index.md`;
+  the documentation and authentication index topics now render separately.
+  Generated HTML validation covers missing topic targets, unresolved source-topic
+  paths, and broken local topic anchors. A manifest-derived reserved-target check
+  independently rejects any rendered topic-content link that resolves onto a
+  Codox-owned output (the project index or a namespace page), so a producer that
+  fails to rewrite a documentation link cannot leave it pointing at Codox chrome.
+  Fixes
+  [issue 174](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/174).
+
 ### Fixed (client lifecycle)
 - Internally managed clients now store `:external-server? false` instead of
   `nil`, preserving process ownership semantics while satisfying the public
