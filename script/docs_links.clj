@@ -391,6 +391,27 @@
                    :target path})))))
          vec)))
 
+(defn broken-relative-output-links
+  "Return relative topic-content hrefs whose generated target does not exist."
+  [manifest output-dir]
+  (let [output-dir (canonical-file output-dir)]
+    (->> manifest
+         (mapcat
+          (fn [{:keys [source-path output-file]}]
+            (let [html-file (io/file output-dir output-file)]
+              (when (.isFile html-file)
+                (for [href (hrefs (topic-content-html (slurp html-file)))
+                      :let [[path] (split-url-suffix href)
+                            target (canonical-file (io/file output-dir path))]
+                      :when (and (relative-url? path)
+                                 (not (.isFile target))
+                                 (not (.isDirectory target)))]
+                  {:source-page source-path
+                   :output-page output-file
+                   :href href
+                   :target (posix-path (.getPath target))})))))
+         vec)))
+
 (defn unresolved-output-links
   "Return source-topic hrefs that do not use their generated identities."
   [manifest output-dir]
@@ -492,15 +513,17 @@
 (defn assert-valid-output-links!
   [manifest reserved-output-files output-dir]
   (let [broken (broken-output-links manifest output-dir)
+        broken-relative (broken-relative-output-links manifest output-dir)
         unresolved (unresolved-output-links manifest output-dir)
         broken-anchors (broken-output-anchors manifest output-dir)
         reserved-targets (reserved-target-content-links manifest
                                                         reserved-output-files
                                                         output-dir)]
-    (when (or (seq broken) (seq unresolved) (seq broken-anchors)
+    (when (or (seq broken) (seq broken-relative) (seq unresolved) (seq broken-anchors)
               (seq reserved-targets))
       (throw (ex-info "Generated topic links are broken"
                       {:broken-links broken
+                       :broken-relative-links broken-relative
                        :unresolved-links unresolved
                        :broken-anchors broken-anchors
                        :reserved-target-links reserved-targets}))))

@@ -238,6 +238,24 @@
                :target "byok.html"}]
              (links/broken-output-links manifest (io/file root "doc/api")))))))
 
+(deftest validates-all-generated-relative-targets
+  (with-temp-root [root]
+    (write-file! root "doc/index.md" "# Documentation")
+    (write-file! root "doc/api/doc-index.html"
+                 (topic-html
+                  (str "<a href=\"missing/file.html#section\">Missing</a>"
+                       "<a href=\"https://example.com/missing.html\">External</a>"
+                       "<a href=\"#local\">Local</a>")))
+    (let [manifest (links/build-topic-manifest root {:doc-paths ["doc"]})]
+      (is (= [{:source-page "doc/index.md"
+               :output-page "doc-index.html"
+               :href "missing/file.html#section"
+               :target (.getPath (.getCanonicalFile
+                                  (io/file root "doc/api/missing/file.html")))}]
+             (links/broken-relative-output-links
+              manifest
+              (io/file root "doc/api")))))))
+
 (deftest detects-unresolved-generated-topic-links
   (with-temp-root [root]
     (write-file! root "doc/index.md" "# Documentation")

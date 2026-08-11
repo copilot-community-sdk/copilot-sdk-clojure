@@ -233,6 +233,11 @@
         (error! output-page
                 (format "Broken generated topic link from %s: %s -> %s"
                         source-page href target)))
+      (doseq [{:keys [source-page output-page href target]}
+              (docs-links/broken-relative-output-links manifest output-dir)]
+        (error! output-page
+                (format "Broken generated relative link from %s: %s -> %s"
+                        source-page href target)))
       (doseq [{:keys [source-page output-page href expected]}
               (docs-links/unresolved-output-links manifest output-dir)]
         (error! output-page

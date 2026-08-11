@@ -5,7 +5,7 @@ Clojure SDK for programmatic control of the GitHub Copilot CLI via JSON-RPC.
 ## Getting Started
 
 - [Getting Started](getting-started.md) — Step-by-step tutorial building a weather assistant
-- [Examples](../examples/README.md) — 20 working examples with walkthroughs
+- [Examples](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md) — 20 working examples with walkthroughs
 
 ## Guides
 
@@ -38,7 +38,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 ## Reference
 
 - [API Reference](reference/API.md) — Complete API: helpers, client, session, events, tools
-- [Generated API Docs](api/index.html) — Codox-generated namespace documentation
+- [Generated API Docs](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/api/index.html) — Codox-generated namespace documentation
 
 ## Architecture Decisions
 
@@ -50,6 +50,6 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 - [Style Guide](style.md) — Documentation authoring conventions
 - [Code Generation](codegen.md) — Schema-driven generation of clojure.spec definitions
 - [Upstream Doc Gap Matrix](upstream-doc-gap-matrix.md) — Per-topic coverage vs the upstream SDK docs
-- [AGENTS.md](../AGENTS.md) — Guidelines for AI agents working on this codebase
-- [PUBLISHING.md](../PUBLISHING.md) — Versioning, CI/CD workflows, release process, build attestation
-- [CHANGELOG](../CHANGELOG.md) — Version history
+- [AGENTS.md](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/AGENTS.md) — Guidelines for AI agents working on this codebase
+- [PUBLISHING.md](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/PUBLISHING.md) — Versioning, CI/CD workflows, release process, build attestation
+- [CHANGELOG](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/CHANGELOG.md) — Version history

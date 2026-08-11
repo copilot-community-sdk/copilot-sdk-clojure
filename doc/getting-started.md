@@ -1,6 +1,6 @@
 # Getting Started with the Copilot SDK for Clojure
 
-> **Note:** Version `1.0.0.0` is the first generally available (GA) release (tracking upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) `v1.0.0`). The public API is stable. Subsequent releases follow the upstream versioning scheme (see [Versioning](../PUBLISHING.md#versioning)); any breaking changes are called out in the [CHANGELOG](../CHANGELOG.md).
+> **Note:** Version `1.0.0.0` is the first generally available (GA) release (tracking upstream [github/copilot-sdk](https://github.com/github/copilot-sdk) `v1.0.0`). The public API is stable. Subsequent releases follow the upstream versioning scheme (see [Versioning](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/PUBLISHING.md#versioning)); any breaking changes are called out in the [CHANGELOG](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/CHANGELOG.md).
 
 In this tutorial, you'll use the Copilot SDK for Clojure to build a command-line assistant. You'll start with the basics, add streaming responses, then add custom tools — giving Copilot the ability to call your code.
 
@@ -150,7 +150,7 @@ Use `<create-session` and `<send!` for fully non-blocking operations inside `go`
     (println (<!! result-ch))))
 ```
 
-This pattern parks (instead of blocking) on the core.async thread pool, enabling true parallelism across multiple `go` blocks — ideal for multi-agent orchestration. See the [multi-agent example](../examples/README.md) for a complete walkthrough.
+This pattern parks (instead of blocking) on the core.async thread pool, enabling true parallelism across multiple `go` blocks — ideal for multi-agent orchestration. See the [multi-agent example](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md) for a complete walkthrough.
 
 ### Event Subscription Methods
 
@@ -261,7 +261,7 @@ Now that you have the basics, explore these topics:
 - **[Agent Factories](./guides/agent-factories.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-factory` / `run-factory!`
 - **[Authentication](./auth/index.md)** — All auth methods including BYOK
 - **[MCP Servers](./mcp/overview.md)** — Connect to external tools via MCP
-- **[Examples](../examples/README.md)** — More working examples
+- **[Examples](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md)** — More working examples
 
 ### Permissions (deny-by-default)
 
