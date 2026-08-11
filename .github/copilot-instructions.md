@@ -100,6 +100,45 @@ value that violates a spec will throw immediately. When adding new public functi
 2. Ensure the corresponding specs exist in `src/github/copilot_sdk/specs.clj`
 3. Run `bb test` — if specs are wrong, instrumented tests will catch it
 
+### Public API Surface Guard
+
+`resources/github/copilot_sdk/api_surface.edn` is the versioned compatibility
+snapshot for these supported namespaces:
+
+- `github.copilot-sdk`
+- `github.copilot-sdk.client`
+- `github.copilot-sdk.factory`
+- `github.copilot-sdk.helpers`
+- `github.copilot-sdk.instrument`
+- `github.copilot-sdk.logging`
+- `github.copilot-sdk.session`
+- `github.copilot-sdk.specs`
+- `github.copilot-sdk.tool-set`
+- `github.copilot-sdk.tools`
+
+The snapshot guards namespace membership; curated public non-`no-doc` var
+names; function/macro/value kind; canonical arglists;
+dynamic/deprecated/experimental markers; normalized public fdef forms; and
+curated idiom spec-key membership. It intentionally excludes docstrings, source
+metadata, values, full idiom spec definitions, internal namespaces, and
+generated wire namespaces.
+
+Compiler-generated vars are not API merely because `ns-publics` returns them.
+The guard has named, reasoned, stale-checked exclusions for the generated
+`FactoryHandle` and `CopilotSession` record constructors, plus a narrow validated
+predicate for the two private non-closing stdio proxy class interns. Any other
+record factory or proxy intern in a supported namespace fails generation until
+it is reviewed. Fdefs are loaded without retaining the instrumentation side
+effect of `github.copilot-sdk.instrument`; the generator restores the shared
+JVM's exact prior instrumentation state.
+
+After an intentional contract change, run `bb api-surface:update` and review the
+generated EDN diff. To add a supported namespace, enroll it explicitly in
+`test/github/copilot_sdk/api_surface.clj`, document its public status, regenerate
+the snapshot, and review the complete new namespace block. Add a generated-var
+exclusion only for a specific compiler artifact, with a reason and a stale-entry
+test; never filter arbitrary name prefixes.
+
 ### Running Examples
 
 Examples are part of the test suite but run separately:

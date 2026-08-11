@@ -4,7 +4,7 @@
  {test {:doc "Run the test suite."
         :task (clojure "-M:test" "-m" "cognitect.test-runner")}
 
-  api-surface:update {:doc "Regenerate the checked-in public API-surface snapshot."
+  api-surface:update {:doc "Regenerate the versioned multi-namespace public API snapshot."
                       :task (clojure "-M:test" "-m" "github.copilot-sdk.api-surface")}
 
   fmt {:doc "Format all Clojure files."
@@ -38,7 +38,7 @@
            :task (clojure "-T:build" "install")}
 
   validate-docs {:doc "Validate documentation: links, code blocks, and structure."
-                 :task (shell "bb" "script/validate_docs.clj")}
+                 :task (shell "bb" "-cp" "script" "script/validate_docs.clj")}
 
   schemas:fetch {:doc "Fetch upstream @github/copilot JSON Schemas at the pinned version into schemas/."
                  :task (shell "bb" "script/codegen/fetch_schemas.clj")}
