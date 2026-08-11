@@ -69,14 +69,34 @@
 <h3><a href="#query-chan" id="query-chan"></a><code>query-chan</code></h3>
 <pre><code class="language-clojure">(h/query-chan prompt &amp; {:keys [client session buffer]})
 </code></pre>
-<p>Execute a query and return a core.async channel of events. Use this when you want to process events with core.async.</p>
-<pre><code class="language-clojure">(let [ch (h/query-chan "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})]
-  (go-loop []
-    (when-let [event (&lt;! ch)]
-      (when (= :copilot/assistant.message_delta (:type event))
-        (print (get-in event [:data :delta-content])))
-      (recur))))
+<p>Execute a query and return a bounded core.async channel of events. The channel closes after a <code>:copilot/session.idle</code> or <code>:copilot/session.error</code> event.</p>
+<table>
+<thead>
+<tr><th> Key </th><th> Type </th><th> Default </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:buffer</code> </td><td> positive integer </td><td> <code>256</code> </td><td> Maximum number of events buffered before producer backpressure </td></tr>
+<tr><td> <code>:client</code> </td><td> map </td><td> <code>nil</code> </td><td> Client options map </td></tr>
+<tr><td> <code>:session</code> </td><td> map </td><td> <code>nil</code> </td><td> Session options map </td></tr>
+</tbody>
+</table>
+<pre><code class="language-clojure">(require '[clojure.core.async :refer [&lt;! close! go-loop]])
+
+(def events
+  (h/query-chan "Tell me a story"
+               :session {:on-permission-request copilot/approve-all
+                         :streaming? true}))
+
+(go-loop [remaining 10]
+  (when-let [event (&lt;! events)]
+    (when (= :copilot/assistant.message_delta (:type event))
+      (print (get-in event [:data :delta-content])))
+    (if (= remaining 1)
+      (close! events)
+      (recur (dec remaining)))))
 </code></pre>
+<p>Close the returned channel when you stop consuming before a terminal event. Closing cancels the hidden query and disconnects its session even when the output buffer is full. The example above closes after ten events instead of abandoning the channel.</p>
+<p>Values accepted into the buffer before cancellation remain readable after <code>close!</code>. An in-flight event whose parked put loses to cancellation may be dropped; cancellation is not a lossless drain.</p>
 <h3><a href="#shutdown" id="shutdown"></a><code>shutdown!</code></h3>
 <pre><code class="language-clojure">(h/shutdown!)
 </code></pre>

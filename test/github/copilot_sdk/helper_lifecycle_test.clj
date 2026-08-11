@@ -1,5 +1,6 @@
 (ns github.copilot-sdk.helper-lifecycle-test
   (:require [clojure.core.async :as async]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.spec.test.alpha :as stest]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [github.copilot-sdk :as sdk]
@@ -62,6 +63,333 @@
   `(call-with-single-helper-client
     (fn [~client-binding]
       ~@body)))
+
+(defn- observe-parked-put
+  [ch parked-put event-to-observe put-count producer-finished close-count]
+  (reify
+    async-protocols/ReadPort
+    (take! [_ handler]
+      (async-protocols/take! ch handler))
+
+    async-protocols/WritePort
+    (put! [_ value handler]
+      (swap! put-count inc)
+      (let [result (async-protocols/put! ch value handler)]
+        (when (and (identical? value event-to-observe)
+                   (nil? result))
+          (deliver parked-put true))
+        result))
+
+    async-protocols/Channel
+    (close! [_]
+      (let [closes (swap! close-count inc)
+            result (async-protocols/close! ch)]
+        (when (= 2 closes)
+          (deliver producer-finished true))
+        result))
+    (closed? [_]
+      (async-protocols/closed? ch))))
+
+(defn- call-with-controlled-query
+  [{:keys [events-ch disconnect-fn subscribe-fn send-fn chan-fn]} test-fn]
+  (with-redefs-fn
+    (cond-> {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
+             (fn [_client-opts] ::client)
+             #'sdk/create-session
+             (fn [_client _session-config] ::session)
+             #'sdk/subscribe-events
+             (or subscribe-fn (fn [_session] events-ch))
+             #'sdk/send!
+             (or send-fn (fn [_session _message] ::message-id))
+             #'sdk/disconnect!
+             (or disconnect-fn (fn [_session] nil))}
+      chan-fn (assoc #'async/chan chan-fn))
+    test-fn))
+
+(deftest query-chan-close-releases-a-put-parked-on-a-full-buffer
+  (let [events-ch (async/chan 3)
+        first-event {:type :copilot/assistant.turn_start}
+        parked-event {:type :copilot/assistant.message_delta}
+        unread-event {:type :copilot/assistant.message}
+        parked-put (promise)
+        producer-finished (promise)
+        disconnected (promise)
+        disconnects (atom 0)
+        output-puts (atom 0)
+        output-closes (atom 0)
+        query-ch (atom nil)
+        original-chan async/chan
+        output-created? (atom false)
+        observed-chan (fn [& args]
+                        (let [ch (apply original-chan args)]
+                          (if (and (= [1] args)
+                                   (compare-and-set! output-created? false true))
+                            (observe-parked-put ch parked-put parked-event output-puts
+                                                producer-finished output-closes)
+                            ch)))]
+    (doseq [event [first-event parked-event unread-event]]
+      (is (true? (async/>!! events-ch event))))
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session]
+                       (swap! disconnects inc)
+                       (deliver disconnected true))
+      :chan-fn observed-chan}
+     (fn []
+       (try
+         (reset! query-ch (h/query-chan "park" :buffer 1))
+         (is (true? (deref parked-put 1000 false)))
+
+         (async/close! @query-ch)
+
+         (is (true? (deref disconnected 500 false)))
+         (is (true? (deref producer-finished 500 false)))
+         (is (= 1 @disconnects))
+         (is (= first-event (async/<!! @query-ch)))
+         (is (nil? (async/<!! @query-ch)))
+         (is (= 2 @output-puts))
+         (finally
+           (async/close! events-ch)
+           (when-let [ch @query-ch]
+             (loop []
+               (when (some? (async/<!! ch))
+                 (recur))))
+           (deref disconnected 1000 nil)))))))
+
+(deftest query-chan-preserves-bounded-order-through-natural-terminal
+  (let [events-ch (async/chan)
+        first-event {:type :copilot/assistant.turn_start}
+        second-event {:type :copilot/assistant.message}
+        terminal-event {:type :copilot/session.idle}
+        disconnects (atom 0)]
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session] (swap! disconnects inc))}
+     (fn []
+       (let [query-ch (h/query-chan "ordered" :buffer 1)]
+         (is (true? (async/>!! events-ch first-event)))
+         (is (true? (async/>!! events-ch second-event)))
+         (is (= first-event (async/<!! query-ch)))
+         (is (= second-event (async/<!! query-ch)))
+         (is (true? (async/>!! events-ch terminal-event)))
+         (is (= terminal-event (async/<!! query-ch)))
+         (is (nil? (async/<!! query-ch)))
+         (is (= 1 @disconnects)))))))
+
+(deftest query-chan-source-close-disconnects-once
+  (let [events-ch (async/chan)
+        disconnects (atom 0)]
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session] (swap! disconnects inc))}
+     (fn []
+       (let [query-ch (h/query-chan "source close")]
+         (async/close! events-ch)
+         (is (nil? (async/<!! query-ch)))
+         (is (= 1 @disconnects)))))))
+
+(deftest query-chan-close-initiates-disconnect-while-producer-takes-source
+  (let [events-ch (async/chan)
+        disconnected (promise)
+        disconnects (atom 0)]
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session]
+                       (swap! disconnects inc)
+                       (deliver disconnected true))}
+     (fn []
+       (let [query-ch (h/query-chan "cancel source take")]
+         (try
+           (async/close! query-ch)
+           (is (true? (deref disconnected 500 false)))
+           (async/close! query-ch)
+           (is (= 1 @disconnects))
+           (is (nil? (async/<!! query-ch)))
+           (finally
+             (async/close! events-ch))))))))
+
+(deftest query-chan-concurrent-close-starts-one-disconnect
+  (let [events-ch (async/chan)
+        disconnect-entered (promise)
+        release-disconnect (promise)
+        disconnect-finished (promise)
+        disconnects (atom 0)]
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session]
+                       (swap! disconnects inc)
+                       (deliver disconnect-entered true)
+                       @release-disconnect
+                       (deliver disconnect-finished true))}
+     (fn []
+       (let [query-ch (h/query-chan "concurrent close")
+             closes (doall (repeatedly 8 #(future (async/close! query-ch))))]
+         (try
+           (is (true? (deref disconnect-entered 1000 false)))
+           (doseq [close-result closes]
+             (is (nil? (deref close-result 1000 ::timeout))))
+           (is (= 1 @disconnects))
+           (async/close! query-ch)
+           (is (= 1 @disconnects))
+           (finally
+             (deliver release-disconnect true)
+             (async/close! events-ch)
+             (deref disconnect-finished 1000 nil))))))))
+
+(deftest query-chan-terminal-cleanup-races-with-close-exactly-once
+  (let [events-ch (async/chan)
+        terminal-event {:type :copilot/session.idle}
+        disconnect-entered (promise)
+        release-disconnect (promise)
+        disconnect-finished (promise)
+        disconnects (atom 0)]
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session]
+                       (swap! disconnects inc)
+                       (deliver disconnect-entered true)
+                       @release-disconnect
+                       (deliver disconnect-finished true))}
+     (fn []
+       (let [query-ch (h/query-chan "terminal close race")]
+         (try
+           (is (true? (async/>!! events-ch terminal-event)))
+           (is (= terminal-event (async/<!! query-ch)))
+           (is (true? (deref disconnect-entered 1000 false)))
+           (async/close! query-ch)
+           (is (= 1 @disconnects))
+           (finally
+             (deliver release-disconnect true)
+             (deref disconnect-finished 1000 nil)))
+         (is (nil? (async/<!! query-ch)))
+         (is (= 1 @disconnects)))))))
+
+(deftest query-chan-validates-buffer-before-setup
+  (let [setup-called? (atom false)]
+    (with-redefs-fn {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
+                     (fn [_client-opts]
+                       (reset! setup-called? true)
+                       ::client)}
+      (fn []
+        (doseq [buffer [0 -1 nil "1"]]
+          (is (thrown-with-msg?
+               clojure.lang.ExceptionInfo
+               #":buffer must be a positive integer"
+               (h/query-chan "invalid" :buffer buffer))))))
+    (is (false? @setup-called?))))
+
+(deftest query-chan-post-session-setup-failures-disconnect-once
+  (testing "channel construction"
+    (let [disconnects (atom 0)
+          original-chan async/chan
+          failed? (atom false)]
+      (call-with-controlled-query
+       {:disconnect-fn (fn [_session] (swap! disconnects inc))
+        :chan-fn (fn [& args]
+                   (if (compare-and-set! failed? false true)
+                     (throw (ex-info "channel failed" {}))
+                     (apply original-chan args)))}
+       #(is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"channel failed"
+             (h/query-chan "channel failure"))))
+      (is (= 1 @disconnects))))
+
+  (testing "event subscription"
+    (let [disconnects (atom 0)]
+      (call-with-controlled-query
+       {:disconnect-fn (fn [_session] (swap! disconnects inc))
+        :subscribe-fn (fn [_session] (throw (ex-info "subscribe failed" {})))}
+       #(is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"subscribe failed"
+             (h/query-chan "subscribe failure"))))
+      (is (= 1 @disconnects))))
+
+  (testing "send"
+    (let [events-ch (async/chan)
+          disconnects (atom 0)]
+      (call-with-controlled-query
+       {:events-ch events-ch
+        :disconnect-fn (fn [_session] (swap! disconnects inc))
+        :send-fn (fn [_session _message] (throw (ex-info "send failed" {})))}
+       #(is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"send failed"
+             (h/query-chan "send failure"))))
+      (is (= 1 @disconnects))
+      (async/close! events-ch))))
+
+(deftest query-chan-throwing-disconnect-does-not-hang-cleanup
+  (testing "setup failure"
+    (let [disconnects (atom 0)]
+      (call-with-controlled-query
+       {:disconnect-fn (fn [_session]
+                         (swap! disconnects inc)
+                         (throw (ex-info "disconnect failed" {})))
+        :send-fn (fn [_session _message] (throw (ex-info "send failed" {})))}
+       #(is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"send failed"
+             (h/query-chan "setup and disconnect failure"))))
+      (is (= 1 @disconnects))))
+
+  (testing "consumer cancellation"
+    (let [events-ch (async/chan)
+          disconnect-entered (promise)
+          disconnects (atom 0)]
+      (call-with-controlled-query
+       {:events-ch events-ch
+        :disconnect-fn (fn [_session]
+                         (swap! disconnects inc)
+                         (deliver disconnect-entered true)
+                         (throw (ex-info "disconnect failed" {})))}
+       (fn []
+         (let [query-ch (h/query-chan "cancel and disconnect failure")
+               close-result (future (async/close! query-ch))]
+           (try
+             (is (nil? (deref close-result 1000 ::timeout)))
+             (is (true? (deref disconnect-entered 1000 false)))
+             (is (= 1 @disconnects))
+             (is (nil? (async/<!! query-ch)))
+             (finally
+               (async/close! events-ch)))))))))
+
+(deftest query-chan-remains-a-core-async-channel
+  (let [events-ch (async/chan)
+        first-event {:type :copilot/assistant.turn_start}
+        second-event {:type :copilot/assistant.message}
+        terminal-event {:type :copilot/session.idle}
+        external-value {:type ::external}
+        disconnects (atom 0)]
+    (call-with-controlled-query
+     {:events-ch events-ch
+      :disconnect-fn (fn [_session] (swap! disconnects inc))}
+     (fn []
+       (let [query-ch (h/query-chan "protocols" :buffer 2)]
+         (is (satisfies? async-protocols/ReadPort query-ch))
+         (is (satisfies? async-protocols/WritePort query-ch))
+         (is (satisfies? async-protocols/Channel query-ch))
+         (is (false? (async-protocols/closed? query-ch)))
+
+         (is (true? (async/offer! query-ch external-value)))
+         (is (= external-value (async/<!! query-ch)))
+
+         (is (true? (async/>!! events-ch first-event)))
+         (let [[value port] (async/alts!! [query-ch (async/timeout 1000)])]
+           (is (= first-event value))
+           (is (identical? query-ch port)))
+
+         (let [piped-ch (async/chan 2)]
+           (async/pipe query-ch piped-ch)
+           (is (true? (async/>!! events-ch second-event)))
+           (is (true? (async/>!! events-ch terminal-event)))
+           (is (= second-event (async/<!! piped-ch)))
+           (is (= terminal-event (async/<!! piped-ch)))
+           (is (nil? (async/<!! piped-ch))))
+
+         (is (true? (async-protocols/closed? query-ch)))
+         (is (= 1 @disconnects)))))))
 
 (deftest with-query-seq-compiles-and-runs-from-a-separate-namespace
   (with-single-helper-client [copilot-client]

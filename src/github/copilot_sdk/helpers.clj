@@ -35,7 +35,8 @@
    - `:session` - Session options (model, tools, streaming?, etc.)
    - `:timeout-ms` - Timeout for blocking `query` (default: 60000)
    "
-  (:require [clojure.core.async :as async :refer [go go-loop <! >! chan close! timeout alts!]]
+  (:require [clojure.core.async :as async :refer [go-loop <! chan close! alts!]]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [github.copilot-sdk :as copilot]))
 
 ;; =============================================================================
@@ -145,6 +146,26 @@
   "Check if x is a CopilotSession instance (has :session-id and :client)."
   [x]
   (and (record? x) (contains? x :session-id) (contains? x :client)))
+
+(defn- cancellable-channel
+  [out-ch cancel-ch disconnect-ch]
+  (reify
+    async-protocols/ReadPort
+    (take! [_ handler]
+      (async-protocols/take! out-ch handler))
+
+    async-protocols/WritePort
+    (put! [_ value handler]
+      (async-protocols/put! out-ch value handler))
+
+    async-protocols/Channel
+    (close! [_]
+      (close! cancel-ch)
+      (close! out-ch)
+      (force disconnect-ch)
+      nil)
+    (closed? [_]
+      (async-protocols/closed? out-ch))))
 
 ;; =============================================================================
 ;; Public API
@@ -339,62 +360,68 @@
 
 (defn query-chan
   "Execute a query and return a core.async channel of events.
-   
+
    This allows asynchronous processing of session events using
-   core.async primitives.
-   
+   core.async primitives. Closing the returned channel cancels the query and
+   disconnects its hidden session, including when its bounded output buffer is
+   full. Values accepted into the buffer before cancellation remain readable;
+   an in-flight event whose parked put loses to cancellation may be dropped.
+
    Arguments:
      prompt - The prompt string to send
-   
+
    Keyword options:
      :client - Client options map
      :session - Session options map
      :buffer - Channel buffer size (default: 256)
-   
+
    Returns a channel that yields event maps. The channel closes when
    the session becomes idle or errors.
-   
+
    Examples:
      (let [ch (query-chan \"Tell me a story\" :session {:on-permission-request copilot/approve-all
                                                        :streaming? true})]
-       (go-loop []
+       (go-loop [remaining 10]
          (when-let [event (<! ch)]
            (when (= :copilot/assistant.message_delta (:type event))
              (print (get-in event [:data :delta-content])))
-           (recur))))
+           (if (= remaining 1)
+             (close! ch)
+             (recur (dec remaining))))))
    "
   [prompt & {:keys [client session buffer] :or {buffer 256}}]
+  (when-not (pos-int? buffer)
+    (throw (ex-info ":buffer must be a positive integer" {:buffer buffer})))
   (let [c (ensure-client! client)
         session-config (build-session-config session)
         sess (copilot/create-session c session-config)
-        events-ch (copilot/subscribe-events sess)
-        out-ch (chan buffer)
-       ;; disconnect! blocks (thread joins), so run it on a real thread and
-       ;; return a channel the go-loop can park on instead of blocking a
-       ;; shared go dispatch thread.
-        disconnect-async (fn [] (async/thread (copilot/disconnect! sess)))]
+        ;; disconnect! blocks (thread joins), so start it at most once on a real
+        ;; thread. Producers await the completion channel, not a result value.
+        disconnect-ch (delay (async/thread (copilot/disconnect! sess)))]
     (try
-     ;; Send the prompt
-      (copilot/send! sess {:prompt prompt})
+      (let [cancel-ch (chan)
+            out-ch (chan buffer)
+            events-ch (copilot/subscribe-events sess)
+            result-ch (cancellable-channel out-ch cancel-ch disconnect-ch)]
+        (copilot/send! sess {:prompt prompt})
 
-     ;; Pipe events to output channel, cleanup on completion
-      (go-loop []
-        (if-let [event (<! events-ch)]
-          (do
-            (>! out-ch event)
-            (if (#{:copilot/session.idle :copilot/session.error} (:type event))
-              (do
-                (<! (disconnect-async))
-                (close! out-ch))
-              (recur)))
-          (do
-            (<! (disconnect-async))
-            (close! out-ch))))
+        (go-loop []
+          (if-let [event (<! events-ch)]
+            (let [[accepted? port] (alts! [cancel-ch [out-ch event]] :priority true)]
+              (if (and (identical? port out-ch) (true? accepted?))
+                (if (#{:copilot/session.idle :copilot/session.error} (:type event))
+                  (do
+                    (<! (force disconnect-ch))
+                    (close! out-ch))
+                  (recur))
+                (do
+                  (<! (force disconnect-ch))
+                  (close! out-ch))))
+            (do
+              (<! (force disconnect-ch))
+              (close! out-ch))))
 
-      out-ch
+        result-ch)
       (catch Throwable t
-       ;; send! failed before the go-loop started: release the session that
-       ;; would otherwise leak, close the output channel, and surface the error.
-        (copilot/disconnect! sess)
-        (close! out-ch)
+        (async/<!! (force disconnect-ch))
         (throw t)))))
