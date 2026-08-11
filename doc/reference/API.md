@@ -103,16 +103,39 @@ immediately without emitting anything). Consume the whole seq, or use `with-quer
 (h/query-chan prompt & {:keys [client session buffer]})
 ```
 
-Execute a query and return a core.async channel of events. Use this when you want to process events with core.async.
+Execute a query and return a bounded core.async channel of events. The channel closes after a
+`:copilot/session.idle` or `:copilot/session.error` event.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `:buffer` | positive integer | `256` | Maximum number of events buffered before producer backpressure |
+| `:client` | map | `nil` | Client options map |
+| `:session` | map | `nil` | Session options map |
 
 ```clojure
-(let [ch (h/query-chan "Tell me a story" :session {:on-permission-request copilot/approve-all :streaming? true})]
-  (go-loop []
-    (when-let [event (<! ch)]
-      (when (= :copilot/assistant.message_delta (:type event))
-        (print (get-in event [:data :delta-content])))
-      (recur))))
+(require '[clojure.core.async :refer [<! close! go-loop]])
+
+(def events
+  (h/query-chan "Tell me a story"
+               :session {:on-permission-request copilot/approve-all
+                         :streaming? true}))
+
+(go-loop [remaining 10]
+  (when-let [event (<! events)]
+    (when (= :copilot/assistant.message_delta (:type event))
+      (print (get-in event [:data :delta-content])))
+    (if (= remaining 1)
+      (close! events)
+      (recur (dec remaining)))))
 ```
+
+Close the returned channel when you stop consuming before a terminal event. Closing cancels
+the hidden query and disconnects its session even when the output buffer is full. The example
+above closes after ten events instead of abandoning the channel.
+
+Values accepted into the buffer before cancellation remain readable after `close!`. An
+in-flight event whose parked put loses to cancellation may be dropped; cancellation is not a
+lossless drain.
 
 ### `shutdown!`
 

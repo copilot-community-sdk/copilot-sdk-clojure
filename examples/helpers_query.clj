@@ -1,5 +1,5 @@
 (ns helpers-query
-  (:require [clojure.core.async :refer [<!! go-loop <!]]
+  (:require [clojure.core.async :refer [<!! go-loop <! close!]]
             [github.copilot-sdk :as copilot :refer [evt]]
             [github.copilot-sdk.helpers :as h]))
 
@@ -48,7 +48,10 @@
   (println)
   (let [ch (h/query-chan prompt :session {:on-permission-request copilot/approve-all
                                           :model "gpt-5.4" :streaming? true})]
-    (<!! (go-loop []
-           (when-let [event (<! ch)]
-             (handle-event event)
-             (recur))))))
+    (try
+      (<!! (go-loop []
+             (when-let [event (<! ch)]
+               (handle-event event)
+               (recur))))
+      (finally
+        (close! ch)))))
