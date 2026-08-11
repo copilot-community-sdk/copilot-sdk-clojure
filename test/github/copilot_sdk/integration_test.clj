@@ -5811,6 +5811,16 @@
       (is (not (contains? create-params :enableConfigDiscovery))))))
 
 (deftest test-model-capabilities-on-wire
+  (testing "fixed-precision Long limits validate while arbitrary-precision integers do not"
+    (let [limits {:max-prompt-tokens (long 120000)
+                  :max-output-tokens (long 16000)
+                  :max-context-window-tokens (long 136000)
+                  :vision {:max-prompt-images (long 5)
+                           :max-prompt-image-size (long 1048576)}}]
+      (is (s/valid? ::specs/model-capabilities {:limits limits}))
+      (is (not (s/valid? ::specs/model-capabilities
+                         {:limits (assoc limits :max-prompt-tokens 120000N)})))))
+
   (testing "modelCapabilities is forwarded in session.create (upstream PR #1029)"
     (let [seen (atom {})
           _ (mock/set-request-hook! *mock-server* (fn [method params]
