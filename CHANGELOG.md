@@ -62,6 +62,10 @@ All notable changes to this project will be documented in this file. This change
   handling, lifecycle macro ownership order, transformed and sliding-buffered
   event subscriptions, pending interaction envelopes, UI elicitation, and
   workspace-path propagation across session producers.
+- The monolithic integration test namespace is now decomposed into 17 focused
+  namespaces with shared lifecycle and synchronization support, preserving the
+  exact behavioral inventory while removing obsolete Factory symbol-existence
+  assertions now covered by behavior tests.
 - Replaced fixed timing sleeps in concurrency and event-routing tests with
   observable request, event, handler, and lifecycle synchronization. The two
   remaining bounded sleep backoffs poll real protocol state with explicit

@@ -75,7 +75,7 @@ Show the plan to the user. Wait for approval before implementing.
 
 For each code/spec change:
 
-1. **RED** — Write a failing test first in `test/github/copilot_sdk/integration_test.clj`
+1. **RED** — Write a failing test first in the focused namespace under `test/github/copilot_sdk/integration/`
 2. Run tests: `bb test` — confirm failure (it's OK to just run the tests you added as you iterate)
 3. **GREEN** — Implement the minimal change in `src/`
 4. Run tests again — confirm all pass (0 failures)
