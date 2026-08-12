@@ -107,11 +107,12 @@
      support/*mock-server*
      (fn [method _]
        (when (= "session.factory.getRun" method)
-         (throw (ex-info "factory lookup failed" {:code -32050})))))
+         (throw (Exception. "factory lookup failed")))))
     (let [value (support/read-value-then-close!!
                  (sdk/<get-factory-run session "missing"))]
       (is (instance? Throwable value))
-      (is (= "factory lookup failed" (ex-message value))))))
+      (is (= "factory lookup failed" (ex-message value)))
+      (is (= -32603 (get-in (ex-data value) [:error :code]))))))
 
 (deftest factory-resume-maps-known-errors-and-passes-through-unknown-errors
   (let [session (sdk/create-session support/*test-client* {:session-id "factory-resume-session"})]
