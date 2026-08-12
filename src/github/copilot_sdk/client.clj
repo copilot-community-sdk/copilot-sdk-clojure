@@ -2721,7 +2721,8 @@
    - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
-   - :config-dir         - Override config directory for CLI (configDir)
+   - :config-directory   - Override config directory for CLI (configDir).
+                           :config-dir remains a deprecated alias.
    - :skill-directories  - Additional skill directories to load
    - :disabled-skills    - Disable specific skills by name
    - :large-output       - Tool output handling config
@@ -2957,7 +2958,8 @@
    - :mcp-servers        - MCP server configurations
    - :custom-agents      - Custom agent configurations
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
-   - :config-dir         - Override configuration directory
+   - :config-directory   - Override configuration directory.
+                           :config-dir remains a deprecated alias.
    - :skill-directories  - Directories to load skills from
     - :disabled-skills    - Skills to disable
     - :infinite-sessions  - Infinite session configuration

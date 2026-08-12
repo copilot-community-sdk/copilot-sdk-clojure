@@ -355,7 +355,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
 | `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
 | `:managed-settings` | map | Structured enterprise managed-settings payload, supplied by the caller instead of (or alongside) `:enable-managed-settings?`. Optional key `:permissions`: `{:disable-bypass-permissions-mode :disable, :deny [...], :ask [...], :allow [...]}` — `:disable-bypass-permissions-mode` is serialized as wire `permissions.disableBypassPermissionsMode` (string `"disable"`); `:deny`/`:ask`/`:allow` are vectors of non-blank permission-rule strings forwarded verbatim. Presence of this key (or `:enable-managed-settings? true`) sets the permission-handler context's `:managed-settings-enabled?` to `true` — see [`approve-all`](#approve-all). Valid on `create-session`, `resume-session`, and `join-session`. ([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139)) |
-| `:canvas-provider` | map | Canvas provider identity for the session. `{:id "..." :name "..."}` (`:name` optional) — serialized as wire `canvasProvider.{id,name}`. (upstream PR #1847) |
+| `:canvas-provider` | map | Canvas provider identity only. `{:id "..." :name "..."}` (`:name` optional) — serialized as wire `canvasProvider.{id,name}`. This does not implement the upstream experimental canvas authoring/provider callbacks. (upstream PR #1847) |
 | `:exp-assignments` | map | (`@internal`) Exact `CopilotExpAssignmentResponse` contract using PascalCase string keys. Required: `"Features"` (string vector), `"Flights"` (string-to-string map), `"Configs"` (vector of closed maps containing exactly `"Id"` (string) and `"Parameters"` (map of string keys to string, number, boolean, or `nil` values)), and `"AssignmentContext"` (string). Optional: `"ParameterGroups"` (opaque), `"FlightingVersion"` (number), and `"ImpressionId"` (string). The Clojure spec rejects unknown top-level and config-entry keys. The map is forwarded unchanged on `create-session`, `resume-session`, and `join-session` (`join-session` delegates to resume). Serialized as `expAssignments`. ([upstream PR #2033](https://github.com/github/copilot-sdk/pull/2033)) |
 | `:mcp-servers` | map | MCP server configs keyed by opaque string or keyword server IDs; keyword IDs preserve their full spelling without the leading colon (for example, `:srv-1` becomes `"srv-1"` and `:team/srv-1` becomes `"team/srv-1"`). See [MCP docs](../mcp/overview.md). Local (stdio) servers: `:mcp-command`, `:mcp-args`, `:mcp-tools`. Remote (HTTP/SSE) servers: `:mcp-server-type` (`:http`/`:sse`), `:mcp-url`, `:mcp-tools`. Spec aliases: `::mcp-stdio-server` = `::mcp-local-server`, `::mcp-http-server` = `::mcp-remote-server` |
 | `:enable-mcp-apps` | boolean | **Experimental (SEP-1865).** Opt into MCP Apps UI passthrough only when the host can render `ui://` MCP App bundles. Explicit `true` sends `requestMcpApps: true` on `session.create` and `session.resume` (`join-session` delegates to resume). `false` and omission leave the wire key absent; explicit `nil` is invalid. The runtime may still decline the capability when its MCP Apps gate is off. ([upstream PR #1335](https://github.com/github/copilot-sdk/pull/1335)) |
@@ -366,7 +366,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
 | `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). On create, omission sends `requestPermission: false`; providing a handler sends `true`. Resolve surfaced pending requests manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas. Explicit `false` is forwarded; omission leaves the runtime default unchanged. |
-| `:config-dir` | string | Override config directory for CLI |
+| `:config-directory` | string | Override the CLI config directory. `:config-dir` remains accepted as a deprecated alias. |
 | `:skill-directories` | vector | Additional skill directories to load |
 | `:instruction-directories` | vector | Additional directories to search for custom instruction files. Forwarded as `instructionDirectories` on `session.create` and `session.resume`. (upstream PR #1190) |
 | `:additional-directories` | vector | Extra directories the runtime is allowed to read/write outside the session's working directory. Vector of non-blank strings. Serialized as wire `additionalDirectories`. Re-supply the vector when resuming a session. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
@@ -1454,6 +1454,12 @@ canvas-instance maps. The snapshot is initialized from `session.resume` and
 updated by `:copilot/session.canvas.opened` / `:copilot/session.canvas.closed`
 events. `session.create` does NOT populate it (matches upstream Node.js).
 
+> **Parity exclusion:** The upstream experimental `Canvas` / `createCanvas`
+> authoring and provider API is intentionally absent. This SDK can observe and
+> restore open canvases, but cannot declare canvases or handle provider
+> open/close/action callbacks. `:canvas-provider` supplies provider identity
+> only.
+
 Each entry has required keys `:instance-id`, `:extension-id`, `:canvas-id`,
 and optional `:extension-name`, `:title`, `:status`, `:url`, `:input`, and
 `:icon` (a host-local PNG path). Closing an instance that's not in the snapshot
@@ -1718,7 +1724,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/assistant.reasoning` | Model reasoning (if supported); optional data: `:rte` (opaque round-trip encrypted reasoning token, for providers that require it to be replayed back) (upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
 | `:copilot/assistant.message_start` | Streaming assistant message start metadata |
-| `:copilot/assistant.message` | Complete assistant response; optional data: `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:rte` (upstream schema 1.0.79-5/6) |
+| `:copilot/assistant.message` | Complete assistant response; optional data: `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:citations` (see [Citations](#citations-experimental)), `:rte` (upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
@@ -1789,6 +1795,51 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/session.canvas.recorded` | Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient `:url` and `:availability`. |
 | `:copilot/factory.run_updated` | An [Agent Factory](#agent-factories-experimental) run's status changed; data: `{:run-id "..." :revision N}` (both required). Consumed internally by `wait-for-run!`/`<wait-for-run!` to detect terminal status. (upstream PR #2114) |
 | `:copilot/session.canvas.removed` | Durable record that a canvas instance was closed, superseding a prior `canvas.recorded` during resume replay. |
+
+### Citations (Experimental)
+
+Read citations from the final `:copilot/assistant.message` event. The
+`:citations` key is optional even when `:enable-citations` is true.
+
+```clojure
+{:type :copilot/assistant.message
+ :data {:message-id "message-1"
+        :content "Clojure was created by Rich Hickey."
+        :citations
+        {:sources [{:id "source-1"
+                    :provider "client"
+                    :title "Language notes"
+                    :path "docs/languages.md"}]
+         :spans [{:start-index 23
+                  :end-index 34
+                  :references [{:source-id "source-1"
+                                :cited-text "Rich Hickey"
+                                :location {:type "char"
+                                           :start-index 100
+                                           :end-index 111}
+                                :provider-metadata
+                                {:search-result-index 0}}]}]}}}
+```
+
+`:sources` contains deduplicated source maps. Each source requires `:id` and
+`:provider` (`"anthropic"`, `"openai"`, or `"client"`); `:title`, `:url`, and
+`:path` are optional.
+
+Each span requires `:start-index`, `:end-index`, and `:references`. Span offsets
+index the final message `:content` in UTF-16 code units: start is zero-based and
+inclusive, end is exclusive. Clojure strings are Java strings, so these offsets
+can be passed directly to `.substring`.
+
+Each reference requires `:source-id`; `:cited-text`, `:location`, and
+`:provider-metadata` are optional. `:provider-metadata` accepts any JSON value
+(`nil`, scalar, vector, or map). It follows normal recursive `wire->clj`
+conversion: map keys are normalized to kebab-case keywords, including maps
+nested in vectors (`search_result_index` becomes `:search-result-index`).
+Citation metadata is not an opaque-key preservation surface.
+
+Location maps use a string `:type`: `"char"` with `:start-index` /
+`:end-index`, `"page"` with `:start-page` / `:end-page`, or `"block"` with
+`:start-block` / `:end-block`.
 
 ### Example: Handling Events
 
@@ -2445,14 +2496,15 @@ The default agent cannot call `repo_index_search`. The `repo-auditor` custom age
 
 ### Config Directory and Skills
 
-`config-dir` overrides where the CLI reads its config and state (e.g., `~/.copilot`).
+`:config-directory` overrides where the CLI reads its config and state
+(e.g., `~/.copilot`). The deprecated `:config-dir` alias remains accepted.
 It does not define custom agents. Custom agents are provided via `:custom-agents`.
 
 ```clojure
 (def session (copilot/create-session client
                {:model "gpt-5.4"
                 :on-permission-request copilot/approve-all
-                :config-dir "/tmp/copilot-config"
+                :config-directory "/tmp/copilot-config"
                 :skill-directories ["/path/to/skills" "/opt/team-skills"]
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
 ```

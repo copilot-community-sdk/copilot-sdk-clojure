@@ -72,6 +72,15 @@ All notable changes to this project will be documented in this file. This change
   deadlines.
 
 ### Fixed (documentation)
+- Closed example tracking gaps: the portable runner now covers every
+  credential-free standalone entry point, including both streaming helper paths
+  and the closed-stdin user-input path. Streaming examples are bounded, propagate
+  session errors, and cancel their helper sources on timeout; manual exclusions
+  and preconditions are explicit. The upstream documentation matrix now covers
+  all pages at its pinned commit, records the intentional canvas-authoring
+  exclusion, classifies experimental citations and session limits, and links the
+  citation payload contract. Session docstrings and examples use the canonical
+  `:config-directory` spelling.
 - Codox topic generation now assigns deterministic output identities from source
   paths, preserves flat URLs for unambiguous basenames that do not collide with
   Codox-owned pages, and rewrites relative topic links through the resulting

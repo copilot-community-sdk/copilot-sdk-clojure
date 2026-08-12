@@ -1,7 +1,9 @@
 (ns helpers-query
-  (:require [clojure.core.async :refer [<!! go-loop <! close!]]
+  (:require [clojure.core.async :refer [<!! close!]]
             [github.copilot-sdk :as copilot :refer [evt]]
-            [github.copilot-sdk.helpers :as h]))
+            [github.copilot-sdk.helpers :as h])
+  (:import [java.util.concurrent Callable ExecutionException FutureTask
+            TimeUnit TimeoutException]))
 
 ;; See examples/README.md for usage
 
@@ -33,25 +35,84 @@
   (print delta-content)
   (flush))
 (defmethod handle-event (evt :assistant.message) [_] (println))
+(defmethod handle-event (evt :session.error) [{:keys [data] :as event}]
+  (throw (ex-info (or (:message data) "Copilot session failed")
+                  {:type :example-session-error
+                   :event event})))
+
+(defn- run-bounded!
+  [label timeout-ms cancel! f]
+  (when-not (pos-int? timeout-ms)
+    (throw (ex-info ":timeout-ms must be a positive integer"
+                    {:timeout-ms timeout-ms})))
+  (let [finished (promise)
+        task (FutureTask.
+              ^Callable
+              (fn []
+                (try
+                  (f)
+                  (finally
+                    (deliver finished true)))))]
+    (doto (Thread. ^Runnable task label)
+      (.setDaemon true)
+      (.start))
+    (try
+      (.get task timeout-ms TimeUnit/MILLISECONDS)
+      (catch TimeoutException _
+        ;; Cancel the helper source before interrupting its blocking consumer.
+        (cancel!)
+        (.cancel task true)
+        (when-not (deref finished 5000 false)
+          (throw (ex-info (str label " timed out; cleanup did not complete")
+                          {:type :example-cleanup-timeout
+                           :timeout-ms timeout-ms})))
+        (throw (ex-info (str label " timed out")
+                        {:type :example-timeout
+                         :timeout-ms timeout-ms})))
+      (catch ExecutionException e
+        (throw (.getCause e)))
+      (catch InterruptedException e
+        (cancel!)
+        (.cancel task true)
+        (.interrupt (Thread/currentThread))
+        (throw e)))))
+
+(defn- consume-channel!
+  [events]
+  (loop []
+    (when-let [event (<!! events)]
+      (handle-event event)
+      (recur))))
 
 (defn run-streaming
-  [{:keys [prompt] :or {prompt "Explain the concept of immutability in 2-3 sentences."}}]
+  [{:keys [prompt timeout-ms]
+    :or {prompt "Explain the concept of immutability in 2-3 sentences."
+         timeout-ms 120000}}]
   (println "Query:" prompt)
   (println)
-  (h/with-query-seq [events prompt :session {:on-permission-request copilot/approve-all
-                                             :model "gpt-5.4" :streaming? true}]
-    (run! handle-event events)))
+  (run-bounded!
+   "helpers-query/run-streaming"
+   timeout-ms
+   (constantly nil)
+   #(h/with-query-seq [events prompt :session {:on-permission-request copilot/approve-all
+                                               :model "gpt-5.4" :streaming? true}]
+      (run! handle-event events))))
 
 (defn run-async
-  [{:keys [prompt] :or {prompt "Tell me a short joke."}}]
+  [{:keys [prompt timeout-ms]
+    :or {prompt "Tell me a short joke."
+         timeout-ms 120000}}]
   (println "Query:" prompt)
   (println)
-  (let [ch (h/query-chan prompt :session {:on-permission-request copilot/approve-all
-                                          :model "gpt-5.4" :streaming? true})]
-    (try
-      (<!! (go-loop []
-             (when-let [event (<! ch)]
-               (handle-event event)
-               (recur))))
-      (finally
-        (close! ch)))))
+  (let [events (atom nil)]
+    (run-bounded!
+     "helpers-query/run-async"
+     timeout-ms
+     #(some-> @events close!)
+     #(let [ch (h/query-chan prompt :session {:on-permission-request copilot/approve-all
+                                              :model "gpt-5.4" :streaming? true})]
+        (reset! events ch)
+        (try
+          (consume-channel! ch)
+          (finally
+            (close! ch)))))))
