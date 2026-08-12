@@ -58,6 +58,10 @@ All notable changes to this project will be documented in this file. This change
   interns are explicitly excluded, and snapshot generation preserves the
   caller's spec-instrumentation state. The canonical `bb api-surface:update`
   task regenerates the complete contract.
+- Added focused behavioral coverage for async Factory facade routing and error
+  handling, lifecycle macro ownership order, transformed and sliding-buffered
+  event subscriptions, pending interaction envelopes, UI elicitation, and
+  workspace-path propagation across session producers.
 
 ### Fixed (documentation)
 - Codox topic generation now assigns deterministic output identities from source

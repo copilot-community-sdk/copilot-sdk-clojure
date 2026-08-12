@@ -1,0 +1,148 @@
+(ns github.copilot-sdk.lifecycle-macros-behavior-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [github.copilot-sdk :as sdk]))
+
+(deftest with-client-and-with-session-own-resources-in-order
+  (let [calls (atom [])]
+    (with-redefs-fn
+      {#'sdk/client (fn [& args]
+                      (swap! calls conj [:client (vec args)])
+                      ::client)
+       #'sdk/start! (fn [client]
+                      (swap! calls conj [:start client]))
+       #'sdk/stop! (fn [client]
+                     (swap! calls conj [:stop client]))}
+      (fn []
+        (sdk/with-client [client {:log-level :debug}]
+          (swap! calls conj [:body client]))))
+    (is (= [[:client [{:log-level :debug}]]
+            [:start ::client]
+            [:body ::client]
+            [:stop ::client]]
+           @calls)))
+
+  (let [calls (atom [])]
+    (with-redefs-fn
+      {#'sdk/create-session (fn [client opts]
+                              (swap! calls conj [:create-session client opts])
+                              ::session)
+       #'sdk/disconnect! (fn [session]
+                           (swap! calls conj [:disconnect session]))}
+      (fn []
+        (sdk/with-session [session ::client {:model "test"}]
+          (swap! calls conj [:body session]))))
+    (is (= [[:create-session ::client {:model "test"}]
+            [:body ::session]
+            [:disconnect ::session]]
+           @calls))))
+
+(deftest with-client-session-supports-all-binding-forms
+  (let [run-case
+        (fn [invoke]
+          (let [calls (atom [])]
+            (with-redefs-fn
+              {#'sdk/client (fn [& args]
+                              (swap! calls conj [:client (vec args)])
+                              ::client)
+               #'sdk/start! (fn [client]
+                              (swap! calls conj [:start client]))
+               #'sdk/stop! (fn [client]
+                             (swap! calls conj [:stop client]))
+               #'sdk/create-session (fn [client opts]
+                                      (swap! calls conj [:create-session client opts])
+                                      ::session)
+               #'sdk/disconnect! (fn [session]
+                                   (swap! calls conj [:disconnect session]))}
+              #(invoke calls))
+            @calls))
+        session-opts {:model "test"}
+        client-opts {:log-level :debug}
+        cases
+        [{:label "anonymous client with defaults"
+          :invoke (fn [calls]
+                    (sdk/with-client-session [session {:model "test"}]
+                      (swap! calls conj [:body session])))
+          :expected [[:client []]
+                     [:start ::client]
+                     [:create-session ::client session-opts]
+                     [:body ::session]
+                     [:disconnect ::session]
+                     [:stop ::client]]}
+         {:label "anonymous client with options"
+          :invoke (fn [calls]
+                    (sdk/with-client-session [{:log-level :debug} session {:model "test"}]
+                      (swap! calls conj [:body session])))
+          :expected [[:client [client-opts]]
+                     [:start ::client]
+                     [:create-session ::client session-opts]
+                     [:body ::session]
+                     [:disconnect ::session]
+                     [:stop ::client]]}
+         {:label "named client with defaults"
+          :invoke (fn [calls]
+                    (sdk/with-client-session [client session {:model "test"}]
+                      (swap! calls conj [:body client session])))
+          :expected [[:client []]
+                     [:start ::client]
+                     [:create-session ::client session-opts]
+                     [:body ::client ::session]
+                     [:disconnect ::session]
+                     [:stop ::client]]}
+         {:label "named client with options"
+          :invoke (fn [calls]
+                    (sdk/with-client-session [client {:log-level :debug} session {:model "test"}]
+                      (swap! calls conj [:body client session])))
+          :expected [[:client [client-opts]]
+                     [:start ::client]
+                     [:create-session ::client session-opts]
+                     [:body ::client ::session]
+                     [:disconnect ::session]
+                     [:stop ::client]]}]]
+    (doseq [{:keys [label invoke expected]} cases]
+      (testing label
+        (is (= expected (run-case invoke)))))))
+
+(deftest lifecycle-macros-preserve-body-and-setup-exceptions
+  (let [calls (atom [])
+        body-error (ex-info "body failed" {:phase :body})
+        caught
+        (with-redefs-fn
+          {#'sdk/create-session (fn [_ _]
+                                  (swap! calls conj :create-session)
+                                  ::session)
+           #'sdk/disconnect! (fn [_]
+                               (swap! calls conj :disconnect))}
+          (fn []
+            (try
+              (sdk/with-session [session ::client {}]
+                (swap! calls conj :body)
+                (throw body-error))
+              (catch Throwable error
+                error))))]
+    (is (identical? body-error caught))
+    (is (= [:create-session :body :disconnect] @calls)))
+
+  (let [calls (atom [])
+        setup-error (ex-info "session setup failed" {:phase :setup})
+        caught
+        (with-redefs-fn
+          {#'sdk/client (fn []
+                          (swap! calls conj :client)
+                          ::client)
+           #'sdk/start! (fn [_]
+                          (swap! calls conj :start))
+           #'sdk/stop! (fn [_]
+                         (swap! calls conj :stop))
+           #'sdk/create-session (fn [_ _]
+                                  (swap! calls conj :create-session)
+                                  (throw setup-error))
+           #'sdk/disconnect! (fn [_]
+                               (swap! calls conj :disconnect))}
+          (fn []
+            (try
+              (sdk/with-client-session [session {}]
+                (swap! calls conj [:body session]))
+              (catch Throwable error
+                error))))]
+    (is (identical? setup-error caught))
+    (is (= [:client :start :create-session :stop] @calls))))
