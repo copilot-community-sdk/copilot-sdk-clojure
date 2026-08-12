@@ -14,6 +14,8 @@
   {:on-permission-request copilot/approve-all
    :model "claude-haiku-4.5"})
 
+(def ^:private cleanup-timeout-ms 5000)
+
 (defn run
   [{:keys [prompt] :or {prompt (:prompt defaults)}}]
   (println "Query:" prompt)
@@ -40,6 +42,31 @@
                   {:type :example-session-error
                    :event event})))
 
+(defn- cancellation-outcome
+  [^FutureTask task finished cancel!]
+  (let [cancel-error (try
+                       (cancel!)
+                       nil
+                       (catch Throwable t
+                         t))
+        interrupt-error (try
+                          (.cancel task true)
+                          nil
+                          (catch Throwable t
+                            t))]
+    {:finished? (deref finished cleanup-timeout-ms false)
+     :errors (remove nil? [cancel-error interrupt-error])}))
+
+(defn- cancellation-exception
+  [message data errors]
+  (let [[cause & suppressed] errors
+        error (if cause
+                (ex-info message data cause)
+                (ex-info message data))]
+    (doseq [^Throwable t suppressed]
+      (.addSuppressed error t))
+    error))
+
 (defn- run-bounded!
   [label timeout-ms cancel! f]
   (when-not (pos-int? timeout-ms)
@@ -59,23 +86,42 @@
     (try
       (.get task timeout-ms TimeUnit/MILLISECONDS)
       (catch TimeoutException _
-        ;; Cancel the helper source before interrupting its blocking consumer.
-        (cancel!)
-        (.cancel task true)
-        (when-not (deref finished 5000 false)
-          (throw (ex-info (str label " timed out; cleanup did not complete")
-                          {:type :example-cleanup-timeout
-                           :timeout-ms timeout-ms})))
-        (throw (ex-info (str label " timed out")
-                        {:type :example-timeout
-                         :timeout-ms timeout-ms})))
+        (let [{:keys [finished? errors]} (cancellation-outcome task finished cancel!)]
+          (cond
+            (not finished?)
+            (throw (cancellation-exception
+                    (str label " timed out; cleanup did not complete")
+                    {:type :example-cleanup-timeout
+                     :timeout-ms timeout-ms}
+                    errors))
+
+            (seq errors)
+            (throw (cancellation-exception
+                    (str label " timed out; cancellation failed")
+                    {:type :example-cancel-failed
+                     :timeout-ms timeout-ms}
+                    errors))
+
+            :else
+            (throw (ex-info (str label " timed out")
+                            {:type :example-timeout
+                             :timeout-ms timeout-ms})))))
       (catch ExecutionException e
         (throw (.getCause e)))
       (catch InterruptedException e
-        (cancel!)
-        (.cancel task true)
-        (.interrupt (Thread/currentThread))
-        (throw e)))))
+        (let [{:keys [finished? errors]} (cancellation-outcome task finished cancel!)
+              errors (cons e errors)]
+          (.interrupt (Thread/currentThread))
+          (if finished?
+            (throw (cancellation-exception
+                    (str label " interrupted")
+                    {:type :example-interrupted}
+                    errors))
+            (throw (cancellation-exception
+                    (str label " interrupted; cleanup did not complete")
+                    {:type :example-cleanup-timeout
+                     :timeout-ms timeout-ms}
+                    errors))))))))
 
 (defn- consume-channel!
   [events]
@@ -90,13 +136,17 @@
          timeout-ms 120000}}]
   (println "Query:" prompt)
   (println)
-  (run-bounded!
-   "helpers-query/run-streaming"
-   timeout-ms
-   (constantly nil)
-   #(h/with-query-seq [events prompt :session {:on-permission-request copilot/approve-all
-                                               :model "gpt-5.4" :streaming? true}]
-      (run! handle-event events))))
+  (copilot/with-client [client {}]
+    (run-bounded!
+     "helpers-query/run-streaming"
+     timeout-ms
+     #(copilot/force-stop! client)
+     #(h/with-query-seq [events prompt
+                         :client client
+                         :session {:on-permission-request copilot/approve-all
+                                   :model "gpt-5.4"
+                                   :streaming? true}]
+        (run! handle-event events)))))
 
 (defn run-async
   [{:keys [prompt timeout-ms]

@@ -58,7 +58,7 @@ Use this as the default seq-style streaming helper. Cleanup runs when `body` ret
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
-| `:client` | map | `nil` | Client options map |
+| `:client` | map or `CopilotClient` | `nil` | Client options map or caller-owned client |
 | `:max-events` | integer | `256` | Maximum number of events to emit; `0` disconnects immediately |
 | `:session` | map | `nil` | Session options map |
 
@@ -81,6 +81,8 @@ Do not let `events` escape the body. The session is closed when the macro exits,
 ```
 
 Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported.
+Pass a client options map to use the helpers-managed client, or a started
+`CopilotClient` instance to keep client lifecycle ownership with the caller.
 
 **Warning:** cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a
 `:copilot/session.idle` / `:copilot/session.error` event, or the events channel closing (detected when the

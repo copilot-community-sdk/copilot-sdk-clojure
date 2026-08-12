@@ -42,7 +42,7 @@
 <tr><th> Key </th><th> Type </th><th> Default </th><th> Description </th></tr>
 </thead>
 <tbody>
-<tr><td> <code>:client</code> </td><td> map </td><td> <code>nil</code> </td><td> Client options map </td></tr>
+<tr><td> <code>:client</code> </td><td> map or <code>CopilotClient</code> </td><td> <code>nil</code> </td><td> Client options map or caller-owned client </td></tr>
 <tr><td> <code>:max-events</code> </td><td> integer </td><td> <code>256</code> </td><td> Maximum number of events to emit; <code>0</code> disconnects immediately </td></tr>
 <tr><td> <code>:session</code> </td><td> map </td><td> <code>nil</code> </td><td> Session options map </td></tr>
 </tbody>
@@ -59,7 +59,7 @@
 <h3><a href="#query-seq" id="query-seq"></a><code>query-seq!</code></h3>
 <pre><code class="language-clojure">(h/query-seq! prompt &amp; {:keys [client session max-events]})
 </code></pre>
-<p>Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported.</p>
+<p>Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported. Pass a client options map to use the helpers-managed client, or a started <code>CopilotClient</code> instance to keep client lifecycle ownership with the caller.</p>
 <p><strong>Warning:</strong> cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a <code>:copilot/session.idle</code> / <code>:copilot/session.error</code> event, or the events channel closing (detected when the next read yields <code>nil</code>, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it reaches a terminal event (e.g. <code>(first ...)</code> or <code>(take 1 ...)</code> when the first element isn’t already terminal), or hitting a positive <code>:max-events</code> bound before that end of stream, leaks the session and its event tap (the sole exception is <code>:max-events 0</code>, which disconnects immediately without emitting anything). Consume the whole seq, or use <code>with-query-seq</code> or <code>query</code> when you may stop reading early.</p>
 <pre><code class="language-clojure">(run! println
       (h/query-seq! "Tell me a story"

@@ -71,6 +71,12 @@ All notable changes to this project will be documented in this file. This change
   remaining bounded sleep backoffs poll real protocol state with explicit
   deadlines.
 
+### Fixed (helpers)
+- `with-query-seq` and `query-seq!` now use an explicitly supplied
+  `CopilotClient` instead of treating it as client options and silently starting
+  a second helpers-managed client. The temporary session still disconnects on
+  scope exit while the caller retains client lifecycle ownership.
+
 ### Fixed (documentation)
 - Closed example tracking gaps: the portable runner now covers every
   credential-free standalone entry point, including both streaming helper paths

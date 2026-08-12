@@ -422,6 +422,49 @@
            (throw (ex-info "body failed" {})))))
     (is (cleaned-up? copilot-client))))
 
+(deftest query-seq-uses-an-explicit-client-without-starting-a-shared-client
+  (let [copilot-client (connect-helper-to-server!)
+        ensure-calls (atom [])
+        instrument-all! (requiring-resolve 'github.copilot-sdk.instrument/instrument-all!)
+        unstrument-all! (requiring-resolve 'github.copilot-sdk.instrument/unstrument-all!)]
+    (instrument-all!)
+    (try
+      (with-redefs-fn
+        {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
+         (fn [client-opts]
+           (swap! ensure-calls conj client-opts)
+           (throw (ex-info "shared client should not start" {})))}
+        #(let [events (h/with-query-seq [events "explicit client"
+                                         :client copilot-client]
+                        (doall events))]
+           (is (some (comp #{:copilot/session.idle} :type) events))
+           (is (cleaned-up? copilot-client))
+           (is (= :connected (sdk/state copilot-client)))))
+      (is (empty? @ensure-calls))
+      (is (nil? (h/client-info)))
+      (finally
+        (unstrument-all!)
+        (sdk/stop! copilot-client)))))
+
+(deftest query-seq-client-options-still-use-the-shared-client-path
+  (let [copilot-client (connect-helper-to-server!)
+        client-opts {:log-level :debug}
+        ensure-calls (atom [])]
+    (try
+      (with-redefs-fn
+        {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
+         (fn [opts]
+           (swap! ensure-calls conj opts)
+           copilot-client)}
+        #(let [events (h/with-query-seq [events "client options"
+                                         :client client-opts]
+                        (doall events))]
+           (is (some (comp #{:copilot/session.idle} :type) events))
+           (is (cleaned-up? copilot-client))))
+      (is (= [client-opts] @ensure-calls))
+      (finally
+        (sdk/stop! copilot-client)))))
+
 (deftest query-seq-setup-failure-disconnects-created-session-once
   (with-single-helper-client [copilot-client]
     (let [disconnects (atom [])]
