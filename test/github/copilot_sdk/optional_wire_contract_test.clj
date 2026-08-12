@@ -138,9 +138,30 @@
                             (map :key)
                             frequencies
                             (keep (fn [[key n]] (when (> n 1) key)))
-                            set)]
+                            set)
+        duplicate-case-names
+        (->> contracts
+             (keep (fn [{:keys [key cases]}]
+                     (let [duplicates (->> cases
+                                           (map :name)
+                                           frequencies
+                                           (keep (fn [[case-name n]]
+                                                   (when (> n 1) case-name)))
+                                           set)]
+                       (when (seq duplicates) [key duplicates]))))
+             (into {}))
+        accepted-node-keys (->> contracts (keep :node-key) set)
+        excluded-node-keys (->> (get-in contract-report
+                                        [:classification :node-public-not-accepted-by-clojure])
+                                (map :node-key)
+                                set)]
     (is (empty? duplicate-keys)
         (str "Contract rows must be key-by-key; duplicate rows: " duplicate-keys))
+    (is (empty? duplicate-case-names)
+        (str "Contract case names must be unique per key: " duplicate-case-names))
+    (is (empty? (set/intersection accepted-node-keys excluded-node-keys))
+        (str "Accepted Node keys must not remain explicitly excluded: "
+             (set/intersection accepted-node-keys excluded-node-keys)))
     (is (= specs/session-config-keys create-keys)
         (str "Create coverage drift. Missing "
              (set/difference specs/session-config-keys create-keys)
@@ -149,7 +170,7 @@
         (str "Resume coverage drift. Missing "
              (set/difference (resume-config-keys) resume-keys)
              ", extra " (set/difference resume-keys (resume-config-keys))))
-    (is (= "3108e8ce26286043afa52f12781331460628baa0"
+    (is (= "f75d222117d99acf50db95fab8bb2cbf1d5148d8"
            (get-in contract-report [:upstream :commit])))))
 
 (deftest unset-optional-fields-match-node-omission-contract
@@ -168,6 +189,35 @@
             label (str (:key contract) " unset on " (name scope))]
         (when path
           (assert-path! (get baselines scope) path expectation label))))))
+
+(deftest enable-mcp-apps-public-wire-contract
+  (let [seed (sdk/create-session *test-client* {})
+        resume-session-id (sdk/session-id seed)
+        cases [{:name :unset :config {} :expect :absent}
+               {:name :false :config {:enable-mcp-apps false} :expect :absent}
+               {:name :true :config {:enable-mcp-apps true} :expect true}
+               {:name :explicit-nil :config {:enable-mcp-apps nil} :expect :invalid}]]
+    (doseq [scope [:create :resume]
+            {:keys [name config expect]} cases]
+      (testing (str name " on " (clojure.core/name scope))
+        (let [outcome (invoke-config! scope resume-session-id config)
+              method (target-method scope)
+              params (request-params (:requests outcome) method)
+              label (str ":enable-mcp-apps " name " on " (clojure.core/name scope))]
+          (if (= :invalid expect)
+            (do
+              (is (instance? clojure.lang.ExceptionInfo (:error outcome))
+                  (str label " must be rejected by the public config contract"))
+              (is (nil? params)
+                  (str label " must fail before sending " method)))
+            (do
+              (is (nil? (:error outcome))
+                  (str label " unexpectedly failed: "
+                       (some-> (:error outcome) ex-message)))
+              (when params
+                (is (not (contains? params :enableMcpApps))
+                    (str label " must not leak the public option name onto the wire"))
+                (assert-path! params [:requestMcpApps] expect label)))))))))
 
 (deftest optional-field-values-match-node-wire-contract
   (let [seed (sdk/create-session *test-client* {})

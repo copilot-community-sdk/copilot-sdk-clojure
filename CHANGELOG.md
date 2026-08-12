@@ -121,6 +121,12 @@ All notable changes to this project will be documented in this file. This change
   integer to the shared nilable `::timeout-ms`.
 
 ### Added (v1.0.79 sync)
+- **Experimental `:enable-mcp-apps` session opt-in** -- port of
+  [upstream PR #1335](https://github.com/github/copilot-sdk/pull/1335).
+  `create-session`, `resume-session`, and `join-session` accept a boolean
+  `:enable-mcp-apps`; only explicit `true` emits `requestMcpApps: true`.
+  `false` and omission leave the wire key absent, and explicit `nil` is
+  rejected by the closed public config specs.
 - **Deterministic regression coverage for the `send-and-wait!` outcome race**
   (`test/github/copilot_sdk/send_and_wait_test.clj`), porting the upstream
   `nodejs/test/session-send-and-wait.test.ts` suite: an early `session.error`

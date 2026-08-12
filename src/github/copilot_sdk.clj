@@ -562,6 +562,9 @@
    - :provider             - Custom provider config (BYOK)
    - :streaming?           - Enable streaming deltas
    - :mcp-servers          - MCP server configs map (keyed by server ID)
+   - :enable-mcp-apps      - Experimental MCP Apps host opt-in. Set true only when
+                             the host can render `ui://` bundles; false and omission
+                             do not send the wire request.
    - :custom-agents        - Custom agent configs
    - :default-agent        - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :skill-directories    - Additional skill directories to load
@@ -695,6 +698,7 @@
 (defn resume-session
   "Resume an existing session by ID.
    Accepts the same config options as `create-session` (except `:session-id`),
+   including the experimental `:enable-mcp-apps` host opt-in,
    plus:
    - :disable-resume?  - When true, skip emitting the session.resume event (default: false)
 

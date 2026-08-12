@@ -71,6 +71,8 @@
 (defn create-session
   "Create a new session. Internal use - called by client.
    Initializes session state in client's atom and returns a CopilotSession handle.
+   Retains the validated config, including the experimental :enable-mcp-apps
+   host opt-in after the client performs wire negotiation.
    If :on-event is provided, taps a subscriber that forwards events to the handler
    on a dedicated thread. Uses a sliding buffer, so events may be dropped under
    extreme backpressure if the handler cannot keep up with the event rate."

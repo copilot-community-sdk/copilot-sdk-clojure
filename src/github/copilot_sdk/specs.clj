@@ -842,6 +842,11 @@
 ;; enableConfigDiscovery: auto-discover MCP configs, skills, instruction files (upstream PR #1044)
 (s/def ::enable-config-discovery boolean?)
 
+;; enableMcpApps: experimental SEP-1865 host opt-in
+;; (https://github.com/github/copilot-sdk/pull/1335).
+;; Only true is emitted on create/resume as requestMcpApps; false is omitted.
+(s/def ::enable-mcp-apps boolean?)
+
 ;; includeSubAgentStreamingEvents: forward streaming events from sub-agents to the parent
 ;; session's event stream (upstream PR #1108). Defaults to true on the wire.
 (s/def ::include-sub-agent-streaming-events? boolean?)
@@ -1041,7 +1046,7 @@
     :on-user-input-request :on-elicitation-request :hooks
     :on-exit-plan-mode :on-auto-mode-switch
     :working-directory :agent :on-event :create-session-fs-handler
-    :enable-config-discovery :model-capabilities :github-token
+    :enable-config-discovery :enable-mcp-apps :model-capabilities :github-token
     :enable-session-telemetry?
     :remote-session
     :cloud
@@ -1088,7 +1093,7 @@
                     ::on-user-input-request ::on-elicitation-request ::hooks
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities ::github-token
+                    ::enable-config-discovery ::enable-mcp-apps ::model-capabilities ::github-token
                     ::enable-session-telemetry?
                     ::remote-session
                     ::cloud
@@ -1130,7 +1135,7 @@
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
     :on-exit-plan-mode :on-auto-mode-switch
     :continue-pending-work?
-    :create-session-fs-handler :enable-config-discovery :model-capabilities :github-token
+    :create-session-fs-handler :enable-config-discovery :enable-mcp-apps :model-capabilities :github-token
     :enable-session-telemetry?
     :remote-session
     :mcp-oauth-token-storage
@@ -1176,7 +1181,7 @@
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities ::github-token
+                    ::enable-config-discovery ::enable-mcp-apps ::model-capabilities ::github-token
                     ::continue-pending-work?
                     ::enable-session-telemetry?
                     ::remote-session
@@ -1226,7 +1231,7 @@
                     ::on-user-input-request ::on-elicitation-request ::hooks ::working-directory ::disable-resume? ::agent
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::model-capabilities ::github-token
+                    ::enable-config-discovery ::enable-mcp-apps ::model-capabilities ::github-token
                     ::continue-pending-work?
                     ::enable-session-telemetry?
                     ::remote-session
