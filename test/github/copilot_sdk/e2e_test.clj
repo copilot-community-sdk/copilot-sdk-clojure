@@ -23,6 +23,26 @@
   `(when e2e-enabled?
      ~@body))
 
+(defn- await-event-type!
+  [events-ch event-type timeout-ms]
+  (let [deadline (timeout timeout-ms)]
+    (loop []
+      (let [[event port] (alts!! [events-ch deadline])]
+        (cond
+          (= port deadline)
+          (throw (ex-info (str "Timed out waiting for " event-type)
+                          {:event-type event-type :timeout-ms timeout-ms}))
+
+          (nil? event)
+          (throw (ex-info (str "Event channel closed while waiting for " event-type)
+                          {:event-type event-type}))
+
+          (= event-type (:type event))
+          event
+
+          :else
+          (recur))))))
+
 (defmacro with-quiet-logs
   "Execute body with stderr suppressed (silences slf4j-simple output)."
   [& body]
@@ -111,15 +131,21 @@
 (deftest ^:e2e test-e2e-session-abort
   (when-e2e
    (testing "Abort session operation"
-     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
-        ;; Send a message without waiting
-       (sdk/send! session {:prompt "Write a very long essay about quantum physics."})
-        ;; Abort should not throw
-       (is (nil? (sdk/abort! session)))
-        ;; Wait a moment for abort to process
-       (Thread/sleep 500)
-        ;; Clean up
-       (sdk/destroy! session)))))
+     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
+           events-ch (sdk/subscribe-events session)]
+       (try
+         (sdk/send! session
+                    {:prompt "run the shell command 'sleep 100' (note this works on both bash and PowerShell)"})
+         (await-event-type! events-ch :copilot/tool.execution_start 60000)
+         (let [abort-result (sdk/abort! session)]
+           (await-event-type! events-ch :copilot/session.idle 30000)
+           (is (and (nil? abort-result)
+                    (some #(= :copilot/abort (:type %))
+                          (sdk/get-messages session)))
+               "abort! should return nil and persist an abort event for the active turn"))
+         (finally
+           (sdk/unsubscribe-events! session events-ch)
+           (sdk/destroy! session)))))))
 
 (deftest ^:e2e test-e2e-tool-integration
   (when-e2e
