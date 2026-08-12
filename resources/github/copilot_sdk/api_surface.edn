@@ -596,6 +596,7 @@
     :github.copilot-sdk.specs/enable-host-git-operations
     :github.copilot-sdk.specs/enable-insiders-mode?
     :github.copilot-sdk.specs/enable-managed-settings?
+    :github.copilot-sdk.specs/enable-mcp-apps
     :github.copilot-sdk.specs/enable-on-demand-instruction-discovery
     :github.copilot-sdk.specs/enable-session-store
     :github.copilot-sdk.specs/enable-session-telemetry?

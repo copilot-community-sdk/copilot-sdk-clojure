@@ -2191,6 +2191,11 @@
           (close! out)))
     out))
 
+(defn- request-mcp-apps?
+  "True only for the official SDK's explicit experimental MCP Apps opt-in."
+  [config]
+  (true? (:enable-mcp-apps config)))
+
 (defn- build-create-session-params
   "Build wire params for session.create from config."
   [config]
@@ -2289,6 +2294,7 @@
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
+      (request-mcp-apps? config) (assoc :requestMcpApps true)
       true (assoc :request-exit-plan-mode (boolean (:on-exit-plan-mode config)))
       true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
       true (assoc :hooks (boolean (some identity (vals (:hooks config)))))
@@ -2486,6 +2492,7 @@
       (:agent config) (assoc :agent (:agent config))
       true (assoc :request-user-input (boolean (:on-user-input-request config)))
       true (assoc :request-elicitation (boolean (:on-elicitation-request config)))
+      (request-mcp-apps? config) (assoc :requestMcpApps true)
       true (assoc :request-exit-plan-mode (boolean (:on-exit-plan-mode config)))
       true (assoc :request-auto-mode-switch (boolean (:on-auto-mode-switch config)))
       true (assoc :hooks (boolean (some identity (vals (:hooks config)))))
@@ -2765,6 +2772,10 @@
                            Guarantees early events like session.start are not missed.
    - :enable-config-discovery - Boolean. Auto-discover .mcp.json, .vscode/mcp.json, skills, etc.
                                 Instruction files are always loaded regardless. (upstream PR #1044)
+   - :enable-mcp-apps    - Boolean (@experimental). Set true only when the host can render
+                           `ui://` MCP App bundles. Explicit true sends `requestMcpApps: true`
+                           on create; false and omission do not send the wire key.
+                           (https://github.com/github/copilot-sdk/pull/1335)
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
                            DeepPartial of model capabilities, e.g.
                            {:supports {:vision true}
@@ -2967,6 +2978,9 @@
    - :on-event           - Event handler (1-arg fn) registered before the RPC call.
                            Guarantees early events like session.start are not missed.
    - :enable-config-discovery - Boolean. Auto-discover .mcp.json, skills, etc. (upstream PR #1044)
+   - :enable-mcp-apps    - Boolean (@experimental). See `create-session`; explicit true sends
+                           `requestMcpApps: true` on resume, while false and omission send nothing.
+                           (https://github.com/github/copilot-sdk/pull/1335)
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
                            Same shape as `create-session`; :adaptive-thinking and
                            :max-output-tokens are experimental CLI-protocol extras.

@@ -1,6 +1,11 @@
 {:upstream
  {:repository "github/copilot-sdk"
-  :commit "3108e8ce26286043afa52f12781331460628baa0"
+  :commit "f75d222117d99acf50db95fab8bb2cbf1d5148d8"
+  :introducing-pr "https://github.com/github/copilot-sdk/pull/1335"
+  :introducing-commit "4e3b8e231dddaa0c5a1c7195f77a1b0723386cda"
+  :generated-request-schema
+  {:source "nodejs/src/generated/rpc.ts"
+   :session-create-resume :not-declared}
   :canonical
   ["nodejs/src/types.ts:2130-2793"
    "nodejs/src/generated/rpc.ts:9672-9737"
@@ -70,8 +75,7 @@
    {:node-key "requestCanvasRenderer" :type-line 2219 :status :separate-parity-work}
    {:node-key "requestExtensions" :type-line 2227 :status :separate-parity-work}
    {:node-key "extensionSdkPath" :type-line 2241 :status :separate-parity-work}
-   {:node-key "extensionInfo" :type-line 2248 :status :separate-parity-work}
-   {:node-key "enableMcpApps" :type-line 2463 :status :excluded-par-016-r3}]
+   {:node-key "extensionInfo" :type-line 2248 :status :separate-parity-work}]
 
   :clojure-aliases
   [{:clojure-key :config-dir
@@ -92,6 +96,8 @@
     :source "nodejs/src/types.ts:2359-2364"}
    {:surface :session-limits :status :experimental
     :source "nodejs/src/types.ts:2366-2371"}
+   {:surface :enable-mcp-apps :status :experimental
+    :source "nodejs/src/types.ts:2439-2464"}
    {:surface :providers :status :experimental
     :source "nodejs/src/types.ts:2323-2347"}
    {:surface :models :status :experimental
@@ -320,6 +326,16 @@
    :wire-path [:enableCitations]
    :cases [{:name :false :value false :expect false}
            {:name :true :value true :expect true}]}
+
+  {:key :enable-mcp-apps
+   :scope :shared
+   :node-key "enableMcpApps"
+   :type-line 2464
+   :stability :experimental
+   :wire-path [:requestMcpApps]
+   :cases [{:name :false :value false :expect :absent}
+           {:name :true :value true :expect true}
+           {:name :explicit-nil :value nil :expect :invalid}]}
 
   {:key :enable-config-discovery
    :scope :shared
