@@ -62,6 +62,10 @@ All notable changes to this project will be documented in this file. This change
   handling, lifecycle macro ownership order, transformed and sliding-buffered
   event subscriptions, pending interaction envelopes, UI elicitation, and
   workspace-path propagation across session producers.
+- Replaced fixed timing sleeps in concurrency and event-routing tests with
+  observable request, event, handler, and lifecycle synchronization. The two
+  remaining bounded sleep backoffs poll real protocol state with explicit
+  deadlines.
 
 ### Fixed (documentation)
 - Codox topic generation now assigns deterministic output identities from source

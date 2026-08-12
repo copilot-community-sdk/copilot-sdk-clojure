@@ -2,6 +2,7 @@
   "Integration tests using mock JSON-RPC server."
   (:require [clojure.test :refer [deftest testing is use-fixtures]]
             [clojure.core.async :as async :refer [<!! >!! chan close! go timeout alts!!]]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.spec.alpha :as s]
             [clojure.string :as str]
             [clojure.tools.logging :as log]
@@ -22,6 +23,70 @@
 (def ^:dynamic *mock-server* nil)
 (def ^:dynamic *test-client* nil)
 
+(defn- await-value!
+  [value-ref label timeout-ms]
+  (let [value (deref value-ref timeout-ms ::timeout)]
+    (when (= ::timeout value)
+      (throw (ex-info (str "Timed out waiting for " label)
+                      {:label label :timeout-ms timeout-ms})))
+    value))
+
+(defn- await-atom!
+  [state pred label timeout-ms]
+  (let [observed (promise)
+        watch-key (keyword (str (gensym "await-atom-")))]
+    (add-watch state watch-key
+               (fn [_ _ _ new-value]
+                 (when (pred new-value)
+                   (deliver observed new-value))))
+    (try
+      (when (pred @state)
+        (deliver observed @state))
+      (await-value! observed label timeout-ms)
+      (finally
+        (remove-watch state watch-key)))))
+
+(defn- await-event-type!
+  [events-ch event-type timeout-ms]
+  (let [deadline (timeout timeout-ms)]
+    (loop []
+      (let [[event port] (alts!! [events-ch deadline])]
+        (cond
+          (= port deadline)
+          (throw (ex-info (str "Timed out waiting for " event-type)
+                          {:event-type event-type :timeout-ms timeout-ms}))
+
+          (nil? event)
+          (throw (ex-info (str "Event channel closed while waiting for " event-type)
+                          {:event-type event-type}))
+
+          (= event-type (:type event))
+          event
+
+          :else
+          (recur))))))
+
+(defn- observe-take-attempts
+  [port attempts parked-takes]
+  (reify
+    async-protocols/ReadPort
+    (take! [_ handler]
+      (let [result (async-protocols/take! port handler)]
+        (.countDown attempts)
+        (when (nil? result)
+          (.countDown parked-takes))
+        result))
+
+    async-protocols/WritePort
+    (put! [_ value handler]
+      (async-protocols/put! port value handler))
+
+    async-protocols/Channel
+    (close! [_]
+      (async-protocols/close! port))
+    (closed? [_]
+      (async-protocols/closed? port))))
+
 (defn with-mock-server
   "Fixture that creates a mock server and client for each test."
   [test-fn]
@@ -38,7 +103,6 @@
         (finally
           ;; Stop client first to suppress auto-restart during teardown
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (use-fixtures :each with-mock-server)
@@ -259,6 +323,7 @@
 
   (testing "pipeline starts all admitted items without chunk barriers"
     (let [started (atom 0)
+          all-started (java.util.concurrent.CountDownLatch. 64)
           release (promise)
           execution
           (future
@@ -266,16 +331,13 @@
              (vec (range 64))
              (fn [_ item _]
                (swap! started inc)
+               (.countDown all-started)
                @release
                item)))]
       (try
-        (let [deadline (+ (System/currentTimeMillis) 1000)]
-          (loop []
-            (when (and (< @started 64)
-                       (< (System/currentTimeMillis) deadline))
-              (Thread/sleep 5)
-              (recur))))
-        (is (= 64 @started))
+        (is (and (.await all-started 1 java.util.concurrent.TimeUnit/SECONDS)
+                 (= 64 @started))
+            "all pipeline items should start within the deadline")
         (finally
           (deliver release true)))
       (is (= (vec (range 64)) (deref execution 2000 ::timeout))))))
@@ -446,55 +508,79 @@
 (deftest test-auto-restart-deprecated-connection-close
   (testing "auto-restart no longer triggers on connection close (deprecated)"
     (let [starts (atom 0)
-          stops (atom 0)]
+          stops (atom 0)
+          real-maybe-reconnect (var-get (var client/maybe-reconnect!))
+          reconnect-observed (promise)]
       (log/info "Warnings expected in this test: connection close no longer triggers auto-restart.")
-      (with-redefs [client/stop! (fn [c]
-                                   (swap! stops inc)
-                                   (swap! (:state c) assoc :status :disconnected)
-                                   [])
-                    client/start! (fn [c]
-                                    (swap! starts inc)
-                                    (swap! (:state c) assoc :status :connected)
-                                    nil)]
-        (mock/stop-mock-server! *mock-server*)
-        (Thread/sleep 200)
-        (is (zero? @stops) "auto-restart is deprecated; stop! should not be called")
-        (is (zero? @starts) "auto-restart is deprecated; start! should not be called")))))
+      (with-redefs-fn
+        {(var client/maybe-reconnect!)
+         (fn [c reason]
+           (let [result (real-maybe-reconnect c reason)]
+             (deliver reconnect-observed reason)
+             result))}
+        #(with-redefs [client/stop! (fn [c]
+                                      (swap! stops inc)
+                                      (swap! (:state c) assoc :status :disconnected)
+                                      [])
+                       client/start! (fn [c]
+                                       (swap! starts inc)
+                                       (swap! (:state c) assoc :status :connected)
+                                       nil)]
+           (mock/stop-mock-server! *mock-server*)
+           (await-value! reconnect-observed "connection-close handling" 1000)
+           (is (zero? @stops) "auto-restart is deprecated; stop! should not be called")
+           (is (zero? @starts) "auto-restart is deprecated; start! should not be called"))))))
 
 (deftest test-auto-restart-deprecated-process-exit
   (testing "auto-restart no longer triggers on process exit (deprecated)"
     (let [starts (atom 0)
           stops (atom 0)
           exit-ch (chan 1)
+          real-maybe-reconnect (var-get (var client/maybe-reconnect!))
+          reconnect-observed (promise)
           watch-exit (var client/watch-process-exit!)]
       (log/info "Warnings expected in this test: simulated process exit no longer triggers auto-restart.")
-      (with-redefs [client/stop! (fn [c]
-                                   (swap! stops inc)
-                                   (swap! (:state c) assoc :status :disconnected)
-                                   [])
-                    client/start! (fn [c]
-                                    (swap! starts inc)
-                                    (swap! (:state c) assoc :status :connected)
-                                    nil)]
-        (watch-exit *test-client* {:exit-chan exit-ch})
-        (>!! exit-ch {:exit-code 123})
-        (close! exit-ch)
-        (Thread/sleep 200)
-        (is (zero? @stops) "auto-restart is deprecated; stop! should not be called")
-        (is (zero? @starts) "auto-restart is deprecated; start! should not be called")))))
+      (with-redefs-fn
+        {(var client/maybe-reconnect!)
+         (fn [c reason]
+           (let [result (real-maybe-reconnect c reason)]
+             (deliver reconnect-observed reason)
+             result))}
+        #(with-redefs [client/stop! (fn [c]
+                                      (swap! stops inc)
+                                      (swap! (:state c) assoc :status :disconnected)
+                                      [])
+                       client/start! (fn [c]
+                                       (swap! starts inc)
+                                       (swap! (:state c) assoc :status :connected)
+                                       nil)]
+           (watch-exit *test-client* {:exit-chan exit-ch})
+           (>!! exit-ch {:exit-code 123})
+           (close! exit-ch)
+           (await-value! reconnect-observed "process-exit handling" 1000)
+           (is (zero? @stops) "auto-restart is deprecated; stop! should not be called")
+           (is (zero? @starts) "auto-restart is deprecated; start! should not be called"))))))
 
 (deftest test-auto-restart-suppressed-when-stopping
   (testing "auto-restart is suppressed while stopping"
     (let [starts (atom 0)
-          stops (atom 0)]
+          stops (atom 0)
+          real-maybe-reconnect (var-get (var client/maybe-reconnect!))
+          reconnect-observed (promise)]
       (swap! (:state *test-client*) assoc :stopping? true)
       (try
-        (with-redefs [client/stop! (fn [_] (swap! stops inc) [])
-                      client/start! (fn [_] (swap! starts inc) nil)]
-          (mock/stop-mock-server! *mock-server*)
-          (Thread/sleep 200)
-          (is (zero? @stops))
-          (is (zero? @starts)))
+        (with-redefs-fn
+          {(var client/maybe-reconnect!)
+           (fn [c reason]
+             (let [result (real-maybe-reconnect c reason)]
+               (deliver reconnect-observed reason)
+               result))}
+          #(with-redefs [client/stop! (fn [_] (swap! stops inc) [])
+                         client/start! (fn [_] (swap! starts inc) nil)]
+             (mock/stop-mock-server! *mock-server*)
+             (await-value! reconnect-observed "stopping connection-close handling" 1000)
+             (is (zero? @stops))
+             (is (zero? @starts))))
         (finally
           (swap! (:state *test-client*) assoc :stopping? false))))))
 
@@ -514,9 +600,8 @@
           start-forwarder (var client/start-stderr-forwarder!)
           get-stderr (var client/get-stderr-output)
           client (sdk/client {:auto-start? false})]
-      (start-forwarder client fake-mp)
-      ;; Give the go-loop time to drain stderr
-      (Thread/sleep 200)
+      (let [stderr-buffer (start-forwarder client fake-mp)]
+        (await-atom! stderr-buffer #(= 3 (count %)) "stderr drain" 1000))
       (let [output (get-stderr client)]
         (is (some? output) "stderr output should be captured")
         (is (clojure.string/includes? output "error line 1"))
@@ -851,7 +936,13 @@
           ;; cannot enter `send!` until the first completes.
           first-entered (promise)
           release-first (promise)
-          second-entered (promise)]
+          second-entered (promise)
+          take-attempts (java.util.concurrent.CountDownLatch. 2)
+          parked-takes (java.util.concurrent.CountDownLatch. 1)
+          send-lock (get-in @(:state client) [:session-io session-id :send-lock])]
+      (swap! (:state client) assoc-in
+             [:session-io session-id :send-lock]
+             (observe-take-attempts send-lock take-attempts parked-takes))
       (with-redefs [session/send! (fn [_ _]
                                     (case (long (swap! send-calls inc))
                                       1 (do (deliver first-entered true)
@@ -866,7 +957,9 @@
           (is (true? (deref first-entered 2000 ::timeout)))
           (let [second-f (future (session/send-and-wait! session {:prompt "B"} 5000))]
             ;; The second caller blocks on the lock and cannot enter send!.
-            (is (not (realized? second-entered)))
+            (is (and (.await take-attempts 1 java.util.concurrent.TimeUnit/SECONDS)
+                     (.await parked-takes 1 java.util.concurrent.TimeUnit/SECONDS)
+                     (not (realized? second-entered))))
             (is (= 1 @send-calls))
             ;; Release the first send!; the tap is already installed, so events
             ;; dispatched now buffer on the tapped channel and drive completion.
@@ -923,33 +1016,47 @@
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           client (:client session)
-          send-calls (atom 0)]
+          send-calls (atom 0)
+          take-attempts (java.util.concurrent.CountDownLatch. 2)
+          parked-takes (java.util.concurrent.CountDownLatch. 1)
+          send-lock (get-in @(:state client) [:session-io session-id :send-lock])]
+      (swap! (:state client) assoc-in
+             [:session-io session-id :send-lock]
+             (observe-take-attempts send-lock take-attempts parked-takes))
       ;; <send-async* uses proto/send-request directly
-      (with-redefs [protocol/send-request (fn [_ _ _]
-                                            (swap! send-calls inc)
-                                            (let [ch (async/chan 1)]
-                                              (async/put! ch {:result {:message-id "msg"}})
-                                              (async/close! ch)
-                                              ch))]
-        (let [ch1 (session/send-async session {:prompt "A"})
-              ch2-f (future (session/send-async session {:prompt "B"}))]
-          (Thread/sleep 50)
-          (is (= 1 @send-calls))
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "first"}})
-          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
-          (is (not= ::timeout (deref ch2-f 1000 ::timeout)))
-          (Thread/sleep 50)
-          (is (= 2 @send-calls))
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "second"}})
-          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
-          (loop []
-            (let [[v _] (alts!! [ch1 (timeout 1000)])]
-              (when (some? v)
-                (recur)))))))))
+      (let [first-send (promise)
+            second-send (promise)]
+        (with-redefs [protocol/send-request (fn [_ _ _]
+                                              (case (swap! send-calls inc)
+                                                1 (deliver first-send true)
+                                                2 (deliver second-send true)
+                                                nil)
+                                              (let [ch (async/chan 1)]
+                                                (async/put! ch {:result {:message-id "msg"}})
+                                                (async/close! ch)
+                                                ch))]
+          (let [ch1 (session/send-async session {:prompt "A"})
+                ch2-f (future (session/send-async session {:prompt "B"}))]
+            (await-value! first-send "first serialized send" 1000)
+            (is (and (.await take-attempts 1 java.util.concurrent.TimeUnit/SECONDS)
+                     (.await parked-takes 1 java.util.concurrent.TimeUnit/SECONDS)
+                     (= 1 @send-calls))
+                "second send must reach the send lock without issuing its RPC")
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "first"}})
+            (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+            (is (not= ::timeout (deref ch2-f 1000 ::timeout)))
+            (await-value! second-send "second serialized send" 1000)
+            (is (= 2 @send-calls))
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "second"}})
+            (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+            (loop []
+              (let [[v _] (alts!! [ch1 (timeout 1000)])]
+                (when (some? v)
+                  (recur))))))))))
 
 (deftest test-<send!-returns-last-assistant-message
   (testing "<send! returns the last assistant.message content, not the first"
@@ -957,74 +1064,77 @@
           session-id (sdk/session-id session)
           client (:client session)]
       ;; Bypass actual send to control event flow
-      (with-redefs [protocol/send-request (fn [_ _ _]
-                                            (let [ch (async/chan 1)]
-                                              (async/put! ch {:result {:message-id "msg-id"}})
-                                              (async/close! ch)
-                                              ch))]
-        (let [result-ch (sdk/<send! session {:prompt "Test agentic flow"})]
-          ;; Let the go block acquire lock, send RPC, and tap event-mult
-          (Thread/sleep 50)
+      (let [send-requested (promise)]
+        (with-redefs [protocol/send-request (fn [_ _ _]
+                                              (deliver send-requested true)
+                                              (let [ch (async/chan 1)]
+                                                (async/put! ch {:result {:message-id "msg-id"}})
+                                                (async/close! ch)
+                                                ch))]
+          (let [result-ch (sdk/<send! session {:prompt "Test agentic flow"})]
+            (await-value! send-requested "<send! request setup" 1000)
           ;; Simulate agentic flow: multiple assistant messages with tool calls between
           ;; First assistant.message (often empty in agentic flows)
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "" :message-id "msg-1"}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "" :message-id "msg-1"}})
           ;; Tool execution
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/tool.execution_start
-                                    :data {:tool-call-id "tc-1" :tool-name "view"}})
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/tool.execution_complete
-                                    :data {:tool-call-id "tc-1" :success true}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/tool.execution_start
+                                      :data {:tool-call-id "tc-1" :tool-name "view"}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/tool.execution_complete
+                                      :data {:tool-call-id "tc-1" :success true}})
           ;; Second assistant.message (intermediate, may also be empty)
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "Analyzing..." :message-id "msg-2"}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "Analyzing..." :message-id "msg-2"}})
           ;; More tool execution
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/tool.execution_start
-                                    :data {:tool-call-id "tc-2" :tool-name "grep"}})
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/tool.execution_complete
-                                    :data {:tool-call-id "tc-2" :success true}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/tool.execution_start
+                                      :data {:tool-call-id "tc-2" :tool-name "grep"}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/tool.execution_complete
+                                      :data {:tool-call-id "tc-2" :success true}})
           ;; Final assistant.message with actual content
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "Here is the final answer with all the details." :message-id "msg-3"}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "Here is the final answer with all the details." :message-id "msg-3"}})
           ;; Session idle
-          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+            (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
 
           ;; Verify <send! returns the LAST message content, not the first empty one
-          (let [[result _] (alts!! [result-ch (timeout 2000)])]
-            (is (= "Here is the final answer with all the details." result)
-                "<send! should return the last assistant.message content, not the first")))))))
+            (let [[result _] (alts!! [result-ch (timeout 2000)])]
+              (is (= "Here is the final answer with all the details." result)
+                  "<send! should return the last assistant.message content, not the first"))))))))
 
 (deftest test-<send-and-wait!-returns-final-event
   (testing "<send-and-wait! delivers the final assistant.message EVENT (not just content)"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           client (:client session)]
-      (with-redefs [protocol/send-request (fn [_ _ _]
-                                            (let [ch (async/chan 1)]
-                                              (async/put! ch {:result {:message-id "msg-id"}})
-                                              (async/close! ch)
-                                              ch))]
-        (let [result-ch (sdk/<send-and-wait! session {:prompt "Q"})]
-          (Thread/sleep 50)
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "first" :message-id "m1"}})
-          (session/dispatch-event! client session-id
-                                   {:type :copilot/assistant.message
-                                    :data {:content "final answer" :message-id "m2"}})
-          (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
-          (let [[result _] (alts!! [result-ch (timeout 2000)])]
-            (is (= :copilot/assistant.message (:type result))
-                "<send-and-wait! should deliver the full event map, not just content")
-            (is (= "final answer" (get-in result [:data :content]))
-                "<send-and-wait! should deliver the LAST assistant.message")
-            (is (= "m2" (get-in result [:data :message-id])))))))))
+      (let [send-requested (promise)]
+        (with-redefs [protocol/send-request (fn [_ _ _]
+                                              (deliver send-requested true)
+                                              (let [ch (async/chan 1)]
+                                                (async/put! ch {:result {:message-id "msg-id"}})
+                                                (async/close! ch)
+                                                ch))]
+          (let [result-ch (sdk/<send-and-wait! session {:prompt "Q"})]
+            (await-value! send-requested "<send-and-wait! request setup" 1000)
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "first" :message-id "m1"}})
+            (session/dispatch-event! client session-id
+                                     {:type :copilot/assistant.message
+                                      :data {:content "final answer" :message-id "m2"}})
+            (session/dispatch-event! client session-id {:type :copilot/session.idle :data {}})
+            (let [[result _] (alts!! [result-ch (timeout 2000)])]
+              (is (= :copilot/assistant.message (:type result))
+                  "<send-and-wait! should deliver the full event map, not just content")
+              (is (= "final answer" (get-in result [:data :content]))
+                  "<send-and-wait! should deliver the LAST assistant.message")
+              (is (= "m2" (get-in result [:data :message-id]))))))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Session Operations Tests
@@ -1075,19 +1185,12 @@
   (testing "Can subscribe to session event stream"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           events-ch (sdk/subscribe-events session)]
-      ;; Send a message to trigger events
-      (sdk/send! session {:prompt "Event test"})
-      ;; Wait for some events
-      (Thread/sleep 200)
-      ;; Should have received events via subscription
-      (let [events (atom [])]
-        (loop []
-          (let [[v _] (alts!! [events-ch (timeout 100)])]
-            (when (some? v)
-              (swap! events conj v)
-              (recur))))
-        (is (pos? (count @events))))
-      (sdk/unsubscribe-events! session events-ch))))
+      (try
+        (sdk/send! session {:prompt "Event test"})
+        (is (= :copilot/session.idle
+               (:type (await-event-type! events-ch :copilot/session.idle 1000))))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-non-session-notification-routed
   (testing "Non-session notifications are delivered to client notifications channel"
@@ -1130,8 +1233,7 @@
         (dotimes [i 1024]
           (>!! incoming {:i i}))
         (let [dispatch (future (#'protocol/dispatch-message! conn msg))]
-          (Thread/sleep 50)
-          (is (true? (realized? dispatch)))
+          (is (not= ::timeout (deref dispatch 1000 ::timeout)))
           (<!! incoming)
           (let [seen (loop []
                        (when-let [v (<!! incoming)]
@@ -2202,6 +2304,9 @@
   ;; matrix's :on-permission-request row.)
   (testing "v3 no-result skips handlePendingPermissionRequest RPC"
     (let [requests (atom [])
+          processing-completed (promise)
+          real-handle-v3-permission-requested
+          (var-get (var client/handle-v3-permission-requested!))
           _ (mock/set-request-hook! *mock-server*
                                     (fn [method params]
                                       (swap! requests conj {:method method :params params})))
@@ -2210,23 +2315,33 @@
                                        (fn [_request _ctx]
                                          {:kind :no-result})})
           session-id (sdk/session-id session)]
-      ;; Force protocol v3 so the broadcast path is active
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      ;; Reset captured requests after session creation
-      (reset! requests [])
-      ;; Inject a v3 permission.requested broadcast event
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "permission.requested"
-                                     {:requestId "perm-req-1"
-                                      :permissionRequest {:permissionKind "shell"
-                                                          :fullCommandText "echo test"}})
-      ;; Allow async handler to process
-      (Thread/sleep 500)
-      ;; The handler returned no-result — no handlePendingPermissionRequest RPC
-      (is (empty? (filter #(= "session.permissions.handlePendingPermissionRequest"
-                              (:method %))
-                          @requests))
-          "no-result should skip the handlePendingPermissionRequest RPC"))))
+      (with-redefs-fn
+        {(var client/handle-v3-permission-requested!)
+         (fn [client session-id event]
+           (let [result-ch (real-handle-v3-permission-requested client session-id event)]
+             (async/take! result-ch
+                          (fn [_]
+                            (deliver processing-completed true)))
+             result-ch))}
+        (fn []
+           ;; Force protocol v3 so the broadcast path is active
+          (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+           ;; Reset captured requests after session creation
+          (reset! requests [])
+           ;; Inject a v3 permission.requested broadcast event
+          (mock/send-v3-broadcast-event! *mock-server* session-id
+                                         "permission.requested"
+                                         {:requestId "perm-req-1"
+                                          :permissionRequest {:permissionKind "shell"
+                                                              :fullCommandText "echo test"}})
+           ;; The handler returned no-result — no handlePendingPermissionRequest RPC
+          (is (and (true? (await-value! processing-completed
+                                        "v3 permission processing"
+                                        1000))
+                   (empty? (filter #(= "session.permissions.handlePendingPermissionRequest"
+                                       (:method %))
+                                   @requests)))
+              "no-result should complete processing without sending the pending-permission RPC"))))))
 
 (deftest test-permission-approved-v3
   (testing "v3 approve-once handler sends handlePendingPermissionRequest RPC"
@@ -3900,29 +4015,45 @@
   (testing "session.snapshot_rewind event is received and parsed correctly"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
-          events-ch (sdk/subscribe-events session)
-          rewind-events (atom [])]
-      ;; Send snapshot_rewind event from mock server
-      (mock/send-session-event! *mock-server* session-id
-                                :copilot/session.snapshot_rewind
-                                {:upToEventId "evt-42"
-                                 :eventsRemoved 5}
-                                :ephemeral? true)
-      ;; Collect events
-      (Thread/sleep 100)
-      (loop []
-        (let [[v _] (alts!! [events-ch (timeout 100)])]
-          (when (some? v)
-            (when (= :copilot/session.snapshot_rewind (:type v))
-              (swap! rewind-events conj v))
-            (recur))))
-      ;; Verify event was received
-      (is (= 1 (count @rewind-events)))
-      (let [event (first @rewind-events)]
-        (is (= :copilot/session.snapshot_rewind (:type event)))
-        (is (= "evt-42" (get-in event [:data :up-to-event-id])))
-        (is (= 5 (get-in event [:data :events-removed]))))
-      (sdk/unsubscribe-events! session events-ch))))
+          events-ch (sdk/subscribe-events session)]
+      (try
+        (mock/send-session-event! *mock-server* session-id
+                                  :copilot/session.snapshot_rewind
+                                  {:upToEventId "evt-42"
+                                   :eventsRemoved 5}
+                                  :ephemeral? true)
+        ;; The following marker fences all earlier notifications on the same
+        ;; ordered transport, making duplicate rewind delivery observable.
+        (mock/send-session-event! *mock-server* session-id
+                                  :copilot/session.idle
+                                  {})
+        (let [deadline (timeout 1000)
+              rewind-events
+              (loop [events []]
+                (let [[event port] (alts!! [events-ch deadline])]
+                  (cond
+                    (= port deadline)
+                    (throw (ex-info "Timed out waiting for snapshot rewind marker"
+                                    {:timeout-ms 1000}))
+
+                    (nil? event)
+                    (throw (ex-info "Event channel closed before snapshot rewind marker" {}))
+
+                    (= :copilot/session.idle (:type event))
+                    events
+
+                    (= :copilot/session.snapshot_rewind (:type event))
+                    (recur (conj events event))
+
+                    :else
+                    (recur events))))
+              event (first rewind-events)]
+          (is (= 1 (count rewind-events)))
+          (is (= :copilot/session.snapshot_rewind (:type event)))
+          (is (= "evt-42" (get-in event [:data :up-to-event-id])))
+          (is (= 5 (get-in event [:data :events-removed]))))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Async Session Lifecycle Tests
@@ -4208,18 +4339,21 @@
   (testing "capabilities.changed broadcast updates session capabilities"
     (let [session (sdk/create-session *test-client*
                                       {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      (is (false? (sdk/elicitation-supported? session)))
-      ;; Force protocol v3
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      ;; Inject capabilities.changed event
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "capabilities.changed"
-                                     {:ui {:elicitation true}}
-                                     :ephemeral? true)
-      ;; Give event routing time to process
-      (Thread/sleep 200)
-      (is (true? (sdk/elicitation-supported? session))))))
+          session-id (sdk/session-id session)
+          events-ch (sdk/subscribe-events session)]
+      (try
+        (is (false? (sdk/elicitation-supported? session)))
+        ;; Force protocol v3
+        (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+        ;; Inject capabilities.changed event
+        (mock/send-v3-broadcast-event! *mock-server* session-id
+                                       "capabilities.changed"
+                                       {:ui {:elicitation true}}
+                                       :ephemeral? true)
+        (await-event-type! events-ch :copilot/capabilities.changed 1000)
+        (is (true? (sdk/elicitation-supported? session)))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 ;; -----------------------------------------------------------------------------
 ;; SessionFs Tests (upstream PR #917)
@@ -4812,7 +4946,6 @@
           (is (= "/workspace" (:initialCwd params))))
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server)))))
 
   (testing ":capabilities is omitted when not configured"
@@ -4833,7 +4966,6 @@
           (is (not (contains? params :capabilities))))
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest test-session-fs-sqlite-capability-validation
@@ -6595,7 +6727,6 @@
       (f server client)
       (finally
         (try (sdk/stop! client) (catch Exception _))
-        (Thread/sleep 50)
         (mock/stop-mock-server! server)))))
 
 (deftest test-on-github-telemetry-client-option-accepted
@@ -6833,21 +6964,23 @@
 (deftest test-github-telemetry-handler-throwable-does-not-kill-router
   (testing "a telemetry handler throwing a non-Exception Throwable (e.g. AssertionError) must not kill the notification router; a later notification still dispatches (upstream PR #1835, regression guard)"
     (let [calls (atom 0)
+          first-observed (promise)
           second-received (promise)
           handler (fn [_notif]
                     (if (= 1 (swap! calls inc))
                       ;; AssertionError is a Throwable but NOT an Exception —
                       ;; a `catch Exception` would let it escape and unwind the
                       ;; notification go-loop, killing dispatch for all sessions.
-                      (throw (AssertionError. "boom"))
+                      (do
+                        (deliver first-observed true)
+                        (throw (AssertionError. "boom")))
                       (deliver second-received :ok)))]
       (with-telemetry-client*
         {:on-github-telemetry handler}
         (fn [server _client]
           (mock/send-notification! server "gitHubTelemetry.event"
                                    {:sessionId "s1" :restricted false :event {:kind "k"}})
-          ;; Let the router process the first (throwing) notification.
-          (Thread/sleep 50)
+          (await-value! first-observed "first telemetry handler invocation" 1000)
           (mock/send-notification! server "gitHubTelemetry.event"
                                    {:sessionId "s2" :restricted false :event {:kind "k"}})
           (is (= :ok (deref second-received 1000 :timeout))
@@ -6915,17 +7048,15 @@
 
   (testing "send-async forwards :request-headers as wire :requestHeaders (upstream PR #1094)"
     (let [seen (atom {})
+          send-observed (promise)
           _ (mock/set-request-hook! *mock-server* (fn [method params]
                                                     (when (#{"session.send"} method)
-                                                      (swap! seen assoc method params))))
+                                                      (swap! seen assoc method params)
+                                                      (deliver send-observed true))))
           session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           _ (sdk/send-async session {:prompt "Hi"
-                                     :request-headers {"X-Trace-Id" "xyz-789"}})
-          ;; Poll for the async RPC to land rather than fixed sleep (avoids flakes under load).
-          deadline (+ (System/currentTimeMillis) 2000)]
-      (while (and (nil? (get @seen "session.send"))
-                  (< (System/currentTimeMillis) deadline))
-        (Thread/sleep 10))
+                                     :request-headers {"X-Trace-Id" "xyz-789"}})]
+      (await-value! send-observed "async session.send request" 2000)
       (let [send-params (get @seen "session.send")]
         (is (some? send-params) "async send should have issued session.send within deadline")
         (is (= "xyz-789" (get-in send-params [:requestHeaders (keyword "X-Trace-Id")])))))))
@@ -8258,7 +8389,6 @@
           (is (= "excluded" (:toolFilterPrecedence p))))
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest test-empty-mode-memory-default-on-create-and-resume
@@ -8299,7 +8429,6 @@
             "caller-provided :memory overrides the empty-mode default")
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest test-empty-mode-caller-config-wins-over-mode-defaults
@@ -8332,7 +8461,6 @@
           (is (= true (:skipEmbeddingRetrieval p))))
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest test-cli-mode-does-not-spread-mode-defaults
@@ -8383,7 +8511,6 @@
       (-> (get @seen "session.create") :systemMessage)
       (finally
         (try (sdk/stop! client) (catch Exception _))
-        (Thread/sleep 50)
         (mock/stop-mock-server! server)))))
 
 (deftest test-empty-mode-system-message-default
@@ -8484,7 +8611,6 @@
       @seen
       (finally
         (try (sdk/stop! client) (catch Exception _))
-        (Thread/sleep 50)
         (mock/stop-mock-server! server)))))
 
 (deftest test-empty-mode-options-update-defaults
@@ -8518,7 +8644,6 @@
                                         (reset! seen params))))
           _ (sdk/create-session *test-client*
                                 {:on-permission-request sdk/approve-all})]
-      (Thread/sleep 100)
       (is (nil? @seen)
           "no RPC should be sent when the patch would be empty"))))
 
@@ -8569,7 +8694,6 @@
           (is (= [] (:installedPlugins p))))
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest test-empty-mode-options-update-failure-cleans-up-session
@@ -8602,7 +8726,6 @@
             "failed session must be removed from in-memory registry")
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest test-empty-mode-options-update-async-failure-cleans-up-session
@@ -8632,7 +8755,6 @@
             "failed session must be removed from in-memory registry (async path)")
         (finally
           (try (sdk/stop! client) (catch Exception _))
-          (Thread/sleep 50)
           (mock/stop-mock-server! server))))))
 
 (deftest disconnect-concurrent-idempotent-test
@@ -8741,113 +8863,125 @@
 (deftest test-canvas-opened-upserts-snapshot
   (testing "session.canvas.opened upserts by instanceId"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      (is (= [] (sdk/open-canvases session)))
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"
-                                 :status "loading"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))))
-      (is (= "loading" (:status (first (sdk/open-canvases session)))))
-      ;; Re-emit with same instanceId, different status — replace in place
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"
-                                 :status "ready"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))) "length unchanged on upsert")
-      (is (= "ready" (:status (first (sdk/open-canvases session)))) "entry updated in place")
-      ;; Append a new instance
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i2"
-                                 :extensionId "ext-a"
-                                 :canvasId "c2"
-                                 :reopen false
-                                 :availability "ready"})
-      (Thread/sleep 200)
-      (is (= 2 (count (sdk/open-canvases session))))
-      (is (= ["i1" "i2"] (mapv :instance-id (sdk/open-canvases session)))))))
+          session-id (sdk/session-id session)
+          events-ch (sdk/subscribe-events session)]
+      (try
+        (is (= [] (sdk/open-canvases session)))
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"
+                                   :status "loading"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        (is (= "loading" (:status (first (sdk/open-canvases session)))))
+        ;; Re-emit with same instanceId, different status — replace in place
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"
+                                   :status "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))) "length unchanged on upsert")
+        (is (= "ready" (:status (first (sdk/open-canvases session)))) "entry updated in place")
+        ;; Append a new instance
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i2"
+                                   :extensionId "ext-a"
+                                   :canvasId "c2"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 2 (count (sdk/open-canvases session))))
+        (is (= ["i1" "i2"] (mapv :instance-id (sdk/open-canvases session))))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-canvas-closed-removes-from-snapshot
   (testing "session.canvas.closed removes by instanceId (upstream PR #1604)"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))))
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= [] (sdk/open-canvases session)))
-      ;; Idempotent — closing absent instanceId is a no-op
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId "i-missing"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= [] (sdk/open-canvases session))))))
+          session-id (sdk/session-id session)
+          events-ch (sdk/subscribe-events session)]
+      (try
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= [] (sdk/open-canvases session)))
+        ;; Idempotent — closing absent instanceId is a no-op
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId "i-missing"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= [] (sdk/open-canvases session)))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-canvas-events-malformed-payload-no-op
   (testing "missing/blank instanceId on opened/closed warns and no-ops"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      ;; Seed one entry so we can verify no mutation
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Closed with empty instanceId — no-op
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId ""
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Opened with blank instanceId — no-op
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId ""
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Closed with non-string instanceId (numeric) — no-op (matches strict
-      ;; ::instance-id non-blank-string spec used elsewhere)
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId 42
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session)))))))
+          session-id (sdk/session-id session)
+          events-ch (sdk/subscribe-events session)]
+      (try
+        ;; Seed one entry so we can verify no mutation
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Closed with empty instanceId — no-op
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId ""
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Opened with blank instanceId — no-op
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId ""
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Closed with non-string instanceId (numeric) — no-op (matches strict
+        ;; ::instance-id non-blank-string spec used elsewhere)
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId 42
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-schedule-data-cron-and-at
   (testing "schedule_created accepts cron-only payload (no :interval-ms)"
@@ -8892,29 +9026,33 @@
 (deftest test-canvas-opened-event-input-preserved-verbatim
   (testing "session.canvas.opened :input keys round-trip without kebab-casing"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      ;; Caller-defined opaque input map with snake_case AND camelCase AND
-      ;; nested keys — none should be re-cased by wire->clj.
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"
-                                 :input {:user_id 42
-                                         :myKey "v"
-                                         :nested {:secondKey "v2"
-                                                  :third_key 3}}})
-      (Thread/sleep 200)
-      (let [snap (first (sdk/open-canvases session))
-            input (:input snap)]
-        (is (some? snap) "snapshot was upserted")
-        (is (= 42 (:user_id input)) "snake_case caller key preserved")
-        (is (= "v" (:myKey input)) "camelCase caller key preserved")
-        (let [nested (:nested input)]
-          (is (= "v2" (:secondKey nested)) "nested camelCase preserved")
-          (is (= 3 (:third_key nested)) "nested snake_case preserved"))))))
+          session-id (sdk/session-id session)
+          events-ch (sdk/subscribe-events session)]
+      (try
+        ;; Caller-defined opaque input map with snake_case AND camelCase AND
+        ;; nested keys — none should be re-cased by wire->clj.
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"
+                                   :input {:user_id 42
+                                           :myKey "v"
+                                           :nested {:secondKey "v2"
+                                                    :third_key 3}}})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (let [snap (first (sdk/open-canvases session))
+              input (:input snap)]
+          (is (some? snap) "snapshot was upserted")
+          (is (= 42 (:user_id input)) "snake_case caller key preserved")
+          (is (= "v" (:myKey input)) "camelCase caller key preserved")
+          (let [nested (:nested input)]
+            (is (= "v2" (:secondKey nested)) "nested camelCase preserved")
+            (is (= 3 (:third_key nested)) "nested snake_case preserved")))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-resume-response-open-canvases-input-preserved
   (testing "session.resume openCanvases[].input keys round-trip verbatim"
@@ -8944,49 +9082,53 @@
 (deftest test-canvas-upsert-strict-validation
   (testing "upsert requires the three ids (matches v1.0.4 isOpenCanvasInstance)"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          session-id (sdk/session-id session)]
-      ;; Seed a valid entry first (3 required ids only)
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Missing :canvasId — guard rejects, no upsert
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i2"
-                                 :extensionId "ext-a"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session)))
-          "missing :canvas-id rejected")
-      ;; Blank :extensionId — guard rejects
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i3"
-                                 :extensionId ""
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session)))
-          "blank :extension-id rejected")
-      ;; Non-string :instanceId — guard rejects
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId 42
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= 1 (count (sdk/open-canvases session)))
-          ":instance-id must be a non-blank string")
-      ;; Sanity: a fully valid second entry is still admitted
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i2"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (Thread/sleep 200)
-      (is (= 2 (count (sdk/open-canvases session))) "valid entry admitted"))))
+          session-id (sdk/session-id session)
+          events-ch (sdk/subscribe-events session)]
+      (try
+        ;; Seed a valid entry first (3 required ids only)
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Missing :canvasId — guard rejects, no upsert
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i2"
+                                   :extensionId "ext-a"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session)))
+            "missing :canvas-id rejected")
+        ;; Blank :extensionId — guard rejects
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i3"
+                                   :extensionId ""
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session)))
+            "blank :extension-id rejected")
+        ;; Non-string :instanceId — guard rejects
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId 42
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session)))
+            ":instance-id must be a non-blank string")
+        ;; Sanity: a fully valid second entry is still admitted
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i2"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 2 (count (sdk/open-canvases session))) "valid entry admitted")
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-resume-config-open-canvases-outbound-wire
   (testing "resume-session :open-canvases sends camelCase wire shape with verbatim :input"
