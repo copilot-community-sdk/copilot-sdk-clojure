@@ -4340,16 +4340,19 @@
                                       {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)]
-      (is (false? (sdk/elicitation-supported? session)))
-      ;; Force protocol v3
-      (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
-      ;; Inject capabilities.changed event
-      (mock/send-v3-broadcast-event! *mock-server* session-id
-                                     "capabilities.changed"
-                                     {:ui {:elicitation true}}
-                                     :ephemeral? true)
-      (await-event-type! events-ch :copilot/capabilities.changed 1000)
-      (is (true? (sdk/elicitation-supported? session))))))
+      (try
+        (is (false? (sdk/elicitation-supported? session)))
+        ;; Force protocol v3
+        (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+        ;; Inject capabilities.changed event
+        (mock/send-v3-broadcast-event! *mock-server* session-id
+                                       "capabilities.changed"
+                                       {:ui {:elicitation true}}
+                                       :ephemeral? true)
+        (await-event-type! events-ch :copilot/capabilities.changed 1000)
+        (is (true? (sdk/elicitation-supported? session)))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 ;; -----------------------------------------------------------------------------
 ;; SessionFs Tests (upstream PR #917)
@@ -8861,114 +8864,123 @@
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)]
-      (is (= [] (sdk/open-canvases session)))
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"
-                                 :status "loading"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session))))
-      (is (= "loading" (:status (first (sdk/open-canvases session)))))
-      ;; Re-emit with same instanceId, different status — replace in place
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"
-                                 :status "ready"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session))) "length unchanged on upsert")
-      (is (= "ready" (:status (first (sdk/open-canvases session)))) "entry updated in place")
-      ;; Append a new instance
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i2"
-                                 :extensionId "ext-a"
-                                 :canvasId "c2"
-                                 :reopen false
-                                 :availability "ready"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 2 (count (sdk/open-canvases session))))
-      (is (= ["i1" "i2"] (mapv :instance-id (sdk/open-canvases session)))))))
+      (try
+        (is (= [] (sdk/open-canvases session)))
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"
+                                   :status "loading"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        (is (= "loading" (:status (first (sdk/open-canvases session)))))
+        ;; Re-emit with same instanceId, different status — replace in place
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"
+                                   :status "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))) "length unchanged on upsert")
+        (is (= "ready" (:status (first (sdk/open-canvases session)))) "entry updated in place")
+        ;; Append a new instance
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i2"
+                                   :extensionId "ext-a"
+                                   :canvasId "c2"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 2 (count (sdk/open-canvases session))))
+        (is (= ["i1" "i2"] (mapv :instance-id (sdk/open-canvases session))))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-canvas-closed-removes-from-snapshot
   (testing "session.canvas.closed removes by instanceId (upstream PR #1604)"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)]
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session))))
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.closed 1000)
-      (is (= [] (sdk/open-canvases session)))
-      ;; Idempotent — closing absent instanceId is a no-op
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId "i-missing"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.closed 1000)
-      (is (= [] (sdk/open-canvases session))))))
+      (try
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= [] (sdk/open-canvases session)))
+        ;; Idempotent — closing absent instanceId is a no-op
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId "i-missing"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= [] (sdk/open-canvases session)))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-canvas-events-malformed-payload-no-op
   (testing "missing/blank instanceId on opened/closed warns and no-ops"
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)]
-      ;; Seed one entry so we can verify no mutation
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Closed with empty instanceId — no-op
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId ""
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.closed 1000)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Opened with blank instanceId — no-op
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId ""
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Closed with non-string instanceId (numeric) — no-op (matches strict
-      ;; ::instance-id non-blank-string spec used elsewhere)
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.closed"
-                                {:instanceId 42
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.closed 1000)
-      (is (= 1 (count (sdk/open-canvases session)))))))
+      (try
+        ;; Seed one entry so we can verify no mutation
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Closed with empty instanceId — no-op
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId ""
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Opened with blank instanceId — no-op
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId ""
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Closed with non-string instanceId (numeric) — no-op (matches strict
+        ;; ::instance-id non-blank-string spec used elsewhere)
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.closed"
+                                  {:instanceId 42
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.closed 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-schedule-data-cron-and-at
   (testing "schedule_created accepts cron-only payload (no :interval-ms)"
@@ -9015,28 +9027,31 @@
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)]
-      ;; Caller-defined opaque input map with snake_case AND camelCase AND
-      ;; nested keys — none should be re-cased by wire->clj.
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"
-                                 :reopen false
-                                 :availability "ready"
-                                 :input {:user_id 42
-                                         :myKey "v"
-                                         :nested {:secondKey "v2"
-                                                  :third_key 3}}})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (let [snap (first (sdk/open-canvases session))
-            input (:input snap)]
-        (is (some? snap) "snapshot was upserted")
-        (is (= 42 (:user_id input)) "snake_case caller key preserved")
-        (is (= "v" (:myKey input)) "camelCase caller key preserved")
-        (let [nested (:nested input)]
-          (is (= "v2" (:secondKey nested)) "nested camelCase preserved")
-          (is (= 3 (:third_key nested)) "nested snake_case preserved"))))))
+      (try
+        ;; Caller-defined opaque input map with snake_case AND camelCase AND
+        ;; nested keys — none should be re-cased by wire->clj.
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"
+                                   :reopen false
+                                   :availability "ready"
+                                   :input {:user_id 42
+                                           :myKey "v"
+                                           :nested {:secondKey "v2"
+                                                    :third_key 3}}})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (let [snap (first (sdk/open-canvases session))
+              input (:input snap)]
+          (is (some? snap) "snapshot was upserted")
+          (is (= 42 (:user_id input)) "snake_case caller key preserved")
+          (is (= "v" (:myKey input)) "camelCase caller key preserved")
+          (let [nested (:nested input)]
+            (is (= "v2" (:secondKey nested)) "nested camelCase preserved")
+            (is (= 3 (:third_key nested)) "nested snake_case preserved")))
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-resume-response-open-canvases-input-preserved
   (testing "session.resume openCanvases[].input keys round-trip verbatim"
@@ -9068,48 +9083,51 @@
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
           session-id (sdk/session-id session)
           events-ch (sdk/subscribe-events session)]
-      ;; Seed a valid entry first (3 required ids only)
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i1"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session))))
-      ;; Missing :canvasId — guard rejects, no upsert
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i2"
-                                 :extensionId "ext-a"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session)))
-          "missing :canvas-id rejected")
-      ;; Blank :extensionId — guard rejects
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i3"
-                                 :extensionId ""
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session)))
-          "blank :extension-id rejected")
-      ;; Non-string :instanceId — guard rejects
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId 42
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 1 (count (sdk/open-canvases session)))
-          ":instance-id must be a non-blank string")
-      ;; Sanity: a fully valid second entry is still admitted
-      (mock/send-session-event! *mock-server* session-id
-                                "session.canvas.opened"
-                                {:instanceId "i2"
-                                 :extensionId "ext-a"
-                                 :canvasId "c1"})
-      (await-event-type! events-ch :copilot/session.canvas.opened 1000)
-      (is (= 2 (count (sdk/open-canvases session))) "valid entry admitted"))))
+      (try
+        ;; Seed a valid entry first (3 required ids only)
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i1"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session))))
+        ;; Missing :canvasId — guard rejects, no upsert
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i2"
+                                   :extensionId "ext-a"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session)))
+            "missing :canvas-id rejected")
+        ;; Blank :extensionId — guard rejects
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i3"
+                                   :extensionId ""
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session)))
+            "blank :extension-id rejected")
+        ;; Non-string :instanceId — guard rejects
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId 42
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 1 (count (sdk/open-canvases session)))
+            ":instance-id must be a non-blank string")
+        ;; Sanity: a fully valid second entry is still admitted
+        (mock/send-session-event! *mock-server* session-id
+                                  "session.canvas.opened"
+                                  {:instanceId "i2"
+                                   :extensionId "ext-a"
+                                   :canvasId "c1"})
+        (await-event-type! events-ch :copilot/session.canvas.opened 1000)
+        (is (= 2 (count (sdk/open-canvases session))) "valid entry admitted")
+        (finally
+          (sdk/unsubscribe-events! session events-ch))))))
 
 (deftest test-resume-config-open-canvases-outbound-wire
   (testing "resume-session :open-canvases sends camelCase wire shape with verbatim :input"
