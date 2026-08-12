@@ -464,8 +464,10 @@
                   (write-message (:writer server)
                                  {:jsonrpc "2.0"
                                   :id (:id msg)
-                                  :error {:code (or (:code error-data) -32603)
-                                          :message (.getMessage e)}}))))
+                                  :error (cond-> {:code (or (:code error-data) -32603)
+                                                  :message (.getMessage e)}
+                                           (contains? error-data :data)
+                                           (assoc :data (:data error-data)))}))))
             ;; It's a notification (has :method but no :id) — process silently
             (try
               (handle-request server msg)
