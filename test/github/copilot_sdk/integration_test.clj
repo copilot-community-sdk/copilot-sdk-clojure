@@ -335,8 +335,9 @@
                @release
                item)))]
       (try
-        (.await all-started 1 java.util.concurrent.TimeUnit/SECONDS)
-        (is (= 64 @started))
+        (is (and (.await all-started 1 java.util.concurrent.TimeUnit/SECONDS)
+                 (= 64 @started))
+            "all pipeline items should start within the deadline")
         (finally
           (deliver release true)))
       (is (= (vec (range 64)) (deref execution 2000 ::timeout))))))
