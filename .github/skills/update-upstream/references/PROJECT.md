@@ -1,63 +1,118 @@
 # Upstream Sync Reference
 
-This reference supplements `AGENTS.md` (the canonical project reference) with sync-specific context.
+This reference supplements `AGENTS.md`, the canonical project reference.
 
-For project structure, testing commands, version format, changelog conventions, and code quality expectations, see `AGENTS.md`.
+## Authority Inventory
 
-## Upstream Checkout
+Inventory the complete official Node.js public surface at the selected exact
+pin.
 
-Resolve the local upstream checkout from any normal checkout or linked
-worktree:
+| Upstream source | Evidence |
+|-----------------|----------|
+| `nodejs/src/index.ts` | Package-root exports and supported public entry points |
+| `nodejs/src/types.ts` | Public options, config maps, result types, enums, and nullability |
+| `nodejs/src/client.ts` | `CopilotClient` construction, create/resume/join builders, and client methods |
+| `nodejs/src/session.ts` | `CopilotSession` methods, lifecycle, event handling, and method builders |
+| `nodejs/src/extension.ts` | Extension-facing public construction and session paths |
+| `nodejs/src/toolSet.ts` | Public tool-filter helpers |
+| `nodejs/test/` | Stable unit and end-to-end behavior, especially omission and lifecycle semantics |
+| `nodejs/src/generated/` | Wire signatures and event schemas; informative, not independently a stable parity requirement |
 
-```bash
-UPSTREAM_REPO="$(bash .github/skills/update-upstream/scripts/resolve-upstream.sh)"
+Treat Python as secondary corroboration. Treat CLI/runtime implementation as
+wire evidence, not public API authority.
+
+## Clojure Mapping
+
+| Contract area | Clojure source |
+|---------------|----------------|
+| Package facade and curated public values | `src/github/copilot_sdk.clj` |
+| Client construction and session builders | `src/github/copilot_sdk/client.clj` |
+| Session functions and lifecycle | `src/github/copilot_sdk/session.clj` |
+| Public convenience helpers | `src/github/copilot_sdk/helpers.clj` |
+| Tool helpers and filters | `src/github/copilot_sdk/tools.clj`, `src/github/copilot_sdk/tool_set.clj` |
+| Caller-facing shapes | `src/github/copilot_sdk/specs.clj` |
+| Public function contracts | `src/github/copilot_sdk/instrument.clj` |
+| Protocol and normalization | `src/github/copilot_sdk/protocol.clj`, `src/github/copilot_sdk/util.clj` |
+| Generated wire validation and coercion | `src/github/copilot_sdk/generated/` |
+| Versioned public compatibility snapshot | `resources/github/copilot_sdk/api_surface.edn` |
+
+## Delta Classification
+
+Assign exactly one classification before deciding whether to port a delta:
+
+| Class | Action |
+|-------|--------|
+| Stable public | Port and prove the full Clojure contract |
+| Experimental | Exclude unless explicitly approved; mark outside stable compatibility if ported |
+| Internal | Do not expose |
+| Generated-only | Use as wire evidence; do not infer public support |
+| Language-specific | Skip unless the Clojure design has an independently justified counterpart |
+
+Record intentional exclusions in durable evidence, docs, or an ADR.
+
+## Stable Delta Proof
+
+For every stable public delta, prove:
+
+```text
+Node export/type
+  -> applicable create/resume/join/method builder
+  -> exact wire shape and omission semantics
+  -> Clojure name and idiomatic value
+  -> closed spec + registered fdef + API snapshot
+  -> targeted tests
+  -> docs + examples + changelog
 ```
 
-The helper finds the primary `copilot-sdk-clojure` checkout through Git's
-common directory, then resolves its `copilot-sdk` sibling. Set
-`COPILOT_SDK_UPSTREAM` when the upstream checkout lives elsewhere. Re-resolve
-the variable in each shell tool call because shell environments do not
-persist between calls.
+Test optional fields with a table containing the states that apply: absent,
+`false`, `true`, empty, and `nil`. Omission and JSON `null` are different
+contracts. Reject explicit `nil` when an optional upstream type is non-null.
+Check that create/resume/join-only fields never appear in unrelated mutable
+updates.
 
-## Upstream ↔ Clojure File Mapping
+Public shapes are usually declared in several places: leaf specs, closed-key
+sets, one or more `s/keys` lists, public sets, builders, and docstrings. Grep for
+an analogous existing key and mirror every applicable declaration site. Missing
+one can silently strip an option, leave it unenforced, or hide it from callers.
 
-When syncing, map upstream changes to the corresponding Clojure files:
+## Wire and Idiom Boundary
 
-### Upstream (`$UPSTREAM_REPO`)
+Convert camelCase and kebab-case once at the protocol boundary.
 
-| Upstream File | Contains |
-|---------------|----------|
-| `nodejs/src/types.ts` | Canonical type definitions (`SessionConfig`, `MessageOptions`, etc.) |
-| `nodejs/src/client.ts` | `CopilotClient` methods, what params go on the wire |
-| `nodejs/src/session.ts` | `CopilotSession` methods, event handling |
-| `nodejs/src/index.ts` | Public exports (defines the public API surface) |
-| `nodejs/src/generated/session-events.ts` | All event types and data shapes |
-| `nodejs/src/generated/rpc.ts` | RPC method signatures |
-| `nodejs/src/toolSet.ts` | `ToolSet` / `BuiltInTools` tool-filter helpers |
+- Boolean conversion does not add a `?` suffix. Re-key caller-facing predicates
+  deliberately.
+- `wire->clj` transforms keyword keys; string-keyed fixture maps bypass that
+  conversion.
+- Mock-server requests are wire-shaped. Client assertions are idiomatic.
+- Generated wire specs validate raw schema-faithful values and are never public
+  API.
+- Hand-curated idiom specs define Clojure-native values and should use closed
+  maps where the upstream contract is exact.
+- Event data specs remain open for forward-compatible pass-through unless there
+  is a deliberate exact-map requirement. Add explicit field specs for public
+  documentation and validation; do not close an event map merely because a new
+  field was discovered.
+- Generated coercion records deliberate wire/idiom differences.
+- Opaque JSON needs recursive JSON specs and key-preservation tests, not a broad
+  `map?`. Cover live notifications and historical response paths when both can
+  carry the value.
 
-### Clojure Counterparts
+Use `handle-permission-request!` in `session.clj` as the reference for an RPC
+handler that returns idiomatic shapes and re-keys only the predicate leaf that
+requires it.
 
-| Upstream Area | Clojure File | Notes |
-|---------------|-------------|-------|
-| Types / config | `specs.clj` | Session config, event data, permissions, tools |
-| Client methods | `client.clj` | Broadcast handlers, create-client, create-session |
-| Session methods | `session.clj` | send/receive, UI convenience methods |
-| Curated public event sets | `copilot_sdk.clj` | Top-level `github.copilot-sdk` ns: hand-curated public `event-types` / `session-events` sets |
-| Generated event specs | `generated/event_specs.clj` | AUTO-GENERATED full `event-types` set + wire specs (`bb codegen`) |
-| RPC methods | `protocol.clj` | JSON-RPC protocol layer |
-| Tool-filter helpers | `tool_set.clj` | Source-qualified `:available-tools` / `:excluded-tools` patterns |
-| Public exports | `copilot_sdk.clj`, `client.clj`, `helpers.clj`, `tools.clj` | Public API surface |
-| Function specs | `instrument.clj` | fdefs for all public functions |
+## Evidence Maintenance
 
-## Wire Conversion Cheat Sheet
+Prefer symbol-based evidence over source line ranges. A validated historical
+oracle remains pinned to the source it actually inspected. When the target
+moves, add a separate delta inventory from that oracle to the new exact pin.
+Never replace only the old hash while retaining stale line or range claims.
 
-camelCase ↔ kebab-case is handled by `util/wire->clj` and `util/clj->wire` (camel-snake-kebab). Conversion happens **once**, at the protocol boundary.
+Parity evidence should make all stable deltas and intentional exclusions
+machine-readable and leave no unclassified rows.
 
-Test a conversion: `(csk/->kebab-case-keyword :yourCamelCaseField)`
+## Deterministic Outputs
 
-Mechanics worth remembering:
-
-- **Booleans don't get a `?` suffix.** `resolvedByHook` → `:resolved-by-hook`, not `:resolved-by-hook?`. Code that wants `?`-suffixed keywords (e.g., `:approved?`) must re-key manually. csk preserves an existing `?` if you pass it in.
-- **`wire->clj` only transforms keyword keys.** String-keyed maps pass through untouched. The mock server parses JSON with `:key-fn keyword` and does **not** apply `wire->clj`, so request-hook callbacks see camelCase keyword keys (e.g., `:remoteSession`).
-- **Opaque user data must be preserved.** Source-defined identifiers (`tool.call` arguments, `session.custom_notification` `:subject`/`:payload`) bypass conversion via explicit escape hatches in `protocol/normalize-incoming`. When adding a new event with opaque fields, apply the escape hatch on both the notification path and the response path (for `session.getMessages`).
-- **`handle-permission-request!`** in `session.clj` is the reference example for an RPC handler: returns idiomatic shapes and only manually re-keys what csk can't (`:approved?` → `:approved`).
+Schemas, generated Clojure, API snapshots, and generated docs are outputs of
+canonical pinned inputs. Follow the deterministic regeneration procedure in
+the owning skill.
