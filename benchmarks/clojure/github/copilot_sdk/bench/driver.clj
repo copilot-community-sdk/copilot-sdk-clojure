@@ -10,7 +10,9 @@
   (into {}
         (map (fn [arg]
                (let [[key value] (str/split arg #"=" 2)]
-                 (when-not (and (str/starts-with? key "--") value)
+                 (when-not (and (str/starts-with? key "--")
+                                (> (count key) 2)
+                                (not (str/blank? value)))
                    (throw (ex-info "Expected --name=value" {:argument arg})))
                  [(subs key 2) value])))
         args))

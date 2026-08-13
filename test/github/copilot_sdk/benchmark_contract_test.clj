@@ -369,7 +369,7 @@
     (doseq [missing bench-driver/common-required-args]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
-           (re-pattern (str "Missing --" missing))
+           #"Expected --name=value"
            (bench-driver/validate-args!
             (mapv #(if (str/starts-with? % (str "--" missing "="))
                      (str "--" missing "=")
@@ -384,7 +384,7 @@
                   (remove #(str/starts-with? % (str "--" missing "=")) steady)))))
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
-           (re-pattern (str "Missing --" missing))
+           #"Expected --name=value"
            (bench-driver/validate-args!
             (mapv #(if (str/starts-with? % (str "--" missing "="))
                      (str "--" missing "=")
@@ -394,6 +394,14 @@
            (get (bench-driver/validate-args!
                  (assoc common 0 "--mode=cold"))
                 "mode")))))
+
+(deftest clojure-driver-parser-rejects-blanks-and-preserves-equals
+  (doseq [argument ["--name=" "--=value"]]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Expected --name=value"
+                          (bench-driver/parse-args [argument]))))
+  (is (= {"name" "value=with=equals"}
+         (bench-driver/parse-args ["--name=value=with=equals"]))))
 
 (deftest runner-rejects-blank-argument-keys-and-values
   (doseq [argument ["--output=" "--profile=" "--=value"]]
