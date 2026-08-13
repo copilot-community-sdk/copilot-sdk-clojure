@@ -3,6 +3,12 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (agent guidance)
+- Consolidated durable repository guidance for exact-pin stable upstream
+  recertification, end-to-end wire/idiom contract proof, core.async and resource
+  ownership, executable documentation, deterministic generated outputs, and
+  matched-process performance evidence.
+
 ### Added (stable 811adc sync)
 - Added stable `:enable-file-change-tracking?` session config parity through
   upstream commit

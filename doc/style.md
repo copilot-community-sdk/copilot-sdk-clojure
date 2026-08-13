@@ -76,7 +76,9 @@ Use Clojure terms consistently:
 ## Cross-References
 
 - Use **relative paths** between doc files: `[API Reference](reference/API.md)`
-- From repo root (README, AGENTS.md): `[API Reference](./doc/reference/API.md)`
+- From repo root README: `[API Reference](./doc/reference/API.md)`
+- `AGENTS.md` is a symlink to `.github/copilot-instructions.md`; links in that
+  shared file must use full canonical GitHub URLs so both rendered paths work
 - From examples/: `[BYOK](../doc/auth/byok.md)`
 - Never use absolute filesystem paths
 - Link to specific sections with anchors: `[Events](reference/API.md#event-types)`

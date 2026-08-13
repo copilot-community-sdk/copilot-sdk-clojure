@@ -51,11 +51,40 @@ This SDK must maintain **strict API parity** with the official Node.js SDK (`@gi
 4. **Clojure-only additions** (convenience macros, core.async wrappers, internal tuning knobs) are fine
    as long as they don't conflict with the official API surface.
 
+5. **Prefer one canonical Clojure spelling.** Add compatibility aliases only
+   for demonstrated consumer need or an explicit compatibility policy. Prefer a
+   documented breaking correction over a speculative shim with no removal path.
+
+### Stable Upstream Recertification
+
+A stable recertification is a complete public-surface inventory at an exact
+upstream pin, not a scan of changed generated files.
+
+1. Inventory package-root exports and public types, `CopilotClient` builders and
+   methods, `CopilotSession` methods, extension/join paths, and relevant stable
+   tests. Generated RPC and CLI sources are wire evidence, not independent
+   parity requirements.
+2. Classify every delta as stable public, experimental, internal,
+   generated-only, or language-specific before deciding whether to port it.
+   Experimental subsystems require an explicit maintainer decision, accepted
+   ADR, or direct request.
+3. Trace each stable delta end to end: public export/type, applicable
+   create/resume/join or method builder, exact wire and omission semantics,
+   idiom spec/fdef/API snapshot, tests, docs, examples, and changelog.
+4. Apply the optional-field proof matrix in
+   `.github/skills/update-upstream/references/PROJECT.md`. Omission and JSON
+   `null` are different contracts.
+5. Keep validated historical evidence pinned to the source it describes. Add a
+   symbol-based post-baseline inventory rather than changing only an old hash
+   while retaining stale line or range claims.
+
+Use `.github/skills/update-upstream/SKILL.md` for the complete workflow and
+durable source mapping.
+
 ## Syncing with Upstream
 
-Upstream syncing is **automated** via the daily agentic workflow (`.github/workflows/upstream-sync.md`, runs weekdays). It discovers upstream `github/copilot-sdk` changes, plans idiomatic Clojure ports, implements them, runs full CI, and opens a draft PR for @krukow to review.
-
-To manually check for upstream changes that may need porting:
+Use `.github/skills/update-upstream/SKILL.md` to check or sync upstream
+changes. At minimum:
 
 1. Review merged PRs: https://github.com/github/copilot-sdk/pulls?q=is%3Apr+is%3Aclosed
 2. Compare with recent commits in this repository
@@ -201,6 +230,21 @@ This project emphasizes **rigor and correctness**, particularly for:
 - **Protocol/wire code** (JSON-RPC communication with CLI server)
 - **Sound process and resource management** robust error handling and cleanup to avoid leaking resources
 
+### Async and Lifecycle Invariants
+
+- Every resource-owning API must define ownership, cancellation, backpressure,
+  bounded blocking, and deterministic exactly-once cleanup.
+- Never run arbitrary blocking or user-supplied work on `go` dispatch or a
+  protocol reader thread. Use an explicit bounded execution facility.
+- Resource-owning lazy or streaming helpers require an explicit scope and
+  abandonment path; channel closure alone is not cancellation unless the API
+  defines it that way.
+- Preserve the primary failure across cleanup. Cleanup failures must remain
+  observable without replacing the exception that caused teardown.
+- Synchronize tests on observable state, requests, events, latches, futures, or
+  channel closure. Fixed sleeps are not completion, ordering, or absence
+  oracles.
+
 ### Spec Usage
 
 - Use `clojure.spec` for data validation at API boundaries
@@ -210,9 +254,23 @@ This project emphasizes **rigor and correctness**, particularly for:
 ### Testing
 
 - Unit tests for pure functions
-- Integration tests using mock server
+- Integration tests using the real protocol and deterministic mock server
 - E2E tests against real Copilot CLI
 - All examples serve as additional integration tests
+- Prefer table-driven and property-based tests for contract state spaces
+- Prefer real lightweight implementations over mocks of internal behavior
+- Test important public behavior and interaction boundaries, not facts already
+  guaranteed by the compiler or spec declaration alone
+- Use the smallest targeted gate while iterating, then the established full
+  repository gates before review
+
+### Performance Evidence
+
+Do not make cross-language parity or superiority claims from unmatched
+microbenchmarks or live service calls. Matched public SDK paths, fresh process
+pairs, predeclared analysis/abort rules, no trajectory-based selection, complete
+raw provenance, and careful non-significance language are non-negotiable.
+`benchmarks/README.md` and `benchmarks/METHODOLOGY.md` own the full protocol.
 
 ## Project Structure
 
@@ -261,6 +319,12 @@ and CI fails the PR if generated output is out of date. The idiom layer only
 moves under deliberate curator review. This is what makes the API both
 schema-faithful at the wire AND idiomatic in Clojure.
 
+Opaque JSON fields need recursive JSON validation and explicit tests for which
+key paths are preserved versus normalized; a broad `map?` contract is not
+enough. Treat schemas, generated Clojure, API snapshots, and generated docs as
+outputs of canonical pinned inputs. Follow the owning skill's deterministic
+regeneration gate when drift risk matters.
+
 ## Documentation
 
 All these must be updated as appropriate when making changes:
@@ -274,11 +338,19 @@ All these must be updated as appropriate when making changes:
 - `doc/auth/byok.md` - BYOK (Bring Your Own Key) provider guide
 - `doc/mcp/overview.md` - MCP server configuration guide
 - `doc/mcp/debugging.md` - MCP debugging and troubleshooting
+- `benchmarks/README.md` - Benchmark usage, evidence, and interpretation
+- `benchmarks/METHODOLOGY.md` - Confirmatory study protocol
 - `CHANGELOG.md` - Version history and changes (see below)
 - `AGENTS.md` - update this file when significant changes happen (e.g. Project Structure)
 
 Run `bb validate-docs` to check for broken links, unparseable code blocks, and structural issues.
-Use `/update-docs` skill (`.github/skills/update-docs/SKILL.md`) to regenerate docs after source changes.
+Invoke the repo-local `update-docs` skill
+(`.github/skills/update-docs/SKILL.md`) to regenerate docs after source changes.
+
+Examples are executable contract evidence. Keep them portable, bounded,
+fail-loud, and explicit about client, session, subscription, process, and
+channel cleanup. Generated API HTML is never an editing surface: fix canonical
+source/docstrings or Markdown, then regenerate it.
 
 ### Changelog
 
