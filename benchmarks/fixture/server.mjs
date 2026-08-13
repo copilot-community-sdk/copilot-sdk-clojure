@@ -56,6 +56,9 @@ function normalizeSessionIds(value, key = null) {
 }
 
 function normalizedRequest(request) {
+  if (!request || typeof request !== "object" || Array.isArray(request)) {
+    return { invalidRequestValue: normalizeSessionIds(request) };
+  }
   return {
     ...normalizeSessionIds(request),
     id: "<request>",
@@ -265,7 +268,10 @@ function processBuffer(socket, state) {
       failed = true;
       const response = {
         jsonrpc: "2.0",
-        id: request.id,
+        id:
+          request && typeof request === "object" && !Array.isArray(request)
+            ? (request.id ?? null)
+            : null,
         error: { code: -32602, message: error.message },
       };
       socket.write(frame(response));
@@ -322,7 +328,13 @@ function finish(signal) {
           JSON.stringify({
             connection: record.connection,
             index: record.index,
-            method: record.request.method,
+            method:
+              record.request &&
+              typeof record.request === "object" &&
+              !Array.isArray(record.request) &&
+              typeof record.request.method === "string"
+                ? record.request.method
+                : "<invalid>",
             rawRequestSha256: record.rawRequestSha256,
             comparableSha256: record.comparableSha256,
           }),

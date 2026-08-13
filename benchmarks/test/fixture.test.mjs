@@ -134,6 +134,7 @@ test("fixture rejects invalid payloads and still confirms cleanup", async () => 
       socket.once("connect", resolveConnect);
       socket.once("error", reject);
     });
+
     const nextResponse = responseReader(socket);
     socket.write(
       frame({
@@ -166,6 +167,40 @@ test("fixture rejects invalid payloads and still confirms cleanup", async () => 
     socket.end();
     const state = await stopFixture(fixture, 1);
     assert.equal(state.failed, true);
+  } finally {
+    if (fixture) await terminateAndWait(fixture.child);
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("fixture records scalar and array JSON request failures", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "copilot-benchmark-fixture-"));
+  let fixture;
+  try {
+    fixture = await startFixture(directory);
+    const socket = connect(fixture.readiness.port, fixture.readiness.host);
+    await new Promise((resolveConnect, reject) => {
+      socket.once("connect", resolveConnect);
+      socket.once("error", reject);
+    });
+    const nextResponse = responseReader(socket);
+    for (const value of ["invalid", 42, [], null]) {
+      socket.write(frame(value));
+      assert.match(
+        (await nextResponse()).error.message,
+        /JSON-RPC request must be an object/,
+      );
+    }
+    socket.end();
+    const state = await stopFixture(fixture, 1);
+    assert.equal(state.failed, true);
+    const traces = (await readFile(fixture.trace, "utf8")).trim().split("\n");
+    assert.equal(traces.length, 4);
+    assert.ok(
+      traces.every(
+        (line) => JSON.parse(line).method === "<invalid>",
+      ),
+    );
   } finally {
     if (fixture) await terminateAndWait(fixture.child);
     await rm(directory, { recursive: true, force: true });

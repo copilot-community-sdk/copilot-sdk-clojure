@@ -31,5 +31,34 @@
     "relative-drift": { "type": ["number", "null"], "minimum": 0 },
     "stable": { "type": "boolean" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "measurement-drift" } }
+      },
+      "then": {
+        "properties": {
+          "reference-median-ms": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "relative-drift": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "warmup-window" } }
+      },
+      "then": {
+        "properties": {
+          "reference-median-ms": { "const": null }
+        }
+      }
+    }
+  ],
   "additionalProperties": false
 }

@@ -1,11 +1,13 @@
 (ns github.copilot-sdk.benchmark-contract-test
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk.bench.analysis :as analysis]
             [github.copilot-sdk.bench.driver :as bench-driver]
             [github.copilot-sdk.bench.protocol :as bench-protocol]
             [github.copilot-sdk.bench.runner :as runner])
-  (:import [java.lang ProcessHandle]
+  (:import [java.io BufferedReader PipedInputStream PipedOutputStream StringReader]
+           [java.lang ProcessHandle]
            [java.nio.file Files]
            [java.util.concurrent CountDownLatch TimeUnit]))
 
@@ -138,6 +140,10 @@
                          (assoc-in [2 :median-ms] 99.0)
                          (assoc-in [3 :median-ms] 99.0))
                      (assoc-in records [4 :relative-drift] 99.0)
+                     (assoc-in records [4 :reference-median-ms] 0.0)
+                     (assoc-in records [4 :reference-median-ms] -1.0)
+                     (assoc-in records [0 :reference-median-ms] 1.0)
+                     (assoc-in records [0 :kind] "measurement-drift")
                      (assoc-in records [4 :operation-count] 9)]]
       (is (thrown? clojure.lang.ExceptionInfo
                    (analysis/validate-stability-set! invalid profile))))
@@ -146,6 +152,25 @@
          #"Invalid benchmark stability record"
          (analysis/validate-stability-record!
           (assoc (first records) :median-ms Double/NaN))))))
+
+(deftest stability-schema-kind-contract
+  (let [schema (json/read-str
+                (slurp "benchmarks/schema/stability.schema.json")
+                :key-fn keyword)
+        conditions (:allOf schema)
+        by-kind (into {}
+                      (map (fn [condition]
+                             [(get-in condition [:if :properties :kind :const])
+                              (:then condition)]))
+                      conditions)]
+    (is (= {:type "number" :exclusiveMinimum 0}
+           (get-in by-kind ["measurement-drift" :properties
+                            :reference-median-ms])))
+    (is (= {:type "number" :minimum 0}
+           (get-in by-kind ["measurement-drift" :properties :relative-drift])))
+    (is (= {:const nil}
+           (get-in by-kind ["warmup-window" :properties
+                            :reference-median-ms])))))
 
 (deftest analysis-contract
   (let [observations
@@ -549,3 +574,94 @@
         (.delete marker)
         (.delete directory)
         (bench-protocol/reset-process-registry-for-tests!)))))
+
+(deftest stop-fixture-preserves-live-termination-failure
+  (bench-protocol/reset-process-registry-for-tests!)
+  (let [process (bench-protocol/start-process!
+                 (ProcessBuilder.
+                  ^java.util.List
+                  ["sh" "-c" "trap '' TERM; echo ready; while :; do sleep 1; done"]))
+        reader (io/reader (.getInputStream process))
+        ready (deref (future (.readLine reader)) 2000 ::timeout)
+        stdout-future (future (slurp reader))
+        stderr-future (future (slurp (.getErrorStream process)))
+        primary (ex-info "forced fixture termination failure" {})
+        real-terminate bench-protocol/terminate-process!]
+    (try
+      (is (= "ready" ready))
+      (let [error
+            (binding [runner/*fixture-process-timeout-ms* 10]
+              (with-redefs [bench-protocol/terminate-process!
+                            (fn [_] (throw primary))]
+                (try
+                  (runner/stop-fixture!
+                   {:process process
+                    :stdout-reader reader
+                    :stdout-future stdout-future
+                    :stderr-future stderr-future
+                    :state-file (io/file "does-not-exist")})
+                  nil
+                  (catch Throwable error error))))]
+        (is (identical? primary error))
+        (is (.isAlive process))
+        (is (= 1 (bench-protocol/tracked-process-count))))
+      (finally
+        (when (.isAlive process)
+          (real-terminate process))
+        (bench-protocol/unregister-process! process)
+        (bench-protocol/reset-process-registry-for-tests!)))))
+
+(deftest stop-fixture-suppresses-dead-unregister-failure
+  (bench-protocol/reset-process-registry-for-tests!)
+  (let [process (bench-protocol/start-process!
+                 (ProcessBuilder. ^java.util.List ["sh" "-c" "exit 0"]))
+        _ (.waitFor process)
+        stdout-reader (BufferedReader. (StringReader. ""))
+        stdout-future (promise)
+        stderr-future (doto (promise) (deliver ""))
+        unregister-failure (ex-info "forced unregister failure" {})
+        real-unregister bench-protocol/unregister-process!]
+    (try
+      (let [error
+            (binding [runner/*fixture-stream-timeout-ms* 10]
+              (with-redefs [bench-protocol/unregister-process!
+                            (fn [_] (throw unregister-failure))]
+                (try
+                  (runner/stop-fixture!
+                   {:process process
+                    :stdout-reader stdout-reader
+                    :stdout-future stdout-future
+                    :stderr-future stderr-future
+                    :state-file (io/file "does-not-exist")})
+                  nil
+                  (catch Throwable error error))))]
+        (is (= "Fixture stream reader did not complete" (ex-message error)))
+        (is (= [unregister-failure] (vec (.getSuppressed ^Throwable error))))
+        (is (= 1 (bench-protocol/tracked-process-count))))
+      (finally
+        (real-unregister process)
+        (bench-protocol/reset-process-registry-for-tests!)))))
+
+(deftest fixture-stream-timeout-does-not-block-on-reader-close
+  (let [stdout-stream (PipedInputStream.)
+        writer (PipedOutputStream. stdout-stream)
+        reader (BufferedReader. (io/reader stdout-stream))
+        stdout-future (future (slurp reader))
+        stderr-future (doto (promise) (deliver ""))]
+    (try
+      (let [result
+            (deref
+             (future
+               (binding [runner/*fixture-stream-timeout-ms* 10]
+                 (try
+                   (runner/await-fixture-streams!
+                    stdout-stream reader stdout-future stderr-future)
+                   nil
+                   (catch Throwable error error))))
+             1000
+             ::timeout)]
+        (is (not= ::timeout result))
+        (is (= "Fixture stream reader did not complete" (ex-message result))))
+      (finally
+        (.close writer)
+        (future-cancel stdout-future)))))

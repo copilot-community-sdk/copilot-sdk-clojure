@@ -232,7 +232,8 @@
                  (str "--implementation=" implementation)]
         process (bench-protocol/start-process!
                  (ProcessBuilder. ^java.util.List command))
-        stdout-reader (io/reader (.getInputStream process))
+        stdout-stream (.getInputStream process)
+        stdout-reader (io/reader stdout-stream)
         stderr-future (future (slurp (.getErrorStream process)))
         readiness-future (future (.readLine stdout-reader))
         readiness-line (deref readiness-future 10000 ::timeout)]
@@ -252,6 +253,7 @@
         (.close stdout-reader)
         (throw (ex-info "Invalid fixture readiness signal" {:readiness readiness})))
       {:process process
+       :stdout-stream stdout-stream
        :stdout-reader stdout-reader
        :stdout-future (future (slurp stdout-reader))
        :stderr-future stderr-future
@@ -259,30 +261,58 @@
        :trace-file trace-file
        :readiness readiness})))
 
-(defn- stop-fixture!
-  [{:keys [^Process process stdout-reader stdout-future stderr-future state-file]
-    :as fixture}]
-  (try
-    (.destroy process)
-    (when-not (.waitFor process 5000 TimeUnit/MILLISECONDS)
-      (bench-protocol/terminate-process! process))
-    (when (.isAlive process)
-      (throw (ex-info "Fixture cleanup was not confirmed" {:pid (.pid process)})))
-    (.close ^java.io.BufferedReader stdout-reader)
-    (let [stdout (deref stdout-future 5000 ::stream-timeout)
-          stderr (deref stderr-future 5000 ::stream-timeout)]
-      (when (or (= ::stream-timeout stdout) (= ::stream-timeout stderr))
+(def ^:dynamic *fixture-process-timeout-ms* 5000)
+(def ^:dynamic *fixture-stream-timeout-ms* 5000)
+
+(defn await-fixture-streams!
+  [stdout-stream stdout-reader stdout-future stderr-future]
+  (let [stdout (deref stdout-future *fixture-stream-timeout-ms* ::stream-timeout)
+        stderr (deref stderr-future *fixture-stream-timeout-ms* ::stream-timeout)
+        complete? (and (not= ::stream-timeout stdout)
+                       (not= ::stream-timeout stderr))]
+    (if complete?
+      (do
+        (.close ^java.io.Closeable stdout-reader)
+        {:stdout stdout :stderr stderr})
+      (do
+        (when stdout-stream
+          (.close ^java.io.Closeable stdout-stream))
         (throw (ex-info "Fixture stream reader did not complete"
                         {:stdout-complete? (not= ::stream-timeout stdout)
-                         :stderr-complete? (not= ::stream-timeout stderr)})))
-      (when-not (zero? (.exitValue process))
-        (throw (ex-info "Fixture exited unsuccessfully"
-                        {:exit (.exitValue process) :stderr stderr}))))
-    (when-not (.isFile state-file)
-      (throw (ex-info "Fixture did not write final state" {:state-file (str state-file)})))
-    (assoc fixture :state (json/read-str (slurp state-file) :key-fn keyword))
-    (finally
-      (bench-protocol/unregister-process! process))))
+                         :stderr-complete? (not= ::stream-timeout stderr)}))))))
+
+(defn stop-fixture!
+  [{:keys [^Process process stdout-stream stdout-reader stdout-future
+           stderr-future state-file]
+    :as fixture}]
+  (let [primary-error (atom nil)]
+    (try
+      (try
+        (.destroy process)
+        (when-not (.waitFor process *fixture-process-timeout-ms* TimeUnit/MILLISECONDS)
+          (bench-protocol/terminate-process! process))
+        (when (.isAlive process)
+          (throw (ex-info "Fixture cleanup was not confirmed" {:pid (.pid process)})))
+        (let [{:keys [stderr]}
+              (await-fixture-streams! stdout-stream stdout-reader
+                                      stdout-future stderr-future)]
+          (when-not (zero? (.exitValue process))
+            (throw (ex-info "Fixture exited unsuccessfully"
+                            {:exit (.exitValue process) :stderr stderr}))))
+        (when-not (.isFile state-file)
+          (throw (ex-info "Fixture did not write final state" {:state-file (str state-file)})))
+        (assoc fixture :state (json/read-str (slurp state-file) :key-fn keyword))
+        (catch Throwable error
+          (reset! primary-error error)
+          (throw error)))
+      (finally
+        (when-not (.isAlive process)
+          (try
+            (bench-protocol/unregister-process! process)
+            (catch Throwable unregister-error
+              (if-let [primary @primary-error]
+                (.addSuppressed ^Throwable primary unregister-error)
+                (throw unregister-error)))))))))
 
 (defn- fixture-uri
   [fixture]
