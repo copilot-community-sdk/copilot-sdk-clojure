@@ -9,6 +9,14 @@ no complete 20-pair confirmatory result is included. All existing local result
 sets are exploratory, failed, or incomplete. Do not make a directional
 performance conclusion from this repository change.
 
+## Prerequisites
+
+Use a POSIX environment on macOS or Linux with `bash`, `ps`, `git`, Node/npm,
+a JDK, Clojure CLI, and Babashka. Native Windows is not currently supported
+unless equivalent POSIX process signals, shell tools, and `ps` RSS semantics are
+available. Copilot CLI is optional provenance only; the fixture does not invoke
+it.
+
 ## Prepare the Node SDK
 
 Resolve the canonical upstream checkout and build its public package:

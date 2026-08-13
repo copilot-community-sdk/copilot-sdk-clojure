@@ -67,27 +67,34 @@
   [file]
   (sha256-bytes (Files/readAllBytes (.toPath (io/file file)))))
 
+(defn path-within?
+  [root file]
+  (.startsWith (.toPath (.getCanonicalFile (io/file file)))
+               (.toPath (.getCanonicalFile (io/file root)))))
+
 (defn- regular-files
-  [root]
+  [root excluded-root]
   (let [root-file (io/file root)]
     (if (.isFile root-file)
       [root-file]
       (->> (file-seq root-file)
            (filter #(.isFile ^File %))
-           (remove #(str/includes? (.getPath ^File %) "/results/"))
+           (remove #(path-within? excluded-root %))
            (sort-by #(.getPath ^File %))))))
 
-(defn- hash-files
-  [roots base]
-  (let [base-path (.toPath (.getCanonicalFile (io/file base)))
-        digest (MessageDigest/getInstance "SHA-256")]
-    (doseq [file (mapcat regular-files roots)]
-      (let [path (.toPath (.getCanonicalFile ^File file))
-            relative (str (.relativize base-path path))]
-        (.update digest (.getBytes relative "UTF-8"))
-        (.update digest (byte-array [0]))
-        (.update digest (Files/readAllBytes path))))
-    (format "%064x" (BigInteger. 1 (.digest digest)))))
+(defn hash-files
+  ([roots base]
+   (hash-files roots base (io/file "benchmarks" "results")))
+  ([roots base excluded-root]
+   (let [base-path (.toPath (.getCanonicalFile (io/file base)))
+         digest (MessageDigest/getInstance "SHA-256")]
+     (doseq [file (mapcat #(regular-files % excluded-root) roots)]
+       (let [path (.toPath (.getCanonicalFile ^File file))
+             relative (str (.relativize base-path path))]
+         (.update digest (.getBytes relative "UTF-8"))
+         (.update digest (byte-array [0]))
+         (.update digest (Files/readAllBytes path))))
+     (format "%064x" (BigInteger. 1 (.digest digest))))))
 
 (defn- checked-command
   [command]

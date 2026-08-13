@@ -480,6 +480,35 @@
                           (runner/parse-args [argument]))))
   (is (= {} (runner/parse-args []))))
 
+(deftest provenance-results-path-exclusion-is-platform-native
+  (let [directory (.toFile (Files/createTempDirectory
+                            "copilot-benchmark-paths"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))
+        benchmarks (io/file directory "benchmarks")
+        results (io/file benchmarks "results")
+        similarly-named (io/file benchmarks "results-archive")
+        excluded-file (io/file results "run.ndjson")
+        included-file (io/file similarly-named "run.ndjson")]
+    (try
+      (.mkdirs results)
+      (.mkdirs similarly-named)
+      (spit excluded-file "excluded-v1")
+      (spit included-file "included-v1")
+      (is (runner/path-within? results excluded-file))
+      (is (false? (runner/path-within? results included-file)))
+      (let [initial (runner/hash-files [benchmarks] directory results)]
+        (spit excluded-file "excluded-v2")
+        (is (= initial (runner/hash-files [benchmarks] directory results)))
+        (spit included-file "included-v2")
+        (is (not= initial (runner/hash-files [benchmarks] directory results))))
+      (finally
+        (doseq [file [excluded-file included-file]
+                :when (.exists file)]
+          (.delete file))
+        (doseq [folder [results similarly-named benchmarks directory]
+                :when (.exists folder)]
+          (.delete folder))))))
+
 (deftest protocol-frame-contract
   (let [payload "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"message\":\"bench\"}}"
         frame (bench-protocol/encode-frame payload)]
