@@ -18,7 +18,7 @@
 (defn- require-args!
   [args names]
   (doseq [name names]
-    (when-not (get args name)
+    (when (str/blank? (get args name))
       (throw (ex-info (str "Missing --" name) {:argument name}))))
   args)
 

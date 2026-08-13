@@ -366,17 +366,41 @@
                 "--output=observations.ndjson"
                 "--run-id=run"]
         steady (mapv #(str "--" % "=1") bench-driver/steady-required-args)]
+    (doseq [missing bench-driver/common-required-args]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           (re-pattern (str "Missing --" missing))
+           (bench-driver/validate-args!
+            (mapv #(if (str/starts-with? % (str "--" missing "="))
+                     (str "--" missing "=")
+                     %)
+                  (into common steady))))))
     (doseq [missing bench-driver/steady-required-args]
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            (re-pattern (str "Missing --" missing))
            (bench-driver/validate-args!
             (into common
-                  (remove #(str/starts-with? % (str "--" missing "=")) steady))))))
+                  (remove #(str/starts-with? % (str "--" missing "=")) steady)))))
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           (re-pattern (str "Missing --" missing))
+           (bench-driver/validate-args!
+            (mapv #(if (str/starts-with? % (str "--" missing "="))
+                     (str "--" missing "=")
+                     %)
+                  (into common steady))))))
     (is (= "cold"
            (get (bench-driver/validate-args!
                  (assoc common 0 "--mode=cold"))
                 "mode")))))
+
+(deftest runner-rejects-blank-argument-keys-and-values
+  (doseq [argument ["--output=" "--profile=" "--=value"]]
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                          #"Expected --name=value"
+                          (runner/parse-args [argument]))))
+  (is (= {} (runner/parse-args []))))
 
 (deftest protocol-frame-contract
   (let [payload "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"message\":\"bench\"}}"
