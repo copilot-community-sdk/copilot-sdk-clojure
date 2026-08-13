@@ -18,7 +18,7 @@ All notable changes to this project will be documented in this file. This change
 
 ### Changed (architecture)
 - Accepted the
-  [host-owned inference boundary ADR](doc/adr/2026-08-10-host-owned-inference-boundary.md),
+  [ADR: Defer a host-owned inference boundary](doc/adr/2026-08-10-host-owned-inference-boundary.md),
   intentionally excluding the upstream experimental
   `CopilotClientOptions.requestHandler` and five-method `llmInference.*`
   lifecycle until concrete Clojure consumer demand or upstream
