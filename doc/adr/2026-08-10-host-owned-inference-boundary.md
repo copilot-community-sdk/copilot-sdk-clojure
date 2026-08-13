@@ -1,11 +1,12 @@
-# ADR: Define a narrow experimental boundary for host-owned inference
+# ADR: Defer a host-owned inference boundary
 
-- Status: Proposed
+- Status: Accepted
 - Deciders: @krukow
 - Related:
+  [latest upstream audit baseline](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d),
   [upstream audit baseline](https://github.com/github/copilot-sdk/commit/8d0a9cc63391cb5d820bd092726c811f1225c4b9),
   [prior upstream audit baseline](https://github.com/github/copilot-sdk/commit/25c0beab6095def6881bb12ddd8d36f21dcbd3d6),
-  [current Clojure baseline](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/e4087504e29ab874ee37bc8d3aea981e77c1b72c)
+  [current Clojure baseline](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/4fd01ffc2437d8698f65bea356e8dfbad35eb4c1)
 
 ## Context
 
@@ -145,13 +146,14 @@ stream-lifetime work elsewhere.
 
 Three adjacent areas share this ADR's scope boundary, not one technical blocker:
 
-- Stable extension-host identity/config fields already exist independently.
-  Upstream separates extension opt-in, extension SDK path, and stable extension
-  identity from canvas provider identity
+- Stable extension session config exists independently. Upstream separates
+  extension opt-in, extension SDK path, and stable extension identity from
+  canvas provider identity
   ([`types.ts` lines 2221-2248](https://github.com/github/copilot-sdk/blob/8d0a9cc63391cb5d820bd092726c811f1225c4b9/nodejs/src/types.ts#L2221-L2248)).
-  Clojure currently forwards stable `:canvas-provider` identity while omitting
-  canvas authoring callbacks
-  ([`specs.clj` lines 937-987](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/e4087504e29ab874ee37bc8d3aea981e77c1b72c/src/github/copilot_sdk/specs.clj#L937-L987)).
+  Clojure supports `:request-extensions?`, `:extension-sdk-path`,
+  `:extension-info`, and `:canvas-provider`; this decision does not reopen those
+  stable fields
+  ([`create-session` config](../reference/API.md#create-session)).
 - Canvas authoring/provider APIs are a coherent but experimental upstream
   surface
   ([`canvas.ts` lines 20-31](https://github.com/github/copilot-sdk/blob/8d0a9cc63391cb5d820bd092726c811f1225c4b9/nodejs/src/canvas.ts#L20-L31),
@@ -177,24 +179,137 @@ wrappers
 Generated method availability alone is not evidence of a complete supported
 lifecycle.
 
-The audit compared the prior upstream baseline
+The initial audit compared the prior upstream baseline
 [`25c0beab6095def6881bb12ddd8d36f21dcbd3d6`](https://github.com/github/copilot-sdk/commit/25c0beab6095def6881bb12ddd8d36f21dcbd3d6)
 with
 [`8d0a9cc63391cb5d820bd092726c811f1225c4b9`](https://github.com/github/copilot-sdk/commit/8d0a9cc63391cb5d820bd092726c811f1225c4b9).
 No material public host/inference/canvas/launch-provider shape changed in that
 range; the relevant movement was generated schema/runtime package revision.
 
+The decision was reconfirmed on 2026-08-13 against upstream
+[`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d).
+At that commit, `CopilotClientOptions.requestHandler` remains explicitly
+experimental and process-global
+([`types.ts` lines 382-404](https://github.com/github/copilot-sdk/blob/811adc050a82d823cc6f6891576f30058554af8d/nodejs/src/types.ts#L382-L404)).
+Client startup still installs one global adapter and registers the provider
+([`client.ts` lines 832-841](https://github.com/github/copilot-sdk/blob/811adc050a82d823cc6f6891576f30058554af8d/nodejs/src/client.ts#L832-L841),
+[`client.ts` lines 907-912](https://github.com/github/copilot-sdk/blob/811adc050a82d823cc6f6891576f30058554af8d/nodejs/src/client.ts#L907-L912)).
+The generated lifecycle still consists of `setProvider`, two inbound request
+methods, and two outbound response methods
+([`rpc.ts` lines 19194-19217](https://github.com/github/copilot-sdk/blob/811adc050a82d823cc6f6891576f30058554af8d/nodejs/src/generated/rpc.ts#L19194-L19217),
+[`rpc.ts` lines 21955-21964](https://github.com/github/copilot-sdk/blob/811adc050a82d823cc6f6891576f30058554af8d/nodejs/src/generated/rpc.ts#L21955-L21964)).
+There is still no `unsetProvider` RPC, and upstream still documents the
+single-provider conflict in its E2E test
+([`copilot_request_cancel_error.e2e.test.ts` lines 165-171](https://github.com/github/copilot-sdk/blob/811adc050a82d823cc6f6891576f30058554af8d/nodejs/test/e2e/copilot_request_cancel_error.e2e.test.ts#L165-L171)).
+A path-scoped comparison from
+[`d9a6fabb03a98900afbba7fa39e31c9ee6179cd1`](https://github.com/github/copilot-sdk/commit/d9a6fabb03a98900afbba7fa39e31c9ee6179cd1)
+through the latest baseline found no changes to `types.ts`, `client.ts`,
+`copilotRequestHandler.ts`, or generated `rpc.ts` affecting this lifecycle.
+
 ## Decision
 
-Add, in a later implementation PR, one narrow and explicitly experimental
-host-owned inference boundary at client construction.
+Keep application-owned inference interception outside the supported Clojure SDK
+for now. Do not add a `:request-handler` client option, public
+`CopilotRequestHandler` equivalents, `llmInference.*` wrappers, inference
+transport dependencies, or provider lifecycle machinery.
 
-The durable boundary is one idiomatic Clojure client option whose value is a
-small protocol or validated handler map covering the complete exchange:
-HTTP/SSE request handling, WebSocket connection/message handling, cancellation,
-response streaming, failure, and teardown. Exact names and executor topology
-belong to implementation review. The five `llmInference.*` methods remain
-private protocol details and are not exposed as public wrappers.
+This intentionally selects Alternative C. The project is early enough that a
+small, maintainable, curated API is more valuable than speculative compatibility
+with a large experimental transport and secret boundary for which no concrete
+Clojure consumer need is recorded. Deferring is the most reversible choice:
+upstream can stabilize or redesign the contract, and a real consumer can supply
+requirements before the project commits to process-global ownership, streaming
+resource policy, and credential-bearing callbacks.
+
+Stable extension session config is already supported and remains supported.
+Experimental canvas authoring/provider callbacks and the experimental extension
+launch-provider lifecycle remain separate intentional exclusions. Their
+stability and value must be evaluated independently; none is a prerequisite for
+the others.
+
+## Non-goals
+
+This decision does not authorize:
+
+- inference interception implementation;
+- public access to any `llmInference.*` method;
+- a generic raw RPC object or generated wrapper surface;
+- canvas authoring, renderer, or provider APIs;
+- extension launch-provider registration or resolution;
+- removal or reconsideration of stable extension session config;
+- changes to existing canvas observation, `open-canvases`, canvas-provider
+  identity, or extension management wrappers;
+- stable API status;
+- a permanent claim that Clojure will never support host-owned inference.
+
+This ADR records an intentional parity exclusion, not a hidden implementation
+plan. The checklist below constrains a future decision if the exclusion is
+revisited; it does not authorize implementation.
+
+## Consequences
+
+**Smaller supported surface:** the SDK avoids new HTTP, SSE, WebSocket, binary,
+cancellation, buffering, and execution-pool policy until those costs serve a
+demonstrated Clojure use case.
+
+**Reduced secret and resource exposure:** the supported API does not introduce
+a callback that intentionally receives unredacted model credentials, headers,
+URLs, prompts, bodies, and responses. It also avoids process-global provider
+contention and a second long-lived streaming execution subsystem.
+
+**Documented parity gap:** Clojure hosts cannot implement application gateways,
+policy enforcement, traffic observation or mutation, or custom inference
+hosting through the SDK. Users needing those capabilities must use another
+integration boundary or reopen this decision with concrete requirements.
+
+**Future work remains substantial:** deferment does not make a later port cheap.
+If revisited, the project must still resolve lifecycle ownership, bounded
+streaming, transport fidelity, cancellation, overload semantics, secret-safe
+diagnostics, and the full test matrix below.
+
+**Reversible now, costlier later:** waiting allows upstream evidence to improve
+the design, but downstream users could build around the omission. A later API
+addition remains compatible; an emergency port after adoption pressure appears
+would have less design time.
+
+## Alternatives
+
+### A. Port the full host surface
+
+Port inference, canvas authoring/provider, extension launch-provider, and raw
+typed RPC access together.
+
+This maximizes nominal upstream surface parity, but combines unrelated
+lifecycles and stability levels. Canvas is coherent but experimental;
+launch-provider has generated register/resolve shapes without supported Node
+wiring or lifecycle evidence; raw RPC bypasses Clojure's curated API policy.
+The result would expose more secrets, generated churn, and difficult-to-change
+surface than the supported behavior justifies.
+
+### B. Add only the complete inference-host boundary
+
+Add one experimental client option covering the complete
+HTTP/SSE/WebSocket/cancellation lifecycle while keeping the five wire methods
+private. This is coherent and feasible, but it was not selected because it
+would commit the project to a large secret, transport, singleton, and resource
+boundary before either concrete Clojure demand or upstream stabilization.
+
+### C. Exclude application-owned inference
+
+Keep all host-owned inference outside the Clojure SDK until a concrete consumer
+appears or upstream stabilizes the API.
+
+This is the selected alternative. It minimizes security exposure, dependencies,
+singleton complexity, and maintenance while preserving the ability to add a
+well-motivated API later. It knowingly loses upstream parity for gateways,
+policy enforcement, observation/mutation, and custom inference hosting.
+
+## Future implementation checklist if revisited
+
+This checklist preserves the implementation invariants developed during the
+proposal. Meeting it would be necessary but not sufficient: revisiting the
+decision first requires a new Proposed ADR with current upstream and consumer
+evidence.
 
 ### Ownership and registration
 
@@ -204,22 +319,21 @@ private protocol details and are not exposed as public wrappers.
 - The runtime owns one provider slot per process. A competing registration
   fails explicitly.
 - Disconnect releases the connection's handler state and all in-flight
-  exchanges. The SDK does not promise that disconnect terminates an external or
-  shared runtime, and it does not invent an unsupported `unsetProvider`.
+  exchanges. The SDK must not promise that disconnect terminates an external or
+  shared runtime, and must not invent an unsupported `unsetProvider`.
 
 ### Two-stage execution
 
 - `httpRequestStart` and `httpRequestChunk` enter through the existing bounded
   reverse-RPC dispatcher.
 - Each stage allocates or routes bounded exchange state and acknowledges
-  promptly. It does not perform application network I/O and does not hold a
-  reverse worker for the exchange lifetime.
+  promptly. It must not perform application network I/O or hold a reverse worker
+  for the exchange lifetime.
 - Long-lived HTTP, SSE, and WebSocket application work and response emission run
   outside the reader thread, core.async `go` dispatch, and shared reverse-RPC
   workers on a separately bounded inference execution facility.
-- The implementation may choose the facility, but it must bound concurrency and
-  queued work, isolate lifecycle ownership per connection, and tear it down
-  deterministically.
+- The facility must bound concurrency and queued work, isolate lifecycle
+  ownership per connection, and tear down deterministically.
 
 ### Buffering, pacing, and ordering
 
@@ -230,15 +344,13 @@ private protocol details and are not exposed as public wrappers.
   acknowledgement is explicitly permitted to be treated as fire-and-forget
   ([`rpc.ts` lines 7231-7268](https://github.com/github/copilot-sdk/blob/8d0a9cc63391cb5d820bd092726c811f1225c4b9/nodejs/src/generated/rpc.ts#L7231-L7268),
   [`rpc.ts` lines 21990-21996](https://github.com/github/copilot-sdk/blob/8d0a9cc63391cb5d820bd092726c811f1225c4b9/nodejs/src/generated/rpc.ts#L21990-L21996)).
-  Because this decision requires prompt acknowledgement to avoid occupying
-  reverse workers, Clojure deliberately does not use delayed acknowledgement as
-  an undocumented pacing mechanism and cannot apply true upstream backpressure.
-  If the runtime outruns a bounded request buffer, the SDK terminates that
-  exchange with an explicit transport/overload failure. It never blocks the
-  reader or silently drops a chunk.
+  Clojure must not use delayed acknowledgement as an undocumented pacing
+  mechanism or claim true upstream backpressure. If the runtime outruns a
+  bounded request buffer, terminate that exchange with an explicit
+  transport/overload failure. Never block the reader or silently drop a chunk.
 - Response start, chunks, and terminal completion are ordered per request.
-  Awaiting response RPCs provides real downstream pacing. Response ordering
-  state is also bounded; it does not grow an unbounded promise/task chain.
+  Awaiting response RPCs provides downstream pacing. Response ordering state
+  must also be bounded.
 - Cancellation stops application I/O, prevents later response writes, and
   reaches exactly one terminal cleanup path. Connection loss and teardown do
   the same for every in-flight exchange.
@@ -258,140 +370,40 @@ private protocol details and are not exposed as public wrappers.
 - Default HTTP and WebSocket forwarding sends every end-to-end request header
   value while removing only hop-by-hop or transport-controlled headers such as
   `host`, `connection`, `content-length`, `transfer-encoding`, `upgrade`, and
-  related connection headers. Clojure does not adopt Node's default WebSocket
-  header loss.
+  related connection headers. Do not adopt Node's default WebSocket header loss.
 - Binary HTTP request and response chunks remain bytes.
 - Binary WebSocket response messages are supported. Runtime-to-application
   binary WebSocket request messages are rejected with an explicit unsupported
   transport error until upstream provides a coherent public end-to-end
-  contract; they are never decoded with replacement characters or silently
-  converted to empty data.
+  contract; never decode them with replacement characters or silently convert
+  them to empty data.
 - The contract applies to both CAPI and BYOK traffic.
 
 ### Security and observability
 
-Enabling this option is an explicit trust decision. Application handlers receive
-unredacted URLs, headers, credentials, and prompt/body content so they can
-forward or replace the request.
+Enabling a future option would be an explicit trust decision. Application
+handlers would receive unredacted URLs, headers, credentials, and prompt/body
+content so they could forward or replace the request.
 
 SDK-owned logs, telemetry, exceptions, diagnostics, and transport errors must
 not include URLs, query strings, header values, bodies, response content, or
 callback exception messages by default. Safe diagnostics are limited to
 non-secret request/session/agent identifiers when available, transport, phase,
 byte or queue counts, and stable machine-readable error classes. Any content
-capture requires a separate explicit caller opt-in and is outside this ADR.
-This callback-failure rule is intentionally stricter than the current generic
-reverse-RPC error path.
+capture requires a separate explicit caller opt-in and remains outside this
+ADR. This callback-failure rule must be stricter than the generic reverse-RPC
+error path.
 
 ### Experimental and compatibility policy
 
-The option, protocol/handler vars, and documentation carry explicit
-experimental metadata. They are excluded from stable API compatibility
-guarantees until a later ADR promotes them.
+Any future option, protocol/handler vars, and documentation must carry explicit
+experimental metadata and remain outside stable API compatibility guarantees
+until a later ADR promotes them.
 
 Experimental status permits later source/API revisions or removal in newly
-published versions. It cannot recall artifacts already published: applications
-can continue using the behavior contained in an old artifact. Promotion requires
-upstream stabilization, concrete Clojure consumer evidence, and operational
-results from the bounded implementation.
-
-## Non-goals
-
-This decision does not authorize:
-
-- implementation in this ADR change;
-- public access to any `llmInference.*` method;
-- a generic raw RPC object or generated wrapper surface;
-- canvas authoring, renderer, or provider APIs;
-- extension launch-provider registration or resolution;
-- isolated ports of extension-host identity/config fields;
-- changes to existing canvas observation, `open-canvases`, or extension
-  management wrappers;
-- stable API status;
-- Node's unbounded request buffering, dropped WebSocket headers, or potentially
-  growing response serialization chain.
-
-Stable extension-host configuration, experimental canvas authoring/provider,
-and incomplete launch-provider support remain independent parity tracks. Each
-needs its own evidence and decision; none is blocked technically on inference
-hosting.
-
-## Consequences
-
-**Positive:** Clojure gains a principled parity path for application gateways,
-policy enforcement, traffic observation or mutation, and custom inference
-hosting. One complete boundary preserves transport and lifecycle invariants
-instead of leaking five order-sensitive methods into the public API. It also
-reuses the existing bounded reverse-RPC entry discipline without making
-stream-lifetime work occupy that pool.
-
-**No recorded local demand:** the recommendation is based on coherent upstream
-SDK evidence, parity value, and anticipated use cases. No concrete Clojure
-consumer request is currently recorded. The project accepts implementation and
-maintenance cost before demonstrated local demand; that makes continued
-exclusion a credible alternative.
-
-**Security cost:** the callback is a privileged credential and content boundary.
-A malicious or careless handler can exfiltrate CAPI/BYOK credentials and prompts
-by design. Safe SDK logging reduces accidental leakage but cannot make untrusted
-handler code safe.
-
-**Resource and throughput cost:** bounded queues trade unbounded memory growth
-for explicit overload failures. A separate inference execution facility can
-still starve CPU, memory, sockets, or session work if its limits, ownership, or
-teardown are misdesigned. Isolation changes the contention boundary; it does not
-eliminate contention. Conservative bounds may reduce streaming throughput.
-
-**Ownership cost:** shared and external runtimes create process-wide singleton
-conflicts that do not occur when each client owns a stdio runtime. Tests and
-applications must treat duplicate registration as a normal explicit failure,
-not a flaky startup condition.
-
-**Maintenance cost:** HTTP, SSE, WebSocket, binary data, cancellation, and
-teardown add transport dependencies and a larger test matrix. The surface may
-still churn while upstream remains experimental, and published experimental
-artifacts cannot be withdrawn.
-
-## Alternatives
-
-### A. Port the full host surface
-
-Port inference, canvas authoring/provider, extension launch-provider, and raw
-typed RPC access together.
-
-This maximizes nominal upstream surface parity, but combines unrelated
-lifecycles and stability levels. Canvas is coherent but experimental;
-launch-provider has generated register/resolve shapes without supported Node
-wiring or lifecycle evidence; raw RPC bypasses Clojure's curated API policy.
-The result would expose more secrets, generated churn, and difficult-to-change
-surface than the supported behavior justifies.
-
-### B. Add only the complete inference-host boundary
-
-This is the proposed decision. Upstream supplies one public experimental
-handler, coherent HTTP/SSE/WebSocket/cancellation semantics, package-root
-exports, and E2E evidence. Clojure has the framing and bounded dispatch
-substrate to implement it without exposing wire methods, provided long-lived I/O
-is isolated from reverse workers and request overflow is reported rather than
-misrepresented as backpressure.
-
-The absence of recorded Clojure consumer demand and the cost of a separate
-transport/execution subsystem are the strongest arguments against this choice.
-
-### C. Exclude application-owned inference
-
-Keep all host-owned inference outside the Clojure SDK until a concrete consumer
-appears or upstream stabilizes the API.
-
-This minimizes security exposure, dependencies, singleton complexity, and
-maintenance. It is the most reversible choice and is strengthened by the lack of
-recorded Clojure demand. It loses upstream parity for gateways, policy
-enforcement, observation/mutation, and custom inference hosting despite the
-coherent SDK-level source and tests now available.
-
-## Prerequisites for implementation
-
-A later implementation PR must satisfy all of these gates.
+published versions, but cannot recall already published artifacts. Promotion
+would require upstream stabilization, concrete Clojure consumer evidence, and
+operational results from the bounded implementation.
 
 ### Design and API
 
@@ -444,20 +456,20 @@ order-dependent. Set explicit time, request, and resource bounds.
 
 ## Revisit or supersede this decision when
 
+- a concrete Clojure consumer needs model-layer interception and can supply
+  transport, policy, deployment-topology, and lifecycle requirements that
+  cannot be met through a smaller existing boundary;
 - upstream stabilizes or materially redesigns `CopilotRequestHandler` or the
   five-method wire lifecycle;
-- the runtime supports multiple scoped providers instead of one process-wide
-  provider;
-- upstream defines public binary WebSocket request semantics;
-- concrete Clojure usage shows the proposed handler shape is wrong or the
-  feature has insufficient value;
-- security review rejects the unredacted callback boundary;
-- a separate bounded inference facility cannot meet measured streaming
-  throughput or starves reverse RPC, sessions, sockets, memory, or host CPU;
-- stable extension-host config, experimental canvas authoring/provider, or
-  extension launch-provider independently acquires sufficient public
-  construction, lifecycle, tests, and narrative docs for its own parity
-  decision.
+- the runtime replaces the process-global provider slot with scoped ownership
+  and explicit release, or otherwise makes shared/external runtime teardown
+  coherent;
+- upstream publishes coherent binary WebSocket request, overload,
+  cancellation, and resource-lifecycle semantics with operational evidence;
+- a reviewed security model materially reduces or clearly governs the
+  unredacted credential and content boundary;
+- project maturity and maintainer capacity justify owning the transport,
+  execution, observability, and test matrix in the future checklist.
 
 Material changes require a new ADR that marks this one superseded. Minor
-clarifications may amend this Proposed ADR while it remains under review.
+clarifications may amend this Accepted ADR with an explicit dated note.

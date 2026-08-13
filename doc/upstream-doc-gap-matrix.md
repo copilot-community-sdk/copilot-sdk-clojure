@@ -34,6 +34,12 @@ and `:extension-info`) are covered in the [`create-session`](reference/API.md#cr
 config reference. The experimental `extensionLaunchProvider.resolve` reverse RPC
 remains intentionally absent; callers cannot register a custom extension launcher.
 
+The upstream experimental `CopilotClientOptions.requestHandler` and its
+process-global, five-method `llmInference.*` lifecycle are intentionally absent.
+The accepted
+[host-owned inference ADR](adr/2026-08-10-host-owned-inference-boundary.md)
+records the security, resource, ownership, and revisit criteria.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |
