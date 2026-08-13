@@ -2,6 +2,7 @@
 
 const { appendFileSync, readFileSync } = require("node:fs");
 const { validateDriverArgs } = require("./args.cjs");
+const { capture } = require("./diagnostics.cjs");
 const { sampleOperations, validatePreflight } = require("./measurement.cjs");
 const { rssBytes } = require("./rss.cjs");
 
@@ -25,14 +26,18 @@ const iterations = Number(args.iterations ?? 1);
 const timeoutMs = Number(args["timeout-ms"] ?? 5000);
 const sampleIndex = Number(args["sample-index"] ?? 0);
 const replicate = Number(args.replicate ?? 0);
+const pairOrderIndex = Number(args["pair-order-index"] ?? 0);
 const sampleOffset = Number(args["sample-offset"] ?? 0);
 const warmupWindowSize = Number(args["warmup-window-size"] ?? 1);
 const stableWindowCount = Number(args["stable-window-count"] ?? 1);
-const maxWarmupRelativeDrift = Number(args["max-warmup-relative-drift"] ?? 1);
-const measuredDriftWindow = Number(args["measured-drift-window"] ?? 1);
-const maxMeasuredRelativeDrift = Number(
-  args["max-measured-relative-drift"] ?? 1,
+const warmupRelativeDriftReference = Number(
+  args["warmup-relative-drift-reference"] ?? 1,
 );
+const measuredDriftWindow = Number(args["measured-drift-window"] ?? 1);
+const measuredRelativeDriftReference = Number(
+  args["measured-relative-drift-reference"] ?? 1,
+);
+const processStartedNs = process.hrtime.bigint();
 
 function nowNs() {
   return process.hrtime.bigint();
@@ -75,7 +80,8 @@ function stabilityRecord(
   medianMs,
   referenceMedianMs,
   relativeDrift,
-  stable,
+  relativeDriftReference,
+  withinReferenceBound,
 ) {
   return {
     "schema-version": 1,
@@ -89,8 +95,33 @@ function stabilityRecord(
     "median-ms": medianMs,
     "reference-median-ms": referenceMedianMs,
     "relative-drift": relativeDrift,
-    stable,
+    "relative-drift-reference": relativeDriftReference,
+    "within-reference-bound": withinReferenceBound,
   };
+}
+
+function diagnosticRecord(
+  workload,
+  workloadOrderIndex,
+  checkpoint,
+  windowIndex,
+  timedOperationCount,
+  validationOperationCount,
+  rss,
+) {
+  return capture({
+    runId: args["run-id"],
+    workload,
+    replicate,
+    pairOrderIndex,
+    workloadOrderIndex,
+    checkpoint,
+    windowIndex,
+    timedOperationCount,
+    validationOperationCount,
+    startedNs: processStartedNs,
+    rssBytes: rss,
+  });
 }
 
 function createClient() {
@@ -152,7 +183,7 @@ async function runCold() {
   }
 }
 
-async function measuredLoop(workload, operation, validate) {
+async function measuredLoop(workload, workloadOrderIndex, operation, validate) {
   if (
     warmup % warmupWindowSize !== 0 ||
     warmup / warmupWindowSize < 2 * stableWindowCount
@@ -165,6 +196,17 @@ async function measuredLoop(workload, operation, validate) {
   await validatePreflight(operation, validate);
   const warmupMedians = [];
   const stabilityRecords = [];
+  const diagnosticRecords = [
+    diagnosticRecord(
+      workload,
+      workloadOrderIndex,
+      "pre-warmup",
+      null,
+      0,
+      1,
+      rssBytes(),
+    ),
+  ];
   for (
     let windowIndex = 0;
     windowIndex < warmup / warmupWindowSize;
@@ -195,21 +237,59 @@ async function measuredLoop(workload, operation, validate) {
         windowMedian,
         null,
         drift,
-        drift !== null && drift <= maxWarmupRelativeDrift,
+        warmupRelativeDriftReference,
+        drift === null ? null : drift <= warmupRelativeDriftReference,
+      ),
+    );
+    diagnosticRecords.push(
+      diagnosticRecord(
+        workload,
+        workloadOrderIndex,
+        "warmup-window",
+        windowIndex,
+        (windowIndex + 1) * warmupWindowSize,
+        1,
+        null,
       ),
     );
   }
-  const warmupStable = stabilityRecords.at(-1).stable;
   const rssBefore = rssBytes();
+  const preMeasurement = diagnosticRecord(
+    workload,
+    workloadOrderIndex,
+    "pre-measurement",
+    null,
+    warmup,
+    1,
+    rssBefore,
+  );
   const batchStart = nowNs();
   const samples = await sampleOperations(iterations, operation, elapsedMs);
   const batchDuration = elapsedMs(batchStart);
-  const rssDelta = rssBytes() - rssBefore;
+  const rssAfter = rssBytes();
+  const rssDelta = rssAfter - rssBefore;
+  const postMeasurement = diagnosticRecord(
+    workload,
+    workloadOrderIndex,
+    "post-measurement",
+    null,
+    warmup + iterations,
+    1,
+    rssAfter,
+  );
   const firstMedian = median(samples.slice(0, measuredDriftWindow));
   const lastMedian = median(samples.slice(-measuredDriftWindow));
   const measuredDrift = Math.abs(lastMedian - firstMedian) / firstMedian;
-  const measuredStable = measuredDrift <= maxMeasuredRelativeDrift;
   await validatePreflight(operation, validate);
+  const postflight = diagnosticRecord(
+    workload,
+    workloadOrderIndex,
+    "postflight",
+    null,
+    warmup + iterations,
+    2,
+    rssBytes(),
+  );
   samples.forEach((value, index) => {
     observe("steady", workload, "latency", sampleOffset + index, value, "ms");
   });
@@ -231,19 +311,20 @@ async function measuredLoop(workload, operation, validate) {
       firstMedian,
       lastMedian,
       measuredDrift,
-      measuredStable,
+      measuredRelativeDriftReference,
+      measuredDrift <= measuredRelativeDriftReference,
     ),
   );
   appendFileSync(
     args["stability-output"],
     stabilityRecords.map((record) => JSON.stringify(record)).join("\n") + "\n",
   );
-  if (!warmupStable) {
-    throw new Error(`${workload} warmup failed the stability criterion`);
-  }
-  if (!measuredStable) {
-    throw new Error(`${workload} measured latency drift exceeded the bound`);
-  }
+  appendFileSync(
+    args["diagnostics-output"],
+    [...diagnosticRecords, preMeasurement, postMeasurement, postflight]
+      .map((record) => JSON.stringify(record))
+      .join("\n") + "\n",
+  );
 }
 
 async function runSteady() {
@@ -252,6 +333,7 @@ async function runSteady() {
     await client.start();
     await measuredLoop(
       "ping",
+      0,
       () => client.ping(corpus.pingMessage),
       assertPing,
     );
@@ -261,6 +343,7 @@ async function runSteady() {
     });
     await measuredLoop(
       "send-and-wait",
+      1,
       () => session.sendAndWait({ prompt: corpus.prompt }, timeoutMs),
       assertResponse,
     );

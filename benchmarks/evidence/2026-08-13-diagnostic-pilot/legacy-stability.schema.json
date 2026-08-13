@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/copilot-community-sdk/copilot-sdk-clojure/benchmarks/schema/stability.schema.json",
-  "title": "Matched SDK benchmark stability record",
+  "$id": "https://github.com/copilot-community-sdk/copilot-sdk-clojure/benchmarks/evidence/2026-08-13-diagnostic-pilot/legacy-stability.schema.json",
+  "title": "Legacy hard-gate benchmark stability record",
   "type": "object",
   "required": [
     "schema-version",
@@ -15,8 +15,7 @@
     "median-ms",
     "reference-median-ms",
     "relative-drift",
-    "relative-drift-reference",
-    "within-reference-bound"
+    "stable"
   ],
   "properties": {
     "schema-version": { "const": 1 },
@@ -30,8 +29,7 @@
     "median-ms": { "type": "number", "exclusiveMinimum": 0 },
     "reference-median-ms": { "type": ["number", "null"] },
     "relative-drift": { "type": ["number", "null"], "minimum": 0 },
-    "relative-drift-reference": { "type": "number", "minimum": 0 },
-    "within-reference-bound": { "type": ["boolean", "null"] }
+    "stable": { "type": "boolean" }
   },
   "allOf": [
     {
@@ -47,8 +45,7 @@
           "relative-drift": {
             "type": "number",
             "minimum": 0
-          },
-          "within-reference-bound": { "type": "boolean" }
+          }
         }
       }
     },

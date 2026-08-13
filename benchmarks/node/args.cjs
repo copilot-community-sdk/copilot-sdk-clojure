@@ -11,16 +11,18 @@ const driverRequiredArgs = [
 
 const steadyDriverRequiredArgs = [
   "stability-output",
+  "diagnostics-output",
   "warmup",
   "iterations",
   "timeout-ms",
   "replicate",
+  "pair-order-index",
   "sample-offset",
   "warmup-window-size",
   "stable-window-count",
-  "max-warmup-relative-drift",
+  "warmup-relative-drift-reference",
   "measured-drift-window",
-  "max-measured-relative-drift",
+  "measured-relative-drift-reference",
 ];
 
 const fixtureRequiredArgs = [

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "fixtureVersion": "1",
+  "corpusSha256": "2ef6368acc3d0631e99ede2bd7e05b6340dafc531142de58e069939bd3d9b8a1",
+  "phase": "steady",
+  "implementation": "clojure",
+  "signal": "SIGTERM",
+  "failed": false,
+  "counts": {
+    "connect": 1,
+    "ping": 24002
+  },
+  "connectionCount": 1,
+  "comparableSequenceSha256": "3772f9159e11573b266a909659ba47168192683756031bdbc3d4d29ca15e6017"
+}

@@ -3,6 +3,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.tools.logging :as log]
+            [github.copilot-sdk.bench.diagnostics :as diagnostics]
             [github.copilot-sdk :as sdk]))
 
 (defn parse-args
@@ -29,16 +30,18 @@
 
 (def steady-required-args
   ["stability-output"
+   "diagnostics-output"
    "warmup"
    "iterations"
    "timeout-ms"
    "replicate"
+   "pair-order-index"
    "sample-offset"
    "warmup-window-size"
    "stable-window-count"
-   "max-warmup-relative-drift"
+   "warmup-relative-drift-reference"
    "measured-drift-window"
-   "max-measured-relative-drift"])
+   "measured-relative-drift-reference"])
 
 (defn validate-args!
   [raw-args]
@@ -98,7 +101,8 @@
 
 (defn- stability-record
   [args workload kind window-index operation-count median-ms
-   reference-median-ms relative-drift stable]
+   reference-median-ms relative-drift relative-drift-reference
+   within-reference-bound]
   {"schema-version" 1
    "run-id" (get args "run-id")
    "implementation" "clojure"
@@ -110,7 +114,25 @@
    "median-ms" median-ms
    "reference-median-ms" reference-median-ms
    "relative-drift" relative-drift
-   "stable" stable})
+   "relative-drift-reference" relative-drift-reference
+   "within-reference-bound" within-reference-bound})
+
+(defn- diagnostic-record
+  [args workload workload-order-index checkpoint window-index
+   timed-operation-count validation-operation-count started-ns rss]
+  (diagnostics/capture
+   {:run-id (get args "run-id")
+    :implementation "clojure"
+    :workload workload
+    :replicate (parse-long (get args "replicate"))
+    :pair-order-index (parse-long (get args "pair-order-index"))
+    :workload-order-index workload-order-index
+    :checkpoint checkpoint
+    :window-index window-index
+    :timed-operation-count timed-operation-count
+    :validation-operation-count validation-operation-count
+    :started-ns started-ns
+    :rss-bytes rss}))
 
 (defn sample-operations
   [operation count]
@@ -174,16 +196,18 @@
         (stop-client! client)))))
 
 (defn- measured-loop!
-  [args workload operation validate]
+  [args workload workload-order-index operation validate started-ns]
   (let [warmup (parse-long (get args "warmup" "0"))
         iterations (parse-long (get args "iterations" "1"))
         replicate (parse-long (get args "replicate" "0"))
         sample-offset (parse-long (get args "sample-offset" "0"))
         window-size (parse-long (get args "warmup-window-size"))
         stable-window-count (parse-long (get args "stable-window-count"))
-        max-warmup-drift (parse-double (get args "max-warmup-relative-drift"))
+        warmup-drift-reference
+        (parse-double (get args "warmup-relative-drift-reference"))
         drift-window (parse-long (get args "measured-drift-window"))
-        max-measured-drift (parse-double (get args "max-measured-relative-drift"))]
+        measured-drift-reference
+        (parse-double (get args "measured-relative-drift-reference"))]
     (when (or (not (zero? (mod warmup window-size)))
               (< (quot warmup window-size) (* 2 stable-window-count)))
       (throw (ex-info "Warmup must contain complete stability windows"
@@ -192,12 +216,18 @@
       (throw (ex-info "Measurement must contain two drift windows"
                       {:iterations iterations :drift-window drift-window})))
     (validate-preflight! operation validate)
-    (let [warmup-result
+    (let [pre-warmup
+          (diagnostic-record args workload workload-order-index
+                             "pre-warmup" nil 0 1 started-ns (rss-bytes))
+          warmup-result
           (loop [window-index 0
                  medians []
-                 records []]
+                 records []
+                 diagnostic-records [pre-warmup]]
             (if (= window-index (quot warmup window-size))
-              {:medians medians :records records}
+              {:medians medians
+               :records records
+               :diagnostic-records diagnostic-records}
               (let [samples (sample-operations operation window-size)
                     window-median (percentile samples 0.50)
                     medians (conj medians window-median)
@@ -217,58 +247,81 @@
                        (stability-record
                         args workload "warmup-window" window-index
                         (* (inc window-index) window-size)
-                        window-median nil drift
-                        (boolean (and drift (<= drift max-warmup-drift)))))))))
-          warmup-stable? (get (last (:records warmup-result)) "stable")
+                        window-median nil drift warmup-drift-reference
+                        (when drift (<= drift warmup-drift-reference))))
+                 (conj diagnostic-records
+                       (diagnostic-record
+                        args workload workload-order-index "warmup-window"
+                        window-index (* (inc window-index) window-size)
+                        1 started-ns nil))))))
           rss-before (rss-bytes)
+          pre-measurement
+          (diagnostic-record args workload workload-order-index
+                             "pre-measurement" nil warmup 1
+                             started-ns rss-before)
           batch-started (System/nanoTime)
           samples (sample-operations operation iterations)
           batch-duration (elapsed-ms batch-started)
-          rss-delta (- (rss-bytes) rss-before)
+          rss-after (rss-bytes)
+          rss-delta (- rss-after rss-before)
+          post-measurement
+          (diagnostic-record args workload workload-order-index
+                             "post-measurement" nil (+ warmup iterations) 1
+                             started-ns rss-after)
           first-median (percentile (take drift-window samples) 0.50)
           last-median (percentile (take-last drift-window samples) 0.50)
           measured-drift (/ (Math/abs (- last-median first-median)) first-median)
-          measured-stable? (<= measured-drift max-measured-drift)
           stability-records
           (conj (:records warmup-result)
                 (stability-record args workload "measurement-drift" 0 iterations
                                   first-median last-median measured-drift
-                                  measured-stable?))]
+                                  measured-drift-reference
+                                  (<= measured-drift
+                                      measured-drift-reference)))]
       (validate-preflight! operation validate)
-      (doseq [[sample-index value] (map-indexed vector samples)]
-        (observe! args "steady" workload "latency"
-                  (+ sample-offset sample-index) value "ms"))
-      (observe! args "steady" workload "batch-duration" replicate batch-duration "ms")
-      (observe! args "steady" workload "rss-delta" replicate rss-delta "bytes")
-      (spit (get args "stability-output")
-            (str (str/join "\n" (map json/write-str stability-records)) "\n")
-            :append true)
-      (when-not warmup-stable?
-        (throw (ex-info (str workload " warmup failed the stability criterion")
-                        {:records stability-records})))
-      (when-not measured-stable?
-        (throw (ex-info (str workload " measured latency drift exceeded the bound")
-                        {:records stability-records}))))))
+      (let [postflight
+            (diagnostic-record args workload workload-order-index
+                               "postflight" nil (+ warmup iterations) 2
+                               started-ns (rss-bytes))]
+        (doseq [[sample-index value] (map-indexed vector samples)]
+          (observe! args "steady" workload "latency"
+                    (+ sample-offset sample-index) value "ms"))
+        (observe! args "steady" workload "batch-duration" replicate batch-duration "ms")
+        (observe! args "steady" workload "rss-delta" replicate rss-delta "bytes")
+        (spit (get args "stability-output")
+              (str (str/join "\n" (map json/write-str stability-records)) "\n")
+              :append true)
+        (spit (get args "diagnostics-output")
+              (str (str/join
+                    "\n"
+                    (map json/write-str
+                         (into (:diagnostic-records warmup-result)
+                               [pre-measurement post-measurement postflight])))
+                   "\n")
+              :append true)))))
 
 (defn- run-steady!
   [args corpus]
   (let [client (create-client args corpus)
-        timeout-ms (parse-long (get args "timeout-ms" "5000"))]
+        timeout-ms (parse-long (get args "timeout-ms" "5000"))
+        started-ns (System/nanoTime)]
     (try
       (sdk/start! client)
-      (measured-loop! args "ping"
+      (measured-loop! args "ping" 0
                       #(sdk/ping client (get corpus "pingMessage"))
-                      #(assert-ping! corpus %))
+                      #(assert-ping! corpus %)
+                      started-ns)
       (let [session (sdk/create-session
                      client
                      {:session-id "bench-session"
                       :model (get corpus "model")})]
-        (measured-loop! args "send-and-wait"
+        (measured-loop! args "send-and-wait" 1
                         #(sdk/send-and-wait!
                           session
                           {:prompt (get corpus "prompt")}
                           timeout-ms)
-                        #(assert-response! corpus %)))
+                        #(assert-response! corpus %)
+                        started-ns))
       (finally
         (stop-client! client)))))
 
