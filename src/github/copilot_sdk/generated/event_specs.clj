@@ -71,6 +71,8 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/cache-write-tokens clojure.core/integer?)
 
+(s/def :github.copilot-sdk.generated.event-specs/cancelled clojure.core/boolean?)
+
 (s/def :github.copilot-sdk.generated.event-specs/candidate-models (s/coll-of clojure.core/string?))
 
 (s/def :github.copilot-sdk.generated.event-specs/canvas-id clojure.core/string?)
@@ -831,7 +833,7 @@
 
 (s/def :github.copilot-sdk.generated.event-specs/skill.invoked-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/content :github.copilot-sdk.generated.event-specs/name :github.copilot-sdk.generated.event-specs/path] :opt-un [:github.copilot-sdk.generated.event-specs/allowed-tools :github.copilot-sdk.generated.event-specs/description :github.copilot-sdk.generated.event-specs/model :github.copilot-sdk.generated.event-specs/plugin-name :github.copilot-sdk.generated.event-specs/plugin-version :github.copilot-sdk.generated.event-specs/source :github.copilot-sdk.generated.event-specs/trigger]) (fn [data] (s/valid? clojure.core/string? (:content data))) (fn [data] (or (not (contains? data :source)) (s/valid? clojure.core/string? (:source data)))) (fn [data] (or (not (contains? data :trigger)) (s/valid? #{"agent-invoked" "user-invoked" "context-load"} (:trigger data))))))
 
-(s/def :github.copilot-sdk.generated.event-specs/subagent.completed-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/agent-display-name :github.copilot-sdk.generated.event-specs/agent-name :github.copilot-sdk.generated.event-specs/tool-call-id] :opt-un [:github.copilot-sdk.generated.event-specs/duration-ms :github.copilot-sdk.generated.event-specs/model :github.copilot-sdk.generated.event-specs/total-tokens :github.copilot-sdk.generated.event-specs/total-tool-calls]) (fn [data] (or (not (contains? data :duration-ms)) (s/valid? clojure.core/integer? (:duration-ms data))))))
+(s/def :github.copilot-sdk.generated.event-specs/subagent.completed-data (s/and (s/keys :req-un [:github.copilot-sdk.generated.event-specs/agent-display-name :github.copilot-sdk.generated.event-specs/agent-name :github.copilot-sdk.generated.event-specs/tool-call-id] :opt-un [:github.copilot-sdk.generated.event-specs/cancelled :github.copilot-sdk.generated.event-specs/duration-ms :github.copilot-sdk.generated.event-specs/model :github.copilot-sdk.generated.event-specs/total-tokens :github.copilot-sdk.generated.event-specs/total-tool-calls]) (fn [data] (or (not (contains? data :duration-ms)) (s/valid? clojure.core/integer? (:duration-ms data))))))
 
 (s/def :github.copilot-sdk.generated.event-specs/subagent.deselected-data (s/keys))
 

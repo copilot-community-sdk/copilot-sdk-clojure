@@ -205,7 +205,8 @@
    "subagent.completed"
    {:tool-call-id "tc-1"
     :agent-name "subagent"
-    :agent-display-name "SubAgent"}
+    :agent-display-name "SubAgent"
+    :cancelled true}
 
    "subagent.failed"
    {:tool-call-id "tc-1"

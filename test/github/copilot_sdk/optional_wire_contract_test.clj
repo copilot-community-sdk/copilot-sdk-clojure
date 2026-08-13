@@ -2,8 +2,10 @@
   "Table-driven session.create/session.resume optional-field wire contracts.
 
   The oracle is test/resources/optional_wire_contracts.edn, grounded in the
-  exact upstream Node SDK commit recorded there. Tests invoke the public
-  Clojure API and capture JSON-RPC params after serialization."
+  exact upstream Node SDK baseline recorded there. Stable public config added
+  after that baseline is classified by stable_upstream_delta_811adc.edn and
+  tested in focused namespaces. Tests invoke the public Clojure API and capture
+  JSON-RPC params after serialization."
   (:require [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.set :as set]
@@ -21,6 +23,19 @@
       edn/read-string))
 
 (def contracts (:contracts contract-report))
+
+(def stable-delta-report
+  (-> "resources/stable_upstream_delta_811adc.edn"
+      io/resource
+      slurp
+      edn/read-string))
+
+(def post-baseline-public-config
+  (->> (:stable-deltas stable-delta-report)
+       (keep (fn [{:keys [id clojure]}]
+               (when (= :session-config/enable-file-change-tracking id)
+                 {:key (:public-key clojure)
+                  :scopes (:scopes clojure)})))))
 
 (def fixtures
   {:fixture/handler (fn [& _])
@@ -126,14 +141,20 @@
   ;; This guards Clojure-spec drift. Node parity is an independent oracle:
   ;; each row cites the pinned upstream source, and review compares those rows
   ;; against that source rather than deriving expectations from production.
-  (let [create-keys (->> contracts
-                         (filter #(#{:shared :create-only} (:scope %)))
-                         (map :key)
-                         set)
-        resume-keys (->> contracts
-                         (filter #(#{:shared :resume-only} (:scope %)))
-                         (map :key)
-                         set)
+  (let [create-keys (into (->> contracts
+                               (filter #(#{:shared :create-only} (:scope %)))
+                               (map :key)
+                               set)
+                          (comp (filter #(contains? (:scopes %) :create))
+                                (map :key))
+                          post-baseline-public-config)
+        resume-keys (into (->> contracts
+                               (filter #(#{:shared :resume-only} (:scope %)))
+                               (map :key)
+                               set)
+                          (comp (filter #(contains? (:scopes %) :resume))
+                                (map :key))
+                          post-baseline-public-config)
         duplicate-keys (->> contracts
                             (map :key)
                             frequencies
