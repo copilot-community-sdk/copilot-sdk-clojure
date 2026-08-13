@@ -745,6 +745,43 @@
                              :opts map?)
                 :ret ::specs/tool)
 
+(def ^:private result-success-args
+  (s/alt :text (s/cat :text string?)
+         :text+telemetry (s/cat :text string? :telemetry ::specs/tool-telemetry)))
+
+(def ^:private result-failure-args
+  (s/alt :text (s/cat :text string?)
+         :text+error (s/cat :text string? :error (s/nilable string?))
+         :text+error+telemetry
+         (s/cat :text string?
+                :error (s/nilable string?)
+                :telemetry ::specs/tool-telemetry)))
+
+(register-fdef! github.copilot-sdk.tools/result-success
+                :args result-success-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk/result-success
+                :args result-success-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk.tools/result-denied
+                :args result-success-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk/result-denied
+                :args result-success-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk.tools/result-rejected
+                :args result-success-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk/result-rejected
+                :args result-success-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk.tools/result-failure
+                :args result-failure-args
+                :ret ::specs/tool-result-object)
+(register-fdef! github.copilot-sdk/result-failure
+                :args result-failure-args
+                :ret ::specs/tool-result-object)
+
 ;; convert-mcp-call-tool-result function spec (upstream PR #1049)
 (register-fdef! github.copilot-sdk.tools/convert-mcp-call-tool-result
                 :args (s/cat :call-result map?)

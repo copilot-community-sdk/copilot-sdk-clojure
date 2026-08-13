@@ -6,7 +6,7 @@ GA reviewers (and future maintainers) can see, at a glance, which upstream topic
 ported, adapted, intentionally folded into the API reference, deferred, or not applicable.
 
 Audited against upstream commit
-[`25c0beab6095def6881bb12ddd8d36f21dcbd3d6`](https://github.com/github/copilot-sdk/commit/25c0beab6095def6881bb12ddd8d36f21dcbd3d6).
+[`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d).
 
 **Decision legend**
 
@@ -36,13 +36,16 @@ remains intentionally absent; callers cannot register a custom extension launche
 
 The upstream experimental `CopilotClientOptions.requestHandler` and its
 process-global, five-method `llmInference.*` lifecycle are intentionally absent.
-This lifecycle exclusion was reconfirmed against upstream commit
-[`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d);
-the documentation inventory in this matrix remains frozen at the older audit pin
-recorded above.
 The accepted
 [host-owned inference ADR](adr/2026-08-10-host-owned-inference-boundary.md)
 records the security, resource, ownership, and revisit criteria.
+
+The stable `:enable-file-change-tracking?` session option is documented for
+create, resume, and join in the
+[`create-session`](reference/API.md#create-session) config reference. Consumers
+observe stable workspace-file and snapshot events through existing event APIs.
+The low-level rewind RPCs added in the same upstream change remain experimental
+and are intentionally absent.
 
 ## auth/
 
@@ -67,7 +70,7 @@ records the security, resource, ownership, and revisit criteria.
 | `features/custom-agents.md` | Adapted | [`guides/custom-agents.md`](guides/custom-agents.md) |
 | `features/skills.md` | Folded | API.md [Config Directory and Skills](reference/API.md#config-directory-and-skills) + `:skill-directories`/`:enable-skills`/`:disabled-skills` |
 | `features/image-input.md` | Folded | API.md [File Attachments](reference/API.md#file-attachments) / [Blob Attachments](reference/API.md#blob-attachments) |
-| `features/session-persistence.md` | Folded | API.md `resume-session`, `list-sessions`, `get-session-metadata` |
+| `features/session-persistence.md` | Folded | API.md `resume-session`, `list-sessions`, `get-session-metadata`, and stable `:enable-file-change-tracking?`; experimental rewind RPCs are excluded |
 | `features/steering-and-queueing.md` | Folded | API.md `send!` `:mode` (`:enqueue`/`:immediate`) |
 | `features/plugin-directories.md` | Folded | API.md `:plugin-directories` config row |
 | `features/remote-sessions.md` | Folded (experimental) | API.md `:remote?` / `:remote-session` config rows |

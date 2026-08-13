@@ -618,12 +618,12 @@
              ["structured ToolResultObject is forwarded with telemetry"
               (fn [_args _inv] {:text-result-for-llm "all good"
                                 :result-type "success"
-                                :tool-telemetry {:latency-ms 42}})
+                                :tool-telemetry {"metrics" {"latency_ms" 42}}})
               "tool-req-3" "tc-3"
               (fn [result]
                 (is (= "all good" (:textResultForLlm result)))
                 (is (= "success" (:resultType result)))
-                (is (= 42 (get-in result [:toolTelemetry :latencyMs]))))]
+                (is (= 42 (get-in result [:toolTelemetry :metrics :latency_ms]))))]
              ["structured ToolResultObject forwards tool references"
               (fn [_args _inv] {:text-result-for-llm "found tools"
                                 :result-type "success"

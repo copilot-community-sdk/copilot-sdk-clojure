@@ -911,6 +911,7 @@
 (s/def ::organization-custom-instructions string?)
 (s/def ::enable-on-demand-instruction-discovery boolean?)
 (s/def ::enable-file-hooks boolean?)
+(s/def ::enable-file-change-tracking? boolean?)
 (s/def ::enable-host-git-operations boolean?)
 (s/def ::enable-session-store boolean?)
 (s/def ::enable-skills boolean?)
@@ -1076,6 +1077,7 @@
     :organization-custom-instructions
     :enable-on-demand-instruction-discovery
     :enable-file-hooks
+    :enable-file-change-tracking?
     :enable-host-git-operations
     :enable-session-store
     :enable-skills
@@ -1124,6 +1126,7 @@
                     ::organization-custom-instructions
                     ::enable-on-demand-instruction-discovery
                     ::enable-file-hooks
+                    ::enable-file-change-tracking?
                     ::enable-host-git-operations
                     ::enable-session-store
                     ::enable-skills
@@ -1166,6 +1169,7 @@
     :organization-custom-instructions
     :enable-on-demand-instruction-discovery
     :enable-file-hooks
+    :enable-file-change-tracking?
     :enable-host-git-operations
     :enable-session-store
     :enable-skills
@@ -1214,6 +1218,7 @@
                     ::organization-custom-instructions
                     ::enable-on-demand-instruction-discovery
                     ::enable-file-hooks
+                    ::enable-file-change-tracking?
                     ::enable-host-git-operations
                     ::enable-session-store
                     ::enable-skills
@@ -1267,6 +1272,7 @@
                     ::organization-custom-instructions
                     ::enable-on-demand-instruction-discovery
                     ::enable-file-hooks
+                    ::enable-file-change-tracking?
                     ::enable-host-git-operations
                     ::enable-session-store
                     ::enable-skills
@@ -1976,6 +1982,7 @@
 (s/def ::total-tool-calls nat-int?)
 (s/def ::total-tokens nat-int?)
 (s/def ::duration-ms nat-int?)
+(s/def ::cancelled boolean?)
 
 (s/def ::subagent.started-data
   (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
@@ -1983,7 +1990,7 @@
 
 (s/def ::subagent.completed-data
   (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
-          :opt-un [::model ::total-tool-calls ::total-tokens ::duration-ms]))
+          :opt-un [::cancelled ::model ::total-tool-calls ::total-tokens ::duration-ms]))
 
 (s/def ::subagent.failed-data
   (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name ::error]
@@ -2075,7 +2082,24 @@
         :string #{"success" "failure" "rejected" "denied" "timeout"}))
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
-(s/def ::tool-telemetry map?)
+(defn- json-number?
+  [value]
+  (and (number? value)
+       (not (ratio? value))
+       (cond
+         (instance? Double value) (Double/isFinite ^Double value)
+         (instance? Float value) (Float/isFinite ^Float value)
+         :else true)))
+
+(s/def ::json-value
+  (s/or :null nil?
+        :string string?
+        :number json-number?
+        :boolean boolean?
+        :array (s/coll-of ::json-value :kind vector?)
+        :object (s/map-of string? ::json-value)))
+(s/def ::json-object (s/map-of string? ::json-value))
+(s/def ::tool-telemetry (s/map-of string? ::json-object))
 (s/def ::tool-references (s/coll-of ::non-blank-string))
 
 (s/def ::current-tool-metadata

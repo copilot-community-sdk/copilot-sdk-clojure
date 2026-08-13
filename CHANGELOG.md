@@ -3,6 +3,26 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (stable 811adc sync)
+- Added stable `:enable-file-change-tracking?` session config parity through
+  upstream commit
+  [`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d).
+  Create, resume, and join omit the wire key by default, preserve explicit
+  `false` and `true` as `enableFileChangeTracking`, and reject explicit `nil`
+  before RPC. The option is not mutable through `session.options.update`;
+  experimental low-level rewind RPCs remain excluded.
+- Updated the generated event schema pin from `1.0.79-6` to `1.0.79-9` and
+  added the optional `:cancelled` field to `subagent.completed`. Cancellation
+  still emits completion; the field distinguishes cancelled teardown from a
+  subagent that ran to the end.
+- Added recursive JSON value/object specs and tightened `:tool-telemetry` to the
+  stable Node `ToolTelemetry` contract: string bucket names map to JSON object
+  maps whose nested values are JSON-compatible. Result helpers now enforce the
+  contract under public API instrumentation.
+- Added machine-readable symbol-based parity evidence for every stable delta at
+  the target commit, with experimental and internal exclusions classified and
+  no unclassified stable rows.
+
 ### Added (benchmarking)
 - Added a matched Node/Clojure benchmark harness with fresh deterministic TCP
   JSON-RPC fixtures per independent process, public SDK clients, separate
