@@ -42,7 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
-- [ADR: Define a narrow experimental boundary for host-owned inference](adr/2026-08-10-host-owned-inference-boundary.md) -- **Proposed.** Proposes one complete client-global inference-host contract while keeping `llmInference.*` RPCs private and leaving canvas authoring/provider, extension launch-provider, and raw RPC out of scope.
+- [ADR: Defer a host-owned inference boundary](adr/2026-08-10-host-owned-inference-boundary.md) -- **Accepted.** Keeps the upstream experimental `requestHandler` / `llmInference.*` lifecycle outside the supported SDK until concrete Clojure demand or upstream stabilization/material redesign.
 - [ADR: Add scope-bound query sequences before deprecating query-seq!](adr/2026-08-08-query-seq-scoped-lifecycle.md) -- **Accepted.** Adds `with-query-seq` as the safe default for streaming/seq-style consumption; `query-seq!` deprecation and removal are deferred, separate future steps.
 
 ## Contributing

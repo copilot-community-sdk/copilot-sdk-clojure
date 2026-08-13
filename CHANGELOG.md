@@ -29,6 +29,15 @@ All notable changes to this project will be documented in this file. This change
   [PR #1494](https://github.com/github/copilot-sdk/pull/1494); the experimental
   extension launch-provider RPC remains excluded.
 
+### Changed (architecture)
+- Accepted the
+  [ADR: Defer a host-owned inference boundary](doc/adr/2026-08-10-host-owned-inference-boundary.md),
+  intentionally excluding the upstream experimental
+  `CopilotClientOptions.requestHandler` and five-method `llmInference.*`
+  lifecycle until concrete Clojure consumer demand or upstream
+  stabilization/material redesign. Reconfirmed against upstream commit
+  [`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d).
+
 ### Fixed (optional session wire contracts)
 - `session.create` and `session.resume` now match the official Node SDK's
   optional-field contract: explicit `false` is preserved for `:streaming?` and

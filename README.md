@@ -244,6 +244,10 @@ The following upstream surface is intentionally **out of scope for 1.0.0 GA**:
 - **Extension launch-provider RPC** — stable extension session fields are supported,
   but the experimental `extensionLaunchProvider.resolve` reverse RPC is not exposed.
   Hosts cannot register a custom extension launcher.
+- **Application-owned inference interception** — the upstream experimental
+  `CopilotClientOptions.requestHandler` and five-method `llmInference.*`
+  lifecycle are intentionally excluded. See the
+  [accepted architecture decision](./doc/adr/2026-08-10-host-owned-inference-boundary.md).
 
 ### Quick Comparison
 
