@@ -81,11 +81,10 @@
                 :prompt
                 clojure.core/string?
                 :opts
-                (clojure.spec.alpha/keys*
-                 :opt-un
-                 [:github.copilot-sdk.specs/client
-                  :github.copilot-sdk.specs/session
-                  :github.copilot-sdk.specs/timeout-ms]))
+                (clojure.spec.alpha/?
+                 (clojure.spec.alpha/&
+                  (clojure.spec.alpha/keys*)
+                  :github.copilot-sdk.instrument/helper-query-options)))
                :ret
                (clojure.spec.alpha/nilable clojure.core/string?)
                :fn

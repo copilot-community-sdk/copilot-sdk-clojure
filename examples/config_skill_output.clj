@@ -33,7 +33,7 @@
     (println (str "[debug] output-dir: " output-dir))
     (copilot/with-client-session [session {:on-permission-request copilot/approve-all
                                            :model "claude-haiku-4.5"
-                                           :config-dir config-dir
+                                           :config-directory config-dir
                                            :skill-directories [skill-dir]
                                            :disabled-skills ["demo-skill"]
                                            :large-output {:enabled true

@@ -71,7 +71,28 @@ All notable changes to this project will be documented in this file. This change
   remaining bounded sleep backoffs poll real protocol state with explicit
   deadlines.
 
+### Fixed (helpers)
+- `with-query-seq` and `query-seq!` now use an explicitly supplied
+  `CopilotClient` instead of treating it as client options and silently starting
+  a second helpers-managed client. The temporary session still disconnects on
+  scope exit while the caller retains client lifecycle ownership.
+
+### Fixed (specs)
+- Helper fdefs now validate each function's actual `:client` and `:session`
+  option contract: `query` accepts owned instances or config maps, seq helpers
+  accept either client form with session config, and `query-chan` remains
+  config-map-only.
+
 ### Fixed (documentation)
+- Closed example tracking gaps: the portable runner now covers every
+  credential-free standalone entry point, including both streaming helper paths
+  and the closed-stdin user-input path. Streaming examples are bounded, propagate
+  session errors, and cancel their helper sources on timeout; manual exclusions
+  and preconditions are explicit. The upstream documentation matrix now covers
+  all pages at its pinned commit, records the intentional canvas-authoring
+  exclusion, classifies experimental citations and session limits, and links the
+  citation payload contract. Session docstrings and examples use the canonical
+  `:config-directory` spelling.
 - Codox topic generation now assigns deterministic output identities from source
   paths, preserves flat URLs for unambiguous basenames that do not collide with
   Codox-owned pages, and rewrites relative topic links through the resulting

@@ -42,7 +42,7 @@
 <tr><th> Key </th><th> Type </th><th> Default </th><th> Description </th></tr>
 </thead>
 <tbody>
-<tr><td> <code>:client</code> </td><td> map </td><td> <code>nil</code> </td><td> Client options map </td></tr>
+<tr><td> <code>:client</code> </td><td> map or <code>CopilotClient</code> </td><td> <code>nil</code> </td><td> Client options map or caller-owned client </td></tr>
 <tr><td> <code>:max-events</code> </td><td> integer </td><td> <code>256</code> </td><td> Maximum number of events to emit; <code>0</code> disconnects immediately </td></tr>
 <tr><td> <code>:session</code> </td><td> map </td><td> <code>nil</code> </td><td> Session options map </td></tr>
 </tbody>
@@ -59,7 +59,7 @@
 <h3><a href="#query-seq" id="query-seq"></a><code>query-seq!</code></h3>
 <pre><code class="language-clojure">(h/query-seq! prompt &amp; {:keys [client session max-events]})
 </code></pre>
-<p>Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported.</p>
+<p>Execute a query and return a bounded lazy sequence of events (default: 256 events). This function is still supported. Pass a client options map to use the helpers-managed client, or a started <code>CopilotClient</code> instance to keep client lifecycle ownership with the caller.</p>
 <p><strong>Warning:</strong> cleanup (session disconnect) runs only when the sequence is consumed to its natural end — a <code>:copilot/session.idle</code> / <code>:copilot/session.error</code> event, or the events channel closing (detected when the next read yields <code>nil</code>, the end-of-stream sentinel — not an emitted element). Abandoning the seq before it reaches a terminal event (e.g. <code>(first ...)</code> or <code>(take 1 ...)</code> when the first element isn’t already terminal), or hitting a positive <code>:max-events</code> bound before that end of stream, leaks the session and its event tap (the sole exception is <code>:max-events 0</code>, which disconnects immediately without emitting anything). Consume the whole seq, or use <code>with-query-seq</code> or <code>query</code> when you may stop reading early.</p>
 <pre><code class="language-clojure">(run! println
       (h/query-seq! "Tell me a story"
@@ -249,7 +249,7 @@
 <tr><td> <code>:session-limits</code> </td><td> map </td><td> (Experimental) Session AI-credit limits. <code>{:max-ai-credits &lt;number&gt;}</code> — serialized as wire <code>sessionLimits.maxAiCredits</code>. (upstream PR #1865) </td></tr>
 <tr><td> <code>:enable-managed-settings?</code> </td><td> boolean </td><td> Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session’s <code>:github-token</code> (required; the runtime fails closed if omitted). Gated on <code>some?</code> — an explicit <code>false</code> is forwarded verbatim; an absent key is omitted. Serialized as wire <code>enableManagedSettings</code>. (upstream PR #1925) </td></tr>
 <tr><td> <code>:managed-settings</code> </td><td> map </td><td> Structured enterprise managed-settings payload, supplied by the caller instead of (or alongside) <code>:enable-managed-settings?</code>. Optional key <code>:permissions</code>: <code>{:disable-bypass-permissions-mode :disable, :deny [...], :ask [...], :allow [...]}</code> — <code>:disable-bypass-permissions-mode</code> is serialized as wire <code>permissions.disableBypassPermissionsMode</code> (string <code>"disable"</code>); <code>:deny</code>/<code>:ask</code>/<code>:allow</code> are vectors of non-blank permission-rule strings forwarded verbatim. Presence of this key (or <code>:enable-managed-settings? true</code>) sets the permission-handler context’s <code>:managed-settings-enabled?</code> to <code>true</code> — see <a href="#approve-all"><code>approve-all</code></a>. Valid on <code>create-session</code>, <code>resume-session</code>, and <code>join-session</code>. (<a href="https://github.com/github/copilot-sdk/pull/2139">upstream PR #2139</a>) </td></tr>
-<tr><td> <code>:canvas-provider</code> </td><td> map </td><td> Canvas provider identity for the session. <code>{:id "..." :name "..."}</code> (<code>:name</code> optional) — serialized as wire <code>canvasProvider.{id,name}</code>. (upstream PR #1847) </td></tr>
+<tr><td> <code>:canvas-provider</code> </td><td> map </td><td> Canvas provider identity only. <code>{:id "..." :name "..."}</code> (<code>:name</code> optional) — serialized as wire <code>canvasProvider.{id,name}</code>. This does not implement the upstream experimental canvas authoring/provider callbacks. (upstream PR #1847) </td></tr>
 <tr><td> <code>:exp-assignments</code> </td><td> map </td><td> (<code>@internal</code>) Exact <code>CopilotExpAssignmentResponse</code> contract using PascalCase string keys. Required: <code>"Features"</code> (string vector), <code>"Flights"</code> (string-to-string map), <code>"Configs"</code> (vector of closed maps containing exactly <code>"Id"</code> (string) and <code>"Parameters"</code> (map of string keys to string, number, boolean, or <code>nil</code> values)), and <code>"AssignmentContext"</code> (string). Optional: <code>"ParameterGroups"</code> (opaque), <code>"FlightingVersion"</code> (number), and <code>"ImpressionId"</code> (string). The Clojure spec rejects unknown top-level and config-entry keys. The map is forwarded unchanged on <code>create-session</code>, <code>resume-session</code>, and <code>join-session</code> (<code>join-session</code> delegates to resume). Serialized as <code>expAssignments</code>. (<a href="https://github.com/github/copilot-sdk/pull/2033">upstream PR #2033</a>) </td></tr>
 <tr><td> <code>:mcp-servers</code> </td><td> map </td><td> MCP server configs keyed by opaque string or keyword server IDs; keyword IDs preserve their full spelling without the leading colon (for example, <code>:srv-1</code> becomes <code>"srv-1"</code> and <code>:team/srv-1</code> becomes <code>"team/srv-1"</code>). See <a href="overview.html">MCP docs</a>. Local (stdio) servers: <code>:mcp-command</code>, <code>:mcp-args</code>, <code>:mcp-tools</code>. Remote (HTTP/SSE) servers: <code>:mcp-server-type</code> (<code>:http</code>/<code>:sse</code>), <code>:mcp-url</code>, <code>:mcp-tools</code>. Spec aliases: <code>::mcp-stdio-server</code> = <code>::mcp-local-server</code>, <code>::mcp-http-server</code> = <code>::mcp-remote-server</code> </td></tr>
 <tr><td> <code>:enable-mcp-apps</code> </td><td> boolean </td><td> <strong>Experimental (SEP-1865).</strong> Opt into MCP Apps UI passthrough only when the host can render <code>ui://</code> MCP App bundles. Explicit <code>true</code> sends <code>requestMcpApps: true</code> on <code>session.create</code> and <code>session.resume</code> (<code>join-session</code> delegates to resume). <code>false</code> and omission leave the wire key absent; explicit <code>nil</code> is invalid. The runtime may still decline the capability when its MCP Apps gate is off. (<a href="https://github.com/github/copilot-sdk/pull/1335">upstream PR #1335</a>) </td></tr>
@@ -260,7 +260,7 @@
 <tr><td> <code>:default-agent</code> </td><td> map </td><td> Built-in/default agent config. Use <code>{:excluded-tools [...]}</code> to hide tools from the default agent while leaving them available to custom agents </td></tr>
 <tr><td> <code>:on-permission-request</code> </td><td> fn </td><td> Permission handler function. <strong>Optional</strong> (upstream PR #1308). On create, omission sends <code>requestPermission: false</code>; providing a handler sends <code>true</code>. Resolve surfaced pending requests manually via <code>handle-pending-permission-request!</code>. Use <code>copilot/approve-all</code> to approve everything. </td></tr>
 <tr><td> <code>:streaming?</code> </td><td> boolean </td><td> Enable streaming deltas. Explicit <code>false</code> is forwarded; omission leaves the runtime default unchanged. </td></tr>
-<tr><td> <code>:config-dir</code> </td><td> string </td><td> Override config directory for CLI </td></tr>
+<tr><td> <code>:config-directory</code> </td><td> string </td><td> Override the CLI config directory. <code>:config-dir</code> remains accepted as a deprecated alias. </td></tr>
 <tr><td> <code>:skill-directories</code> </td><td> vector </td><td> Additional skill directories to load </td></tr>
 <tr><td> <code>:instruction-directories</code> </td><td> vector </td><td> Additional directories to search for custom instruction files. Forwarded as <code>instructionDirectories</code> on <code>session.create</code> and <code>session.resume</code>. (upstream PR #1190) </td></tr>
 <tr><td> <code>:additional-directories</code> </td><td> vector </td><td> Extra directories the runtime is allowed to read/write outside the session’s working directory. Vector of non-blank strings. Serialized as wire <code>additionalDirectories</code>. Re-supply the vector when resuming a session. (<a href="https://github.com/github/copilot-sdk/pull/2180">upstream PR #2180</a>) </td></tr>
@@ -1115,6 +1115,9 @@
 ;;      :icon "/tmp/diff.png"}]
 </code></pre>
 <p>Get the current open-canvases snapshot for <code>session</code>. Returns a vector of canvas-instance maps. The snapshot is initialized from <code>session.resume</code> and updated by <code>:copilot/session.canvas.opened</code> / <code>:copilot/session.canvas.closed</code> events. <code>session.create</code> does NOT populate it (matches upstream Node.js).</p>
+<blockquote>
+<p><strong>Parity exclusion:</strong> The upstream experimental <code>Canvas</code> / <code>createCanvas</code> authoring and provider API is intentionally absent. This SDK can observe and restore open canvases, but cannot declare canvases or handle provider open/close/action callbacks. <code>:canvas-provider</code> supplies provider identity only.</p>
+</blockquote>
 <p>Each entry has required keys <code>:instance-id</code>, <code>:extension-id</code>, <code>:canvas-id</code>, and optional <code>:extension-name</code>, <code>:title</code>, <code>:status</code>, <code>:url</code>, <code>:input</code>, and <code>:icon</code> (a host-local PNG path). Closing an instance that’s not in the snapshot is a silent no-op (idempotent); malformed payloads (missing required field or wrong type) log a warning and leave the snapshot unchanged.</p>
 <p>The <code>:input</code> map (caller-defined opaque data on each canvas) is preserved verbatim through wire conversion. Keys you receive (e.g. via the canvas opened event or after a resume) round-trip back to the CLI without camelCasing — including <code>snake_case</code> and nested keys.</p>
 <h4><a href="#seeding-open-canvases-on-resume" id="seeding-open-canvases-on-resume"></a>Seeding <code>open-canvases</code> on resume</h4>
@@ -1306,7 +1309,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/assistant.reasoning</code> </td><td> Model reasoning (if supported); optional data: <code>:rte</code> (opaque round-trip encrypted reasoning token, for providers that require it to be replayed back) (upstream schema 1.0.79-5/6) </td></tr>
 <tr><td> <code>:copilot/assistant.reasoning_delta</code> </td><td> Streaming reasoning chunk </td></tr>
 <tr><td> <code>:copilot/assistant.message_start</code> </td><td> Streaming assistant message start metadata </td></tr>
-<tr><td> <code>:copilot/assistant.message</code> </td><td> Complete assistant response; optional data: <code>:chunk-index</code>, <code>:chunk-count</code> (position/count when the response was split across multiple messages), <code>:rte</code> (upstream schema 1.0.79-5/6) </td></tr>
+<tr><td> <code>:copilot/assistant.message</code> </td><td> Complete assistant response; optional data: <code>:chunk-index</code>, <code>:chunk-count</code> (position/count when the response was split across multiple messages), <code>:citations</code> (see <a href="#citations-experimental">Citations</a>), <code>:rte</code> (upstream schema 1.0.79-5/6) </td></tr>
 <tr><td> <code>:copilot/assistant.message_delta</code> </td><td> Streaming response chunk </td></tr>
 <tr><td> <code>:copilot/assistant.streaming_delta</code> </td><td> Response size update during streaming; data: <code>{:total-response-size-bytes N}</code> </td></tr>
 <tr><td> <code>:copilot/assistant.turn_end</code> </td><td> Assistant turn completed </td></tr>
@@ -1379,6 +1382,30 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.canvas.removed</code> </td><td> Durable record that a canvas instance was closed, superseding a prior <code>canvas.recorded</code> during resume replay. </td></tr>
 </tbody>
 </table>
+<h3><a href="#citations-experimental" id="citations-experimental"></a>Citations (Experimental)</h3>
+<p>Read citations from the final <code>:copilot/assistant.message</code> event. The <code>:citations</code> key is optional even when <code>:enable-citations</code> is true.</p>
+<pre><code class="language-clojure">{:type :copilot/assistant.message
+ :data {:message-id "message-1"
+        :content "Clojure was created by Rich Hickey."
+        :citations
+        {:sources [{:id "source-1"
+                    :provider "client"
+                    :title "Language notes"
+                    :path "docs/languages.md"}]
+         :spans [{:start-index 23
+                  :end-index 34
+                  :references [{:source-id "source-1"
+                                :cited-text "Rich Hickey"
+                                :location {:type "char"
+                                           :start-index 100
+                                           :end-index 111}
+                                :provider-metadata
+                                {:search-result-index 0}}]}]}}}
+</code></pre>
+<p><code>:sources</code> contains deduplicated source maps. Each source requires <code>:id</code> and <code>:provider</code> (<code>"anthropic"</code>, <code>"openai"</code>, or <code>"client"</code>); <code>:title</code>, <code>:url</code>, and <code>:path</code> are optional.</p>
+<p>Each span requires <code>:start-index</code>, <code>:end-index</code>, and <code>:references</code>. Span offsets index the final message <code>:content</code> in UTF-16 code units: start is zero-based and inclusive, end is exclusive. Clojure strings are Java strings, so these offsets can be passed directly to <code>.substring</code>.</p>
+<p>Each reference requires <code>:source-id</code>; <code>:cited-text</code>, <code>:location</code>, and <code>:provider-metadata</code> are optional. <code>:provider-metadata</code> accepts any JSON value (<code>nil</code>, scalar, vector, or map). It follows normal recursive <code>wire-&gt;clj</code> conversion: map keys are normalized to kebab-case keywords, including maps nested in vectors (<code>search_result_index</code> becomes <code>:search-result-index</code>). Citation metadata is not an opaque-key preservation surface.</p>
+<p>Location maps use a string <code>:type</code>: <code>"char"</code> with <code>:start-index</code> / <code>:end-index</code>, <code>"page"</code> with <code>:start-page</code> / <code>:end-page</code>, or <code>"block"</code> with <code>:start-block</code> / <code>:end-block</code>.</p>
 <h3><a href="#example-handling-events" id="example-handling-events"></a>Example: Handling Events</h3>
 <pre><code class="language-clojure">(copilot/with-client-session [session {:streaming? true
                                        :on-permission-request copilot/approve-all}]
@@ -1901,11 +1928,11 @@ tool-set/isolated
 </code></pre>
 <p>The default agent cannot call <code>repo_index_search</code>. The <code>repo-auditor</code> custom agent can still call it because custom-agent tool assignment is independent of <code>:default-agent</code>. Its reasoning effort is overridden to <code>"high"</code>; omit <code>:agent-reasoning-effort</code> to let the runtime resolve effort from the model configuration, inheriting the parent session’s effort only when the agent uses the same model.</p>
 <h3><a href="#config-directory-and-skills" id="config-directory-and-skills"></a>Config Directory and Skills</h3>
-<p><code>config-dir</code> overrides where the CLI reads its config and state (e.g., <code>~/.copilot</code>). It does not define custom agents. Custom agents are provided via <code>:custom-agents</code>.</p>
+<p><code>:config-directory</code> overrides where the CLI reads its config and state (e.g., <code>~/.copilot</code>). The deprecated <code>:config-dir</code> alias remains accepted. It does not define custom agents. Custom agents are provided via <code>:custom-agents</code>.</p>
 <pre><code class="language-clojure">(def session (copilot/create-session client
                {:model "gpt-5.4"
                 :on-permission-request copilot/approve-all
-                :config-dir "/tmp/copilot-config"
+                :config-directory "/tmp/copilot-config"
                 :skill-directories ["/path/to/skills" "/opt/team-skills"]
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
 </code></pre>
