@@ -64,12 +64,18 @@
               :extension-info {:source "github-app"
                                :name "counter-provider"}})]
         (is (nil? error))
-        (is (= true (:requestExtensions params)))
-        (is (= "missing-sdk-directory" (:extensionSdkPath params)))
-        (is (= {:source "github-app" :name "counter-provider"}
-               (:extensionInfo params)))
+        (is (= {:requestExtensions true
+                :extensionSdkPath "missing-sdk-directory"
+                :extensionInfo {:source "github-app"
+                                :name "counter-provider"}}
+               (select-keys params [:requestExtensions
+                                    :extensionSdkPath
+                                    :extensionInfo])))
         (is (not (contains? params :requestExtensions?)))
-        (is (not (contains? params :extensionSdkPath?)))))
+        (is (not-any? #(contains? params %)
+                      [:request-extensions?
+                       :extension-sdk-path
+                       :extension-info]))))
 
     (testing (str (name scope) " rejects nil instead of emitting JSON null")
       (doseq [config [{:request-extensions? nil}
