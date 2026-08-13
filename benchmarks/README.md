@@ -4,10 +4,11 @@ Run both SDKs through the same deterministic TCP JSON-RPC fixture. The harness
 measures implementation overhead without model, network, or live Copilot
 service latency.
 
-**Evidence status:** the confirmatory profile is executable and predeclared, but
-no complete 20-pair confirmatory result is included. All existing local result
-sets are exploratory, failed, or incomplete. Do not make a directional
-performance conclusion from this repository change.
+**Evidence status:** a complete methodology version 2 result is recorded in the
+[2026-08-13 confirmatory report](evidence/2026-08-13-confirmatory/REPORT.md).
+It supports directional conclusions for three endpoints under the deterministic
+fixture. Ping throughput has `no-supported-difference`; that result does not
+establish equivalence or parity.
 
 ## Prerequisites
 

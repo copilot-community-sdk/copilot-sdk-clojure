@@ -33,13 +33,18 @@ All notable changes to this project will be documented in this file. This change
   Copilot CLI provenance, assertion-free timed operation sampling with untimed
   pre/postflight validation, and a quick smoke profile.
   Results are rejected when fixture sequences, request counts, metadata, or
-  corpus hashes differ. No complete confirmatory result is included, and the
-  harness makes no performance-parity or directional claim.
+  corpus hashes differ.
 - Revised the predeclared confirmatory benchmark methodology so the unchanged
   15% warmup and 10% measured drift values are report-only diagnostics instead
   of process-selection gates. Added out-of-timing JVM/Node runtime checkpoints,
   exact diagnostic validation, and a SHA-256 evidence manifest. All 20 matched
   steady pairs are retained; only integrity failures abort a run.
+- Recorded the complete 2026-08-13 methodology version 2 confirmatory result,
+  including exact provenance, pair-level effects, bootstrap intervals, exact
+  and Holm-adjusted p-values, retained drift-reference exceedances, and hashes
+  for the 480 MiB raw evidence set. The deterministic fixture supports
+  directional conclusions for three endpoints; ping throughput remains
+  `no-supported-difference` and does not establish equivalence.
 
 ### Added (upstream parity)
 - Added the stable extension session config fields `:request-extensions?`,

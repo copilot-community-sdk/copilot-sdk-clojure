@@ -384,6 +384,38 @@
     (is (= #{"node-lower-latency" "clojure-higher-throughput"}
            (set (map :conclusion (:endpoints result)))))))
 
+(deftest committed-confirmatory-evidence-contract
+  (let [directory (io/file "benchmarks" "evidence"
+                           "2026-08-13-confirmatory")
+        metadata (json/read-str (slurp (io/file directory "metadata.json"))
+                                :key-fn keyword)
+        final-metadata
+        (json/read-str (slurp (io/file directory "metadata-final.json"))
+                       :key-fn keyword)
+        summary (json/read-str (slurp (io/file directory "summary.json"))
+                               :key-fn keyword)
+        manifest
+        (json/read-str (slurp (io/file directory "evidence-manifest.json")))
+        endpoints (get-in summary [:confirmatory :endpoints])]
+    (is (= metadata (analysis/assert-comparable! metadata final-metadata)))
+    (is (= 2 (:methodology-version metadata)))
+    (is (= "rigorous" (:profile metadata)))
+    (is (= "reported-covariate-no-selection"
+           (:stationarity-policy metadata)))
+    (is (= 20 (count (get-in endpoints [0 :pair-effects]))))
+    (is (every? #(= 20 (:process-pairs %)) endpoints))
+    (is (= {"ping-latency" "clojure-lower-latency"
+            "send-and-wait-latency" "node-lower-latency"
+            "ping-throughput" "no-supported-difference"
+            "send-and-wait-throughput" "node-higher-throughput"}
+           (into {} (map (juxt :endpoint :conclusion)) endpoints)))
+    (is (= 7 (get-in summary
+                     [:stationarity :reported-reference-exceedances])))
+    (is (= 6720 (get-in summary [:runtime-diagnostics :record-count])))
+    (is (= 206 (count (get manifest "files"))))
+    (is (= "fa852d063a364c5a87b44ac12a5921e97f522c4ac09e1c48520ac8e2148882fc"
+           (get-in manifest ["files" "summary.json" "sha256"])))))
+
 (deftest incomplete-run-does-not-write-summary
   (let [directory (.toFile (Files/createTempDirectory
                             "copilot-benchmark-incomplete"
