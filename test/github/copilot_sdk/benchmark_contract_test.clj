@@ -343,6 +343,76 @@
            (:command result)))
     (is (not-empty (:reason result)))))
 
+(deftest rss-output-contract
+  (doseq [script ["printf garbage"
+                  "printf '   '"
+                  "printf -- -1"]]
+    (let [error
+          (binding [bench-driver/*start-rss-process*
+                    (fn []
+                      (.start (ProcessBuilder.
+                               ^java.util.List ["sh" "-c" script])))]
+            (try
+              (bench-driver/rss-bytes)
+              nil
+              (catch clojure.lang.ExceptionInfo error error)))]
+      (is (= "Invalid ps output while measuring RSS" (ex-message error)))
+      (is (contains? (ex-data error) :stdout))
+      (is (contains? (ex-data error) :stderr))
+      (is (= 0 (:exit (ex-data error)))))))
+
+(deftest malformed-fixture-readiness-cleans-up-process
+  (bench-protocol/reset-process-registry-for-tests!)
+  (let [directory (.toFile (Files/createTempDirectory
+                            "copilot-malformed-readiness"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))]
+    (try
+      (let [error
+            (binding [runner/*fixture-command-builder*
+                      (fn [& _]
+                        ["node" "-e"
+                         (str "console.error('fixture diagnostic'); "
+                              "console.log('not-json'); setInterval(()=>{},1000)")])]
+              (try
+                (runner/start-fixture! "test" "test" 0 directory)
+                nil
+                (catch clojure.lang.ExceptionInfo error error)))]
+        (is (= "Invalid fixture readiness signal" (ex-message error)))
+        (is (instance? Throwable (ex-cause error)))
+        (is (str/includes? (:stderr (ex-data error)) "fixture diagnostic"))
+        (is (zero? (bench-protocol/tracked-process-count))))
+      (finally
+        (bench-protocol/cleanup-tracked-processes!)
+        (bench-protocol/reset-process-registry-for-tests!)
+        (.delete directory)))))
+
+(deftest fixture-readiness-timeout-does-not-deadlock-reader-close
+  (bench-protocol/reset-process-registry-for-tests!)
+  (let [directory (.toFile (Files/createTempDirectory
+                            "copilot-readiness-timeout"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))]
+    (try
+      (let [result
+            (deref
+             (future
+               (binding [runner/*fixture-readiness-timeout-ms* 10
+                         runner/*fixture-command-builder*
+                         (fn [& _]
+                           ["node" "-e" "setInterval(()=>{},1000)"])]
+                 (try
+                   (runner/start-fixture! "test" "test" 0 directory)
+                   nil
+                   (catch Throwable error error))))
+             2000
+             ::timeout)]
+        (is (not= ::timeout result))
+        (is (= "Fixture did not signal readiness" (ex-message result)))
+        (is (zero? (bench-protocol/tracked-process-count))))
+      (finally
+        (bench-protocol/cleanup-tracked-processes!)
+        (bench-protocol/reset-process-registry-for-tests!)
+        (.delete directory)))))
+
 (deftest validation-is-outside-sampled-operations
   (let [calls (atom [])
         operation #(do (swap! calls conj :operation) {:invalid true})
@@ -653,6 +723,7 @@
                    {:process process
                     :stdout-reader reader
                     :stdout-future stdout-future
+                    :stderr-stream nil
                     :stderr-future stderr-future
                     :state-file (io/file "does-not-exist")})
                   nil
@@ -686,12 +757,14 @@
                    {:process process
                     :stdout-reader stdout-reader
                     :stdout-future stdout-future
+                    :stderr-stream nil
                     :stderr-future stderr-future
                     :state-file (io/file "does-not-exist")})
                   nil
                   (catch Throwable error error))))]
         (is (= "Fixture stream reader did not complete" (ex-message error)))
-        (is (= [unregister-failure] (vec (.getSuppressed ^Throwable error))))
+        (is (some #(identical? unregister-failure %)
+                  (.getSuppressed ^Throwable error)))
         (is (= 1 (bench-protocol/tracked-process-count))))
       (finally
         (real-unregister process)
@@ -710,7 +783,7 @@
                (binding [runner/*fixture-stream-timeout-ms* 10]
                  (try
                    (runner/await-fixture-streams!
-                    stdout-stream reader stdout-future stderr-future)
+                    stdout-stream reader stdout-future nil stderr-future)
                    nil
                    (catch Throwable error error))))
              1000

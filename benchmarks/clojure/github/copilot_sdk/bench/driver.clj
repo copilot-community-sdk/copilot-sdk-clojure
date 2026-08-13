@@ -48,17 +48,23 @@
       (require-args! args steady-required-args))
     args))
 
-(defn- rss-bytes
+(def ^:dynamic *start-rss-process*
+  (fn []
+    (let [pid (str (.pid (java.lang.ProcessHandle/current)))]
+      (.start (ProcessBuilder. ^java.util.List ["ps" "-o" "rss=" "-p" pid])))))
+
+(defn rss-bytes
   []
-  (let [pid (str (.pid (java.lang.ProcessHandle/current)))
-        process (.start (ProcessBuilder. ^java.util.List ["ps" "-o" "rss=" "-p" pid]))
+  (let [process (*start-rss-process*)
         _ (.close (.getOutputStream process))
         output (slurp (.getInputStream process))
         error (slurp (.getErrorStream process))
-        exit (.waitFor process)]
-    (when-not (zero? exit)
-      (throw (ex-info "ps failed while measuring RSS" {:exit exit :stderr error})))
-    (* 1024 (parse-long (str/trim output)))))
+        exit (.waitFor process)
+        value (parse-long (str/trim output))]
+    (when-not (and (zero? exit) (some? value) (not (neg? value)))
+      (throw (ex-info "Invalid ps output while measuring RSS"
+                      {:stdout output :stderr error :exit exit})))
+    (* 1024 value)))
 
 (defn- elapsed-ms
   [started-ns]

@@ -221,43 +221,114 @@
   [implementation phase replicate]
   (format "%s-%s-%03d" implementation phase replicate))
 
-(defn- start-fixture!
+(def ^:dynamic *fixture-command-builder*
+  (fn [state-file trace-file phase implementation]
+    ["node" "benchmarks/fixture/server.mjs"
+     (str "--corpus=" (.getCanonicalPath (io/file "benchmarks/corpus.json")))
+     (str "--state=" (.getCanonicalPath state-file))
+     (str "--trace=" (.getCanonicalPath trace-file))
+     (str "--phase=" phase)
+     (str "--implementation=" implementation)]))
+
+(defn- suppress-cleanup-error!
+  [^Throwable primary cleanup]
+  (try
+    (cleanup)
+    (catch Throwable error
+      (.addSuppressed primary error))))
+
+(defn- fail-fixture-start!
+  [error process stdout-stream stdout-reader readiness-future
+   stderr-stream stderr-future]
+  (suppress-cleanup-error!
+   error #(when (.isAlive ^Process process)
+            (bench-protocol/terminate-process! process)))
+  (suppress-cleanup-error! error #(.close ^java.io.Closeable stdout-stream))
+  (let [readiness-drained? (atom false)]
+    (suppress-cleanup-error!
+     error
+     (fn []
+       (when (= ::stream-timeout
+                (deref readiness-future 5000 ::stream-timeout))
+         (throw (ex-info "Fixture readiness reader did not complete" {})))
+       (reset! readiness-drained? true)))
+    (when (or @readiness-drained? (realized? readiness-future))
+      (suppress-cleanup-error! error #(.close ^java.io.Closeable stdout-reader))))
+  (let [stderr-value (atom ::stream-timeout)]
+    (suppress-cleanup-error!
+     error
+     (fn []
+       (let [value (deref stderr-future 5000 ::stream-timeout)]
+         (when (= ::stream-timeout value)
+           (throw (ex-info "Fixture stderr reader did not complete" {})))
+         (reset! stderr-value value))))
+    (suppress-cleanup-error! error #(.close ^java.io.Closeable stderr-stream))
+    (when (= ::stream-timeout @stderr-value)
+      (suppress-cleanup-error!
+       error
+       (fn []
+         (let [value (deref stderr-future 5000 ::stream-timeout)]
+           (when (= ::stream-timeout value)
+             (throw (ex-info "Fixture stderr reader remained blocked" {})))
+           (reset! stderr-value value)))))
+    (when-not (.isAlive ^Process process)
+      (suppress-cleanup-error!
+       error #(bench-protocol/unregister-process! process)))
+    (let [enriched (ex-info (ex-message error)
+                            (assoc (ex-data error)
+                                   :stderr (when-not (= ::stream-timeout @stderr-value)
+                                             @stderr-value))
+                            (ex-cause error))]
+      (doseq [suppressed (.getSuppressed ^Throwable error)]
+        (.addSuppressed ^Throwable enriched suppressed))
+      (throw enriched))))
+
+(def ^:dynamic *fixture-readiness-timeout-ms* 10000)
+
+(defn start-fixture!
   [implementation phase replicate output-dir]
   (let [prefix (evidence-prefix implementation phase replicate)
         state-file (io/file output-dir (str prefix "-fixture.json"))
         trace-file (io/file output-dir (str prefix "-trace.ndjson"))
-        command ["node" "benchmarks/fixture/server.mjs"
-                 (str "--corpus=" (.getCanonicalPath (io/file "benchmarks/corpus.json")))
-                 (str "--state=" (.getCanonicalPath state-file))
-                 (str "--trace=" (.getCanonicalPath trace-file))
-                 (str "--phase=" phase)
-                 (str "--implementation=" implementation)]
+        command (*fixture-command-builder* state-file trace-file phase implementation)
         process (bench-protocol/start-process!
                  (ProcessBuilder. ^java.util.List command))
         stdout-stream (.getInputStream process)
         stdout-reader (io/reader stdout-stream)
-        stderr-future (future (slurp (.getErrorStream process)))
+        stderr-stream (.getErrorStream process)
+        stderr-future (future (slurp stderr-stream))
         readiness-future (future (.readLine stdout-reader))
-        readiness-line (deref readiness-future 10000 ::timeout)]
+        readiness-line (deref readiness-future
+                              *fixture-readiness-timeout-ms*
+                              ::timeout)]
     (when (or (= ::timeout readiness-line) (nil? readiness-line))
-      (bench-protocol/terminate-process! process)
-      (bench-protocol/unregister-process! process)
-      (.close stdout-reader)
-      (throw (ex-info "Fixture did not signal readiness"
-                      {:implementation implementation
-                       :phase phase
-                       :replicate replicate
-                       :stderr (deref stderr-future 5000 ::stream-timeout)})))
-    (let [readiness (json/read-str readiness-line :key-fn keyword)]
+      (fail-fixture-start!
+       (ex-info "Fixture did not signal readiness"
+                {:implementation implementation
+                 :phase phase
+                 :replicate replicate})
+       process stdout-stream stdout-reader readiness-future
+       stderr-stream stderr-future))
+    (let [readiness
+          (try
+            (json/read-str readiness-line :key-fn keyword)
+            (catch Throwable parse-error
+              (fail-fixture-start!
+               (ex-info "Invalid fixture readiness signal"
+                        {:readiness-line readiness-line}
+                        parse-error)
+               process stdout-stream stdout-reader readiness-future
+               stderr-stream stderr-future)))]
       (when-not (:ready readiness)
-        (bench-protocol/terminate-process! process)
-        (bench-protocol/unregister-process! process)
-        (.close stdout-reader)
-        (throw (ex-info "Invalid fixture readiness signal" {:readiness readiness})))
+        (fail-fixture-start!
+         (ex-info "Invalid fixture readiness signal" {:readiness readiness})
+         process stdout-stream stdout-reader readiness-future
+         stderr-stream stderr-future))
       {:process process
        :stdout-stream stdout-stream
        :stdout-reader stdout-reader
        :stdout-future (future (slurp stdout-reader))
+       :stderr-stream stderr-stream
        :stderr-future stderr-future
        :state-file state-file
        :trace-file trace-file
@@ -267,7 +338,7 @@
 (def ^:dynamic *fixture-stream-timeout-ms* 5000)
 
 (defn await-fixture-streams!
-  [stdout-stream stdout-reader stdout-future stderr-future]
+  [stdout-stream stdout-reader stdout-future stderr-stream stderr-future]
   (let [stdout (deref stdout-future *fixture-stream-timeout-ms* ::stream-timeout)
         stderr (deref stderr-future *fixture-stream-timeout-ms* ::stream-timeout)
         complete? (and (not= ::stream-timeout stdout)
@@ -277,15 +348,40 @@
         (.close ^java.io.Closeable stdout-reader)
         {:stdout stdout :stderr stderr})
       (do
-        (when stdout-stream
-          (.close ^java.io.Closeable stdout-stream))
-        (throw (ex-info "Fixture stream reader did not complete"
-                        {:stdout-complete? (not= ::stream-timeout stdout)
-                         :stderr-complete? (not= ::stream-timeout stderr)}))))))
+        (let [error (ex-info "Fixture stream reader did not complete"
+                             {:stdout-complete? (not= ::stream-timeout stdout)
+                              :stderr-complete? (not= ::stream-timeout stderr)})
+              stdout-drained? (atom (not= ::stream-timeout stdout))]
+          (when stdout-stream
+            (suppress-cleanup-error!
+             error #(.close ^java.io.Closeable stdout-stream)))
+          (when stderr-stream
+            (suppress-cleanup-error!
+             error #(.close ^java.io.Closeable stderr-stream)))
+          (suppress-cleanup-error!
+           error
+           (fn []
+             (when (= ::stream-timeout
+                      (deref stdout-future *fixture-stream-timeout-ms*
+                             ::stream-timeout))
+               (throw (ex-info "Fixture stdout reader remained blocked" {})))
+             (reset! stdout-drained? true)))
+          (when stderr-stream
+            (suppress-cleanup-error!
+             error
+             (fn []
+               (when (= ::stream-timeout
+                        (deref stderr-future *fixture-stream-timeout-ms*
+                               ::stream-timeout))
+                 (throw (ex-info "Fixture stderr reader remained blocked" {}))))))
+          (when @stdout-drained?
+            (suppress-cleanup-error!
+             error #(.close ^java.io.Closeable stdout-reader)))
+          (throw error))))))
 
 (defn stop-fixture!
   [{:keys [^Process process stdout-stream stdout-reader stdout-future
-           stderr-future state-file]
+           stderr-stream stderr-future state-file]
     :as fixture}]
   (let [primary-error (atom nil)]
     (try
@@ -297,7 +393,7 @@
           (throw (ex-info "Fixture cleanup was not confirmed" {:pid (.pid process)})))
         (let [{:keys [stderr]}
               (await-fixture-streams! stdout-stream stdout-reader
-                                      stdout-future stderr-future)]
+                                      stdout-future stderr-stream stderr-future)]
           (when-not (zero? (.exitValue process))
             (throw (ex-info "Fixture exited unsuccessfully"
                             {:exit (.exitValue process) :stderr stderr}))))
