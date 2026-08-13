@@ -49,12 +49,13 @@ steady processes per implementation. Each steady process runs 20,000 excluded
 warmup operations and 4,000 measured operations for each workload. Concurrency
 is explicitly 1. The fixed warmup is divided into 250-operation windows. In the
 final 16 windows, the median of the first eight window medians and the median
-of the last eight must have relative drift at most 15%. The first and last
-2,000-operation halves of the measured 4,000 operations must also have median
-drift at most 10%. These predeclared checks apply identically to both SDKs; any
-failed process aborts the run without truncating or deleting operations. Cold
-and steady execution alternate which implementation runs first to reduce
-host-drift bias. Override the output directory by invoking the runner directly:
+of the last eight have a 15% relative-drift reference. The first and last
+2,000-operation halves of the measured 4,000 operations have a 10%
+relative-drift reference. These unchanged values are report-only diagnostics:
+they never exclude, replace, or restart a process. Cold and steady execution
+alternate which implementation runs first to reduce host-drift bias. See the
+[predeclared methodology](METHODOLOGY.md). Override the output directory by
+invoking the runner directly:
 
 ```bash
 clojure -M:bench -m github.copilot-sdk.bench.runner \
@@ -124,18 +125,31 @@ endpoints at familywise alpha 0.05. Directional wording is allowed only when the
 Holm-adjusted p-value is at most 0.05; every other endpoint is labeled
 `no-supported-difference`. No endpoint or replicate is removed.
 
+Complete and report exactly one fresh 20-pair set under methodology version 2,
+even when a drift reference is exceeded or an endpoint is noisy or
+non-significant. Prior attempts and diagnostic pilots never contribute pairs or
+statistics.
+
 Operation-level pooled p50/p95/p99 and pooled ratios are descriptive only and
 appear separately from the confirmatory process-pair results. Twenty pairs give
 minimum two-sided exact resolution `2 / 2^20`, unlike five pairs whose minimum
 resolution is 0.0625.
 
+Latency and throughput for each workload come from the same measured batch and
+are not independent confirmations. Batch throughput includes runtime-specific
+sampling-loop overhead. The summary also reports
+`1000 * iterations / sum(raw latency samples)` as a descriptive sensitivity
+value that excludes sample storage and continuation work outside each per-call
+timer interval. It is not a fifth confirmatory endpoint.
+
 The runner serializes cold samples, applies bounded timeouts, validates every
 result, confirms child and fixture cleanup, verifies exact request counters,
 and validates the exact unique observation tuples expected by the profile.
 Duplicate, missing, malformed, non-finite, and unexpected observations fail the
-run. Warmup-window and measured-drift records are also exact-schema and
-exact-tuple validated; unstable rigorous records fail the run. It refuses
-comparison unless each matched fixture pair has identical
+run. Warmup-window, measured-drift, and runtime diagnostic records are also
+exact-schema and exact-tuple validated. Drift reference exceedances remain in
+the evidence and never fail the run. It refuses comparison unless each matched
+fixture pair has identical
 counts, per-request comparable hashes, and normalized sequence hashes, and
 unless start/end provenance and corpus hashes match.
 
@@ -159,10 +173,12 @@ Each run writes:
 |------|----------|
 | `metadata.json`, `metadata-final.json` | Start/end repository HEAD and dirty hash; benchmark-input hash; upstream commit/dirty hash; loaded Node entry, full dist, package, and lock hashes; toolchains; host; profile; corpus; and bootstrap settings |
 | `observations.ndjson` | One raw observation per line using `schema/observation.schema.json`, including its independent process `replicate` |
-| `stability.ndjson` | Per-process warmup-window medians, actual cumulative warmup counts, final stability outcomes, and first/last measured-window drift using `schema/stability.schema.json` |
+| `stability.ndjson` | Per-process warmup-window medians, actual cumulative warmup counts, unchanged report-only reference bounds, and first/last measured-window drift using `schema/stability.schema.json` |
+| `diagnostics.ndjson` | Out-of-timing runtime checkpoints using `schema/diagnostic.schema.json`: process CPU/RSS, heap, GC/JIT or V8 code state, host load, elapsed time, and execution order |
 | `*-NNN-fixture.json` | Fresh per-replicate exact request/connection counts, corpus hash, cleanup signal, and comparable sequence hash |
 | `*-NNN-trace.ndjson` | Fresh per-replicate raw-request and full-envelope comparable hashes; full canonical inputs remain in the deterministic fixture/corpus source |
-| `summary.json` | Descriptive operation summaries, raw stability diagnostics, and separate four-endpoint confirmatory process-pair effects/CIs/exact p-values/Holm conclusions |
+| `summary.json` | Descriptive operation summaries, stationarity/runtime diagnostics, and separate four-endpoint confirmatory process-pair effects/CIs/exact p-values/Holm conclusions |
+| `evidence-manifest.json` | SHA-256 and byte length for every completed evidence file except the manifest itself |
 
 Ratios are labeled in `summary.json`. Descriptive operation summaries never
 drive directional conclusions. Confirmatory latency ratios below 1 favor
@@ -171,7 +187,8 @@ its multiplicative ratio is omitted unless every matched delta in both
 implementations is strictly positive. Zero, negative, and mixed-sign pairs are
 retained in raw/descriptive values but never conditionally dropped or absolutized.
 
-Smoke is correctness-only. A future rigorous run may use directional wording
-only from a complete `summary.json` endpoint whose Holm-adjusted exact p-value
-is at most 0.05. Operation summaries and bootstrap intervals never establish a
-directional conclusion by themselves.
+Smoke is correctness-only. A rigorous run may use directional wording only
+from a complete `summary.json` endpoint whose Holm-adjusted exact p-value is at
+most 0.05. Operation summaries and bootstrap intervals never establish a
+directional conclusion by themselves. A non-significant endpoint does not
+establish equivalence, parity, or non-inferiority.

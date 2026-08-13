@@ -4,6 +4,7 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk.bench.analysis :as analysis]
+            [github.copilot-sdk.bench.diagnostics :as diagnostics]
             [github.copilot-sdk.bench.driver :as bench-driver]
             [github.copilot-sdk.bench.protocol :as bench-protocol]
             [github.copilot-sdk.bench.runner :as runner])
@@ -40,6 +41,34 @@
    :sample-index sample-index
    :value value
    :unit (if (= metric "rss-delta") "bytes" "ms")})
+
+(defn diagnostic-record
+  [implementation workload checkpoint window-index timed-count validation-count]
+  {:schema-version 1
+   :run-id "run"
+   :implementation implementation
+   :workload workload
+   :replicate 0
+   :pair-order-index (if (= implementation "clojure") 0 1)
+   :workload-order-index (if (= workload "ping") 0 1)
+   :checkpoint checkpoint
+   :window-index window-index
+   :timed-operation-count timed-count
+   :validation-operation-count validation-count
+   :wall-time "2026-08-13T08:00:00Z"
+   :elapsed-ms 1.0
+   :process-cpu-ms 1.0
+   :rss-bytes 1024
+   :heap-used-bytes 512
+   :heap-committed-bytes 1024
+   :gc-count 0
+   :gc-time-ms 0.0
+   :jit-code-bytes nil
+   :jit-compilation-time-ms 0.0
+   :event-loop-idle-ms nil
+   :total-allocated-bytes nil
+   :host-load-average-1m 1.0
+   :available-processors 10})
 
 (deftest observation-schema-contract
   (testing "valid latency, batch, and memory observations are accepted"
@@ -106,20 +135,21 @@
   (let [profile {:warmup 20
                  :warmup-window-size 5
                  :stable-window-count 2
-                 :max-warmup-relative-drift 0.10
+                 :warmup-relative-drift-reference 0.10
                  :steady-repetitions 1
                  :iterations 10
-                 :max-measured-relative-drift 0.10}
+                 :measured-relative-drift-reference 0.10}
         records
         (vec
          (for [implementation ["clojure" "node"]
                workload ["ping" "send-and-wait"]
-               [kind window-index operation-count median reference drift stable]
-               [["warmup-window" 0 5 1.0 nil nil false]
-                ["warmup-window" 1 10 1.0 nil nil false]
-                ["warmup-window" 2 15 1.0 nil nil false]
-                ["warmup-window" 3 20 1.0 nil 0.0 true]
-                ["measurement-drift" 0 10 1.0 1.05 0.05 true]]]
+               [kind window-index operation-count median reference drift
+                drift-reference within-reference]
+               [["warmup-window" 0 5 1.0 nil nil 0.10 nil]
+                ["warmup-window" 1 10 1.0 nil nil 0.10 nil]
+                ["warmup-window" 2 15 1.0 nil nil 0.10 nil]
+                ["warmup-window" 3 20 1.0 nil 0.0 0.10 true]
+                ["measurement-drift" 0 10 1.0 1.05 0.05 0.10 true]]]
            {:schema-version 1
             :run-id "stability"
             :implementation implementation
@@ -131,12 +161,25 @@
             :median-ms median
             :reference-median-ms reference
             :relative-drift drift
-            :stable stable}))]
+            :relative-drift-reference drift-reference
+            :within-reference-bound within-reference}))
+        outside-reference
+        (mapv (fn [record]
+                (if (= "measurement-drift" (:kind record))
+                  (assoc record
+                         :reference-median-ms 1.25
+                         :relative-drift 0.25
+                         :within-reference-bound false)
+                  record))
+              records)]
     (is (= records (analysis/validate-stability-set! records profile)))
+    (is (= outside-reference
+           (analysis/validate-stability-set! outside-reference profile)))
     (doseq [invalid [(conj records (first records))
                      (pop records)
-                     (assoc-in records [3 :stable] false)
+                     (assoc-in records [3 :within-reference-bound] false)
                      (assoc-in records [3 :relative-drift] 99.0)
+                     (assoc-in records [3 :relative-drift-reference] 99.0)
                      (-> records
                          (assoc-in [2 :median-ms] 99.0)
                          (assoc-in [3 :median-ms] 99.0))
@@ -169,9 +212,70 @@
                             :reference-median-ms])))
     (is (= {:type "number" :minimum 0}
            (get-in by-kind ["measurement-drift" :properties :relative-drift])))
+    (is (= {:type "boolean"}
+           (get-in by-kind ["measurement-drift" :properties
+                            :within-reference-bound])))
     (is (= {:const nil}
            (get-in by-kind ["warmup-window" :properties
                             :reference-median-ms])))))
+
+(deftest rigorous-stationarity-protocol-is-report-only
+  (let [profile (get runner/profiles "rigorous")]
+    (is (= "reported-covariate-no-selection"
+           (:stationarity-policy profile)))
+    (is (= 0.15 (:warmup-relative-drift-reference profile)))
+    (is (= 0.10 (:measured-relative-drift-reference profile)))
+    (is (some #{:run-id} analysis/comparable-metadata-keys))
+    (is (not (contains? profile :max-warmup-relative-drift)))
+    (is (not (contains? profile :max-measured-relative-drift)))))
+
+(deftest runtime-diagnostic-record-contract
+  (let [profile {:warmup 20
+                 :warmup-window-size 5
+                 :steady-repetitions 1
+                 :iterations 10}
+        records
+        (vec
+         (for [implementation ["clojure" "node"]
+               workload ["ping" "send-and-wait"]
+               [checkpoint window-index timed-count validation-count]
+               (concat [["pre-warmup" nil 0 1]]
+                       (for [window-index (range 4)]
+                         ["warmup-window" window-index
+                          (* (inc window-index) 5) 1])
+                       [["pre-measurement" nil 20 1]
+                        ["post-measurement" nil 30 1]
+                        ["postflight" nil 30 2]])]
+           (diagnostic-record implementation workload checkpoint window-index
+                              timed-count validation-count)))]
+    (is (= records (analysis/validate-diagnostic-set! records profile)))
+    (doseq [invalid [(conj records (first records))
+                     (pop records)
+                     (assoc-in records [0 :elapsed-ms] Double/NaN)
+                     (assoc-in records [0 :rss-bytes] -1)
+                     (assoc-in records [0 :checkpoint] "during-measurement")
+                     (assoc-in records [1 :timed-operation-count] 99)
+                     (assoc-in records [0 :pair-order-index] 1)]]
+      (is (thrown? clojure.lang.ExceptionInfo
+                   (analysis/validate-diagnostic-set! invalid profile))))
+    (let [record
+          (diagnostics/capture
+           {:run-id "run"
+            :implementation "clojure"
+            :workload "ping"
+            :replicate 0
+            :pair-order-index 0
+            :workload-order-index 0
+            :checkpoint "pre-warmup"
+            :window-index nil
+            :timed-operation-count 0
+            :validation-operation-count 1
+            :started-ns (System/nanoTime)
+            :rss-bytes 1024})]
+      (is (= analysis/diagnostic-keys (set (keys record))))
+      (is (= record (analysis/validate-diagnostic-record! record)))
+      (is (= 1024 (:rss-bytes record)))
+      (is (pos? (:available-processors record))))))
 
 (deftest analysis-contract
   (let [observations
@@ -196,6 +300,15 @@
                    (:descriptive-results summary))]
     (is (= 4 (get-in ping [:clojure :n])))
     (is (= 2.0 (get-in ping [:clojure :p99-ms])))
+    (is (= 500.0
+           (get-in ping
+                   [:clojure
+                    :sample-timing-throughput-sensitivity-ops-per-second
+                    :p50])))
+    (is (= 0.5
+           (get-in ping
+                   [:clojure-node-ratio
+                    :sample-timing-throughput-sensitivity])))
     (is (= 2.0 (get-in ping [:clojure-node-ratio :pooled-p50-latency])))
     (is (= "not-run" (get-in summary [:confirmatory :status])))))
 
@@ -292,6 +405,30 @@
       (is (false? (.exists summary-file)))
       (finally
         (.delete directory)))))
+
+(deftest evidence-manifest-hashes-every-completed-output
+  (let [directory (.toFile (Files/createTempDirectory
+                            "copilot-benchmark-manifest"
+                            (make-array java.nio.file.attribute.FileAttribute 0)))
+        first-file (io/file directory "metadata.json")
+        second-file (io/file directory "summary.json")
+        manifest-file (io/file directory "evidence-manifest.json")]
+    (try
+      (spit first-file "metadata")
+      (spit second-file "summary")
+      (let [manifest (runner/write-evidence-manifest! directory)]
+        (is (= 1 (:schema-version manifest)))
+        (is (= "SHA-256" (:hash-algorithm manifest)))
+        (is (= #{"metadata.json" "summary.json"}
+               (set (keys (:files manifest)))))
+        (is (every? #(re-matches #"[0-9a-f]{64}" (:sha256 %))
+                    (vals (:files manifest))))
+        (is (= (json/write-str manifest :escape-slash false)
+               (slurp manifest-file))))
+      (finally
+        (doseq [file [manifest-file second-file first-file directory]
+                :when (.exists file)]
+          (.delete file))))))
 
 (deftest metadata-comparison-contract
   (is (= matching-metadata

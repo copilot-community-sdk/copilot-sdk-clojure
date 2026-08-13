@@ -15,7 +15,8 @@
     "median-ms",
     "reference-median-ms",
     "relative-drift",
-    "stable"
+    "relative-drift-reference",
+    "within-reference-bound"
   ],
   "properties": {
     "schema-version": { "const": 1 },
@@ -29,7 +30,8 @@
     "median-ms": { "type": "number", "exclusiveMinimum": 0 },
     "reference-median-ms": { "type": ["number", "null"] },
     "relative-drift": { "type": ["number", "null"], "minimum": 0 },
-    "stable": { "type": "boolean" }
+    "relative-drift-reference": { "type": "number", "minimum": 0 },
+    "within-reference-bound": { "type": ["boolean", "null"] }
   },
   "allOf": [
     {
@@ -45,7 +47,8 @@
           "relative-drift": {
             "type": "number",
             "minimum": 0
-          }
+          },
+          "within-reference-bound": { "type": "boolean" }
         }
       }
     },

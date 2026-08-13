@@ -9,7 +9,8 @@
     :metric :replicate :sample-index :value :unit})
 
 (def comparable-metadata-keys
-  [:schema-version :fixture-version :corpus-sha256 :profile
+  [:schema-version :methodology-version :run-id :fixture-version
+   :corpus-sha256 :profile
    :warmup :iterations :steady-repetitions :concurrency :host-id
    :repository-commit :repository-dirty-sha256 :benchmark-inputs-sha256
    :node-sdk-repository-root :node-sdk-commit :node-sdk-dirty-sha256
@@ -17,19 +18,33 @@
    :node-entry-sha256 :node-dist-sha256 :node-package-sha256
    :node-lock-sha256 :copilot-cli-version :node-version :java-version
    :clojure-cli-version :babashka-version :os :cpu
-   :warmup-window-size :stable-window-count :max-warmup-relative-drift
-   :measured-drift-window :max-measured-relative-drift :confirmatory?
-   :confirmatory-min-pairs :familywise-alpha])
+   :warmup-window-size :stable-window-count
+   :warmup-relative-drift-reference :measured-drift-window
+   :measured-relative-drift-reference :stationarity-policy
+   :diagnostic-schema-version :confirmatory? :confirmatory-min-pairs
+   :familywise-alpha])
 
 (def stability-keys
   #{:schema-version :run-id :implementation :workload :replicate :kind
     :window-index :operation-count :median-ms :reference-median-ms
-    :relative-drift :stable})
+    :relative-drift :relative-drift-reference :within-reference-bound})
+
+(def diagnostic-keys
+  #{:schema-version :run-id :implementation :workload :replicate
+    :pair-order-index :workload-order-index :checkpoint :window-index
+    :timed-operation-count :validation-operation-count :wall-time :elapsed-ms
+    :process-cpu-ms :rss-bytes :heap-used-bytes :heap-committed-bytes
+    :gc-count :gc-time-ms :jit-code-bytes :jit-compilation-time-ms
+    :event-loop-idle-ms :total-allocated-bytes :host-load-average-1m
+    :available-processors})
 
 (def implementations #{"clojure" "node"})
 (def phases #{"cold" "steady"})
 (def workloads #{"process" "connect-ping" "ping" "send-and-wait"})
 (def metrics #{"latency" "batch-duration" "rss-delta"})
+(def diagnostic-checkpoints
+  #{"pre-warmup" "warmup-window" "pre-measurement"
+    "post-measurement" "postflight"})
 
 (def allowed-combinations
   #{["cold" "process" "latency" "ms"]
@@ -174,16 +189,20 @@
                     (pos-int? (:operation-count record))
                     (finite-number? (:median-ms record))
                     (pos? (:median-ms record))
-                    (boolean? (:stable record))
+                    (finite-number? (:relative-drift-reference record))
+                    (not (neg? (:relative-drift-reference record)))
                     (if warmup?
                       (and (nil? (:reference-median-ms record))
-                           (or (nil? (:relative-drift record))
-                               (and (finite-number? (:relative-drift record))
-                                    (not (neg? (:relative-drift record))))))
+                           (if (nil? (:relative-drift record))
+                             (nil? (:within-reference-bound record))
+                             (and (finite-number? (:relative-drift record))
+                                  (not (neg? (:relative-drift record)))
+                                  (boolean? (:within-reference-bound record)))))
                       (and (finite-number? (:reference-median-ms record))
                            (pos? (:reference-median-ms record))
                            (finite-number? (:relative-drift record))
-                           (not (neg? (:relative-drift record))))))]
+                           (not (neg? (:relative-drift record)))
+                           (boolean? (:within-reference-bound record)))))]
     (when-not valid?
       (throw (ex-info "Invalid benchmark stability record"
                       {:record record
@@ -198,6 +217,132 @@
          (remove str/blank?)
          (mapv #(-> (json/read-str % :key-fn keyword)
                     validate-stability-record!)))))
+
+(defn- nullable-nonnegative-number?
+  [value]
+  (or (nil? value)
+      (and (finite-number? value) (not (neg? value)))))
+
+(defn- nullable-nonnegative-integer?
+  [value]
+  (or (nil? value) (nat-int? value)))
+
+(defn- instant-string?
+  [value]
+  (and (string? value)
+       (try
+         (java.time.Instant/parse value)
+         true
+         (catch java.time.format.DateTimeParseException _
+           false))))
+
+(defn validate-diagnostic-record!
+  [record]
+  (let [keys-present (set (keys record))
+        warmup-window? (= "warmup-window" (:checkpoint record))
+        valid?
+        (and (= diagnostic-keys keys-present)
+             (= 1 (:schema-version record))
+             (string? (:run-id record))
+             (not (str/blank? (:run-id record)))
+             (contains? implementations (:implementation record))
+             (#{"ping" "send-and-wait"} (:workload record))
+             (nat-int? (:replicate record))
+             (#{0 1} (:pair-order-index record))
+             (#{0 1} (:workload-order-index record))
+             (contains? diagnostic-checkpoints (:checkpoint record))
+             (if warmup-window?
+               (nat-int? (:window-index record))
+               (nil? (:window-index record)))
+             (nat-int? (:timed-operation-count record))
+             (nat-int? (:validation-operation-count record))
+             (instant-string? (:wall-time record))
+             (and (finite-number? (:elapsed-ms record))
+                  (not (neg? (:elapsed-ms record))))
+             (nullable-nonnegative-number? (:process-cpu-ms record))
+             (nullable-nonnegative-integer? (:rss-bytes record))
+             (nullable-nonnegative-integer? (:heap-used-bytes record))
+             (nullable-nonnegative-integer? (:heap-committed-bytes record))
+             (nullable-nonnegative-integer? (:gc-count record))
+             (nullable-nonnegative-number? (:gc-time-ms record))
+             (nullable-nonnegative-integer? (:jit-code-bytes record))
+             (nullable-nonnegative-number? (:jit-compilation-time-ms record))
+             (nullable-nonnegative-number? (:event-loop-idle-ms record))
+             (nullable-nonnegative-integer? (:total-allocated-bytes record))
+             (nullable-nonnegative-number? (:host-load-average-1m record))
+             (pos-int? (:available-processors record)))]
+    (when-not valid?
+      (throw (ex-info "Invalid benchmark diagnostic record"
+                      {:record record
+                       :missing (set/difference diagnostic-keys keys-present)
+                       :extra (set/difference keys-present diagnostic-keys)})))
+    record))
+
+(defn read-diagnostic-records
+  [file]
+  (with-open [reader (io/reader file)]
+    (->> (line-seq reader)
+         (remove str/blank?)
+         (mapv #(-> (json/read-str % :key-fn keyword)
+                    validate-diagnostic-record!)))))
+
+(defn diagnostic-key
+  [record]
+  ((juxt :implementation :workload :replicate :checkpoint :window-index)
+   record))
+
+(defn- expected-pair-order-index
+  [implementation replicate]
+  (let [first-implementation (if (even? replicate) "clojure" "node")]
+    (if (= implementation first-implementation) 0 1)))
+
+(defn expected-diagnostic-records
+  [{:keys [warmup warmup-window-size steady-repetitions iterations]}]
+  (into
+   {}
+   (for [implementation implementations
+         workload ["ping" "send-and-wait"]
+         replicate (range steady-repetitions)
+         [checkpoint window-index timed-count validation-count]
+         (concat
+          [["pre-warmup" nil 0 1]]
+          (for [window-index (range (quot warmup warmup-window-size))]
+            ["warmup-window" window-index
+             (* (inc window-index) warmup-window-size) 1])
+          [["pre-measurement" nil warmup 1]
+           ["post-measurement" nil (+ warmup iterations) 1]
+           ["postflight" nil (+ warmup iterations) 2]])]
+     (let [key [implementation workload replicate checkpoint window-index]]
+       [key {:pair-order-index
+             (expected-pair-order-index implementation replicate)
+             :workload-order-index (if (= workload "ping") 0 1)
+             :timed-operation-count timed-count
+             :validation-operation-count validation-count}]))))
+
+(defn validate-diagnostic-set!
+  [records profile]
+  (doseq [record records]
+    (validate-diagnostic-record! record))
+  (let [frequencies (frequencies (map diagnostic-key records))
+        duplicates (into {} (filter (fn [[_ count]] (> count 1))) frequencies)
+        actual (set (keys frequencies))
+        expected-records (expected-diagnostic-records profile)
+        expected (set (keys expected-records))
+        missing (set/difference expected actual)
+        unexpected (set/difference actual expected)]
+    (when (or (seq duplicates) (seq missing) (seq unexpected))
+      (throw (ex-info "Invalid benchmark diagnostic record set"
+                      {:duplicates duplicates :missing missing
+                       :unexpected unexpected})))
+    (doseq [record records
+            :let [expected-fields
+                  (get expected-records (diagnostic-key record))]
+            [field expected-value] expected-fields]
+      (when-not (= expected-value (get record field))
+        (throw (ex-info "Benchmark diagnostic checkpoint mismatch"
+                        {:record record :field field
+                         :expected expected-value}))))
+    records))
 
 (defn observation-key
   [observation]
@@ -266,7 +411,8 @@
 
 (defn validate-stability-set!
   [records {:keys [warmup-window-size stable-window-count iterations
-                   max-warmup-relative-drift max-measured-relative-drift]
+                   warmup-relative-drift-reference
+                   measured-relative-drift-reference]
             :as profile}]
   (doseq [record records]
     (validate-stability-record! record))
@@ -306,9 +452,9 @@
                         first-median (percentile previous 0.50)
                         last-median (percentile recent 0.50)]
                     (/ (Math/abs (- last-median first-median)) first-median)))
-                expected-stable (boolean
-                                 (and expected-drift
-                                      (<= expected-drift max-warmup-relative-drift)))]
+                expected-within-reference
+                (when expected-drift
+                  (<= expected-drift warmup-relative-drift-reference))]
             (when-not (= has-drift? (some? (:relative-drift record)))
               (throw (ex-info "Invalid warmup drift availability"
                               {:workload workload :replicate replicate :record record})))
@@ -317,31 +463,42 @@
               (throw (ex-info "Recorded warmup drift does not match recomputation"
                               {:workload workload :replicate replicate
                                :record record :expected expected-drift})))
-            (when-not (= expected-stable (:stable record))
-              (throw (ex-info "Recorded warmup stability flag is invalid"
+            (when-not (close? (:relative-drift-reference record)
+                              warmup-relative-drift-reference)
+              (throw (ex-info "Recorded warmup drift reference is invalid"
                               {:workload workload :replicate replicate
-                               :record record :expected expected-stable})))))
+                               :record record
+                               :expected warmup-relative-drift-reference})))
+            (when-not (= expected-within-reference
+                         (:within-reference-bound record))
+              (throw (ex-info "Recorded warmup reference flag is invalid"
+                              {:workload workload :replicate replicate
+                               :record record
+                               :expected expected-within-reference})))))
         (let [expected-measured-drift
               (/ (Math/abs (- (:reference-median-ms measurement)
                               (:median-ms measurement)))
                  (:median-ms measurement))
-              expected-measured-stable
-              (<= expected-measured-drift max-measured-relative-drift)]
+              expected-within-reference
+              (<= expected-measured-drift measured-relative-drift-reference)]
           (when-not (close? (:relative-drift measurement) expected-measured-drift)
             (throw (ex-info "Recorded measured drift does not match recomputation"
                             {:workload workload :replicate replicate
                              :record measurement :expected expected-measured-drift})))
-          (when-not (= expected-measured-stable (:stable measurement))
-            (throw (ex-info "Recorded measured stability flag is invalid"
+          (when-not (close? (:relative-drift-reference measurement)
+                            measured-relative-drift-reference)
+            (throw (ex-info "Recorded measured drift reference is invalid"
                             {:workload workload :replicate replicate
-                             :record measurement :expected expected-measured-stable}))))
-        (when-not (:stable (last warmup-records))
-          (throw (ex-info "Warmup failed stability criterion"
-                          {:workload workload :replicate replicate
-                           :record (last warmup-records)})))
-        (when-not (and (= iterations (:operation-count measurement))
-                       (:stable measurement))
-          (throw (ex-info "Measured window drift failed stability criterion"
+                             :record measurement
+                             :expected measured-relative-drift-reference})))
+          (when-not (= expected-within-reference
+                       (:within-reference-bound measurement))
+            (throw (ex-info "Recorded measured reference flag is invalid"
+                            {:workload workload :replicate replicate
+                             :record measurement
+                             :expected expected-within-reference}))))
+        (when-not (= iterations (:operation-count measurement))
+          (throw (ex-info "Invalid measured operation count"
                           {:workload workload :replicate replicate
                            :record measurement})))))
     records))
@@ -373,11 +530,25 @@
    :p50 (percentile samples 0.50)
    :max (apply max samples)})
 
+(defn- sample-timing-throughput-clusters
+  [latency-clusters]
+  (into
+   (sorted-map)
+   (map (fn [[replicate values]]
+          [replicate
+           [(/ (* 1000.0 (count values))
+               (reduce + values))]]))
+   latency-clusters))
+
 (defn- workload-summary
   [observations implementation phase workload iterations]
-  (let [latencies (-> (cluster-values observations implementation phase workload
-                                      "latency" identity)
-                      flattened-values)
+  (let [latency-clusters (cluster-values observations implementation phase workload
+                                         "latency" identity)
+        latencies (flattened-values latency-clusters)
+        sample-timing-throughput
+        (-> latency-clusters
+            sample-timing-throughput-clusters
+            flattened-values)
         throughput (-> (cluster-values observations implementation phase workload
                                        "batch-duration"
                                        #(/ (* 1000.0 iterations) %))
@@ -386,6 +557,9 @@
                                 "rss-delta" identity)
                 flattened-values)]
     (cond-> (summarize-latencies latencies)
+      (= phase "steady")
+      (assoc :sample-timing-throughput-sensitivity-ops-per-second
+             (distribution-summary sample-timing-throughput))
       (seq throughput)
       (assoc :throughput-ops-per-second (distribution-summary throughput))
       (seq rss)
@@ -578,7 +752,7 @@
                                         adjusted-p familywise-alpha))))
            unadjusted)}))
 
-(defn- stability-diagnostics
+(defn- stationarity-diagnostics
   [records]
   (mapv
    (fn [[[implementation workload replicate] values]]
@@ -591,17 +765,76 @@
         :actual-warmup-count (:operation-count final-warmup)
         :final-warmup-window-median-ms (:median-ms final-warmup)
         :final-warmup-relative-drift (:relative-drift final-warmup)
-        :warmup-stable (:stable final-warmup)
+        :warmup-relative-drift-reference
+        (:relative-drift-reference final-warmup)
+        :warmup-within-reference-bound
+        (:within-reference-bound final-warmup)
         :first-measured-window-median-ms (:median-ms measurement)
         :last-measured-window-median-ms (:reference-median-ms measurement)
         :measured-relative-drift (:relative-drift measurement)
-        :measured-stable (:stable measurement)}))
+        :measured-relative-drift-reference
+        (:relative-drift-reference measurement)
+        :measured-within-reference-bound
+        (:within-reference-bound measurement)}))
    (sort-by key (group-by (juxt :implementation :workload :replicate) records))))
+
+(def runtime-diagnostics-delta-keys
+  [:elapsed-ms :process-cpu-ms :rss-bytes :heap-used-bytes
+   :heap-committed-bytes :gc-count :gc-time-ms :jit-code-bytes
+   :jit-compilation-time-ms :event-loop-idle-ms :total-allocated-bytes])
+
+(defn- diagnostic-deltas
+  [start end]
+  (into {}
+        (map (fn [key]
+               [key (when (and (number? (get start key))
+                               (number? (get end key)))
+                      (- (get end key) (get start key)))]))
+        runtime-diagnostics-delta-keys))
+
+(defn- range-summary
+  [values]
+  (let [values (filterv number? values)]
+    (when (seq values)
+      {:min (apply min values)
+       :max (apply max values)})))
+
+(defn runtime-diagnostics-summary
+  [records]
+  {:record-count (count records)
+   :by-process-workload
+   (mapv
+    (fn [[[implementation workload replicate] values]]
+      (let [pre-warmup (first (filter #(= "pre-warmup" (:checkpoint %)) values))
+            pre-measurement
+            (first (filter #(= "pre-measurement" (:checkpoint %)) values))
+            post-measurement
+            (first (filter #(= "post-measurement" (:checkpoint %)) values))
+            postflight (first (filter #(= "postflight" (:checkpoint %)) values))]
+        {:implementation implementation
+         :workload workload
+         :replicate replicate
+         :pair-order-index (:pair-order-index pre-warmup)
+         :workload-order-index (:workload-order-index pre-warmup)
+         :host-load-average-1m
+         (range-summary (map :host-load-average-1m values))
+         :warmup-deltas (diagnostic-deltas pre-warmup pre-measurement)
+         :measurement-deltas
+         (diagnostic-deltas pre-measurement post-measurement)
+         :postflight-elapsed-ms (:elapsed-ms postflight)}))
+    (sort-by key (group-by (juxt :implementation :workload :replicate) records)))})
 
 (defn analyze
   ([observations metadata]
-   (analyze observations metadata []))
+   (analyze observations metadata [] []))
   ([observations {:keys [iterations confirmatory?] :as metadata} stability]
+   (analyze observations metadata stability []))
+  ([observations
+    {:keys [iterations confirmatory? stationarity-policy
+            warmup-relative-drift-reference
+            measured-relative-drift-reference]
+     :as metadata}
+    stability diagnostics]
    (let [configurations [["cold" "process"]
                          ["cold" "connect-ping"]
                          ["steady" "ping"]
@@ -630,8 +863,20 @@
                                             "rss-delta" identity)
                 node-rss (cluster-values observations "node" phase workload
                                          "rss-delta" identity)
+                clojure-sample-timing-throughput
+                (some-> (cluster-values observations "clojure" phase workload
+                                        "latency" identity)
+                        sample-timing-throughput-clusters)
+                node-sample-timing-throughput
+                (some-> (cluster-values observations "node" phase workload
+                                        "latency" identity)
+                        sample-timing-throughput-clusters)
                 throughput-ratio (when (seq clojure-throughput)
                                    (paired-ratio clojure-throughput node-throughput))
+                sample-timing-throughput-ratio
+                (when (= phase "steady")
+                  (paired-ratio clojure-sample-timing-throughput
+                                node-sample-timing-throughput))
                 rss-ratio (descriptive-rss-ratio clojure-rss node-rss)]
             {:phase phase
              :workload workload
@@ -645,10 +890,31 @@
                       (paired-ratio clojure-latency node-latency)}
                throughput-ratio
                (assoc :throughput throughput-ratio)
+               sample-timing-throughput-ratio
+               (assoc :sample-timing-throughput-sensitivity
+                      sample-timing-throughput-ratio)
                rss-ratio
                (assoc :rss-delta rss-ratio))}))
         configurations)}
-       (seq stability) (assoc :stability (stability-diagnostics stability))
+       (seq stability)
+       (assoc
+        :stationarity
+        (let [records (stationarity-diagnostics stability)]
+          {:policy stationarity-policy
+           :selection "none; reference exceedances never exclude or replace a pair"
+           :reference-bounds
+           {:warmup-relative-drift warmup-relative-drift-reference
+            :measured-relative-drift measured-relative-drift-reference}
+           :reported-reference-exceedances
+           (count
+            (filter false?
+                    (mapcat
+                     (juxt :warmup-within-reference-bound
+                           :measured-within-reference-bound)
+                     records)))
+           :diagnostics records}))
+       (seq diagnostics)
+       (assoc :runtime-diagnostics (runtime-diagnostics-summary diagnostics))
        true (assoc :confirmatory
                    (if confirmatory?
                      (confirmatory-analysis observations metadata)

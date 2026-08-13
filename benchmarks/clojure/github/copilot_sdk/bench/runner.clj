@@ -12,13 +12,16 @@
 
 (def profiles
   {"smoke" {:cold-start-count 2
+            :methodology-version 2
             :warmup 20
             :warmup-window-size 5
             :stable-window-count 2
-            :max-warmup-relative-drift 10.0
+            :warmup-relative-drift-reference 10.0
             :iterations 10
             :measured-drift-window 5
-            :max-measured-relative-drift 10.0
+            :measured-relative-drift-reference 10.0
+            :stationarity-policy "reported-covariate-no-selection"
+            :diagnostic-schema-version 1
             :steady-repetitions 1
             :confirmatory? false
             :confirmatory-min-pairs 20
@@ -29,13 +32,16 @@
             :bootstrap-seed 424242
             :bootstrap-resamples 1000}
    "rigorous" {:cold-start-count 30
+               :methodology-version 2
                :warmup 20000
                :warmup-window-size 250
                :stable-window-count 8
-               :max-warmup-relative-drift 0.15
+               :warmup-relative-drift-reference 0.15
                :iterations 4000
                :measured-drift-window 2000
-               :max-measured-relative-drift 0.10
+               :measured-relative-drift-reference 0.10
+               :stationarity-policy "reported-covariate-no-selection"
+               :diagnostic-schema-version 1
                :steady-repetitions 20
                :confirmatory? true
                :confirmatory-min-pairs 20
@@ -163,7 +169,7 @@
    "deps.edn"])
 
 (defn- collect-metadata
-  [profile-name profile corpus node-root]
+  [profile-name profile corpus node-root run-id]
   (let [os (checked-command ["uname" "-a"])
         cpu (if (str/includes? (System/getProperty "os.name") "Mac")
               (checked-command ["sysctl" "-n" "machdep.cpu.brand_string"])
@@ -183,6 +189,8 @@
                      "--untracked-files=all" "--" "."])]
     (merge
      {:schema-version 1
+      :methodology-version (:methodology-version profile)
+      :run-id run-id
       :fixture-version (get corpus "fixtureVersion")
       :corpus-sha256 (sha256-file "benchmarks/corpus.json")
       :profile profile-name
@@ -220,8 +228,11 @@
      (select-keys profile [:timeout-ms :driver-timeout-ms
                            :bootstrap-seed :bootstrap-resamples
                            :warmup-window-size :stable-window-count
-                           :max-warmup-relative-drift :measured-drift-window
-                           :max-measured-relative-drift :confirmatory?
+                           :warmup-relative-drift-reference
+                           :measured-drift-window
+                           :measured-relative-drift-reference
+                           :stationarity-policy :diagnostic-schema-version
+                           :confirmatory?
                            :confirmatory-min-pairs :familywise-alpha]))))
 
 (defn- evidence-prefix
@@ -426,27 +437,30 @@
        (get-in fixture [:readiness :port])))
 
 (defn- driver-command
-  [implementation mode uri output stability-output run-id profile node-root
-   sample-index replicate sample-offset]
+  [implementation mode uri output stability-output diagnostics-output run-id
+   profile node-root sample-index replicate pair-order-index sample-offset]
   (let [common [(str "--mode=" mode)
                 (str "--uri=" uri)
                 (str "--corpus=" (.getCanonicalPath (io/file "benchmarks/corpus.json")))
                 (str "--output=" (.getCanonicalPath output))
                 (str "--stability-output=" (.getCanonicalPath stability-output))
+                (str "--diagnostics-output="
+                     (.getCanonicalPath diagnostics-output))
                 (str "--run-id=" run-id)
                 (str "--warmup=" (:warmup profile))
                 (str "--iterations=" (:iterations profile))
                 (str "--timeout-ms=" (:timeout-ms profile))
                 (str "--sample-index=" sample-index)
                 (str "--replicate=" replicate)
+                (str "--pair-order-index=" pair-order-index)
                 (str "--sample-offset=" sample-offset)
                 (str "--warmup-window-size=" (:warmup-window-size profile))
                 (str "--stable-window-count=" (:stable-window-count profile))
-                (str "--max-warmup-relative-drift="
-                     (:max-warmup-relative-drift profile))
+                (str "--warmup-relative-drift-reference="
+                     (:warmup-relative-drift-reference profile))
                 (str "--measured-drift-window=" (:measured-drift-window profile))
-                (str "--max-measured-relative-drift="
-                     (:max-measured-relative-drift profile))]]
+                (str "--measured-relative-drift-reference="
+                     (:measured-relative-drift-reference profile))]]
     (case implementation
       "node" (into ["node" "benchmarks/node/driver.cjs"
                     (str "--node-sdk-root=" node-root)]
@@ -504,8 +518,8 @@
                      :actual (:connectionCount state)}))))
 
 (defn- run-sample!
-  [implementation phase replicate output stability-output run-id profile node-root
-   output-dir]
+  [implementation phase replicate pair-order-index output stability-output
+   diagnostics-output run-id profile node-root output-dir]
   (let [fixture (start-fixture! implementation phase replicate output-dir)
         primary-error (atom nil)
         finished (atom nil)]
@@ -513,7 +527,8 @@
       (let [mode (if (= phase "cold") "cold" "steady")
             command (driver-command
                      implementation mode (fixture-uri fixture) output stability-output
-                     run-id profile node-root replicate replicate
+                     diagnostics-output run-id profile node-root replicate replicate
+                     pair-order-index
                      (if (= phase "steady") (* replicate (:iterations profile)) 0))
             started (System/nanoTime)]
         (run-driver! command (:driver-timeout-ms profile))
@@ -582,27 +597,55 @@
                        :node-count (count node-trace)})))))
 
 (defn- run-matched-phase!
-  [phase replicate-count output stability-output run-id profile node-root output-dir]
+  [phase replicate-count output stability-output diagnostics-output run-id profile
+   node-root output-dir]
   (dotimes [replicate replicate-count]
     (let [first-implementation (if (= phase "cold") "node" "clojure")
           matched
           (into {}
-                (map (fn [implementation]
-                       [implementation
-                        (run-sample! implementation phase replicate output
-                                     stability-output run-id profile node-root
-                                     output-dir)]))
+                (map-indexed
+                 (fn [pair-order-index implementation]
+                   [implementation
+                    (run-sample! implementation phase replicate
+                                 pair-order-index output stability-output
+                                 diagnostics-output run-id profile node-root
+                                 output-dir)]))
                 (alternating-order replicate first-implementation))]
       (assert-fixtures-match! phase replicate matched)))
   (println "completed matched" phase))
 
 (defn write-summary!
-  [summary-file observations stability profile metadata]
-  (analysis/validate-observation-set! observations profile)
-  (analysis/validate-stability-set! stability profile)
-  (let [summary (analysis/analyze observations metadata stability)]
-    (spit summary-file (json/write-str summary :escape-slash false))
-    summary))
+  ([summary-file observations stability profile metadata]
+   (write-summary! summary-file observations stability [] profile metadata))
+  ([summary-file observations stability diagnostics profile metadata]
+   (analysis/validate-observation-set! observations profile)
+   (analysis/validate-stability-set! stability profile)
+   (analysis/validate-diagnostic-set! diagnostics profile)
+   (let [summary (analysis/analyze observations metadata stability diagnostics)]
+     (spit summary-file (json/write-str summary :escape-slash false))
+     summary)))
+
+(defn write-evidence-manifest!
+  [output-dir]
+  (let [manifest-file (io/file output-dir "evidence-manifest.json")
+        files (->> (.listFiles (io/file output-dir))
+                   (filter #(.isFile ^File %))
+                   (remove #(= (.getCanonicalPath manifest-file)
+                               (.getCanonicalPath ^File %)))
+                   (sort-by #(.getName ^File %)))
+        manifest
+        {:schema-version 1
+         :hash-algorithm "SHA-256"
+         :files
+         (into
+          (sorted-map)
+          (map (fn [^File file]
+                 [(.getName file)
+                  {:bytes (.length file)
+                   :sha256 (sha256-file file)}]))
+          files)}]
+    (spit manifest-file (json/write-str manifest :escape-slash false))
+    manifest))
 
 (defn -main
   [& raw-args]
@@ -622,23 +665,31 @@
         run-id (str profile-name "-" (System/currentTimeMillis))
         node-root (resolve-node-root)
         corpus (json/read-str (slurp "benchmarks/corpus.json"))
-        initial-metadata (collect-metadata profile-name profile corpus node-root)
+        initial-metadata
+        (collect-metadata profile-name profile corpus node-root run-id)
         raw-file (io/file output-dir "observations.ndjson")
-        stability-file (io/file output-dir "stability.ndjson")]
+        stability-file (io/file output-dir "stability.ndjson")
+        diagnostics-file (io/file output-dir "diagnostics.ndjson")]
     (spit (io/file output-dir "metadata.json")
           (json/write-str initial-metadata :escape-slash false))
     (run-matched-phase! "cold" (:cold-start-count profile)
-                        raw-file stability-file run-id profile node-root output-dir)
+                        raw-file stability-file diagnostics-file run-id
+                        profile node-root output-dir)
     (run-matched-phase! "steady" (:steady-repetitions profile)
-                        raw-file stability-file run-id profile node-root output-dir)
-    (let [final-metadata (collect-metadata profile-name profile corpus node-root)
+                        raw-file stability-file diagnostics-file run-id
+                        profile node-root output-dir)
+    (let [final-metadata
+          (collect-metadata profile-name profile corpus node-root run-id)
           _ (spit (io/file output-dir "metadata-final.json")
                   (json/write-str final-metadata :escape-slash false))
           _ (analysis/assert-comparable! initial-metadata final-metadata)
           observations (analysis/read-observations raw-file)
           stability (analysis/read-stability-records stability-file)
+          diagnostics (analysis/read-diagnostic-records diagnostics-file)
           _ (write-summary! (io/file output-dir "summary.json")
-                            observations stability profile initial-metadata)]
+                            observations stability diagnostics profile
+                            initial-metadata)
+          _ (write-evidence-manifest! output-dir)]
       (println (json/write-str
                 {:ok true
                  :profile profile-name

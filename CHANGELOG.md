@@ -15,6 +15,11 @@ All notable changes to this project will be documented in this file. This change
   Results are rejected when fixture sequences, request counts, metadata, or
   corpus hashes differ. No complete confirmatory result is included, and the
   harness makes no performance-parity or directional claim.
+- Revised the predeclared confirmatory benchmark methodology so the unchanged
+  15% warmup and 10% measured drift values are report-only diagnostics instead
+  of process-selection gates. Added out-of-timing JVM/Node runtime checkpoints,
+  exact diagnostic validation, and a SHA-256 evidence manifest. All 20 matched
+  steady pairs are retained; only integrity failures abort a run.
 
 ### Added (upstream parity)
 - Added the stable extension session config fields `:request-extensions?`,

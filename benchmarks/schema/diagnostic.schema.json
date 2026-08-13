@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copilot-community-sdk/copilot-sdk-clojure/benchmarks/schema/diagnostic.schema.json",
+  "title": "Matched SDK benchmark runtime diagnostic record",
+  "type": "object",
+  "required": [
+    "schema-version",
+    "run-id",
+    "implementation",
+    "workload",
+    "replicate",
+    "pair-order-index",
+    "workload-order-index",
+    "checkpoint",
+    "window-index",
+    "timed-operation-count",
+    "validation-operation-count",
+    "wall-time",
+    "elapsed-ms",
+    "process-cpu-ms",
+    "rss-bytes",
+    "heap-used-bytes",
+    "heap-committed-bytes",
+    "gc-count",
+    "gc-time-ms",
+    "jit-code-bytes",
+    "jit-compilation-time-ms",
+    "event-loop-idle-ms",
+    "total-allocated-bytes",
+    "host-load-average-1m",
+    "available-processors"
+  ],
+  "properties": {
+    "schema-version": { "const": 1 },
+    "run-id": { "type": "string", "minLength": 1 },
+    "implementation": { "enum": ["clojure", "node"] },
+    "workload": { "enum": ["ping", "send-and-wait"] },
+    "replicate": { "type": "integer", "minimum": 0 },
+    "pair-order-index": { "enum": [0, 1] },
+    "workload-order-index": { "enum": [0, 1] },
+    "checkpoint": {
+      "enum": [
+        "pre-warmup",
+        "warmup-window",
+        "pre-measurement",
+        "post-measurement",
+        "postflight"
+      ]
+    },
+    "window-index": { "type": ["integer", "null"], "minimum": 0 },
+    "timed-operation-count": { "type": "integer", "minimum": 0 },
+    "validation-operation-count": { "type": "integer", "minimum": 0 },
+    "wall-time": { "type": "string", "format": "date-time" },
+    "elapsed-ms": { "type": "number", "minimum": 0 },
+    "process-cpu-ms": { "type": ["number", "null"], "minimum": 0 },
+    "rss-bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "heap-used-bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "heap-committed-bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "gc-count": { "type": ["integer", "null"], "minimum": 0 },
+    "gc-time-ms": { "type": ["number", "null"], "minimum": 0 },
+    "jit-code-bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "jit-compilation-time-ms": {
+      "type": ["number", "null"],
+      "minimum": 0
+    },
+    "event-loop-idle-ms": { "type": ["number", "null"], "minimum": 0 },
+    "total-allocated-bytes": { "type": ["integer", "null"], "minimum": 0 },
+    "host-load-average-1m": { "type": ["number", "null"], "minimum": 0 },
+    "available-processors": { "type": "integer", "minimum": 1 }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "checkpoint": { "const": "warmup-window" } }
+      },
+      "then": {
+        "properties": {
+          "window-index": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "else": {
+        "properties": { "window-index": { "const": null } }
+      }
+    }
+  ],
+  "additionalProperties": false
+}
