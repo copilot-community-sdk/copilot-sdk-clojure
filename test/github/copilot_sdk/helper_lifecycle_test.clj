@@ -41,6 +41,14 @@
          (every? :destroyed? (vals sessions))
          (every? #(await-closed (:event-chan %)) (vals session-io)))))
 
+(defn- instrumentation-rejected?
+  [f]
+  (try
+    (f)
+    false
+    (catch clojure.lang.ExceptionInfo e
+      (= :instrument (:clojure.spec.alpha/failure (ex-data e))))))
+
 (defn- connect-helper-to-server!
   []
   (let [copilot-client (sdk/client {:auto-start? false})
@@ -449,7 +457,10 @@
 (deftest query-seq-client-options-still-use-the-shared-client-path
   (let [copilot-client (connect-helper-to-server!)
         client-opts {:log-level :debug}
-        ensure-calls (atom [])]
+        ensure-calls (atom [])
+        instrument-all! (requiring-resolve 'github.copilot-sdk.instrument/instrument-all!)
+        unstrument-all! (requiring-resolve 'github.copilot-sdk.instrument/unstrument-all!)]
+    (instrument-all!)
     (try
       (with-redefs-fn
         {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
@@ -463,6 +474,87 @@
            (is (cleaned-up? copilot-client))))
       (is (= [client-opts] @ensure-calls))
       (finally
+        (unstrument-all!)
+        (sdk/stop! copilot-client)))))
+
+(deftest helper-option-instrumentation-matches-each-function-contract
+  (let [copilot-client (connect-helper-to-server!)
+        session (sdk/create-session copilot-client {})
+        client-opts {:log-level :debug}
+        session-opts {:model "gpt-5.4"}
+        ensure-calls (atom [])
+        instrument-all! (requiring-resolve 'github.copilot-sdk.instrument/instrument-all!)
+        unstrument-all! (requiring-resolve 'github.copilot-sdk.instrument/unstrument-all!)]
+    (instrument-all!)
+    (try
+      (with-redefs-fn
+        {(requiring-resolve 'github.copilot-sdk.helpers/ensure-client!)
+         (fn [opts]
+           (swap! ensure-calls conj opts)
+           copilot-client)}
+        (fn []
+           ;; query accepts owned instances or option maps for both resources.
+          (is (string? (h/query "query client"
+                                :client copilot-client
+                                :session session-opts)))
+          (is (string? (h/query "query options"
+                                :client client-opts
+                                :session session-opts)))
+          (is (string? (h/query "query session" :session session)))
+
+           ;; Seq helpers accept either client form, but session config only.
+          (is (empty? (h/query-seq! "seq client"
+                                    :client copilot-client
+                                    :session session-opts
+                                    :max-events 0)))
+          (is (empty? (h/query-seq! "seq options"
+                                    :client client-opts
+                                    :session session-opts
+                                    :max-events 0)))
+          (is (empty? (h/query-seq! "unknown option"
+                                    :unknown-option :accepted
+                                    :max-events 0)))
+
+           ;; Channel helper retains its map-only client/session contract.
+          (let [events (h/query-chan "chan options"
+                                     :client client-opts
+                                     :session session-opts
+                                     :buffer 1)]
+            (async/close! events))
+
+           ;; Wrong record/map forms are rejected before function execution.
+          (is (instrumentation-rejected?
+               #(h/query "bad client record" :client session)))
+          (is (instrumentation-rejected?
+               #(h/query "bad session record" :session copilot-client)))
+          (is (instrumentation-rejected?
+               #(h/query "bad client map" :client {:bogus true})))
+          (is (instrumentation-rejected?
+               #(h/query "bad session map" :session {:bogus true})))
+          (is (instrumentation-rejected?
+               #(h/query-seq! "seq session record"
+                              :session session
+                              :max-events 0)))
+          (is (instrumentation-rejected?
+               #(h/query-seq! "seq client map"
+                              :client {:bogus true}
+                              :max-events 0)))
+          (is (instrumentation-rejected?
+               #(h/query-chan "chan client record"
+                              :client copilot-client)))
+          (is (instrumentation-rejected?
+               #(h/query-chan "chan session record"
+                              :session session)))
+          (is (instrumentation-rejected?
+               #(h/query-chan "chan client map"
+                              :client {:bogus true})))
+          (is (instrumentation-rejected?
+               #(h/query-chan "chan session map"
+                              :session {:bogus true})))))
+      (is (some #{client-opts} @ensure-calls))
+      (finally
+        (unstrument-all!)
+        (sdk/disconnect! session)
         (sdk/stop! copilot-client)))))
 
 (deftest query-seq-setup-failure-disconnects-created-session-once

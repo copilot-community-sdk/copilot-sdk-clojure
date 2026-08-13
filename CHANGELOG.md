@@ -77,6 +77,12 @@ All notable changes to this project will be documented in this file. This change
   a second helpers-managed client. The temporary session still disconnects on
   scope exit while the caller retains client lifecycle ownership.
 
+### Fixed (specs)
+- Helper fdefs now validate each function's actual `:client` and `:session`
+  option contract: `query` accepts owned instances or config maps, seq helpers
+  accept either client form with session config, and `query-chan` remains
+  config-map-only.
+
 ### Fixed (documentation)
 - Closed example tracking gaps: the portable runner now covers every
   credential-free standalone entry point, including both streaming helper paths
