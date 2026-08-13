@@ -10,18 +10,20 @@
            [java.util.concurrent CountDownLatch TimeUnit]))
 
 (def matching-metadata
-  {:schema-version 1
-   :fixture-version "1"
-   :corpus-sha256 "abc"
-   :profile "smoke"
-   :warmup 2
-   :iterations 5
-   :steady-repetitions 2
-   :concurrency 1
-   :host-id "host-a"
-   :repository-commit "repo-a"
-   :repository-dirty-sha256 "dirty-a"
-   :benchmark-inputs-sha256 "inputs-a"})
+  (merge
+   (zipmap analysis/comparable-metadata-keys (repeat "same"))
+   {:schema-version 1
+    :fixture-version "1"
+    :corpus-sha256 "abc"
+    :profile "smoke"
+    :warmup 2
+    :iterations 5
+    :steady-repetitions 2
+    :concurrency 1
+    :host-id "host-a"
+    :repository-commit "repo-a"
+    :repository-dirty-sha256 "dirty-a"
+    :benchmark-inputs-sha256 "inputs-a"}))
 
 (defn observation
   [implementation phase workload metric replicate sample-index value]
@@ -281,6 +283,25 @@
            #"Benchmark metadata mismatch"
            (analysis/assert-comparable! matching-metadata
                                         (assoc matching-metadata key value)))))))
+(deftest metadata-missing-key-contract
+  (let [metadata-key :corpus-sha256]
+    (doseq [[left right expected-left expected-right]
+            [[(dissoc matching-metadata metadata-key)
+              (dissoc matching-metadata metadata-key)
+              #{metadata-key} #{metadata-key}]
+             [(dissoc matching-metadata metadata-key)
+              matching-metadata
+              #{metadata-key} #{}]
+             [matching-metadata
+              (dissoc matching-metadata metadata-key)
+              #{} #{metadata-key}]]]
+      (let [error (try
+                    (analysis/assert-comparable! left right)
+                    nil
+                    (catch clojure.lang.ExceptionInfo error error))]
+        (is error)
+        (is (= expected-left (:missing-left (ex-data error))))
+        (is (= expected-right (:missing-right (ex-data error))))))))
 
 (deftest configured-node-root-contract
   (is (= "/tmp/package"
@@ -346,6 +367,29 @@
                      {:timeout-ms 100})]
       (is (:timed-out? timed-out))
       (is (false? (:alive? timed-out))))))
+
+(deftest run-process-preserves-termination-failure
+  (bench-protocol/reset-process-registry-for-tests!)
+  (let [primary (ex-info "forced termination failure" {:kind :primary})
+        real-terminate bench-protocol/terminate-process!]
+    (try
+      (let [error (with-redefs [bench-protocol/terminate-process!
+                                (fn [_] (throw primary))]
+                    (try
+                      (bench-protocol/run-process!
+                       ["sleep" "5"] {:timeout-ms 10})
+                      nil
+                      (catch Throwable error error)))]
+        (is (identical? primary error))
+        (is (= "forced termination failure" (ex-message error)))
+        (is (= 1 (bench-protocol/tracked-process-count))))
+      (finally
+        (doseq [process (:processes (bench-protocol/process-registry-state))]
+          (when (.isAlive ^Process process)
+            (real-terminate process))
+          (when-not (.isAlive ^Process process)
+            (bench-protocol/unregister-process! process)))
+        (bench-protocol/reset-process-registry-for-tests!)))))
 
 (deftest benchmark-process-registry-contract
   (bench-protocol/reset-process-registry-for-tests!)

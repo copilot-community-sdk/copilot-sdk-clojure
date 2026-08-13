@@ -234,19 +234,30 @@
         process-env (.environment builder)
         _ (doseq [[key value] env]
             (.put process-env (name key) (str value)))
-        process (start-process! builder)]
+        process (start-process! builder)
+        primary-error (atom nil)]
     (try
-      (let [stdout-future (future (read-stream (.getInputStream process)))
-            stderr-future (future (read-stream (.getErrorStream process)))
-            completed? (.waitFor process (long timeout-ms) TimeUnit/MILLISECONDS)]
-        (when-not completed?
-          (terminate-process! process))
-        (when-not (.waitFor process 5000 TimeUnit/MILLISECONDS)
-          (terminate-process! process))
-        {:exit (when-not (.isAlive process) (.exitValue process))
-         :stdout (completed-stream! stdout-future :stdout)
-         :stderr (completed-stream! stderr-future :stderr)
-         :timed-out? (not completed?)
-         :alive? (.isAlive process)})
+      (try
+        (let [stdout-future (future (read-stream (.getInputStream process)))
+              stderr-future (future (read-stream (.getErrorStream process)))
+              completed? (.waitFor process (long timeout-ms) TimeUnit/MILLISECONDS)]
+          (when-not completed?
+            (terminate-process! process))
+          (when-not (.waitFor process 5000 TimeUnit/MILLISECONDS)
+            (terminate-process! process))
+          {:exit (when-not (.isAlive process) (.exitValue process))
+           :stdout (completed-stream! stdout-future :stdout)
+           :stderr (completed-stream! stderr-future :stderr)
+           :timed-out? (not completed?)
+           :alive? (.isAlive process)})
+        (catch Throwable error
+          (reset! primary-error error)
+          (throw error)))
       (finally
-        (unregister-process! process)))))
+        (when-not (.isAlive process)
+          (try
+            (unregister-process! process)
+            (catch Throwable unregister-error
+              (if-let [primary @primary-error]
+                (.addSuppressed ^Throwable primary unregister-error)
+                (throw unregister-error)))))))))

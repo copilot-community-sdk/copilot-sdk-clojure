@@ -119,12 +119,19 @@
 
 (defn assert-comparable!
   [left right]
-  (let [left-comparable (select-keys left comparable-metadata-keys)
+  (let [required (set comparable-metadata-keys)
+        missing-left (set/difference required (set (keys left)))
+        missing-right (set/difference required (set (keys right)))
+        left-comparable (select-keys left comparable-metadata-keys)
         right-comparable (select-keys right comparable-metadata-keys)]
-    (when-not (= left-comparable right-comparable)
+    (when (or (seq missing-left)
+              (seq missing-right)
+              (not= left-comparable right-comparable))
       (throw (ex-info "Benchmark metadata mismatch"
                       {:left left-comparable
                        :right right-comparable
+                       :missing-left missing-left
+                       :missing-right missing-right
                        :mismatched-keys
                        (into {}
                              (keep (fn [key]

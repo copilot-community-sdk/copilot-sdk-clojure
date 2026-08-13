@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
+import { EventEmitter } from "node:events";
 import { test } from "node:test";
-import { spawnWithReadiness, terminateAndWait } from "./spawn_readiness.mjs";
+import {
+  spawnWithReadiness,
+  terminateAndWait,
+  waitForExit,
+} from "./spawn_readiness.mjs";
 
 function assertExited(error) {
   assert.ok(error.child.exitCode !== null || error.child.signalCode !== null);
@@ -48,4 +53,15 @@ test("spawn readiness handles child spawn errors", async () => {
     spawnWithReadiness("definitely-not-a-real-readiness-command", []),
     (error) => error.code === "ENOENT" && error.child.pid === undefined,
   );
+});
+
+test("waitForExit propagates a child error event", async () => {
+  const child = new EventEmitter();
+  child.exitCode = null;
+  child.signalCode = null;
+  child.pid = 1;
+  const failure = new Error("forced child error");
+  const waiting = waitForExit(child, 1000);
+  child.emit("error", failure);
+  await assert.rejects(waiting, (error) => error === failure);
 });

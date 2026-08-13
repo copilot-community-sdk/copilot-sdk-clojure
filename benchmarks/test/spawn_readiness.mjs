@@ -4,18 +4,35 @@ function exited(child) {
   return child.exitCode !== null || child.signalCode !== null || child.pid === undefined;
 }
 
-function waitForExit(child, timeoutMs) {
-  if (exited(child)) return Promise.resolve();
+export function waitForExit(child, timeoutMs) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      child.off("exit", onExit);
-      reject(new Error("Child failed to exit within cleanup timeout"));
-    }, timeoutMs);
-    function onExit() {
+    let settled = false;
+    let timeout;
+    const cleanup = () => {
       clearTimeout(timeout);
-      resolve();
+      child.off("error", onError);
+      child.off("exit", onExit);
+    };
+    const settle = (error) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (error) reject(error);
+      else resolve();
+    };
+    function onError(error) {
+      settle(error);
     }
+    function onExit() {
+      settle();
+    }
+    child.once("error", onError);
     child.once("exit", onExit);
+    timeout = setTimeout(
+      () => settle(new Error("Child failed to exit within cleanup timeout")),
+      timeoutMs,
+    );
+    if (exited(child)) settle();
   });
 }
 
