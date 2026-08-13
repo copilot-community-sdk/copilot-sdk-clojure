@@ -1,0 +1,2 @@
+{"schema-version":1,"run-id":"sample","implementation":"clojure","phase":"steady","workload":"ping","metric":"latency","replicate":0,"sample-index":0,"value":0.5,"unit":"ms"}
+{"schema-version":1,"run-id":"sample","implementation":"node","phase":"steady","workload":"ping","metric":"batch-duration","replicate":0,"sample-index":0,"value":10.0,"unit":"ms"}

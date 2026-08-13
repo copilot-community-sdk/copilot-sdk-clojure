@@ -8,10 +8,10 @@
                       :task (clojure "-M:test" "-m" "github.copilot-sdk.api-surface")}
 
   fmt {:doc "Format all Clojure files."
-       :task (clojure "-M:fmt" "fix" "src" "test" "examples")}
+       :task (clojure "-M:fmt" "fix" "src" "test" "examples" "benchmarks/clojure")}
 
   fmt:check {:doc "Check formatting without modifying files."
-             :task (clojure "-M:fmt" "check" "src" "test" "examples")}
+            :task (clojure "-M:fmt" "check" "src" "test" "examples" "benchmarks/clojure")}
 
   docs {:doc "Generate API documentation with codox."
         :task (clojure "-X:codox")}
@@ -44,4 +44,17 @@
                  :task (shell "bb" "script/codegen/fetch_schemas.clj")}
 
   codegen {:doc "Regenerate Clojure code from upstream JSON Schemas in schemas/."
-           :task (shell "bb" "-cp" "script" "-m" "codegen.main")}}}
+           :task (shell "bb" "-cp" "script" "-m" "codegen.main")}
+
+  benchmark:test
+  {:doc "Run benchmark infrastructure contract tests."
+   :task (shell "bash" "-lc"
+                "clojure -M:test -m cognitect.test-runner -n github.copilot-sdk.benchmark-contract-test && node --test benchmarks/test/*.test.mjs")}
+
+  benchmark:smoke
+  {:doc "Run the quick matched Node/Clojure benchmark profile."
+   :task (clojure "-M:bench" "-m" "github.copilot-sdk.bench.runner" "--profile=smoke")}
+
+  benchmark:rigorous
+  {:doc "Run the rigorous matched Node/Clojure benchmark profile."
+   :task (clojure "-M:bench" "-m" "github.copilot-sdk.bench.runner" "--profile=rigorous")}}}

@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (benchmarking)
+- Added a matched Node/Clojure benchmark harness with fresh deterministic TCP
+  JSON-RPC fixtures per independent process, public SDK clients, separate
+  cold-start and warmed profiles, replicate-identified raw NDJSON observations,
+  deferred fixture request traces, dirty-tree and loaded-dist provenance,
+  paired process confirmatory inference with exact sign-flip tests and Holm
+  correction, benchmark-scoped process-tree shutdown cleanup, optional explicit
+  Copilot CLI provenance, assertion-free timed operation sampling with untimed
+  pre/postflight validation, and a quick smoke profile.
+  Results are rejected when fixture sequences, request counts, metadata, or
+  corpus hashes differ. No complete confirmatory result is included, and the
+  harness makes no performance-parity or directional claim.
+
 ### Added (upstream parity)
 - Added the stable extension session config fields `:request-extensions?`,
   `:extension-sdk-path`, and `:extension-info` for `session.create` and

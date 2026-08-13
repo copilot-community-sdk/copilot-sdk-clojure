@@ -28,6 +28,7 @@
 /checkouts
 /classes
 /target
+/benchmarks/results/
 .clj-kondo/
 prompt.md
 *.asc

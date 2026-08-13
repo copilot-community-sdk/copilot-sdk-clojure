@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copilot-community-sdk/copilot-sdk-clojure/benchmarks/schema/stability.schema.json",
+  "title": "Matched SDK benchmark stability record",
+  "type": "object",
+  "required": [
+    "schema-version",
+    "run-id",
+    "implementation",
+    "workload",
+    "replicate",
+    "kind",
+    "window-index",
+    "operation-count",
+    "median-ms",
+    "reference-median-ms",
+    "relative-drift",
+    "stable"
+  ],
+  "properties": {
+    "schema-version": { "const": 1 },
+    "run-id": { "type": "string", "minLength": 1 },
+    "implementation": { "enum": ["clojure", "node"] },
+    "workload": { "enum": ["ping", "send-and-wait"] },
+    "replicate": { "type": "integer", "minimum": 0 },
+    "kind": { "enum": ["warmup-window", "measurement-drift"] },
+    "window-index": { "type": "integer", "minimum": 0 },
+    "operation-count": { "type": "integer", "minimum": 1 },
+    "median-ms": { "type": "number", "exclusiveMinimum": 0 },
+    "reference-median-ms": { "type": ["number", "null"] },
+    "relative-drift": { "type": ["number", "null"], "minimum": 0 },
+    "stable": { "type": "boolean" }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "kind": { "const": "measurement-drift" } }
+      },
+      "then": {
+        "properties": {
+          "reference-median-ms": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "relative-drift": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "kind": { "const": "warmup-window" } }
+      },
+      "then": {
+        "properties": {
+          "reference-median-ms": { "const": null }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false
+}

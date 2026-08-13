@@ -1,0 +1,10 @@
+{
+  "fixtureVersion": "1",
+  "protocolVersion": 3,
+  "connectionToken": "matched-benchmark-token",
+  "pingMessage": "matched-benchmark-ping",
+  "prompt": "Return the deterministic benchmark response.",
+  "response": "Deterministic benchmark response.",
+  "model": "gpt-5.4",
+  "timestamp": "2026-01-01T00:00:00.000Z"
+}

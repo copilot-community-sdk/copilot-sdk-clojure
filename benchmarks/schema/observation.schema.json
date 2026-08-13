@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/copilot-community-sdk/copilot-sdk-clojure/benchmarks/schema/observation.schema.json",
+  "title": "Matched SDK benchmark observation",
+  "type": "object",
+  "required": [
+    "schema-version",
+    "run-id",
+    "implementation",
+    "phase",
+    "workload",
+    "metric",
+    "replicate",
+    "sample-index",
+    "value",
+    "unit"
+  ],
+  "properties": {
+    "schema-version": { "const": 1 },
+    "run-id": { "type": "string", "minLength": 1 },
+    "implementation": { "enum": ["clojure", "node"] },
+    "phase": { "enum": ["cold", "steady"] },
+    "workload": { "enum": ["process", "connect-ping", "ping", "send-and-wait"] },
+    "metric": { "enum": ["latency", "batch-duration", "rss-delta"] },
+    "replicate": { "type": "integer", "minimum": 0 },
+    "sample-index": { "type": "integer", "minimum": 0 },
+    "value": { "type": "number" },
+    "unit": { "enum": ["ms", "bytes"] }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "phase": { "const": "cold" },
+        "workload": { "const": "process" },
+        "metric": { "const": "latency" },
+        "unit": { "const": "ms" }
+      }
+    },
+    {
+      "properties": {
+        "phase": { "const": "cold" },
+        "workload": { "const": "connect-ping" },
+        "metric": { "const": "latency" },
+        "unit": { "const": "ms" }
+      }
+    },
+    {
+      "properties": {
+        "phase": { "const": "cold" },
+        "workload": { "const": "connect-ping" },
+        "metric": { "const": "rss-delta" },
+        "unit": { "const": "bytes" }
+      }
+    },
+    {
+      "properties": {
+        "phase": { "const": "steady" },
+        "workload": { "enum": ["ping", "send-and-wait"] },
+        "metric": { "const": "latency" },
+        "unit": { "const": "ms" }
+      }
+    },
+    {
+      "properties": {
+        "phase": { "const": "steady" },
+        "workload": { "enum": ["ping", "send-and-wait"] },
+        "metric": { "const": "batch-duration" },
+        "unit": { "const": "ms" }
+      }
+    },
+    {
+      "properties": {
+        "phase": { "const": "steady" },
+        "workload": { "enum": ["ping", "send-and-wait"] },
+        "metric": { "const": "rss-delta" },
+        "unit": { "const": "bytes" }
+      }
+    }
+  ],
+  "additionalProperties": false
+}
