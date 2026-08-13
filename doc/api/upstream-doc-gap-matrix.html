@@ -13,6 +13,7 @@
 <p>GA gate: every <strong>stable</strong> public API is documented (Adapted or Folded). Deferred items are narrative/architecture guidance only — none gates a stable API.</p>
 <h2><a href="#intentional-api-exclusions" id="intentional-api-exclusions"></a>Intentional API exclusions</h2>
 <p>The upstream experimental canvas authoring/provider API (<code>Canvas</code>, <code>createCanvas</code>, session <code>canvases</code>, and provider callbacks) is intentionally absent. The Clojure SDK supports provider identity via <code>:canvas-provider</code> and can observe and restore the <a href="API.html#open-canvases"><code>open-canvases</code></a> snapshot and canvas events, but it cannot declare or serve canvases.</p>
+<p>The stable extension session fields (<code>:request-extensions?</code>, <code>:extension-sdk-path</code>, and <code>:extension-info</code>) are covered in the <a href="API.html#create-session"><code>create-session</code></a> config reference. The experimental <code>extensionLaunchProvider.resolve</code> reverse RPC remains intentionally absent; callers cannot register a custom extension launcher.</p>
 <h2><a href="#auth" id="auth"></a>auth/</h2>
 <table>
 <thead>

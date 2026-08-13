@@ -241,6 +241,9 @@ The following upstream surface is intentionally **out of scope for 1.0.0 GA**:
   API. The related **events** (`session.canvas.opened`, `session.canvas.registry_changed`,
   `session.extensions.attachments_pushed`) **are** observable via the normal event stream.
   Tracked in [#121](https://github.com/copilot-community-sdk/copilot-sdk-clojure/issues/121).
+- **Extension launch-provider RPC** — stable extension session fields are supported,
+  but the experimental `extensionLaunchProvider.resolve` reverse RPC is not exposed.
+  Hosts cannot register a custom extension launcher.
 
 ### Quick Comparison
 
