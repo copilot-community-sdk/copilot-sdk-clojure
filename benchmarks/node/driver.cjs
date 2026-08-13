@@ -1,9 +1,9 @@
 "use strict";
 
 const { appendFileSync, readFileSync } = require("node:fs");
-const { spawnSync } = require("node:child_process");
 const { validateDriverArgs } = require("./args.cjs");
 const { sampleOperations, validatePreflight } = require("./measurement.cjs");
+const { rssBytes } = require("./rss.cjs");
 
 const args = validateDriverArgs(process.argv.slice(2));
 
@@ -40,18 +40,6 @@ function nowNs() {
 
 function elapsedMs(start) {
   return Number(process.hrtime.bigint() - start) / 1_000_000;
-}
-
-function rssBytes() {
-  const result = spawnSync("ps", ["-o", "rss=", "-p", String(process.pid)], {
-    encoding: "utf8",
-  });
-  if (result.status !== 0) {
-    throw new Error(`ps failed while measuring RSS: ${result.stderr}`);
-  }
-  const kib = Number(result.stdout.trim());
-  if (!Number.isFinite(kib)) throw new Error(`Invalid RSS output: ${result.stdout}`);
-  return kib * 1024;
 }
 
 function observe(phase, workload, metric, index, value, unit) {

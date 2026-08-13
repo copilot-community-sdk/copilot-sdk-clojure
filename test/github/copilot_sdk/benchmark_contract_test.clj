@@ -370,9 +370,9 @@
       (let [error
             (binding [runner/*fixture-command-builder*
                       (fn [& _]
-                        ["node" "-e"
-                         (str "console.error('fixture diagnostic'); "
-                              "console.log('not-json'); setInterval(()=>{},1000)")])]
+                        ["sh" "-c"
+                         (str "printf 'fixture diagnostic\\n' >&2; "
+                              "printf 'not-json\\n'; IFS= read -r _")])]
               (try
                 (runner/start-fixture! "test" "test" 0 directory)
                 nil
@@ -398,7 +398,7 @@
                (binding [runner/*fixture-readiness-timeout-ms* 10
                          runner/*fixture-command-builder*
                          (fn [& _]
-                           ["node" "-e" "setInterval(()=>{},1000)"])]
+                           ["sh" "-c" "IFS= read -r _"])]
                  (try
                    (runner/start-fixture! "test" "test" 0 directory)
                    nil
@@ -412,6 +412,18 @@
         (bench-protocol/cleanup-tracked-processes!)
         (bench-protocol/reset-process-registry-for-tests!)
         (.delete directory)))))
+
+(deftest stability-sample-matches-runtime-formula
+  (let [records (->> (str/split-lines
+                      (slurp "benchmarks/schema/stability-sample.ndjson"))
+                     (mapv #(json/read-str % :key-fn keyword)))
+        measurement (first (filter #(= "measurement-drift" (:kind %)) records))
+        expected (/ (Math/abs (- (:reference-median-ms measurement)
+                                 (:median-ms measurement)))
+                    (:median-ms measurement))]
+    (doseq [record records]
+      (is (= record (analysis/validate-stability-record! record))))
+    (is (= expected (:relative-drift measurement)))))
 
 (deftest validation-is-outside-sampled-operations
   (let [calls (atom [])

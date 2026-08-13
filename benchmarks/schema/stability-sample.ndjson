@@ -1,2 +1,2 @@
 {"schema-version":1,"run-id":"sample","implementation":"clojure","workload":"ping","replicate":0,"kind":"warmup-window","window-index":0,"operation-count":250,"median-ms":0.25,"reference-median-ms":null,"relative-drift":null,"stable":false}
-{"schema-version":1,"run-id":"sample","implementation":"clojure","workload":"ping","replicate":0,"kind":"measurement-drift","window-index":0,"operation-count":1000,"median-ms":0.22,"reference-median-ms":0.21,"relative-drift":0.045,"stable":true}
+{"schema-version":1,"run-id":"sample","implementation":"clojure","workload":"ping","replicate":0,"kind":"measurement-drift","window-index":0,"operation-count":1000,"median-ms":0.22,"reference-median-ms":0.21,"relative-drift":0.0454545454545455,"stable":true}
