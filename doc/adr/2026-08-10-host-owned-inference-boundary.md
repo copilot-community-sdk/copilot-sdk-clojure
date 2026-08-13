@@ -3,10 +3,11 @@
 - Status: Accepted
 - Deciders: @krukow
 - Related:
-  [latest upstream audit baseline](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d),
+  [original Clojure analysis baseline](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/e4087504e29ab874ee37bc8d3aea981e77c1b72c),
   [upstream audit baseline](https://github.com/github/copilot-sdk/commit/8d0a9cc63391cb5d820bd092726c811f1225c4b9),
   [prior upstream audit baseline](https://github.com/github/copilot-sdk/commit/25c0beab6095def6881bb12ddd8d36f21dcbd3d6),
-  [current Clojure baseline](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/4fd01ffc2437d8698f65bea356e8dfbad35eb4c1)
+  [decision-refresh Clojure baseline](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/4fd01ffc2437d8698f65bea356e8dfbad35eb4c1),
+  [decision-refresh upstream baseline](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d)
 
 ## Context
 
@@ -184,9 +185,15 @@ The initial audit compared the prior upstream baseline
 with
 [`8d0a9cc63391cb5d820bd092726c811f1225c4b9`](https://github.com/github/copilot-sdk/commit/8d0a9cc63391cb5d820bd092726c811f1225c4b9).
 No material public host/inference/canvas/launch-provider shape changed in that
-range; the relevant movement was generated schema/runtime package revision.
+range; the relevant movement was generated schema/runtime package revision. The
+detailed Clojure source citations in the technical analysis above were captured
+against
+[`e4087504e29ab874ee37bc8d3aea981e77c1b72c`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/e4087504e29ab874ee37bc8d3aea981e77c1b72c)
+and remain pinned to that original analysis baseline.
 
-The decision was reconfirmed on 2026-08-13 against upstream
+The Accepted decision was reconfirmed on 2026-08-13 against Clojure main
+[`4fd01ffc2437d8698f65bea356e8dfbad35eb4c1`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/commit/4fd01ffc2437d8698f65bea356e8dfbad35eb4c1)
+and upstream
 [`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d).
 At that commit, `CopilotClientOptions.requestHandler` remains explicitly
 experimental and process-global
