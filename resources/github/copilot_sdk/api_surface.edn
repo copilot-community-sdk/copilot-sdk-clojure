@@ -104,7 +104,10 @@
     with-session {:kind :macro, :arglists ([[session-sym client config] & body])}
     workspace-path {:kind :fn, :arglists ([session])}}
    :fdefs
-   {}}
+   {github.copilot-sdk/result-denied (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk/result-failure (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-failure-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk/result-rejected (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)}}
   github.copilot-sdk.client
   {:vars
    {<create-session {:kind :fn, :arglists ([client config])}
@@ -507,6 +510,7 @@
     :github.copilot-sdk.specs/cache-write-tokens
     :github.copilot-sdk.specs/can-offer-session-approval
     :github.copilot-sdk.specs/can-persist-approval
+    :github.copilot-sdk.specs/cancelled
     :github.copilot-sdk.specs/canvas-id
     :github.copilot-sdk.specs/canvas-provider
     :github.copilot-sdk.specs/capabilities
@@ -592,6 +596,7 @@
     :github.copilot-sdk.specs/enable-citations
     :github.copilot-sdk.specs/enable-config-discovery
     :github.copilot-sdk.specs/enable-experimental-mode?
+    :github.copilot-sdk.specs/enable-file-change-tracking?
     :github.copilot-sdk.specs/enable-file-hooks
     :github.copilot-sdk.specs/enable-host-git-operations
     :github.copilot-sdk.specs/enable-insiders-mode?
@@ -693,7 +698,9 @@
     :github.copilot-sdk.specs/is-child-process?
     :github.copilot-sdk.specs/is-terminal?
     :github.copilot-sdk.specs/join-session-config
+    :github.copilot-sdk.specs/json-object
     :github.copilot-sdk.specs/json-schema
+    :github.copilot-sdk.specs/json-value
     :github.copilot-sdk.specs/kind
     :github.copilot-sdk.specs/large-output
     :github.copilot-sdk.specs/last-insert-rowid
@@ -1083,5 +1090,9 @@
    :fdefs
    {github.copilot-sdk.tools/convert-mcp-call-tool-result (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :call-result clojure.core/map?) :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk.tools/define-tool (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :name :github.copilot-sdk.specs/tool-name :opts clojure.core/map?) :ret :github.copilot-sdk.specs/tool :fn nil)
-    github.copilot-sdk.tools/define-tool-from-spec (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :name :github.copilot-sdk.specs/tool-name :opts clojure.core/map?) :ret :github.copilot-sdk.specs/tool :fn nil)}}
+    github.copilot-sdk.tools/define-tool-from-spec (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :name :github.copilot-sdk.specs/tool-name :opts clojure.core/map?) :ret :github.copilot-sdk.specs/tool :fn nil)
+    github.copilot-sdk.tools/result-denied (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk.tools/result-failure (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-failure-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk.tools/result-rejected (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk.tools/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)}}
  }}

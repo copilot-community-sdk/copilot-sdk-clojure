@@ -166,7 +166,10 @@
     (assoc :is-terminal? is-terminal?)))
 
 (defn result-success
-  "Create a successful tool result."
+  "Create a successful tool result.
+
+   `telemetry` is a map of string bucket names to JSON object maps. Nested
+   values may contain JSON scalars, vectors, maps with string keys, and nil."
   ([text]
    (result-success text {}))
   ([text telemetry]
@@ -175,7 +178,10 @@
     :tool-telemetry telemetry}))
 
 (defn result-failure
-  "Create a failed tool result."
+  "Create a failed tool result.
+
+   `telemetry` follows the same recursive JSON object contract as
+   `result-success`."
   ([text]
    (result-failure text nil))
   ([text error]
@@ -187,7 +193,10 @@
     :tool-telemetry telemetry}))
 
 (defn result-denied
-  "Create a denied tool result (permission denied)."
+  "Create a denied tool result (permission denied).
+
+   `telemetry` follows the same recursive JSON object contract as
+   `result-success`."
   ([text]
    (result-denied text {}))
   ([text telemetry]
@@ -196,7 +205,10 @@
     :tool-telemetry telemetry}))
 
 (defn result-rejected
-  "Create a rejected tool result (user rejected)."
+  "Create a rejected tool result (user rejected).
+
+   `telemetry` follows the same recursive JSON object contract as
+   `result-success`."
   ([text]
    (result-rejected text {}))
   ([text telemetry]

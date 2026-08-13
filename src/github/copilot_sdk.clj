@@ -1424,23 +1424,31 @@
 ;; Re-export result helpers as thin wrappers so the public surface keeps the
 ;; source docstrings and signatures (a bare `def` alias drops both).
 (defn result-success
-  "Create a successful tool result."
+  "Create a successful tool result.
+
+   `telemetry` is a map of string bucket names to JSON object maps."
   ([text] (tools/result-success text))
   ([text telemetry] (tools/result-success text telemetry)))
 
 (defn result-failure
-  "Create a failed tool result."
+  "Create a failed tool result.
+
+   `telemetry` is a map of string bucket names to JSON object maps."
   ([text] (tools/result-failure text))
   ([text error] (tools/result-failure text error))
   ([text error telemetry] (tools/result-failure text error telemetry)))
 
 (defn result-denied
-  "Create a denied tool result (permission denied)."
+  "Create a denied tool result (permission denied).
+
+   `telemetry` is a map of string bucket names to JSON object maps."
   ([text] (tools/result-denied text))
   ([text telemetry] (tools/result-denied text telemetry)))
 
 (defn result-rejected
-  "Create a rejected tool result (user rejected)."
+  "Create a rejected tool result (user rejected).
+
+   `telemetry` is a map of string bucket names to JSON object maps."
   ([text] (tools/result-rejected text))
   ([text telemetry] (tools/result-rejected text telemetry)))
 

@@ -1,0 +1,92 @@
+{:upstream
+ {:repository "github/copilot-sdk"
+  :base-commit "3108e8ce26286043afa52f12781331460628baa0"
+  :target-commit "811adc050a82d823cc6f6891576f30058554af8d"
+  :schema-package "@github/copilot-linux-x64"
+  :schema-version "1.0.79-9"}
+
+ :source-symbols
+ {:session-config-file-change-tracking
+  {:file "nodejs/src/types.ts"
+   :symbol "SessionConfigBase.enableFileChangeTracking"}
+  :create-file-change-tracking
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.createSession(enableFileChangeTracking)"}
+  :resume-file-change-tracking
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.resumeSession(enableFileChangeTracking)"}
+  :subagent-completed-cancelled
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "SubagentCompletedData.cancelled"}
+  :tool-telemetry
+  {:file "nodejs/src/types.ts"
+   :symbol "ToolTelemetry"}
+  :tool-telemetry-json-value
+  {:file "nodejs/src/types.ts"
+   :symbol "JsonValue"}}
+
+ :stable-delta-ids
+ #{:session-config/enable-file-change-tracking
+   :event/subagent-completed-cancelled
+   :type/tool-telemetry-json}
+
+ :stable-deltas
+ [{:id :session-config/enable-file-change-tracking
+   :classification :stable
+   :status :ported
+   :evidence [:session-config-file-change-tracking
+              :create-file-change-tracking
+              :resume-file-change-tracking]
+   :clojure {:public-key :enable-file-change-tracking?
+             :spec :github.copilot-sdk.specs/enable-file-change-tracking?
+             :scopes #{:create :resume :join}
+             :wire-key "enableFileChangeTracking"
+             :mutable-via-options-update? false}}
+  {:id :event/subagent-completed-cancelled
+   :classification :stable
+   :status :ported
+   :evidence [:subagent-completed-cancelled]
+   :clojure {:public-key :cancelled
+             :wire-spec :github.copilot-sdk.generated.event-specs/cancelled
+             :idiom-spec :github.copilot-sdk.specs/cancelled
+             :event-spec :github.copilot-sdk.specs/subagent.completed-data}}
+  {:id :type/tool-telemetry-json
+   :classification :stable
+   :status :ported
+   :evidence [:tool-telemetry :tool-telemetry-json-value]
+   :clojure {:json-value-spec :github.copilot-sdk.specs/json-value
+             :json-object-spec :github.copilot-sdk.specs/json-object
+             :tool-telemetry-spec :github.copilot-sdk.specs/tool-telemetry
+             :outer-values :json-objects}}]
+
+ :experimental-exclusions
+ [{:id :rpc/session-rewind
+   :classification :experimental
+   :status :excluded
+   :reason :low-level-rewind-rpcs}
+  {:id :surface/agent-factories
+   :classification :experimental
+   :status :excluded
+   :reason :agent-factory-api}
+  {:id :surface/canvas-authoring
+   :classification :experimental
+   :status :excluded
+   :reason :canvas-authoring-api}
+  {:id :surface/inference-request-handler
+   :classification :experimental
+   :status :excluded
+   :reason :inference-and-request-handler-api}
+  {:id :surface/extension-launch-provider
+   :classification :experimental
+   :status :excluded
+   :reason :extension-launch-provider-api}
+  {:id :schema/generated-experimental
+   :classification :experimental
+   :status :excluded
+   :reason :generated-experimental-schema-deltas}
+  {:id :schema/generated-internal
+   :classification :internal
+   :status :excluded
+   :reason :generated-internal-schema-deltas}]
+
+ :unclassified-stable []}

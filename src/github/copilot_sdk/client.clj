@@ -2329,6 +2329,8 @@
       (assoc :enable-on-demand-instruction-discovery (:enable-on-demand-instruction-discovery config))
       (some? (:enable-file-hooks config))
       (assoc :enable-file-hooks (:enable-file-hooks config))
+      (some? (:enable-file-change-tracking? config))
+      (assoc :enable-file-change-tracking (:enable-file-change-tracking? config))
       (some? (:enable-host-git-operations config))
       (assoc :enable-host-git-operations (:enable-host-git-operations config))
       (some? (:enable-session-store config))
@@ -2533,6 +2535,8 @@
       (assoc :enable-on-demand-instruction-discovery (:enable-on-demand-instruction-discovery config))
       (some? (:enable-file-hooks config))
       (assoc :enable-file-hooks (:enable-file-hooks config))
+      (some? (:enable-file-change-tracking? config))
+      (assoc :enable-file-change-tracking (:enable-file-change-tracking? config))
       (some? (:enable-host-git-operations config))
       (assoc :enable-host-git-operations (:enable-host-git-operations config))
       (some? (:enable-session-store config))
@@ -2805,6 +2809,11 @@
                                 session. Forwarded as `excludedBuiltinAgents`. (upstream PR #1865)
    - :enable-citations - Boolean (@experimental). Enable native model citations. Forwarded as
                          `enableCitations`. (upstream PR #1865)
+   - :enable-file-change-tracking? - Boolean. Opt into capturing file changes from the first
+                                    tracked turn. Omission sends no wire key; explicit false
+                                    or true is forwarded as `enableFileChangeTracking`.
+                                    Tracking enables stable file-change and snapshot events;
+                                    low-level rewind RPCs remain experimental and are not exposed.
    - :session-limits     - Map (@experimental). Per-session accounting limits, e.g.
                            {:max-ai-credits 100}. Forwarded as `sessionLimits`. (upstream PR #1865)
    - :enable-managed-settings? - Boolean (opt-in). When true, the runtime self-fetches enterprise
@@ -3009,6 +3018,9 @@
    - :enable-session-telemetry? - Boolean. See `create-session` (upstream PR #1224).
    - :excluded-builtin-agents - Vector of strings. See `create-session` (upstream PR #1865).
    - :enable-citations - Boolean (@experimental). See `create-session` (upstream PR #1865).
+   - :enable-file-change-tracking? - Boolean. See `create-session`. On resume, tracking can
+                                     start only when the runtime still has a valid baseline;
+                                     earlier untracked turns cannot be reconstructed.
    - :session-limits     - Map (@experimental). See `create-session` (upstream PR #1865).
    - :enable-managed-settings? - Boolean. See `create-session` (upstream PR #1925).
    - :request-extensions? - Boolean. See `create-session`; explicit false is forwarded.

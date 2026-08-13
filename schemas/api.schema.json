@@ -1785,19 +1785,33 @@
             "sessionId": {
               "type": "string",
               "description": "Target session identifier"
+            },
+            "afterSeq": {
+              "type": "integer",
+              "description": "Exclusive forward cursor."
+            },
+            "beforeSeq": {
+              "type": "integer",
+              "description": "Exclusive backward cursor."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Maximum terminal runs to return. Defaults to 200 and is capped at 500."
             }
           },
           "required": [
             "sessionId"
           ],
           "additionalProperties": false,
-          "description": "Empty parameters for listing factory runs.",
+          "description": "Parameters for paging factory runs.",
           "title": "FactoryListRunsRequest",
           "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/FactoryListRunsResult",
-          "description": "Factory runs in durable creation order."
+          "description": "A page of factory runs in durable creation order."
         },
         "stability": "experimental"
       },
@@ -3868,8 +3882,8 @@
             },
             "config": {
               "description": "Opaque runtime MCP reload configuration. Marked internal: an in-process runtime shape (reloadMcpServers throws over the wire).",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             }
           },
           "required": [
@@ -4028,8 +4042,8 @@
             },
             "authInfo": {
               "description": "Opaque runtime auth info for GitHub MCP configuration. Marked internal: an in-process runtime shape (configureGitHubMcp is a no-op over the wire).",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             }
           },
           "required": [
@@ -4159,18 +4173,18 @@
             },
             "client": {
               "description": "In-process MCP Client instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             },
             "transport": {
               "description": "In-process MCP Transport instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             },
             "config": {
               "description": "In-process server config (MCPServerConfig) paired with the in-process client/transport. Marked internal alongside its companions.",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             }
           },
           "required": [
@@ -5826,13 +5840,13 @@
             },
             "onChunk": {
               "description": "In-process streaming callback `(text) => void` invoked with each token as the model emits it. Marked internal: excluded from the public SDK surface. In a process-separated SDK this is replaced by a streaming RPC that yields chunks and a final answer.",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             },
             "abortSignal": {
               "description": "In-process `AbortSignal` forwarded to the model client to cancel an in-flight request. Marked internal: excluded from the public SDK surface. Replaced by an explicit cancellation token + cancel RPC in the SDK migration.",
-              "x-opaque-json": true,
-              "visibility": "internal"
+              "visibility": "internal",
+              "x-opaque-in-process": true
             }
           },
           "required": [
@@ -12173,8 +12187,8 @@
         },
         "controller": {
           "description": "In-process ExtensionController delegate (CLI-only optimization). Marked internal: this field is excluded from the public SDK surface. The post-SDK extension surface exposes list/enable/disable/reload via dedicated RPCs served by the runtime.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -14584,6 +14598,18 @@
         "model": {
           "type": "string",
           "description": "Optional model identifier for the subagent."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Optional reasoning effort for the subagent. This field is accepted but not yet honored."
+        },
+        "contextTier": {
+          "$ref": "#/definitions/ContextTier",
+          "description": "Optional context tier for the subagent. This field is accepted but not yet honored."
+        },
+        "agent": {
+          "type": "string",
+          "description": "Optional custom agent name for the subagent. This field is accepted but not yet honored."
         }
       },
       "additionalProperties": false,
@@ -14957,9 +14983,24 @@
     },
     "FactoryListRunsRequest": {
       "type": "object",
-      "properties": {},
+      "properties": {
+        "afterSeq": {
+          "type": "integer",
+          "description": "Exclusive forward cursor."
+        },
+        "beforeSeq": {
+          "type": "integer",
+          "description": "Exclusive backward cursor."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Maximum terminal runs to return. Defaults to 200 and is capped at 500."
+        }
+      },
       "additionalProperties": false,
-      "description": "Empty parameters for listing factory runs.",
+      "description": "Parameters for paging factory runs.",
       "title": "FactoryListRunsRequest",
       "stability": "experimental"
     },
@@ -14972,13 +15013,44 @@
             "$ref": "#/definitions/FactoryRunSummary",
             "description": "Durable factory run summary with read-time live overlays."
           }
+        },
+        "oldestSeq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Oldest terminal-run cursor in this page, or null when the terminal window is empty."
+        },
+        "newestSeq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Newest terminal-run cursor in this page, or null when the terminal window is empty."
+        },
+        "hasMoreNewer": {
+          "type": "boolean",
+          "description": "Whether terminal runs newer than this page exist."
+        },
+        "omittedOlder": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of terminal runs older than this page."
         }
       },
       "required": [
         "runs"
       ],
       "additionalProperties": false,
-      "description": "Factory runs in durable creation order.",
+      "description": "A page of factory runs in durable creation order.",
       "title": "FactoryListRunsResult",
       "stability": "experimental"
     },
@@ -15519,6 +15591,30 @@
             "runId"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "Factory run identifier."
+            },
+            "drainedNanoAiu": {
+              "type": "integer",
+              "description": "Confirmed usage in nano-AIU, representing the floor of what the run spent."
+            },
+            "type": {
+              "type": "string",
+              "const": "factory_accounting_incomplete"
+            }
+          },
+          "required": [
+            "type",
+            "runId",
+            "drainedNanoAiu"
+          ],
+          "additionalProperties": false,
+          "description": "The run stopped because its usage accounting could not be completed."
         }
       ],
       "description": "Machine-readable factory run failure.",
@@ -18490,8 +18586,8 @@
       "properties": {
         "authInfo": {
           "description": "Opaque runtime auth info for GitHub MCP configuration. Marked internal: an in-process runtime shape (configureGitHubMcp is a no-op over the wire).",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -19077,18 +19173,18 @@
         },
         "client": {
           "description": "In-process MCP Client instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "transport": {
           "description": "In-process MCP Transport instance. Marked internal: cannot be serialized across the JSON-RPC boundary.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "config": {
           "description": "In-process server config (MCPServerConfig) paired with the in-process client/transport. Marked internal alongside its companions.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -19107,8 +19203,8 @@
       "properties": {
         "config": {
           "description": "Opaque runtime MCP reload configuration. Marked internal: an in-process runtime shape (reloadMcpServers throws over the wire).",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -25781,8 +25877,8 @@
         },
         "loader": {
           "description": "In-process ExtensionLoader handle (CLI-only optimization). Marked internal: this field is excluded from the public SDK surface. When the CLI migrates to a process-separated SDK, extension discovery/launch moves entirely into the runtime — the CLI passes pure config (search paths, disabled ids) via SessionOptions instead.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "options": {
           "$ref": "#/definitions/SessionsRegisterExtensionToolsOnSessionOptions",
@@ -25803,8 +25899,8 @@
       "properties": {
         "unsubscribe": {
           "description": "In-process unsubscribe function (CLI-only optimization). Marked internal: replaced by an explicit `extensions.unregister` RPC in the SDK migration.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -25933,8 +26029,8 @@
         },
         "promptManager": {
           "description": "In-process prompt-manager handle (CLI-only optimization). Marked internal: this field is excluded from the public SDK surface. When the CLI migrates to a process-separated SDK, the same bidirectional prompt-routing handshake is expressed via dedicated remote-control RPCs (register/resolve) rather than a shared in-process object.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "awaitingFirstMessage": {
           "type": "boolean",
@@ -26330,13 +26426,9 @@
           "type": "boolean",
           "description": "Whether to auto-add the current working directory to readwritePaths. Default: true."
         },
-        "gitAuth": {
-          "type": "boolean",
-          "description": "Whether to inject the Copilot GitHub token as an `http.<host>.extraheader` so authenticated HTTPS git works inside the sandbox without the shell-based credential helper the sandbox blocks. Default: false (opt-in)."
-        },
-        "ghAuth": {
-          "type": "boolean",
-          "description": "Whether to export `GH_TOKEN` so the `gh` CLI authenticates inside the sandbox without the OS keyring the sandbox blocks. Default: false (opt-in)."
+        "auth": {
+          "$ref": "#/definitions/SandboxConfigAuth",
+          "description": "Credential-injection capability flags."
         },
         "allowDevToolAccess": {
           "type": "boolean",
@@ -26350,6 +26442,22 @@
       "description": "Resolved sandbox configuration.",
       "title": "SandboxConfig",
       "stability": "experimental"
+    },
+    "SandboxConfigAuth": {
+      "type": "object",
+      "properties": {
+        "git": {
+          "type": "boolean",
+          "description": "Whether to inject git credentials as an `http.<url>.extraheader` so authenticated HTTPS git works inside the sandbox without the shell-based credential helper the sandbox blocks. github.com is served by the Copilot token; every other forge (Azure DevOps, GitHub Enterprise Server, GitLab, ...) by a credential the host resolves from the user's own helper before the sandbox is applied. Default: false (opt-in)."
+        },
+        "gh": {
+          "type": "boolean",
+          "description": "Whether to export `GH_TOKEN` so the `gh` CLI authenticates inside the sandbox without the OS keyring the sandbox blocks. Default: false (opt-in)."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Credential-injection capability flags applied while the sandbox is enabled.",
+      "title": "SandboxConfigAuth"
     },
     "SandboxConfigUserPolicy": {
       "type": "object",
@@ -29483,8 +29591,8 @@
         },
         "sessionApi": {
           "description": "In-process SessionClientApi handle for the opened session, returned to CLI callers as a transitional shortcut. Marked internal so the public SDK surface does not expose it; SDK consumers should construct per-session clients from `sessionId` instead.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "startupPrompts": {
           "type": "array",
@@ -30354,8 +30462,8 @@
         },
         "onTaskCreated": {
           "description": "In-process callback invoked when the cloud task is created (before connection). Marked internal because a function reference cannot cross the JSON-RPC boundary. Disappears in the SDK migration: the field is purely cosmetic (it flips a single CLI phase label from 'creating' to 'connecting') and the wire-clean version just drops the intermediate phase.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -30411,13 +30519,13 @@
         },
         "onProgress": {
           "description": "In-process progress callback `(update) => void` invoked for each handoff step. Marked internal because a function reference cannot cross the JSON-RPC boundary. The host-side `handoffSession` is already declared as `AsyncGenerator<HandoffProgress, HandoffResult>`; the schema layer flattens it because it does not yet support streaming methods. The wire-clean replacement is to expose the AsyncGenerator directly (or use vscode-jsonrpc `$/progress` notifications) once the schema/transport layer supports it.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "onConfirm": {
           "description": "In-process confirmation callback `(request) => boolean | Promise<boolean>` invoked when the handoff needs the caller to confirm a non-fatal blocker (e.g. a repository mismatch between the current working directory and the remote session). Returning `true` proceeds with the handoff; returning `false` (or omitting the callback) aborts it. Marked internal because a function reference cannot cross the JSON-RPC boundary, for the same reasons as `onProgress`.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
@@ -30659,8 +30767,8 @@
       "properties": {
         "enabled": {
           "description": "In-process `() => boolean` gating callback (CLI-only optimization). Marked internal: replaced by runtime-side enable/disable RPCs in the SDK migration.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "additionalProperties": false,
@@ -33529,13 +33637,13 @@
         },
         "onChunk": {
           "description": "In-process streaming callback `(text) => void` invoked with each token as the model emits it. Marked internal: excluded from the public SDK surface. In a process-separated SDK this is replaced by a streaming RPC that yields chunks and a final answer.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         },
         "abortSignal": {
           "description": "In-process `AbortSignal` forwarded to the model client to cancel an in-flight request. Marked internal: excluded from the public SDK surface. Replaced by an explicit cancellation token + cancel RPC in the SDK migration.",
-          "x-opaque-json": true,
-          "visibility": "internal"
+          "visibility": "internal",
+          "x-opaque-in-process": true
         }
       },
       "required": [
