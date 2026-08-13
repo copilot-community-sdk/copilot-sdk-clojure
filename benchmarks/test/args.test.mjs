@@ -22,7 +22,17 @@ const commonDriver = [
 const steadyDriver = steadyDriverRequiredArgs.map((name) => `--${name}=1`);
 
 test("Node driver rejects an argument without -- prefix", () => {
-  assert.throws(() => validateDriverArgs(["foo=bar"]), /Expected --name=value/);
+  for (const argument of [
+    "foo=bar",
+    "--name=",
+    "--name=   ",
+    "--   =value",
+  ]) {
+    assert.throws(() => validateDriverArgs([argument]), /Expected --name=value/);
+  }
+  assert.deepEqual(parseArgs(["--name=value=with=equals"]), {
+    name: "value=with=equals",
+  });
 });
 
 test("Node steady driver requires every steady-only argument", () => {

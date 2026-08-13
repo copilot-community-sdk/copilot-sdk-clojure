@@ -35,10 +35,16 @@ function parseArgs(argv) {
   return Object.fromEntries(
     argv.map((arg) => {
       const separator = arg.indexOf("=");
-      if (!arg.startsWith("--") || separator <= 2) {
+      const name = separator > 2 ? arg.slice(2, separator) : "";
+      const value = separator >= 0 ? arg.slice(separator + 1) : "";
+      if (
+        !arg.startsWith("--") ||
+        !name.trim() ||
+        !value.trim()
+      ) {
         throw new Error(`Expected --name=value, got ${arg}`);
       }
-      return [arg.slice(2, separator), arg.slice(separator + 1)];
+      return [name, value];
     }),
   );
 }

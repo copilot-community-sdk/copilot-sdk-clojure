@@ -466,7 +466,7 @@
                 "mode")))))
 
 (deftest clojure-driver-parser-rejects-blanks-and-preserves-equals
-  (doseq [argument ["--name=" "--=value"]]
+  (doseq [argument ["--name=" "--name=   " "--=value" "--   =value"]]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Expected --name=value"
                           (bench-driver/parse-args [argument]))))
@@ -474,7 +474,7 @@
          (bench-driver/parse-args ["--name=value=with=equals"]))))
 
 (deftest runner-rejects-blank-argument-keys-and-values
-  (doseq [argument ["--output=" "--profile=" "--=value"]]
+  (doseq [argument ["--output=" "--profile=   " "--=value" "--   =value"]]
     (is (thrown-with-msg? clojure.lang.ExceptionInfo
                           #"Expected --name=value"
                           (runner/parse-args [argument]))))
