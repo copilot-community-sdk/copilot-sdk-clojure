@@ -441,7 +441,7 @@
            clojure.lang.ExceptionInfo
            #"Invalid benchmark observation set"
            (runner/write-summary!
-            summary-file [] []
+            summary-file [] [] []
             {:cold-start-count 1
              :steady-repetitions 1
              :iterations 1

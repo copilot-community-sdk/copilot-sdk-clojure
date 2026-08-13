@@ -615,15 +615,13 @@
   (println "completed matched" phase))
 
 (defn write-summary!
-  ([summary-file observations stability profile metadata]
-   (write-summary! summary-file observations stability [] profile metadata))
-  ([summary-file observations stability diagnostics profile metadata]
-   (analysis/validate-observation-set! observations profile)
-   (analysis/validate-stability-set! stability profile)
-   (analysis/validate-diagnostic-set! diagnostics profile)
-   (let [summary (analysis/analyze observations metadata stability diagnostics)]
-     (spit summary-file (json/write-str summary :escape-slash false))
-     summary)))
+  [summary-file observations stability diagnostics profile metadata]
+  (analysis/validate-observation-set! observations profile)
+  (analysis/validate-stability-set! stability profile)
+  (analysis/validate-diagnostic-set! diagnostics profile)
+  (let [summary (analysis/analyze observations metadata stability diagnostics)]
+    (spit summary-file (json/write-str summary :escape-slash false))
+    summary))
 
 (defn write-evidence-manifest!
   [output-dir]
