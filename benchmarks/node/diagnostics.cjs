@@ -32,6 +32,10 @@ const diagnosticKeys = [
   "available-processors",
 ];
 
+function nullableNonnegativeNumber(value) {
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function capture({
   runId,
   workload,
@@ -64,19 +68,23 @@ function capture({
     "validation-operation-count": validationOperationCount,
     "wall-time": new Date().toISOString(),
     "elapsed-ms": Number(process.hrtime.bigint() - startedNs) / 1_000_000,
-    "process-cpu-ms": (cpu.user + cpu.system) / 1000,
-    "rss-bytes": rssBytes,
-    "heap-used-bytes": memory.heapUsed,
-    "heap-committed-bytes": memory.heapTotal,
+    "process-cpu-ms": nullableNonnegativeNumber((cpu.user + cpu.system) / 1000),
+    "rss-bytes": nullableNonnegativeNumber(rssBytes),
+    "heap-used-bytes": nullableNonnegativeNumber(memory.heapUsed),
+    "heap-committed-bytes": nullableNonnegativeNumber(memory.heapTotal),
     "gc-count": null,
     "gc-time-ms": null,
-    "jit-code-bytes": code.code_and_metadata_size,
+    "jit-code-bytes": nullableNonnegativeNumber(code.code_and_metadata_size),
     "jit-compilation-time-ms": null,
-    "event-loop-idle-ms": performance.nodeTiming.idleTime,
-    "total-allocated-bytes": heap.total_allocated_bytes,
-    "host-load-average-1m": os.loadavg()[0],
+    "event-loop-idle-ms": nullableNonnegativeNumber(
+      performance.nodeTiming.idleTime,
+    ),
+    "total-allocated-bytes": nullableNonnegativeNumber(
+      heap.total_allocated_bytes,
+    ),
+    "host-load-average-1m": nullableNonnegativeNumber(os.loadavg()[0]),
     "available-processors": os.availableParallelism(),
   };
 }
 
-module.exports = { capture, diagnosticKeys };
+module.exports = { capture, diagnosticKeys, nullableNonnegativeNumber };

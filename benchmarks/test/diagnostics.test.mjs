@@ -3,7 +3,19 @@ import { createRequire } from "node:module";
 import { test } from "node:test";
 
 const require = createRequire(import.meta.url);
-const { capture, diagnosticKeys } = require("../node/diagnostics.cjs");
+const {
+  capture,
+  diagnosticKeys,
+  nullableNonnegativeNumber,
+} = require("../node/diagnostics.cjs");
+
+test("optional Node counters serialize unavailable values as null", () => {
+  assert.equal(nullableNonnegativeNumber(undefined), null);
+  assert.equal(nullableNonnegativeNumber(Number.NaN), null);
+  assert.equal(nullableNonnegativeNumber(-1), null);
+  assert.equal(nullableNonnegativeNumber(0), 0);
+  assert.equal(nullableNonnegativeNumber(42), 42);
+});
 
 test("Node runtime diagnostics use the shared exact record shape", () => {
   const record = capture({
