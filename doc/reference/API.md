@@ -354,6 +354,7 @@ Create a client and session together, ensuring both are cleaned up on exit.
 | `:capi` | map | CAPI (Copilot API) session options. `{:enable-web-socket-responses boolean}` — serialized as wire `capi.enableWebSocketResponses`. (upstream PR #1711) |
 | `:excluded-builtin-agents` | vector | Names of built-in agents to hide/exclude from the session. Serialized as wire `excludedBuiltinAgents`. (upstream PR #1865) |
 | `:enable-citations` | boolean | (Experimental) Opt into native model citations. Gated on `some?` — an explicit `false` is forwarded; an absent key is omitted. Serialized as wire `enableCitations`. (upstream PR #1865) |
+| `:enable-file-change-tracking?` | boolean | Opt into file-change capture for cumulative session diffs. Omission sends no key; explicit `false` and `true` are preserved as `enableFileChangeTracking` on create, resume, and join. On resume, tracking starts only when the runtime still has a valid baseline and cannot reconstruct earlier untracked turns. Observe stable file-change and snapshot events through the normal event APIs; experimental low-level rewind RPCs are intentionally not exposed. |
 | `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
 | `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
 | `:managed-settings` | map | Structured enterprise managed-settings payload, supplied by the caller instead of (or alongside) `:enable-managed-settings?`. Optional key `:permissions`: `{:disable-bypass-permissions-mode :disable, :deny [...], :ask [...], :allow [...]}` — `:disable-bypass-permissions-mode` is serialized as wire `permissions.disableBypassPermissionsMode` (string `"disable"`); `:deny`/`:ask`/`:allow` are vectors of non-blank permission-rule strings forwarded verbatim. Presence of this key (or `:enable-managed-settings? true`) sets the permission-handler context's `:managed-settings-enabled?` to `true` — see [`approve-all`](#approve-all). Valid on `create-session`, `resume-session`, and `join-session`. ([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139)) |
@@ -1746,7 +1747,7 @@ Convert an unqualified event keyword to a namespace-qualified `:copilot/` keywor
 | `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) |
 | `:copilot/tool_search.activated` | Persisted generic client-side tool activations restored when a session resumes. Data: `{:strategy <string> :tool-names [<string> ...]}`. |
 | `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, `:agent-description`, and optional `:model` ([upstream PR #2072](https://github.com/github/copilot-sdk/pull/2072)) |
-| `:copilot/subagent.completed` | Subagent completed; data includes :tool-call-id, :agent-name, :agent-display-name, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
+| `:copilot/subagent.completed` | Subagent completed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and optional `:cancelled`, `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`. `:cancelled true` means cancellation tore down the subagent; cancellation still reports completion rather than failure. |
 | `:copilot/subagent.failed` | Subagent failed; data includes :tool-call-id, :agent-name, :agent-display-name, :error, optional :model, :total-tool-calls, :total-tokens, :duration-ms |
 | `:copilot/subagent.selected` | Subagent selected |
 | `:copilot/subagent.deselected` | Subagent deselected |
@@ -2284,13 +2285,17 @@ Object tool results contain:
 | `:binary-results-for-llm` | vector | no | Binary image or resource results |
 | `:error` | string | no | Error details |
 | `:session-log` | string | no | Session log text |
-| `:tool-telemetry` | map | no | Tool telemetry fields |
+| `:tool-telemetry` | map | no | Map of string bucket names to JSON object maps. Nested values may be JSON strings, finite numbers, booleans, `nil`, vectors, or maps with string keys. Sets, symbols, functions, keyword keys, non-finite numbers, and non-object bucket values are invalid. |
 | `:tool-references` | collection of strings | no | Tool names referenced by the result |
 
 **Result helpers:**
 
 ```clojure
 (copilot/result-success "It worked!")
+(copilot/result-success
+  "It worked!"
+  {"metrics" {"match_count" 3
+              "cached" false}})
 (copilot/result-failure "It failed" "error details")
 (copilot/result-denied "Permission denied")
 (copilot/result-rejected "Invalid parameters")

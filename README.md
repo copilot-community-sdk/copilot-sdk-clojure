@@ -129,6 +129,25 @@ See [doc/reference/API.md](./doc/reference/API.md) for the complete API referenc
 - **Streaming** - How to handle incremental responses
 - **Advanced Usage** - Tools, system messages, permissions (deny-by-default), multiple sessions
 
+### Track File Changes
+
+Opt into stable file-change capture when creating, resuming, or joining a session:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(copilot/with-client [client]
+  (def tracked-session
+    (copilot/create-session
+      client
+      {:enable-file-change-tracking? true
+       :on-permission-request copilot/approve-all}))
+  (copilot/disconnect! tracked-session))
+```
+
+Observe file-change and snapshot events through the normal event APIs. The
+experimental low-level rewind RPCs are intentionally not exposed.
+
 ## Examples
 
 See the [`examples/`](./examples/) directory for complete working examples:

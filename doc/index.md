@@ -49,7 +49,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 - [Style Guide](style.md) — Documentation authoring conventions
 - [Code Generation](codegen.md) — Schema-driven generation of clojure.spec definitions
-- [Matched Node/Clojure Benchmarks](../benchmarks/README.md) — Deterministic cross-SDK performance evidence
+- [Matched Node/Clojure Benchmarks](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/benchmarks/README.md) — Deterministic cross-SDK performance evidence
 - [Upstream Doc Gap Matrix](upstream-doc-gap-matrix.md) — Per-topic coverage vs the upstream SDK docs
 - [AGENTS.md](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/AGENTS.md) — Guidelines for AI agents working on this codebase
 - [PUBLISHING.md](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/PUBLISHING.md) — Versioning, CI/CD workflows, release process, build attestation
