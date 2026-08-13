@@ -36,6 +36,9 @@ clojure -A:examples -X helpers-query/run-multi :questions '["What is Rust?" "Wha
 # Streaming output
 clojure -A:examples -X helpers-query/run-streaming
 
+# Streaming output (core.async)
+clojure -A:examples -X helpers-query/run-async
+
 # Custom tool integration
 clojure -A:examples -X tool-integration/run
 clojure -A:examples -X tool-integration/run :languages '["clojure" "haskell"]'
@@ -56,6 +59,12 @@ clojure -A:examples -X permission-bash/run
 # Session state events monitoring
 clojure -A:examples -X session-events/run
 
+# Elicitation provider
+clojure -A:examples -X elicitation-provider/run
+
+# Slash commands
+clojure -A:examples -X commands/run
+
 # User input handling (ask_user)
 clojure -A:examples -X user-input/run
 clojure -A:examples -X user-input/run-simple
@@ -67,7 +76,8 @@ clojure -A:examples -X ask-user-failure/run
 OPENAI_API_KEY=sk-... clojure -A:examples -X byok-provider/run
 clojure -A:examples -X byok-provider/run :provider-name '"ollama"'
 
-# MCP local server (requires npx/Node.js)
+# MCP local server (requires npx and npm registry access)
+command -v npx >/dev/null || { echo "npx is required" >&2; exit 1; }
 clojure -A:examples -X mcp-local-server/run
 clojure -A:examples -X mcp-local-server/run-with-custom-tools
 
@@ -101,9 +111,16 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Note:** `run-all-examples.sh` runs 18 example files that need only the Copilot CLI (examples 1–9, 12–19, and 21) — 19 runs in total, since `helpers-query` runs twice (`run` and `run-multi`).
-> Examples 10 (BYOK), 11 (MCP), and 20 (empty-mode — uses BYOK) require external dependencies (API keys, Node.js) and are run manually.
-> Example 22 (agent-factories) requires `SESSION_ID` — it only runs as a child extension process of a live Copilot CLI session, not standalone, so it too is run manually.
+> **Portable runner coverage:** `run-all-examples.sh` executes all 22 entry points
+> across the 18 files that require only the Copilot CLI. It closes stdin for
+> `user-input/run`, exercising its EOF path without hanging.
+>
+> Four files remain explicit manual runs:
+> - `byok_provider.clj` and `empty_mode.clj` require a provider API key.
+> - `mcp_local_server.clj` requires local `npx` plus npm registry access. It stays
+>   out of the shared runner to keep that runner network-independent.
+> - `agent_factories.clj` requires `SESSION_ID` from a live parent Copilot CLI
+>   session and cannot run standalone.
 
 With a custom CLI path:
 ```bash
@@ -157,7 +174,7 @@ clojure -A:examples -X basic-chat/run :q1 '"What is Clojure?"' :q2 '"Who created
 ## Example 2: Helpers Query (`helpers_query.clj`)
 
 **Difficulty:** Beginner  
-**Concepts:** Stateless queries, simple API
+**Concepts:** Stateless queries, bounded streaming, fail-loud session errors
 
 Shows the simplified helpers API for one-shot queries without managing client/session lifecycle.
 
@@ -391,7 +408,7 @@ clojure -A:examples -X multi-agent/run :topics '["AI safety" "machine learning" 
 ## Example 5: Config, Skills, and Large Output (`config_skill_output.clj`)
 
 **Difficulty:** Intermediate  
-**Concepts:** config-dir overrides, skill directories, disabling skills, large tool output settings
+**Concepts:** config-directory overrides, skill directories, disabling skills, large tool output settings
 
 Shows how to:
 - set a custom config directory
@@ -637,11 +654,18 @@ Shows how to integrate MCP (Model Context Protocol) servers to extend the assist
 
 ### Prerequisites
 
-- Node.js and `npx` installed (for the filesystem MCP server)
+- Install Node.js and `npx`.
+- Allow npm registry access so `npx` can resolve
+  `@modelcontextprotocol/server-filesystem`.
+
+The shared runner excludes this example because it cannot prove both
+preconditions without making a network request.
 
 ### Usage
 
 ```bash
+command -v npx >/dev/null || { echo "npx is required" >&2; exit 1; }
+
 # Basic filesystem access
 clojure -A:examples -X mcp-local-server/run
 

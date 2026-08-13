@@ -222,9 +222,9 @@
     shutdown! {:kind :fn, :arglists ([])}
     with-query-seq {:kind :macro, :arglists ([bindings & body])}}
    :fdefs
-   {github.copilot-sdk.helpers/query (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :prompt clojure.core/string? :opts (clojure.spec.alpha/keys* :opt-un [:github.copilot-sdk.specs/client :github.copilot-sdk.specs/session :github.copilot-sdk.specs/timeout-ms])) :ret (clojure.spec.alpha/nilable clojure.core/string?) :fn nil)
-    github.copilot-sdk.helpers/query-chan (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :prompt clojure.core/string? :opts (clojure.spec.alpha/keys* :opt-un [:github.copilot-sdk.specs/client :github.copilot-sdk.specs/session :github.copilot-sdk.specs/buffer])) :ret clojure.core/any? :fn nil)
-    github.copilot-sdk.helpers/query-seq! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :prompt clojure.core/string? :opts (clojure.spec.alpha/keys* :opt-un [:github.copilot-sdk.specs/client :github.copilot-sdk.specs/session :github.copilot-sdk.specs/max-events])) :ret clojure.core/seqable? :fn nil)
+   {github.copilot-sdk.helpers/query (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :prompt clojure.core/string? :opts (clojure.spec.alpha/? (clojure.spec.alpha/& (clojure.spec.alpha/keys*) :github.copilot-sdk.instrument/helper-query-options))) :ret (clojure.spec.alpha/nilable clojure.core/string?) :fn nil)
+    github.copilot-sdk.helpers/query-chan (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :prompt clojure.core/string? :opts (clojure.spec.alpha/? (clojure.spec.alpha/& (clojure.spec.alpha/keys*) :github.copilot-sdk.instrument/helper-query-chan-options))) :ret clojure.core/any? :fn nil)
+    github.copilot-sdk.helpers/query-seq! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :prompt clojure.core/string? :opts (clojure.spec.alpha/? (clojure.spec.alpha/& (clojure.spec.alpha/keys*) :github.copilot-sdk.instrument/helper-query-seq-options))) :ret clojure.core/seqable? :fn nil)
     github.copilot-sdk.helpers/shutdown! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat) :ret clojure.core/nil? :fn nil)}}
   github.copilot-sdk.instrument
   {:vars
@@ -631,8 +631,10 @@
     :github.copilot-sdk.specs/exp-parameters
     :github.copilot-sdk.specs/exporter-type
     :github.copilot-sdk.specs/extension-id
+    :github.copilot-sdk.specs/extension-identity
     :github.copilot-sdk.specs/extension-info
     :github.copilot-sdk.specs/extension-name
+    :github.copilot-sdk.specs/extension-sdk-path
     :github.copilot-sdk.specs/extension-status
     :github.copilot-sdk.specs/extensions
     :github.copilot-sdk.specs/external-server?
@@ -876,6 +878,7 @@
     :github.copilot-sdk.specs/remote?
     :github.copilot-sdk.specs/rename
     :github.copilot-sdk.specs/repository
+    :github.copilot-sdk.specs/request-extensions?
     :github.copilot-sdk.specs/request-handler-queue-size
     :github.copilot-sdk.specs/request-handler-threads
     :github.copilot-sdk.specs/request-headers

@@ -256,7 +256,9 @@
   (when-not (nat-int? max-events)
     (throw (ex-info ":max-events must be a non-negative integer"
                     {:max-events max-events})))
-  (let [c (ensure-client! client)
+  (let [c (if (client-instance? client)
+            client
+            (ensure-client! client))
         session-config (build-session-config session)
         sess (copilot/create-session c session-config)
         done? (atom false)]
@@ -298,7 +300,7 @@
      [events prompt & {:keys [client session max-events]}]
 
    Keyword options match `query-seq!`:
-     :client - Client options map
+     :client - Client options map or CopilotClient instance
      :session - Session options map
      :max-events - Maximum number of events to emit (default: 256)
 
@@ -346,7 +348,7 @@
    or `query` (single response, deterministic cleanup).
 
    Keyword options:
-     :client - Client options map
+     :client - Client options map or CopilotClient instance
      :session - Session options map
      :max-events - Maximum number of events to emit (default: 256)
 

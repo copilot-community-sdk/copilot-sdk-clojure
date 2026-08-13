@@ -1,13 +1,13 @@
 {:upstream
  {:repository "github/copilot-sdk"
-  :commit "f75d222117d99acf50db95fab8bb2cbf1d5148d8"
+  :commit "3108e8ce26286043afa52f12781331460628baa0"
   :introducing-pr "https://github.com/github/copilot-sdk/pull/1335"
   :introducing-commit "4e3b8e231dddaa0c5a1c7195f77a1b0723386cda"
   :generated-request-schema
   {:source "nodejs/src/generated/rpc.ts"
    :session-create-resume :not-declared}
   :canonical
-  ["nodejs/src/types.ts:2130-2793"
+  ["nodejs/src/types.ts:2135-2793"
    "nodejs/src/generated/rpc.ts:9672-9737"
    "nodejs/src/client.ts:1523-1614"
    "nodejs/src/client.ts:1768-1863"
@@ -72,10 +72,7 @@
  :classification
  {:node-public-not-accepted-by-clojure
   [{:node-key "canvases" :type-line 2211 :status :separate-parity-work}
-   {:node-key "requestCanvasRenderer" :type-line 2219 :status :separate-parity-work}
-   {:node-key "requestExtensions" :type-line 2227 :status :separate-parity-work}
-   {:node-key "extensionSdkPath" :type-line 2241 :status :separate-parity-work}
-   {:node-key "extensionInfo" :type-line 2248 :status :separate-parity-work}]
+   {:node-key "requestCanvasRenderer" :type-line 2219 :status :separate-parity-work}]
 
   :clojure-aliases
   [{:clojure-key :config-dir
@@ -441,6 +438,38 @@
                      :Flights {:matrix "treatment"}
                      :Configs []
                      :AssignmentContext "matrix-context"}}]}
+
+  {:key :extension-info
+   :scope :shared
+   :node-key "extensionInfo"
+   :type-line 2248
+   :wire-path [:extensionInfo]
+   :cases [{:name :value
+            :value {:source "github-app" :name "matrix-provider"}
+            :expect {:source "github-app" :name "matrix-provider"}}
+           {:name :missing-source
+            :value {:name "matrix-provider"}
+            :expect :invalid}
+           {:name :non-string-name
+            :value {:source "github-app" :name 42}
+            :expect :invalid}
+           {:name :unknown-key
+            :value {:source "github-app"
+                    :name "matrix-provider"
+                    :unknown true}
+            :expect :invalid}
+           {:name :explicit-nil :value nil :expect :invalid}]}
+
+  {:key :extension-sdk-path
+   :scope :shared
+   :node-key "extensionSdkPath"
+   :type-line 2241
+   :wire-path [:extensionSdkPath]
+   :cases [{:name :empty :value "" :expect ""}
+           {:name :missing-path
+            :value "missing-extension-sdk"
+            :expect "missing-extension-sdk"}
+           {:name :explicit-nil :value nil :expect :invalid}]}
 
   {:key :github-mcp-tool-config
    :scope :shared
@@ -819,6 +848,15 @@
    :type-line 2158
    :wire-path [:reasoningSummary]
    :cases [{:name :value :value "detailed" :expect "detailed"}]}
+
+  {:key :request-extensions?
+   :scope :shared
+   :node-key "requestExtensions"
+   :type-line 2227
+   :wire-path [:requestExtensions]
+   :cases [{:name :false :value false :expect false}
+           {:name :true :value true :expect true}
+           {:name :explicit-nil :value nil :expect :invalid}]}
 
   {:key :remote-session
    :scope :shared

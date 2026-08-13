@@ -575,24 +575,65 @@
 ;; Function specs for helpers namespace
 ;; -----------------------------------------------------------------------------
 
+(s/def ::helper-client
+  (s/or :instance ::specs/client
+        :options ::specs/client-options))
+
+(s/def ::helper-session
+  (s/or :instance ::specs/session
+        :config ::specs/session-config))
+
+(defn- options-valid?
+  [options option-specs]
+  (and (map? options)
+       (every? (fn [[key spec]]
+                 (or (not (contains? options key))
+                     (s/valid? spec (get options key))))
+               option-specs)))
+
+(defn- query-options?
+  [options]
+  (options-valid? options
+                  {:client ::helper-client
+                   :session ::helper-session
+                   :timeout-ms ::specs/timeout-ms}))
+
+(defn- query-seq-options?
+  [options]
+  (options-valid? options
+                  {:client ::helper-client
+                   :session ::specs/session-config
+                   :max-events ::specs/max-events}))
+
+(defn- query-chan-options?
+  [options]
+  (options-valid? options
+                  {:client ::specs/client-options
+                   :session ::specs/session-config
+                   :buffer ::specs/buffer}))
+
+(s/def ::helper-query-options query-options?)
+(s/def ::helper-query-seq-options query-seq-options?)
+(s/def ::helper-query-chan-options query-chan-options?)
+
 (register-fdef! github.copilot-sdk.helpers/query
                 :args (s/cat :prompt string?
-                             :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/timeout-ms]))
+                             :opts (s/? (s/& (s/keys*) ::helper-query-options)))
                 :ret (s/nilable string?))
 
 (register-fdef! github.copilot-sdk.helpers/query-seq-source
                 :args (s/cat :prompt string?
-                             :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/max-events]))
+                             :opts (s/? (s/& (s/keys*) ::helper-query-seq-options)))
                 :ret (s/tuple seqable? ifn?))
 
 (register-fdef! github.copilot-sdk.helpers/query-seq!
                 :args (s/cat :prompt string?
-                             :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/max-events]))
+                             :opts (s/? (s/& (s/keys*) ::helper-query-seq-options)))
                 :ret seqable?)
 
 (register-fdef! github.copilot-sdk.helpers/query-chan
                 :args (s/cat :prompt string?
-                             :opts (s/keys* :opt-un [::specs/client ::specs/session ::specs/buffer]))
+                             :opts (s/? (s/& (s/keys*) ::helper-query-chan-options)))
                 :ret any?)  ; core.async channel
 
 (register-fdef! github.copilot-sdk.helpers/shutdown!

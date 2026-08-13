@@ -565,6 +565,11 @@
    - :enable-mcp-apps      - Experimental MCP Apps host opt-in. Set true only when
                              the host can render `ui://` bundles; false and omission
                              do not send the wire request.
+   - :request-extensions?  - Opt into extension management and dispatch. Explicit
+                             false is forwarded; omission sends no wire key.
+   - :extension-sdk-path   - String path override for the SDK injected into extension
+                             subprocesses. Invalid paths fall back to the bundled SDK.
+   - :extension-info       - Stable extension identity `{:source string :name string}`.
    - :custom-agents        - Custom agent configs
    - :default-agent        - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :skill-directories    - Additional skill directories to load
@@ -697,7 +702,7 @@
 
 (defn resume-session
   "Resume an existing session by ID.
-   Accepts the same config options as `create-session` (except `:session-id`),
+   Accepts the same config options as `create-session` (except `:session-id` and `:cloud`),
    including the experimental `:enable-mcp-apps` host opt-in,
    plus:
    - :disable-resume?  - When true, skip emitting the session.resume event (default: false)
@@ -743,7 +748,9 @@
    Reads the SESSION_ID environment variable and connects to the parent CLI process
    via stdio. Intended for extensions spawned by the Copilot CLI.
 
-   Config is the same as `resume-session`. `:on-permission-request` is **optional**;
+   Config is the same as `resume-session` except `:extension-sdk-path` is not accepted.
+   `:request-extensions?` and `:extension-info` are accepted.
+   `:on-permission-request` is **optional**;
    when omitted, join-session uses `default-join-session-permission-handler`.
    The `:disable-resume?` option defaults to true.
 

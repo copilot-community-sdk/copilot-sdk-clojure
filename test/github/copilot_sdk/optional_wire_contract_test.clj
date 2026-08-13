@@ -170,7 +170,7 @@
         (str "Resume coverage drift. Missing "
              (set/difference (resume-config-keys) resume-keys)
              ", extra " (set/difference resume-keys (resume-config-keys))))
-    (is (= "f75d222117d99acf50db95fab8bb2cbf1d5148d8"
+    (is (= "3108e8ce26286043afa52f12781331460628baa0"
            (get-in contract-report [:upstream :commit])))))
 
 (deftest unset-optional-fields-match-node-omission-contract

@@ -15,6 +15,14 @@ echo "=== helpers-query/run-multi ==="
 clojure -A:examples -X helpers-query/run-multi
 
 echo ""
+echo "=== helpers-query/run-streaming ==="
+clojure -A:examples -X helpers-query/run-streaming
+
+echo ""
+echo "=== helpers-query/run-async ==="
+clojure -A:examples -X helpers-query/run-async
+
+echo ""
 echo "=== tool-integration ==="
 clojure -A:examples -X tool-integration/run
 
@@ -39,8 +47,12 @@ echo "=== session-events ==="
 clojure -A:examples -X session-events/run
 
 echo ""
-echo "=== user-input ==="
+echo "=== user-input/run-simple ==="
 clojure -A:examples -X user-input/run-simple
+
+echo ""
+echo "=== user-input/run (stdin closed) ==="
+clojure -A:examples -X user-input/run < /dev/null
 
 echo ""
 echo "=== file-attachments ==="
@@ -78,9 +90,9 @@ echo ""
 echo "=== manual-tool-resume ==="
 clojure -A:examples -X manual-tool-resume/run
 
-# Intentionally excluded — these require external credentials or network setup
-# and cannot run unattended in CI:
+# Intentionally excluded because they are not portable unattended runs:
 #   byok_provider     needs a provider API key (OPENAI_API_KEY / ANTHROPIC_API_KEY / ...)
 #   empty_mode        :empty mode disables the local keychain, so it also needs a provider key
-#   mcp_local_server  needs npx (Node.js) + network to download @modelcontextprotocol/server-filesystem
-# Run them manually after providing the relevant key / tooling. See examples/README.md.
+#   mcp_local_server  needs npx plus npm registry access for @modelcontextprotocol/server-filesystem
+#   agent_factories   needs SESSION_ID from a live parent Copilot CLI session
+# Run the exact manual commands after satisfying each precondition. See examples/README.md.

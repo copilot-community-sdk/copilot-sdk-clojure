@@ -2351,6 +2351,12 @@
       (assoc :enable-managed-settings (:enable-managed-settings? config))
       (:managed-settings config)
       (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
+      (some? (:request-extensions? config))
+      (assoc :request-extensions (:request-extensions? config))
+      (some? (:extension-sdk-path config))
+      (assoc :extension-sdk-path (:extension-sdk-path config))
+      (some? (:extension-info config))
+      (assoc :extension-info (:extension-info config))
       ;; canvasProvider (upstream PR #1847): stable canvas-provider identity.
       ;; The nested {:id :name} map's kebab keys are camelCased by clj->wire.
       (:canvas-provider config)
@@ -2557,6 +2563,12 @@
       (assoc :enable-managed-settings (:enable-managed-settings? config))
       (:managed-settings config)
       (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
+      (some? (:request-extensions? config))
+      (assoc :request-extensions (:request-extensions? config))
+      (some? (:extension-sdk-path config))
+      (assoc :extension-sdk-path (:extension-sdk-path config))
+      (some? (:extension-info config))
+      (assoc :extension-info (:extension-info config))
       (:canvas-provider config)
       (assoc :canvas-provider (:canvas-provider config))
       true (assoc :env-value-mode "direct"))))
@@ -2721,7 +2733,8 @@
    - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
-   - :config-dir         - Override config directory for CLI (configDir)
+   - :config-directory   - Override config directory for CLI (configDir).
+                           :config-dir remains a deprecated alias.
    - :skill-directories  - Additional skill directories to load
    - :disabled-skills    - Disable specific skills by name
    - :large-output       - Tool output handling config
@@ -2799,6 +2812,11 @@
                            session's `:github-token`, which must be set (the runtime fails closed
                            otherwise). Forwarded verbatim as `enableManagedSettings` — an explicit
                            `false` is sent on the wire. (upstream PR #1925)
+   - :request-extensions? - Boolean. Opt into extension management and dispatch for this
+                            connection. Explicit false is preserved; omission sends no key.
+   - :extension-sdk-path - String path override for the SDK injected into extension
+                           subprocesses. Invalid paths fall back to the bundled SDK.
+   - :extension-info     - Stable extension identity `{:source string :name string}`.
    - :canvas-provider    - Map `{:id \"...\" :name \"...\"}` (`:name` optional). Identifies the canvas
                            provider for the session. Forwarded as `canvasProvider`. (upstream PR #1847)
    - :remote-session     - Keyword. Per-session Mission Control remote mode: :off, :export, or :on.
@@ -2957,7 +2975,8 @@
    - :mcp-servers        - MCP server configurations
    - :custom-agents      - Custom agent configurations
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
-   - :config-dir         - Override configuration directory
+   - :config-directory   - Override configuration directory.
+                           :config-dir remains a deprecated alias.
    - :skill-directories  - Directories to load skills from
     - :disabled-skills    - Skills to disable
     - :infinite-sessions  - Infinite session configuration
@@ -2992,6 +3011,9 @@
    - :enable-citations - Boolean (@experimental). See `create-session` (upstream PR #1865).
    - :session-limits     - Map (@experimental). See `create-session` (upstream PR #1865).
    - :enable-managed-settings? - Boolean. See `create-session` (upstream PR #1925).
+   - :request-extensions? - Boolean. See `create-session`; explicit false is forwarded.
+   - :extension-sdk-path - String path override for extension subprocesses. See `create-session`.
+   - :extension-info     - Stable extension identity `{:source string :name string}`.
    - :canvas-provider    - Map `{:id .. :name ..}`. See `create-session` (upstream PR #1847).
    - :on-exit-plan-mode  - Handler for exitPlanMode.request RPCs. See `create-session`
                            (upstream PR #1228).
@@ -3221,7 +3243,9 @@
    Reads the SESSION_ID environment variable and connects to the parent CLI process
    via stdio. This is intended for extensions spawned by the Copilot CLI.
 
-   Config is the same as resume-session. `:on-permission-request` is **optional**;
+   Config is the same as resume-session except `:extension-sdk-path` is not accepted.
+   `:request-extensions?` and `:extension-info` are accepted.
+   `:on-permission-request` is **optional**;
    when omitted, a default handler is used that returns `{:kind :no-result}`, leaving any
    pending permission request unanswered (appropriate for most extensions that use
    `:skip-permission?` on their tools or do not require permission handling).
