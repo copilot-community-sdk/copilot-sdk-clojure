@@ -1,5 +1,6 @@
 (ns github.copilot-sdk.helpers-query-example-test
   (:require [clojure.core.async :as async]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.test :refer [deftest is]]
             [github.copilot-sdk :as sdk])
   (:import [java.util.concurrent CountDownLatch TimeUnit]))
@@ -39,6 +40,7 @@
                       sdk/force-stop! (fn [actual-client]
                                         (is (identical? client actual-client))
                                         (swap! calls conj :force-stop)
+                                        (async/close! events-ch)
                                         (reset! state {:status :disconnected
                                                        :sessions {}
                                                        :process nil
@@ -60,6 +62,7 @@
     (is (= [:start :create-session :subscribe :send
             :force-stop :worker-finally :owner-finally]
            @calls))
+    (is (true? (async-protocols/closed? events-ch)))
     (is (= {:status :disconnected
             :sessions {}
             :process nil
