@@ -2,26 +2,10 @@
 
 const { appendFileSync, readFileSync } = require("node:fs");
 const { spawnSync } = require("node:child_process");
+const { validateDriverArgs } = require("./args.cjs");
 const { sampleOperations, validatePreflight } = require("./measurement.cjs");
 
-const args = Object.fromEntries(
-  process.argv.slice(2).map((arg) => {
-    const separator = arg.indexOf("=");
-    if (separator === -1) throw new Error(`Expected --name=value, got ${arg}`);
-    return [arg.slice(2, separator), arg.slice(separator + 1)];
-  }),
-);
-
-for (const name of [
-  "mode",
-  "uri",
-  "corpus",
-  "output",
-  "run-id",
-  "node-sdk-root",
-]) {
-  if (!args[name]) throw new Error(`Missing --${name}`);
-}
+const args = validateDriverArgs(process.argv.slice(2));
 
 const corpus = JSON.parse(readFileSync(args.corpus));
 const sdk = require(args["node-sdk-root"]);

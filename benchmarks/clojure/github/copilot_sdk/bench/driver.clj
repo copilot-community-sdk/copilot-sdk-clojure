@@ -5,7 +5,7 @@
             [clojure.tools.logging :as log]
             [github.copilot-sdk :as sdk]))
 
-(defn- parse-args
+(defn parse-args
   [args]
   (into {}
         (map (fn [arg]
@@ -21,6 +21,30 @@
     (when-not (get args name)
       (throw (ex-info (str "Missing --" name) {:argument name}))))
   args)
+
+(def common-required-args
+  ["mode" "uri" "corpus" "output" "run-id"])
+
+(def steady-required-args
+  ["stability-output"
+   "warmup"
+   "iterations"
+   "timeout-ms"
+   "replicate"
+   "sample-offset"
+   "warmup-window-size"
+   "stable-window-count"
+   "max-warmup-relative-drift"
+   "measured-drift-window"
+   "max-measured-relative-drift"])
+
+(defn validate-args!
+  [raw-args]
+  (let [args (-> (parse-args raw-args)
+                 (require-args! common-required-args))]
+    (when (= "steady" (get args "mode"))
+      (require-args! args steady-required-args))
+    args))
 
 (defn- rss-bytes
   []
@@ -244,8 +268,7 @@
   [& raw-args]
   (when (log/enabled? :info)
     (throw (ex-info "Benchmark logging must suppress INFO before measurement" {})))
-  (let [args (-> (parse-args raw-args)
-                 (require-args! ["mode" "uri" "corpus" "output" "run-id"]))
+  (let [args (validate-args! raw-args)
         corpus (json/read-str (slurp (io/file (get args "corpus"))))]
     (case (get args "mode")
       "cold" (run-cold! args corpus)

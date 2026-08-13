@@ -1,6 +1,7 @@
 (ns github.copilot-sdk.benchmark-contract-test
   (:require [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk.bench.analysis :as analysis]
             [github.copilot-sdk.bench.driver :as bench-driver]
@@ -354,6 +355,28 @@
     (reset! calls [])
     (is (= 3 (count (bench-driver/sample-operations operation 3))))
     (is (= [:operation :operation :operation] @calls))))
+
+(deftest clojure-driver-argument-contract
+  (is (thrown-with-msg? clojure.lang.ExceptionInfo
+                        #"Expected --name=value"
+                        (bench-driver/validate-args! ["foo=bar"])))
+  (let [common ["--mode=steady"
+                "--uri=127.0.0.1:1"
+                "--corpus=corpus.json"
+                "--output=observations.ndjson"
+                "--run-id=run"]
+        steady (mapv #(str "--" % "=1") bench-driver/steady-required-args)]
+    (doseq [missing bench-driver/steady-required-args]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           (re-pattern (str "Missing --" missing))
+           (bench-driver/validate-args!
+            (into common
+                  (remove #(str/starts-with? % (str "--" missing "=")) steady))))))
+    (is (= "cold"
+           (get (bench-driver/validate-args!
+                 (assoc common 0 "--mode=cold"))
+                "mode")))))
 
 (deftest protocol-frame-contract
   (let [payload "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\",\"params\":{\"message\":\"bench\"}}"

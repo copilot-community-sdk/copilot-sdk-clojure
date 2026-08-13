@@ -1,18 +1,15 @@
 import { createHash } from "node:crypto";
+import { createRequire } from "node:module";
 import { readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 
-const args = Object.fromEntries(
-  process.argv.slice(2).map((arg) => {
-    const separator = arg.indexOf("=");
-    if (separator === -1) throw new Error(`Expected --name=value, got ${arg}`);
-    return [arg.slice(2, separator), arg.slice(separator + 1)];
-  }),
-);
-
-for (const name of ["corpus", "state", "trace", "phase", "implementation"]) {
-  if (!args[name]) throw new Error(`Missing --${name}`);
-}
+const require = createRequire(import.meta.url);
+const {
+  fixtureRequiredArgs,
+  parseArgs,
+  requireArgs,
+} = require("../node/args.cjs");
+const args = requireArgs(parseArgs(process.argv.slice(2)), fixtureRequiredArgs);
 
 const corpusBytes = readFileSync(args.corpus);
 const corpus = JSON.parse(corpusBytes);
