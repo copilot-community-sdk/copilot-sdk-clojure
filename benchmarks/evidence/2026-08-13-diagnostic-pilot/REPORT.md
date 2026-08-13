@@ -33,6 +33,9 @@ This pilot is diagnostic only:
 
 - it contains one Clojure workload and no matched Node pair;
 - it has no `metadata-final.json` or `summary.json`;
+- its immutable `stability-legacy-v1.ndjson` uses the superseded hard-gate
+  shape documented by `legacy-stability.schema.json`, not the current
+  report-only stability schema;
 - it contributes no pair, effect, interval, p-value, or conclusion to the
   confirmatory study;
 - it was never reused after methodology version 2 removed drift-based
@@ -44,7 +47,7 @@ This pilot is diagnostic only:
 |------|---------|
 | `metadata.json` | `6244280eca9629ef4fb5e2813e6e6f4cb28a5352176df697d02255e68daa8fc4` |
 | `observations.ndjson` | `df049455f4c4ff8648ff92ddf4f9057948106d00b2cf772e4b7d918bff740500` |
-| `stability.ndjson` | `13966e606ba8c4d03ac7c3488c84a217ce60c5309744e492f59474b0eee4bc69` |
+| `stability-legacy-v1.ndjson` | `13966e606ba8c4d03ac7c3488c84a217ce60c5309744e492f59474b0eee4bc69` |
 | `diagnostics.ndjson` | `1d5a8bb6deae50219a338f7d05dea64e403b613bbf95d6769ee026bdcf15affc` |
 | `clojure-steady-000-fixture.json` | `19e49a7f42ccaa609e51f4cb9e19840405b0e0832e30f95b084a6953c1a9d50c` |
 

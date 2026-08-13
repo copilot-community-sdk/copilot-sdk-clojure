@@ -416,6 +416,21 @@
     (is (= "fa852d063a364c5a87b44ac12a5921e97f522c4ac09e1c48520ac8e2148882fc"
            (get-in manifest ["files" "summary.json" "sha256"])))))
 
+(deftest diagnostic-pilot-uses-explicit-legacy-stability-schema
+  (let [directory (io/file "benchmarks" "evidence"
+                           "2026-08-13-diagnostic-pilot")
+        schema (json/read-str
+                (slurp (io/file directory "legacy-stability.schema.json"))
+                :key-fn keyword)
+        required (set (map keyword (:required schema)))
+        records (->> (str/split-lines
+                      (slurp (io/file directory
+                                      "stability-legacy-v1.ndjson")))
+                     (mapv #(json/read-str % :key-fn keyword)))]
+    (is (seq records))
+    (is (every? #(= required (set (keys %))) records))
+    (is (not= required analysis/stability-keys))))
+
 (deftest incomplete-run-does-not-write-summary
   (let [directory (.toFile (Files/createTempDirectory
                             "copilot-benchmark-incomplete"
