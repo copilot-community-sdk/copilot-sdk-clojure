@@ -3,6 +3,19 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (upstream parity)
+- Added the stable extension session config fields `:request-extensions?`,
+  `:extension-sdk-path`, and `:extension-info` for `session.create` and
+  `session.resume`. `join-session` accepts `:request-extensions?` and
+  `:extension-info` but rejects the SDK path override, matching the official
+  Node SDK. Explicit false is preserved for the opt-in, nil is rejected instead
+  of serialized as JSON null, and extension identity is a closed two-string map
+  that remains distinct from the richer `session.extensions_loaded` event item.
+  Ports upstream
+  [PR #1401](https://github.com/github/copilot-sdk/pull/1401) and
+  [PR #1494](https://github.com/github/copilot-sdk/pull/1494); the experimental
+  extension launch-provider RPC remains excluded.
+
 ### Fixed (optional session wire contracts)
 - `session.create` and `session.resume` now match the official Node SDK's
   optional-field contract: explicit `false` is preserved for `:streaming?` and

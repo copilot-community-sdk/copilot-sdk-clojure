@@ -961,6 +961,26 @@
 (s/def ::additional-directories (s/coll-of ::non-blank-string :kind vector?))
 (s/def ::disabled-mcp-servers (s/coll-of ::non-blank-string :kind vector?))
 
+;; Stable extension-host session fields. `::extension-info` is already the
+;; richer session.extensions_loaded event item, so config validation uses the
+;; distinct `::extension-identity` spec through `valid-extension-identity?`.
+(s/def ::request-extensions? boolean?)
+(s/def ::extension-sdk-path string?)
+(s/def ::extension-identity
+  (closed-keys
+   (s/keys :req-un [::source ::name])
+   #{:source :name}))
+
+(defn- valid-extension-identity?
+  [config]
+  (or (not (contains? config :extension-info))
+      (s/valid? ::extension-identity (:extension-info config))))
+
+(defn- closed-session-config
+  [keys-spec allowed-keys]
+  (s/and (closed-keys keys-spec allowed-keys)
+         valid-extension-identity?))
+
 (s/def ::enable-all-tools? boolean?)
 (s/def ::additional-toolsets (s/coll-of ::non-blank-string :kind vector?))
 (s/def ::additional-tools (s/coll-of ::non-blank-string :kind vector?))
@@ -1070,10 +1090,11 @@
     :enable-managed-settings? :managed-settings
     :enable-experimental-mode? :additional-directories :disabled-mcp-servers
     :github-mcp-tool-config
+    :request-extensions? :extension-sdk-path :extension-info
     :canvas-provider})
 
 (s/def ::session-config
-  (closed-keys
+  (closed-session-config
    ;; Upstream PR #1308: :on-permission-request is now optional. When omitted,
    ;; permission requests are surfaced as events and left pending for the
    ;; consumer to resolve via `handle-pending-permission-request!`.
@@ -1117,6 +1138,7 @@
                     ::enable-managed-settings? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
+                    ::request-extensions? ::extension-sdk-path
                     ::canvas-provider])
    session-config-keys))
 
@@ -1160,10 +1182,11 @@
     :enable-managed-settings? :managed-settings
     :enable-experimental-mode? :additional-directories :disabled-mcp-servers
     :github-mcp-tool-config
+    :request-extensions? :extension-sdk-path :extension-info
     :canvas-provider})
 
 (s/def ::resume-session-config
-  (closed-keys
+  (closed-session-config
    ;; Upstream PR #1308: :on-permission-request is now optional.
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
@@ -1206,15 +1229,18 @@
                     ::enable-managed-settings? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
+                    ::request-extensions? ::extension-sdk-path
                     ::canvas-provider])
    resume-session-config-keys))
 
 ;; join-session config extends resume with extension-authored Agent Factories.
 ;; When omitted, join-session defaults to a handler that returns {:kind :no-result}.
 (def ^:private join-session-config-keys
-  (conj resume-session-config-keys :factories))
+  (-> resume-session-config-keys
+      (disj :extension-sdk-path)
+      (conj :factories)))
 (s/def ::join-session-config
-  (closed-keys
+  (closed-session-config
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
                     ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
@@ -1256,6 +1282,7 @@
                     ::enable-managed-settings? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
+                    ::request-extensions?
                     ::canvas-provider
                     ::factories])
    join-session-config-keys))

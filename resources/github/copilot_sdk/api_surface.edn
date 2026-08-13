@@ -631,8 +631,10 @@
     :github.copilot-sdk.specs/exp-parameters
     :github.copilot-sdk.specs/exporter-type
     :github.copilot-sdk.specs/extension-id
+    :github.copilot-sdk.specs/extension-identity
     :github.copilot-sdk.specs/extension-info
     :github.copilot-sdk.specs/extension-name
+    :github.copilot-sdk.specs/extension-sdk-path
     :github.copilot-sdk.specs/extension-status
     :github.copilot-sdk.specs/extensions
     :github.copilot-sdk.specs/external-server?
@@ -876,6 +878,7 @@
     :github.copilot-sdk.specs/remote?
     :github.copilot-sdk.specs/rename
     :github.copilot-sdk.specs/repository
+    :github.copilot-sdk.specs/request-extensions?
     :github.copilot-sdk.specs/request-handler-queue-size
     :github.copilot-sdk.specs/request-handler-threads
     :github.copilot-sdk.specs/request-headers

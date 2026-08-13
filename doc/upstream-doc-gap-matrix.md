@@ -29,6 +29,11 @@ SDK supports provider identity via `:canvas-provider` and can observe and restor
 the [`open-canvases`](reference/API.md#open-canvases) snapshot and canvas events,
 but it cannot declare or serve canvases.
 
+The stable extension session fields (`:request-extensions?`, `:extension-sdk-path`,
+and `:extension-info`) are covered in the [`create-session`](reference/API.md#create-session)
+config reference. The experimental `extensionLaunchProvider.resolve` reverse RPC
+remains intentionally absent; callers cannot register a custom extension launcher.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |
