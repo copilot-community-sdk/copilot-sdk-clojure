@@ -1,15 +1,63 @@
 (ns github.copilot-sdk.helpers-query-example-test
-  (:require [clojure.core.async :as async]
+  (:require [clojure.java.io :as io]
+            [clojure.core.async :as async]
             [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.test :refer [deftest is]]
             [github.copilot-sdk :as sdk])
-  (:import [java.util.concurrent CountDownLatch TimeUnit]))
+  (:import [java.nio.file Files]
+           [java.util.concurrent CountDownLatch TimeUnit]))
 
-(load-file "examples/helpers_query.clj")
+(def ^:private test-resource-path
+  "github/copilot_sdk/helpers_query_example_test.clj")
+
+(defn- resolve-helper-example-file
+  []
+  (let [resource (or (io/resource test-resource-path)
+                     (throw (ex-info "Helper example test resource not found"
+                                     {:resource test-resource-path})))]
+    (when-not (= "file" (.getProtocol resource))
+      (throw (ex-info "Helper example test resource must be a file URL"
+                      {:resource test-resource-path
+                       :url (str resource)})))
+    (let [resource-file (.getCanonicalFile (io/file (.toURI resource)))
+          test-root (loop [directory (.getParentFile resource-file)]
+                      (cond
+                        (nil? directory)
+                        (throw (ex-info "Could not derive repository test root"
+                                        {:resource-file (.getPath resource-file)}))
+
+                        (= "test" (.getName directory))
+                        directory
+
+                        :else
+                        (recur (.getParentFile directory))))
+          repository-root (.getParentFile test-root)
+          example-file (.getCanonicalFile
+                        (io/file repository-root "examples" "helpers_query.clj"))]
+      (when-not (.isFile example-file)
+        (throw (ex-info "Helper example source not found"
+                        {:path (.getPath example-file)})))
+      example-file)))
+
+(load-file (.getPath (resolve-helper-example-file)))
 
 (defn- example-var
   [sym]
   (ns-resolve 'helpers-query sym))
+
+(deftest helper-example-resolution-is-cwd-independent
+  (let [original-user-dir (System/getProperty "user.dir")
+        temporary-dir (.toFile (Files/createTempDirectory "copilot-example-test" (make-array java.nio.file.attribute.FileAttribute 0)))]
+    (try
+      (System/setProperty "user.dir" (.getCanonicalPath temporary-dir))
+      (let [example-file (resolve-helper-example-file)]
+        (is (.isFile example-file))
+        (is (= "helpers_query.clj" (.getName example-file)))
+        (is (not (.startsWith (.toPath example-file) (.toPath temporary-dir)))))
+      (finally
+        (System/setProperty "user.dir" original-user-dir)
+        (Files/deleteIfExists (.toPath temporary-dir))))
+    (is (= original-user-dir (System/getProperty "user.dir")))))
 
 (deftest streaming-timeout-force-stops-its-owned-client
   (let [calls (atom [])
