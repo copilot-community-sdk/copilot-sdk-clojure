@@ -8,17 +8,47 @@
 ;; Convert between wire format (camelCase) and Clojure idiom (kebab-case)
 ;; -----------------------------------------------------------------------------
 
+(defn- simple-lowercase-keyword?
+  [k allow-hyphen? allow-digits?]
+  (when (and (keyword? k) (nil? (namespace k)))
+    (let [^String value (name k)
+          length (.length value)]
+      (and (pos? length)
+           (loop [index 0
+                  previous-hyphen? false]
+             (if (= index length)
+               true
+               (let [character (.charAt value index)
+                     hyphen? (= character \-)]
+                 (cond
+                   (or (<= (int \a) (int character) (int \z))
+                       (and allow-digits?
+                            (<= (int \0) (int character) (int \9))))
+                   (recur (inc index) false)
+
+                   (and allow-hyphen?
+                        hyphen?
+                        (pos? index)
+                        (< index (dec length))
+                        (not previous-hyphen?))
+                   (recur (inc index) true)
+
+                   :else
+                   false))))))))
+
 (defn- keyword->camel
   [k]
-  (if (keyword? k)
-    (csk/->camelCaseKeyword k)
-    k))
+  (cond
+    (simple-lowercase-keyword? k false true) k
+    (keyword? k) (csk/->camelCaseKeyword k)
+    :else k))
 
 (defn- keyword->kebab
   [k]
-  (if (keyword? k)
-    (csk/->kebab-case-keyword k)
-    k))
+  (cond
+    (simple-lowercase-keyword? k true false) k
+    (keyword? k) (csk/->kebab-case-keyword k)
+    :else k))
 
 (defn ->wire-keys
   "Convert map keys from kebab-case to camelCase for wire format.
