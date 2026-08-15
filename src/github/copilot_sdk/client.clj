@@ -13,7 +13,8 @@
             [github.copilot-sdk.util :as util]
             [github.copilot-sdk.teardown :as td]
             [github.copilot-sdk.logging :as log])
-  (:import [java.net Socket]
+  (:import [java.io BufferedInputStream]
+           [java.net Socket]
            [java.util.concurrent LinkedBlockingQueue]))
 
 (def ^:private sdk-protocol-version-max 3)
@@ -1034,10 +1035,14 @@
   (let [host (:actual-host client)
         {:keys [actual-port]} @(:state client)
         socket (proc/connect-tcp host actual-port 10000)]
-    ;; Initialize connection state before connecting
-    (swap! (:state client) assoc :connection (proto/initial-connection-state))
-    (let [conn (proto/connect (.getInputStream socket) (.getOutputStream socket) (:state client))]
-      (swap! (:state client) assoc :socket socket :connection-io conn))))
+    ;; Transfer socket ownership before stream/protocol initialization so a
+    ;; failure below remains recoverable through release-transport!.
+    (swap! (:state client) assoc
+           :connection (proto/initial-connection-state)
+           :socket socket)
+    (let [input (BufferedInputStream. (.getInputStream socket) 65536)
+          conn (proto/connect input (.getOutputStream socket) (:state client))]
+      (swap! (:state client) assoc :connection-io conn))))
 
 (defn- verify-protocol-version!
   "Verify the server's protocol version matches ours.
