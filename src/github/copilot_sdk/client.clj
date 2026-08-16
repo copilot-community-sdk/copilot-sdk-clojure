@@ -1329,7 +1329,13 @@
                            "plugins.builtin.set"
                            {:paths (vec directories)})
       (catch Exception error
-        (force-stop! client)
+        (when-let [cleanup-failure
+                   (td/attempt {:operation :force-stop
+                                :resource :client-startup}
+                               (force-stop! client))]
+          (.addSuppressed ^Throwable error cleanup-failure)
+          (log/warn cleanup-failure
+                    "Client force-stop failed after plugin registration error"))
         (throw error))))
   nil)
 

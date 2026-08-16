@@ -171,6 +171,42 @@
               #"plugin registration failed"
               (sdk/start! copilot-client))))
       (is (= [{:process :forcible}] @cleanup))
+      (is (= :error (sdk/state copilot-client)))))
+
+  (testing "force-stop failure remains observable without replacing registration failure"
+    (let [cleanup-error (ex-info "force-stop failed" {})
+          copilot-client
+          (sdk/client {:auto-start? false
+                       :cli-url "localhost:1234"
+                       :builtin-plugin-directories ["/opt/copilot/plugins"]})
+          startup-error
+          (with-redefs-fn
+            {(var client/connect-tcp!)
+             (fn [c]
+               (swap! (:state c)
+                      assoc
+                      :connection (protocol/initial-connection-state)
+                      :connection-io ::connection))
+             (var client/verify-protocol-version!) (fn [_] nil)
+             (var client/force-stop!)
+             (fn [c]
+               (swap! (:state c) assoc :stopping? true)
+               (throw cleanup-error))
+             (var protocol/send-request!)
+             (fn [_ method _]
+               (when (= "plugins.builtin.set" method)
+                 (throw (ex-info "plugin registration failed" {})))
+               {})}
+            #(try
+               (sdk/start! copilot-client)
+               nil
+               (catch Exception error
+                 error)))]
+      (is (= "plugin registration failed" (ex-message startup-error)))
+      (is (= 1 (count (.getSuppressed ^Throwable startup-error))))
+      (is (identical?
+           cleanup-error
+           (ex-cause (first (.getSuppressed ^Throwable startup-error)))))
       (is (= :error (sdk/state copilot-client))))))
 
 (deftest attributed-permission-result-contract

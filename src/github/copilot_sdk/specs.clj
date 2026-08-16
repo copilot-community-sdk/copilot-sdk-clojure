@@ -2243,16 +2243,14 @@
 
 (s/def ::permission-decision-context
   (s/and
-   map?
-   #(= #{:outcome :source :surface} (set (keys %)))
+   (closed-keys map? #{:outcome :source :surface})
    #(s/valid? ::permission-decision-outcome (:outcome %))
    #(s/valid? ::permission-decision-source (:source %))
    #(s/valid? ::permission-decision-surface (:surface %))))
 
 (s/def ::attributed-permission-result
   (s/and
-   map?
-   #(= #{:kind :result :decision-context} (set (keys %)))
+   (closed-keys map? #{:kind :result :decision-context})
    #(= :attributed (:kind %))
    #(s/valid? ::permission-result (:result %))
    #(s/valid? ::permission-decision-context (:decision-context %))))
