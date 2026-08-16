@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (performance)
+- Avoided unnecessary camel/snake-case conversion work for already-normalized
+  protocol keywords while preserving exact conversion semantics for camel,
+  snake, namespaced, and punctuated keys.
+- Buffered TCP protocol input before Content-Length framing so header-byte reads
+  are satisfied from user space instead of repeatedly reaching the socket.
+
 ## [1.0.9.0] - 2026-08-13
 ### Changed (agent guidance)
 - Consolidated durable repository guidance for exact-pin stable upstream
