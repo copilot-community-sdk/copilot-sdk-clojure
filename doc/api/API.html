@@ -134,6 +134,7 @@
 <tbody>
 <tr><td> <code>:cli-path</code> </td><td> string </td><td> <code>"copilot"</code> </td><td> Path to CLI executable. Falls back to <code>COPILOT_CLI_PATH</code> env var when not set </td></tr>
 <tr><td> <code>:cli-args</code> </td><td> vector </td><td> <code>[]</code> </td><td> Extra arguments prepended before SDK-managed flags </td></tr>
+<tr><td> <code>:builtin-plugin-directories</code> </td><td> vector of strings </td><td> <code>[]</code> </td><td> Absolute paths to trusted plugin directories bundled by the host. The complete non-empty set is registered once after the protocol handshake and before any session or session filesystem provider. A registration failure force-stops the client and fails <code>start!</code>. Distinct from the per-session <code>:plugin-directories</code> option. (<a href="https://github.com/github/copilot-sdk/pull/2330">upstream PR #2330</a>) </td></tr>
 <tr><td> <code>:cli-url</code> </td><td> string </td><td> nil </td><td> URL of existing CLI server (e.g., <code>"localhost:8080"</code>). When provided, no CLI process is spawned </td></tr>
 <tr><td> <code>:port</code> </td><td> number </td><td> <code>0</code> </td><td> Server port (0 = random) </td></tr>
 <tr><td> <code>:use-stdio?</code> </td><td> boolean </td><td> <code>true</code> </td><td> Use stdio transport instead of TCP </td></tr>
@@ -2022,7 +2023,7 @@ tool-set/isolated
 </code></pre>
 <h3><a href="#agent-factories-experimental" id="agent-factories-experimental"></a>Agent Factories (Experimental)</h3>
 <blockquote>
-<p><strong>Note:</strong> Agent Factories are <code>@experimental</code> upstream (<a href="https://github.com/github/copilot-sdk/pull/2114">upstream PR #2114</a>). The API may change in future releases.</p>
+<p><strong>Note:</strong> Agent Factories are <code>@experimental</code> upstream (<a href="https://github.com/github/copilot-sdk/pull/2114">upstream PR #2114</a>). The API may change in future releases. The upstream <code>v1.0.11</code> experimental <code>argsSchema</code> authoring addition is intentionally not exposed while this surface remains experimental.</p>
 </blockquote>
 <p>An Agent Factory is an extension-authored, named workflow that a session can run: it declares its own phases and limits, executes with reverse-RPC access to the parent session (spawn nested agent turns, run journaled/idempotent steps, fan out work in parallel or as a pipeline), and reports durable, resumable progress back to the CLI. Factories are registered per-session via <a href="#join-session"><code>join-session</code></a>’s <code>:factories</code> option and approved via the <a href="#permission-handling"><code>:factory</code> permission kind</a>.</p>
 <p>Most of this API is namespace-qualified only — require the namespace directly:</p>
@@ -2251,6 +2252,32 @@ tool-set/isolated
 <p>Legacy Clojure permission result kinds such as <code>:approved</code> and <code>:denied-by-rules</code> remain accepted and are normalized before the SDK sends the decision to the CLI.</p>
 <h4><a href="#resolvedbyhook-hook-resolved-permissions" id="resolvedbyhook-hook-resolved-permissions"></a><code>resolvedByHook</code> — Hook-Resolved Permissions</h4>
 <p>When the runtime resolves a permission request via a <code>permissionRequest</code> hook, the <code>permission.requested</code> event includes <code>:resolved-by-hook true</code>. The SDK automatically skips the client’s <code>:on-permission-request</code> handler and does not send the <code>handlePendingPermissionRequest</code> RPC — the event is still published to event subscribers for observability.</p>
+<h4><a href="#attributed-permission-result" id="attributed-permission-result"></a><code>attributed-permission-result</code></h4>
+<pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
+
+(defn permission-handler [_request _ctx]
+  (copilot/attributed-permission-result
+   {:kind :approve-once}
+   {:outcome :auto-approved
+    :source :host-policy
+    :surface :sdk}))
+
+(copilot/attributed-permission-result?
+ (permission-handler nil nil))
+;; =&gt; true
+</code></pre>
+<p>Attach informational context describing how and where a permission decision was made. Reapplying <code>attributed-permission-result</code> replaces the previous context rather than nesting it. Permission behavior is determined only by the inner result.</p>
+<table>
+<thead>
+<tr><th> Context key </th><th> Allowed values </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:outcome</code> </td><td> <code>:auto-approved</code>, <code>:autopilot-denied</code>, <code>:prompted-user</code> </td></tr>
+<tr><td> <code>:source</code> </td><td> <code>:judge-recommendation</code>, <code>:human-response</code>, <code>:host-policy</code>, <code>:unattended-fallback</code> </td></tr>
+<tr><td> <code>:surface</code> </td><td> <code>:tui</code>, <code>:prompt-mode</code>, <code>:copilot-app</code>, <code>:sdk</code> </td></tr>
+</tbody>
+</table>
+<p>The SDK converts these keywords to the runtime’s snake-case strings and sends <code>decisionContext</code> beside <code>result</code>. Plain permission decisions omit <code>decisionContext</code> entirely. An attributed <code>{:kind :no-result}</code> still suppresses the response RPC. Handlers may return attributed results directly or through a core.async channel. (<a href="https://github.com/github/copilot-sdk/pull/2294">upstream PR #2294</a>)</p>
 <h4><a href="#approve-all" id="approve-all"></a><code>approve-all</code></h4>
 <pre><code class="language-clojure">(copilot/approve-all request ctx)
 </code></pre>

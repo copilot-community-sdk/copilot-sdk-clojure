@@ -23,6 +23,8 @@
     abort! {:kind :fn, :arglists ([session])}
     approve-all {:kind :fn, :arglists ([request ctx])}
     assistant-events {:kind :value}
+    attributed-permission-result {:kind :fn, :arglists ([result decision-context])}
+    attributed-permission-result? {:kind :fn, :arglists ([result])}
     cancel-factory-run! {:kind :fn, :arglists ([session run-id]), :experimental true}
     capabilities {:kind :fn, :arglists ([session])}
     client {:kind :fn, :arglists ([] [opts])}
@@ -104,7 +106,9 @@
     with-session {:kind :macro, :arglists ([[session-sym client config] & body])}
     workspace-path {:kind :fn, :arglists ([session])}}
    :fdefs
-   {github.copilot-sdk/result-denied (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+   {github.copilot-sdk/attributed-permission-result (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :result :github.copilot-sdk.specs/permission-handler-result :decision-context :github.copilot-sdk.specs/permission-decision-context) :ret :github.copilot-sdk.specs/attributed-permission-result :fn nil)
+    github.copilot-sdk/attributed-permission-result? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :result clojure.core/any?) :ret clojure.core/boolean? :fn nil)
+    github.copilot-sdk/result-denied (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-failure (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-failure-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-rejected (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)}}
@@ -113,6 +117,8 @@
    {<create-session {:kind :fn, :arglists ([client config])}
     <resume-session {:kind :fn, :arglists ([client session-id config])}
     approve-all {:kind :fn, :arglists ([request ctx])}
+    attributed-permission-result {:kind :fn, :arglists ([result decision-context])}
+    attributed-permission-result? {:kind :fn, :arglists ([result])}
     client {:kind :fn, :arglists ([] [opts])}
     connect-with-streams! {:kind :fn, :arglists ([client in out])}
     create-session {:kind :fn, :arglists ([client config])}
@@ -146,6 +152,8 @@
    {github.copilot-sdk.client/<create-session (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :config :github.copilot-sdk.specs/session-config) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.client/<resume-session (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :session-id :github.copilot-sdk.specs/session-id :config :github.copilot-sdk.specs/resume-session-config) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.client/approve-all (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :request :github.copilot-sdk.specs/permission-request :ctx clojure.core/map?) :ret :github.copilot-sdk.specs/permission-result :fn nil)
+    github.copilot-sdk.client/attributed-permission-result (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :result :github.copilot-sdk.specs/permission-handler-result :decision-context :github.copilot-sdk.specs/permission-decision-context) :ret :github.copilot-sdk.specs/attributed-permission-result :fn nil)
+    github.copilot-sdk.client/attributed-permission-result? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :result clojure.core/any?) :ret clojure.core/boolean? :fn nil)
     github.copilot-sdk.client/client (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :opts (clojure.spec.alpha/? :github.copilot-sdk.specs/client-options)) :ret :github.copilot-sdk.specs/client :fn nil)
     github.copilot-sdk.client/create-session (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :config :github.copilot-sdk.specs/session-config) :ret :github.copilot-sdk.specs/session :fn nil)
     github.copilot-sdk.client/delete-session! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :session-id :github.copilot-sdk.specs/session-id) :ret clojure.core/nil? :fn nil)
@@ -483,6 +491,7 @@
     :github.copilot-sdk.specs/attachment-state
     :github.copilot-sdk.specs/attachment-type
     :github.copilot-sdk.specs/attachments
+    :github.copilot-sdk.specs/attributed-permission-result
     :github.copilot-sdk.specs/auth-type
     :github.copilot-sdk.specs/authenticated?
     :github.copilot-sdk.specs/auto-mode-switch-request
@@ -504,6 +513,7 @@
     :github.copilot-sdk.specs/branch
     :github.copilot-sdk.specs/buffer
     :github.copilot-sdk.specs/buffer-exhaustion-threshold
+    :github.copilot-sdk.specs/builtin-plugin-directories
     :github.copilot-sdk.specs/cache-expires-at
     :github.copilot-sdk.specs/cache-price
     :github.copilot-sdk.specs/cache-read-tokens
@@ -828,6 +838,11 @@
     :github.copilot-sdk.specs/parent-id
     :github.copilot-sdk.specs/path
     :github.copilot-sdk.specs/payload
+    :github.copilot-sdk.specs/permission-decision-context
+    :github.copilot-sdk.specs/permission-decision-outcome
+    :github.copilot-sdk.specs/permission-decision-source
+    :github.copilot-sdk.specs/permission-decision-surface
+    :github.copilot-sdk.specs/permission-handler-result
     :github.copilot-sdk.specs/permission-kind
     :github.copilot-sdk.specs/permission-request
     :github.copilot-sdk.specs/permission-result

@@ -257,6 +257,9 @@
     - :session-idle-timeout-seconds - Server-wide session idle timeout in seconds. When > 0,
                        the SDK appends `--session-idle-timeout <n>` to the spawned CLI so idle
                        sessions are cleaned up after the given duration. Default: disabled.
+    - :builtin-plugin-directories - Vector of absolute paths to trusted plugin directories
+                       bundled by the host. The complete non-empty set is registered once
+                       during startup before sessions can be created.
     - :remote?       - **Experimental**. Enable remote session support (Mission Control). When true,
                        the SDK appends `--remote` to the spawned CLI; sessions in a GitHub repository
                        working directory become accessible from GitHub web and mobile. Ignored when
@@ -310,6 +313,12 @@
              {:mode :empty
               :provided-storage-keys (select-keys opts [:copilot-home :session-fs
                                                         :cli-url :is-child-process?])})))
+   (when (and (contains? opts :builtin-plugin-directories)
+              (not (s/valid? ::specs/builtin-plugin-directories
+                             (:builtin-plugin-directories opts))))
+     (throw (ex-info
+             "builtin-plugin-directories must be a vector of absolute paths"
+             {:builtin-plugin-directories (:builtin-plugin-directories opts)})))
    (when-not (s/valid? ::specs/client-options opts)
      (let [safe-opts (redact-secrets opts)
            unknown (specs/unknown-keys opts specs/client-options-keys)
@@ -411,6 +420,7 @@
 
 (declare stop!)
 (declare start!)
+(declare force-stop!)
 (declare maybe-reconnect!)
 (declare negotiated-protocol-version)
 
@@ -495,9 +505,13 @@
               (let [conn (:connection-io @(:state client))]
                 (when conn
                   (<! (proto/send-request conn "session.permissions.handlePendingPermissionRequest"
-                                          {:session-id session-id
-                                           :request-id request-id
-                                           :result result}))))))
+                                          (cond-> {:session-id session-id
+                                                   :request-id request-id
+                                                   :result result}
+                                            (contains? perm-response :decision-context)
+                                            (assoc :decision-context
+                                                   (:decision-context
+                                                    perm-response)))))))))
           (catch Exception e
             (log/debug "v3 permission request error for " request-id ": " (ex-message e))
             (try
@@ -1159,6 +1173,25 @@
 ;; Permission helpers
 ;; ---------------------------------------------------------------------------
 
+(defn attributed-permission-result?
+  "Return true when `result` is a well-formed attributed permission result."
+  [result]
+  (s/valid? ::specs/attributed-permission-result result))
+
+(defn attributed-permission-result
+  "Attach informational decision context to a permission-handler result.
+
+   `result` is a permission decision such as `{:kind :approve-once}`. If it is
+   already attributed, the existing context is replaced rather than nested.
+   `decision-context` contains `:outcome`, `:source`, and `:surface`; see
+   `github.copilot-sdk.specs/permission-decision-context` for allowed values."
+  [result decision-context]
+  {:kind :attributed
+   :result (if (attributed-permission-result? result)
+             (:result result)
+             result)
+   :decision-context decision-context})
+
 (defn approve-all
   "Permission handler that approves all permission requests.
 
@@ -1285,6 +1318,27 @@
     (log/warn failure "Client teardown step failed"))
   failures)
 
+(defn- register-builtin-plugin-directories!
+  "Register the complete host-bundled plugin directory set before sessions."
+  [client]
+  (when-let [directories
+             (seq (get-in @(:state client)
+                          [:options :builtin-plugin-directories]))]
+    (try
+      (proto/send-request! (:connection-io @(:state client))
+                           "plugins.builtin.set"
+                           {:paths (vec directories)})
+      (catch Exception error
+        (when-let [cleanup-failure
+                   (td/attempt {:operation :force-stop
+                                :resource :client-startup}
+                               (force-stop! client))]
+          (.addSuppressed ^Throwable error cleanup-failure)
+          (log/warn cleanup-failure
+                    "Client force-stop failed after plugin registration error"))
+        (throw error))))
+  nil)
+
 (defn start!
   "Start the CLI server and establish connection.
    Blocks until connected or throws on error.
@@ -1344,6 +1398,9 @@
       ;; Verify protocol version
         (verify-protocol-version! client)
 
+      ;; Register trusted built-in plugins before any session can be created.
+        (register-builtin-plugin-directories! client)
+
       ;; Register sessionFs provider if configured
         (when-let [sf-config (:session-fs client)]
           (let [{:keys [connection-io]} @(:state client)]
@@ -1364,18 +1421,18 @@
         nil
 
         (catch Exception e
-          (let [stderr (get-stderr-output client)
+          (let [already-stopped? (:stopping? @(:state client))
+                stderr (get-stderr-output client)
                 msg (cond-> (str "Failed to start client: " (ex-message e))
                       stderr (str "\nstderr: " stderr))]
             (log/error msg)
-          ;; Release any resources created before the failure so a failed
-          ;; start! does not leak the spawned process, its stderr/exit watcher
-          ;; threads, the socket, or the JSON-RPC connection. Mark :stopping? so
-          ;; the process-exit watcher treats the teardown as expected. Status is
-          ;; left as :error (not :disconnected) so callers can distinguish a
-          ;; failed start from a clean stop.
-            (swap! (:state client) assoc :stopping? true)
-            (log-teardown-failures! (release-transport! client {:process :graceful}))
+            ;; Release resources unless a nested startup step already force-stopped
+            ;; the client. Status remains :error so callers can distinguish a
+            ;; failed start from a clean stop.
+            (when-not already-stopped?
+              (swap! (:state client) assoc :stopping? true)
+              (log-teardown-failures!
+               (release-transport! client {:process :graceful})))
             (swap! (:state client) assoc :status :error :actual-port nil)
             (throw e)))))))
 

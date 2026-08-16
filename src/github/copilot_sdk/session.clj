@@ -1125,6 +1125,55 @@
 
       result)))
 
+(def ^:private permission-context-wire-values
+  {:auto-approved "auto_approved"
+   :autopilot-denied "autopilot_denied"
+   :prompted-user "prompted_user"
+   :judge-recommendation "judge_recommendation"
+   :human-response "human_response"
+   :host-policy "host_policy"
+   :unattended-fallback "unattended_fallback"
+   :tui "tui"
+   :prompt-mode "prompt_mode"
+   :copilot-app "copilot_app"
+   :sdk "sdk"})
+
+(defn- permission-context->wire
+  [{:keys [outcome source surface]}]
+  {:outcome (permission-context-wire-values outcome)
+   :source (permission-context-wire-values source)
+   :surface (permission-context-wire-values surface)})
+
+(defn- normalize-permission-handler-result
+  [result]
+  (cond
+    (and (map? result) (= :attributed (:kind result)))
+    (when (s/valid? ::specs/attributed-permission-result result)
+      (let [decision (:result result)]
+        (if (= :no-result (:kind decision))
+          {:result :no-result}
+          {:result (normalize-permission-result decision)
+           :decision-context
+           (permission-context->wire (:decision-context result))})))
+
+    (and (map? result) (= :no-result (:kind result)))
+    {:result :no-result}
+
+    (and (map? result) (contains? result :kind))
+    {:result (normalize-permission-result result)}
+
+    ;; Historical wrapped form: {:result {:kind ...}}
+    (and (map? result) (map? (:result result))
+         (= :no-result (get-in result [:result :kind])))
+    {:result :no-result}
+
+    (and (map? result) (map? (:result result))
+         (contains? (:result result) :kind))
+    {:result (normalize-permission-result (:result result))}
+
+    :else
+    nil))
+
 (defn handle-permission-request!
   "Handle an incoming permission request. Returns a channel with the result.
    When the handler returns `{:kind :no-result}`, the result is
@@ -1148,25 +1197,10 @@
                  ;; If handler returns a channel, await it
                  result (if (channel? result)
                           (<!! result)
-                          result)]
-             (cond
-               ;; no-result: extension doesn't answer this permission request
-               (and (map? result) (= :no-result (:kind result)))
-               {:result :no-result}
-
-               (and (map? result) (contains? result :kind))
-               {:result (normalize-permission-result result)}
-
-               ;; Wrapped form: {:result {:kind ...}}
-               (and (map? result) (contains? result :result)
-                    (map? (:result result)) (= :no-result (:kind (:result result))))
-               {:result :no-result}
-
-               (and (map? result) (contains? result :result)
-                    (map? (:result result)) (contains? (:result result) :kind))
-               (update result :result normalize-permission-result)
-
-               :else
+                          result)
+                 response (normalize-permission-handler-result result)]
+             (if response
+               response
                (do
                  (log/warn "Invalid permission response for session " session-id ": " result)
                  {:result {:kind :user-not-available}})))

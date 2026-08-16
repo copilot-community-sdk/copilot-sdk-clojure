@@ -67,7 +67,8 @@ Short paragraphs (1–3 sentences). Use code blocks liberally.
 <h2><a href="#cross-references" id="cross-references"></a>Cross-References</h2>
 <ul>
 <li>Use <strong>relative paths</strong> between doc files: <code>[API Reference](reference/API.md)</code></li>
-<li>From repo root (README, AGENTS.md): <code>[API Reference](./doc/reference/API.md)</code></li>
+<li>From repo root README: <code>[API Reference](./doc/reference/API.md)</code></li>
+<li><code>AGENTS.md</code> is a symlink to <code>.github/copilot-instructions.md</code>; links in that shared file must use full canonical GitHub URLs so both rendered paths work</li>
 <li>From examples/: <code>[BYOK](../doc/auth/byok.md)</code></li>
 <li>Never use absolute filesystem paths</li>
 <li>Link to specific sections with anchors: <code>[Events](reference/API.md#event-types)</code></li>

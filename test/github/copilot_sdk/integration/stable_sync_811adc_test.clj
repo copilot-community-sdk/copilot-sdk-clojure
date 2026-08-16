@@ -30,8 +30,8 @@
         exclusions (:experimental-exclusions stable-delta-report)]
     (is (= "811adc050a82d823cc6f6891576f30058554af8d"
            (get-in stable-delta-report [:upstream :target-commit])))
-    (is (= (slurp ".copilot-schema-version")
-           (str (get-in stable-delta-report [:upstream :schema-version]) "\n")))
+    (is (= "1.0.79-9"
+           (get-in stable-delta-report [:upstream :schema-version])))
     (is (= (:stable-delta-ids stable-delta-report) stable-ids))
     (is (empty? (:unclassified-stable stable-delta-report)))
     (let [schema (with-open [reader (io/reader "schemas/session-events.schema.json")]

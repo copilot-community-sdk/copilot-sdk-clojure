@@ -86,6 +86,24 @@
                              :ctx map?)
                 :ret ::specs/permission-result)
 
+(register-fdef! github.copilot-sdk.client/attributed-permission-result?
+                :args (s/cat :result any?)
+                :ret boolean?)
+
+(register-fdef! github.copilot-sdk.client/attributed-permission-result
+                :args (s/cat :result ::specs/permission-handler-result
+                             :decision-context ::specs/permission-decision-context)
+                :ret ::specs/attributed-permission-result)
+
+(register-fdef! github.copilot-sdk/attributed-permission-result?
+                :args (s/cat :result any?)
+                :ret boolean?)
+
+(register-fdef! github.copilot-sdk/attributed-permission-result
+                :args (s/cat :result ::specs/permission-handler-result
+                             :decision-context ::specs/permission-decision-context)
+                :ret ::specs/attributed-permission-result)
+
 (register-fdef! github.copilot-sdk.client/stop!
                 :args (s/cat :client ::specs/client)
                 :ret (s/coll-of any?))

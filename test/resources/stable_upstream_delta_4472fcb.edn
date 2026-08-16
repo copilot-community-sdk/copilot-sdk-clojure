@@ -1,0 +1,125 @@
+{:upstream
+ {:repository "github/copilot-sdk"
+  :base-commit "811adc050a82d823cc6f6891576f30058554af8d"
+  :target-commit "4472fcb9ad342b02aae14ccc3cf1c8083603863e"
+  :target-release "v1.0.11"
+  :schema-package "@github/copilot-linux-x64"
+  :schema-version "1.0.80"}
+
+ :source-symbols
+ {:builtin-plugin-option
+  {:file "nodejs/src/types.ts"
+   :symbol "CopilotClientOptions.builtinPluginDirectories"}
+  :builtin-plugin-validation
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.constructor(builtinPluginDirectories)"}
+  :builtin-plugin-registration
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.start(plugins.builtin.set)"}
+  :attributed-permission-result
+  {:file "nodejs/src/types.ts"
+   :symbol "AttributedPermissionResult"}
+  :attributed-permission-predicate
+  {:file "nodejs/src/types.ts"
+   :symbol "isAttributedPermissionResult"}
+  :attributed-permission-constructor
+  {:file "nodejs/src/types.ts"
+   :symbol "createAttributedPermissionResult"}
+  :permission-decision-context-exports
+  {:file "nodejs/src/index.ts"
+   :symbol "PermissionDecisionContext and enum exports"}
+  :attributed-permission-dispatch
+  {:file "nodejs/src/session.ts"
+   :symbol "CopilotSession._executePermissionAndRespond"}}
+
+ :stable-delta-ids
+ #{:client/builtin-plugin-directories
+   :permissions/attributed-result}
+
+ :stable-deltas
+ [{:id :client/builtin-plugin-directories
+   :classification :stable
+   :status :ported
+   :upstream-commit "1935fd3029f86f2b9f077dffc4cce1d2807886a1"
+   :evidence [:builtin-plugin-option
+              :builtin-plugin-validation
+              :builtin-plugin-registration]
+   :clojure {:public-key :builtin-plugin-directories
+             :spec :github.copilot-sdk.specs/builtin-plugin-directories
+             :scope :client
+             :wire-method "plugins.builtin.set"
+             :wire-params {:paths :complete-vector}
+             :omission :absent-or-empty
+             :startup-order [:protocol-verification
+                             :builtin-plugin-registration
+                             :session-provider-registration]
+             :failure :force-stop}}
+  {:id :permissions/attributed-result
+   :classification :stable
+   :status :ported
+   :upstream-commit "a550258d5c37bd662197536992a23d633bfe5804"
+   :evidence [:attributed-permission-result
+              :attributed-permission-predicate
+              :attributed-permission-constructor
+              :permission-decision-context-exports
+              :attributed-permission-dispatch]
+   :clojure {:constructor github.copilot-sdk/attributed-permission-result
+             :predicate github.copilot-sdk/attributed-permission-result?
+             :context-spec :github.copilot-sdk.specs/permission-decision-context
+             :result-spec :github.copilot-sdk.specs/attributed-permission-result
+             :wire-key "decisionContext"
+             :wire-placement :sibling-of-result
+             :legacy-omission :absent
+             :no-result :suppress-rpc}}]
+
+ :commit-classifications
+ [{:commit "f0c89d176399b24d68d65814009317644d345fca"
+   :classification :generated-only
+   :status :excluded
+   :reason :upstream-code-generator-only}
+  {:commit "3b0d55633c4821a45357616baba6b7f4b51ccada"
+   :classification :experimental
+   :status :excluded
+   :reason :factory-authoring-args-schema}
+  {:commit "1935fd3029f86f2b9f077dffc4cce1d2807886a1"
+   :classification :stable
+   :status :ported
+   :reason :builtin-plugin-directories}
+  {:commit "a550258d5c37bd662197536992a23d633bfe5804"
+   :classification :stable
+   :status :ported
+   :reason :attributed-permission-results}
+  {:commit "93f3542173e92b039699aa2c1eb8324fa71256ec"
+   :classification :language-specific
+   :status :excluded
+   :reason :java-version-documentation}
+  {:commit "85ededd134f0d6411de3c044c52236f801a1e5c2"
+   :classification :language-specific
+   :status :excluded
+   :reason :java-release-metadata}
+  {:commit "e2ee46f8d80cf11d0339cc95fd9ffeefeba7bc5d"
+   :classification :language-specific
+   :status :excluded
+   :reason :java-development-version}
+  {:commit "9d67eb76e93367164a1e11bf0b2fd0833047db45"
+   :classification :generated-only
+   :status :refreshed
+   :reason :runtime-dependency-and-lockfiles}
+  {:commit "a67956bb15135c27e3baf55d04b63e5d65dea729"
+   :classification :language-specific
+   :status :excluded
+   :reason :rust-process-lifecycle}
+  {:commit "18002a81fa52d006589b813441f98b53e118fe8a"
+   :classification :language-specific
+   :status :excluded
+   :reason :java-build-tests}
+  {:commit "731317c2c4006e73c3d41b68b47efa5b0ce63fe2"
+   :classification :internal
+   :status :excluded
+   :reason :shared-test-harness-replay-normalization}
+  {:commit "4472fcb9ad342b02aae14ccc3cf1c8083603863e"
+   :classification :internal
+   :status :excluded
+   :reason :npm-and-java-build-tooling}]
+
+ :unclassified-stable []}

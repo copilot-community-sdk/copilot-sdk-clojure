@@ -2,7 +2,8 @@
   "Clojure specs for Copilot SDK data structures."
   (:require [clojure.spec.alpha :as s]
             [clojure.set :as set]
-            [clojure.string :as str]))
+            [clojure.string :as str])
+  (:import [java.nio.file InvalidPathException Paths]))
 
 ;; -----------------------------------------------------------------------------
 ;; Common specs
@@ -70,6 +71,16 @@
 ;; Upstream PR #1176 (@github/copilot-sdk).
 (s/def ::tcp-connection-token ::non-blank-string)
 (s/def ::session-idle-timeout-seconds (s/and int? #(>= % 0)))
+
+(defn- absolute-path?
+  [path]
+  (try
+    (.isAbsolute (Paths/get ^String path (make-array String 0)))
+    (catch InvalidPathException _
+      false)))
+
+(s/def ::builtin-plugin-directories
+  (s/coll-of (s/and ::non-blank-string absolute-path?) :kind vector?))
 
 ;; OpenTelemetry configuration (upstream PR #785)
 (s/def ::otlp-endpoint string?)
@@ -222,7 +233,7 @@
     :is-child-process? :on-list-models :telemetry :on-get-trace-context
     :on-github-telemetry
     :session-fs :copilot-home :tcp-connection-token :remote?
-    :session-idle-timeout-seconds
+    :session-idle-timeout-seconds :builtin-plugin-directories
     :mode})
 
 (s/def ::client-options
@@ -236,7 +247,7 @@
                      ::is-child-process? ::on-list-models ::telemetry ::on-get-trace-context
                      ::on-github-telemetry
                      ::session-fs ::copilot-home ::tcp-connection-token ::remote?
-                     ::session-idle-timeout-seconds])
+                     ::session-idle-timeout-seconds ::builtin-plugin-directories])
     client-options-keys)
    (fn [m]
      (or (not (contains? m :mode))
@@ -2222,6 +2233,31 @@
 (s/def ::permission-result
   (s/keys :req-un [::kind]
           :opt-un [::rules ::approval ::location-key ::feedback]))
+
+(s/def ::permission-decision-outcome
+  #{:auto-approved :autopilot-denied :prompted-user})
+(s/def ::permission-decision-source
+  #{:judge-recommendation :human-response :host-policy :unattended-fallback})
+(s/def ::permission-decision-surface
+  #{:tui :prompt-mode :copilot-app :sdk})
+
+(s/def ::permission-decision-context
+  (s/and
+   (closed-keys map? #{:outcome :source :surface})
+   #(s/valid? ::permission-decision-outcome (:outcome %))
+   #(s/valid? ::permission-decision-source (:source %))
+   #(s/valid? ::permission-decision-surface (:surface %))))
+
+(s/def ::attributed-permission-result
+  (s/and
+   (closed-keys map? #{:kind :result :decision-context})
+   #(= :attributed (:kind %))
+   #(s/valid? ::permission-result (:result %))
+   #(s/valid? ::permission-decision-context (:decision-context %))))
+
+(s/def ::permission-handler-result
+  (s/or :plain ::permission-result
+        :attributed ::attributed-permission-result))
 
 ;; -----------------------------------------------------------------------------
 ;; Client record spec
