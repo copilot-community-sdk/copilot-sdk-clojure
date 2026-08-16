@@ -1459,6 +1459,19 @@
   (tools/convert-mcp-call-tool-result result))
 
 ;; Re-export permission helpers
+(defn attributed-permission-result?
+  "Return true when `result` is an attributed permission-handler result.
+   See `github.copilot-sdk.client/attributed-permission-result?`."
+  [result]
+  (client/attributed-permission-result? result))
+
+(defn attributed-permission-result
+  "Attach informational decision context to a permission-handler result.
+   Reapplying attribution replaces the previous context rather than nesting it.
+   See `github.copilot-sdk.client/attributed-permission-result`."
+  [result decision-context]
+  (client/attributed-permission-result result decision-context))
+
 (def ^{:arglists '([request ctx])} approve-all
   "Permission handler that approves all requests with `{:kind :approve-once}`.
    See `github.copilot-sdk.client/approve-all`."
