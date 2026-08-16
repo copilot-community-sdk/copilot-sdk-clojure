@@ -222,6 +222,8 @@
       (is (true? (sdk/attributed-permission-result? attributed)))
       (is (false? (sdk/attributed-permission-result?
                    {:kind :approve-once})))
+      (is (false? (sdk/attributed-permission-result?
+                   {:kind :attributed})))
       (is (= {:kind :attributed
               :result {:kind :approve-once}
               :decision-context

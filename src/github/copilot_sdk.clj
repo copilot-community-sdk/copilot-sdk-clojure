@@ -1460,7 +1460,7 @@
 
 ;; Re-export permission helpers
 (defn attributed-permission-result?
-  "Return true when `result` is an attributed permission-handler result.
+  "Return true when `result` is a well-formed attributed permission result.
    See `github.copilot-sdk.client/attributed-permission-result?`."
   [result]
   (client/attributed-permission-result? result))

@@ -1174,9 +1174,9 @@
 ;; ---------------------------------------------------------------------------
 
 (defn attributed-permission-result?
-  "Return true when `result` is an attributed permission-handler result."
+  "Return true when `result` is a well-formed attributed permission result."
   [result]
-  (and (map? result) (= :attributed (:kind result))))
+  (s/valid? ::specs/attributed-permission-result result))
 
 (defn attributed-permission-result
   "Attach informational decision context to a permission-handler result.
