@@ -193,6 +193,7 @@ kebab-case ↔ camelCase wire convention (e.g. `:working-directory` ↔
 |-----|------|---------|-------------|
 | `:cli-path` | string | `"copilot"` | Path to CLI executable. Falls back to `COPILOT_CLI_PATH` env var when not set |
 | `:cli-args` | vector | `[]` | Extra arguments prepended before SDK-managed flags |
+| `:builtin-plugin-directories` | vector of strings | `[]` | Absolute paths to trusted plugin directories bundled by the host. The complete non-empty set is registered once after the protocol handshake and before any session or session filesystem provider. A registration failure force-stops the client and fails `start!`. Distinct from the per-session `:plugin-directories` option. ([upstream PR #2330](https://github.com/github/copilot-sdk/pull/2330)) |
 | `:cli-url` | string | nil | URL of existing CLI server (e.g., `"localhost:8080"`). When provided, no CLI process is spawned |
 | `:port` | number | `0` | Server port (0 = random) |
 | `:use-stdio?` | boolean | `true` | Use stdio transport instead of TCP |
@@ -2620,7 +2621,9 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
 
 > **Note:** Agent Factories are `@experimental` upstream
 > ([upstream PR #2114](https://github.com/github/copilot-sdk/pull/2114)).
-> The API may change in future releases.
+> The API may change in future releases. The upstream `v1.0.11` experimental
+> `argsSchema` authoring addition is intentionally not exposed while this
+> surface remains experimental.
 
 An Agent Factory is an extension-authored, named workflow that a session can run: it
 declares its own phases and limits, executes with reverse-RPC access to the parent
@@ -2897,6 +2900,41 @@ When the runtime resolves a permission request via a `permissionRequest` hook, t
 skips the client's `:on-permission-request` handler and does not send the
 `handlePendingPermissionRequest` RPC — the event is still published to event subscribers
 for observability.
+
+#### `attributed-permission-result`
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(defn permission-handler [_request _ctx]
+  (copilot/attributed-permission-result
+   {:kind :approve-once}
+   {:outcome :auto-approved
+    :source :host-policy
+    :surface :sdk}))
+
+(copilot/attributed-permission-result?
+ (permission-handler nil nil))
+;; => true
+```
+
+Attach informational context describing how and where a permission decision was
+made. Reapplying `attributed-permission-result` replaces the previous context
+rather than nesting it. Permission behavior is determined only by the inner
+result.
+
+| Context key | Allowed values |
+|-------------|----------------|
+| `:outcome` | `:auto-approved`, `:autopilot-denied`, `:prompted-user` |
+| `:source` | `:judge-recommendation`, `:human-response`, `:host-policy`, `:unattended-fallback` |
+| `:surface` | `:tui`, `:prompt-mode`, `:copilot-app`, `:sdk` |
+
+The SDK converts these keywords to the runtime's snake-case strings and sends
+`decisionContext` beside `result`. Plain permission decisions omit
+`decisionContext` entirely. An attributed `{:kind :no-result}` still suppresses
+the response RPC. Handlers may return attributed results directly or through a
+core.async channel.
+([upstream PR #2294](https://github.com/github/copilot-sdk/pull/2294))
 
 #### `approve-all`
 

@@ -6,7 +6,7 @@ GA reviewers (and future maintainers) can see, at a glance, which upstream topic
 ported, adapted, intentionally folded into the API reference, deferred, or not applicable.
 
 Audited against upstream commit
-[`811adc050a82d823cc6f6891576f30058554af8d`](https://github.com/github/copilot-sdk/commit/811adc050a82d823cc6f6891576f30058554af8d).
+[`4472fcb9ad342b02aae14ccc3cf1c8083603863e`](https://github.com/github/copilot-sdk/commit/4472fcb9ad342b02aae14ccc3cf1c8083603863e).
 
 **Decision legend**
 
@@ -47,6 +47,11 @@ observe stable workspace-file and snapshot events through existing event APIs.
 The low-level rewind RPCs added in the same upstream change remain experimental
 and are intentionally absent.
 
+The experimental Agent Factory `argsSchema` authoring addition remains
+intentionally absent. The existing Factory surface is already marked
+experimental and does not expand solely in response to another experimental
+upstream field.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |
@@ -72,7 +77,7 @@ and are intentionally absent.
 | `features/image-input.md` | Folded | API.md [File Attachments](reference/API.md#file-attachments) / [Blob Attachments](reference/API.md#blob-attachments) |
 | `features/session-persistence.md` | Folded | API.md `resume-session`, `list-sessions`, `get-session-metadata`, and stable `:enable-file-change-tracking?`; experimental rewind RPCs are excluded |
 | `features/steering-and-queueing.md` | Folded | API.md `send!` `:mode` (`:enqueue`/`:immediate`) |
-| `features/plugin-directories.md` | Folded | API.md `:plugin-directories` config row |
+| `features/plugin-directories.md` | Folded | API.md client `:builtin-plugin-directories` and session `:plugin-directories` config rows |
 | `features/remote-sessions.md` | Folded (experimental) | API.md `:remote?` / `:remote-session` config rows |
 | `features/cloud-sessions.md` | Folded (experimental) | API.md `:cloud` config row |
 | `features/session-limits.md` | Folded (experimental) | API.md `:session-limits` config row + `session.session_limits_changed` event |

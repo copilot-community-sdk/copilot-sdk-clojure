@@ -3,6 +3,24 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.11 sync)
+- Added client-level `:builtin-plugin-directories` for absolute, trusted plugin
+  directories bundled by a host. A non-empty vector is registered exactly once
+  after protocol negotiation and before sessions can be created; registration
+  failure force-stops startup.
+  ([upstream PR #2330](https://github.com/github/copilot-sdk/pull/2330))
+- Added `attributed-permission-result` and
+  `attributed-permission-result?`, with closed idiomatic decision-context specs.
+  Permission handlers can attach outcome, source, and surface context without
+  changing the decision; plain decisions preserve legacy wire omission and
+  attributed `:no-result` still suppresses the response RPC.
+  ([upstream PR #2294](https://github.com/github/copilot-sdk/pull/2294))
+
+### Changed (v1.0.11 sync)
+- Synced the library version to `1.0.11.0` and the runtime schema pin to
+  `1.0.80`. The API and session-event schemas are unchanged at the new pin, so
+  deterministic code generation produces no generated source delta.
+
 ### Changed (performance)
 - Avoided unnecessary camel/snake-case conversion work for already-normalized
   protocol keywords while preserving exact conversion semantics for camel,
