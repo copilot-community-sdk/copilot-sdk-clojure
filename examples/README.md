@@ -1031,20 +1031,21 @@ See [`doc/reference/API.md`](../doc/reference/API.md) for
 **Concepts:** Experimental Agent Factories API, reverse-RPC extensions, joining a parent CLI session
 
 An **Agent Factory** is a named, reusable multi-step routine — with declared
-phases and resource limits — that an extension registers when it joins a
+phases and optional resource limits — that an extension registers when it joins a
 running Copilot CLI session. The parent session (or another script driving
 it) triggers runs of the factory by name; this example only *defines and
 services* runs — it never triggers one itself. This is the experimental
 extension side of the API: `copilot/define-factory` + `copilot/join-session`.
 
+This example omits resource limits because its cost profile is not known. Add a
+ceiling only when the cost is known or the user explicitly requested one.
+
 ### What It Demonstrates
 
 - Defining a factory with `copilot/define-factory`: `:meta` (`:name`,
-  `:description`, `:phases`), optional `:limits`
-  (`:max-concurrent-subagents`, `:max-total-subagents`,
-  `:timeout-seconds`, `:max-ai-credits`), and a `:run` function
+  `:description`, `:phases`) and a `:run` function
 - Validating a factory's own runtime `:args` map (distinct from the
-  `:meta`/`:limits` validation `define-factory` already performs)
+  metadata validation `define-factory` already performs)
 - Using `phase`, `log`, `agent`, `step`, and `parallel` from the factory
   execution context to structure and narrate a multi-step run
 - Joining the parent session as a child extension via

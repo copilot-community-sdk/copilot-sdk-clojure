@@ -14,8 +14,7 @@
    {:meta {:name "code-review"
            :description "Reviews changed files and summarizes findings"
            :phases [{:title "Analyze" :detail "Inspect changed files"}
-                    {:title "Summarize"}]
-           :limits {:max-concurrent-subagents 2 :timeout-seconds 300}}
+                    {:title "Summarize"}]}
     :run (fn [{:keys [args agent step phase log]}]
            (phase "Analyze")
            (log (str "Reviewing " (:path args)))
@@ -41,7 +40,7 @@
 <tr><th> Concept </th><th> Description </th></tr>
 </thead>
 <tbody>
-<tr><td> <strong>Factory</strong> </td><td> A named, versionless workflow definition: <code>:meta</code> (name, description, phases, limits) plus a <code>:run</code> function </td></tr>
+<tr><td> <strong>Factory</strong> </td><td> A named, versionless workflow definition: <code>:meta</code> (name, description, phases, and optional limits) plus a <code>:run</code> function </td></tr>
 <tr><td> <strong>Run</strong> </td><td> One durable execution of a factory, identified by a <code>run-id</code>, tracked server-side through <code>:pending</code> -&gt; <code>:running</code> -&gt; a terminal status </td></tr>
 <tr><td> <strong>Phase</strong> </td><td> A named milestone declared in <code>:meta</code> and reported during execution via the context’s <code>phase</code> function </td></tr>
 <tr><td> <strong>Step</strong> </td><td> A unit of work inside <code>:run</code> whose result is journaled so a resumed run can skip re-computing it </td></tr>
@@ -159,7 +158,10 @@
 <li><strong>Aborting a local wait, not the run</strong> — <code>wait-for-factory-run!</code> accepts an optional <code>:cancel-chan</code>; closing it makes the <em>wait</em> throw <code>ex-info</code> with <code>{:type :factory-wait-cancelled}</code> without cancelling the run itself. Use this to stop blocking on a run you still want to keep executing.</li>
 </ol>
 <h2><a href="#limits" id="limits"></a>Limits</h2>
-<p>Optional per-factory or per-run limits, validated eagerly (unknown keys throw):</p>
+<p>Resource limits are optional. An omitted limit leaves that dimension unbounded, except that an omitted <code>:max-concurrent-subagents</code> falls back to <code>:max-total-subagents</code> when the latter is set.</p>
+<p>Set a ceiling only when the factory’s cost profile is known or the user explicitly requested one. Do not guess limits on a user’s behalf: an invented ceiling does not make a run safer and can stop healthy work with <code>factory_limit_reached</code> after the run has already spent credits. Bound broad fan-out with the factory’s own workload counters instead.</p>
+<p>Model-initiated <code>run_factory</code> requests still require permission and show the effective limits. Direct SDK calls to <code>run-factory!</code> and <code>resume-factory!</code> do not request permission, so callers are responsible for choosing any ceilings deliberately.</p>
+<p>Per-factory or per-run limits are validated eagerly (unknown keys throw):</p>
 <table>
 <thead>
 <tr><th> Key </th><th> Type </th><th> Constraint </th></tr>
