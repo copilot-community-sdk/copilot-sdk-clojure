@@ -48,6 +48,10 @@ Assign exactly one classification before deciding whether to port a delta:
 | Generated-only | Use as wire evidence; do not infer public support |
 | Language-specific | Skip unless the Clojure design has an independently justified counterpart |
 
+Classify by the affected surface, not the changed file type. Documentation and
+tests for an experimental API are experimental; use internal only for non-public
+implementation surfaces.
+
 Record intentional exclusions in durable evidence, docs, or an ADR.
 
 ## Stable Delta Proof

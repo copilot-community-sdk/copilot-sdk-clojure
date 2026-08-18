@@ -1,0 +1,69 @@
+{:upstream
+ {:repository "github/copilot-sdk"
+  :base-commit "4472fcb9ad342b02aae14ccc3cf1c8083603863e"
+  :target-commit "eb7ba2411171f5e1fea9d38df01b436acdfb7271"
+  :target-package-version "0.0.0-dev"
+  :target-release-status :post-v1.0.11-unreleased
+  :schema-package "@github/copilot-linux-x64"
+  :schema-version "1.0.80"
+  :node-runtime-dependency
+  {:package "@github/copilot"
+   :version "^1.0.80"}}
+
+ :source-symbols
+ {:factory-limits-opt-in-guidance
+  {:file "nodejs/docs/factories.md"
+   :symbol "Resource limits: optional dimensions and omission semantics"}
+  :factory-limits-authoring-guidance
+  {:file "nodejs/docs/factories.md"
+   :symbol "Resource limits: use known costs or explicit user ceilings"}
+  :factory-limits-permission-guidance
+  {:file "nodejs/docs/factories.md"
+   :symbol "Resource limits: model-initiated and SDK-initiated permission behavior"}
+  :factory-scaling-guidance
+  {:file "nodejs/docs/factory-patterns.md"
+   :symbol "Scaling: bound wide fan-out with factory counters"}
+  :factory-limits-documentation-test
+  {:file "nodejs/test/factory.test.ts"
+   :symbol "documents limits as opt-in rather than inviting an invented ceiling"}}
+
+ :public-surface-audit
+ {:changed-files
+  ["nodejs/docs/factories.md"
+   "nodejs/docs/factory-patterns.md"
+   "nodejs/test/factory.test.ts"]
+  :stable-public-files-inspected
+  ["nodejs/src/index.ts"
+   "nodejs/src/types.ts"
+   "nodejs/src/client.ts"
+   "nodejs/src/session.ts"
+   "nodejs/src/extension.ts"
+   "nodejs/src/toolSet.ts"
+   "nodejs/src/factory.ts"]
+  :stable-source-delta-files []
+  :generated-source-delta-files []}
+
+ :stable-delta-ids
+ #{}
+
+ :stable-deltas
+ []
+
+ :commit-classifications
+ [{:commit "eb7ba2411171f5e1fea9d38df01b436acdfb7271"
+   :classification :experimental
+   :status :ported
+   :reason :factory-limits-guidance-experimental-surface
+   :pr "https://github.com/github/copilot-sdk/pull/2353"
+   :evidence [:factory-limits-opt-in-guidance
+              :factory-limits-authoring-guidance
+              :factory-limits-permission-guidance
+              :factory-scaling-guidance
+              :factory-limits-documentation-test]
+   :clojure {:implementation :unchanged
+             :api-surface :unchanged
+             :schema-pin :unchanged
+             :documentation :aligned}}]
+
+ :unclassified-stable
+ []}

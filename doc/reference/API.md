@@ -2626,9 +2626,10 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
 > surface remains experimental.
 
 An Agent Factory is an extension-authored, named workflow that a session can run: it
-declares its own phases and limits, executes with reverse-RPC access to the parent
-session (spawn nested agent turns, run journaled/idempotent steps, fan out work in
-parallel or as a pipeline), and reports durable, resumable progress back to the CLI.
+declares its own phases and optional limits, executes with reverse-RPC access to the
+parent session (spawn nested agent turns, run journaled/idempotent steps, fan out
+work in parallel or as a pipeline), and reports durable, resumable progress back to
+the CLI.
 Factories are registered per-session via [`join-session`](#join-session)'s
 `:factories` option and approved via the [`:factory` permission kind](#permission-handling).
 
@@ -2647,9 +2648,7 @@ Most of this API is namespace-qualified only — require the namespace directly:
     {:meta {:name "summarize-repo"
             :description "Summarize a repository's structure and recent activity"
             :phases [{:title "Scan" :detail "List top-level files and directories"}
-                     {:title "Summarize"}]
-            :limits {:max-concurrent-subagents 4
-                     :timeout-seconds 300}}
+                     {:title "Summarize"}]}
      :run (fn [{:keys [args phase log step agent parallel] session :session}]
             (phase "Scan")
             (let [files (step "list-files" #(session/workspace-list-files session))]
@@ -2681,6 +2680,19 @@ Most of this API is namespace-qualified only — require the namespace directly:
 | `:max-total-subagents` | positive integer | — |
 | `:timeout-seconds` | positive finite number | ≤ `2147483.647` |
 | `:max-ai-credits` | positive finite number | must round to a positive nano-AIU value |
+
+Resource limits are optional. An omitted limit leaves that dimension unbounded,
+except that an omitted `:max-concurrent-subagents` falls back to
+`:max-total-subagents` when the latter is set. Set a ceiling only when the factory's
+cost profile is known or the user explicitly requested one. Do not guess limits on a
+user's behalf: an invented ceiling does not make a run safer and can stop healthy
+work with `factory_limit_reached` after the run has already spent credits. Bound
+broad fan-out with the factory's own workload counters instead.
+
+Model-initiated `run_factory` requests still require permission and show the
+effective limits. Direct SDK calls to `run-factory!` and `resume-factory!` do not
+request permission, so callers are responsible for choosing any ceilings
+deliberately.
 
 `:run` must be a function of one argument, the [context map](#the-run-context-map)
 described below, and returns (directly or via a core.async channel, `Future`, promise,

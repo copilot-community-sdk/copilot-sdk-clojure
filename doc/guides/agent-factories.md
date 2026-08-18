@@ -16,8 +16,7 @@ An Agent Factory is defined once with `define-factory` and registered when an ex
    {:meta {:name "code-review"
            :description "Reviews changed files and summarizes findings"
            :phases [{:title "Analyze" :detail "Inspect changed files"}
-                    {:title "Summarize"}]
-           :limits {:max-concurrent-subagents 2 :timeout-seconds 300}}
+                    {:title "Summarize"}]}
     :run (fn [{:keys [args agent step phase log]}]
            (phase "Analyze")
            (log (str "Reviewing " (:path args)))
@@ -43,7 +42,7 @@ An Agent Factory is defined once with `define-factory` and registered when an ex
 
 | Concept | Description |
 |---------|-------------|
-| **Factory** | A named, versionless workflow definition: `:meta` (name, description, phases, limits) plus a `:run` function |
+| **Factory** | A named, versionless workflow definition: `:meta` (name, description, phases, and optional limits) plus a `:run` function |
 | **Run** | One durable execution of a factory, identified by a `run-id`, tracked server-side through `:pending` -> `:running` -> a terminal status |
 | **Phase** | A named milestone declared in `:meta` and reported during execution via the context's `phase` function |
 | **Step** | A unit of work inside `:run` whose result is journaled so a resumed run can skip re-computing it |
@@ -202,7 +201,22 @@ There are three distinct cancellation mechanisms, and they don't overlap:
 
 ## Limits
 
-Optional per-factory or per-run limits, validated eagerly (unknown keys throw):
+Resource limits are optional. An omitted limit leaves that dimension unbounded,
+except that an omitted `:max-concurrent-subagents` falls back to
+`:max-total-subagents` when the latter is set.
+
+Set a ceiling only when the factory's cost profile is known or the user explicitly
+requested one. Do not guess limits on a user's behalf: an invented ceiling does not
+make a run safer and can stop healthy work with `factory_limit_reached` after the run
+has already spent credits. Bound broad fan-out with the factory's own workload
+counters instead.
+
+Model-initiated `run_factory` requests still require permission and show the
+effective limits. Direct SDK calls to `run-factory!` and `resume-factory!` do not
+request permission, so callers are responsible for choosing any ceilings
+deliberately.
+
+Per-factory or per-run limits are validated eagerly (unknown keys throw):
 
 | Key | Type | Constraint |
 |-----|------|------------|

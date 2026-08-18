@@ -4,7 +4,7 @@
    the parent session ends.
 
    An Agent Factory is a named, reusable multi-step routine (with declared
-   phases and resource limits) that an extension registers on join. The
+   phases and optional resource limits) that an extension registers on join. The
    *parent* Copilot CLI session (or another script driving that session)
    triggers runs by name; this process only defines and services them - it
    never calls the run! side of the API itself."
@@ -62,18 +62,13 @@
          :risks risks}))))
 
 (def review-factory
-  "A FactoryHandle registered with the parent session in `run` below.
-   :limits are optional on `:meta` - included here to show the accepted keys."
+  "A FactoryHandle registered with the parent session in `run` below."
   (copilot/define-factory
     {:meta {:name (:factory-name defaults)
             :description "Reviews a topic across plan, gather, and summarize phases."
             :phases [{:title "Plan" :detail "Outline the review approach"}
                      {:title "Gather" :detail "Collect context and risks in parallel"}
-                     {:title "Summarize" :detail "Compose the final result"}]
-            :limits {:max-concurrent-subagents 2
-                     :max-total-subagents 4
-                     :timeout-seconds 120
-                     :max-ai-credits 5}}
+                     {:title "Summarize" :detail "Compose the final result"}]}
      :run run-review-factory}))
 
 ;; -----------------------------------------------------------------------

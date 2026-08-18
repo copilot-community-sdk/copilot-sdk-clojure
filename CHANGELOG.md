@@ -3,6 +3,14 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Changed (upstream parity)
+- Recertified the stable public surface through upstream commit
+  `eb7ba2411171f5e1fea9d38df01b436acdfb7271`; no stable API, wire, generated
+  source, or runtime schema changes were found. Aligned the experimental Agent
+  Factory documentation with upstream's opt-in resource-limit guidance and
+  removed guessed ceilings from introductory examples.
+  ([upstream PR #2353](https://github.com/github/copilot-sdk/pull/2353))
+
 ## [1.0.11.0] - 2026-08-16
 ### Added (v1.0.11 sync)
 - Added client-level `:builtin-plugin-directories` for absolute, trusted plugin
