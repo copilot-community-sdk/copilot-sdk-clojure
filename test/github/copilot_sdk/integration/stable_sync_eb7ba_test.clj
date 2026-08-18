@@ -89,8 +89,10 @@
                              [:example-source example-definition]
                              [:example-readme readme-section]]]
       (testing (name label)
-        (is (some? content))
-        (is (not (str/includes? content ":limits")))))
+        (is (some? content) "Expected section markers were not found")
+        (when content
+          (is (not (str/includes? content ":limits"))
+              "Introductory guidance must not invent resource limits"))))
     (is (str/includes? guide "Resource limits are optional."))
     (is (str/includes? guide "Do not guess limits"))
     (is (str/includes? api-reference "Resource limits are optional."))
