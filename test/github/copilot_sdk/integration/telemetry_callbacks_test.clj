@@ -610,8 +610,10 @@
                   {:tool-call-id "tc-1"
                    :agent-name "rubber-duck"
                    :agent-display-name "Rubber Duck"
+                   :agent-description "Reviews a proposed implementation"
                    :model "gpt-5.4"}))
     (is (s/valid? :github.copilot-sdk.specs/subagent.started-data
                   {:tool-call-id "tc-1"
                    :agent-name "rubber-duck"
-                   :agent-display-name "Rubber Duck"}))))
+                   :agent-display-name "Rubber Duck"
+                   :agent-description "Reviews a proposed implementation"}))))

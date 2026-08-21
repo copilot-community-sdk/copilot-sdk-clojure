@@ -137,7 +137,7 @@
 <pre><code class="language-clojure">(when (copilot/elicitation-supported? session)
   (copilot/confirm! session "Deploy to production?"))
 </code></pre>
-</div></div></div><div class="public anchor" id="var-event-types"><h3>event-types</h3><div class="usage"></div><div class="doc"><div class="markdown"><p>All valid session event types as namespaced keywords.</p>
+</div></div></div><div class="public anchor" id="var-event-types"><h3>event-types</h3><div class="usage"></div><div class="doc"><div class="markdown"><p>Session event types exposed by the public SDK as namespaced keywords.</p>
 </div></div></div><div class="public anchor" id="var-events"><h3>events</h3><div class="usage"><code>(events session)</code></div><div class="doc"><div class="markdown"><p>Get the event mult for this session. Use tap/untap to subscribe:</p>
 <p>Example:</p>
 <pre><code class="language-clojure">(require '[clojure.core.async :refer [chan tap untap go-loop &lt;!]])
@@ -213,15 +213,20 @@
 </div></div></div><div class="public anchor" id="var-interaction-events"><h3>interaction-events</h3><div class="usage"></div><div class="doc"><div class="markdown"><p>Events related to permission, user input, elicitation, sampling, and external tool flows.</p>
 </div></div></div><div class="public anchor" id="var-join-session"><h3>join-session</h3><div class="usage"><code>(join-session config)</code></div><div class="doc"><div class="markdown"><p>Join the current foreground session from an extension running as a child process.</p>
 <p>Reads the SESSION_ID environment variable and connects to the parent CLI process via stdio. Intended for extensions spawned by the Copilot CLI.</p>
-<p>Config is the same as <code>resume-session</code> except <code>:extension-sdk-path</code> is not accepted. <code>:request-extensions?</code> and <code>:extension-info</code> are accepted. <code>:on-permission-request</code> is <strong>optional</strong>; when omitted, join-session uses <code>default-join-session-permission-handler</code>. The <code>:disable-resume?</code> option defaults to true.</p>
-<p>Returns a map with <code>:client</code> and <code>:session</code> keys. The caller is responsible for stopping the client when done.</p>
+<p>Config is the same as <code>resume-session</code> except <code>:extension-sdk-path</code> is not accepted. <code>:request-extensions?</code>, <code>:extension-info</code>, and the join-only <code>:requested-environment-variables</code> vector are accepted. An omitted or empty environment-variable vector sends no request; explicit nil is invalid. <code>:on-permission-request</code> is <strong>optional</strong>; when omitted, join-session uses <code>default-join-session-permission-handler</code>. The <code>:disable-resume?</code> option defaults to true.</p>
+<p>Returns a map with <code>:client</code> and <code>:session</code> keys. When environment variables are requested, the result also includes <code>:granted-environment-variables</code>, filtered to the exact requested names. Unlike Node.js, the JVM cannot portably mutate process environment variables, so extensions read approved values from this map. The caller is responsible for stopping the client when done.</p>
 <p>Throws if SESSION_ID is not set in the environment.</p>
 <p>Example:</p>
 <pre><code class="language-clojure">(require '[github.copilot-sdk :as copilot])
 
-(let [{:keys [client session]} (copilot/join-session
-                                 {:on-permission-request copilot/approve-all
-                                  :tools [my-tool]})]
+(let [{:keys [client session granted-environment-variables]}
+      (copilot/join-session
+       {:on-permission-request copilot/approve-all
+        :requested-environment-variables ["GITHUB_TOKEN"]
+        :tools [my-tool]})]
+  (when-let [token (get granted-environment-variables "GITHUB_TOKEN")]
+    ;; Supply token to extension-owned code without logging it.
+    (use-token token))
   ;; use session...
   (copilot/stop! client))
 </code></pre>
@@ -291,6 +296,7 @@
 <p><code>telemetry</code> is a map of string bucket names to JSON object maps.</p>
 </div></div></div><div class="public anchor" id="var-resume-factory.21"><h3>resume-factory!</h3><div class="usage"><code>(resume-factory! session run-id)</code><code>(resume-factory! session run-id options)</code></div><div class="doc"><div class="markdown"></div></div></div><div class="public anchor" id="var-resume-session"><h3>resume-session</h3><div class="usage"><code>(resume-session client session-id config)</code></div><div class="doc"><div class="markdown"><p>Resume an existing session by ID. Accepts the same config options as <code>create-session</code> (except <code>:session-id</code> and <code>:cloud</code>), including the experimental <code>:enable-mcp-apps</code> host opt-in, plus: - :disable-resume?  - When true, skip emitting the session.resume event (default: false)</p>
 <p><code>:on-permission-request</code> is <strong>optional</strong> (since upstream PR #1308) — omit it to leave permission requests pending for manual resolution.</p>
+<p>When <code>:mcp-servers</code> is present, resume applies the same configuration with <code>session.mcp.reloadWithConfig</code> after <code>session.resume</code>. A reload failure fails the resume and cleans up the local session.</p>
 <p>Example:</p>
 <pre><code class="language-clojure">(def session (copilot/resume-session client "session-123"
                {:on-permission-request copilot/approve-all}))

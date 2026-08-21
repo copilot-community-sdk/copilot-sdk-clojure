@@ -247,6 +247,12 @@
         (assoc-in [:result :run :snapshot]
                   (get-in msg [:result :run :snapshot])))
 
+      "session.resume"
+      (cond-> converted
+        (contains? (:result msg) :grantedEnvironmentVariables)
+        (assoc-in [:result :granted-environment-variables]
+                  (get-in msg [:result :grantedEnvironmentVariables])))
+
       ("session.factory.agent" "session.factory.journal.get")
       (cond
         (contains? (:result msg) :result)
@@ -979,6 +985,34 @@
            (put! ch {:error {:code -32000 :message "Connection closed"}})
            (close! ch)))
        ch))))
+
+(defn send-request-with-timeout
+  "Send a JSON-RPC request and return a channel for its bounded response.
+   A timeout delivers a JSON-RPC-shaped error and removes the pending request.
+
+   The 5-arity form accepts the same opts as `send-request`."
+  ([conn method params timeout-ms]
+   (send-request-with-timeout conn method params timeout-ms {}))
+  ([conn method params timeout-ms opts]
+   (let [state-atom (:state-atom conn)
+        response-ch (send-request conn method params opts)
+        result-ch (chan 1)
+        timeout-ch (async/timeout timeout-ms)]
+     (async/go
+       (let [[result port] (async/alts! [response-ch timeout-ch])]
+        (if (= port timeout-ch)
+          (do
+            (remove-pending-by-chan! state-atom response-ch)
+            (close! response-ch)
+            (async/>! result-ch
+                      {:error
+                       {:code -32000
+                        :message "Request timeout"
+                        :data {:method method :timeout-ms timeout-ms}}}))
+          (when (some? result)
+            (async/>! result-ch result)))
+        (close! result-ch)))
+     result-ch)))
 
 (defn send-request!
   "Send a JSON-RPC request and block for the response.

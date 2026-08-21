@@ -11,6 +11,45 @@ All notable changes to this project will be documented in this file. This change
   removed guessed ceilings from introductory examples.
   ([upstream PR #2353](https://github.com/github/copilot-sdk/pull/2353))
 
+### Added (post-v1.0.12-preview.0 sync)
+- Added join-only `:requested-environment-variables` for extension environment
+  access. `join-session` returns approved values under
+  `:granted-environment-variables`, filtered to the exact requested names,
+  because the JVM cannot portably mutate process environment variables.
+  ([upstream PR #2348](https://github.com/github/copilot-sdk/pull/2348))
+- Added stable runtime event and permission fields through upstream commit
+  [`ea41dadb199725766d5097f4592c17be3200035f`](https://github.com/github/copilot-sdk/commit/ea41dadb199725766d5097f4592c17be3200035f),
+  including model-change source, assistant usage metadata, per-agent shutdown
+  metrics, interaction correlation, host routing/display metadata, extension
+  environment access, memory scope, custom-tool permission skipping, and
+  managed-approval event metadata.
+  ([upstream PR #2358](https://github.com/github/copilot-sdk/pull/2358),
+  [upstream PR #2363](https://github.com/github/copilot-sdk/pull/2363),
+  [upstream PR #2364](https://github.com/github/copilot-sdk/pull/2364))
+
+### Changed (post-v1.0.12-preview.0 sync)
+- Updated the runtime schema pin from `1.0.80` to `1.0.81-5` and recertified
+  the complete stable Node SDK public surface through upstream commit
+  [`ea41dadb199725766d5097f4592c17be3200035f`](https://github.com/github/copilot-sdk/commit/ea41dadb199725766d5097f4592c17be3200035f).
+  Experimental assisted-approval controls, ephemeral UI queries, factory
+  lifecycle events, generated-only RPC declarations, and Node-specific package
+  resolution remain intentionally excluded.
+- **BREAKING (experimental):** Updated the already-exposed
+  `:copilot/session.permissions_changed` event to the current permission-mode
+  transition data, `{:mode <mode> :previous-mode <mode>}`, with optional
+  `:assisted-approval-model`. This replaces the removed aggregate allow-all
+  booleans and `"off"` / `"auto"` / `"on"` mode fields.
+- `resume-session`, `<resume-session`, and `join-session` now apply supplied MCP
+  server configuration through `session.mcp.reloadWithConfig` after resume.
+  Reload failures and bounded timeouts propagate and clean up the partially
+  registered local session.
+  ([upstream PR #2358](https://github.com/github/copilot-sdk/pull/2358))
+
+### Fixed (post-v1.0.12-preview.0 sync)
+- Create, resume, and join now send omitted command descriptions as `""`, and
+  elicitation results omit absent content rather than serializing JSON `null`.
+  ([upstream PR #2358](https://github.com/github/copilot-sdk/pull/2358))
+
 ## [1.0.11.0] - 2026-08-16
 ### Added (v1.0.11 sync)
 - Added client-level `:builtin-plugin-directories` for absolute, trusted plugin

@@ -1,0 +1,352 @@
+{:upstream
+ {:repository "github/copilot-sdk"
+  :base-commit "eb7ba2411171f5e1fea9d38df01b436acdfb7271"
+  :target-commit "ea41dadb199725766d5097f4592c17be3200035f"
+  :target-package-version "0.0.0-dev"
+  :target-release-status :post-v1.0.12-preview.0
+  :schema-package "@github/copilot-linux-x64"
+  :schema-version "1.0.81-5"
+  :schema-sha256
+  {"api.schema.json"
+   "6bb6cd3e01b6d59b8b9f83740e3d1e90fda13f70f458dca24ebdac6c7941c464"
+   "session-events.schema.json"
+   "9fd414f5020c317a234da6d7a06a4d0ef02ddad227ddc9962dced49302e5e8ec"}
+  :node-runtime-dependency
+  {:package "@github/copilot"
+   :version "^1.0.81-5"}}
+
+ :source-symbols
+ {:extension-join-config
+  {:file "nodejs/src/extension.ts"
+   :symbol "JoinSessionConfig.requestedEnvironmentVariables"}
+  :extension-join-builder
+  {:file "nodejs/src/extension.ts"
+   :symbol "joinSession(requestedEnvironmentVariables)"}
+  :extension-resume-builder
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.resumeSessionForExtension(extensionOptions)"}
+  :extension-grant-projection
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.resumeSessionInternal(grantedEnvironmentVariables)"}
+  :create-command-description
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.createSession(commands[].description ?? \"\")"}
+  :resume-command-description
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.resumeSessionInternal(commands[].description ?? \"\")"}
+  :resume-mcp-reload
+  {:file "nodejs/src/client.ts"
+   :symbol "CopilotClient.resumeSessionInternal(session.mcp.reloadWithConfig)"}
+  :elicitation-content-omission
+  {:file "nodejs/src/session.ts"
+   :symbol "CopilotSession.handlePendingElicitation(result.content omission)"}
+  :model-change-source
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "ModelChangeData.source / ModelChangeSource"}
+  :assistant-usage-fields
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "AssistantUsageData stable 1.0.81-2 additions / AssistantUsageTransport"}
+  :shutdown-agent-metrics
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "ShutdownData.agentMetrics / ShutdownAgentMetric"}
+  :user-message-turn-id
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "UserMessageData.turnId"}
+  :model-call-failure-interaction-type
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "ModelCallFailureData.interactionType"}
+  :subagent-started-factory-run-id
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "SubagentStartedData.factoryRunId"}
+  :system-notification-display-name
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "SystemNotificationAgentCompleted.displayName / SystemNotificationAgentIdle.displayName"}
+  :external-tool-provider-id
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "ExternalToolRequestedData.providerId"}
+  :exit-plan-mode-model
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "ExitPlanModeRequestedData.model"}
+  :permission-custom-tool-skip
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "PermissionRequestCustomTool.skipPermission"}
+  :permission-memory-repo-scope
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "PermissionRequestMemory.repoNwo / scope / PermissionRequestMemoryScope"}
+  :permission-extension-env
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "PermissionRequestExtensionEnvAccess / PermissionPromptRequestExtensionEnvAccess / UserToolSessionApprovalExtensionEnvAccess"}
+  :permission-managed-approval
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "PermissionApproved*.managedApprovalHandled"}
+  :experimental-permission-mode-event
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "PermissionMode / PermissionsChangedData"}
+  :experimental-assisted-approval
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "PermissionAssistedApproval / AssistedApprovalRecommendation"}
+  :experimental-managed-settings
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "ManagedSettingsEnforcedEscalation.assisted_approval"}
+  :experimental-ephemeral-query
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "UIEphemeralQueryEvent / UIEphemeralQueryData"}
+  :experimental-factory-lifecycle
+  {:file "nodejs/src/generated/session-events.ts"
+   :symbol "FactoryRunStartedEvent / FactoryRunSettledEvent"}
+  :generated-rpc-internals
+  {:file "nodejs/src/generated/rpc.ts"
+   :symbol "1.0.81-5 generated RPC declaration delta"}
+  :node-platform-package-resolution
+  {:file "nodejs/src/client.ts"
+   :symbol "getCliPlatformPackageNames package entry resolution"}}
+
+ :runtime-schema-symbols
+ {:internal-agent-interrupted
+  {:file "schemas/session-events.schema.json"
+   :symbol "AgentInterruptedEvent visibility internal"}
+  :internal-prompt-cache-break
+  {:file "schemas/session-events.schema.json"
+   :symbol "PromptCacheBreakEvent visibility internal"}
+  :internal-sandbox-decision
+  {:file "schemas/session-events.schema.json"
+   :symbol "SandboxDecisionEvent visibility internal"}}
+
+ :public-surface-audit
+ {:stable-public-files-inspected
+  ["nodejs/src/index.ts"
+   "nodejs/src/types.ts"
+   "nodejs/src/client.ts"
+   "nodejs/src/session.ts"
+   "nodejs/src/extension.ts"
+   "nodejs/src/toolSet.ts"
+   "nodejs/src/factory.ts"]
+  :changed-node-files
+  ["nodejs/docs/extensions.md"
+   "nodejs/package-lock.json"
+   "nodejs/package.json"
+   "nodejs/samples/package-lock.json"
+   "nodejs/src/client.ts"
+   "nodejs/src/extension.ts"
+   "nodejs/src/generated/rpc.ts"
+   "nodejs/src/generated/session-events.ts"
+   "nodejs/src/session.ts"
+   "nodejs/src/types.ts"
+   "nodejs/test/client.test.ts"
+   "nodejs/test/e2e/extension_env_access.e2e.test.ts"
+   "nodejs/test/e2e/factory.e2e.test.ts"
+   "nodejs/test/e2e/fixtures/env-access-extension.mjs"
+   "nodejs/test/e2e/mcp_and_agents.e2e.test.ts"
+   "nodejs/test/e2e/permissions.e2e.test.ts"
+   "nodejs/test/e2e/rewind.e2e.test.ts"
+   "nodejs/test/e2e/rpc_session_state_extras.e2e.test.ts"
+   "nodejs/test/e2e/rpc_ui_ephemeral_query.e2e.test.ts"
+   "nodejs/test/e2e/session.e2e.test.ts"
+   "nodejs/test/e2e/session_fs.e2e.test.ts"
+   "nodejs/test/e2e/tools.e2e.test.ts"
+   "nodejs/test/extension.test.ts"
+   "nodejs/test/factory.test.ts"
+   "nodejs/test/session-event-codegen.test.ts"
+   "nodejs/vitest.config.ts"]
+  :stable-source-delta-files
+  ["nodejs/src/client.ts"
+   "nodejs/src/extension.ts"
+   "nodejs/src/generated/session-events.ts"
+   "nodejs/src/session.ts"
+   "nodejs/src/types.ts"]
+  :generated-evidence-files
+  ["nodejs/src/generated/rpc.ts"
+   "nodejs/src/generated/session-events.ts"]
+  :unchanged-authority-files
+  ["nodejs/src/index.ts"
+   "nodejs/src/toolSet.ts"
+   "nodejs/src/factory.ts"]}
+
+ :stable-delta-ids
+ #{:extension/requested-environment-variables
+   :commands/default-description
+   :resume/mcp-reload-with-config
+   :elicitation/omit-absent-content
+   :event/model-change-source
+   :event/assistant-usage-metadata
+   :event/shutdown-agent-metrics
+   :event/interaction-correlation-fields
+   :event/host-routing-and-display-fields
+   :permission/stable-additions}
+
+ :stable-deltas
+ [{:id :extension/requested-environment-variables
+   :classification :stable
+   :status :ported
+   :evidence [:extension-join-config
+              :extension-join-builder
+              :extension-resume-builder
+              :extension-grant-projection]
+   :clojure
+   {:public-key :requested-environment-variables
+    :scope :join
+    :wire-key "requestedEnvironmentVariables"
+    :result-key :granted-environment-variables
+    :jvm-adaptation :return-filtered-grants}}
+  {:id :commands/default-description
+   :classification :stable
+   :status :ported
+   :evidence [:create-command-description
+              :resume-command-description]
+   :clojure
+   {:scopes #{:create :resume :join}
+    :wire-default ""}}
+  {:id :resume/mcp-reload-with-config
+   :classification :stable
+   :status :ported
+   :evidence [:resume-mcp-reload]
+   :clojure
+   {:scopes #{:resume :join}
+    :rpc-method "session.mcp.reloadWithConfig"
+    :failure-semantics :propagate}}
+  {:id :elicitation/omit-absent-content
+   :classification :stable
+   :status :ported
+   :evidence [:elicitation-content-omission]
+   :clojure
+   {:handler :on-elicitation-request
+    :wire-key "content"
+    :nil-semantics :omit}}
+  {:id :event/model-change-source
+   :classification :stable
+   :status :ported
+   :evidence [:model-change-source]
+   :clojure
+   {:spec :github.copilot-sdk.specs/session.model_change-data
+    :public-key :source}}
+  {:id :event/assistant-usage-metadata
+   :classification :stable
+   :status :ported
+   :evidence [:assistant-usage-fields]
+   :clojure
+   {:spec :github.copilot-sdk.specs/assistant.usage-data
+    :transport-spec :github.copilot-sdk.specs/assistant-usage-transport}}
+  {:id :event/shutdown-agent-metrics
+   :classification :stable
+   :status :ported
+   :evidence [:shutdown-agent-metrics]
+   :clojure
+   {:spec :github.copilot-sdk.specs/session.shutdown-data
+    :agent-spec :github.copilot-sdk.specs/shutdown-agent-metric}}
+  {:id :event/interaction-correlation-fields
+   :classification :stable
+   :status :ported
+   :evidence [:user-message-turn-id
+              :model-call-failure-interaction-type
+              :subagent-started-factory-run-id]
+   :clojure
+   {:user-message-spec :github.copilot-sdk.specs/user.message-data
+    :model-failure-spec :github.copilot-sdk.specs/model.call_failure-data
+    :subagent-spec :github.copilot-sdk.specs/subagent.started-data}}
+  {:id :event/host-routing-and-display-fields
+   :classification :stable
+   :status :ported
+   :evidence [:system-notification-display-name
+              :external-tool-provider-id
+              :exit-plan-mode-model]
+   :clojure
+   {:system-notification-spec :github.copilot-sdk.specs/system.notification-data
+    :external-tool-spec :github.copilot-sdk.specs/external_tool.requested-data
+    :exit-plan-mode-spec :github.copilot-sdk.specs/exit-plan-mode-request}}
+  {:id :permission/stable-additions
+   :classification :stable
+   :status :ported
+   :evidence [:permission-custom-tool-skip
+              :permission-memory-repo-scope
+              :permission-extension-env
+              :permission-managed-approval]
+   :clojure
+   {:request-spec :github.copilot-sdk.specs/permission-request
+    :event-metadata-key :managed-approval-handled
+    :environment-kind :extension-env-access}}]
+
+ :experimental-deltas
+ [{:id :event/permission-mode-transition
+   :classification :experimental
+   :status :ported-compatibility
+   :evidence [:experimental-permission-mode-event]
+   :clojure
+   {:event-type :copilot/session.permissions_changed
+    :spec :github.copilot-sdk.specs/session.permissions_changed-data
+    :migrated-from :aggregate-allow-all-flags}}]
+
+ :intentional-exclusions
+ [{:id :surface/assisted-approval
+   :classification :experimental
+   :status :excluded
+   :reason :upstream-experimental-assisted-approval-api
+   :evidence [:experimental-assisted-approval
+             :experimental-managed-settings]}
+  {:id :event/ui-ephemeral-query
+   :classification :experimental
+   :status :excluded
+   :reason :upstream-experimental-event
+   :evidence [:experimental-ephemeral-query]}
+  {:id :event/factory-lifecycle
+   :classification :experimental
+   :status :excluded
+   :reason :experimental-factory-context
+   :evidence [:experimental-factory-lifecycle]}
+  {:id :event/internal-runtime-events
+   :classification :internal
+   :status :excluded
+   :reason :runtime-schema-internal-visibility
+   :evidence [:internal-agent-interrupted
+              :internal-prompt-cache-break
+              :internal-sandbox-decision]}
+  {:id :rpc/generated-runtime-delta
+   :classification :generated-only
+   :status :excluded
+   :reason :generated-wire-evidence-not-public-sdk-surface
+   :evidence [:generated-rpc-internals]}
+  {:id :client/node-platform-package-resolution
+   :classification :language-specific
+   :status :excluded
+   :reason :node-esm-package-resolution
+   :evidence [:node-platform-package-resolution]}]
+
+ :commit-classifications
+ [{:commit "525866c9379c525f405086d32b82da338a353ecf"
+   :classification :stable
+   :status :ported
+   :pr "https://github.com/github/copilot-sdk/pull/2348"
+   :reason :extension-environment-access}
+  {:commit "0c599433cc3759264503c2e96a09bc7670b63a72"
+   :classification :documentation
+   :status :reviewed-no-port
+   :pr "https://github.com/github/copilot-sdk/pull/2354"
+   :reason :no-new-sdk-contract}
+  {:commit "1593e223233b50a9ae27b8812c9ff19a3def41b1"
+   :classification :mixed
+   :status :stable-subset-ported
+   :pr "https://github.com/github/copilot-sdk/pull/2358"
+   :reason :runtime-schema-and-cross-sdk-update}
+  {:commit "21652079c8fab4e30bd7358fabd9a258a7140b94"
+   :classification :mixed
+   :status :stable-subset-ported
+   :pr "https://github.com/github/copilot-sdk/pull/2363"
+   :reason :runtime-schema-and-experimental-permission-update}
+  {:commit "23dcc2e7afd1f06107a7af261d1fc2a25539773e"
+   :classification :mixed
+   :status :stable-subset-ported
+   :pr "https://github.com/github/copilot-sdk/pull/2364"
+   :reason :runtime-schema-and-test-coverage-update}
+  {:commit "e4cbb63a2df791dea83675f47bfc08f2f839174e"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason :java-preview-documentation}
+  {:commit "5fe49f7d5f606a7a5e9328f2bf7eaa0758633478"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason :java-preview-release}
+  {:commit "ea41dadb199725766d5097f4592c17be3200035f"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason :java-post-release-version}]
+
+ :unclassified-stable []}

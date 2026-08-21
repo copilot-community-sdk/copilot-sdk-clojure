@@ -42,7 +42,7 @@
 ;; =============================================================================
 
 (def event-types
-  "All valid session event types as namespaced keywords."
+  "Session event types exposed by the public SDK as namespaced keywords."
   #{:copilot/session.start
     :copilot/session.resume
     :copilot/session.error
@@ -710,6 +710,10 @@
    `:on-permission-request` is **optional** (since upstream PR #1308) — omit it to
    leave permission requests pending for manual resolution.
 
+   When `:mcp-servers` is present, resume applies the same configuration with
+   `session.mcp.reloadWithConfig` after `session.resume`. A reload failure fails
+   the resume and cleans up the local session.
+
    Example:
    ```clojure
    (def session (copilot/resume-session client \"session-123\"
@@ -749,13 +753,18 @@
    via stdio. Intended for extensions spawned by the Copilot CLI.
 
    Config is the same as `resume-session` except `:extension-sdk-path` is not accepted.
-   `:request-extensions?` and `:extension-info` are accepted.
+   `:request-extensions?`, `:extension-info`, and the join-only
+   `:requested-environment-variables` vector are accepted. An omitted or empty
+   environment-variable vector sends no request; explicit nil is invalid.
    `:on-permission-request` is **optional**;
    when omitted, join-session uses `default-join-session-permission-handler`.
    The `:disable-resume?` option defaults to true.
 
-   Returns a map with `:client` and `:session` keys. The caller is responsible for
-   stopping the client when done.
+   Returns a map with `:client` and `:session` keys. When environment variables
+   are requested, the result also includes `:granted-environment-variables`,
+   filtered to the exact requested names. Unlike Node.js, the JVM cannot portably
+   mutate process environment variables, so extensions read approved values from
+   this map. The caller is responsible for stopping the client when done.
 
    Throws if SESSION_ID is not set in the environment.
 
@@ -763,9 +772,14 @@
    ```clojure
    (require '[github.copilot-sdk :as copilot])
 
-   (let [{:keys [client session]} (copilot/join-session
-                                    {:on-permission-request copilot/approve-all
-                                     :tools [my-tool]})]
+   (let [{:keys [client session granted-environment-variables]}
+         (copilot/join-session
+          {:on-permission-request copilot/approve-all
+           :requested-environment-variables [\"GITHUB_TOKEN\"]
+           :tools [my-tool]})]
+     (when-let [token (get granted-environment-variables \"GITHUB_TOKEN\")]
+       ;; Supply token to extension-owned code without logging it.
+       (use-token token))
      ;; use session...
      (copilot/stop! client))
    ```"

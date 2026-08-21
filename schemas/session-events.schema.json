@@ -87,6 +87,173 @@
         "autopilot_credit_limit": "Autopilot stopped the run because the active objective reached its user-set --max-ai-credits limit."
       }
     },
+    "AgentInterruptedActivity": {
+      "type": "string",
+      "enum": [
+        "model_call",
+        "retry_backoff",
+        "tool_call",
+        "background_agent"
+      ],
+      "description": "What the agent was doing when the user interrupted it.",
+      "title": "AgentInterruptedActivity",
+      "x-enumDescriptions": {
+        "model_call": "A request to the model was open.",
+        "retry_backoff": "The turn was sleeping between retry attempts.",
+        "tool_call": "One or more tools were executing.",
+        "background_agent": "Background sub-agents were running while the main loop was idle."
+      }
+    },
+    "AgentInterruptedCancelPhase": {
+      "type": "string",
+      "enum": [
+        "pre_first_token",
+        "mid_stream"
+      ],
+      "description": "Where the interruption landed relative to the first streamed token.",
+      "title": "AgentInterruptedCancelPhase",
+      "x-enumDescriptions": {
+        "pre_first_token": "No output had been produced when the request was cancelled.",
+        "mid_stream": "The response was already streaming when the request was cancelled."
+      }
+    },
+    "AgentInterruptedData": {
+      "type": "object",
+      "properties": {
+        "activity": {
+          "$ref": "#/definitions/AgentInterruptedActivity",
+          "description": "What the agent was doing when the user interrupted it"
+        },
+        "elapsedMs": {
+          "type": "number",
+          "minimum": 0,
+          "format": "duration",
+          "description": "How long the interrupted work had been running, in milliseconds"
+        },
+        "turn": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based agentic-loop iteration the interrupt landed in"
+        },
+        "model": {
+          "type": "string",
+          "description": "For an interrupted model call: the model the request targeted"
+        },
+        "apiEndpoint": {
+          "type": "string",
+          "description": "For an interrupted model call: the provider endpoint the request targeted"
+        },
+        "transport": {
+          "$ref": "#/definitions/ModelCallFailureTransport",
+          "description": "For an interrupted model call: the transport the request used"
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "For an interrupted model call: the reasoning effort the request asked for"
+        },
+        "cancelPhase": {
+          "$ref": "#/definitions/AgentInterruptedCancelPhase",
+          "description": "For an interrupted model call: whether the user interrupted before any token arrived or while the response was streaming"
+        },
+        "outputTtftMs": {
+          "type": "number",
+          "minimum": 0,
+          "format": "duration",
+          "description": "For a mid-stream interrupt: the observed time to first observable output, in milliseconds. Deliberately distinct from the `ttftMs` reported on a successful model call, which measures time to first stream event."
+        },
+        "toolNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Names of the tools that were still running. More than one when the model requested a parallel fan-out."
+        },
+        "toolCallIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tool call identifiers that were still running"
+        },
+        "safeToolNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Subset of `toolNames` whose tool metadata marks the tool name as safe to record unhashed in telemetry."
+        },
+        "interruptedAgentCount": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "For an interrupted background-agent batch: how many background sub-agents the stop swept. Counts accepted cancellations, so an agent cancelled as a cascade of its interrupted parent is covered by that parent rather than counted again."
+        }
+      },
+      "required": [
+        "activity",
+        "elapsedMs",
+        "turn"
+      ],
+      "additionalProperties": false,
+      "description": "Metadata for work the user interrupted while the agent was running",
+      "title": "AgentInterruptedData"
+    },
+    "AgentInterruptedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "agent.interrupted",
+          "description": "Type discriminator. Always \"agent.interrupted\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AgentInterruptedData",
+          "description": "Metadata for work the user interrupted while the agent was running"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"agent.interrupted\". Metadata for work the user interrupted while the agent was running",
+      "title": "AgentInterruptedEvent",
+      "visibility": "internal"
+    },
     "AssistantIdleData": {
       "type": "object",
       "properties": {
@@ -301,7 +468,8 @@
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
         "rte": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Per-request treatment/eligibility signal returned by the Copilot API in the `X-GitHub-Copilot-Request-TE` response header for the associated model call; `false` when the header was absent or unparseable."
         },
         "apiCallId": {
           "type": "string",
@@ -473,28 +641,33 @@
       "type": "object",
       "properties": {
         "provider": {
-          "type": "string"
+          "type": "string",
+          "description": "Model provider that produced this server-tool payload."
         },
         "items": {
           "type": "array",
           "items": {
             "x-opaque-json": true
-          }
+          },
+          "description": "Provider-native server-tool call and output items preserved verbatim for replay."
         },
         "functionCallNamespaces": {
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          }
+          },
+          "description": "Provider function-call namespaces keyed by function-call identifier."
         },
         "rawContentBlocks": {
           "type": "array",
           "items": {
             "x-opaque-json": true
-          }
+          },
+          "description": "Raw provider content blocks retained for verbatim round-tripping."
         },
         "advisorModel": {
-          "type": "string"
+          "type": "string",
+          "description": "Advisor model identifier associated with the server-tool payload."
         }
       },
       "required": [
@@ -652,7 +825,8 @@
           "description": "The complete extended thinking text from the model"
         },
         "rte": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Per-request treatment/eligibility signal returned by the Copilot API in the `X-GitHub-Copilot-Request-TE` response header for the associated model call; `false` when the header was absent or unparseable."
         }
       },
       "required": [
@@ -1403,6 +1577,38 @@
           "type": "string",
           "description": "Coarse classification of the interaction that produced this call, mirroring the session's per-request agent context (e.g. `conversation-agent`, `conversation-subagent`, `conversation-sampling`, `conversation-background`, `conversation-compaction`, `conversation-user`). Non-billing; lets consumers attribute a model call to a call class (e.g. sub-agent/sidekick) independently of the billing initiator. Absent when the runtime did not classify the request."
         },
+        "isByok": {
+          "type": "boolean",
+          "description": "Whether this model call used a bring-your-own-key provider"
+        },
+        "isAuto": {
+          "type": "boolean",
+          "description": "Whether Auto mode was selected for this model call"
+        },
+        "maxPromptTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective maximum prompt-token limit used for this model call"
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Requested maximum output tokens used for this model call"
+        },
+        "acceptedPredictionTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of accepted speculative prediction tokens"
+        },
+        "rejectedPredictionTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of rejected speculative prediction tokens"
+        },
+        "transport": {
+          "$ref": "#/definitions/AssistantUsageTransport",
+          "description": "Transport used for this model call (http or websocket)"
+        },
         "apiCallId": {
           "type": "string",
           "description": "Completion ID from the model provider (e.g., chatcmpl-abc123)"
@@ -1416,7 +1622,8 @@
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
         "rte": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Per-request treatment/eligibility signal returned by the Copilot API in the `X-GitHub-Copilot-Request-TE` response header for the associated model call; `false` when the header was absent or unparseable."
         },
         "apiEndpoint": {
           "$ref": "#/definitions/AssistantUsageApiEndpoint",
@@ -1445,6 +1652,10 @@
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
         },
+        "reasoningSummary": {
+          "$ref": "#/definitions/ReasoningSummary",
+          "description": "Reasoning summary mode used for this model call, if applicable"
+        },
         "availableToolCount": {
           "type": "integer",
           "minimum": 0,
@@ -1455,6 +1666,22 @@
           "type": "integer",
           "minimum": 0,
           "description": "Number of tokens used by tool definitions for this call",
+          "visibility": "internal"
+        },
+        "frontierSource": {
+          "type": "string",
+          "description": "How the prompt-cache frontier was determined for this call",
+          "visibility": "internal"
+        },
+        "cacheTtlSeconds": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective prompt-cache lifetime in seconds for this call",
+          "visibility": "internal"
+        },
+        "cacheDetailsReported": {
+          "type": "boolean",
+          "description": "Whether the provider reported prompt-cache usage details for this call",
           "visibility": "internal"
         },
         "numToolCalls": {
@@ -1622,6 +1849,57 @@
       "description": "Internal per-quota snapshot for assistant usage, including entitlement, consumed requests, overage, reset date, and remaining quota.",
       "title": "AssistantUsageQuotaSnapshot",
       "visibility": "internal"
+    },
+    "AssistantUsageTransport": {
+      "type": "string",
+      "enum": [
+        "http",
+        "websocket"
+      ],
+      "description": "Transport used for a successful model call",
+      "title": "AssistantUsageTransport",
+      "x-enumDescriptions": {
+        "http": "HTTP transport, including SSE streams.",
+        "websocket": "WebSocket transport."
+      }
+    },
+    "AssistedApprovalJudgeFailureReason": {
+      "type": "string",
+      "enum": [
+        "timeout",
+        "abort",
+        "empty_response",
+        "model_error",
+        "parse_error"
+      ],
+      "description": "Why the assisted-approval judge produced no usable recommendation. Present only alongside an `error` recommendation, where the human-readable reason is a fixed string and therefore cannot distinguish these cases. Intended to make a judge failure reportable by a consumer that has no access to the host's logs.",
+      "title": "AssistedApprovalJudgeFailureReason",
+      "x-enumDescriptions": {
+        "timeout": "The judge model call exceeded its deadline.",
+        "abort": "The judge model call was cancelled before it returned.",
+        "empty_response": "The judge model call completed but returned no content.",
+        "model_error": "The judge model call failed (for example a transport, authentication, or rate-limit error).",
+        "parse_error": "The judge model replied, but the reply carried no ALLOW/DENY verdict."
+      },
+      "stability": "experimental"
+    },
+    "AssistedApprovalRecommendation": {
+      "type": "string",
+      "enum": [
+        "approve",
+        "requireApproval",
+        "excluded",
+        "error"
+      ],
+      "description": "Outcome of the assisted-approval safety judge for a permission request. Present only in assisted mode; its absence means the judge did not evaluate the request.",
+      "title": "AssistedApprovalRecommendation",
+      "x-enumDescriptions": {
+        "approve": "The judge evaluated the request and recommends automatically approving it.",
+        "requireApproval": "The judge evaluated the request and does not recommend automatically approving it; explicit approval is required. Whether that means prompting, denying, or something else is the consumer's decision.",
+        "excluded": "Assisted mode is enabled, but this request category is never automatically approvable (for example, sandbox-bypass requests), so the judge was not consulted.",
+        "error": "The judge was consulted but did not return a usable recommendation, so the request requires explicit approval."
+      },
+      "stability": "experimental"
     },
     "Attachment": {
       "anyOf": [
@@ -2391,44 +2669,6 @@
       "additionalProperties": false,
       "description": "Start position of the selection",
       "title": "AttachmentSelectionDetailsStart"
-    },
-    "AutoApprovalJudgeFailureReason": {
-      "type": "string",
-      "enum": [
-        "timeout",
-        "abort",
-        "empty_response",
-        "model_error",
-        "parse_error"
-      ],
-      "description": "Why the auto-approval judge produced no usable recommendation. Present only alongside an `error` recommendation, where the human-readable reason is a fixed string and therefore cannot distinguish these cases. Intended to make a judge failure reportable by a consumer that has no access to the host's logs.",
-      "title": "AutoApprovalJudgeFailureReason",
-      "x-enumDescriptions": {
-        "timeout": "The judge model call exceeded its deadline.",
-        "abort": "The judge model call was cancelled before it returned.",
-        "empty_response": "The judge model call completed but returned no content.",
-        "model_error": "The judge model call failed (for example a transport, authentication, or rate-limit error).",
-        "parse_error": "The judge model replied, but the reply carried no ALLOW/DENY verdict."
-      },
-      "stability": "experimental"
-    },
-    "AutoApprovalRecommendation": {
-      "type": "string",
-      "enum": [
-        "approve",
-        "requireApproval",
-        "excluded",
-        "error"
-      ],
-      "description": "Outcome of the auto-approval safety judge for a permission request. Present only when auto mode is enabled; its absence means the judge did not evaluate the request (auto mode was off).",
-      "title": "AutoApprovalRecommendation",
-      "x-enumDescriptions": {
-        "approve": "The judge evaluated the request and recommends automatically approving it.",
-        "requireApproval": "The judge evaluated the request and does not recommend auto-approving it; explicit approval is required. Whether that means prompting, denying, or something else is the consumer's decision.",
-        "excluded": "Auto mode is enabled, but this request category is never auto-approvable (for example, sandbox-bypass requests), so the judge was not consulted.",
-        "error": "The judge was consulted but did not return a usable recommendation, so the request requires explicit approval."
-      },
-      "stability": "experimental"
     },
     "AutoModeResolvedData": {
       "type": "object",
@@ -5687,6 +5927,10 @@
         "recommendedAction": {
           "$ref": "#/definitions/ExitPlanModeAction",
           "description": "Recommended action to preselect for the user"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model the session had selected when the plan was authored, when one is known"
         }
       },
       "required": [
@@ -6059,6 +6303,13 @@
           "type": "string",
           "description": "Name of the external tool to invoke"
         },
+        "providerId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Stable provider identity captured with an extension-owned tool definition; hosts use it to route the request to the same provider that was offered to the model"
+        },
         "arguments": {
           "description": "Arguments to pass to the external tool",
           "x-opaque-json": true
@@ -6172,11 +6423,213 @@
       "description": "A declared phase shown in a factory permission prompt.",
       "title": "FactoryPermissionPhase"
     },
+    "FactoryRunSettledData": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Identifier of the factory run that settled."
+        },
+        "status": {
+          "$ref": "#/definitions/FactoryRunSettledStatus",
+          "description": "Terminal status the run committed."
+        },
+        "consumedSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Subagents this run consumed against its limits."
+        },
+        "consumedNanoAiu": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "AI credits this run consumed, in nano-AIU."
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Active milliseconds accumulated across every attempt of this run."
+        },
+        "failureType": {
+          "type": "string",
+          "description": "Typed failure class recorded on the run, when it failed with one (e.g. `factory_limit_reached`)."
+        }
+      },
+      "required": [
+        "runId",
+        "status",
+        "consumedSubagents",
+        "consumedNanoAiu",
+        "elapsedMs"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral signal that a factory run reached a terminal status.",
+      "title": "FactoryRunSettledData",
+      "stability": "experimental"
+    },
+    "FactoryRunSettledEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "factory.run_settled",
+          "description": "Type discriminator. Always \"factory.run_settled\"."
+        },
+        "data": {
+          "$ref": "#/definitions/FactoryRunSettledData",
+          "description": "Ephemeral signal that a factory run reached a terminal status."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"factory.run_settled\". Ephemeral signal that a factory run reached a terminal status.",
+      "title": "FactoryRunSettledEvent",
+      "stability": "experimental"
+    },
+    "FactoryRunSettledStatus": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "halted",
+        "cancelled",
+        "error"
+      ],
+      "description": "Terminal status a factory run committed. A settled run is never `pending` or `running`, so those two members of the run-status domain are deliberately absent.",
+      "title": "FactoryRunSettledStatus",
+      "x-enumDescriptions": {
+        "completed": "The factory body resolved and its result was committed.",
+        "halted": "The run was stopped by a limit, an approval refusal or another policy decision.",
+        "cancelled": "The run was cancelled by its caller or by session disposal.",
+        "error": "The run failed, with `failureType` carrying the class when it has one."
+      }
+    },
+    "FactoryRunStartedData": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Identifier of the factory run that started."
+        },
+        "factoryName": {
+          "type": "string",
+          "description": "Name of the factory this run executes. Low cardinality by construction."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Attempt number this start committed; a resumed run increments it."
+        }
+      },
+      "required": [
+        "runId",
+        "factoryName",
+        "attempt"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral signal that a factory run attempt began executing.",
+      "title": "FactoryRunStartedData",
+      "stability": "experimental"
+    },
+    "FactoryRunStartedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "factory.run_started",
+          "description": "Type discriminator. Always \"factory.run_started\"."
+        },
+        "data": {
+          "$ref": "#/definitions/FactoryRunStartedData",
+          "description": "Ephemeral signal that a factory run attempt began executing."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"factory.run_started\". Ephemeral signal that a factory run attempt began executing.",
+      "title": "FactoryRunStartedEvent",
+      "stability": "experimental"
+    },
     "FactoryRunUpdatedData": {
       "type": "object",
       "properties": {
         "runId": {
-          "type": "string"
+          "type": "string",
+          "description": "Factory run identifier."
         },
         "revision": {
           "type": "integer",
@@ -6921,16 +7374,16 @@
       "enum": [
         "allow_all",
         "approve_all",
-        "auto_approval",
+        "assisted_approval",
         "unrestricted_paths",
         "unrestricted_urls"
       ],
       "description": "For a `bypass_permissions_blocked` action, which permission-escalation primitive was refused",
       "title": "ManagedSettingsEnforcedEscalation",
       "x-enumDescriptions": {
-        "allow_all": "Full allow-all (\"/allow-all on\") permissions — auto-approving tools, paths, and URLs.",
-        "approve_all": "Auto-approval of all tool permission requests.",
-        "auto_approval": "Advisory auto-approval (\"/allow-all auto\") mode — keeps normal prompt paths and adds LLM-advised approval, distinct from full allow-all.",
+        "allow_all": "Full allow-all permissions — automatically approving tools, paths, and URLs.",
+        "approve_all": "Automatic approval of all tool permission requests.",
+        "assisted_approval": "Assisted mode — keeps normal prompt paths and adds an LLM recommendation, distinct from allow-all.",
         "unrestricted_paths": "Unrestricted filesystem access outside the session's allowed directories.",
         "unrestricted_urls": "Unrestricted URL fetch access."
       }
@@ -8365,7 +8818,8 @@
           "description": "Copilot service request ID (x-copilot-service-request-id header) for CAPI log correlation"
         },
         "rte": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Per-request treatment/eligibility signal returned by the Copilot API in the `X-GitHub-Copilot-Request-TE` response header for the associated model call; `false` when the header was absent or unparseable."
         },
         "statusCode": {
           "type": "integer",
@@ -8412,6 +8866,10 @@
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort level used for the failed model call, if applicable"
+        },
+        "interactionType": {
+          "type": "string",
+          "description": "Authoritative interaction classification for the failed call, matching `assistant.usage.interactionType` (for example `conversation-agent`, `conversation-subagent`, or `conversation-sampling`). Absent when the producer cannot classify the interaction."
         },
         "source": {
           "$ref": "#/definitions/ModelCallFailureSource",
@@ -8735,6 +9193,10 @@
         "cause": {
           "type": "string",
           "description": "Reason the change happened, when not user-initiated. `\"rate_limit_auto_switch\"` for changes triggered by the auto-mode-switch rate-limit recovery path, or `\"refusal_fallback\"` when the active model declined a request (content refusal) and the runtime switched to the configured refusal-fallback model. UI clients can use this to render contextual copy."
+        },
+        "source": {
+          "$ref": "#/definitions/ModelChangeSource",
+          "description": "Origin of the effective model change, when known."
         }
       },
       "required": [
@@ -8797,6 +9259,37 @@
       "additionalProperties": false,
       "description": "Session event \"session.model_change\". Model change details including previous and new model identifiers",
       "title": "ModelChangeEvent"
+    },
+    "ModelChangeSource": {
+      "type": "string",
+      "enum": [
+        "model_command",
+        "settings_command",
+        "config_command",
+        "model_picker",
+        "managed_settings",
+        "repo_settings",
+        "startup",
+        "agent",
+        "plan_mode",
+        "automatic",
+        "sdk"
+      ],
+      "description": "Origin of an effective session model change.",
+      "title": "ModelChangeSource",
+      "x-enumDescriptions": {
+        "model_command": "The user selected a model directly with `/model <id>`.",
+        "settings_command": "The user selected the model with `/settings`.",
+        "config_command": "The user selected the model with the `/config` alias.",
+        "model_picker": "The user selected the model in the model picker, including the picker opened by bare `/model`.",
+        "managed_settings": "Organization-managed settings selected the model.",
+        "repo_settings": "Repository settings selected the model.",
+        "startup": "Startup model resolution selected the model.",
+        "agent": "Selecting an agent selected its configured model.",
+        "plan_mode": "Entering, leaving, or reconfiguring plan mode selected the model.",
+        "automatic": "The runtime selected the model automatically, such as rate-limit recovery or refusal fallback.",
+        "sdk": "An SDK or RPC caller selected the model."
+      }
     },
     "OmittedBinaryOmittedReason": {
       "type": "string",
@@ -8930,22 +9423,6 @@
       "description": "Session event \"pending_messages.modified\". Empty payload; the event signals that the pending message queue has changed",
       "title": "PendingMessagesModifiedEvent"
     },
-    "PermissionAllowAllMode": {
-      "type": "string",
-      "enum": [
-        "off",
-        "on",
-        "auto"
-      ],
-      "description": "Allow-all mode for the session.",
-      "title": "PermissionAllowAllMode",
-      "x-enumDescriptions": {
-        "off": "Permission requests follow the normal approval flow.",
-        "on": "Tool, path, and URL permission requests are automatically approved.",
-        "auto": "Permission requests follow the normal approval flow with an LLM advisory recommendation attached; clients may choose to auto-approve requests the judge evaluated as acceptable."
-      },
-      "stability": "experimental"
-    },
     "PermissionApproved": {
       "type": "object",
       "properties": {
@@ -8953,6 +9430,10 @@
           "type": "string",
           "const": "approved",
           "description": "The permission request was approved"
+        },
+        "managedApprovalHandled": {
+          "type": "boolean",
+          "description": "Whether a managed approval policy already handled this request"
         }
       },
       "required": [
@@ -8977,6 +9458,10 @@
         "locationKey": {
           "type": "string",
           "description": "The location key (git root or cwd) to persist the approval to"
+        },
+        "managedApprovalHandled": {
+          "type": "boolean",
+          "description": "Whether a managed approval policy already handled this request"
         }
       },
       "required": [
@@ -8999,6 +9484,10 @@
         "approval": {
           "$ref": "#/definitions/UserToolSessionApproval",
           "description": "The approval to add as a session-scoped rule"
+        },
+        "managedApprovalHandled": {
+          "type": "boolean",
+          "description": "Whether a managed approval policy already handled this request"
         }
       },
       "required": [
@@ -9009,12 +9498,12 @@
       "description": "Permission response variant that approves a request and remembers the provided approval for the rest of the session.",
       "title": "PermissionApprovedForSession"
     },
-    "PermissionAutoApproval": {
+    "PermissionAssistedApproval": {
       "type": "object",
       "properties": {
         "recommendation": {
-          "$ref": "#/definitions/AutoApprovalRecommendation",
-          "description": "The auto-approval safety judge's outcome for this request."
+          "$ref": "#/definitions/AssistedApprovalRecommendation",
+          "description": "The assisted-approval safety judge's outcome for this request."
         },
         "reason": {
           "type": "string",
@@ -9025,7 +9514,7 @@
           "description": "Model id that produced the recommendation, when the judge was consulted and reported one. Absent for `excluded` (the judge was not consulted) and for failures that occurred before a model was selected."
         },
         "failureReason": {
-          "$ref": "#/definitions/AutoApprovalJudgeFailureReason",
+          "$ref": "#/definitions/AssistedApprovalJudgeFailureReason",
           "description": "Classified cause of an `error` recommendation. Absent for every other recommendation."
         }
       },
@@ -9033,8 +9522,8 @@
         "recommendation"
       ],
       "additionalProperties": false,
-      "description": "Auto-approval judge information attached to a permission request. Present (non-null) only when the session's allow-all mode is \"auto\"; its absence means auto mode was off and the judge did not evaluate the request. The `recommendation` conveys the judge's disposition for this request.",
-      "title": "PermissionAutoApproval",
+      "description": "Assisted-approval judge information attached to a permission request. Present only in assisted mode; its absence means the judge did not evaluate the request. The `recommendation` conveys the judge's disposition for this request.",
+      "title": "PermissionAssistedApproval",
       "stability": "experimental"
     },
     "PermissionCancelled": {
@@ -9250,6 +9739,22 @@
       "description": "Permission response variant denied because no approval rule matched and user confirmation was unavailable.",
       "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser"
     },
+    "PermissionMode": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "assisted",
+        "allow-all"
+      ],
+      "description": "Permission mode for the session.",
+      "title": "PermissionMode",
+      "x-enumDescriptions": {
+        "manual": "Permission requests follow the normal approval flow.",
+        "assisted": "Permission requests include an LLM safety recommendation; clients may automatically approve requests judged acceptable.",
+        "allow-all": "Tool, path, and URL permission requests are automatically approved."
+      },
+      "stability": "experimental"
+    },
     "PermissionPromptRequest": {
       "anyOf": [
         {
@@ -9299,6 +9804,10 @@
         {
           "$ref": "#/definitions/PermissionPromptRequestExtensionPermissionAccess",
           "description": "Extension permission access prompt"
+        },
+        {
+          "$ref": "#/definitions/PermissionPromptRequestExtensionEnvAccess",
+          "description": "Extension sensitive environment variable access prompt"
         }
       ],
       "description": "Derived user-facing permission prompt details for UI consumers",
@@ -9339,9 +9848,9 @@
           "type": "string",
           "description": "Optional warning message about risks of running this command"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         },
         "managedApprovalRequired": {
@@ -9384,9 +9893,9 @@
           "description": "Arguments to pass to the custom tool",
           "x-opaque-json": true
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9398,6 +9907,45 @@
       "additionalProperties": false,
       "description": "Custom tool invocation permission prompt",
       "title": "PermissionPromptRequestCustomTool"
+    },
+    "PermissionPromptRequestExtensionEnvAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-env-access",
+          "description": "Prompt kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Name of the extension requesting environment variable access"
+        },
+        "environmentVariables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Names of the sensitive environment variables the extension is requesting. Values never appear here."
+        },
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
+          "stability": "experimental"
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName",
+        "environmentVariables"
+      ],
+      "additionalProperties": false,
+      "description": "Extension sensitive environment variable access prompt",
+      "title": "PermissionPromptRequestExtensionEnvAccess"
     },
     "PermissionPromptRequestExtensionManagement": {
       "type": "object",
@@ -9419,9 +9967,9 @@
           "type": "string",
           "description": "Name of the extension being managed"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9456,9 +10004,9 @@
           },
           "description": "Capabilities the extension is requesting"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9523,17 +10071,21 @@
         },
         "declaredMaxConcurrentSubagents": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Factory-declared concurrent-subagent limit before any run/resume caller override is applied."
         },
         "declaredMaxTotalSubagents": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Factory-declared total-subagent limit before any run/resume caller override is applied."
         },
         "declaredTimeoutSeconds": {
-          "type": "number"
+          "type": "number",
+          "description": "Factory-declared active-time limit in seconds before any run/resume caller override is applied."
         },
         "declaredMaxAiCredits": {
-          "type": "number"
+          "type": "number",
+          "description": "Factory-declared AI-credit limit before any run/resume caller override is applied."
         },
         "approvalKey": {
           "type": "string",
@@ -9543,9 +10095,9 @@
           "type": "boolean",
           "description": "Whether this factory is eligible for persistent approval"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         },
         "managedApprovalRequired": {
@@ -9590,9 +10142,9 @@
           "type": "string",
           "description": "Optional message from the hook explaining why confirmation is needed"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9632,9 +10184,14 @@
           "description": "Arguments to pass to the MCP tool",
           "x-opaque-json": true
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "permissionRecommendation": {
+          "$ref": "#/definitions/PermissionRecommendation",
+          "description": "Advisory runtime permission recommendation. The host remains responsible for deciding the request and may reject it.",
+          "stability": "experimental"
+        },
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9684,9 +10241,9 @@
           "type": "string",
           "description": "Reason for the vote (vote only)"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9721,9 +10278,9 @@
           },
           "description": "File paths that require explicit approval"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         }
       },
@@ -9771,9 +10328,9 @@
           "type": "string",
           "description": "Path of the file or directory being read"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         },
         "managedApprovalRequired": {
@@ -9822,9 +10379,9 @@
           "type": "string",
           "description": "Model-provided justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         },
         "managedApprovalRequired": {
@@ -9873,9 +10430,9 @@
           "type": "boolean",
           "description": "Whether the UI can offer session-wide approval for file write operations"
         },
-        "autoApproval": {
-          "$ref": "#/definitions/PermissionAutoApproval",
-          "description": "Auto-approval judge information for this request; present only when auto mode is enabled.",
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
           "stability": "experimental"
         },
         "managedApprovalRequired": {
@@ -9893,6 +10450,18 @@
       "additionalProperties": false,
       "description": "File write permission prompt",
       "title": "PermissionPromptRequestWrite"
+    },
+    "PermissionRecommendation": {
+      "type": "string",
+      "enum": [
+        "approve"
+      ],
+      "description": "Advisory recommendation the runtime attaches to a permission request whose origin it can vouch for by construction. Unlike the auto-approval judge this does not depend on auto mode and does not evaluate what the tool call does; its absence simply means the runtime has no opinion and the request follows the host's normal approval flow.",
+      "title": "PermissionRecommendation",
+      "x-enumDescriptions": {
+        "approve": "The runtime vouches for the request's origin and recommends approving it without prompting. The host still owns the decision and may deny it; deny rules, managed policy, and the auto-approval safety judge all outrank this recommendation."
+      },
+      "stability": "experimental"
     },
     "PermissionRequest": {
       "anyOf": [
@@ -9939,6 +10508,10 @@
         {
           "$ref": "#/definitions/PermissionRequestExtensionPermissionAccess",
           "description": "Extension permission access request"
+        },
+        {
+          "$ref": "#/definitions/PermissionRequestExtensionEnvAccess",
+          "description": "Extension sensitive environment variable access request"
         }
       ],
       "description": "Details of the permission being requested",
@@ -9967,6 +10540,10 @@
         "args": {
           "description": "Arguments to pass to the custom tool",
           "x-opaque-json": true
+        },
+        "skipPermission": {
+          "type": "boolean",
+          "description": "Whether the tool declared that permission may be skipped unless a deny rule matches"
         }
       },
       "required": [
@@ -10063,6 +10640,40 @@
       "additionalProperties": false,
       "description": "Session event \"permission.requested\". Permission request notification requiring client approval with request details",
       "title": "PermissionRequestedEvent"
+    },
+    "PermissionRequestExtensionEnvAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-env-access",
+          "description": "Permission kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Name of the extension requesting environment variable access"
+        },
+        "environmentVariables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Names of the sensitive environment variables the extension is requesting. Values never appear here."
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName",
+        "environmentVariables"
+      ],
+      "additionalProperties": false,
+      "description": "Extension sensitive environment variable access request",
+      "title": "PermissionRequestExtensionEnvAccess"
     },
     "PermissionRequestExtensionManagement": {
       "type": "object",
@@ -10178,17 +10789,21 @@
         },
         "declaredMaxConcurrentSubagents": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Factory-declared concurrent-subagent limit before any run/resume caller override is applied."
         },
         "declaredMaxTotalSubagents": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "description": "Factory-declared total-subagent limit before any run/resume caller override is applied."
         },
         "declaredTimeoutSeconds": {
-          "type": "number"
+          "type": "number",
+          "description": "Factory-declared active-time limit in seconds before any run/resume caller override is applied."
         },
         "declaredMaxAiCredits": {
-          "type": "number"
+          "type": "number",
+          "description": "Factory-declared AI-credit limit before any run/resume caller override is applied."
         },
         "approvalKey": {
           "type": "string",
@@ -10276,6 +10891,11 @@
         "readOnly": {
           "type": "boolean",
           "description": "Whether this MCP tool is read-only (no side effects)"
+        },
+        "permissionRecommendation": {
+          "$ref": "#/definitions/PermissionRecommendation",
+          "description": "Advisory runtime permission recommendation. The SDK host remains responsible for deciding the request and may reject it.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -10324,6 +10944,19 @@
         "reason": {
           "type": "string",
           "description": "Reason for the vote (vote only)"
+        },
+        "scope": {
+          "$ref": "#/definitions/PermissionRequestMemoryScope",
+          "description": "Scope of the stored memory (store only)"
+        },
+        "repoNwo": {
+          "type": "string",
+          "description": "Repository name with owner associated with the stored memory (store only)"
+        },
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -10359,6 +10992,19 @@
       "x-enumDescriptions": {
         "upvote": "Vote that the memory is useful or accurate.",
         "downvote": "Vote that the memory is incorrect or outdated."
+      }
+    },
+    "PermissionRequestMemoryScope": {
+      "type": "string",
+      "enum": [
+        "repository",
+        "user"
+      ],
+      "description": "Scope of a stored memory.",
+      "title": "PermissionRequestMemoryScope",
+      "x-enumDescriptions": {
+        "repository": "Store the memory for the current repository.",
+        "user": "Store the memory for the current user."
       }
     },
     "PermissionRequestRead": {
@@ -10718,32 +11364,30 @@
     "PermissionsChangedData": {
       "type": "object",
       "properties": {
-        "previousAllowAllPermissions": {
-          "type": "boolean",
-          "description": "Aggregate allow-all flag before the change"
-        },
-        "allowAllPermissions": {
-          "type": "boolean",
-          "description": "Aggregate allow-all flag after the change"
-        },
-        "previousAllowAllPermissionMode": {
-          "$ref": "#/definitions/PermissionAllowAllMode",
-          "description": "Allow-all mode before the change",
+        "previousMode": {
+          "$ref": "#/definitions/PermissionMode",
+          "description": "Permission mode before the change",
           "stability": "experimental"
         },
-        "allowAllPermissionMode": {
-          "$ref": "#/definitions/PermissionAllowAllMode",
-          "description": "Allow-all mode after the change",
+        "mode": {
+          "$ref": "#/definitions/PermissionMode",
+          "description": "Permission mode after the change",
+          "stability": "experimental"
+        },
+        "assistedApprovalModel": {
+          "type": "string",
+          "description": "Explicit LLM judge model override used by assisted mode; omitted when the provider default applies",
           "stability": "experimental"
         }
       },
       "required": [
-        "previousAllowAllPermissions",
-        "allowAllPermissions"
+        "previousMode",
+        "mode"
       ],
       "additionalProperties": false,
-      "description": "Permissions change details carrying the aggregate allow-all transition.",
-      "title": "PermissionsChangedData"
+      "description": "Permission-mode transition details.",
+      "title": "PermissionsChangedData",
+      "stability": "experimental"
     },
     "PermissionsChangedEvent": {
       "type": "object",
@@ -10785,7 +11429,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionsChangedData",
-          "description": "Permissions change details carrying the aggregate allow-all transition."
+          "description": "Permission-mode transition details."
         }
       },
       "required": [
@@ -10796,8 +11440,9 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all transition.",
-      "title": "PermissionsChangedEvent"
+      "description": "Session event \"session.permissions_changed\". Permission-mode transition details.",
+      "title": "PermissionsChangedEvent",
+      "stability": "experimental"
     },
     "PersistedBinaryImage": {
       "type": "object",
@@ -10951,6 +11596,234 @@
         "update": "The plan file was updated.",
         "delete": "The plan file was deleted."
       }
+    },
+    "PromptCacheBreakData": {
+      "type": "object",
+      "properties": {
+        "primaryReason": {
+          "type": "string",
+          "description": "The highest-precedence reason for the cache break"
+        },
+        "contributingReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "All reasons that contributed to the cache break, ordered by precedence"
+        },
+        "beforeRequest": {
+          "description": "Request state that established the prior cache frontier",
+          "x-opaque-json": true,
+          "visibility": "internal"
+        },
+        "afterRequest": {
+          "description": "Request state whose cached prefix fell short",
+          "x-opaque-json": true,
+          "visibility": "internal"
+        },
+        "survivedTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of cached prefix tokens that survived"
+        },
+        "frontierTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Prior cached prompt frontier in tokens"
+        },
+        "shortfallTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Cached prefix tokens lost since the prior call"
+        },
+        "retentionRatio": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "description": "Fraction of the prior cache frontier that survived"
+        },
+        "modelFrom": {
+          "type": "string",
+          "description": "Model that held the prior cache frontier, when the call changed models",
+          "visibility": "internal"
+        },
+        "modelTo": {
+          "type": "string",
+          "description": "Model this call targeted, when the call changed models",
+          "visibility": "internal"
+        },
+        "toolsAdded": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Telemetry-safe names of tools added since the prior call",
+          "visibility": "internal"
+        },
+        "toolsRemoved": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Telemetry-safe names of tools removed since the prior call",
+          "visibility": "internal"
+        },
+        "toolsRedefined": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Telemetry-safe names of tools whose definition changed since the prior call",
+          "visibility": "internal"
+        },
+        "toolsAddedRaw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Raw names of tools added since the prior call, restricted because a tool name can be user-authored",
+          "visibility": "internal"
+        },
+        "toolsRemovedRaw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Raw names of tools removed since the prior call, restricted because a tool name can be user-authored",
+          "visibility": "internal"
+        },
+        "toolsRedefinedRaw": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Raw names of tools redefined since the prior call, restricted because a tool name can be user-authored",
+          "visibility": "internal"
+        },
+        "toolsReordered": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the tool list kept its members but changed their order",
+          "visibility": "internal"
+        },
+        "systemSegmentsChanged": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Names of the system-prompt segments whose content changed",
+          "visibility": "internal"
+        },
+        "cacheConfigChangedFields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Names of the cache-configuration fields that changed",
+          "visibility": "internal"
+        },
+        "rewriteMessageIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Index of the first conversation message whose content changed",
+          "visibility": "internal"
+        },
+        "rewriteShape": {
+          "type": "string",
+          "description": "Shape of the history rewrite, for example whether the history grew or shrank",
+          "visibility": "internal"
+        },
+        "rewriteSource": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Subsystems that announced a history rewrite before this call, for example compaction or truncation",
+          "visibility": "internal"
+        },
+        "agentName": {
+          "type": "string",
+          "description": "Name of the sub-agent whose conversation broke, stamped by the parent bridge",
+          "visibility": "internal"
+        }
+      },
+      "required": [
+        "primaryReason",
+        "contributingReasons",
+        "survivedTokens",
+        "frontierTokens",
+        "shortfallTokens",
+        "retentionRatio"
+      ],
+      "additionalProperties": false,
+      "description": "A detected loss of a previously cached prompt prefix",
+      "title": "PromptCacheBreakData"
+    },
+    "PromptCacheBreakEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "prompt_cache_break",
+          "description": "Type discriminator. Always \"prompt_cache_break\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PromptCacheBreakData",
+          "description": "A detected loss of a previously cached prompt prefix"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"prompt_cache_break\". A detected loss of a previously cached prompt prefix",
+      "title": "PromptCacheBreakEvent",
+      "visibility": "internal"
     },
     "ReasoningSummary": {
       "type": "string",
@@ -11327,6 +12200,438 @@
       "description": "Session event \"sampling.requested\". Sampling request from an MCP server; contains the server name and a requestId for correlation",
       "title": "SamplingRequestedEvent"
     },
+    "SandboxBackend": {
+      "type": "string",
+      "enum": [
+        "seatbelt",
+        "bubblewrap",
+        "process_container",
+        "unsupported"
+      ],
+      "description": "Process-containment backend selected for the host platform",
+      "title": "SandboxBackend",
+      "x-enumDescriptions": {
+        "seatbelt": "Apple Seatbelt process sandbox.",
+        "bubblewrap": "Linux Bubblewrap process sandbox.",
+        "process_container": "Windows ProcessContainer sandbox.",
+        "unsupported": "No supported process-containment backend is available."
+      }
+    },
+    "SandboxControl": {
+      "type": "string",
+      "enum": [
+        "process",
+        "filesystem",
+        "network",
+        "routing",
+        "bypass",
+        "credentials",
+        "platform"
+      ],
+      "description": "Customer-controllable sandbox governance area",
+      "title": "SandboxControl",
+      "x-enumDescriptions": {
+        "process": "Process containment and sandbox spawn behavior.",
+        "filesystem": "Filesystem read, write, and deny policy.",
+        "network": "Outbound and local-network access policy.",
+        "routing": "Selection of the sandbox or built-in enforcement route.",
+        "bypass": "User-visible elevation and unsandboxed rerun decisions.",
+        "credentials": "Credential and keychain capability injection.",
+        "platform": "Host-platform and backend support behavior."
+      }
+    },
+    "SandboxDecisionData": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/definitions/SandboxControl",
+              "description": "Enforcement mechanism this decision describes"
+            },
+            "outcome": {
+              "$ref": "#/definitions/SandboxOutcome",
+              "description": "Whether the resolved policy is fully active or degraded"
+            },
+            "toolCallId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Internal tool-call ID, used only to correlate the decision with its owning span. Omitted when the decision is not attributable to a tool call."
+            },
+            "platform": {
+              "$ref": "#/definitions/SandboxPlatform",
+              "description": "Host platform the sandbox is running on"
+            },
+            "backend": {
+              "$ref": "#/definitions/SandboxBackend",
+              "description": "Process-containment implementation backing the sandbox"
+            },
+            "policySource": {
+              "$ref": "#/definitions/SandboxPolicySource",
+              "description": "Whether the policy came from built-in defaults or user configuration"
+            },
+            "enforcementPoint": {
+              "$ref": "#/definitions/SandboxEnforcementPoint",
+              "description": "Runtime subsystem that applied the policy"
+            },
+            "readwritePathsCount": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of read-write path rules in the effective policy"
+            },
+            "readonlyPathsCount": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of read-only path rules in the effective policy"
+            },
+            "deniedPathsCount": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Number of denied path rules in the effective policy"
+            },
+            "addCurrentWorkingDirectory": {
+              "type": "boolean",
+              "description": "Whether the current working directory was granted automatically"
+            },
+            "allowOutbound": {
+              "type": "boolean",
+              "description": "Whether the sandboxed process may open outbound network connections"
+            },
+            "allowLocalNetwork": {
+              "type": "boolean",
+              "description": "Whether the sandboxed process may reach loopback and private-range addresses"
+            },
+            "proxyMode": {
+              "$ref": "#/definitions/SandboxProxyMode",
+              "description": "Whether outbound traffic is unproxied, routed through a loopback proxy, or routed through an external proxy"
+            },
+            "allowBypass": {
+              "type": "boolean",
+              "description": "Whether callers may opt an individual command out of the sandbox"
+            },
+            "gitAuth": {
+              "type": "boolean",
+              "description": "Whether the sandbox policy permits git credentials inside the sandbox. A policy capability, not proof that a credential was injected into this spawn: injection is per-command"
+            },
+            "ghAuth": {
+              "type": "boolean",
+              "description": "Whether the sandbox policy permits GitHub CLI credentials inside the sandbox. A policy capability, not proof that a credential was injected into this spawn: injection is per-command"
+            },
+            "keychainAccess": {
+              "type": "boolean",
+              "description": "Whether the macOS keychain was reachable from inside the sandbox. Always false on other platforms."
+            },
+            "effectiveFilesystemPolicy": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxFilesystemPolicyDetails",
+                  "description": "Effective sandbox filesystem rules, in policy order. Only populated when content capture is enabled, since these are real host paths."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Effective filesystem rules. Populated only when content capture is enabled; the counts above are always present."
+            },
+            "degradationReason": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDegradationReason",
+                  "description": "Finite reason why sandbox enforcement is weaker than configured"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Why enforcement is weaker than configured, when it is"
+            },
+            "kind": {
+              "type": "string",
+              "const": "policy_resolved",
+              "description": "Sandbox decision variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "control",
+            "outcome",
+            "platform",
+            "backend",
+            "policySource",
+            "enforcementPoint",
+            "readwritePathsCount",
+            "readonlyPathsCount",
+            "deniedPathsCount",
+            "addCurrentWorkingDirectory",
+            "allowOutbound",
+            "allowLocalNetwork",
+            "proxyMode",
+            "allowBypass",
+            "gitAuth",
+            "ghAuth",
+            "keychainAccess"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/definitions/SandboxControl",
+              "description": "Enforcement mechanism this decision describes"
+            },
+            "outcome": {
+              "$ref": "#/definitions/SandboxOutcome",
+              "description": "Whether the sandboxed process launched under the named backend. Not the exit status of the command that ran inside it."
+            },
+            "toolCallId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Internal tool-call ID, used only to correlate the decision with its owning span. Omitted when the decision is not attributable to a tool call."
+            },
+            "platform": {
+              "$ref": "#/definitions/SandboxPlatform",
+              "description": "Host platform the sandbox is running on"
+            },
+            "backend": {
+              "$ref": "#/definitions/SandboxBackend",
+              "description": "Process-containment implementation backing the sandbox"
+            },
+            "enforcementPoint": {
+              "$ref": "#/definitions/SandboxEnforcementPoint",
+              "description": "Runtime subsystem that applied the policy"
+            },
+            "durationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Wall-clock time spent spawning the sandboxed process, in milliseconds"
+            },
+            "degradationReason": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDegradationReason",
+                  "description": "Finite reason why sandbox enforcement is weaker than configured"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Why enforcement is weaker than configured, when it is"
+            },
+            "kind": {
+              "type": "string",
+              "const": "spawn_completed",
+              "description": "Sandbox decision variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "control",
+            "outcome",
+            "platform",
+            "backend",
+            "enforcementPoint",
+            "durationMs"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Payload of `sandbox.decision`, a bounded governance record of what the process sandbox was configured to do and whether it took effect. Discriminated by `kind`.",
+      "title": "SandboxDecisionData"
+    },
+    "SandboxDecisionEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "sandbox.decision",
+          "description": "Type discriminator. Always \"sandbox.decision\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SandboxDecisionData",
+          "description": "Payload of `sandbox.decision`, a bounded governance record of what the process sandbox was configured to do and whether it took effect. Discriminated by `kind`."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"sandbox.decision\". Payload of `sandbox.decision`, a bounded governance record of what the process sandbox was configured to do and whether it took effect. Discriminated by `kind`.",
+      "title": "SandboxDecisionEvent",
+      "visibility": "internal"
+    },
+    "SandboxDegradationReason": {
+      "type": "string",
+      "enum": [
+        "denied_paths_unsupported",
+        "unsupported_platform"
+      ],
+      "description": "Finite reason why sandbox enforcement is weaker than configured",
+      "title": "SandboxDegradationReason",
+      "x-enumDescriptions": {
+        "denied_paths_unsupported": "The selected backend cannot enforce per-path deny rules.",
+        "unsupported_platform": "The host platform has no supported process-containment backend."
+      }
+    },
+    "SandboxEnforcementPoint": {
+      "type": "string",
+      "enum": [
+        "shell",
+        "builtin_filesystem",
+        "search",
+        "web_fetch",
+        "mcp",
+        "lsp"
+      ],
+      "description": "Runtime boundary that enforced or routed a sandbox decision",
+      "title": "SandboxEnforcementPoint",
+      "x-enumDescriptions": {
+        "shell": "Shell command process containment.",
+        "builtin_filesystem": "Built-in filesystem policy enforcement.",
+        "search": "Search-tool sandbox or policy enforcement.",
+        "web_fetch": "Web-fetch network policy enforcement.",
+        "mcp": "Model Context Protocol server routing.",
+        "lsp": "Language server process routing."
+      }
+    },
+    "SandboxFilesystemPolicyDetails": {
+      "type": "object",
+      "properties": {
+        "readwritePaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths the sandboxed process may read and write"
+        },
+        "readonlyPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths the sandboxed process may read but not write"
+        },
+        "deniedPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Paths the sandboxed process may not access at all"
+        }
+      },
+      "required": [
+        "readwritePaths",
+        "readonlyPaths",
+        "deniedPaths"
+      ],
+      "additionalProperties": false,
+      "description": "Effective sandbox filesystem rules, in policy order. Only populated when content capture is enabled, since these are real host paths.",
+      "title": "SandboxFilesystemPolicyDetails"
+    },
+    "SandboxOutcome": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "succeeded",
+        "failed",
+        "degraded"
+      ],
+      "description": "Finite result of a sandbox decision",
+      "title": "SandboxOutcome",
+      "x-enumDescriptions": {
+        "active": "The resolved sandbox policy is active.",
+        "inactive": "The sandbox control is not active.",
+        "succeeded": "The sandbox operation completed successfully.",
+        "failed": "The sandbox operation failed.",
+        "degraded": "The sandbox is active with one or more controls weakened by platform limitations."
+      }
+    },
+    "SandboxPlatform": {
+      "type": "string",
+      "enum": [
+        "macos",
+        "linux",
+        "windows",
+        "other"
+      ],
+      "description": "Host operating-system family used for sandbox enforcement",
+      "title": "SandboxPlatform",
+      "x-enumDescriptions": {
+        "macos": "Apple macOS host.",
+        "linux": "Linux host.",
+        "windows": "Microsoft Windows host.",
+        "other": "Host platform outside the explicitly supported families."
+      }
+    },
+    "SandboxPolicySource": {
+      "type": "string",
+      "enum": [
+        "default_policy",
+        "user_policy"
+      ],
+      "description": "Origin of the effective sandbox policy",
+      "title": "SandboxPolicySource",
+      "x-enumDescriptions": {
+        "default_policy": "Runtime default sandbox policy.",
+        "user_policy": "User-configured sandbox policy merged with runtime-required grants."
+      }
+    },
+    "SandboxProxyMode": {
+      "type": "string",
+      "enum": [
+        "none",
+        "loopback",
+        "external"
+      ],
+      "description": "Bounded classification of effective sandbox proxy routing",
+      "title": "SandboxProxyMode",
+      "x-enumDescriptions": {
+        "none": "No sandbox proxy is configured.",
+        "loopback": "Traffic routes through a loopback proxy.",
+        "external": "Traffic routes through a non-loopback proxy endpoint."
+      }
+    },
     "ScheduleCancelledData": {
       "type": "object",
       "properties": {
@@ -11660,7 +12965,7 @@
         },
         {
           "$ref": "#/definitions/PermissionsChangedEvent",
-          "description": "Session event \"session.permissions_changed\". Permissions change details carrying the aggregate allow-all transition."
+          "description": "Session event \"session.permissions_changed\". Permission-mode transition details."
         },
         {
           "$ref": "#/definitions/PlanChangedEvent",
@@ -11741,6 +13046,11 @@
           "visibility": "internal"
         },
         {
+          "$ref": "#/definitions/AgentInterruptedEvent",
+          "description": "Session event \"agent.interrupted\". Metadata for work the user interrupted while the agent was running",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/AssistantIntentEvent",
           "description": "Session event \"assistant.intent\". Agent intent description for current activity or plan"
         },
@@ -11789,6 +13099,11 @@
           "description": "Session event \"assistant.usage\". LLM API call usage metrics including tokens, costs, quotas, and billing information"
         },
         {
+          "$ref": "#/definitions/PromptCacheBreakEvent",
+          "description": "Session event \"prompt_cache_break\". A detected loss of a previously cached prompt prefix",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/ModelCallFailureEvent",
           "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry"
         },
@@ -11828,6 +13143,11 @@
         {
           "$ref": "#/definitions/SkillInvokedEvent",
           "description": "Session event \"skill.invoked\". Skill invocation details including content, allowed tools, and plugin metadata"
+        },
+        {
+          "$ref": "#/definitions/SandboxDecisionEvent",
+          "description": "Session event \"sandbox.decision\". Payload of `sandbox.decision`, a bounded governance record of what the process sandbox was configured to do and whether it took effect. Discriminated by `kind`.",
+          "visibility": "internal"
         },
         {
           "$ref": "#/definitions/SubagentStartedEvent",
@@ -11926,6 +13246,10 @@
           "description": "Session event \"session.custom_notification\". Opaque custom notification data. Consumers may branch on source and name, but payload semantics are source-defined."
         },
         {
+          "$ref": "#/definitions/UIEphemeralQueryEvent",
+          "description": "Session event \"ui.ephemeral_query\". Ordered output and terminal state for a transient query that does not modify conversation history."
+        },
+        {
           "$ref": "#/definitions/ExternalToolRequestedEvent",
           "description": "Session event \"external_tool.requested\". External tool invocation request for client-side tool execution"
         },
@@ -12000,6 +13324,14 @@
         {
           "$ref": "#/definitions/FactoryRunUpdatedEvent",
           "description": "Session event \"factory.run_updated\". Ephemeral invalidation signal for a changed factory run."
+        },
+        {
+          "$ref": "#/definitions/FactoryRunStartedEvent",
+          "description": "Session event \"factory.run_started\". Ephemeral signal that a factory run attempt began executing."
+        },
+        {
+          "$ref": "#/definitions/FactoryRunSettledEvent",
+          "description": "Session event \"factory.run_settled\". Ephemeral signal that a factory run reached a terminal status."
         },
         {
           "$ref": "#/definitions/SkillsLoadedEvent",
@@ -12374,6 +13706,46 @@
         "autopilot": "The agent is working autonomously toward task completion."
       }
     },
+    "ShutdownAgentMetric": {
+      "type": "object",
+      "properties": {
+        "agentName": {
+          "type": "string",
+          "description": "Configured agent name, when this is a subagent"
+        },
+        "agentDisplayName": {
+          "type": "string",
+          "description": "Human-readable label for this subagent invocation, copied from the originating `subagent.started` event. For task-tool subagents this is the invocation's task description rather than the agent's configured display name, so group by `agentName` for stable per-agent labels."
+        },
+        "totalApiDurationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "format": "duration",
+          "description": "Time spent in model API calls by this agent, in milliseconds"
+        },
+        "totalNanoAiu": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Accumulated nano-AI units cost for this agent"
+        },
+        "modelMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ShutdownModelMetric",
+            "description": "Per-model shutdown metrics with request counts, token usage, nano-AI units, and token details."
+          },
+          "description": "Per-model usage for this agent, keyed by model identifier"
+        }
+      },
+      "required": [
+        "totalApiDurationMs",
+        "totalNanoAiu",
+        "modelMetrics"
+      ],
+      "additionalProperties": false,
+      "description": "Usage attributed to one agent instance at session shutdown.",
+      "title": "ShutdownAgentMetric"
+    },
     "ShutdownCodeChanges": {
       "type": "object",
       "properties": {
@@ -12462,6 +13834,14 @@
             "description": "Per-model shutdown metrics with request counts, token usage, nano-AI units, and token details."
           },
           "description": "Per-model usage breakdown, keyed by model identifier"
+        },
+        "agentMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ShutdownAgentMetric",
+            "description": "Usage attributed to one agent instance at session shutdown."
+          },
+          "description": "Per-agent usage breakdown, keyed by agent instance identifier. The main conversation uses the stable key `main`."
         },
         "currentModel": {
           "type": "string",
@@ -13558,6 +14938,10 @@
         "model": {
           "type": "string",
           "description": "Model the sub-agent will run with, when known at start."
+        },
+        "factoryRunId": {
+          "type": "string",
+          "description": "Root id of the factory run that spawned this sub-agent, when it was spawned by one."
         }
       },
       "required": [
@@ -13790,7 +15174,11 @@
         },
         "agentId": {
           "type": "string",
-          "description": "Unique identifier of the background agent"
+          "description": "Unique task identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Friendly, non-unique name intended for display"
         },
         "agentType": {
           "type": "string",
@@ -13842,7 +15230,11 @@
         },
         "agentId": {
           "type": "string",
-          "description": "Unique identifier of the background agent"
+          "description": "Unique task identifier"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Friendly, non-unique name intended for display"
         },
         "agentType": {
           "type": "string",
@@ -14729,7 +16121,8 @@
           "description": "CAPI interaction ID for correlating this tool execution with upstream telemetry"
         },
         "rte": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Per-request treatment/eligibility signal returned by the Copilot API in the `X-GitHub-Copilot-Request-TE` response header for the associated model call; `false` when the header was absent or unparseable."
         },
         "isUserRequested": {
           "type": "boolean",
@@ -15030,10 +16423,12 @@
           "description": "Browser permission metadata for an MCP Apps UI resource, including camera, microphone, geolocation, and clipboard-write."
         },
         "domain": {
-          "type": "string"
+          "type": "string",
+          "description": "Optional dedicated origin for the rendered MCP Apps UI resource."
         },
         "prefersBorder": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Whether the host should render a border around the MCP Apps UI resource."
         }
       },
       "additionalProperties": false,
@@ -15047,25 +16442,29 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Domains the UI resource may connect to."
         },
         "resourceDomains": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Domains from which the UI resource may load scripts, styles, images, and other resources."
         },
         "frameDomains": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Domains the UI resource may embed as nested frames."
         },
         "baseUriDomains": {
           "type": "array",
           "items": {
             "type": "string"
-          }
+          },
+          "description": "Domains the UI resource may use as document base URIs."
         }
       },
       "additionalProperties": false,
@@ -15296,7 +16695,8 @@
           "description": "Model identifier that generated this tool call"
         },
         "rte": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Per-request treatment/eligibility signal returned by the Copilot API in the `X-GitHub-Copilot-Request-TE` response header for the associated model call; `false` when the header was absent or unparseable."
         },
         "mcpServerName": {
           "type": "string",
@@ -15818,6 +17218,116 @@
       "description": "Session event \"session.truncation\". Conversation truncation statistics including token counts and removed content metrics",
       "title": "TruncationEvent"
     },
+    "UIEphemeralQueryData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Runtime-minted query identifier."
+        },
+        "phase": {
+          "$ref": "#/definitions/UIEphemeralQueryPhase",
+          "description": "Current query lifecycle phase."
+        },
+        "chunk": {
+          "type": "string",
+          "description": "Ordered text delta, present for the `chunk` phase."
+        },
+        "answer": {
+          "type": "string",
+          "description": "Full response text, present for the `completed` phase."
+        },
+        "error": {
+          "type": "string",
+          "description": "Model or transport failure message, present for the `failed` phase."
+        }
+      },
+      "required": [
+        "requestId",
+        "phase"
+      ],
+      "additionalProperties": false,
+      "description": "Ordered output and terminal state for a transient query that does not modify conversation history.",
+      "title": "UIEphemeralQueryData",
+      "stability": "experimental"
+    },
+    "UIEphemeralQueryEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "ui.ephemeral_query",
+          "description": "Type discriminator. Always \"ui.ephemeral_query\"."
+        },
+        "data": {
+          "$ref": "#/definitions/UIEphemeralQueryData",
+          "description": "Ordered output and terminal state for a transient query that does not modify conversation history."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"ui.ephemeral_query\". Ordered output and terminal state for a transient query that does not modify conversation history.",
+      "title": "UIEphemeralQueryEvent",
+      "stability": "experimental"
+    },
+    "UIEphemeralQueryPhase": {
+      "type": "string",
+      "enum": [
+        "started",
+        "chunk",
+        "completed",
+        "failed",
+        "aborted"
+      ],
+      "description": "Lifecycle phase for a Rust-owned ephemeral query stream.",
+      "title": "UIEphemeralQueryPhase",
+      "x-enumDescriptions": {
+        "started": "The ephemeral query stream has begun.",
+        "chunk": "A partial result chunk was produced by the stream.",
+        "completed": "The ephemeral query stream finished successfully.",
+        "failed": "The ephemeral query stream ended with an error.",
+        "aborted": "The ephemeral query stream was cancelled before completing."
+      },
+      "stability": "experimental"
+    },
     "UsageCheckpointData": {
       "type": "object",
       "properties": {
@@ -15840,6 +17350,14 @@
             "visibility": "internal"
           },
           "description": "Internal per-model prompt-cache state used to restore expiration tracking on resume",
+          "visibility": "internal"
+        },
+        "promptCacheBreakState": {
+          "type": "array",
+          "items": {
+            "x-opaque-json": true
+          },
+          "description": "Internal per-conversation prompt-cache-break detector baselines restored on resume",
           "visibility": "internal"
         }
       },
@@ -16276,6 +17794,10 @@
           "type": "string",
           "description": "CAPI interaction ID for correlating this user message with its turn"
         },
+        "turnId": {
+          "type": "string",
+          "description": "The agent-loop turn ID that consumed this message; absent when no agent-loop turn consumed it"
+        },
         "parentAgentTaskId": {
           "type": "string",
           "description": "Parent agent task ID for background telemetry correlated to this user turn"
@@ -16394,6 +17916,10 @@
         {
           "$ref": "#/definitions/UserToolSessionApprovalExtensionPermissionAccess",
           "description": "Session-scoped tool-approval rule for an extension's permission-gated capability access, keyed by extension name."
+        },
+        {
+          "$ref": "#/definitions/UserToolSessionApprovalExtensionEnvAccess",
+          "description": "Session-scoped tool-approval rule for an extension's access to sensitive environment variables, keyed by extension name and the exact set of variable names."
         }
       ],
       "description": "The approval to add as a session-scoped rule",
@@ -16443,6 +17969,36 @@
       "additionalProperties": false,
       "description": "Session-scoped tool-approval rule for a custom tool, keyed by tool name.",
       "title": "UserToolSessionApprovalCustomTool"
+    },
+    "UserToolSessionApprovalExtensionEnvAccess": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "extension-env-access",
+          "description": "Extension environment access approval kind"
+        },
+        "extensionName": {
+          "type": "string",
+          "description": "Extension name"
+        },
+        "environmentVariables": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Names of the sensitive environment variables this approval covers. Values are never persisted."
+        }
+      },
+      "required": [
+        "kind",
+        "extensionName",
+        "environmentVariables"
+      ],
+      "additionalProperties": false,
+      "description": "Session-scoped tool-approval rule for an extension's access to sensitive environment variables, keyed by extension name and the exact set of variable names.",
+      "title": "UserToolSessionApprovalExtensionEnvAccess"
     },
     "UserToolSessionApprovalExtensionManagement": {
       "type": "object",
