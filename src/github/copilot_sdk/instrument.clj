@@ -137,7 +137,7 @@
 
 (register-fdef! github.copilot-sdk.client/join-session
                 :args (s/cat :config ::specs/join-session-config)
-                :ret (s/keys :req-un [::specs/client ::specs/session]))
+                :ret ::specs/join-session-result)
 
 (register-fdef! github.copilot-sdk.client/list-sessions
                 :args (s/cat :client ::specs/client

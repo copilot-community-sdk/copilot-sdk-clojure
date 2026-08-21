@@ -329,7 +329,7 @@
           resume-params (get @seen "session.resume")]
       ;; Commands are sent with name and description only (no handler)
       (is (= [{:name "deploy" :description "Deploy the app"}
-              {:name "rollback"}]
+              {:name "rollback" :description ""}]
              (:commands create-params)))
       (is (= [{:name "status" :description "Check status"}]
              (:commands resume-params))))))
@@ -514,6 +514,29 @@
         (when (seq rpcs)
           (is (= "elicit-req-1" (:requestId (:params (first rpcs)))))
           (is (= "accept" (get-in (first rpcs) [:params :result :action]))))))))
+
+(deftest test-elicitation-response-omits-nil-content
+  (let [requests (atom [])
+        rpc-latch (java.util.concurrent.CountDownLatch. 1)
+        _ (mock/set-request-hook! *mock-server*
+                                  (fn [method params]
+                                    (when (= "session.ui.handlePendingElicitation" method)
+                                      (swap! requests conj params)
+                                      (.countDown rpc-latch))))
+        session (sdk/create-session *test-client*
+                                    {:on-elicitation-request
+                                     (fn [_]
+                                       {:action "cancel"
+                                        :content nil})})
+        session-id (sdk/session-id session)]
+    (swap! (:state *test-client*) assoc :negotiated-protocol-version 3)
+    (mock/send-v3-broadcast-event! *mock-server* session-id
+                                   "elicitation.requested"
+                                   {:requestId "elicit-without-content"
+                                    :message "Cancel"})
+    (is (.await rpc-latch 5 java.util.concurrent.TimeUnit/SECONDS))
+    (is (= "cancel" (get-in (first @requests) [:result :action])))
+    (is (not (contains? (:result (first @requests)) :content)))))
 
 (deftest test-elicitation-handler-error-sends-cancel
   (testing "handler exception sends cancel response to avoid hanging"

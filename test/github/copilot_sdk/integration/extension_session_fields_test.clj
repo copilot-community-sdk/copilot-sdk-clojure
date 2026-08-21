@@ -139,6 +139,132 @@
                                              :name "counter-provider"
                                              :unknown true}})))))
 
+(deftest join-environment-variable-request-contract
+  (testing "requested names are join-only and non-blank"
+    (is (s/valid? ::specs/join-session-config
+                  {:requested-environment-variables ["MY_TOKEN" "a/b"]}))
+    (doseq [config [{:requested-environment-variables nil}
+                    {:requested-environment-variables [""]}
+                    {:requested-environment-variables [" "]}
+                    {:requested-environment-variables [:MY_TOKEN]}]]
+      (is (not (s/valid? ::specs/join-session-config config))))
+    (is (not (s/valid? ::specs/resume-session-config
+                       {:requested-environment-variables ["MY_TOKEN"]}))))
+
+  (testing "absent and empty requests are omitted from session.resume"
+    (doseq [config [{} {:requested-environment-variables []}]]
+      (let [wire (util/clj->wire
+                  (#'client/build-resume-session-params "session-1" config))]
+        (is (not (contains? wire :requestedEnvironmentVariables))))))
+
+  (testing "non-empty requests use the exact extension wire key"
+    (let [wire (util/clj->wire
+                (#'client/build-resume-session-params
+                 "session-1"
+                 {:requested-environment-variables ["MY_TOKEN" "a/b"]}))]
+      (is (= ["MY_TOKEN" "a/b"] (:requestedEnvironmentVariables wire)))
+      (is (not (contains? wire :requested-environment-variables))))))
+
+(deftest granted-environment-variable-keys-remain-opaque
+  (let [normalize-response (var-get
+                            (ns-resolve 'github.copilot-sdk.protocol
+                                        'normalize-response))
+        normalized
+        (normalize-response
+         "session.resume"
+         {:jsonrpc "2.0"
+          :id 1
+          :result
+          {:grantedEnvironmentVariables
+           {:MY_VAR "upper"
+            :myVar "lower"
+            :a/b "slash"
+            :UNREQUESTED "drop"}}})]
+    (is (= {:MY_VAR "upper"
+            :myVar "lower"
+            :a/b "slash"
+            :UNREQUESTED "drop"}
+           (get-in normalized [:result :granted-environment-variables])))))
+
+(deftest granted-environment-variables-are-projected-from-requested-names
+  (let [projection-var
+        (ns-resolve 'github.copilot-sdk.client
+                    'project-granted-environment-variables)]
+    (is (some? projection-var))
+    (when projection-var
+      (let [project-grants (var-get projection-var)
+            raw {:MY_VAR "upper"
+                 :myVar "lower"
+                 :a/b "slash"
+                 :UNREQUESTED "drop"}]
+        (is (= {"MY_VAR" "upper"
+                "myVar" "lower"
+                "a/b" "slash"}
+               (project-grants ["MY_VAR" "myVar" "a/b" "MISSING"] raw)))
+        (is (= {} (project-grants [] raw)))
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"invalid environment variable grants"
+             (project-grants ["MY_VAR"] [])))
+        (is (thrown-with-msg?
+             clojure.lang.ExceptionInfo
+             #"non-string environment variable grant"
+             (project-grants ["MY_VAR"] {:MY_VAR 42})))))))
+
+(deftest join-session-returns-only-requested-environment-variable-grants
+  (let [foreground-session-id-var
+        (ns-resolve 'github.copilot-sdk.client 'foreground-session-id)
+        resume-session-result-var
+        (ns-resolve 'github.copilot-sdk.client 'resume-session-result*)
+        fake-client {:client :fake}
+        fake-session {:session :fake}
+        observed-config (atom nil)]
+    (is (some? foreground-session-id-var))
+    (is (some? resume-session-result-var))
+    (when (and foreground-session-id-var resume-session-result-var)
+      (with-redefs-fn
+        {foreground-session-id-var (constantly "foreground-session")
+         #'client/client (fn [_] fake-client)
+         resume-session-result-var
+         (fn [c session-id config]
+           (is (= fake-client c))
+           (is (= "foreground-session" session-id))
+           (reset! observed-config config)
+           {:session fake-session
+            :result {:granted-environment-variables
+                     {:MY_TOKEN "secret"
+                      :UNREQUESTED "drop"}}})}
+        (fn []
+          (is (= {:client fake-client
+                  :session fake-session
+                  :granted-environment-variables {"MY_TOKEN" "secret"}}
+                 (sdk/join-session
+                  {:requested-environment-variables ["MY_TOKEN"]})))
+          (is (= sdk/default-join-session-permission-handler
+                 (:on-permission-request @observed-config)))
+          (is (true? (:disable-resume? @observed-config))))))))
+
+(deftest join-session-omits-grants-when-no-environment-variables-are-requested
+  (let [foreground-session-id-var
+        (ns-resolve 'github.copilot-sdk.client 'foreground-session-id)
+        resume-session-result-var
+        (ns-resolve 'github.copilot-sdk.client 'resume-session-result*)
+        fake-client {:client :fake}
+        fake-session {:session :fake}]
+    (is (some? foreground-session-id-var))
+    (is (some? resume-session-result-var))
+    (when (and foreground-session-id-var resume-session-result-var)
+      (with-redefs-fn
+        {foreground-session-id-var (constantly "foreground-session")
+         #'client/client (fn [_] fake-client)
+         resume-session-result-var
+         (fn [_ _ _]
+           {:session fake-session
+            :result {:granted-environment-variables {:MY_TOKEN "secret"}}})}
+        (fn []
+          (is (= {:client fake-client :session fake-session}
+                 (sdk/join-session {}))))))))
+
 (deftest stable-extension-fields-work-under-instrumentation
   (let [instrument-all! (requiring-resolve 'github.copilot-sdk.instrument/instrument-all!)
         unstrument-all! (requiring-resolve 'github.copilot-sdk.instrument/unstrument-all!)

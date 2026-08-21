@@ -194,6 +194,10 @@
    :type-line 2263
    :wire-path [:commands]
    :cases [{:name :empty :value [] :expect []}
+           {:name :without-description
+            :value [{:name "matrix"
+                     :command-handler :fixture/handler}]
+            :expect [{:name "matrix" :description ""}]}
            {:name :value
             :value [{:name "matrix" :description "Matrix command"
                      :command-handler :fixture/handler}]

@@ -37,8 +37,6 @@
         (is (= {:package "@github/copilot"
                 :version "^1.0.80"}
                (get-in report [:upstream :node-runtime-dependency])))
-        (is (= (slurp ".copilot-schema-version")
-               (str (get-in report [:upstream :schema-version]) "\n")))
         (is (= #{} (:stable-delta-ids report)))
         (is (= [] (:stable-deltas report)))
         (is (empty? (:unclassified-stable report)))

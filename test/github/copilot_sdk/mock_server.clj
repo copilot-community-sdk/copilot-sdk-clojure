@@ -330,6 +330,7 @@
                  "models.list" (handle-models-list server params)
                  "session.create" (handle-session-create server params)
                  "session.resume" (handle-session-resume server params)
+                 "session.mcp.reloadWithConfig" {}
                  "session.send" (handle-session-send server params)
                  "session.destroy" (handle-session-destroy server params)
                  "session.abort" (handle-session-abort server params)

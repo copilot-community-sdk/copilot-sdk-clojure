@@ -164,7 +164,7 @@
     github.copilot-sdk.client/get-quota (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client) :ret :github.copilot-sdk.specs/quota-snapshots :fn nil)
     github.copilot-sdk.client/get-session-metadata (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :session-id :github.copilot-sdk.specs/session-id) :ret (clojure.spec.alpha/nilable :github.copilot-sdk.specs/session-metadata) :fn nil)
     github.copilot-sdk.client/get-status (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client) :ret (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/version :github.copilot-sdk.specs/protocol-version]) :fn nil)
-    github.copilot-sdk.client/join-session (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :config :github.copilot-sdk.specs/join-session-config) :ret (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/client :github.copilot-sdk.specs/session]) :fn nil)
+    github.copilot-sdk.client/join-session (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :config :github.copilot-sdk.specs/join-session-config) :ret :github.copilot-sdk.specs/join-session-result :fn nil)
     github.copilot-sdk.client/list-models (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client) :ret (clojure.spec.alpha/coll-of :github.copilot-sdk.specs/model-info) :fn nil)
     github.copilot-sdk.client/list-sessions (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :filter (clojure.spec.alpha/? (clojure.spec.alpha/nilable :github.copilot-sdk.specs/session-list-filter))) :ret (clojure.spec.alpha/coll-of :github.copilot-sdk.specs/session-metadata) :fn nil)
     github.copilot-sdk.client/list-tools (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :model (clojure.spec.alpha/? (clojure.spec.alpha/nilable clojure.core/string?))) :ret (clojure.spec.alpha/coll-of :github.copilot-sdk.specs/tool-info-entry) :fn nil)
@@ -446,6 +446,7 @@
    {}
    :spec-keys
    [:github.copilot-sdk.specs/aborted?
+    :github.copilot-sdk.specs/accepted-prediction-tokens
     :github.copilot-sdk.specs/action
     :github.copilot-sdk.specs/actions
     :github.copilot-sdk.specs/actual-host
@@ -457,6 +458,7 @@
     :github.copilot-sdk.specs/agent-display-name
     :github.copilot-sdk.specs/agent-id
     :github.copilot-sdk.specs/agent-infer?
+    :github.copilot-sdk.specs/agent-metrics
     :github.copilot-sdk.specs/agent-mode
     :github.copilot-sdk.specs/agent-model
     :github.copilot-sdk.specs/agent-name
@@ -467,8 +469,6 @@
     :github.copilot-sdk.specs/agent-tools
     :github.copilot-sdk.specs/agents
     :github.copilot-sdk.specs/allow
-    :github.copilot-sdk.specs/allow-all-permission-mode
-    :github.copilot-sdk.specs/allow-all-permissions
     :github.copilot-sdk.specs/allowed-tools
     :github.copilot-sdk.specs/already-in-use?
     :github.copilot-sdk.specs/api-call-id
@@ -479,6 +479,7 @@
     :github.copilot-sdk.specs/approval-key
     :github.copilot-sdk.specs/approved?
     :github.copilot-sdk.specs/ask
+    :github.copilot-sdk.specs/assistant-usage-transport
     :github.copilot-sdk.specs/assistant.message-data
     :github.copilot-sdk.specs/assistant.message_delta-data
     :github.copilot-sdk.specs/assistant.reasoning-data
@@ -486,6 +487,7 @@
     :github.copilot-sdk.specs/assistant.streaming_delta-data
     :github.copilot-sdk.specs/assistant.turn_start-data
     :github.copilot-sdk.specs/assistant.usage-data
+    :github.copilot-sdk.specs/assisted-approval-model
     :github.copilot-sdk.specs/at
     :github.copilot-sdk.specs/attachment
     :github.copilot-sdk.specs/attachment-state
@@ -623,6 +625,7 @@
     :github.copilot-sdk.specs/ends-at
     :github.copilot-sdk.specs/entitlement-requests
     :github.copilot-sdk.specs/env
+    :github.copilot-sdk.specs/environment-variables
     :github.copilot-sdk.specs/ephemeral?
     :github.copilot-sdk.specs/error-code
     :github.copilot-sdk.specs/error-reason
@@ -653,6 +656,7 @@
     :github.copilot-sdk.specs/extension-status
     :github.copilot-sdk.specs/extensions
     :github.copilot-sdk.specs/external-server?
+    :github.copilot-sdk.specs/external_tool.requested-data
     :github.copilot-sdk.specs/factories
     :github.copilot-sdk.specs/factory-limits
     :github.copilot-sdk.specs/factory-meta
@@ -660,6 +664,7 @@
     :github.copilot-sdk.specs/factory-permission-phases
     :github.copilot-sdk.specs/factory-phase
     :github.copilot-sdk.specs/factory-resume-error-code
+    :github.copilot-sdk.specs/factory-run-id
     :github.copilot-sdk.specs/factory-run-status
     :github.copilot-sdk.specs/factory.run_updated-data
     :github.copilot-sdk.specs/family
@@ -676,6 +681,7 @@
     :github.copilot-sdk.specs/github-telemetry-event
     :github.copilot-sdk.specs/github-telemetry-notification
     :github.copilot-sdk.specs/github-token
+    :github.copilot-sdk.specs/granted-environment-variables
     :github.copilot-sdk.specs/handled?
     :github.copilot-sdk.specs/head-commit
     :github.copilot-sdk.specs/headers
@@ -704,10 +710,13 @@
     :github.copilot-sdk.specs/interaction-id
     :github.copilot-sdk.specs/interaction-type
     :github.copilot-sdk.specs/interval-ms
+    :github.copilot-sdk.specs/is-auto
     :github.copilot-sdk.specs/is-autopilot-continuation
+    :github.copilot-sdk.specs/is-byok
     :github.copilot-sdk.specs/is-child-process?
     :github.copilot-sdk.specs/is-terminal?
     :github.copilot-sdk.specs/join-session-config
+    :github.copilot-sdk.specs/join-session-result
     :github.copilot-sdk.specs/json-object
     :github.copilot-sdk.specs/json-schema
     :github.copilot-sdk.specs/json-value
@@ -777,7 +786,9 @@
     :github.copilot-sdk.specs/model
     :github.copilot-sdk.specs/model-billing
     :github.copilot-sdk.specs/model-billing-promo
+    :github.copilot-sdk.specs/model-call-failure-source
     :github.copilot-sdk.specs/model-capabilities
+    :github.copilot-sdk.specs/model-change-source
     :github.copilot-sdk.specs/model-id
     :github.copilot-sdk.specs/model-info
     :github.copilot-sdk.specs/model-limits
@@ -786,6 +797,7 @@
     :github.copilot-sdk.specs/model-picker-price-category
     :github.copilot-sdk.specs/model-policy
     :github.copilot-sdk.specs/model-supports
+    :github.copilot-sdk.specs/model.call_failure-data
     :github.copilot-sdk.specs/models
     :github.copilot-sdk.specs/modified-time
     :github.copilot-sdk.specs/multiplier
@@ -844,6 +856,7 @@
     :github.copilot-sdk.specs/permission-decision-surface
     :github.copilot-sdk.specs/permission-handler-result
     :github.copilot-sdk.specs/permission-kind
+    :github.copilot-sdk.specs/permission-mode
     :github.copilot-sdk.specs/permission-request
     :github.copilot-sdk.specs/permission-result
     :github.copilot-sdk.specs/permission-result-kind
@@ -858,8 +871,6 @@
     :github.copilot-sdk.specs/port
     :github.copilot-sdk.specs/position
     :github.copilot-sdk.specs/preview?
-    :github.copilot-sdk.specs/previous-allow-all-permission-mode
-    :github.copilot-sdk.specs/previous-allow-all-permissions
     :github.copilot-sdk.specs/previous-mode
     :github.copilot-sdk.specs/previous-model
     :github.copilot-sdk.specs/previous-reasoning-effort
@@ -870,6 +881,7 @@
     :github.copilot-sdk.specs/protocol-version
     :github.copilot-sdk.specs/provider
     :github.copilot-sdk.specs/provider-call-id
+    :github.copilot-sdk.specs/provider-id
     :github.copilot-sdk.specs/provider-model
     :github.copilot-sdk.specs/provider-type
     :github.copilot-sdk.specs/providers
@@ -889,6 +901,7 @@
     :github.copilot-sdk.specs/recurring
     :github.copilot-sdk.specs/redirected-from
     :github.copilot-sdk.specs/reference-type
+    :github.copilot-sdk.specs/rejected-prediction-tokens
     :github.copilot-sdk.specs/remaining-percentage
     :github.copilot-sdk.specs/remote-enable-opts
     :github.copilot-sdk.specs/remote-enable-result
@@ -899,12 +912,14 @@
     :github.copilot-sdk.specs/remote-steerable?
     :github.copilot-sdk.specs/remote?
     :github.copilot-sdk.specs/rename
+    :github.copilot-sdk.specs/repo-nwo
     :github.copilot-sdk.specs/repository
     :github.copilot-sdk.specs/request-extensions?
     :github.copilot-sdk.specs/request-handler-queue-size
     :github.copilot-sdk.specs/request-handler-threads
     :github.copilot-sdk.specs/request-headers
     :github.copilot-sdk.specs/request-id
+    :github.copilot-sdk.specs/requested-environment-variables
     :github.copilot-sdk.specs/requested-schema
     :github.copilot-sdk.specs/reset-date
     :github.copilot-sdk.specs/resolved-by-hook
@@ -919,6 +934,7 @@
     :github.copilot-sdk.specs/rte
     :github.copilot-sdk.specs/rules
     :github.copilot-sdk.specs/run-id
+    :github.copilot-sdk.specs/scope
     :github.copilot-sdk.specs/section-action
     :github.copilot-sdk.specs/section-override
     :github.copilot-sdk.specs/sections
@@ -974,6 +990,7 @@
     :github.copilot-sdk.specs/session.title_changed-data
     :github.copilot-sdk.specs/session.warning-data
     :github.copilot-sdk.specs/session.workspace_file_changed-data
+    :github.copilot-sdk.specs/shutdown-agent-metric
     :github.copilot-sdk.specs/shutdown-type
     :github.copilot-sdk.specs/skill-directories
     :github.copilot-sdk.specs/skill-info
@@ -981,6 +998,7 @@
     :github.copilot-sdk.specs/skills
     :github.copilot-sdk.specs/skip-custom-instructions
     :github.copilot-sdk.specs/skip-embedding-retrieval
+    :github.copilot-sdk.specs/skip-permission
     :github.copilot-sdk.specs/skip-permission?
     :github.copilot-sdk.specs/source
     :github.copilot-sdk.specs/source-name
@@ -1016,7 +1034,9 @@
     :github.copilot-sdk.specs/system-message-content
     :github.copilot-sdk.specs/system-message-mode
     :github.copilot-sdk.specs/system-message-section
+    :github.copilot-sdk.specs/system-notification-kind
     :github.copilot-sdk.specs/system-prompt-section
+    :github.copilot-sdk.specs/system.notification-data
     :github.copilot-sdk.specs/tcp-connection-token
     :github.copilot-sdk.specs/telemetry
     :github.copilot-sdk.specs/temporary
@@ -1049,6 +1069,7 @@
     :github.copilot-sdk.specs/tool.execution_start-data
     :github.copilot-sdk.specs/tools
     :github.copilot-sdk.specs/total-api-duration-ms
+    :github.copilot-sdk.specs/total-nano-aiu
     :github.copilot-sdk.specs/total-premium-requests
     :github.copilot-sdk.specs/total-response-size-bytes
     :github.copilot-sdk.specs/total-tokens

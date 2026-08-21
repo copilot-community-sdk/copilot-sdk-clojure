@@ -47,6 +47,23 @@
         (finally
           (protocol/disconnect conn))))))
 
+(deftest test-async-send-request-timeout-clears-pending
+  (testing "Async timeout resolves with an error and removes the pending request"
+    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
+         in (PipedInputStream.)
+         _ (PipedOutputStream. in)
+         out (ByteArrayOutputStream.)
+         conn (protocol/connect in out state-atom)]
+      (try
+        (let [result (<!! (protocol/send-request-with-timeout conn "ping" {} 10))]
+         (is (= -32000 (get-in result [:error :code])))
+         (is (= "Request timeout" (get-in result [:error :message])))
+         (is (= {:method "ping" :timeout-ms 10}
+                (get-in result [:error :data]))))
+        (is (empty? (get-in @state-atom [:connection :pending-requests])))
+        (finally
+         (protocol/disconnect conn))))))
+
 (deftest test-disconnect-resolves-pending-requests
   (testing "disconnect fails in-flight requests instead of hanging (A3)"
     (let [state-atom (atom {:connection (protocol/initial-connection-state)})

@@ -120,6 +120,7 @@
 <tr><td> <code>:disable-resume?</code> </td><td> <code>suppressResumeEvent</code> </td><td> Config key on <code>resume-session</code> / <code>join-session</code>. When true, skips emitting the <code>session.resume</code> event. Defaults to <code>true</code> in <code>join-session</code> (matching upstream), <code>false</code> elsewhere. </td></tr>
 <tr><td> <code>:max-input-tokens</code> </td><td> <code>maxPromptTokens</code> </td><td> BYOK provider/model config key (input/prompt token cap). Serialized back to <code>maxPromptTokens</code> on the wire. </td></tr>
 <tr><td> <code>join-session</code> return <code>{:client :session}</code> </td><td> <code>joinSession()</code> returns <code>CopilotSession</code> </td><td> Clojure has no implicit/global client, so it returns both so the caller can own the client lifecycle. See <a href="#join-session"><code>join-session</code></a>. </td></tr>
+<tr><td> <code>join-session</code> return <code>:granted-environment-variables</code> </td><td> <code>joinSession()</code> writes grants to <code>process.env</code> </td><td> The JVM cannot portably mutate process environment variables. When an extension requests environment access, Clojure returns approved values as a string-keyed map filtered to the exact requested names. </td></tr>
 </tbody>
 </table>
 <p>These are the only cases where a public Clojure key or return value does not map 1:1 to the upstream name. Everything else follows the standard kebab-case ↔ camelCase wire convention (e.g. <code>:working-directory</code> ↔ <code>workingDirectory</code>), which is applied automatically and needs no lookup.</p>
@@ -260,7 +261,7 @@
 <tr><td> <code>:enable-mcp-apps</code> </td><td> boolean </td><td> <strong>Experimental (SEP-1865).</strong> Opt into MCP Apps UI passthrough only when the host can render <code>ui://</code> MCP App bundles. Explicit <code>true</code> sends <code>requestMcpApps: true</code> on <code>session.create</code> and <code>session.resume</code> (<code>join-session</code> delegates to resume). <code>false</code> and omission leave the wire key absent; explicit <code>nil</code> is invalid. The runtime may still decline the capability when its MCP Apps gate is off. (<a href="https://github.com/github/copilot-sdk/pull/1335">upstream PR #1335</a>) </td></tr>
 <tr><td> <code>:disabled-mcp-servers</code> </td><td> vector </td><td> Names of configured MCP servers (from <code>:mcp-servers</code> or on-disk <code>.mcp.json</code>) to suppress for this session. Vector of non-blank strings. Serialized as wire <code>disabledMcpServers</code>. (<a href="https://github.com/github/copilot-sdk/pull/2260">upstream PR #2260</a>) </td></tr>
 <tr><td> <code>:github-mcp-tool-config</code> </td><td> map </td><td> Configures the built-in GitHub MCP server’s tool surface. Optional keys: <code>:enable-all-tools?</code> (boolean, gated on <code>some?</code>), <code>:additional-toolsets</code> (vector of strings), <code>:additional-tools</code> (vector of strings), <code>:enable-insiders-mode?</code> (boolean, gated on <code>some?</code>), <code>:disable-form-deferral?</code> (boolean, gated on <code>some?</code>). Serialized as wire <code>githubMcpToolConfig.{enableAllTools,additionalToolsets,additionalTools,enableInsidersMode,disableFormDeferral}</code>. (<a href="https://github.com/github/copilot-sdk/pull/2112">upstream PR #2112</a>) </td></tr>
-<tr><td> <code>:commands</code> </td><td> vector </td><td> Command definitions (slash commands). See <a href="#commands">Commands</a> </td></tr>
+<tr><td> <code>:commands</code> </td><td> vector </td><td> Command definitions (slash commands). An omitted command <code>:description</code> is sent as <code>""</code>. See <a href="#commands">Commands</a> </td></tr>
 <tr><td> <code>:custom-agents</code> </td><td> vector </td><td> Custom agent configs. Each agent map: <code>:agent-name</code> (required), <code>:agent-prompt</code> (required), <code>:agent-display-name</code>, <code>:agent-description</code>, <code>:agent-tools</code>, <code>:agent-infer?</code>, <code>:agent-skills</code> (vector of strings), <code>:agent-model</code> (string, e.g. <code>"claude-haiku-4.5"</code>; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), <code>:agent-reasoning-effort</code> (<code>"low"</code>, <code>"medium"</code>, <code>"high"</code>, <code>"xhigh"</code>, or <code>"max"</code>), <code>:mcp-servers</code>. The disambiguating Clojure prefixes are removed on the wire (<code>:agent-name</code> becomes <code>name</code>, <code>:agent-prompt</code> becomes <code>prompt</code>, and so on); <code>:agent-reasoning-effort</code> becomes <code>reasoningEffort</code>. Nested <code>:mcp-servers</code> follow the same config and opaque server-ID rules as session-level MCP servers. When reasoning effort is omitted, the runtime resolves it from the selected model’s configuration; the parent session’s reasoning effort is inherited only when the custom agent uses the same model as the parent. (<a href="https://github.com/github/copilot-sdk/pull/2064">upstream PR #2064</a>) </td></tr>
 <tr><td> <code>:default-agent</code> </td><td> map </td><td> Built-in/default agent config. Use <code>{:excluded-tools [...]}</code> to hide tools from the default agent while leaving them available to custom agents </td></tr>
 <tr><td> <code>:on-permission-request</code> </td><td> fn </td><td> Permission handler function. <strong>Optional</strong> (upstream PR #1308). On create, omission sends <code>requestPermission: false</code>; providing a handler sends <code>true</code>. Resolve surfaced pending requests manually via <code>handle-pending-permission-request!</code>. Use <code>copilot/approve-all</code> to approve everything. </td></tr>
@@ -325,6 +326,7 @@
 <tr><td> <code>:large-output</code> </td><td> map </td><td> Tool output handling config. Forwarded on <code>session.resume</code> as the official SDK’s <code>largeOutput</code> field. </td></tr>
 </tbody>
 </table>
+<p>When <code>:mcp-servers</code> is present, the SDK first resumes the session and then calls <code>session.mcp.reloadWithConfig</code> with the same converted server configuration. This applies to blocking and async resume, and therefore to <code>join-session</code>. Reload errors propagate, and the partially registered local session is removed; the SDK does not silently fall back for older runtimes. Reload requests use a bounded timeout of at least 60 seconds, extended to the largest configured <code>:mcp-timeout</code> plus a five-second transport margin.</p>
 <p>When <code>:on-permission-request</code> is set to <code>default-join-session-permission-handler</code>, the SDK sends <code>requestPermission: false</code> on the wire, telling the CLI that this client does not handle permission requests. Any other handler sends <code>requestPermission: true</code>.</p>
 <pre><code class="language-clojure">;; Resume with a different model and reasoning effort
 (copilot/resume-session client "session-123"
@@ -365,8 +367,8 @@
 <h4><a href="#join-session" id="join-session"></a><code>join-session</code></h4>
 <pre><code class="language-clojure">(copilot/join-session config)
 </code></pre>
-<p>Join the current foreground session from an extension running as a child process of the Copilot CLI. Reads the <code>SESSION_ID</code> environment variable, creates a child-process client, and resumes the session with <code>:disable-resume?</code> defaulting to <code>true</code>. It accepts <code>:request-extensions?</code> and <code>:extension-info</code>, but rejects the create/resume-only <code>:extension-sdk-path</code>.</p>
-<p>Returns a map with <code>:client</code> and <code>:session</code> keys. The caller is responsible for stopping the client when done.</p>
+<p>Join the current foreground session from an extension running as a child process of the Copilot CLI. Reads the <code>SESSION_ID</code> environment variable, creates a child-process client, and resumes the session with <code>:disable-resume?</code> defaulting to <code>true</code>. It accepts <code>:request-extensions?</code>, <code>:extension-info</code>, and the join-only <code>:requested-environment-variables</code>, but rejects the create/resume-only <code>:extension-sdk-path</code>.</p>
+<p>Returns a map with <code>:client</code> and <code>:session</code> keys. When the request vector is non-empty, the map also contains <code>:granted-environment-variables</code>. Its string keys preserve the requested environment names, and it contains only values the parent CLI granted for those exact names. The map may be empty when none were approved. The caller is responsible for stopping the client when done.</p>
 <p>Throws if <code>SESSION_ID</code> is not set in the environment.</p>
 <p>In addition to the <code>resume-session</code> config options, <code>join-session</code> accepts:</p>
 <table>
@@ -375,16 +377,22 @@
 </thead>
 <tbody>
 <tr><td> <code>:factories</code> </td><td> vector </td><td> <code>define-factory</code> handles to register as <a href="#agent-factories-experimental">Agent Factories (Experimental)</a> for this session. Join-only — not accepted by <code>create-session</code> or <code>resume-session</code>. </td></tr>
+<tr><td> <code>:requested-environment-variables</code> </td><td> vector of non-blank strings </td><td> Names the extension asks the parent CLI to grant. Omission and <code>[]</code> send no wire field; explicit <code>nil</code> is invalid. Approved values are returned under <code>:granted-environment-variables</code>, filtered to these exact names. (<a href="https://github.com/github/copilot-sdk/pull/2348">upstream PR #2348</a>) </td></tr>
 </tbody>
 </table>
-<pre><code class="language-clojure">(let [{:keys [client session]} (copilot/join-session
-                                 {:on-permission-request copilot/approve-all
-                                  :tools [my-tool]})]
+<pre><code class="language-clojure">(let [{:keys [client session granted-environment-variables]}
+      (copilot/join-session
+       {:on-permission-request copilot/approve-all
+        :requested-environment-variables ["GITHUB_TOKEN"]
+        :tools [my-tool]})]
+  (when-let [token (get granted-environment-variables "GITHUB_TOKEN")]
+    ;; Supply token to extension-owned code without logging it.
+    (use-token token))
   ;; use session...
   (copilot/stop! client))
 </code></pre>
 <blockquote>
-<p><strong>Return-shape difference vs the official SDK.</strong> The Node.js <code>joinSession(config)</code> returns the <code>CopilotSession</code> directly and hides the client it creates internally. Clojure has no implicit/global client, so <code>join-session</code> returns <strong>both</strong> the <code>:client</code> and the <code>:session</code>: the caller owns the client’s lifecycle and must call <a href="#stop"><code>stop!</code></a> on it when finished. Bind the returned map’s <code>:session</code> where a Node.js caller would use the awaited return value, and keep the <code>:client</code> for cleanup. See <a href="#naming-and-shape-differences-vs-the-official-sdk">Naming and shape differences vs the official SDK</a>.</p>
+<p><strong>Return-shape difference vs the official SDK.</strong> The Node.js <code>joinSession(config)</code> returns the <code>CopilotSession</code> directly and hides the client it creates internally. Clojure has no implicit/global client, so <code>join-session</code> returns <strong>both</strong> the <code>:client</code> and the <code>:session</code>: the caller owns the client’s lifecycle and must call <a href="#stop"><code>stop!</code></a> on it when finished. Bind the returned map’s <code>:session</code> where a Node.js caller would use the awaited return value, and keep the <code>:client</code> for cleanup. Node.js also installs approved environment grants into <code>process.env</code>; the JVM cannot portably do that, so Clojure returns the filtered <code>:granted-environment-variables</code> map instead. See <a href="#naming-and-shape-differences-vs-the-official-sdk">Naming and shape differences vs the official SDK</a>.</p>
 </blockquote>
 <h4><a href="#ping" id="ping"></a><code>ping</code></h4>
 <pre><code class="language-clojure">(copilot/ping client)
@@ -1277,13 +1285,13 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.error</code> </td><td> Session error occurred; data: <code>{:error-type "..." :message "..." :stack "..." :status-code 429 :provider-call-id "..." :url "..."}</code> (<code>:stack</code>, <code>:status-code</code>, <code>:provider-call-id</code>, <code>:url</code> optional) </td></tr>
 <tr><td> <code>:copilot/session.idle</code> </td><td> Session finished processing </td></tr>
 <tr><td> <code>:copilot/session.info</code> </td><td> Informational session update </td></tr>
-<tr><td> <code>:copilot/session.model_change</code> </td><td> Session model changed </td></tr>
+<tr><td> <code>:copilot/session.model_change</code> </td><td> Session model changed; data requires <code>:new-model</code> and may include <code>:previous-model</code>, <code>:previous-reasoning-effort</code>, <code>:reasoning-effort</code>, and <code>:source</code>. Known sources include <code>"model_command"</code>, <code>"config_command"</code>, <code>"model_picker"</code>, <code>"automatic"</code>, <code>"startup"</code>, <code>"managed_settings"</code>, <code>"agent"</code>, and <code>"sdk"</code>. </td></tr>
 <tr><td> <code>:copilot/session.handoff</code> </td><td> Session handed off to another agent; data: <code>{:remote-session-id "..." :host "https://github.com"}</code> (both optional) </td></tr>
 <tr><td> <code>:copilot/session.usage_info</code> </td><td> Token usage information </td></tr>
 <tr><td> <code>:copilot/session.context_changed</code> </td><td> Session context (cwd, repo, branch) changed </td></tr>
 <tr><td> <code>:copilot/session.title_changed</code> </td><td> Session title updated </td></tr>
 <tr><td> <code>:copilot/session.warning</code> </td><td> Session warning (e.g., quota limits) </td></tr>
-<tr><td> <code>:copilot/session.shutdown</code> </td><td> Session is shutting down </td></tr>
+<tr><td> <code>:copilot/session.shutdown</code> </td><td> Session is shutting down. Optional <code>:agent-metrics</code> maps agent keywords to <code>{:model-metrics {...} :total-api-duration-ms N :total-nano-aiu N}</code> plus optional <code>:agent-name</code> and <code>:agent-display-name</code>, enabling per-agent accounting alongside the session totals. </td></tr>
 <tr><td> <code>:copilot/session.truncation</code> </td><td> Context window truncated </td></tr>
 <tr><td> <code>:copilot/session.snapshot_rewind</code> </td><td> Session state rolled back </td></tr>
 <tr><td> <code>:copilot/session.context_cleared</code> </td><td> Conversation context cleared and restarted with a new prompt (via <code>history-clear-context!</code>); data: <code>{:messages-cleared N}</code> (required) with optional <code>:initial-message</code> (the prompt used to start the new context) (upstream PR #2129) </td></tr>
@@ -1297,7 +1305,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.schedule_created</code> </td><td> Scheduled prompt registered via <code>/every</code>; data: <code>{:id &lt;pos-int&gt; :interval-ms &lt;pos-int&gt; :prompt "..."}</code> (upstream schema 1.0.42) </td></tr>
 <tr><td> <code>:copilot/session.schedule_cancelled</code> </td><td> Scheduled prompt cancelled from the schedule manager dialog; data: <code>{:id &lt;pos-int&gt;}</code> (upstream schema 1.0.42) </td></tr>
 <tr><td> <code>:copilot/session.autopilot_objective_changed</code> </td><td> Autopilot objective lifecycle events; data: <code>{:operation #{"create" "update" "delete"}}</code> (required) with optional <code>:id</code> (integer) and <code>:status</code> (upstream schema 1.0.56). The <code>:status</code> enum is widened to include <code>"active"</code>, <code>"paused"</code>, <code>"cap_reached"</code>, <code>"completed"</code>. </td></tr>
-<tr><td> <code>:copilot/session.permissions_changed</code> </td><td> Per-session permission flags changed; data: <code>{:allow-all-permissions boolean :previous-allow-all-permissions boolean}</code> with optional <code>:allow-all-permission-mode</code> / <code>:previous-allow-all-permission-mode</code> (tri-state <code>#{"off" "auto" "on"}</code>, experimental, upstream schema 1.0.70) (upstream schema 1.0.56). </td></tr>
+<tr><td> <code>:copilot/session.permissions_changed</code> </td><td> <strong>Experimental.</strong> Per-session permission mode changed; data: <code>{:mode &lt;mode&gt; :previous-mode &lt;mode&gt;}</code> with optional <code>:assisted-approval-model</code>, where mode is one of <code>"manual"</code>, <code>"assisted"</code>, or <code>"allow-all"</code> (upstream schema 1.0.81-5). </td></tr>
 <tr><td> <code>:copilot/session.session_limits_changed</code> </td><td> Session limits changed; data: <code>{:session-limits {:max-ai-credits &lt;number&gt;}}</code>, where a <code>nil</code> <code>:session-limits</code> clears the active limits (upstream schema 1.0.67) </td></tr>
 <tr><td> <code>:copilot/session.usage_checkpoint</code> </td><td> Durable usage checkpoint for reconstructing aggregate accounting on resume; data: <code>{:total-nano-aiu &lt;number&gt;}</code> with optional <code>:total-premium-requests &lt;number&gt;</code> (upstream schema 1.0.67) </td></tr>
 <tr><td> <code>:copilot/session.auto_mode_resolved</code> </td><td> Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes <code>:chosen-model</code>, optional <code>:candidate-models</code>, <code>:category-scores</code>, <code>:confidence</code>, <code>:predicted-label</code>, <code>:reasoning-bucket</code> (experimental; upstream schema 1.0.70-0) </td></tr>
@@ -1307,7 +1315,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/session.binary_asset</code> </td><td> Canonical bytes for a content-addressed binary asset shared by reference across events </td></tr>
 <tr><td> <code>:copilot/session.extensions.attachments_pushed</code> </td><td> Extension pushed attachments into the session </td></tr>
 <tr><td> <code>:copilot/skill.invoked</code> </td><td> Skill invocation triggered; data includes :name, :path, :content, optional :description, :plugin-name, :plugin-version </td></tr>
-<tr><td> <code>:copilot/user.message</code> </td><td> User message added </td></tr>
+<tr><td> <code>:copilot/user.message</code> </td><td> User message added; data requires <code>:content</code> and may include the correlation field <code>:turn-id</code> plus <code>:interaction-id</code>, <code>:source</code>, <code>:transformed-content</code>, and <code>:is-autopilot-continuation</code>. </td></tr>
 <tr><td> <code>:copilot/pending_messages.modified</code> </td><td> Pending message queue updated </td></tr>
 <tr><td> <code>:copilot/assistant.turn_start</code> </td><td> Assistant turn started </td></tr>
 <tr><td> <code>:copilot/assistant.intent</code> </td><td> Assistant intent update </td></tr>
@@ -1318,11 +1326,11 @@ copilot/interaction-events
 <tr><td> <code>:copilot/assistant.message_delta</code> </td><td> Streaming response chunk </td></tr>
 <tr><td> <code>:copilot/assistant.streaming_delta</code> </td><td> Response size update during streaming; data: <code>{:total-response-size-bytes N}</code> </td></tr>
 <tr><td> <code>:copilot/assistant.turn_end</code> </td><td> Assistant turn completed </td></tr>
-<tr><td> <code>:copilot/assistant.usage</code> </td><td> Token usage and cost for an individual API call. Required: <code>:model</code> (string). Optional: <code>:input-tokens</code>, <code>:output-tokens</code>, <code>:reasoning-tokens</code>, <code>:cache-read-tokens</code>, <code>:cache-write-tokens</code>, <code>:cache-expires-at</code> (<code>java.time.Instant</code> — when the prompt cache expires), <code>:service-request-id</code> (string — <code>x-copilot-service-request-id</code> for CAPI log correlation), <code>:api-endpoint</code>, <code>:api-call-id</code>, <code>:provider-call-id</code>, <code>:content-filter-triggered</code> (boolean), <code>:finish-reason</code> (string), <code>:cost</code>, <code>:duration</code>, <code>:time-to-first-token-ms</code>, <code>:ttft-ms</code>, <code>:inter-token-latency-ms</code>, <code>:reasoning-effort</code>, <code>:initiator</code>, <code>:parent-tool-call-id</code> (deprecated), <code>:copilot-usage</code>, <code>:quota-snapshots</code>, <code>:interaction-type</code>, <code>:rte</code> (<a href="https://github.com/github/copilot-sdk/pull/2074">upstream PR #2074</a>; <code>:interaction-type</code>/<code>:rte</code> added in upstream schema 1.0.79-5/6) </td></tr>
+<tr><td> <code>:copilot/assistant.usage</code> </td><td> Token usage and cost for an individual API call. Required: <code>:model</code> (string). Optional: <code>:input-tokens</code>, <code>:output-tokens</code>, <code>:reasoning-tokens</code>, <code>:accepted-prediction-tokens</code>, <code>:rejected-prediction-tokens</code>, <code>:cache-read-tokens</code>, <code>:cache-write-tokens</code>, <code>:cache-expires-at</code> (<code>java.time.Instant</code> — when the prompt cache expires), <code>:service-request-id</code> (string — <code>x-copilot-service-request-id</code> for CAPI log correlation), <code>:api-endpoint</code>, <code>:api-call-id</code>, <code>:provider-call-id</code>, <code>:content-filter-triggered</code> (boolean), <code>:finish-reason</code> (string), <code>:cost</code>, <code>:duration</code>, <code>:time-to-first-token-ms</code>, <code>:ttft-ms</code>, <code>:inter-token-latency-ms</code>, <code>:reasoning-effort</code>, <code>:reasoning-summary</code> (<code>"none"</code>, <code>"concise"</code>, or <code>"detailed"</code>), <code>:initiator</code>, <code>:parent-tool-call-id</code> (deprecated), <code>:copilot-usage</code>, <code>:quota-snapshots</code>, <code>:interaction-type</code>, <code>:is-auto</code>, <code>:is-byok</code>, <code>:max-output-tokens</code>, <code>:max-prompt-tokens</code>, <code>:transport</code> (<code>"http"</code> or <code>"websocket"</code>), <code>:rte</code> (<a href="https://github.com/github/copilot-sdk/pull/2074">upstream PR #2074</a>; <code>:interaction-type</code>/<code>:rte</code> added in upstream schema 1.0.79-5/6) </td></tr>
 <tr><td> <code>:copilot/assistant.idle</code> </td><td> Main agent’s processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) </td></tr>
 <tr><td> <code>:copilot/assistant.tool_call_delta</code> </td><td> Streaming tool-call argument input chunk; data includes <code>:tool-call-id</code>, <code>:input-delta</code>, optional <code>:tool-name</code>, <code>:tool-type</code> (upstream schema 1.0.69-3) </td></tr>
 <tr><td> <code>:copilot/assistant.server_tool_progress</code> </td><td> Ephemeral live progress for a provider-hosted server tool before the finalized <code>serverTools</code> envelope arrives on the terminal <code>assistant.message</code>. Data: <code>{:output-index &lt;integer&gt; :kind &lt;string&gt; :status &lt;string&gt;}</code>; only <code>"web_search"</code> is currently emitted for <code>:kind</code>, and <code>:status</code> is <code>"in_progress"</code>, <code>"searching"</code>, or <code>"completed"</code>. </td></tr>
-<tr><td> <code>:copilot/model.call_failure</code> </td><td> Failed LLM API call metadata for telemetry </td></tr>
+<tr><td> <code>:copilot/model.call_failure</code> </td><td> Failed LLM API call metadata for telemetry; data requires <code>:source</code> (<code>"top_level"</code>, <code>"subagent"</code>, or <code>"mcp_sampling"</code>) and may include string <code>:interaction-type</code>. </td></tr>
 <tr><td> <code>:copilot/abort</code> </td><td> Current message aborted </td></tr>
 <tr><td> <code>:copilot/tool.user_requested</code> </td><td> Tool execution requested by user </td></tr>
 <tr><td> <code>:copilot/tool.execution_start</code> </td><td> Tool execution started; data includes <code>:tool-call-id</code>, <code>:tool-name</code>, optional <code>:arguments</code>, <code>:parent-tool-call-id</code>, <code>:mcp-server-name</code>, <code>:mcp-tool-name</code>, <code>:model</code> </td></tr>
@@ -1330,7 +1338,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/tool.execution_partial_result</code> </td><td> Tool execution partial result </td></tr>
 <tr><td> <code>:copilot/tool.execution_complete</code> </td><td> Tool execution completed; data may include optional <code>:structured-content</code> (arbitrary structured tool result) (upstream schema 1.0.63) </td></tr>
 <tr><td> <code>:copilot/tool_search.activated</code> </td><td> Persisted generic client-side tool activations restored when a session resumes. Data: <code>{:strategy &lt;string&gt; :tool-names [&lt;string&gt; ...]}</code>. </td></tr>
-<tr><td> <code>:copilot/subagent.started</code> </td><td> Subagent started; data includes <code>:tool-call-id</code>, <code>:agent-name</code>, <code>:agent-display-name</code>, <code>:agent-description</code>, and optional <code>:model</code> (<a href="https://github.com/github/copilot-sdk/pull/2072">upstream PR #2072</a>) </td></tr>
+<tr><td> <code>:copilot/subagent.started</code> </td><td> Subagent started; data includes <code>:tool-call-id</code>, <code>:agent-name</code>, <code>:agent-display-name</code>, and <code>:agent-description</code>, with optional <code>:factory-run-id</code> and <code>:model</code> (<a href="https://github.com/github/copilot-sdk/pull/2072">upstream PR #2072</a>) </td></tr>
 <tr><td> <code>:copilot/subagent.completed</code> </td><td> Subagent completed; data includes <code>:tool-call-id</code>, <code>:agent-name</code>, <code>:agent-display-name</code>, and optional <code>:cancelled</code>, <code>:model</code>, <code>:total-tool-calls</code>, <code>:total-tokens</code>, <code>:duration-ms</code>. <code>:cancelled true</code> means cancellation tore down the subagent; cancellation still reports completion rather than failure. </td></tr>
 <tr><td> <code>:copilot/subagent.failed</code> </td><td> Subagent failed; data includes :tool-call-id, :agent-name, :agent-display-name, :error, optional :model, :total-tool-calls, :total-tokens, :duration-ms </td></tr>
 <tr><td> <code>:copilot/subagent.selected</code> </td><td> Subagent selected </td></tr>
@@ -1339,14 +1347,14 @@ copilot/interaction-events
 <tr><td> <code>:copilot/hook.progress</code> </td><td> Ephemeral progress update from a long-running hook; data: <code>{:message "..."}</code> (upstream schema 1.0.56). </td></tr>
 <tr><td> <code>:copilot/hook.end</code> </td><td> Hook invocation finished </td></tr>
 <tr><td> <code>:copilot/system.message</code> </td><td> System message emitted </td></tr>
-<tr><td> <code>:copilot/system.notification</code> </td><td> System notification with structured <code>:kind</code> discriminator (e.g. <code>agent_completed</code>, <code>shell_completed</code>, <code>shell_detached_completed</code>) </td></tr>
+<tr><td> <code>:copilot/system.notification</code> </td><td> System notification with a structured <code>:kind</code> discriminator: <code>agent_completed</code>, <code>agent_idle</code>, <code>new_inbox_message</code>, <code>shell_completed</code>, <code>shell_detached_completed</code>, <code>instruction_discovered</code>, <code>factory_completed</code>, or <code>unclassified</code>. Each known kind validates its required and optional fields; agent kinds may include <code>:display-name</code>. </td></tr>
 <tr><td> <code>:copilot/permission.requested</code> </td><td> Permission request initiated; data includes <code>:resolved-by-hook</code> when already handled by a hook </td></tr>
-<tr><td> <code>:copilot/permission.completed</code> </td><td> Permission request resolved </td></tr>
+<tr><td> <code>:copilot/permission.completed</code> </td><td> Permission request resolved. Approved nested <code>:result</code> values may include <code>:managed-approval-handled</code>, indicating that managed policy handled the request. </td></tr>
 <tr><td> <code>:copilot/user_input.requested</code> </td><td> User input requested from agent </td></tr>
 <tr><td> <code>:copilot/user_input.completed</code> </td><td> User input received </td></tr>
 <tr><td> <code>:copilot/elicitation.requested</code> </td><td> Elicitation request initiated </td></tr>
 <tr><td> <code>:copilot/elicitation.completed</code> </td><td> Elicitation request resolved </td></tr>
-<tr><td> <code>:copilot/external_tool.requested</code> </td><td> External tool call requested (v3) </td></tr>
+<tr><td> <code>:copilot/external_tool.requested</code> </td><td> External tool call requested (v3); data includes <code>:request-id</code>, <code>:session-id</code>, <code>:tool-call-id</code>, <code>:tool-name</code>, and optional string-or-nil <code>:provider-id</code> for host routing. </td></tr>
 <tr><td> <code>:copilot/external_tool.completed</code> </td><td> External tool call completed (v3) </td></tr>
 <tr><td> <code>:copilot/mcp.oauth_required</code> </td><td> MCP server requires OAuth authentication </td></tr>
 <tr><td> <code>:copilot/mcp.oauth_completed</code> </td><td> MCP OAuth authentication completed </td></tr>
@@ -1359,7 +1367,7 @@ copilot/interaction-events
 <tr><td> <code>:copilot/command.execute</code> </td><td> Command execution started </td></tr>
 <tr><td> <code>:copilot/command.completed</code> </td><td> Command execution completed </td></tr>
 <tr><td> <code>:copilot/commands.changed</code> </td><td> Available commands list changed </td></tr>
-<tr><td> <code>:copilot/exit_plan_mode.requested</code> </td><td> Exit from plan mode requested </td></tr>
+<tr><td> <code>:copilot/exit_plan_mode.requested</code> </td><td> Exit from plan mode requested; data includes <code>:summary</code>, <code>:actions</code>, <code>:recommended-action</code>, and may identify the active <code>:model</code>. </td></tr>
 <tr><td> <code>:copilot/exit_plan_mode.completed</code> </td><td> Exit from plan mode completed </td></tr>
 <tr><td> <code>:copilot/auto_mode_switch.requested</code> </td><td> Auto mode switch request requiring user approval </td></tr>
 <tr><td> <code>:copilot/auto_mode_switch.completed</code> </td><td> Auto mode switch completed </td></tr>
@@ -1793,7 +1801,7 @@ tool-set/isolated
 </tbody>
 </table>
 <h3><a href="#commands" id="commands"></a>Commands</h3>
-<p>Register slash commands that users can invoke in the TUI. Define each command as a map with <code>:name</code>, <code>:description</code>, and <code>:command-handler</code>, then pass them via <code>:commands</code> in session config.</p>
+<p>Register slash commands that users can invoke in the TUI. Define each command as a map with <code>:name</code>, optional <code>:description</code>, and <code>:command-handler</code>, then pass them via <code>:commands</code> in session config. Create, resume, and join send an omitted description as the empty string required by the runtime.</p>
 <pre><code class="language-clojure">(def my-commands
   [{:name "deploy"
     :description "Deploy the current project"
@@ -1816,7 +1824,7 @@ tool-set/isolated
 </thead>
 <tbody>
 <tr><td> <code>:name</code> </td><td> string </td><td> yes </td><td> Command name (without leading slash) </td></tr>
-<tr><td> <code>:description</code> </td><td> string </td><td> no </td><td> Description shown in TUI command list </td></tr>
+<tr><td> <code>:description</code> </td><td> string </td><td> no </td><td> Description shown in TUI command list; defaults to <code>""</code> on the wire </td></tr>
 <tr><td> <code>:command-handler</code> </td><td> fn </td><td> yes </td><td> Handler function </td></tr>
 </tbody>
 </table>
@@ -2183,10 +2191,14 @@ tool-set/isolated
 <tr><td> <code>:custom-tool</code> </td><td> SDK-registered custom tool invocation </td></tr>
 <tr><td> <code>:memory</code> </td><td> Memory storage operation (subject, fact, citations) </td></tr>
 <tr><td> <code>:hook</code> </td><td> Hook-triggered permission check </td></tr>
+<tr><td> <code>:extension-management</code> </td><td> Install, enable, disable, or manage an extension </td></tr>
+<tr><td> <code>:extension-permission-access</code> </td><td> Extension access to another permission surface </td></tr>
+<tr><td> <code>:extension-env-access</code> </td><td> Extension request for named environment variables </td></tr>
 <tr><td> <code>:factory</code> </td><td> Agent Factory run or authoring approval (see <a href="#agent-factories-experimental">Agent Factories (Experimental)</a>) </td></tr>
 </tbody>
 </table>
-<p>Memory permission events include additional data fields (specs <code>::memory-action</code>, <code>::memory-direction</code>, <code>::memory-reason</code>):</p>
+<p>Custom-tool permission requests may include boolean <code>:skip-permission</code>, recording that the tool declaration asked the runtime to bypass its normal prompt.</p>
+<p>Memory permission events include additional data fields:</p>
 <table>
 <thead>
 <tr><th> Field </th><th> Type </th><th> Description </th></tr>
@@ -2195,6 +2207,18 @@ tool-set/isolated
 <tr><td> <code>:memory-action</code> </td><td> <code>:store</code> or <code>:vote</code> </td><td> The memory operation type </td></tr>
 <tr><td> <code>:memory-direction</code> </td><td> <code>:upvote</code> or <code>:downvote</code> </td><td> Vote direction (when action is <code>:vote</code>) </td></tr>
 <tr><td> <code>:memory-reason</code> </td><td> string </td><td> Reason for the memory operation </td></tr>
+<tr><td> <code>:repo-nwo</code> </td><td> non-blank string </td><td> Repository scope in <code>"owner/name"</code> form, when applicable </td></tr>
+<tr><td> <code>:scope</code> </td><td> <code>"repository"</code> or <code>"user"</code> </td><td> Storage scope requested by the memory operation </td></tr>
+</tbody>
+</table>
+<p>Extension environment access requests require both the extension identity and at least one requested name:</p>
+<table>
+<thead>
+<tr><th> Field </th><th> Type </th><th> Description </th></tr>
+</thead>
+<tbody>
+<tr><td> <code>:extension-name</code> </td><td> non-blank string </td><td> Extension asking for access </td></tr>
+<tr><td> <code>:environment-variables</code> </td><td> non-empty vector of non-blank strings </td><td> Environment variable names presented for approval </td></tr>
 </tbody>
 </table>
 <p>Factory permission requests (<code>:permission-kind :factory</code>) include additional data fields describing the run or authoring request awaiting approval (<a href="https://github.com/github/copilot-sdk/pull/2114">upstream PR #2114</a>):</p>
@@ -2249,6 +2273,7 @@ tool-set/isolated
 ;; Extension declines to answer (another handler may respond)
 {:kind :no-result}
 </code></pre>
+<p><code>:managed-approval-handled</code> is runtime-owned metadata on approved <code>:copilot/permission.completed</code> event results. It is not a valid outbound permission decision and permission handlers must not return it.</p>
 <p>Legacy Clojure permission result kinds such as <code>:approved</code> and <code>:denied-by-rules</code> remain accepted and are normalized before the SDK sends the decision to the CLI.</p>
 <h4><a href="#resolvedbyhook-hook-resolved-permissions" id="resolvedbyhook-hook-resolved-permissions"></a><code>resolvedByHook</code> — Hook-Resolved Permissions</h4>
 <p>When the runtime resolves a permission request via a <code>permissionRequest</code> hook, the <code>permission.requested</code> event includes <code>:resolved-by-hook true</code>. The SDK automatically skips the client’s <code>:on-permission-request</code> handler and does not send the <code>handlePendingPermissionRequest</code> RPC — the event is still published to event subscribers for observability.</p>
@@ -2347,7 +2372,7 @@ tool-set/isolated
 </thead>
 <tbody>
 <tr><td> <code>:action</code> </td><td> string </td><td> <code>"accept"</code>, <code>"decline"</code>, or <code>"cancel"</code> </td></tr>
-<tr><td> <code>:content</code> </td><td> map </td><td> Field values when action is <code>"accept"</code> </td></tr>
+<tr><td> <code>:content</code> </td><td> map </td><td> Optional field values for <code>"accept"</code>. Omit for <code>"decline"</code> or <code>"cancel"</code>; absent content is omitted on the wire, never serialized as JSON <code>null</code>. </td></tr>
 </tbody>
 </table>
 <p>If the handler throws, the SDK sends <code>{:action "cancel"}</code> to prevent the request from hanging.</p>

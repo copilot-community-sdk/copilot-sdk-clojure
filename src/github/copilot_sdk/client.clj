@@ -586,7 +586,10 @@
                   (<! (proto/send-request conn "session.ui.handlePendingElicitation"
                                           {:session-id session-id
                                            :request-id request-id
-                                           :result result}))))))
+                                           :result
+                                           (cond-> {:action (:action result)}
+                                             (some? (:content result))
+                                             (assoc :content (:content result)))}))))))
           (catch Exception e
             (log/debug "v3 elicitation request error for " request-id ": " (ex-message e))
             (try
@@ -2258,6 +2261,13 @@
   [config]
   (true? (:enable-mcp-apps config)))
 
+(defn- commands->wire
+  [commands]
+  (mapv (fn [{:keys [name description]}]
+          {:name name
+           :description (or description "")})
+        commands))
+
 (defn- build-create-session-params
   "Build wire params for session.create from config."
   [config]
@@ -2277,12 +2287,7 @@
                              (util/clj->wire agent))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
                                  (util/clj->wire is))
-        wire-commands (when-let [cmds (:commands config)]
-                        (mapv (fn [c]
-                                (cond-> {:name (:name c)}
-                                  (some? (:description c))
-                                  (assoc :description (:description c))))
-                              cmds))
+        wire-commands (some-> (:commands config) commands->wire)
         config-dir (or (:config-directory config) (:config-dir config))
         wire-large-output (some-> (:large-output config) large-output->wire)
         wire-memory (when-let [m (:memory config)]
@@ -2485,12 +2490,7 @@
                              (util/clj->wire agent))
         wire-infinite-sessions (when-let [is (:infinite-sessions config)]
                                  (util/clj->wire is))
-        wire-commands (when-let [cmds (:commands config)]
-                        (mapv (fn [c]
-                                (cond-> {:name (:name c)}
-                                  (some? (:description c))
-                                  (assoc :description (:description c))))
-                              cmds))
+        wire-commands (some-> (:commands config) commands->wire)
         config-dir (or (:config-directory config) (:config-dir config))
         wire-large-output (some-> (:large-output config) large-output->wire)
         wire-memory (when-let [m (:memory config)]
@@ -2637,6 +2637,9 @@
       (assoc :extension-info (:extension-info config))
       (:canvas-provider config)
       (assoc :canvas-provider (:canvas-provider config))
+      (seq (:requested-environment-variables config))
+      (assoc :requested-environment-variables
+             (:requested-environment-variables config))
       true (assoc :env-value-mode "direct"))))
 
 (defn- pre-register-session
@@ -2789,7 +2792,8 @@
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.4\")
    - :tools              - Vector of tool definitions
-   - :commands           - Vector of command definitions (slash commands for TUI)
+   - :commands           - Vector of command definitions (slash commands for TUI).
+                           An omitted command :description is sent as an empty string.
    - :system-message     - System message config
    - :available-tools    - List of allowed tool names
    - :excluded-tools     - List of excluded tool names
@@ -2820,7 +2824,8 @@
                                When provided, sends requestElicitation=true and enables the
                                elicitation capability. Single-arg handler receives an ElicitationContext
                                map with :session-id, :message, :requested-schema, :mode,
-                               :elicitation-source, :url. Returns an ElicitationResult map.
+                               :elicitation-source, :url. Returns an ElicitationResult map; omit
+                               :content for decline/cancel results.
    - :on-mcp-auth-request - Handler for interactive MCP OAuth requests (upstream PR #1669).
                             When provided, the SDK registers interest in `mcp.oauth_required`
                             so the runtime delegates browser-based OAuth to this handler instead
@@ -2997,7 +3002,25 @@
             (session/remove-session! client session-id)
             (throw t)))))))
 
-(defn- resume-session*
+(defn- mcp-reload-with-config-params
+  [session-id mcp-servers]
+  {:session-id session-id
+   :config {:mcp-servers (util/mcp-servers->wire mcp-servers)}})
+
+(def ^:private default-mcp-reload-timeout-ms 60000)
+(def ^:private mcp-reload-transport-margin-ms 5000)
+
+(defn- mcp-reload-timeout-ms
+  [mcp-servers]
+  (reduce
+   max
+   default-mcp-reload-timeout-ms
+   (keep (fn [{:keys [mcp-timeout]}]
+           (when mcp-timeout
+             (+ mcp-timeout mcp-reload-transport-margin-ms)))
+         (vals mcp-servers))))
+
+(defn- resume-session-result*
   [client session-id config]
   (validate-provider-config! config)
   (validate-tool-filters! config)
@@ -3015,14 +3038,25 @@
       (install-session-fs-handler! client session-id session config)
       (register-mcp-auth-interest! client session-id config)
       (let [result (proto/send-request! connection-io "session.resume" params)]
+        (when (contains? config :mcp-servers)
+          (proto/send-request!
+           connection-io
+           "session.mcp.reloadWithConfig"
+           (mcp-reload-with-config-params session-id (:mcp-servers config))
+           (mcp-reload-timeout-ms (:mcp-servers config))))
         (session/set-workspace-path! client session-id (:workspace-path result))
         (session/set-capabilities! client session-id (:capabilities result))
         (session/set-open-canvases! client session-id (:open-canvases result))
         (apply-session-options-update! client session config)
-        session)
+        {:session session
+         :result result})
       (catch Throwable t
         (session/remove-session! client session-id)
         (throw t)))))
+
+(defn- resume-session*
+  [client session-id config]
+  (:session (resume-session-result* client session-id config)))
 
 (defn resume-session
   "Resume an existing session by ID.
@@ -3043,7 +3077,9 @@
    - :tool-search        - Tool discovery config {:enabled :defer-threshold}
    - :provider           - Custom provider configuration (BYOK)
    - :streaming?         - Enable streaming responses
-   - :mcp-servers        - MCP server configurations
+   - :mcp-servers        - MCP server configurations. When present, resume applies the same
+                           config with session.mcp.reloadWithConfig after session.resume;
+                           reload failures fail the resume and clean up the local session.
    - :custom-agents      - Custom agent configurations
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-directory   - Override configuration directory.
@@ -3059,7 +3095,8 @@
    - :on-elicitation-request - Handler for elicitation requests (upstream PRs #908, #960).
                                Single-arg handler receives an ElicitationContext map with
                                :session-id, :message, :requested-schema, :mode,
-                               :elicitation-source, :url. Returns an ElicitationResult map.
+                               :elicitation-source, :url. Returns an ElicitationResult map; omit
+                               :content for decline/cancel results.
    - :on-mcp-auth-request - Handler for interactive MCP OAuth requests (upstream PR #1669).
                             Same shape as `create-session`. On resume, interest in
                             `mcp.oauth_required` is registered before the resume RPC so OAuth
@@ -3303,14 +3340,67 @@
                     (session/remove-session! client session-id)
                     (ex-info (str "Failed to resume session: " (:message err))
                              {:error err :session-id session-id}))
-                (let [result (:result response)]
-                  (session/set-workspace-path! client session-id (:workspace-path result))
-                  (session/set-capabilities! client session-id (:capabilities result))
-                  (session/set-open-canvases! client session-id (:open-canvases result))
-                  (let [r (<! (<apply-session-options-update! client session config))]
-                    (if (instance? Throwable r)
-                      r
-                      session)))))))))))
+                (let [result (:result response)
+                      reload? (contains? config :mcp-servers)
+                      reload-response
+                      (when reload?
+                        (<! (proto/send-request-with-timeout
+                             connection-io
+                             "session.mcp.reloadWithConfig"
+                             (mcp-reload-with-config-params
+                              session-id
+                              (:mcp-servers config))
+                             (mcp-reload-timeout-ms
+                              (:mcp-servers config)))))]
+                  (cond
+                    (and reload? (nil? reload-response))
+                    (do
+                      (session/remove-session! client session-id)
+                      (ex-info "MCP configuration reload failed: RPC channel closed"
+                               {:session-id session-id}))
+
+                    (:error reload-response)
+                    (let [err (:error reload-response)]
+                      (session/remove-session! client session-id)
+                      (ex-info (str "Failed to reload MCP configuration: "
+                                    (:message err))
+                               {:error err :session-id session-id}))
+
+                    :else
+                    (do
+                      (session/set-workspace-path! client session-id (:workspace-path result))
+                      (session/set-capabilities! client session-id (:capabilities result))
+                      (session/set-open-canvases! client session-id (:open-canvases result))
+                      (let [r (<! (<apply-session-options-update! client session config))]
+                        (if (instance? Throwable r)
+                          r
+                          session)))))))))))))
+
+(defn- project-granted-environment-variables
+  [requested-names grants]
+  (let [grants (or grants {})]
+    (when-not (map? grants)
+      (throw
+       (ex-info "session.resume returned invalid environment variable grants" {})))
+    (reduce
+     (fn [projected requested-name]
+       (let [grant-key (keyword requested-name)]
+         (if-not (contains? grants grant-key)
+           projected
+           (let [value (get grants grant-key)]
+             (when-not (string? value)
+               (throw
+                (ex-info
+                 "session.resume returned a non-string environment variable grant"
+                 {:environment-variable requested-name})))
+             (assoc projected requested-name value)))))
+     {}
+     requested-names)))
+
+(defn- foreground-session-id
+  []
+  (System/getenv "SESSION_ID"))
+
 (defn join-session
   "Join the current foreground session from an extension running as a child process.
 
@@ -3325,8 +3415,16 @@
    `:skip-permission?` on their tools or do not require permission handling).
    The `:disable-resume?` option defaults to true.
 
-   Returns a map with :client and :session keys. The caller is responsible for
-   stopping the client when done.
+   :requested-environment-variables is a join-only vector of non-blank environment
+   variable names. An omitted or empty vector sends no request; explicit nil is
+   invalid.
+
+   Returns a map with :client and :session keys. When
+   :requested-environment-variables is non-empty, the map also includes
+   :granted-environment-variables with only the requested names granted by the
+   parent CLI. Unlike Node.js, the JVM cannot portably mutate process environment
+   variables, so extensions must read approved values from this returned map.
+   The caller is responsible for stopping the client when done.
 
    Throws if SESSION_ID is not set in the environment."
   [config]
@@ -3335,7 +3433,7 @@
                     {:config (redact-secrets config)
                      :explain (s/explain-data ::specs/join-session-config
                                               (redact-secrets config))})))
-  (let [session-id (System/getenv "SESSION_ID")]
+  (let [session-id (foreground-session-id)]
     (when-not session-id
       (throw (ex-info (str "join-session is intended for extensions running as child processes "
                            "of the Copilot CLI. SESSION_ID environment variable is not set.")
@@ -3347,8 +3445,15 @@
                           (not (contains? config :disable-resume?))
                           (assoc :disable-resume? true))]
       (try
-        (let [sess (resume-session* c session-id merged-config)]
-          {:client c :session sess})
+        (let [{:keys [session result]}
+              (resume-session-result* c session-id merged-config)
+              requested-names (:requested-environment-variables config)]
+          (cond-> {:client c :session session}
+            (seq requested-names)
+            (assoc :granted-environment-variables
+                   (project-granted-environment-variables
+                    requested-names
+                    (:granted-environment-variables result)))))
         (catch Throwable t
           (try (stop! c) (catch Throwable _))
           (throw t))))))

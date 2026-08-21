@@ -82,19 +82,31 @@
                       [event-type consts])))
                 variants))))
 
-(def ^:private internal-event-types
-  "Event types that the protocol schema marks internal. Generated wire specs
-   cover them for forward compatibility, but they are not part of the public
-   SDK event surface."
+(defn- event-types-with-schema-marker
+  [marker value]
   (let [variants (-> schema :definitions :SessionEvent :anyOf)]
     (into #{}
           (keep (fn [variant]
                   (let [variant (if-let [r (:$ref variant)]
                                   (get-in schema (mapv keyword (rest (str/split r #"/"))))
                                   variant)]
-                    (when (= "internal" (:visibility variant))
+                    (when (= value (get variant marker))
                       (get-in variant [:properties :type :const])))))
           variants)))
+
+(def ^:private internal-event-types
+  "Event types that the protocol schema marks internal. Generated wire specs
+   cover them for forward compatibility, but they are not part of the public
+   SDK event surface."
+  (event-types-with-schema-marker :visibility "internal"))
+
+(def ^:private experimental-event-types
+  (event-types-with-schema-marker :stability "experimental"))
+
+(def ^:private intentionally-excluded-experimental-event-types
+  #{"factory.run_settled"
+    "factory.run_started"
+    "ui.ephemeral_query"})
 
 ;; ---------------------------------------------------------------------------
 ;; Canonical wire-shape fixtures (post `util/wire->clj`, i.e. kebab-case keys).
@@ -302,10 +314,31 @@
     :subject {:doc "foo"}
     :version 1}
 
+   ;; Stable data additions in schema 1.0.81-5.
+   "model.call_failure"
+   {:source "top_level"
+    :interaction-type "conversation-agent"}
+
+   "system.notification"
+   {:content "worker finished"
+    :kind {:type "agent_completed"
+           :agent-id "agent-1"
+           :agent-type "task"
+           :status "completed"
+           :display-name "Build verifier"}}
+
+   "external_tool.requested"
+   {:request-id "request-1"
+    :session-id "session-1"
+    :tool-call-id "tool-1"
+    :tool-name "provider-tool"
+    :provider-id nil}
+
    ;; Round 6 additions (upstream schema 1.0.56-1).
    "session.permissions_changed"
-   {:allow-all-permissions true
-    :previous-allow-all-permissions false}
+   {:mode "assisted"
+    :previous-mode "manual"
+    :assisted-approval-model "gpt-5.4"}
 
    "session.autopilot_objective_changed"
    {:operation "create"
@@ -357,9 +390,12 @@
 
 (deftest public-event-types-match-generated-schema-set
   (testing "the public curated `event-types` set covers exactly the schema's public event types
-            (guards against drift without exposing protocol-internal events)"
+            (guards against drift without exposing internal or intentionally excluded experimental events)"
     (let [curated (set (map name sdk/event-types))
-          generated (clojure.set/difference gen/event-types internal-event-types)
+          generated (clojure.set/difference
+                     gen/event-types
+                     internal-event-types
+                     intentionally-excluded-experimental-event-types)
           missing (clojure.set/difference generated curated)
           extra (clojure.set/difference curated generated)]
       (is (empty? missing)
@@ -368,6 +404,14 @@
       (is (empty? extra)
           (str "public event-types not present in the schema: " (sort extra)
                " — remove them or update the schema pin")))))
+
+(deftest intentionally-excluded-events-remain-experimental
+  (is (clojure.set/subset? intentionally-excluded-experimental-event-types
+                           gen/event-types)
+      "Every intentional event exclusion must still exist in the generated schema")
+  (is (clojure.set/subset? intentionally-excluded-experimental-event-types
+                           experimental-event-types)
+      "An intentionally excluded event becoming stable requires a public-surface decision"))
 
 (deftest generated-data-specs-preserve-variant-local-types
   (testing "session.schedule_created-data rejects string :id (must be positive integer)"

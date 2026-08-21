@@ -599,24 +599,22 @@
     (is (contains? sdk/event-types :copilot/hook.progress))))
 
 (deftest test-spec-session-permissions-changed-data
-  (testing "::session.permissions_changed-data accepts the documented shape"
-    ;; Schema requires :allow-all-permissions and :previous-allow-all-permissions
-    (let [evt {:allow-all-permissions true
-               :previous-allow-all-permissions false}]
+  (testing "::session.permissions_changed-data accepts the current experimental shape"
+    (let [evt {:mode "assisted"
+               :previous-mode "manual"
+               :assisted-approval-model "gpt-5.4"}]
       (is (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data evt)))
     (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
-                       {:allow-all-permissions "yes"
-                        :previous-allow-all-permissions false}))))
-  (testing "optional allow-all mode fields (schema 1.0.70, experimental) validate"
-    (is (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
-                  {:allow-all-permissions true
-                   :previous-allow-all-permissions false
-                   :allow-all-permission-mode "auto"
-                   :previous-allow-all-permission-mode "off"}))
+                       {:mode "automatic"
+                        :previous-mode "manual"})))
+    (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
+                       {:mode "allow-all"
+                        :previous-mode "manual"
+                        :assisted-approval-model 42}))))
+  (testing "the removed pre-1.0.81 shape is rejected"
     (is (not (s/valid? :github.copilot-sdk.specs/session.permissions_changed-data
                        {:allow-all-permissions true
-                        :previous-allow-all-permissions false
-                        :allow-all-permission-mode "sometimes"})))))
+                        :previous-allow-all-permissions false})))))
 
 (deftest test-spec-hook-progress-data
   (testing "::hook.progress-data accepts a non-blank :message string"

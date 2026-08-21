@@ -38,8 +38,8 @@
            (get-in stable-delta-report [:upstream :target-commit])))
     (is (= "v1.0.11"
            (get-in stable-delta-report [:upstream :target-release])))
-    (is (= (slurp ".copilot-schema-version")
-           (str (get-in stable-delta-report [:upstream :schema-version]) "\n")))
+    (is (= "1.0.80"
+           (get-in stable-delta-report [:upstream :schema-version])))
     (is (= (:stable-delta-ids stable-delta-report) stable-ids))
     (is (empty? (:unclassified-stable stable-delta-report)))
     (is (= 12 (count classifications)))

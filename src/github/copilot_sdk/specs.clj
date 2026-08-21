@@ -23,6 +23,27 @@
   [m allowed-keys]
   (set/difference (set (keys m)) allowed-keys))
 
+(defn- json-number?
+  [value]
+  (and (number? value)
+       (not (ratio? value))
+       (cond
+         (instance? Double value) (Double/isFinite ^Double value)
+         (instance? Float value) (Float/isFinite ^Float value)
+         :else true)))
+
+(defn- opaque-json-value?
+  [value]
+  (cond
+    (nil? value) true
+    (string? value) true
+    (json-number? value) true
+    (boolean? value) true
+    (vector? value) (every? opaque-json-value? value)
+    (map? value) (and (every? #(or (keyword? %) (string? %)) (keys value))
+                      (every? opaque-json-value? (vals value)))
+    :else false))
+
 (s/def ::non-blank-string (s/and string? (complement clojure.string/blank?)))
 ;; ::timestamp accepts both ISO 8601 strings (CLI ≥ 1.0.51, upstream PR #1340)
 ;; and numeric epoch-millis (older CLIs). Used by event timestamps and ping
@@ -878,7 +899,7 @@
 (s/def ::recommended-action string?)
 (s/def ::exit-plan-mode-request
   (s/keys :req-un [::summary ::actions ::recommended-action]
-          :opt-un [::plan-content]))
+          :opt-un [::plan-content ::model]))
 (s/def ::approved? boolean?)
 (s/def ::selected-action string?)
 (s/def ::feedback string?)
@@ -1249,12 +1270,15 @@
                     ::canvas-provider])
    resume-session-config-keys))
 
-;; join-session config extends resume with extension-authored Agent Factories.
+;; join-session config extends resume with extension-authored Agent Factories
+;; and the extension-only environment grant request.
 ;; When omitted, join-session defaults to a handler that returns {:kind :no-result}.
+(s/def ::requested-environment-variables
+  (s/coll-of ::non-blank-string :kind vector?))
 (def ^:private join-session-config-keys
   (-> resume-session-config-keys
       (disj :extension-sdk-path)
-      (conj :factories)))
+      (conj :factories :requested-environment-variables)))
 (s/def ::join-session-config
   (closed-session-config
    (s/keys :opt-un [::on-permission-request
@@ -1300,6 +1324,7 @@
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions?
+                    ::requested-environment-variables
                     ::canvas-provider
                     ::factories])
    join-session-config-keys))
@@ -1701,7 +1726,7 @@
 (s/def ::user.message-data
   (s/and (s/keys :req-un [::content]
                  :opt-un [::transformed-content ::source
-                          ::interaction-id ::is-autopilot-continuation])
+                          ::interaction-id ::is-autopilot-continuation ::turn-id])
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
 
@@ -1785,18 +1810,30 @@
 ;; provider's completion reason string (e.g. "stop", "length", "content_filter").
 (s/def ::content-filter-triggered boolean?)
 (s/def ::finish-reason string?)
+(s/def ::accepted-prediction-tokens nat-int?)
+(s/def ::rejected-prediction-tokens nat-int?)
+(s/def ::is-auto boolean?)
+(s/def ::is-byok boolean?)
+(s/def ::assistant-usage-transport #{"http" "websocket"})
 
 (s/def ::assistant.usage-data
-  (s/keys :req-un [::model]
-          :opt-un [::api-call-id ::api-endpoint ::cache-read-tokens
-                   ::cache-write-tokens ::cache-expires-at ::copilot-usage
-                   ::cost ::duration
-                   ::initiator ::interaction-type ::input-tokens ::inter-token-latency-ms
-                   ::output-tokens ::parent-tool-call-id ::provider-call-id
-                   ::quota-snapshots ::reasoning-effort ::reasoning-tokens
-                   ::service-request-id
-                   ::time-to-first-token-ms ::ttft-ms
-                   ::content-filter-triggered ::finish-reason ::rte]))
+  (s/and
+   (s/keys :req-un [::model]
+           :opt-un [::accepted-prediction-tokens ::api-call-id ::api-endpoint
+                    ::cache-read-tokens ::cache-write-tokens ::cache-expires-at
+                    ::copilot-usage ::cost ::duration ::initiator
+                    ::interaction-type ::input-tokens ::inter-token-latency-ms
+                    ::is-auto ::is-byok ::max-output-tokens ::max-prompt-tokens
+                    ::output-tokens ::parent-tool-call-id ::provider-call-id
+                    ::quota-snapshots ::reasoning-effort ::reasoning-tokens
+                    ::rejected-prediction-tokens ::service-request-id
+                    ::time-to-first-token-ms ::ttft-ms
+                    ::content-filter-triggered ::finish-reason ::rte])
+   #(or (not (contains? % :reasoning-summary))
+        (contains? #{"none" "concise" "detailed"}
+                   (:reasoning-summary %)))
+   #(or (not (contains? % :transport))
+        (s/valid? ::assistant-usage-transport (:transport %)))))
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
@@ -1829,12 +1866,17 @@
 (s/def ::code-changes map?)
 (s/def ::model-metrics map?)
 (s/def ::current-model string?)
+(s/def ::total-nano-aiu (s/and number? #(<= 0 %)))
+(s/def ::shutdown-agent-metric
+  (s/keys :req-un [::model-metrics ::total-api-duration-ms ::total-nano-aiu]
+          :opt-un [::agent-name ::agent-display-name]))
+(s/def ::agent-metrics (s/map-of keyword? ::shutdown-agent-metric))
 
 (s/def ::session.shutdown-data
   (s/keys :req-un [::shutdown-type ::total-api-duration-ms
                    ::session-start-time ::code-changes ::model-metrics]
           :opt-un [::error-reason ::current-model ::total-premium-requests
-                   ::events-file-size-bytes]))
+                   ::events-file-size-bytes ::agent-metrics ::total-nano-aiu]))
 
 ;; Session title changed event
 (s/def ::title string?)
@@ -1855,9 +1897,17 @@
 (s/def ::previous-model (s/nilable string?))
 (s/def ::new-model string?)
 (s/def ::previous-reasoning-effort string?)
+(s/def ::model-change-source
+  #{"model_command" "config_command" "settings_command" "model_picker"
+    "plan_mode" "automatic" "startup" "repo_settings" "managed_settings"
+    "agent" "sdk"})
 (s/def ::session.model_change-data
-  (s/keys :req-un [::new-model]
-          :opt-un [::previous-model ::previous-reasoning-effort ::reasoning-effort]))
+  (s/and
+   (s/keys :req-un [::new-model]
+           :opt-un [::previous-model ::previous-reasoning-effort
+                    ::reasoning-effort ::source])
+   #(or (not (contains? % :source))
+        (s/valid? ::model-change-source (:source %)))))
 
 ;; Session mode changed event
 (s/def ::previous-mode string?)
@@ -1865,20 +1915,17 @@
 (s/def ::session.mode_changed-data
   (s/keys :req-un [::previous-mode ::new-mode]))
 
-;; Session permissions changed event (upstream schema 1.0.56-1, round 6 sync).
-;; Reflects toggles of the "allow all permissions" mode. The wire fields are
-;; `allowAllPermissions` and `previousAllowAllPermissions`; no `?` suffix per
-;; the camel-snake-kebab convention (csk does not append `?` for booleans).
-;; Schema 1.0.70 added the optional experimental `allowAllPermissionMode` /
-;; `previousAllowAllPermissionMode` fields, a tri-state string enum layered on
-;; top of the boolean flags.
-(s/def ::allow-all-permissions boolean?)
-(s/def ::previous-allow-all-permissions boolean?)
-(s/def ::allow-all-permission-mode #{"off" "auto" "on"})
-(s/def ::previous-allow-all-permission-mode #{"off" "auto" "on"})
+;; This event is experimental upstream. Schema 1.0.81-5 replaced its aggregate
+;; allow-all booleans with the authoritative permission-mode transition.
+(s/def ::permission-mode #{"manual" "assisted" "allow-all"})
+(s/def ::assisted-approval-model string?)
 (s/def ::session.permissions_changed-data
-  (s/keys :req-un [::allow-all-permissions ::previous-allow-all-permissions]
-          :opt-un [::allow-all-permission-mode ::previous-allow-all-permission-mode]))
+  (s/and
+   (s/keys :req-un [::previous-mode]
+           :opt-un [::assisted-approval-model])
+   #(contains? % :mode)
+   #(s/valid? ::permission-mode (:mode %))
+   #(s/valid? ::permission-mode (:previous-mode %))))
 
 ;; Hook progress event (upstream schema 1.0.56-1, round 6 sync). Ephemeral
 ;; event emitted by hooks during long-running work. Reuses the existing
@@ -1994,10 +2041,12 @@
 (s/def ::total-tokens nat-int?)
 (s/def ::duration-ms nat-int?)
 (s/def ::cancelled boolean?)
+(s/def ::factory-run-id ::non-blank-string)
 
 (s/def ::subagent.started-data
-  (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
-          :opt-un [::agent-description ::model]))
+  (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name
+                   ::agent-description]
+          :opt-un [::factory-run-id ::model]))
 
 (s/def ::subagent.completed-data
   (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name]
@@ -2078,6 +2127,122 @@
 (s/def ::session.extensions_loaded-data
   (s/keys :req-un [::extensions]))
 
+;; Stable host-facing event payloads. These maps remain open so additive wire
+;; fields continue to pass through, while the exported fields below retain their
+;; caller-facing types.
+(s/def ::model-call-failure-source #{"top_level" "subagent" "mcp_sampling"})
+(s/def ::model.call_failure-data
+  (s/and (s/keys :req-un [::source]
+                 :opt-un [::interaction-type])
+         #(s/valid? ::model-call-failure-source (:source %))))
+
+(defn- optional-value?
+  [m key pred]
+  (or (not (contains? m key))
+      (pred (get m key))))
+
+(defn- notification-map?
+  [m required allowed]
+  (and (map? m)
+       (every? #(contains? m %) required)
+       (empty? (set/difference (set (keys m)) allowed))))
+
+(defn- system-notification-kind?
+  [kind]
+  (case (:type kind)
+    "agent_completed"
+    (and (notification-map?
+          kind
+          #{:type :agent-id :agent-type :status}
+          #{:type :agent-id :display-name :agent-type :status :description :prompt})
+         (s/valid? ::non-blank-string (:agent-id kind))
+         (string? (:agent-type kind))
+         (contains? #{"completed" "failed"} (:status kind))
+         (optional-value? kind :display-name string?)
+         (optional-value? kind :description string?)
+         (optional-value? kind :prompt string?))
+
+    "agent_idle"
+    (and (notification-map?
+          kind
+          #{:type :agent-id :agent-type}
+          #{:type :agent-id :display-name :agent-type :description})
+         (s/valid? ::non-blank-string (:agent-id kind))
+         (string? (:agent-type kind))
+         (optional-value? kind :display-name string?)
+         (optional-value? kind :description string?))
+
+    "new_inbox_message"
+    (and (notification-map?
+          kind
+          #{:type :entry-id :sender-name :sender-type :summary}
+          #{:type :entry-id :sender-name :sender-type :summary})
+         (every? string?
+                ((juxt :entry-id :sender-name :sender-type :summary) kind)))
+
+    "shell_completed"
+    (and (notification-map?
+          kind
+          #{:type :shell-id}
+          #{:type :shell-id :exit-code :description})
+         (string? (:shell-id kind))
+         (optional-value? kind :exit-code int?)
+         (optional-value? kind :description string?))
+
+    "shell_detached_completed"
+    (and (notification-map?
+          kind
+          #{:type :shell-id}
+          #{:type :shell-id :description})
+         (string? (:shell-id kind))
+         (optional-value? kind :description string?))
+
+    "instruction_discovered"
+    (and (notification-map?
+          kind
+          #{:type :source-path :trigger-file :trigger-tool}
+          #{:type :source-path :trigger-file :trigger-tool :description})
+         (every? string?
+                ((juxt :source-path :trigger-file :trigger-tool) kind))
+         (optional-value? kind :description string?))
+
+    "factory_completed"
+    (and (notification-map?
+          kind
+          #{:type :run-id :factory-name :status :consumed-subagents
+            :elapsed-ms :consumed-nano-aiu :attempt}
+          #{:type :run-id :factory-name :status :consumed-subagents
+            :elapsed-ms :consumed-nano-aiu :attempt :result-preview
+            :failure :retry-guidance})
+         (string? (:run-id kind))
+         (string? (:factory-name kind))
+         (contains? #{"completed" "halted" "cancelled" "error"} (:status kind))
+         (nat-int? (:consumed-subagents kind))
+         (nat-int? (:elapsed-ms kind))
+         (nat-int? (:consumed-nano-aiu kind))
+         (pos-int? (:attempt kind))
+         (optional-value? kind :result-preview
+                         #(and (string? %) (<= (count %) 256)))
+         (optional-value? kind :failure opaque-json-value?)
+         (optional-value? kind :retry-guidance string?))
+
+    "unclassified"
+    (and (notification-map? kind #{:type} #{:type :metadata})
+         (optional-value? kind :metadata opaque-json-value?))
+
+    false))
+
+(s/def ::system-notification-kind system-notification-kind?)
+(s/def ::system.notification-data
+  (s/and map?
+         #(string? (:content %))
+         #(s/valid? ::system-notification-kind (:kind %))))
+
+(s/def ::provider-id (s/nilable string?))
+(s/def ::external_tool.requested-data
+  (s/keys :req-un [::request-id ::session-id ::tool-call-id ::tool-name]
+          :opt-un [::provider-id]))
+
 ;; Generic session event
 (s/def ::session-event
   (s/merge ::base-event
@@ -2093,15 +2258,6 @@
         :string #{"success" "failure" "rejected" "denied" "timeout"}))
 (s/def ::text-result-for-llm string?)
 (s/def ::session-log string?)
-(defn- json-number?
-  [value]
-  (and (number? value)
-       (not (ratio? value))
-       (cond
-         (instance? Double value) (Double/isFinite ^Double value)
-         (instance? Float value) (Float/isFinite ^Float value)
-         :else true)))
-
 (s/def ::json-value
   (s/or :null nil?
         :string string?
@@ -2164,8 +2320,10 @@
 ;; Permission types
 ;; -----------------------------------------------------------------------------
 
-(s/def ::permission-kind #{:shell :write :mcp :read :url :custom-tool :memory :hook
-                           :extension-management :extension-permission-access :factory})
+(s/def ::permission-kind
+  #{:shell :write :mcp :read :url :custom-tool :memory :hook
+    :extension-management :extension-permission-access
+    :extension-env-access :factory})
 
 ;; Memory permission event data fields (CLI 1.0.22, upstream PR #1055)
 (s/def ::memory-action #{:store :vote})
@@ -2182,12 +2340,19 @@
 (s/def ::declared-max-total-subagents nat-int?)
 (s/def ::declared-timeout-seconds number?)
 (s/def ::declared-max-ai-credits number?)
+(s/def ::skip-permission boolean?)
+(s/def ::repo-nwo ::non-blank-string)
+(s/def ::scope #{"repository" "user"})
+(s/def ::environment-variables
+  (s/coll-of ::non-blank-string :kind vector? :min-count 1))
 
 (s/def ::permission-request
   (s/and
    (s/keys :req-un [::permission-kind]
            :opt-un [::tool-call-id ::memory-action ::memory-direction ::memory-reason
                     ::can-offer-session-approval ::managed-approval-required
+                    ::skip-permission ::repo-nwo ::scope
+                    ::extension-name ::environment-variables
                     ::command-segments ::redirected-from
                     ::name ::description ::phases ::approval-key ::can-persist-approval
                     ::declared-max-concurrent-subagents
@@ -2207,7 +2372,11 @@
              (or (not (contains? % :timeout-seconds))
                  (number? (:timeout-seconds %)))
              (or (not (contains? % :max-ai-credits))
-                 (number? (:max-ai-credits %)))))))
+                 (number? (:max-ai-credits %)))))
+   #(or (not= :extension-env-access (:permission-kind %))
+        (and (s/valid? ::non-blank-string (:extension-name %))
+             (s/valid? ::environment-variables
+                       (:environment-variables %))))))
 
 (s/def ::permission-result-kind
   #{:approve-once
@@ -2231,8 +2400,10 @@
 (s/def ::kind ::permission-result-kind)
 
 (s/def ::permission-result
-  (s/keys :req-un [::kind]
-          :opt-un [::rules ::approval ::location-key ::feedback]))
+  (closed-keys
+   (s/keys :req-un [::kind]
+           :opt-un [::rules ::approval ::location-key ::feedback])
+   #{:kind :rules :approval :location-key :feedback}))
 
 (s/def ::permission-decision-outcome
   #{:auto-approved :autopilot-denied :prompted-user})
@@ -2279,6 +2450,13 @@
 (s/def ::session
   (s/keys :req-un [::session-id ::client]
           :opt-un [::workspace-path]))
+
+(s/def ::granted-environment-variables (s/map-of string? string?))
+(s/def ::join-session-result
+  (closed-keys
+   (s/keys :req-un [::client ::session]
+           :opt-un [::granted-environment-variables])
+   #{:client :session :granted-environment-variables}))
 
 ;; -----------------------------------------------------------------------------
 ;; API response specs
