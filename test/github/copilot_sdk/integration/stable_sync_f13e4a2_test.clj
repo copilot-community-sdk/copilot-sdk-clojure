@@ -322,7 +322,7 @@
                            (:classification-counts baseline-package)
                            {:stable-public 8 :experimental 16})))))))
 
-(deftest historical-version-schema-and-generated-artifacts-are-exact
+(deftest historical-version-and-schema-source-proof-remain-exact
   (let [report (read-resource report-resource)
         artifacts (:local-artifacts report)
         source-proof (:schema-source-proof report)]

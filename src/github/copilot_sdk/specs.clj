@@ -2096,13 +2096,18 @@
 ;; :output-ttft-ms — upstream schema 1.0.83-1. Time-to-first-output-token,
 ;; distinct from ::time-to-first-token-ms; same non-negative-number semantics.
 (s/def ::output-ttft-ms (s/and json-number? #(<= 0 %)))
-(s/def ::batch-size nat-int?)
 (s/def ::cost-per-batch nat-int?)
 (s/def ::token-count nat-int?)
 (s/def ::token-type string?)
+(defn- valid-assistant-usage-batch-size?
+  [token-detail]
+  (and (contains? token-detail :batch-size)
+       (nat-int? (:batch-size token-detail))))
 (s/def ::assistant-usage-token-detail
-  (s/keys :req-un [::batch-size ::cost-per-batch ::token-count ::token-type]
-          :opt-un [::model]))
+  (s/and
+   (s/keys :req-un [::cost-per-batch ::token-count ::token-type]
+           :opt-un [::model])
+   valid-assistant-usage-batch-size?))
 (s/def ::token-details (s/coll-of ::assistant-usage-token-detail))
 (s/def ::copilot-usage
   (s/keys :req-un [::total-nano-aiu]

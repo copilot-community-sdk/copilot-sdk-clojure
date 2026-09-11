@@ -2997,9 +2997,10 @@
                               (:default or :long-context, upstream PR #1522)
    - :model-capabilities    - Model capabilities override map (upstream PR #1029)
                               e.g. {:supports {:vision true}
-                                    :limits {:max-prompt-tokens 128000}}
-                              (:adaptive-thinking / :max-output-tokens are experimental
-                              CLI-protocol extras)
+                                    :limits {:max-prompt-tokens 128000
+                                             :max-output-tokens 64000}}
+                              (:adaptive-thinking is an experimental
+                              CLI-protocol extra)
 
    Returns the new model ID string, or nil."
   ([session model-id] (switch-model! session model-id nil))

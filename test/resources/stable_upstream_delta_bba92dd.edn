@@ -639,18 +639,32 @@
     "src/github/copilot_sdk/client.clj"]}
   {:id :docs/resume-websocket-responses
    :classification :stable-public
-   :status :already-supported
+   :status :ported
    :upstream-pr 2578
    :evidence [:resume-websocket-doc]
    :inventory-items []
-   :clojure-paths ["doc/reference/API.md"]}
+   :clojure-paths ["doc/reference/API.md"]
+   :clojure-evidence
+   [{:path "doc/reference/API.md"
+     :contains
+     ["WebSocket responses default to `true`"
+      "selected model advertises `ws:/responses`"
+      "400 input item ID does not belong to this connection"
+      "COPILOT_CLI_DISABLE_WEBSOCKET_RESPONSES"]}]}
   {:id :docs/per-session-plugin-directories
    :classification :stable-public
-   :status :already-supported
+   :status :ported
    :upstream-pr 2581
    :evidence [:plugin-directories-doc]
    :inventory-items []
-   :clojure-paths ["doc/reference/API.md"]}
+   :clojure-paths ["doc/reference/API.md"]
+   :clojure-evidence
+   [{:path "doc/reference/API.md"
+     :contains
+     ["sent in `session.create` and `session.resume`"
+      "including to externally managed runtimes"
+      "Missing entries are logged and skipped"
+      "take precedence over personal/home plugins but not project plugins"]}]}
   {:id :runtime/schema-1.0.84-4
    :classification :stable-public
    :status :regenerated

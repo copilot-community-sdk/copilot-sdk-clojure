@@ -2278,6 +2278,9 @@
            (:state client)
            (fn [state]
              (cond
+               (:connection-start-completion state)
+               state
+
                (#{:connecting :connected} (:status state))
                state
 
@@ -2293,9 +2296,8 @@
                       :status :connecting))))]
       (cond
         (:connection-start-completion old-state)
-        (let [completion (:connection-start-completion old-state)]
-          {:role :waiter
-           :completion completion})
+        {:role :waiter
+         :completion (:connection-start-completion old-state)}
 
         (= :connected (:status old-state))
         {:role :connected}
@@ -2326,13 +2328,6 @@
          :startup-token startup-token
          :completion completion}))))
 
-(defn- await-client-start!
-  [completion]
-  (let [{:keys [failure]} @completion]
-    (when failure
-      (throw failure)))
-  nil)
-
 (defn- complete-client-start!
   [client completion outcome]
   (deliver completion outcome)
@@ -2350,7 +2345,12 @@
         (claim-client-start! client caller-supplied-streams?)]
     (case role
       :connected nil
-      :waiter (await-client-start! completion)
+      :waiter
+      (do
+        (log/debug "Waiting for in-progress Copilot client startup")
+        (when-let [failure (:failure @completion)]
+          (throw failure))
+        nil)
       :owner
       (try
         (let [result (start-owner! startup-token)]
@@ -4416,7 +4416,7 @@
    - :tool-search        - Tool discovery config {:enabled :defer-threshold}
    - :provider           - Custom provider config (BYOK)
    - :capi               - Copilot API options {:enable-web-socket-responses boolean
-                                                :auto-tier :efficiency|:balance|:intelligence}.
+                                                :auto-tier :efficiency|:balance|:intelligence|:fast}.
                            On resident resume, a supplied different tier requests
                            a safe runtime switch; omission restores the persisted
                            preference.
@@ -4741,7 +4741,7 @@
    - :tool-search        - Tool discovery config {:enabled :defer-threshold}
    - :provider           - Custom provider configuration (BYOK)
    - :capi               - Copilot API options {:enable-web-socket-responses boolean
-                                                :auto-tier :efficiency|:balance|:intelligence}.
+                                                :auto-tier :efficiency|:balance|:intelligence|:fast}.
                            On resident resume, a supplied different tier requests
                            a safe runtime switch; omission restores the persisted
                            preference.
@@ -4786,8 +4786,8 @@
                            `requestMcpApps: true` on resume, while false and omission send nothing.
                            (https://github.com/github/copilot-sdk/pull/1335)
    - :model-capabilities - Model capabilities override map (upstream PR #1029).
-                           Same shape as `create-session`; :adaptive-thinking and
-                           :max-output-tokens are experimental CLI-protocol extras.
+                           Same shape as `create-session`; only :adaptive-thinking
+                           is an experimental CLI-protocol extra.
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
                                             (upstream PR #1108)

@@ -295,6 +295,26 @@
       (with-redefs [proc/spawn-cli (fn [_] (throw (ex-info "start! must not spawn when already :connected" {})))]
         (is (nil? (copilot/start! c)))))))
 
+(deftest start-guard-rejects-connecting-state-without-completion-test
+  (let [c (copilot/client {:auto-start? false})
+        state (:state c)]
+    (swap! state assoc
+           :status :connecting
+           :connection-start-token (Object.)
+           :connection-start-completion nil)
+    (try
+      (let [failure (try
+                      (copilot/start! c)
+                      nil
+                      (catch clojure.lang.ExceptionInfo exception
+                        exception))]
+        (is (instance? clojure.lang.ExceptionInfo failure))
+        (is (= :missing-start-completion (:type (ex-data failure)))))
+      (finally
+        (swap! state assoc
+               :status :not-started
+               :connection-start-token nil)))))
+
 ;; =============================================================================
 ;; Protocol Tests (Unit)
 ;; =============================================================================

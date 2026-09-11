@@ -931,32 +931,23 @@
 ;; Generated top-level form size — JVM `Method code too large!` regression
 ;; guard
 ;;
-;; `emit-envelope-spec` previously re-emitted the ENTIRE global non-conforming
-;; union for the "type"/"data" kebabs (each a cross-schema union spanning
-;; ~135/~133 distinct schemas) as a `strict-pred` INSIDE every one of the
-;; ~135 event variants' envelope `s/and` forms — even though each variant
-;; already has a strictly stronger dedicated check elsewhere (`const-preds`
-;; for `:type`, the trailing `data-kw` predicate for `:data`). That produced
-;; many top-level forms in the ~26KB-source-char class, and `event_specs.clj`
-;; as a whole ballooned to ~3.85MB. At least one such form was large enough to
-;; overflow the JVM's 64KB-per-method bytecode limit at compile time
-;; (`Method code too large!`).
+;; `emit-envelope-spec` previously re-emitted large global structural unions
+;; inside every event variant's envelope `s/and`, even though each variant
+;; already has a stronger dedicated check (`const-preds` for `:type`, the
+;; trailing `data-kw` predicate for `:data`). At least one generated form was
+;; large enough to overflow the JVM's 64KB-per-method bytecode limit at
+;; compile time (`Method code too large!`).
 ;;
 ;; The fix (see `emit-envelope-spec` in `script/codegen/emit_specs.clj`)
-;; excludes const-covered properties and the `"data"` kebab from the
-;; redundant per-variant envelope re-check, so each such global union is now
-;; emitted exactly ONCE as a load-bearing leaf spec (`::type`, `::data`),
-;; consumed by every `s/keys` site via clojure.spec's implicit unqualified-key
-;; -> fully-qualified-keyword spec lookup — not duplicated per variant.
+;; excludes const-covered properties from the redundant envelope re-check and
+;; emits the shared `::data` leaf as `any?`. Each envelope still validates its
+;; exact payload through the event-local `data-kw` predicate.
 ;;
 ;; This test reads the actual generated SOURCE TEXT (not the loaded/expanded
 ;; namespace) via the plain data reader, so it exercises exactly what
 ;; `write-clj!` wrote and what the JVM must compile. The 32000-char and
-;; 8000-char thresholds are reasoned estimates (not a precisely derived exact
-;; safety margin): the current known-good maximum is the single ::data leaf
-;; spec at ~19,185 chars, comfortably under both; a recurrence of the fixed
-;; bug would produce MANY forms at or above the ~26,058-char class this test
-;; guards against.
+;; 8000-char thresholds are conservative guards rather than exact bytecode
+;; limits; the current known-good maximum is below 8000 characters.
 ;; ---------------------------------------------------------------------------
 
 (def ^:private generated-event-specs-forms
@@ -989,7 +980,7 @@
                                   (second %))
                            %)
                         generated-event-specs-forms)]
-    (testing "the shared envelope :data leaf delegates to per-event payload specs"
+    (testing "the shared envelope :data leaf stays permissive"
       (is (= 'clojure.core/any? (nth data-form 2))))
     (testing "no single generated top-level form approaches the 64KB JVM per-method bytecode limit"
       (is (<= (:len max-entry) 32000)

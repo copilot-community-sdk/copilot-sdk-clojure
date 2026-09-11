@@ -459,43 +459,47 @@
           (catch Throwable _))
         (mock/stop-mock-server! server)))))
 
-(deftest test-start-waits-for-shared-completion-after-connection-is-published
-  (let [c (sdk/client {:auto-start? false})
-        completion (promise)
-        startup-failure (ex-info "simulated late startup failure" {:phase :publish})
-        claim-observed (promise)
-        real-claim (var-get (var client/claim-client-start!))]
-    (swap! (:state c) assoc
-           :status :connected
-           :connection-start-completion completion)
-    (try
-      (with-redefs-fn
-        {(var client/claim-client-start!)
-         (fn [startup-client caller-supplied-streams?]
-           (let [claim (real-claim startup-client caller-supplied-streams?)]
-             (deliver claim-observed claim)
-             claim))}
-        #(let [start-result
-               (future
-                 (try
-                   (client/start! c)
-                   :connected
-                   (catch Throwable failure
-                     failure)))]
-           (is (= :waiter
-                  (:role (await-value! claim-observed
-                                       "startup completion waiter"
-                                       1000))))
-           (is (not (realized? start-result)))
-           (deliver completion {:failure startup-failure})
-           (is (identical? startup-failure
-                           (await-value! start-result
-                                         "shared startup completion"
-                                         1000)))))
-      (finally
-        (swap! (:state c) assoc
-               :status :disconnected
-               :connection-start-completion nil)))))
+(deftest test-start-preserves-shared-completion-after-terminal-status-is-published
+  (doseq [published-status [:connected :error]]
+    (let [c (sdk/client {:auto-start? false})
+          completion (promise)
+          startup-failure (ex-info "simulated late startup failure" {:phase :publish})
+          claim-observed (promise)
+          real-claim (var-get (var client/claim-client-start!))]
+      (swap! (:state c) assoc
+             :status published-status
+             :connection-start-completion completion)
+      (try
+        (with-redefs-fn
+          {(var client/claim-client-start!)
+           (fn [startup-client caller-supplied-streams?]
+             (let [claim (real-claim startup-client caller-supplied-streams?)]
+               (deliver claim-observed claim)
+               claim))}
+          #(let [start-result
+                 (future
+                   (try
+                     (client/start! c)
+                     :connected
+                     (catch Throwable failure
+                       failure)))]
+             (is (= :waiter
+                    (:role (await-value! claim-observed
+                                         "startup completion waiter"
+                                         1000))))
+             (is (= published-status (:status @(:state c))))
+             (is (identical? completion
+                             (:connection-start-completion @(:state c))))
+             (is (not (realized? start-result)))
+             (deliver completion {:failure startup-failure})
+             (is (identical? startup-failure
+                             (await-value! start-result
+                                           "shared startup completion"
+                                           1000)))))
+        (finally
+          (swap! (:state c) assoc
+                 :status :disconnected
+                 :connection-start-completion nil))))))
 
 (deftest test-unexpected-close-terminates-the-exact-sdk-owned-process
   (let [server (mock/create-mock-server)

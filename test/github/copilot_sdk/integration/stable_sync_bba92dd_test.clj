@@ -623,6 +623,13 @@
     (doseq [{:keys [clojure-paths]} (:stable-deltas report)
             path clojure-paths]
       (is (.isFile (io/file path)) (str "missing Clojure evidence: " path)))
+    (doseq [{delta-id :id :keys [clojure-evidence]} (:stable-deltas report)
+            {:keys [path contains]} clojure-evidence
+            :let [source (slurp path)]
+            expected contains]
+      (is (str/includes? source expected)
+          (str delta-id " is missing documented evidence "
+               (pr-str expected) " in " path)))
     (when-let [upstream-repo @upstream-repo]
       (let [base (get-in report [:upstream :base-commit])
             target (get-in report [:upstream :target-commit])
@@ -1008,6 +1015,23 @@
     (is (s/valid? ::specs/custom-agent-info custom-agent))
     (is (s/valid? ::specs/permission-request permission))
     (is (s/valid? ::specs/assistant.usage-data assistant-usage))
+    (let [token-detail (first (get-in assistant-usage
+                                      [:copilot-usage :token-details]))
+          copilot-usage (:copilot-usage assistant-usage)]
+      (doseq [spec [::specs/assistant-usage-token-detail
+                    ::generated-events/assistant-usage-copilot-usage-token-detail-shape]
+              required-key [:batch-size :cost-per-batch :token-count :token-type]]
+        (is (not (s/valid? spec (dissoc token-detail required-key)))
+            (str spec " must require " required-key)))
+      (doseq [invalid-batch-size [-1 1.5]]
+        (is (not (s/valid? ::specs/assistant-usage-token-detail
+                           (assoc token-detail :batch-size invalid-batch-size)))
+            (str "Assistant usage batch size must be a natural integer: "
+                 (pr-str invalid-batch-size))))
+      (doseq [spec [::specs/copilot-usage
+                    ::generated-events/assistant-usage-copilot-usage-shape]]
+        (is (not (s/valid? spec (dissoc copilot-usage :total-nano-aiu)))
+            (str spec " must require :total-nano-aiu"))))
     (is (s/valid?
          ::generated-events/subagent.started-data
          subagent-started))
