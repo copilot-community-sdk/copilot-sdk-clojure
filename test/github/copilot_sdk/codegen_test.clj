@@ -191,6 +191,7 @@
     "factory.run_settled"
     "factory.run_started"
     "session.completion_receipt"
+    "session.auto_tier_recommendation"
     "session.fusion_completed"
     "session.fusion_resolved"
     "session.fusion_route_failed"
@@ -930,32 +931,23 @@
 ;; Generated top-level form size — JVM `Method code too large!` regression
 ;; guard
 ;;
-;; `emit-envelope-spec` previously re-emitted the ENTIRE global non-conforming
-;; union for the "type"/"data" kebabs (each a cross-schema union spanning
-;; ~135/~133 distinct schemas) as a `strict-pred` INSIDE every one of the
-;; ~135 event variants' envelope `s/and` forms — even though each variant
-;; already has a strictly stronger dedicated check elsewhere (`const-preds`
-;; for `:type`, the trailing `data-kw` predicate for `:data`). That produced
-;; many top-level forms in the ~26KB-source-char class, and `event_specs.clj`
-;; as a whole ballooned to ~3.85MB. At least one such form was large enough to
-;; overflow the JVM's 64KB-per-method bytecode limit at compile time
-;; (`Method code too large!`).
+;; `emit-envelope-spec` previously re-emitted large global structural unions
+;; inside every event variant's envelope `s/and`, even though each variant
+;; already has a stronger dedicated check (`const-preds` for `:type`, the
+;; trailing `data-kw` predicate for `:data`). At least one generated form was
+;; large enough to overflow the JVM's 64KB-per-method bytecode limit at
+;; compile time (`Method code too large!`).
 ;;
 ;; The fix (see `emit-envelope-spec` in `script/codegen/emit_specs.clj`)
-;; excludes const-covered properties and the `"data"` kebab from the
-;; redundant per-variant envelope re-check, so each such global union is now
-;; emitted exactly ONCE as a load-bearing leaf spec (`::type`, `::data`),
-;; consumed by every `s/keys` site via clojure.spec's implicit unqualified-key
-;; -> fully-qualified-keyword spec lookup — not duplicated per variant.
+;; excludes const-covered properties from the redundant envelope re-check and
+;; emits the shared `::data` leaf as `any?`. Each envelope still validates its
+;; exact payload through the event-local `data-kw` predicate.
 ;;
 ;; This test reads the actual generated SOURCE TEXT (not the loaded/expanded
 ;; namespace) via the plain data reader, so it exercises exactly what
 ;; `write-clj!` wrote and what the JVM must compile. The 32000-char and
-;; 8000-char thresholds are reasoned estimates (not a precisely derived exact
-;; safety margin): the current known-good maximum is the single ::data leaf
-;; spec at ~19,185 chars, comfortably under both; a recurrence of the fixed
-;; bug would produce MANY forms at or above the ~26,058-char class this test
-;; guards against.
+;; 8000-char thresholds are conservative guards rather than exact bytecode
+;; limits; the current known-good maximum is below 8000 characters.
 ;; ---------------------------------------------------------------------------
 
 (def ^:private generated-event-specs-forms
@@ -983,7 +975,13 @@
 (deftest generated-top-level-forms-stay-well-under-jvm-method-size-limit
   (let [sized (map (fn [form] {:form form :len (count (pr-str form))})
                    generated-event-specs-forms)
-        max-entry (apply max-key :len sized)]
+        max-entry (apply max-key :len sized)
+        data-form (some #(when (= :github.copilot-sdk.generated.event-specs/data
+                                  (second %))
+                           %)
+                        generated-event-specs-forms)]
+    (testing "the shared envelope :data leaf stays permissive"
+      (is (= 'clojure.core/any? (nth data-form 2))))
     (testing "no single generated top-level form approaches the 64KB JVM per-method bytecode limit"
       (is (<= (:len max-entry) 32000)
           (str "Largest generated top-level form is " (:len max-entry)
@@ -991,15 +989,23 @@
                "This class of bloat previously caused `Method code too "
                "large!` at JVM compile time — see `emit-envelope-spec` in "
                "`script/codegen/emit_specs.clj`.")))
-    (testing "only the known load-bearing global-union leaf spec (`::data`) is large"
+    (testing "no generated top-level form duplicates a large structural union"
       (let [large (->> sized (filter #(> (:len %) 8000)))]
-        (is (<= (count large) 1)
-            (str "Expected at most one generated top-level form over 8000 "
-                 "chars (the load-bearing `::data` global-union leaf spec, "
-                 "consumed via `s/keys`'s implicit key-spec lookup in "
-                 "`emit-envelope-spec`/`emit-data-spec`). Found "
+        (is (empty? large)
+            (str "Expected no generated top-level form over 8000 chars. "
+                 "The shared `::data` leaf delegates to exact per-event specs "
+                 "instead of aggregating every payload schema. Found "
                  (count large) ": "
                  (pr-str (map (comp second :form) large))
-                 ". A jump here likely means the redundant per-variant "
-                 "envelope strict-pred bug has recurred — see "
-                 "`emit-envelope-spec` in `script/codegen/emit_specs.clj`."))))))
+                 ". A jump here likely means a structural schema was inlined "
+                 "instead of registered or checked variant-locally."))))))
+
+(deftest generated-data-leaf-stays-variant-local
+  (let [valid {:asset-id "asset-1"
+               :byte-length 3
+               :data "YWJj"
+               :mime-type "text/plain"
+               :type "resource"}]
+    (is (s/valid? ::gen/session.binary_asset-data valid))
+    (is (not (s/valid? ::gen/session.binary_asset-data
+                       (assoc valid :data {:unexpected "map"}))))))

@@ -397,6 +397,110 @@
               (catch Throwable _))
             (mock/stop-mock-server! server)))))))
 
+(deftest test-concurrent-starts-share-one-startup-result
+  (let [server (mock/create-mock-server)
+        c (sdk/client {:auto-start? false})
+        [in out] (mock/client-streams server)
+        exit-ch (chan)
+        managed-process
+        (proc/map->ManagedProcess
+         {:process nil
+          :stdin out
+          :stdout in
+          :stderr (java.io.ByteArrayInputStream. (byte-array 0))
+          :exit-chan exit-ch})
+        startup-blocked (promise)
+        release-startup (promise)
+        second-claim-observed (promise)
+        claim-count (atom 0)
+        spawn-count (atom 0)
+        startup-failure (ex-info "simulated startup failure" {:phase :setup})
+        real-claim (var-get (var client/claim-client-start!))
+        capture-start
+        #(future
+           (try
+             (client/start! c)
+             :connected
+             (catch Throwable failure
+               failure)))]
+    (try
+      (mock/start-mock-server! server)
+      (with-redefs-fn
+        {(var proc/spawn-cli)
+         (fn [_]
+           (swap! spawn-count inc)
+           managed-process)
+         (var client/claim-client-start!)
+         (fn [startup-client caller-supplied-streams?]
+           (let [claim (real-claim startup-client caller-supplied-streams?)]
+             (when (= 2 (swap! claim-count inc))
+               (deliver second-claim-observed true))
+             claim))
+         (var client/setup-request-handler!)
+         (fn [_]
+           (deliver startup-blocked true)
+           @release-startup
+           (throw startup-failure))}
+        #(let [first-start (capture-start)]
+           (await-value! startup-blocked "blocked client startup" 1000)
+           (let [second-start (capture-start)]
+             (await-value! second-claim-observed "second startup claim" 1000)
+             (deliver release-startup true)
+             (is (identical? startup-failure
+                             (await-value! first-start "first startup result" 1000)))
+             (is (identical? startup-failure
+                             (await-value! second-start "second startup result" 1000)))
+             (is (= 1 @spawn-count)
+                 "Only the owner should execute the startup sequence"))))
+      (finally
+        (close! exit-ch)
+        (try
+          (sdk/stop! c)
+          (catch Throwable _))
+        (mock/stop-mock-server! server)))))
+
+(deftest test-start-preserves-shared-completion-after-terminal-status-is-published
+  (doseq [published-status [:connected :error]]
+    (let [c (sdk/client {:auto-start? false})
+          completion (promise)
+          startup-failure (ex-info "simulated late startup failure" {:phase :publish})
+          claim-observed (promise)
+          real-claim (var-get (var client/claim-client-start!))]
+      (swap! (:state c) assoc
+             :status published-status
+             :connection-start-completion completion)
+      (try
+        (with-redefs-fn
+          {(var client/claim-client-start!)
+           (fn [startup-client caller-supplied-streams?]
+             (let [claim (real-claim startup-client caller-supplied-streams?)]
+               (deliver claim-observed claim)
+               claim))}
+          #(let [start-result
+                 (future
+                   (try
+                     (client/start! c)
+                     :connected
+                     (catch Throwable failure
+                       failure)))]
+             (is (= :waiter
+                    (:role (await-value! claim-observed
+                                         "startup completion waiter"
+                                         1000))))
+             (is (= published-status (:status @(:state c))))
+             (is (identical? completion
+                             (:connection-start-completion @(:state c))))
+             (is (not (realized? start-result)))
+             (deliver completion {:failure startup-failure})
+             (is (identical? startup-failure
+                             (await-value! start-result
+                                           "shared startup completion"
+                                           1000)))))
+        (finally
+          (swap! (:state c) assoc
+                 :status :disconnected
+                 :connection-start-completion nil))))))
+
 (deftest test-unexpected-close-terminates-the-exact-sdk-owned-process
   (let [server (mock/create-mock-server)
         c (sdk/client {:auto-start? false})

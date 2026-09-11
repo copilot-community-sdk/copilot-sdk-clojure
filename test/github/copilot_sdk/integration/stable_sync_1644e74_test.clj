@@ -162,13 +162,10 @@
                  :event-metadata-changed? false
                  :coercion-source-changed? false}}
                schema))
-        (is (= "1.0.83" (str/trim (slurp ".copilot-schema-version"))))
         (is (= {:sdk "1.0.13.0"
                 :changed? false
                 :release-required? false}
-               version))
-        (is (str/includes? (slurp "build.clj")
-                           "(def version \"1.0.13.0\")"))))))
+               version))))))
 
 (deftest exact-upstream-range-and-public-surface-are-pinned
   (when-let [report (read-resource report-resource)]

@@ -306,7 +306,14 @@
                          values, which would break the envelope spec's
                          `s/and` chain (the per-event `:type` predicate
                          inspects the raw map and would see a conformed
-                         `[:v0 ...]` tuple).
+                         `[:v0 ...]` tuple). The special envelope key `:data`
+                         is emitted as `any?`: every envelope already applies
+                         its exact `::<event>-data` spec, while payloads that
+                         themselves contain a `:data` field receive the same
+                         variant-local strict predicate as other conflicts.
+                         Avoiding the aggregate union here prevents complex
+                         event payload unions from exceeding the JVM's
+                         per-method bytecode limit.
 
    `:env-form-by-kebab` — kebab-name → strict spec form derived from envelope
                          occurrences only (i.e., excluding nested `data`).
@@ -322,18 +329,19 @@
                          predicate for most envelope keys appearing in this
                          set, so e.g. envelope `id` (UUID string) is not
                          weakened by a data-payload `id` (positive integer).
-                         `:type` and `:data` are always members of this set
-                         too; `emit-envelope-spec` excludes them from strict
-                         predicates for the reasons documented beside its
-                         `strict-preds` binding.
+                         `:type` is also a member of this set;
+                         `emit-envelope-spec` excludes it from strict
+                         predicates because each event variant already pins
+                         its exact literal.
 
-   `:data-conflicted`  — set of kebab-names whose global `:leaf-map` form is
-                         a non-conforming union and which occur in at least
-                         one data payload. Data emission adds a variant-local
+   `:data-conflicted`  — set of kebab-names that occur in at least one data
+                         payload and require variant-local validation because
+                         the global leaf is either a conflict union or, for
+                         `data`, intentionally `any?`. Data emission adds a
                          strict predicate for every data key in this set, so
-                         both envelope/data collisions (`id`) and collisions
-                         across data variants (`reason`) retain the exact
-                         schema declared by each event."
+                         envelope/data collisions (`id`), cross-data
+                         collisions (`reason`), and nested `data` fields retain
+                         the exact schema declared by each event."
   [root variants]
   (let [env-pairs  (mapcat (fn [{:keys [variant]}]
                              (map (fn [[k node]]
@@ -381,8 +389,17 @@
                     :let [nodes (mapv second pairs)
                           forms (mapv #(emit-type root %) nodes)
                           uniq  (vec (distinct forms))]]
-                (if (= 1 (count uniq))
+                (cond
+                  (= "data" kebab)
+                  (do
+                    (when (seq (data-groups kebab))
+                      (swap! data-conflicted conj kebab))
+                    [kebab `any?])
+
+                  (= 1 (count uniq))
                   [kebab (first uniq)]
+
+                  :else
                   (let [v (gensym "v")
                         union-form `(~'s/spec
                                      (~'fn [~v]
@@ -524,30 +541,18 @@
         ;; data-payload conflict). Required keys are validated unconditionally;
         ;; optional keys are validated only when present.
         ;;
-        ;; Two kebabs are always excluded here even when `conflicted` contains
-        ;; them, because a variant-specific, strictly-more-precise check
-        ;; already covers them elsewhere in this same `s/and`:
-        ;;   - any property this *specific* variant declares with a JSON
-        ;;     Schema `const` (chiefly `:type`) is already pinned to its
-        ;;     exact literal by `const-preds` above; a strict-pred here would
-        ;;     just re-check membership in the union of every variant's
-        ;;     literal — provably weaker and pure bloat (one huge redundant
-        ;;     union per envelope, multiplied across ~100+ event variants,
-        ;;     is what produces multi-KB `s/def` forms large enough to trip
-        ;;     the JVM's 64KB-per-method bytecode limit).
-        ;;   - `"data"` is always covered by the trailing `data-kw` predicate
-        ;;     below, which validates `:data` against *this* variant's own
-        ;;     `::<event>-data` spec — strictly more precise than a union
-        ;;     across every variant's data shape (which would spuriously
-        ;;     accept `:data` belonging to any *other* event type).
+        ;; Any property this variant declares with a JSON Schema `const`
+        ;; (chiefly `:type`) is already pinned to its exact literal by
+        ;; `const-preds` above. Re-checking membership in the union of every
+        ;; variant's literal would be weaker and can inflate generated
+        ;; `s/def` forms enough to trip the JVM's 64KB-per-method limit.
         strict-preds (->> envelope
                           (keep (fn [[k v]]
                                   (let [kb       (kebab k)
                                         env-form (get env-form-by-kebab kb)]
                                     (when (and (contains? conflicted kb)
                                                env-form
-                                               (not (contains? v :const))
-                                               (not= kb "data"))
+                                               (not (contains? v :const)))
                                       [kb env-form (contains? required (name k))]))))
                           (sort-by first)
                           (map (fn [[prop-name env-form req?]]

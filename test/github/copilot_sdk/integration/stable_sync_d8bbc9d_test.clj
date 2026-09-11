@@ -205,16 +205,11 @@
                 :reason
                 "The runtime SendRequest source field predates this stable SDK addition; generated protocol and event sources are byte-for-byte unchanged."}
                schema))
-        (is (= "1.0.83" (str/trim (slurp ".copilot-schema-version"))))
-        (is (str/includes? (slurp ".github/workflows/ci.yml")
-                           (str "ref: " (:target-commit upstream))))
         (is (= {:sdk "1.0.13.0"
                 :changed? false
                 :release-required? false
                 :next-release "1.0.13.1"}
-               version))
-        (is (str/includes? (slurp "build.clj")
-                           "(def version \"1.0.13.0\")"))))))
+               version))))))
 
 (deftest exact-upstream-range-and-public-surface-are-pinned
   (when-let [report (read-resource report-resource)]

@@ -288,22 +288,32 @@
       (finally
         (reset! state-atom saved)))))
 
-(deftest start-guard-prevents-double-spawn-test
-  ;; The start! status guard must be atomic: if a start is already in progress
-  ;; (:connecting) or complete (:connected), a second start! must NOT spawn a
-  ;; second CLI process. A non-atomic check-then-act lets two concurrent callers
-  ;; both pass the guard and double-spawn. We simulate the in-progress state
-  ;; deterministically and assert no spawn is attempted.
-  (testing "already :connecting -> start! is a no-op (no second spawn)"
-    (let [c (copilot/client {:auto-start? false :use-stdio? true})]
-      (swap! (:state c) assoc :status :connecting)
-      (with-redefs [proc/spawn-cli (fn [_] (throw (ex-info "start! must not spawn when already :connecting" {})))]
-        (is (nil? (copilot/start! c))))))
+(deftest start-guard-prevents-spawn-when-connected-test
   (testing "already :connected -> start! is a no-op"
     (let [c (copilot/client {:auto-start? false :use-stdio? true})]
       (swap! (:state c) assoc :status :connected)
       (with-redefs [proc/spawn-cli (fn [_] (throw (ex-info "start! must not spawn when already :connected" {})))]
         (is (nil? (copilot/start! c)))))))
+
+(deftest start-guard-rejects-connecting-state-without-completion-test
+  (let [c (copilot/client {:auto-start? false})
+        state (:state c)]
+    (swap! state assoc
+           :status :connecting
+           :connection-start-token (Object.)
+           :connection-start-completion nil)
+    (try
+      (let [failure (try
+                      (copilot/start! c)
+                      nil
+                      (catch clojure.lang.ExceptionInfo exception
+                        exception))]
+        (is (instance? clojure.lang.ExceptionInfo failure))
+        (is (= :missing-start-completion (:type (ex-data failure)))))
+      (finally
+        (swap! state assoc
+               :status :not-started
+               :connection-start-token nil)))))
 
 ;; =============================================================================
 ;; Protocol Tests (Unit)

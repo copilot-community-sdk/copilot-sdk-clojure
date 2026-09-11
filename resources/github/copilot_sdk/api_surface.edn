@@ -489,6 +489,7 @@
     :github.copilot-sdk.specs/assistant-message-tool-request-caller
     :github.copilot-sdk.specs/assistant-message-tool-request-caller-type
     :github.copilot-sdk.specs/assistant-message-tool-request-type
+    :github.copilot-sdk.specs/assistant-usage-token-detail
     :github.copilot-sdk.specs/assistant-usage-transport
     :github.copilot-sdk.specs/assistant.message-data
     :github.copilot-sdk.specs/assistant.message_delta-data
@@ -504,6 +505,7 @@
     :github.copilot-sdk.specs/attachment-type
     :github.copilot-sdk.specs/attachments
     :github.copilot-sdk.specs/attributed-permission-result
+    :github.copilot-sdk.specs/auth-client-id-metadata-url
     :github.copilot-sdk.specs/auth-type
     :github.copilot-sdk.specs/authenticated?
     :github.copilot-sdk.specs/auto-mode-switch-request
@@ -577,6 +579,7 @@
     :github.copilot-sdk.specs/copilot-home
     :github.copilot-sdk.specs/copilot-usage
     :github.copilot-sdk.specs/cost
+    :github.copilot-sdk.specs/cost-per-batch
     :github.copilot-sdk.specs/create-session-fs-handler
     :github.copilot-sdk.specs/cron
     :github.copilot-sdk.specs/current-model
@@ -834,6 +837,7 @@
     :github.copilot-sdk.specs/model-picker-category
     :github.copilot-sdk.specs/model-picker-price-category
     :github.copilot-sdk.specs/model-policy
+    :github.copilot-sdk.specs/model-selection-source
     :github.copilot-sdk.specs/model-supports
     :github.copilot-sdk.specs/model.call_failure-data
     :github.copilot-sdk.specs/model.call_finished-data
@@ -964,6 +968,9 @@
     :github.copilot-sdk.specs/request-handler-threads
     :github.copilot-sdk.specs/request-headers
     :github.copilot-sdk.specs/request-id
+    :github.copilot-sdk.specs/request-sandbox-bypass
+    :github.copilot-sdk.specs/request-sandbox-bypass-reason
+    :github.copilot-sdk.specs/request-sandbox-permissive
     :github.copilot-sdk.specs/requested-environment-variables
     :github.copilot-sdk.specs/requested-schema
     :github.copilot-sdk.specs/reset-date
@@ -1092,6 +1099,7 @@
     :github.copilot-sdk.specs/system-notification-kind
     :github.copilot-sdk.specs/system-prompt-section
     :github.copilot-sdk.specs/system.notification-data
+    :github.copilot-sdk.specs/task-model-source
     :github.copilot-sdk.specs/tcp-connection-token
     :github.copilot-sdk.specs/telemetry
     :github.copilot-sdk.specs/temporary
@@ -1103,8 +1111,11 @@
     :github.copilot-sdk.specs/timeout-seconds
     :github.copilot-sdk.specs/timestamp
     :github.copilot-sdk.specs/title
+    :github.copilot-sdk.specs/token-count
+    :github.copilot-sdk.specs/token-details
     :github.copilot-sdk.specs/token-limit
     :github.copilot-sdk.specs/token-prices
+    :github.copilot-sdk.specs/token-type
     :github.copilot-sdk.specs/tool
     :github.copilot-sdk.specs/tool-call-id
     :github.copilot-sdk.specs/tool-description
