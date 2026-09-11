@@ -306,7 +306,14 @@
                          values, which would break the envelope spec's
                          `s/and` chain (the per-event `:type` predicate
                          inspects the raw map and would see a conformed
-                         `[:v0 ...]` tuple).
+                         `[:v0 ...]` tuple). The special envelope key `:data`
+                         is emitted as `any?`: every envelope already applies
+                         its exact `::<event>-data` spec, while payloads that
+                         themselves contain a `:data` field receive the same
+                         variant-local strict predicate as other conflicts.
+                         Avoiding the aggregate union here prevents complex
+                         event payload unions from exceeding the JVM's
+                         per-method bytecode limit.
 
    `:env-form-by-kebab` — kebab-name → strict spec form derived from envelope
                          occurrences only (i.e., excluding nested `data`).
@@ -381,8 +388,17 @@
                     :let [nodes (mapv second pairs)
                           forms (mapv #(emit-type root %) nodes)
                           uniq  (vec (distinct forms))]]
-                (if (= 1 (count uniq))
+                (cond
+                  (= "data" kebab)
+                  (do
+                    (when (seq (data-groups kebab))
+                      (swap! data-conflicted conj kebab))
+                    [kebab `any?])
+
+                  (= 1 (count uniq))
                   [kebab (first uniq)]
+
+                  :else
                   (let [v (gensym "v")
                         union-form `(~'s/spec
                                      (~'fn [~v]

@@ -322,28 +322,14 @@
                            (:classification-counts baseline-package)
                            {:stable-public 8 :experimental 16})))))))
 
-(deftest local-version-schema-and-generated-artifacts-are-exact
+(deftest historical-version-schema-and-generated-artifacts-are-exact
   (let [report (read-resource report-resource)
         artifacts (:local-artifacts report)
         source-proof (:schema-source-proof report)]
     (is (= "1.0.13.0" (:source-version artifacts)))
     (is (= "1.0.83" (:schema-version artifacts)))
-    (is (= "1.0.83" (str/trim (slurp ".copilot-schema-version"))))
-    (is (str/includes? (slurp "build.clj") "(def version \"1.0.13.0\")"))
-    (doseq [[key path]
-            [[:historical-oracle-sha256
-              "test/resources/stable_upstream_delta_2980c78.edn"]
-             [:api-schema-sha256 "schemas/api.schema.json"]
-             [:session-events-schema-sha256
-              "schemas/session-events.schema.json"]
-             [:event-specs-sha256
-              "src/github/copilot_sdk/generated/event_specs.clj"]
-             [:event-metadata-sha256
-              "src/github/copilot_sdk/generated/event_metadata.clj"]
-             [:coerce-sha256
-              "src/github/copilot_sdk/generated/coerce.clj"]]]
-      (testing path
-        (is (= (key artifacts) (sha256-file path)))))
+    (is (= (:historical-oracle-sha256 artifacts)
+           (sha256-file "test/resources/stable_upstream_delta_2980c78.edn")))
     (is (= {:npm-package "@github/copilot-linux-x64"
             :npm-version "1.0.83"
             :official-release "github/copilot-cli v1.0.83"
@@ -524,12 +510,7 @@
           (is (str/includes? source symbol)))))))
 
 (deftest stable-target-version-pins
-  (testing "the source and runtime versions identify the stable v1.0.13 target"
-    (is (= "1.0.83"
-           (str/trim (slurp (io/file ".copilot-schema-version")))))
-    (is (str/includes? (slurp (io/file "build.clj"))
-                       "(def version \"1.0.13.0\")")))
-  (testing "the post-baseline parity oracle pins the exact stable commit"
+  (testing "the historical parity oracle pins the exact stable commit"
     (let [oracle (io/file "test/resources/stable_upstream_delta_f13e4a2.edn")]
       (is (.isFile oracle))
       (when (.isFile oracle)

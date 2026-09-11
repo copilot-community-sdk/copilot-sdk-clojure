@@ -992,6 +992,11 @@
 (s/def ::mcp-oauth-token-storage ::storage-mode)
 (s/def ::embedding-cache-storage ::storage-mode)
 
+;; authClientIdMetadataUrl (upstream PR #2258): host identity for MCP OAuth.
+;; The official SDK exposes a plain optional string and forwards it on create,
+;; resume, and join. Omission is distinct from an explicit nil.
+(s/def ::auth-client-id-metadata-url string?)
+
 ;; Multitenancy hardening flags (upstream PR #1474). All optional, plain
 ;; booleans/strings. Application-mode behavior is driven by Client Mode
 ;; (upstream PR #1428).
@@ -1031,7 +1036,7 @@
 ;; runtime side); set false to force the HTTP Responses transport. Sent verbatim
 ;; under the `capi` wire key.
 (s/def ::enable-web-socket-responses boolean?)
-(s/def ::auto-tier #{:efficiency :balance :intelligence})
+(s/def ::auto-tier #{:efficiency :balance :intelligence :fast})
 (s/def ::capi (s/keys :opt-un [::auto-tier ::enable-web-socket-responses]))
 
 ;; Selects the model-facing shape of the built-in ask_user tool.
@@ -1310,6 +1315,7 @@
     :remote-session
     :cloud
     :mcp-oauth-token-storage
+    :auth-client-id-metadata-url
     :embedding-cache-storage
     :skip-embedding-retrieval
     :organization-custom-instructions
@@ -1361,6 +1367,7 @@
                     ::remote-session
                     ::cloud
                     ::mcp-oauth-token-storage
+                    ::auth-client-id-metadata-url
                     ::embedding-cache-storage
                     ::skip-embedding-retrieval
                     ::organization-custom-instructions
@@ -1406,6 +1413,7 @@
     :enable-session-telemetry?
     :remote-session
     :mcp-oauth-token-storage
+    :auth-client-id-metadata-url
     :embedding-cache-storage
     :skip-embedding-retrieval
     :organization-custom-instructions
@@ -1457,6 +1465,7 @@
                     ::enable-session-telemetry?
                     ::remote-session
                     ::mcp-oauth-token-storage
+                    ::auth-client-id-metadata-url
                     ::embedding-cache-storage
                     ::skip-embedding-retrieval
                     ::organization-custom-instructions
@@ -1516,6 +1525,7 @@
                     ::enable-session-telemetry?
                     ::remote-session
                     ::mcp-oauth-token-storage
+                    ::auth-client-id-metadata-url
                     ::embedding-cache-storage
                     ::skip-embedding-retrieval
                     ::organization-custom-instructions
@@ -2086,7 +2096,17 @@
 ;; :output-ttft-ms — upstream schema 1.0.83-1. Time-to-first-output-token,
 ;; distinct from ::time-to-first-token-ms; same non-negative-number semantics.
 (s/def ::output-ttft-ms (s/and json-number? #(<= 0 %)))
-(s/def ::copilot-usage map?)
+(s/def ::batch-size nat-int?)
+(s/def ::cost-per-batch nat-int?)
+(s/def ::token-count nat-int?)
+(s/def ::token-type string?)
+(s/def ::assistant-usage-token-detail
+  (s/keys :req-un [::batch-size ::cost-per-batch ::token-count ::token-type]
+          :opt-un [::model]))
+(s/def ::token-details (s/coll-of ::assistant-usage-token-detail))
+(s/def ::copilot-usage
+  (s/keys :req-un [::total-nano-aiu]
+          :opt-un [::model ::token-details]))
 
 ;; :api-endpoint — open string enum, added upstream CLI 1.0.47 (PR #1286).
 ;; API endpoint used for this model call, matching CAPI supported_endpoints
@@ -2453,13 +2473,26 @@
 (s/def ::explicit-model-matches-preference boolean?)
 (s/def ::configured-model-matches-actual boolean?)
 (s/def ::model-override-reason string?)
+(s/def ::task-model-source
+  #{"task_argument"
+    "subagent_configuration"
+    "custom_agent_definition"
+    "unset"})
+(s/def ::model-selection-source
+  #{"explicit_override"
+    "configured_required"
+    "configured_preference"
+    "complementary_default"
+    "session_inheritance"
+    "agent_definition_default"
+    "runtime_policy"})
 
 (s/def ::subagent.started-data
   (s/and
    (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name
                     ::agent-description]
            :opt-un [::factory-run-id ::model ::resumable
-                    ::agent-type ::execution-mode])
+                    ::agent-type ::execution-mode ::task-model-source])
    #(or (not (contains? % :parent-id))
         (s/valid? ::subagent-parent-id (:parent-id %)))))
 
@@ -2468,7 +2501,8 @@
           :opt-un [::cancelled ::model ::total-tool-calls ::total-tokens ::duration-ms
                    ::first-dispatched-model ::configured-model-preference
                    ::explicit-model-override ::explicit-model-matches-preference
-                   ::configured-model-matches-actual ::model-override-reason]))
+                   ::configured-model-matches-actual ::model-override-reason
+                   ::model-selection-source]))
 
 (s/def ::subagent.failed-data
   (s/and
@@ -2476,7 +2510,8 @@
            :opt-un [::model ::total-tool-calls ::total-tokens ::duration-ms
                     ::first-dispatched-model ::configured-model-preference
                     ::explicit-model-override ::explicit-model-matches-preference
-                    ::configured-model-matches-actual ::model-override-reason])
+                    ::configured-model-matches-actual ::model-override-reason
+                    ::model-selection-source])
    #(and (contains? % :error) (string? (:error %)))))
 
 ;; session.custom_agents_updated event data (upstream PR #916)
@@ -2488,7 +2523,7 @@
 
 (s/def ::custom-agent-info
   (s/and (s/keys :req-un [::id ::name ::display-name ::description ::source ::user-invocable?]
-                 :opt-un [::model])
+                 :opt-un [::model ::disable-model-invocation])
          #(contains? #{"user" "project" "inherited" "remote" "plugin"} (:source %))
          ;; tools is required by the upstream schema but the value may be
          ;; null (`tools: string[] | null` in CustomAgentsUpdatedAgent;
@@ -2818,6 +2853,9 @@
 ;; 2980c78 sync). ::server-name/::tool-name/::tool-title already exist and
 ;; match the MCP variant's field types exactly.
 (s/def ::can-offer-server-wide-approval boolean?)
+(s/def ::request-sandbox-bypass boolean?)
+(s/def ::request-sandbox-bypass-reason string?)
+(s/def ::request-sandbox-permissive boolean?)
 
 (s/def ::permission-request
   (s/and
@@ -2832,7 +2870,9 @@
                     ::declared-max-total-subagents
                     ::declared-timeout-seconds ::declared-max-ai-credits
                     ::server-name ::tool-name ::tool-title
-                    ::can-offer-server-wide-approval])
+                    ::can-offer-server-wide-approval
+                    ::request-sandbox-bypass ::request-sandbox-bypass-reason
+                    ::request-sandbox-permissive])
    #(or (not= :factory (:permission-kind %))
         (and (s/valid? ::factory-operation (:operation %))
              (s/valid? ::non-blank-string (:name %))

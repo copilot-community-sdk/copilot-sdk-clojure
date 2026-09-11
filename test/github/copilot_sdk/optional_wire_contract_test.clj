@@ -36,6 +36,12 @@
       slurp
       edn/read-string))
 
+(def stable-delta-bba92dd-report
+  (-> "resources/stable_upstream_delta_bba92dd.edn"
+      io/resource
+      slurp
+      edn/read-string))
+
 (def post-2980-session-config
   {:auth/github-token-provider
    {:key :github-token-provider :scopes #{:create :resume}}
@@ -54,7 +60,12 @@
                   {:key (:public-key clojure)
                    :scopes (:scopes clojure)}))))
    (keep post-2980-session-config
-         (:stable-delta-ids stable-delta-2980c78-report))))
+         (:stable-delta-ids stable-delta-2980c78-report))
+   (->> (:stable-deltas stable-delta-bba92dd-report)
+        (keep (fn [{:keys [id clojure]}]
+                (when (= :auth/client-id-metadata-url id)
+                  {:key (:public-key clojure)
+                   :scopes (:scopes clojure)}))))))
 
 (def fixtures
   {:fixture/handler (fn [& _])
@@ -258,6 +269,53 @@
                 (is (not (contains? params :enableMcpApps))
                     (str label " must not leak the public option name onto the wire"))
                 (assert-path! params [:requestMcpApps] expect label)))))))))
+
+(deftest auth-client-id-metadata-url-wire-contract
+  (let [metadata-url "https://example.com/oauth/client-metadata.json"
+        seed (sdk/create-session *test-client* {})
+        resume-session-id (sdk/session-id seed)
+        cases [{:name :unset :config {} :expect :absent}
+               {:name :empty :config {:auth-client-id-metadata-url ""} :expect ""}
+               {:name :value
+                :config {:auth-client-id-metadata-url metadata-url}
+                :expect metadata-url}
+               {:name :explicit-nil
+                :config {:auth-client-id-metadata-url nil}
+                :expect :invalid}]]
+    (doseq [scope [:create :resume]
+            {:keys [name config expect]} cases]
+      (testing (str name " on " (clojure.core/name scope))
+        (let [outcome (invoke-config! scope resume-session-id config)
+              method (target-method scope)
+              params (request-params (:requests outcome) method)
+              label (str ":auth-client-id-metadata-url " name
+                         " on " (clojure.core/name scope))]
+          (if (= :invalid expect)
+            (do
+              (is (instance? clojure.lang.ExceptionInfo (:error outcome))
+                  (str label " must be rejected by the public config contract"))
+              (is (nil? params)
+                  (str label " must fail before sending " method)))
+            (do
+              (is (nil? (:error outcome))
+                  (str label " unexpectedly failed: "
+                       (some-> (:error outcome) ex-message)))
+              (when params
+                (assert-path! params [:authClientIdMetadataUrl] expect label)))))))
+    (let [requests (atom [])]
+      (mock/set-request-hook!
+       *mock-server*
+       (fn [method params]
+         (swap! requests conj [method params])))
+      (with-redefs-fn
+        {(var client/foreground-session-id) (constantly resume-session-id)
+         (var client/client) (constantly *test-client*)}
+        #(client/join-session {:auth-client-id-metadata-url metadata-url}))
+      (assert-path!
+       (request-params @requests "session.resume")
+       [:authClientIdMetadataUrl]
+       metadata-url
+       ":auth-client-id-metadata-url on join"))))
 
 (deftest optional-field-values-match-node-wire-contract
   (let [seed (sdk/create-session *test-client* {})

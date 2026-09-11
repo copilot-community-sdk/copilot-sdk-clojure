@@ -260,6 +260,8 @@ an `:on-mcp-auth-request` handler on `create-session` / `resume-session`:
                               {:on-permission-request copilot/approve-all
                                :mcp-servers {"remote" {:mcp-url "https://mcp.example.com"
                                                        :mcp-tools ["*"]}}
+                               :auth-client-id-metadata-url
+                               "https://host.example.com/.well-known/oauth-client"
                                :on-mcp-auth-request
                                (fn [request _ctx]
                                  (let [token (acquire-oauth-token! (:server-url request))]
@@ -275,6 +277,11 @@ and may return a `core.async` channel. Return a map with `:access-token` to
 answer with a token, or `nil` / `{:kind :cancelled}` / throw to cancel. See
 [MCP OAuth Handler](../reference/API.md#mcp-oauth-handler) for the full request
 shape and result mapping. (upstream PR #1669)
+
+Set `:auth-client-id-metadata-url` when the OAuth flow must identify the host
+through an OAuth Client ID Metadata Document. The SDK forwards the string on
+create, resume, and join. Omission sends no host identity; explicit `nil` is
+invalid. ([upstream PR #2258](https://github.com/github/copilot-sdk/pull/2258))
 
 ## Troubleshooting
 

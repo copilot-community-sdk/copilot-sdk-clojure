@@ -191,6 +191,7 @@
     "factory.run_settled"
     "factory.run_started"
     "session.completion_receipt"
+    "session.auto_tier_recommendation"
     "session.fusion_completed"
     "session.fusion_resolved"
     "session.fusion_route_failed"
@@ -983,7 +984,13 @@
 (deftest generated-top-level-forms-stay-well-under-jvm-method-size-limit
   (let [sized (map (fn [form] {:form form :len (count (pr-str form))})
                    generated-event-specs-forms)
-        max-entry (apply max-key :len sized)]
+        max-entry (apply max-key :len sized)
+        data-form (some #(when (= :github.copilot-sdk.generated.event-specs/data
+                                  (second %))
+                           %)
+                        generated-event-specs-forms)]
+    (testing "the shared envelope :data leaf delegates to per-event payload specs"
+      (is (= 'clojure.core/any? (nth data-form 2))))
     (testing "no single generated top-level form approaches the 64KB JVM per-method bytecode limit"
       (is (<= (:len max-entry) 32000)
           (str "Largest generated top-level form is " (:len max-entry)
@@ -991,15 +998,23 @@
                "This class of bloat previously caused `Method code too "
                "large!` at JVM compile time — see `emit-envelope-spec` in "
                "`script/codegen/emit_specs.clj`.")))
-    (testing "only the known load-bearing global-union leaf spec (`::data`) is large"
+    (testing "no generated top-level form duplicates a large structural union"
       (let [large (->> sized (filter #(> (:len %) 8000)))]
-        (is (<= (count large) 1)
-            (str "Expected at most one generated top-level form over 8000 "
-                 "chars (the load-bearing `::data` global-union leaf spec, "
-                 "consumed via `s/keys`'s implicit key-spec lookup in "
-                 "`emit-envelope-spec`/`emit-data-spec`). Found "
+        (is (empty? large)
+            (str "Expected no generated top-level form over 8000 chars. "
+                 "The shared `::data` leaf delegates to exact per-event specs "
+                 "instead of aggregating every payload schema. Found "
                  (count large) ": "
                  (pr-str (map (comp second :form) large))
-                 ". A jump here likely means the redundant per-variant "
-                 "envelope strict-pred bug has recurred — see "
-                 "`emit-envelope-spec` in `script/codegen/emit_specs.clj`."))))))
+                 ". A jump here likely means a structural schema was inlined "
+                 "instead of registered or checked variant-locally."))))))
+
+(deftest generated-data-leaf-stays-variant-local
+  (let [valid {:asset-id "asset-1"
+               :byte-length 3
+               :data "YWJj"
+               :mime-type "text/plain"
+               :type "resource"}]
+    (is (s/valid? ::gen/session.binary_asset-data valid))
+    (is (not (s/valid? ::gen/session.binary_asset-data
+                       (assoc valid :data {:unexpected "map"}))))))

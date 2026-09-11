@@ -317,6 +317,7 @@
 ;;  :router-ch nil or channel
 ;;  :stopping? false
 ;;  :restarting? false
+;;  :connection-start-completion nil or promise shared by concurrent starters
 ;;  :models-cache nil|promise|vector (list-models cache)
 ;;  :lifecycle-handlers {handler-id -> {:handler fn :event-type type-or-nil}}}
 
@@ -342,6 +343,7 @@
     :router-running? false
     :caller-supplied-streams? false
     :connection-start-token nil
+    :connection-start-completion nil
     :stopping? false
     :models-cache nil         ; nil, promise, or vector of models (cleared on stop)
     :lifecycle-handlers {}
@@ -2270,6 +2272,7 @@
   [client caller-supplied-streams?]
   (loop []
     (let [startup-token (Object.)
+          completion (promise)
           [old-state _]
           (swap-vals!
            (:state client)
@@ -2285,11 +2288,23 @@
                (assoc state
                       :caller-supplied-streams? caller-supplied-streams?
                       :connection-start-token startup-token
+                      :connection-start-completion completion
                       :stopping? false
                       :status :connecting))))]
       (cond
-        (#{:connecting :connected} (:status old-state))
-        nil
+        (:connection-start-completion old-state)
+        (let [completion (:connection-start-completion old-state)]
+          {:role :waiter
+           :completion completion})
+
+        (= :connected (:status old-state))
+        {:role :connected}
+
+        (= :connecting (:status old-state))
+        (throw
+         (ex-info
+          "Connecting client has no shared startup completion"
+          {:type :missing-start-completion}))
 
         (:process old-state)
         (let [process (:process old-state)]
@@ -2307,7 +2322,43 @@
               (recur))))
 
         :else
-        startup-token))))
+        {:role :owner
+         :startup-token startup-token
+         :completion completion}))))
+
+(defn- await-client-start!
+  [completion]
+  (let [{:keys [failure]} @completion]
+    (when failure
+      (throw failure)))
+  nil)
+
+(defn- complete-client-start!
+  [client completion outcome]
+  (deliver completion outcome)
+  (swap! (:state client)
+         (fn [state]
+           (if (identical? completion
+                           (:connection-start-completion state))
+             (assoc state :connection-start-completion nil)
+             state)))
+  nil)
+
+(defn- run-client-start!
+  [client caller-supplied-streams? start-owner!]
+  (let [{:keys [role startup-token completion]}
+        (claim-client-start! client caller-supplied-streams?)]
+    (case role
+      :connected nil
+      :waiter (await-client-start! completion)
+      :owner
+      (try
+        (let [result (start-owner! startup-token)]
+          (complete-client-start! client completion {:result result})
+          result)
+        (catch Throwable failure
+          (complete-client-start! client completion {:failure failure})
+          (throw failure))))))
 
 (defn- finish-client-start!
   [client startup-token connection-io]
@@ -2335,102 +2386,105 @@
         {:type :connection-closed-during-startup}))))
   nil)
 
+(defn- start-owned!
+  [client startup-token]
+  (let [connection-io (atom nil)]
+    (try
+      (log/info "Starting Copilot client...")
+
+      ;; Set log level from options
+      (when-let [level (:log-level (:options client))]
+        (log/set-log-level! level))
+
+      ;; Start CLI process if not connecting to external server
+      (when-not (:external-server? client)
+        (log/debug "Spawning CLI process")
+        (let [opts (:options client)
+              mp (proc/spawn-cli opts)]
+          (swap! (:state client) assoc :process mp)
+          (start-stderr-forwarder! client mp)
+          (watch-process-exit! client mp)
+
+          ;; For TCP mode, wait for port announcement
+          (when-not (:use-stdio? opts)
+            (let [port (proc/wait-for-port mp 10000)]
+              (swap! (:state client) assoc :actual-port port)))))
+
+      ;; Connect to server
+      (cond
+        ;; Child process mode: use own stdin/stdout to talk to parent
+        (:is-child-process? (:options client))
+        (do
+          (log/debug "Connecting via parent stdio (child process mode)")
+          (connect-parent-stdio! client))
+
+        ;; External server (cli-url) or TCP mode
+        (or (:external-server? client)
+            (not (:use-stdio? (:options client))))
+        (do
+          (log/debug "Connecting via TCP")
+          (connect-tcp! client))
+
+        ;; Normal stdio to spawned process
+        :else
+        (do
+          (log/debug "Connecting via stdio")
+          (connect-stdio! client)))
+
+      ;; Verify protocol version
+      (verify-protocol-version! client)
+
+      ;; Register trusted built-in plugins before any session can be created.
+      (register-builtin-plugin-directories! client)
+
+      ;; Register sessionFs provider if configured
+      (when-let [sf-config (:session-fs client)]
+        (let [{:keys [connection-io]} @(:state client)]
+          (proto/send-request! connection-io "sessionFs.setProvider"
+                               (cond-> {:initial-cwd (:initial-cwd sf-config)
+                                        :session-state-path (:session-state-path sf-config)
+                                        :conventions (:conventions sf-config)}
+                                 ;; Upstream PR #1299: forward provider capabilities (e.g., {:sqlite true}).
+                                 (:capabilities sf-config)
+                                 (assoc :capabilities (:capabilities sf-config))))))
+
+      ;; Set up notification routing and request handling
+      (start-notification-router! client)
+      (setup-request-handler! client)
+
+      (reset! connection-io (:connection-io @(:state client)))
+      (finish-client-start! client startup-token @connection-io)
+      (log/info "Copilot client connected")
+      nil
+
+      (catch Throwable e
+        (let [already-stopped? (:stopping? @(:state client))
+              stderr (get-stderr-output client)
+              msg (cond-> (str "Failed to start client: " (ex-message e))
+                    stderr (str "\nstderr: " stderr))]
+          (log/error msg)
+            ;; Release resources unless a nested startup step already force-stopped
+            ;; the client. Status remains :error so callers can distinguish a
+            ;; failed start from a clean stop.
+          (when-not already-stopped?
+            (swap! (:state client) assoc :stopping? true)
+            (log-teardown-failures!
+             (release-transport! client {:process :graceful})))
+          (swap! (:state client) assoc
+                 :status :error
+                 :actual-port nil
+                 :connection-start-token nil)
+          (throw e))))))
+
 (defn start!
   "Start the CLI server and establish connection.
    Blocks until connected or throws on error.
 
-   Thread safety: concurrent start! calls are safe — an atomic compare-and-set
-   on :status ensures only one caller spawns the process; the others no-op.
-   Do not, however, call start! and stop! concurrently from different threads."
+   Concurrent callers share the same in-progress startup and receive the same
+   success or failure. Do not call start! and stop! concurrently from different
+   threads."
   [client]
-  (when-let [startup-token (claim-client-start! client false)]
-    (let [connection-io (atom nil)]
-      (try
-        (log/info "Starting Copilot client...")
-
-      ;; Set log level from options
-        (when-let [level (:log-level (:options client))]
-          (log/set-log-level! level))
-
-      ;; Start CLI process if not connecting to external server
-        (when-not (:external-server? client)
-          (log/debug "Spawning CLI process")
-          (let [opts (:options client)
-                mp (proc/spawn-cli opts)]
-            (swap! (:state client) assoc :process mp)
-            (start-stderr-forwarder! client mp)
-            (watch-process-exit! client mp)
-
-          ;; For TCP mode, wait for port announcement
-            (when-not (:use-stdio? opts)
-              (let [port (proc/wait-for-port mp 10000)]
-                (swap! (:state client) assoc :actual-port port)))))
-
-      ;; Connect to server
-        (cond
-        ;; Child process mode: use own stdin/stdout to talk to parent
-          (:is-child-process? (:options client))
-          (do
-            (log/debug "Connecting via parent stdio (child process mode)")
-            (connect-parent-stdio! client))
-
-        ;; External server (cli-url) or TCP mode
-          (or (:external-server? client)
-              (not (:use-stdio? (:options client))))
-          (do
-            (log/debug "Connecting via TCP")
-            (connect-tcp! client))
-
-        ;; Normal stdio to spawned process
-          :else
-          (do
-            (log/debug "Connecting via stdio")
-            (connect-stdio! client)))
-
-      ;; Verify protocol version
-        (verify-protocol-version! client)
-
-      ;; Register trusted built-in plugins before any session can be created.
-        (register-builtin-plugin-directories! client)
-
-      ;; Register sessionFs provider if configured
-        (when-let [sf-config (:session-fs client)]
-          (let [{:keys [connection-io]} @(:state client)]
-            (proto/send-request! connection-io "sessionFs.setProvider"
-                                 (cond-> {:initial-cwd (:initial-cwd sf-config)
-                                          :session-state-path (:session-state-path sf-config)
-                                          :conventions (:conventions sf-config)}
-                                 ;; Upstream PR #1299: forward provider capabilities (e.g., {:sqlite true}).
-                                   (:capabilities sf-config)
-                                   (assoc :capabilities (:capabilities sf-config))))))
-
-      ;; Set up notification routing and request handling
-        (start-notification-router! client)
-        (setup-request-handler! client)
-
-        (reset! connection-io (:connection-io @(:state client)))
-        (finish-client-start! client startup-token @connection-io)
-        (log/info "Copilot client connected")
-        nil
-
-        (catch Exception e
-          (let [already-stopped? (:stopping? @(:state client))
-                stderr (get-stderr-output client)
-                msg (cond-> (str "Failed to start client: " (ex-message e))
-                      stderr (str "\nstderr: " stderr))]
-            (log/error msg)
-            ;; Release resources unless a nested startup step already force-stopped
-            ;; the client. Status remains :error so callers can distinguish a
-            ;; failed start from a clean stop.
-            (when-not already-stopped?
-              (swap! (:state client) assoc :stopping? true)
-              (log-teardown-failures!
-               (release-transport! client {:process :graceful})))
-            (swap! (:state client) assoc
-                   :status :error
-                   :actual-port nil
-                   :connection-start-token nil)
-            (throw e)))))))
+  (run-client-start! client false #(start-owned! client %)))
 
 (defn stop!
   "Stop the CLI server and close all sessions.
@@ -3768,6 +3822,9 @@
       ;; (csk would mangle it to `"inMemory"`).
       (:mcp-oauth-token-storage config)
       (assoc "mcpOAuthTokenStorage" (name (:mcp-oauth-token-storage config)))
+      (contains? config :auth-client-id-metadata-url)
+      (assoc :auth-client-id-metadata-url
+             (:auth-client-id-metadata-url config))
       (:embedding-cache-storage config)
       (assoc :embedding-cache-storage (name (:embedding-cache-storage config)))
       (some? (:skip-embedding-retrieval config))
@@ -3976,6 +4033,9 @@
       ;; a string key (see `build-create-session-params` for rationale).
       (:mcp-oauth-token-storage config)
       (assoc "mcpOAuthTokenStorage" (name (:mcp-oauth-token-storage config)))
+      (contains? config :auth-client-id-metadata-url)
+      (assoc :auth-client-id-metadata-url
+             (:auth-client-id-metadata-url config))
       (:embedding-cache-storage config)
       (assoc :embedding-cache-storage (name (:embedding-cache-storage config)))
       (some? (:skip-embedding-retrieval config))
@@ -4416,6 +4476,9 @@
                             and a context map {:session-id}; it may return a channel. Return a
                             map with :access-token (plus optional :token-type, :expires-in) to
                             answer with a token; return nil, {:kind :cancelled}, or throw to cancel.
+   - :auth-client-id-metadata-url - Optional OAuth Client ID Metadata Document URL identifying
+                                    the host for MCP authorization. Forwarded on create, resume,
+                                    and join; omitted when unset. (upstream PR #2258)
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-pre-mcp-tool-call,
                             :on-post-tool-use, :on-post-tool-use-failure,
@@ -4446,9 +4509,9 @@
                            {:supports {:vision true}
                             :limits {:max-prompt-tokens 128000}}
                            Stable public-SDK fields: :supports {:vision :reasoning-effort},
-                           :limits {:max-prompt-tokens :max-context-window-tokens :vision {..}}.
-                           :adaptive-thinking and :max-output-tokens are experimental
-                           CLI-protocol extras (not in the public Node SDK type).
+                           :limits {:max-prompt-tokens :max-output-tokens
+                                    :max-context-window-tokens :vision {..}}.
+                           :adaptive-thinking is an experimental CLI-protocol extra.
                            Deprecated :model-supports / :model-limits aliases are still accepted.
    - :include-sub-agent-streaming-events? - Boolean. When true (default), streaming events from
                                             sub-agents are forwarded to this session's event stream.
@@ -5280,40 +5343,45 @@
 ;; Testing Utilities
 ;; -----------------------------------------------------------------------------
 
-(defn- connect-with-streams*
-  [client in out caller-supplied?]
-  (when-let [startup-token
-             (claim-client-start! client caller-supplied?)]
-    (try
+(defn- connect-with-streams-owned!
+  [client in out startup-token]
+  (try
       ;; Initialize connection state before connecting
-      (swap! (:state client) assoc :connection (proto/initial-connection-state))
-      (let [conn (proto/connect in out (:state client))]
-        (swap! (:state client) assoc :connection-io conn))
-      (verify-protocol-version! client)
+    (swap! (:state client) assoc :connection (proto/initial-connection-state))
+    (let [conn (proto/connect in out (:state client))]
+      (swap! (:state client) assoc :connection-io conn))
+    (verify-protocol-version! client)
       ;; Register sessionFs provider if configured
-      (when-let [sf-config (:session-fs client)]
-        (let [{:keys [connection-io]} @(:state client)]
-          (proto/send-request! connection-io "sessionFs.setProvider"
-                               (cond-> {:initial-cwd (:initial-cwd sf-config)
-                                        :session-state-path (:session-state-path sf-config)
-                                        :conventions (:conventions sf-config)}
-                                 (:capabilities sf-config)
-                                 (assoc :capabilities (:capabilities sf-config))))))
-      (start-notification-router! client)
-      (setup-request-handler! client)
-      (finish-client-start!
-       client startup-token (:connection-io @(:state client)))
-      nil
-      (catch Exception e
+    (when-let [sf-config (:session-fs client)]
+      (let [{:keys [connection-io]} @(:state client)]
+        (proto/send-request! connection-io "sessionFs.setProvider"
+                             (cond-> {:initial-cwd (:initial-cwd sf-config)
+                                      :session-state-path (:session-state-path sf-config)
+                                      :conventions (:conventions sf-config)}
+                               (:capabilities sf-config)
+                               (assoc :capabilities (:capabilities sf-config))))))
+    (start-notification-router! client)
+    (setup-request-handler! client)
+    (finish-client-start!
+     client startup-token (:connection-io @(:state client)))
+    nil
+    (catch Throwable e
         ;; Reuse the same teardown as a failed start! so a rejected handshake
         ;; leaves no connection, router, or reverse-request executor behind
         ;; and the caller can retry without cleanup of its own. The streams
         ;; belong to the caller, so no process is touched.
-        (log-teardown-failures! (release-transport! client {:process :none}))
-        (swap! (:state client) assoc
-               :connection-start-token nil
-               :status :error)
-        (throw e)))))
+      (log-teardown-failures! (release-transport! client {:process :none}))
+      (swap! (:state client) assoc
+             :connection-start-token nil
+             :status :error)
+      (throw e))))
+
+(defn- connect-with-streams*
+  [client in out caller-supplied?]
+  (run-client-start!
+   client
+   caller-supplied?
+   #(connect-with-streams-owned! client in out %)))
 
 (defn connect-with-streams!
   "Connect to a server using caller-supplied input/output streams.

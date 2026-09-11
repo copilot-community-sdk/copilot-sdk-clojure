@@ -1755,6 +1755,10 @@
     "AssistantUsageCopilotUsage": {
       "type": "object",
       "properties": {
+        "model": {
+          "type": "string",
+          "description": "Default billing model for token details that do not identify their own model"
+        },
         "tokenDetails": {
           "type": "array",
           "items": {
@@ -1789,6 +1793,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "Cost per batch of tokens"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model responsible for this billing entry"
         },
         "tokenCount": {
           "type": "integer",
@@ -3424,15 +3432,90 @@
       "enum": [
         "efficiency",
         "balance",
-        "intelligence"
+        "intelligence",
+        "fast"
       ],
-      "description": "Routing preference used when the session model is `auto`.",
+      "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference.",
       "title": "AutoTier",
       "x-enumDescriptions": {
         "efficiency": "Optimize for efficiency.",
         "balance": "Balance efficiency and intelligence.",
-        "intelligence": "Optimize for intelligence."
+        "intelligence": "Optimize for intelligence.",
+        "fast": "Integrator-only preset that optimizes for latency."
       }
+    },
+    "AutoTierRecommendationData": {
+      "type": "object",
+      "properties": {
+        "recommendedAutoTier": {
+          "$ref": "#/definitions/RecommendedAutoTier",
+          "description": "Recommended Auto preference."
+        }
+      },
+      "required": [
+        "recommendedAutoTier"
+      ],
+      "additionalProperties": false,
+      "description": "Live-only Auto preference recommendation from Copilot API after a successful Auto model call.",
+      "title": "AutoTierRecommendationData",
+      "stability": "experimental"
+    },
+    "AutoTierRecommendationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.auto_tier_recommendation",
+          "description": "Type discriminator. Always \"session.auto_tier_recommendation\"."
+        },
+        "data": {
+          "$ref": "#/definitions/AutoTierRecommendationData",
+          "description": "Live-only Auto preference recommendation from Copilot API after a successful Auto model call."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.auto_tier_recommendation\". Live-only Auto preference recommendation from Copilot API after a successful Auto model call.",
+      "title": "AutoTierRecommendationEvent",
+      "stability": "experimental"
     },
     "AutoTierSwitchFailedData": {
       "type": "object",
@@ -3445,7 +3528,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`."
+              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
             },
             {
               "type": "null"
@@ -5112,6 +5195,11 @@
     "CompactionCompleteCompactionTokensUsedCopilotUsage": {
       "type": "object",
       "properties": {
+        "model": {
+          "type": "string",
+          "description": "Default billing model for token details that do not identify their own model",
+          "visibility": "internal"
+        },
         "tokenDetails": {
           "type": "array",
           "items": {
@@ -5147,6 +5235,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "Cost per batch of tokens"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model responsible for this billing entry"
         },
         "tokenCount": {
           "type": "integer",
@@ -5211,6 +5303,11 @@
         "summaryContent": {
           "type": "string",
           "description": "LLM-generated summary of the compacted conversation history"
+        },
+        "activeFactorySummary": {
+          "type": "string",
+          "description": "Authoritative active-factory reminder appended to the compacted context",
+          "visibility": "internal"
         },
         "behaviorModelId": {
           "type": "string",
@@ -5814,6 +5911,10 @@
         "userInvocable": {
           "type": "boolean",
           "description": "Whether the agent can be selected by the user"
+        },
+        "disableModelInvocation": {
+          "type": "boolean",
+          "description": "Whether model-driven invocation is disabled for this agent."
         },
         "model": {
           "type": "string",
@@ -7170,6 +7271,7 @@
       "enum": [
         "completed",
         "halted",
+        "paused",
         "cancelled",
         "error"
       ],
@@ -7178,6 +7280,7 @@
       "x-enumDescriptions": {
         "completed": "The factory body resolved and its result was committed.",
         "halted": "The run was stopped by a limit, an approval refusal or another policy decision.",
+        "paused": "The attempt paused intentionally while preserving resumable run state.",
         "cancelled": "The run was cancelled by its caller or by session disposal.",
         "error": "The run failed, with `failureType` carrying the class when it has one."
       }
@@ -11503,7 +11606,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`."
+              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
             },
             {
               "type": "null"
@@ -12242,6 +12345,18 @@
         "managedApprovalRequired": {
           "type": "boolean",
           "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        },
+        "requestSandboxBypass": {
+          "type": "boolean",
+          "description": "True when the shell command is requesting sandbox escalation. This is a request, not a grant."
+        },
+        "requestSandboxPermissive": {
+          "type": "boolean",
+          "description": "True when the escalation is a permissive retry that keeps the sandbox and network policy attached while recording file and process accesses instead of blocking them."
+        },
+        "requestSandboxBypassReason": {
+          "type": "string",
+          "description": "Reason for the sandbox escalation request."
         }
       },
       "required": [
@@ -13514,6 +13629,10 @@
           "type": "boolean",
           "description": "True when the tool is asking to run this command outside the sandbox, either because the command detaches and cannot be sandboxed at all, or because a sandboxed run looked blocked (host opted in via sandbox.allowBypass). The model cannot ask for this; only the tool raises it. This is a request, not a grant: the command runs unsandboxed only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
         },
+        "requestSandboxPermissive": {
+          "type": "boolean",
+          "description": "True when the requested escalation is a permissive retry rather than a full bypass: the command re-runs inside the sandbox with its file and process restrictions recording instead of blocking, while the network policy stays enforced. Always accompanied by requestSandboxBypass, so hosts that do not recognize this field still treat the request as the escalation it is. Hosts that do recognize it must not describe the command as running outside the sandbox, which would overstate the privilege being granted."
+        },
         "requestSandboxBypassReason": {
           "type": "string",
           "description": "What the tool tells the user about the bypass on offer: which policy rule blocked the call, or why it cannot be sandboxed. Only meaningful when requestSandboxBypass is true."
@@ -13774,10 +13893,6 @@
           "stability": "experimental"
         }
       },
-      "required": [
-        "previousMode",
-        "mode"
-      ],
       "additionalProperties": false,
       "description": "Permission-mode transition details.",
       "title": "PermissionsChangedData",
@@ -14232,6 +14347,21 @@
         "none": "Do not request reasoning summaries from the model.",
         "concise": "Request a concise summary of the model's reasoning.",
         "detailed": "Request a detailed summary of the model's reasoning."
+      }
+    },
+    "RecommendedAutoTier": {
+      "type": "string",
+      "enum": [
+        "efficiency",
+        "balance",
+        "intelligence"
+      ],
+      "description": "Auto preferences that Copilot API can recommend.",
+      "title": "RecommendedAutoTier",
+      "x-enumDescriptions": {
+        "efficiency": "Optimize for efficiency.",
+        "balance": "Balance efficiency and intelligence.",
+        "intelligence": "Optimize for intelligence."
       }
     },
     "RemediationAction": {
@@ -14928,6 +15058,13 @@
               ],
               "description": "Runtime observation backing the state. Omitted for `inactive`, which has nothing to attest."
             },
+            "command": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Command the enforcement governed. Populated only when content capture is enabled, and only for shell commands; MCP, LSP, and search command lines are runtime plumbing."
+            },
             "kind": {
               "type": "string",
               "const": "enforcement_state",
@@ -14972,11 +15109,44 @@
             },
             "denialClass": {
               "$ref": "#/definitions/SandboxDenialClass",
-              "description": "Bounded class of the refused access. The only part of the denial that crosses the telemetry boundary."
+              "description": "Bounded class of the refused access."
             },
             "attestation": {
               "$ref": "#/definitions/SandboxAttestation",
               "description": "Runtime observation backing the denial."
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialConfidence",
+                  "description": "How strong the evidence behind a denial is. A denial the sandbox itself recorded is a fact; one inferred from a command's output text is a judgement, and an analysis that cannot tell them apart will treat a false positive as enforcement."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How strong the evidence behind this denial is. Lets an analysis separate denials the sandbox recorded from ones inferred from output text, which otherwise look identical."
+            },
+            "deniedResource": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Resource the check refused, when identified and content capture is enabled."
+            },
+            "command": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Command whose execution the denial arose from. Populated only when content capture is enabled."
+            },
+            "processName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Executable image associated with the captured denial, normalized to a basename. Populated only when content capture is enabled."
             },
             "kind": {
               "type": "string",
@@ -15026,6 +15196,51 @@
               "$ref": "#/definitions/SandboxBypassSource",
               "description": "Where the request originated. Orthogonal to `outcome`."
             },
+            "denialClass": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialClass",
+                  "description": "Bounded class of access an enforcement check refused. Raw resources, commands, and process names accompany it only when content capture is enabled; diagnostic text and matched rules are never exported."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Bounded class of the access whose refusal raised this escalation. Omitted for a pre-execution bypass, such as a detached command that cannot be sandboxed and therefore resolves no denial."
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialConfidence",
+                  "description": "How strong the evidence behind a denial is. A denial the sandbox itself recorded is a fact; one inferred from a command's output text is a judgement, and an analysis that cannot tell them apart will treat a false positive as enforcement."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How strong the evidence behind `denialClass` was. Present exactly when `denialClass` is, so a verdict that relaxed the sandbox on a guess is distinguishable from one that relaxed it on a recorded refusal. Named to match `access_denied`, which reports the same pair."
+            },
+            "deniedResource": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Resource whose refusal raised this escalation. Populated only when content capture is enabled."
+            },
+            "command": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Command the verdict governs. Populated only when content capture is enabled."
+            },
+            "processName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Executable image associated with the denial that raised this escalation, normalized to a basename. Populated only when content capture is enabled."
+            },
             "kind": {
               "type": "string",
               "const": "bypass_decided",
@@ -15042,6 +15257,185 @@
           ],
           "additionalProperties": false,
           "description": "A request to run outside the process sandbox was resolved. This is what makes an `inactive` `enforcement_state` readable: without it, a command that ran unsandboxed because a person approved a bypass looks identical to one that ran unsandboxed because the session never had a sandbox. Reported only when a sandbox was in force, since bypassing a disabled sandbox bypasses nothing. Carries neither backend nor attestation: the verdict comes from the runtime's own permission flow or the local escalation prompt, not from a containment backend and not from the built-in policy check, so `source` is what records where it came from."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/definitions/SandboxControl",
+              "description": "Always `process`: the process container is what this rung relaxes, and the network control is deliberately untouched."
+            },
+            "outcome": {
+              "$ref": "#/definitions/SandboxOutcome",
+              "description": "Whether the permissive retry was granted: `approved` or `declined`. `declined` also covers the cases where nobody answered, since the sandboxed denial stands either way."
+            },
+            "toolCallId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Tool call the decision belongs to, for span correlation only. Never exported as a telemetry attribute or metric dimension."
+            },
+            "platform": {
+              "$ref": "#/definitions/SandboxPlatform",
+              "description": "Host operating-system family"
+            },
+            "enforcementPoint": {
+              "$ref": "#/definitions/SandboxEnforcementPoint",
+              "description": "Runtime subsystem the retry applies to"
+            },
+            "source": {
+              "$ref": "#/definitions/SandboxBypassSource",
+              "description": "Where the request originated. Orthogonal to `outcome`."
+            },
+            "denialClass": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialClass",
+                  "description": "Bounded class of access an enforcement check refused. Raw resources, commands, and process names accompany it only when content capture is enabled; diagnostic text and matched rules are never exported."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Bounded class of the access whose refusal raised this escalation."
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialConfidence",
+                  "description": "How strong the evidence behind a denial is. A denial the sandbox itself recorded is a fact; one inferred from a command's output text is a judgement, and an analysis that cannot tell them apart will treat a false positive as enforcement."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How strong the evidence behind `denialClass` was. Present exactly when `denialClass` is."
+            },
+            "deniedResource": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Resource whose refusal raised this escalation. Populated only when content capture is enabled."
+            },
+            "command": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Command the verdict governs. Populated only when content capture is enabled."
+            },
+            "processName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Executable image associated with the denial that raised this escalation, normalized to a basename. Populated only when content capture is enabled."
+            },
+            "kind": {
+              "type": "string",
+              "const": "permissive_retry_decided",
+              "description": "Sandbox decision variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "control",
+            "outcome",
+            "platform",
+            "enforcementPoint",
+            "source"
+          ],
+          "additionalProperties": false,
+          "description": "A permissive retry was resolved. Distinct from `bypass_decided` because this rung never requests a run outside the process sandbox: it relaxes the process container for one run while the sandbox, and with it the network policy, stays attached. Reported for both outcomes, so an escalation the user declined still leaves evidence that the runtime asked and that the sandboxed denial stood."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/definitions/SandboxControl",
+              "description": "Always `process`: the retry changes process-container enforcement while leaving network policy attached."
+            },
+            "outcome": {
+              "$ref": "#/definitions/SandboxOutcome",
+              "description": "Whether the permissive retry completed successfully: `succeeded` or `failed`."
+            },
+            "toolCallId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Tool call the completion belongs to, for span correlation only. Never exported as a telemetry attribute or metric dimension."
+            },
+            "platform": {
+              "$ref": "#/definitions/SandboxPlatform",
+              "description": "Host operating-system family"
+            },
+            "enforcementPoint": {
+              "$ref": "#/definitions/SandboxEnforcementPoint",
+              "description": "Runtime subsystem that ran the retry"
+            },
+            "denialClass": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialClass",
+                  "description": "Bounded class of access an enforcement check refused. Raw resources, commands, and process names accompany it only when content capture is enabled; diagnostic text and matched rules are never exported."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Bounded class of the access whose refusal raised the permissive retry."
+            },
+            "confidence": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SandboxDenialConfidence",
+                  "description": "How strong the evidence behind a denial is. A denial the sandbox itself recorded is a fact; one inferred from a command's output text is a judgement, and an analysis that cannot tell them apart will treat a false positive as enforcement."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "How strong the evidence behind `denialClass` was."
+            },
+            "deniedResource": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Resource whose refusal raised the retry. Populated only when content capture is enabled."
+            },
+            "command": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Command the retry executed. Populated only when content capture is enabled."
+            },
+            "processName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Executable image associated with the denial that raised the retry, normalized to a basename. Populated only when content capture is enabled."
+            },
+            "kind": {
+              "type": "string",
+              "const": "permissive_retry_completed",
+              "description": "Sandbox decision variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "control",
+            "outcome",
+            "platform",
+            "enforcementPoint"
+          ],
+          "additionalProperties": false,
+          "description": "An approved permissive retry finished. `succeeded` means the retry exited successfully without another correlated sandbox denial; `failed` means it failed or remained blocked and may therefore be followed by a full bypass."
         }
       ],
       "description": "Payload of `sandbox.decision`, a bounded governance record of what the process sandbox was configured to do and whether it took effect. Discriminated by `kind`.",
@@ -15122,16 +15516,49 @@
       "enum": [
         "filesystem_read",
         "filesystem_write",
+        "process_startup",
+        "registry_access",
+        "ipc_access",
+        "process_access",
+        "job_access",
+        "ui_access",
+        "service_access",
         "network_outbound",
-        "network_local"
+        "network_local",
+        "other_access"
       ],
-      "description": "Bounded class of access an enforcement check refused. The only part of a denial that crosses the telemetry boundary; the diagnostic text, matched rule, path, and host never do.",
+      "description": "Bounded class of access an enforcement check refused. Raw resources, commands, and process names accompany it only when content capture is enabled; diagnostic text and matched rules are never exported.",
       "title": "SandboxDenialClass",
       "x-enumDescriptions": {
         "filesystem_read": "A read was refused because the effective policy does not grant it.",
         "filesystem_write": "A write was refused. Distinct from `filesystem_read` because a read-only grant denies writes to a path it otherwise permits.",
+        "process_startup": "A process could not start because the sandbox refused a required process-scoped resource. Currently emitted for the Windows MSYS `BaseNamedObjects` fork failure confirmed by learning-mode capture.",
+        "registry_access": "Windows registry access was refused and correlated with capture evidence.",
+        "ipc_access": "Windows ALPC or RPC access was refused and correlated with capture evidence.",
+        "process_access": "Access to another Windows process was refused and correlated with capture evidence.",
+        "job_access": "Windows job-object access was refused and correlated with capture evidence.",
+        "ui_access": "Windows UI-handle access was refused and correlated with capture evidence.",
+        "service_access": "Windows service-control-manager access was refused and correlated with capture evidence.",
         "network_outbound": "An outbound connection was refused by `network.allowOutbound`.",
-        "network_local": "A connection to a local or loopback destination was refused by `network.allowLocalNetwork`."
+        "network_local": "A connection to a local or loopback destination was refused by `network.allowLocalNetwork`.",
+        "other_access": "The sandbox's denial capture recorded a refusal its record does not attribute to a more specific control: an unclassified resource (registry, COM, section object) or an AppContainer capability with no network meaning. Deliberately generic — the capture proves the denial happened, and naming a narrower class than the record supports would be a guess."
+      }
+    },
+    "SandboxDenialConfidence": {
+      "type": "string",
+      "enum": [
+        "captured",
+        "policy_corroborated",
+        "sandbox_reported",
+        "output_classified"
+      ],
+      "description": "How strong the evidence behind a denial is. A denial the sandbox itself recorded is a fact; one inferred from a command's output text is a judgement, and an analysis that cannot tell them apart will treat a false positive as enforcement.",
+      "title": "SandboxDenialConfidence",
+      "x-enumDescriptions": {
+        "captured": "The sandbox's own denial capture recorded the refused access. The strongest evidence available: the kernel observed it, not the runtime.",
+        "policy_corroborated": "The command named a path that the effective policy independently denies. No capture confirmed it, but the policy did.",
+        "sandbox_reported": "The failure carried a fingerprint the sandbox itself emits, so the sandbox is known to have refused something even though the resource was not confirmed.",
+        "output_classified": "Classified from the command's own output text alone. The weakest evidence: a command that merely prints sandbox-like wording reaches this level."
       }
     },
     "SandboxEnforcementPoint": {
@@ -15202,7 +15629,7 @@
         "approved",
         "declined"
       ],
-      "description": "Finite result of a sandbox decision. Each `SandboxDecisionData` variant uses a disjoint subset: `policy_resolved` is `resolved | degraded`, `spawn_completed` is `succeeded | failed`, `enforcement_state` is `engaged | inactive | failed`, `access_denied` is `denied`, and `bypass_decided` is `approved | declined`.",
+      "description": "Finite result of a sandbox decision. Each `SandboxDecisionData` variant uses a disjoint subset: `policy_resolved` is `resolved | degraded`, `spawn_completed` and `permissive_retry_completed` are `succeeded | failed`, `enforcement_state` is `engaged | inactive | failed`, `access_denied` is `denied`, and escalation decisions are `approved | declined`.",
       "title": "SandboxOutcome",
       "x-enumDescriptions": {
         "resolved": "The sandbox policy resolved successfully. Describes configuration only and makes no claim that a backend engaged.",
@@ -15210,7 +15637,7 @@
         "engaged": "A runtime-owned containment backend accepted the workload. Evidence of engagement, not of verified containment for the workload's lifetime.",
         "succeeded": "The sandbox operation completed successfully.",
         "failed": "The sandbox operation failed.",
-        "degraded": "The sandbox is active with one or more controls weakened by platform limitations.",
+        "degraded": "The sandbox is active with one or more controls weakened by platform limitations or an explicitly selected relaxed mode.",
         "denied": "An enforcement check refused the requested access.",
         "approved": "A request to run outside the process sandbox was granted.",
         "declined": "A request to run outside the process sandbox was not granted."
@@ -15583,6 +16010,10 @@
         {
           "$ref": "#/definitions/ModelChangeEvent",
           "description": "Session event \"session.model_change\". Model change details including previous and new model identifiers"
+        },
+        {
+          "$ref": "#/definitions/AutoTierRecommendationEvent",
+          "description": "Session event \"session.auto_tier_recommendation\". Live-only Auto preference recommendation from Copilot API after a successful Auto model call."
         },
         {
           "$ref": "#/definitions/AutoTierSwitchFailedEvent",
@@ -17307,6 +17738,10 @@
           "type": "string",
           "description": "Why an explicit task-call model did not become the effective model"
         },
+        "modelSelectionSource": {
+          "$ref": "#/definitions/SubagentModelSelectionSource",
+          "description": "Authority or runtime mechanism responsible for sub-agent model selection"
+        },
         "configuredModelMatchesActual": {
           "type": "boolean",
           "description": "Whether the first model actually dispatched matched the user's configured preference"
@@ -17581,6 +18016,10 @@
           "type": "string",
           "description": "Why an explicit task-call model did not become the effective model"
         },
+        "modelSelectionSource": {
+          "$ref": "#/definitions/SubagentModelSelectionSource",
+          "description": "Authority or runtime mechanism responsible for sub-agent model selection"
+        },
         "configuredModelMatchesActual": {
           "type": "boolean",
           "description": "Whether the first model actually dispatched matched the user's configured preference"
@@ -17665,6 +18104,29 @@
       "additionalProperties": false,
       "description": "Session event \"subagent.failed\". Sub-agent failure details including error message and agent information",
       "title": "SubagentFailedEvent"
+    },
+    "SubagentModelSelectionSource": {
+      "type": "string",
+      "enum": [
+        "explicit_override",
+        "configured_required",
+        "configured_preference",
+        "complementary_default",
+        "session_inheritance",
+        "agent_definition_default",
+        "runtime_policy"
+      ],
+      "description": "Authority or runtime mechanism responsible for sub-agent model selection.",
+      "title": "SubagentModelSelectionSource",
+      "x-enumDescriptions": {
+        "explicit_override": "Explicit model supplied by the parent agent on the task call and selected for dispatch.",
+        "configured_required": "Required model policy configured for the sub-agent.",
+        "configured_preference": "Non-required model preference configured for the sub-agent.",
+        "complementary_default": "Complementary-model default selected for the sub-agent.",
+        "session_inheritance": "Model inherited from the parent session.",
+        "agent_definition_default": "Default model declared by the agent definition.",
+        "runtime_policy": "Runtime policy, Auto mode, or an experiment selected the model."
+      }
     },
     "SubagentSelectedData": {
       "type": "object",
@@ -17778,6 +18240,10 @@
           "type": "string",
           "description": "Model the sub-agent will run with, when known at start."
         },
+        "taskModelSource": {
+          "$ref": "#/definitions/SubagentTaskModelSource",
+          "description": "Where the model input for this sub-agent came from. Present when the task planner resolved the launch (the task tool and factory agents); absent for sub-agents created through other runtime paths."
+        },
         "factoryRunId": {
           "type": "string",
           "description": "Root id of the factory run that spawned this sub-agent, when it was spawned by one."
@@ -17862,6 +18328,23 @@
       "additionalProperties": false,
       "description": "Session event \"subagent.started\". Sub-agent startup details including parent tool call and agent information",
       "title": "SubagentStartedEvent"
+    },
+    "SubagentTaskModelSource": {
+      "type": "string",
+      "enum": [
+        "task_argument",
+        "subagent_configuration",
+        "custom_agent_definition",
+        "unset"
+      ],
+      "description": "Where the model input for a task-tool sub-agent came from.",
+      "title": "SubagentTaskModelSource",
+      "x-enumDescriptions": {
+        "task_argument": "The spawning agent supplied the task tool's model argument.",
+        "subagent_configuration": "The task omitted a model and the per-sub-agent settings entry supplied a concrete one.",
+        "custom_agent_definition": "The task omitted a model and the user-defined custom agent's definition supplied one.",
+        "unset": "Neither the task call, the per-sub-agent settings entry, nor a custom agent definition supplied a model."
+      }
     },
     "SystemMessageData": {
       "type": "object",
@@ -18235,6 +18718,10 @@
         "retryGuidance": {
           "type": "string",
           "description": "Actionable run_factory resume guidance for a resource-limit failure."
+        },
+        "pauseInfo": {
+          "$ref": "#/definitions/SystemNotificationFactoryPauseInfo",
+          "description": "Pause initiator metadata when this attempt settled as paused."
         }
       },
       "required": [
@@ -18256,6 +18743,7 @@
       "enum": [
         "completed",
         "halted",
+        "paused",
         "cancelled",
         "error"
       ],
@@ -18264,9 +18752,47 @@
       "x-enumDescriptions": {
         "completed": "The factory completed successfully.",
         "halted": "The factory was halted.",
+        "paused": "The factory attempt paused intentionally.",
         "cancelled": "The factory was cancelled.",
         "error": "The factory failed."
       }
+    },
+    "SystemNotificationFactoryPauseInfo": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "user",
+              "description": "Factory pause initiator discriminator."
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Stable author-defined checkpoint key that initiated the pause."
+            },
+            "type": {
+              "type": "string",
+              "const": "checkpoint",
+              "description": "Factory pause initiator discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "key"
+          ]
+        }
+      ],
+      "description": "Durable metadata describing who initiated a factory pause.",
+      "title": "SystemNotificationFactoryPauseInfo"
     },
     "SystemNotificationInstructionDiscovered": {
       "type": "object",

@@ -9,8 +9,29 @@ All notable changes to this project will be documented in this file. This change
   preserve the opaque ID exactly and serialize it as `agent-<id>`. Omission
   sends no source, while explicit `nil` and unsupported values are rejected.
   ([upstream PR #2573](https://github.com/github/copilot-sdk/pull/2573))
+- Added `:auth-client-id-metadata-url` for MCP OAuth host identity on create,
+  resume, and join, preserving omission separately from an empty string.
+  ([upstream PR #2258](https://github.com/github/copilot-sdk/pull/2258))
+- Added stable runtime event fields for subagent model-selection provenance,
+  custom-agent model-invocation disablement, sandbox permissive escalation,
+  and assistant-usage billing models. CAPI auto-tier configuration now also
+  accepts the integrator-only `:fast` latency preset.
+  ([upstream PR #2609](https://github.com/github/copilot-sdk/pull/2609))
 
 ### Changed (upstream parity)
+- Concurrent client startup is now single-flight: all callers await one
+  connection attempt and observe the same success or failure.
+  ([upstream PR #2570](https://github.com/github/copilot-sdk/pull/2570))
+- `:model-capabilities {:limits {:max-output-tokens ...}}` is now classified as
+  stable public API rather than an experimental runtime extension.
+  ([upstream PR #2569](https://github.com/github/copilot-sdk/pull/2569))
+- Updated the runtime and schema pin to `1.0.84-4` and recertified the complete
+  stable Node SDK public surface through upstream commit
+  [`bba92dda4c4c5a34340817112968bd78485df006`](https://github.com/github/copilot-sdk/commit/bba92dda4c4c5a34340817112968bd78485df006).
+  Experimental Auto-tier recommendation events, factory pause additions,
+  permission-mode changes, internal compaction fields, and generated-only RPCs
+  remain intentionally excluded.
+  ([upstream PR #2609](https://github.com/github/copilot-sdk/pull/2609))
 - Recertified the complete stable Node SDK public surface through upstream
   commit
   [`d8bbc9dd7a6167d4806780f405d8ce74add1cc7c`](https://github.com/github/copilot-sdk/commit/d8bbc9dd7a6167d4806780f405d8ce74add1cc7c).
