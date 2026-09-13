@@ -44,6 +44,7 @@
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-metadata :as event-metadata]
             [github.copilot-sdk.generated.event-specs :as gen]
+            [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.specs :as specs])
   (:import [java.time Instant]))
@@ -68,13 +69,31 @@
             "                               :properties {:z {:type \"string\"} "
             "                                            :a {:type \"string\"} "
             "                                            :m {:type \"string\"}} "
-            "                               :additionalProperties false}))] "
+            "                               :additionalProperties false})) "
+            "      string-dictionary-spec "
+            "      (eval (emit/emit-type {:type \"object\"} "
+            "                            {:type \"object\" "
+            "                             :additionalProperties {:type \"string\"}})) "
+            "      mixed-object-spec "
+            "      (eval (emit/emit-type {:type \"object\"} "
+            "                            {:type \"object\" "
+            "                             :properties {:knownValue {:type \"string\"}} "
+            "                             :required [\"knownValue\"] "
+            "                             :additionalProperties {:type \"integer\"}}))] "
             "  (prn {:keys (mapv core/wire-key->kebab "
             "                    [\"_meta\" \"sessionId\" \"tool_efficiency\" "
             "                     \"URLValue\" \"someURLValue\" \"__foo_bar\"]) "
             "        :bounded (mapv #(s/valid? bounded-spec %) [1 2 2.5 4 5]) "
             "        :exclusive (mapv #(s/valid? exclusive-spec %) [1 1.5 2]) "
             "        :nullable (mapv #(s/valid? nullable-spec %) [\"value\" nil 1]) "
+            "        :string-dictionary "
+            "        (mapv #(s/valid? string-dictionary-spec %) "
+            "              [{:requested \"resolved\"} {:requested 42} []]) "
+            "        :mixed-object "
+            "        (mapv #(s/valid? mixed-object-spec %) "
+            "              [{:known-value \"ok\" :extra 1} "
+            "               {:known-value \"ok\" :extra \"bad\"} "
+            "               {:known-value 1 :extra 1}]) "
             "        :closed-object-form closed-object-form}))"))]
       (when-not (zero? exit)
         (throw (ex-info "Codegen probe failed" {:exit exit :stderr err})))
@@ -92,6 +111,10 @@
 
 (deftest codegen-emits-canonical-closed-object-key-order
   (is (str/includes? (:closed-object-form @codegen-probe) "#{:a :m :z}")))
+
+(deftest codegen-validates-dictionary-values
+  (is (= [true false false] (:string-dictionary @codegen-probe)))
+  (is (= [true false false] (:mixed-object @codegen-probe))))
 
 (deftest generated-object-shape-definitions-are-canonical
   (let [source    (slurp "src/github/copilot_sdk/generated/event_specs.clj")
@@ -120,7 +143,10 @@
              :idiom [:data :projection-message]}]
            ["assistant.fusion_phase_completed"
             {:wire [:data :stagedTerminal :assistantMessage]
-             :idiom [:data :staged-terminal :assistant-message]}]]]
+             :idiom [:data :staged-terminal :assistant-message]}]
+           ["permission.requested"
+            {:wire [:data :permissionRequest :resolvedPaths :map-keys]
+             :idiom [:data :permission-request :resolved-paths :map-keys]}]]]
     (is (contains? (set (get event-metadata/opaque-json-paths event-type))
                    expected-path)
         (str event-type " should preserve " (:wire expected-path)))))
@@ -530,6 +556,52 @@
         (is (s/valid? spec-kw payload)
             (str "generated spec rejected wire payload for " event-type
                  ": " (s/explain-str spec-kw payload)))))))
+
+(deftest generated-dictionary-specs-enforce-additional-property-values
+  (let [shell-request
+        {:request-id "permission-1"
+         :permission-request
+         {:kind "shell"
+          :full-command-text "cat src/MyFile.clj"
+          :intention "Read a source file"
+          :commands [{:identifier "cat" :read-only true}]
+          :possible-paths ["src/MyFile.clj"]
+          :resolved-paths {(keyword "src/MyFile.clj")
+                           "/workspace/src/MyFile.clj"}
+          :possible-urls []
+          :has-write-file-redirection false
+          :can-offer-session-approval false}}]
+    (is (s/valid? ::gen/permission.requested-data shell-request))
+    (is (not (s/valid?
+              ::gen/permission.requested-data
+              (assoc-in shell-request
+                        [:permission-request :resolved-paths
+                         (keyword "src/MyFile.clj")]
+                        42))))))
+
+(deftest generated-dictionary-paths-preserve-keys-and-normalize-values
+  (let [model-key (keyword "GPTModel")
+        token-key (keyword "PromptToken")
+        normalized
+        (#'protocol/normalize-incoming
+         {:method "session.event"
+          :params
+          {:event
+           {:type "session.shutdown"
+            :data
+            {:modelMetrics
+             {model-key
+              {:inputTokens 3
+               :tokenDetails
+               {token-key {:tokenCount 5}}}}}}}})]
+    (is (= 3
+           (get-in normalized
+                   [:params :event :data :model-metrics
+                    model-key :input-tokens])))
+    (is (= 5
+           (get-in normalized
+                   [:params :event :data :model-metrics
+                    model-key :token-details token-key :token-count])))))
 
 (deftest event-types-set-matches-fixtures
   (testing "every fixture event-type is in the generated event-types set"

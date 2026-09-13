@@ -1,7 +1,6 @@
 (ns github.copilot-sdk.integration.stable-sync-f45c46fd-test
   "Executable exact-pin certification for the upstream delta through f45c46fd."
   (:require [clojure.data.json :as json]
-            [clojure.edn :as edn]
             [clojure.java.io :as io]
             [clojure.java.shell :as sh]
             [clojure.set :as set]
@@ -11,12 +10,24 @@
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.generated.event-metadata :as event-metadata]
             [github.copilot-sdk.generated.event-specs :as generated-events]
-            [github.copilot-sdk.integration.stable-sync-bba92dd-test
-             :as baseline-cert]
+            [github.copilot-sdk.integration.stable-sync-support
+             :refer [changed-exported-declarations
+                     changed-source-lines
+                     exported-symbols
+                     git-lines
+                     git-output
+                     interface-fields
+                     public-class-methods
+                     read-resource
+                     referenced-evidence
+                     sha256-file
+                     sha256-items
+                     sha256-lines
+                     sha256-resource
+                     star-export-modules
+                     upstream-repo]]
             [github.copilot-sdk.protocol :as protocol]
-            [github.copilot-sdk.specs :as specs])
-  (:import (java.nio.charset StandardCharsets)
-           (java.security MessageDigest)))
+            [github.copilot-sdk.specs :as specs]))
 
 (def ^:private report-resource
   "resources/stable_upstream_delta_f45c46fd.edn")
@@ -47,88 +58,9 @@
 (def ^:private allowed-classifications
   #{:experimental :generated-only :internal :language-specific :stable-public})
 
-(def ^:private upstream-validation-enabled?
-  (= "true" (System/getenv "COPILOT_UPSTREAM_VALIDATION")))
-
-(def ^:private exported-symbols
-  (var-get #'baseline-cert/exported-symbols))
-
-(def ^:private star-export-modules
-  (var-get #'baseline-cert/star-export-modules))
-
-(def ^:private interface-fields
-  (var-get #'baseline-cert/interface-fields))
-
-(def ^:private changed-exported-declarations
-  (var-get #'baseline-cert/changed-exported-declarations))
-
-(def ^:private public-class-methods
-  (var-get #'baseline-cert/public-class-methods))
-
-(def ^:private changed-source-lines
-  (var-get #'baseline-cert/changed-source-lines))
-
-(def ^:private sha256-file
-  (var-get #'baseline-cert/sha256-file))
-
-(def ^:private sha256-resource
-  (var-get #'baseline-cert/sha256-resource))
-
-(defn- read-resource
-  [resource]
-  (some-> resource io/resource slurp edn/read-string))
-
 (defn- report
   []
   (read-resource report-resource))
-
-(defn- resolve-upstream
-  []
-  (let [{:keys [exit out err]}
-        (sh/sh "bash"
-               ".github/skills/update-upstream/scripts/resolve-upstream.sh")]
-    (when-not (zero? exit)
-      (throw (ex-info "Could not resolve the upstream checkout"
-                      {:exit exit :stderr err})))
-    (str/trim out)))
-
-(def ^:private upstream-repo
-  (delay
-    (when upstream-validation-enabled?
-      (resolve-upstream))))
-
-(defn- shell-output
-  [& args]
-  (let [{:keys [exit out err]} (apply sh/sh args)]
-    (when-not (zero? exit)
-      (throw (ex-info "Command failed"
-                      {:args args :exit exit :stderr err})))
-    (str/trim out)))
-
-(defn- git-output
-  [upstream & args]
-  (apply shell-output "git" "-C" upstream args))
-
-(defn- git-lines
-  [upstream & args]
-  (->> (str/split-lines (apply git-output upstream args))
-       (remove str/blank?)
-       vec))
-
-(defn- sha256-items
-  [items]
-  (let [digest (MessageDigest/getInstance "SHA-256")]
-    (format "%064x"
-            (java.math.BigInteger.
-             1
-             (.digest
-              digest
-              (.getBytes (str/join "\n" items)
-                         StandardCharsets/UTF_8))))))
-
-(defn- sha256-symbols
-  [symbols]
-  ((var-get #'baseline-cert/sha256-lines) symbols))
 
 (defn- export-list-entries
   [source]
@@ -174,13 +106,6 @@
           classification classifications
           declaration (get by-class classification)]
       [:changed-declaration path declaration]))))
-
-(defn- referenced-evidence
-  [report]
-  (set
-   (concat
-    (mapcat :evidence (:stable-deltas report))
-    (mapcat :evidence (:intentional-exclusions report)))))
 
 (deftest report-pins-history-and-local-artifacts
   (let [report (report)
@@ -339,6 +264,8 @@
             (memoize
              (fn [pin path]
                (git-output upstream-repo "show" (str pin ":" path))))
+            package-json
+            (json/read-str (read-source target "nodejs/package.json"))
             index-path (get-in surface [:package-root :path])
             event-path
             (get-in surface [:package-root :session-events :path])
@@ -361,26 +288,18 @@
             (apply set/union
                    #{}
                    (vals (dissoc package-delta :removed)))]
-        (doseq [[path hashes] (:source-blobs surface)
+        (doseq [[surface-key label]
+                [[:source-blobs "blob"] [:trees "tree"]]
+                [path hashes] (get surface surface-key)
                 [pin-key commit] [[:base base] [:target target]]]
-          (testing (str path " " (name pin-key) " blob")
-            (is (= (get hashes pin-key)
-                   (git-output upstream-repo
-                               "rev-parse" (str commit ":" path))))))
-        (doseq [[path hashes] (:trees surface)
-                [pin-key commit] [[:base base] [:target target]]]
-          (testing (str path " " (name pin-key) " tree")
+          (testing (str path " " (name pin-key) " " label)
             (is (= (get hashes pin-key)
                    (git-output upstream-repo
                                "rev-parse" (str commit ":" path))))))
         (is (= (get-in report [:upstream :target-package-version])
-               (get (json/read-str
-                     (read-source target "nodejs/package.json"))
-                    "version")))
+               (get package-json "version")))
         (is (= (get-in report [:upstream :runtime-version])
-               (get (json/read-str
-                     (read-source target "nodejs/package.json"))
-                    "copilotCliVersion")))
+               (get package-json "copilotCliVersion")))
         (is (= historical-resource
                (:baseline-resource package-provenance)))
         (is (= (get-in historical
@@ -396,17 +315,17 @@
                (count explicit-symbols)))
         (is (= (get-in surface
                        [:package-root :explicit-symbols-sha256])
-               (sha256-symbols (sort explicit-symbols))))
+               (sha256-lines (sort explicit-symbols))))
         (is (= (get-in surface
                        [:package-root :session-events :symbol-count])
                (count event-symbols)))
         (is (= (get-in surface
                        [:package-root :session-events :symbols-sha256])
-               (sha256-symbols (sort event-symbols))))
+               (sha256-lines (sort event-symbols))))
         (is (= (get-in surface [:package-root :symbol-count])
                (count package-symbols)))
         (is (= (get-in surface [:package-root :symbols-sha256])
-               (sha256-symbols (sort package-symbols))))
+               (sha256-lines (sort package-symbols))))
         (is (= classified-package-additions
                (set/difference package-symbols baseline-package-symbols)))
         (is (= (:removed package-delta)
@@ -429,7 +348,7 @@
           (testing (name surface-key)
             (is (= symbol-count (count symbols)))
             (is (= symbols-sha256
-                   (sha256-symbols (sort symbols))))))
+                   (sha256-lines (sort symbols))))))
         (doseq [[_ {:keys [path class-name method-count methods-sha256]}]
                 (:classes surface)
                 :let [methods
@@ -438,25 +357,18 @@
           (testing class-name
             (is (= method-count (count methods)))
             (is (= methods-sha256
-                   (sha256-symbols (sort methods))))))
-        (doseq [[path classifications]
-                (:added-exported-symbols inventory)]
+                   (sha256-lines (sort methods))))))
+        (doseq [[inventory-key from to label]
+                [[:added-exported-symbols base target "added"]
+                 [:removed-exported-symbols target base "removed"]]
+                [path classifications] (get inventory inventory-key)]
           (let [expected (apply set/union #{} (vals classifications))
                 actual
                 (set/difference
-                 (exported-symbols (read-source target path))
-                 (exported-symbols (read-source base path)))]
+                 (exported-symbols (read-source to path))
+                 (exported-symbols (read-source from path)))]
             (is (= expected actual)
-                (str "added exported symbols drifted for " path))))
-        (doseq [[path classifications]
-                (:removed-exported-symbols inventory)]
-          (let [expected (apply set/union #{} (vals classifications))
-                actual
-                (set/difference
-                 (exported-symbols (read-source base path))
-                 (exported-symbols (read-source target path)))]
-            (is (= expected actual)
-                (str "removed exported symbols drifted for " path))))
+                (str label " exported symbols drifted for " path))))
         (doseq [{:keys [path symbol base-module target-module]}
                 (:reexport-changes inventory)]
           (testing (str path " " symbol)
@@ -515,6 +427,48 @@
         {:tool-call-id "call-1"
          :tool-name "mcp-tool"
          :mcp-transport "stdio"}
+        tool-start-event
+        {:id "tool-event-1"
+         :parentId nil
+         :timestamp "2026-10-01T00:00:00Z"
+         :type "tool.execution_start"
+         :data {:toolCallId "call-1"
+                :toolName "mcp-tool"
+                :mcpTransport "http"}}
+        normalized-tool-start
+        (#'protocol/normalize-incoming
+         {:method "session.event"
+          :params {:event tool-start-event}})
+        normalized-tool-start-omitted
+        (#'protocol/normalize-incoming
+         {:method "session.event"
+          :params {:event (update tool-start-event :data dissoc :mcpTransport)}})
+        normalized-tool-start-null
+        (#'protocol/normalize-incoming
+         {:method "session.event"
+          :params {:event (assoc-in tool-start-event [:data :mcpTransport] nil)}})
+        requested-path-key (keyword "src/MyFile.clj")
+        permission-requested-event
+        {:id "permission-event-1"
+         :parentId nil
+         :timestamp "2026-10-01T00:00:00Z"
+         :type "permission.requested"
+         :data
+         {:requestId "permission-1"
+          :permissionRequest
+          {:kind "shell"
+           :fullCommandText "cat src/MyFile.clj"
+           :intention "Read a source file"
+           :commands [{:identifier "cat" :readOnly true}]
+           :possiblePaths ["src/MyFile.clj"]
+           :resolvedPaths {requested-path-key "/workspace/src/MyFile.clj"}
+           :possibleUrls []
+           :hasWriteFileRedirection false
+           :canOfferSessionApproval false}}}
+        normalized-permission-request
+        (#'protocol/normalize-incoming
+         {:method "session.event"
+          :params {:event permission-requested-event}})
         message-authorization-data
         {:action-class "shell"
          :polarity "grant"
@@ -576,6 +530,26 @@
     (is (s/valid? ::specs/tool.execution_start-data tool-start))
     (is (s/valid? ::specs/tool.execution_start-data
                   (dissoc tool-start :mcp-transport)))
+    (doseq [transport ["stdio" "http" "sse" "memory"]]
+      (is (s/valid? ::generated-events/tool.execution_start-data
+                    (assoc tool-start :mcp-transport transport)))
+      (is (s/valid? ::specs/tool.execution_start-data
+                    (assoc tool-start :mcp-transport transport))))
+    (is (= "http"
+           (get-in normalized-tool-start
+                   [:params :event :data :mcp-transport])))
+    (is (not (contains?
+              (get-in normalized-tool-start-omitted [:params :event :data])
+              :mcp-transport)))
+    (is (s/valid?
+         ::specs/tool.execution_start-data
+         (get-in normalized-tool-start-omitted [:params :event :data])))
+    (is (contains?
+         (get-in normalized-tool-start-null [:params :event :data])
+         :mcp-transport))
+    (is (not (s/valid?
+              ::specs/tool.execution_start-data
+              (get-in normalized-tool-start-null [:params :event :data]))))
     (is (s/valid? ::generated-events/decision-source
                   "authorization_carry_forward"))
     (is (s/valid? ::generated-events/permission.messageAuthorization-data
@@ -584,6 +558,15 @@
          (set (get event-metadata/opaque-json-paths
                    "permission.messageAuthorization"))
          {:wire [:data :world] :idiom [:data :world]}))
+    (is (contains?
+         (set (get event-metadata/opaque-json-paths
+                   "permission.requested"))
+         {:wire [:data :permissionRequest :resolvedPaths :map-keys]
+          :idiom [:data :permission-request :resolved-paths :map-keys]}))
+    (is (= "/workspace/src/MyFile.clj"
+           (get-in normalized-permission-request
+                   [:params :event :data :permission-request
+                    :resolved-paths requested-path-key])))
     (is (= (:world message-authorization-data)
            (get-in live [:params :event :data :world])
            (get-in historical [:result :events 0 :data :world])))

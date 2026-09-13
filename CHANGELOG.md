@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file. This change
 
 ### Added (v1.0.84-5 sync)
 - Added stable `:mcp-transport` metadata to
-  `:copilot/tool.execution_start` events, with the values `"stdio"`,
+  `:copilot/tool.execution_start` events. The optional field accepts `"stdio"`,
   `"http"`, `"sse"`, and `"memory"`.
   ([upstream PR #2634](https://github.com/github/copilot-sdk/pull/2634))
 
@@ -16,6 +16,11 @@ All notable changes to this project will be documented in this file. This change
   Experimental permission carry-forward, message-authorization, and catalog
   trust additions remain generated wire evidence only.
   ([upstream PR #2634](https://github.com/github/copilot-sdk/pull/2634))
+
+### Fixed
+- Generated event specs now validate values in JSON Schema dictionaries, and
+  event normalization preserves source-defined dictionary keys while still
+  normalizing structured values.
 
 ### Added (upstream parity)
 - Added stable message provenance to every send API. Use `:source :user`,

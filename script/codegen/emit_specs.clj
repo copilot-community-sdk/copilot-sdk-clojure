@@ -29,8 +29,9 @@
      (i.e., not via `$ref` — currently none flow through this path; see
      `emit-object`) → an inline `(s/and map? ...)` form with the same
      structural predicates, built but not separately registered.
-   - nested `object` nodes *without* declared `properties` (dictionary-style
-     or otherwise opaque objects) → `map?`, left open
+   - dictionary-style `object` nodes with schema-valued
+     `additionalProperties` → an open map whose values satisfy that schema
+   - other nested `object` nodes without declared `properties` → `map?`
    - nodes marked `x-opaque-json` → recursive JSON values (including scalars)
    - `anyOf` (incl. nullable)   → `(s/or ...)` or `(s/nilable ...)`
    - Otherwise / less precise cases → `any?`
@@ -168,6 +169,26 @@
       `(~'s/coll-of ~(emit-type root items))
       `(~'s/coll-of any?))))
 
+(defn- emit-dictionary
+  [root node]
+  (let [additional-properties (:additionalProperties node)]
+    (cond
+      (map? additional-properties)
+      (let [value-form (emit-type root additional-properties)]
+        `(~'s/and
+          map?
+          (~'fn [~'m]
+                (~'every?
+                 (~'fn [~'value]
+                       (~'s/valid? ~value-form ~'value))
+                 (~'vals ~'m)))))
+
+      (false? additional-properties)
+      `(~'s/and map? empty?)
+
+      :else
+      `map?)))
+
 (defn- emit-anyOf [root node]
   (let [branches  (:anyOf node)
         non-null  (remove #(= "null" (:type %)) branches)
@@ -226,11 +247,25 @@
                         `(~'fn [~'m]
                                (~'or (~'not (~'contains? ~'m ~kw))
                                      (~'s/valid? ~form (~kw ~'m))))))
-        closed?     (false? (:additionalProperties node))
+        additional-properties (:additionalProperties node)
+        allowed     (into (sorted-set) (map :kw prop-info))
+        closed?     (false? additional-properties)
         closed-pred (when closed?
-                      (let [allowed (into (sorted-set) (map :kw prop-info))]
-                        `(~'fn [~'m] (~'every? ~allowed (~'keys ~'m)))))]
-    `(~'s/and map? ~@prop-preds ~@(when closed-pred [closed-pred]))))
+                      `(~'fn [~'m] (~'every? ~allowed (~'keys ~'m))))
+        additional-pred
+        (when (map? additional-properties)
+          (let [value-form (emit-type root additional-properties)]
+            `(~'fn [~'m]
+                   (~'every?
+                    (~'fn [[~'key ~'value]]
+                          (~'or
+                           (~'contains? ~allowed ~'key)
+                           (~'s/valid? ~value-form ~'value)))
+                    ~'m))))]
+    `(~'s/and map?
+              ~@prop-preds
+              ~@(when closed-pred [closed-pred])
+              ~@(when additional-pred [additional-pred]))))
 
 (defn- register-object-shape!
   "Look up or register a named shape spec for a `$ref`'d object node with
@@ -263,7 +298,7 @@
                                    (if ref
                                      (register-object-shape! root ref node)
                                      (emit-object root node))
-                                   `map?)          ;; opaque/dictionary object → stays open
+                                   (emit-dictionary root node))
       :else                      `any?)))
 
 ;; ---------------------------------------------------------------------------
@@ -660,13 +695,24 @@
       []
       (let [node (cc/deref-once root node)
             seen-refs (cond-> seen-refs ref (conj ref))
-            opaque-dictionary? (:x-opaque-json (:additionalProperties node))]
-        (cond
-          (or (:x-opaque-json node) opaque-dictionary?)
+            additional-properties (:additionalProperties node)
+            opaque-dictionary? (:x-opaque-json additional-properties)
+            typed-dictionary?
+            (and (not (:properties node))
+                 (map? additional-properties)
+                 (not opaque-dictionary?))
+            dictionary-wire-path (conj wire-path :map-keys)
+            dictionary-idiom-path (conj idiom-path :map-keys)]
+        (if (or (:x-opaque-json node) opaque-dictionary?)
           [{:wire wire-path :idiom idiom-path}]
-
-          :else
           (concat
+           (when typed-dictionary?
+             (cons
+              {:wire dictionary-wire-path
+               :idiom dictionary-idiom-path}
+              (opaque-paths-in-node
+               root additional-properties
+               dictionary-wire-path dictionary-idiom-path seen-refs)))
            (mapcat #(opaque-paths-in-node root % wire-path idiom-path seen-refs)
                    (concat (:anyOf node) (:oneOf node) (:allOf node)))
            (when-let [items (:items node)]
@@ -685,14 +731,14 @@
             (sort-by (comp name key) (:properties node)))))))))
 
 (defn collect-opaque-json-paths
-  "Return event-type -> generated raw/idiom paths for every x-opaque-json node."
+  "Return event-type -> raw/idiom paths for opaque JSON and typed map keys."
   [root]
   (into (sorted-map)
         (keep
          (fn [{:keys [type variant]}]
            (let [paths (->> (opaque-paths-in-node root variant [] [] #{})
                             distinct
-                            (sort-by pr-str)
+                            (sort-by (juxt #(count (:wire %)) pr-str))
                             vec)]
              (when (seq paths)
                [type paths]))))

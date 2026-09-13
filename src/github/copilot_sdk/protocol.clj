@@ -474,15 +474,43 @@
                 raw
                 converted)
           converted)
-        (if (and (map? raw)
-                 (map? converted)
-                 (contains? raw wire-key)
-                 (contains? converted idiom-key))
-          (assoc converted idiom-key
-                 (restore-opaque-path (get raw wire-key)
-                                      (get converted idiom-key)
-                                      remaining-wire remaining-idiom))
-          converted)))))
+        (if (= :map-keys wire-key)
+          (if (and (map? raw) (map? converted))
+            (into
+             (empty raw)
+             (map
+              (fn [[raw-key raw-value]]
+                (let [converted-key
+                      (first (keys (util/wire->clj {raw-key nil})))
+                      converted-value
+                      (if remaining-wire
+                        (cond
+                          (contains? converted raw-key)
+                          (get converted raw-key)
+
+                          (contains? converted converted-key)
+                          (get converted converted-key)
+
+                          :else
+                          (util/wire->clj raw-value))
+                        (util/wire->clj raw-value))]
+                  [raw-key
+                   (if remaining-wire
+                     (restore-opaque-path
+                      raw-value converted-value
+                      remaining-wire remaining-idiom)
+                     converted-value)])))
+             raw)
+            converted)
+          (if (and (map? raw)
+                   (map? converted)
+                   (contains? raw wire-key)
+                   (contains? converted idiom-key))
+            (assoc converted idiom-key
+                   (restore-opaque-path (get raw wire-key)
+                                        (get converted idiom-key)
+                                        remaining-wire remaining-idiom))
+            converted))))))
 
 (defn- preserve-event-opaque-fields
   "Given a raw wire event (pre-`wire->clj`) and a converted event, restore
