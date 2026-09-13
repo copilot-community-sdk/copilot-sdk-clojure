@@ -581,7 +581,9 @@
 
 (deftest generated-dictionary-paths-preserve-keys-and-normalize-values
   (let [model-key (keyword "GPTModel")
+        colliding-model-key (keyword "gpt-model")
         token-key (keyword "PromptToken")
+        colliding-token-key (keyword "prompt-token")
         normalized
         (#'protocol/normalize-incoming
          {:method "session.event"
@@ -593,7 +595,11 @@
              {model-key
               {:inputTokens 3
                :tokenDetails
-               {token-key {:tokenCount 5}}}}}}}})]
+               {token-key {:tokenCount 5}}}
+              colliding-model-key
+              {:inputTokens 7
+               :tokenDetails
+               {colliding-token-key {:tokenCount 11}}}}}}}})]
     (is (= 3
            (get-in normalized
                    [:params :event :data :model-metrics
@@ -601,7 +607,16 @@
     (is (= 5
            (get-in normalized
                    [:params :event :data :model-metrics
-                    model-key :token-details token-key :token-count])))))
+                    model-key :token-details token-key :token-count])))
+    (is (= 7
+           (get-in normalized
+                   [:params :event :data :model-metrics
+                    colliding-model-key :input-tokens])))
+    (is (= 11
+           (get-in normalized
+                   [:params :event :data :model-metrics
+                    colliding-model-key :token-details
+                    colliding-token-key :token-count])))))
 
 (deftest event-types-set-matches-fixtures
   (testing "every fixture event-type is in the generated event-types set"

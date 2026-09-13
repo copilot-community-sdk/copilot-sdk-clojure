@@ -480,19 +480,19 @@
              (empty raw)
              (map
               (fn [[raw-key raw-value]]
-                (let [converted-key
-                      (first (keys (util/wire->clj {raw-key nil})))
+                (let [;; Shallower :map-keys paths run first and restore raw
+                      ;; keys. Reuse their values so sibling restorations
+                      ;; compose without normalized-key collisions.
                       converted-value
                       (if remaining-wire
-                        (cond
-                          (contains? converted raw-key)
+                        (if (contains? converted raw-key)
                           (get converted raw-key)
-
-                          (contains? converted converted-key)
-                          (get converted converted-key)
-
-                          :else
-                          (util/wire->clj raw-value))
+                          (let [converted-key
+                                (first
+                                 (keys (util/wire->clj {raw-key nil})))]
+                            (if (contains? converted converted-key)
+                              (get converted converted-key)
+                              (util/wire->clj raw-value))))
                         (util/wire->clj raw-value))]
                   [raw-key
                    (if remaining-wire
