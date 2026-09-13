@@ -1,0 +1,690 @@
+{:certification
+ {:clojure-base-commit "d8c211a3f6c089477ce9146aef14def4330f4e7a"
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_bba92dd.edn"
+   :sha256
+   "78f8648911261fc1e8de79a895679ce6bba0b93fd507b246d1828bf909892673"}}
+
+ :upstream
+ {:base-commit "bba92dda4c4c5a34340817112968bd78485df006"
+  :target-commit "f45c46fd1812f8bed5b4cbc250f47177c83068f0"
+  :commit-count 5
+  :commits-sha256
+  "2a92cbe363c386bb80dc7e6153e97f2e14c23b9011769e7ab442a03f8876dcb3"
+  :hash-format :newline-joined-without-trailing-newline
+  :target-package-version "0.0.0-dev"
+  :runtime-version "1.0.84-5"}
+
+ :commit-classifications
+ [{:commit "51cf90dfb03c062d9a518ddcb6d50c7d4724b3d6"
+   :subject "Fix in-process callback reclamation after connection close (#2610)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2610"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason
+   "Changes in-process FFI callback ownership and teardown only; the experimental runtime host is not a stable Clojure API obligation."
+   :changed-path-count 14
+   :changed-paths-sha256
+   "b781bf2fb2ac15febbfb2e6225d742e3f53c714461a66bc8938d38a01259a13d"}
+  {:commit "0cb0050ef4a6206808c7229ee11715f01bc256b0"
+   :subject "Fix FFI close responsiveness and callback reclamation (#2622)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2622"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason
+   "Changes close responsiveness and callback reclamation inside the experimental in-process FFI lifecycle."
+   :changed-path-count 8
+   :changed-paths-sha256
+   "b0fd0084e2513813126e8d1a21cd6dfcd5bc9c42bcadb29d990f7e89ab33ceb5"}
+  {:commit "39c777fe7bf893ba5a4f8b710feeb2172d1d40f9"
+   :subject "Fix Rust codegen for CLI 1.0.84 schemas (#2631)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2631"
+   :classification :generated-only
+   :status :reviewed-no-port
+   :reason
+   "Changes Rust generator validation, generated Rust output, and cross-language test harness fixtures without adding a Node SDK contract."
+   :changed-path-count 12
+   :changed-paths-sha256
+   "3491577d5d24a7a3d15e159c8bf27ecbab4af3245feb65820cd913e7cea85449"}
+  {:commit "a6f2e56acb5e04af56241146668fe71291304266"
+   :subject "Update Copilot CLI to 1.0.84-5 (#2634)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2634"
+   :classification :stable-public
+   :status :ported
+   :reason
+   "Pins runtime 1.0.84-5, adds stable MCP transport metadata to tool execution start events, and refreshes experimental and generated-only schema consumers."
+   :changed-path-count 65
+   :changed-paths-sha256
+   "7b8725daf15f5453e8fcf9716b4e393ea3026d74950b669072b2578e06ba0c9e"}
+  {:commit "f45c46fd1812f8bed5b4cbc250f47177c83068f0"
+   :subject "Fix abort recovery test event subscription race (#2635)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2635"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason
+   "Changes .NET test synchronization for abort recovery without changing Node SDK behavior."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "8a84d2f40f9917b6bb9da0680960984ba83c3dd93f14896eeb87392650ad1416"}]
+
+ :changed-paths
+ {:count 92
+  :sha256
+  "8ebe0742e58d97fb65e02bf580fb738165debb59543e07c8f4a9a5be60a1da0f"
+  :hash-format :newline-joined-without-trailing-newline
+  :classification-counts
+  {:stable-public 1
+   :experimental 2
+   :generated-only 7
+   :internal 26
+   :language-specific 56}
+  :classification-policy
+  {:stable-public
+   "Canonical Node event declarations containing a stable field delta."
+   :experimental
+   "Explicitly experimental Node permission and catalog surfaces."
+   :generated-only
+   "Generator implementation, generated-validation tests, and wire fixtures with no independent stable SDK obligation."
+   :internal
+   "Repository automation, runtime pins, FFI lifecycle implementation, and test-only synchronization."
+   :language-specific
+   "Generated bindings and validation belonging to non-Node SDKs."}
+  :entries
+  [{:path ".github/workflows/required-checks.yml" :classification :internal}
+   {:path "dotnet/src/FfiRuntimeHost.cs" :classification :internal}
+   {:path "dotnet/src/Generated/Rpc.cs" :classification :language-specific}
+   {:path "dotnet/src/Generated/SessionEvents.cs" :classification :language-specific}
+   {:path "dotnet/test/E2E/SessionE2ETests.cs" :classification :internal}
+   {:path "dotnet/test/Harness/E2ETestContext.cs" :classification :internal}
+   {:path "dotnet/test/Unit/ClientSessionLifetimeTests.cs" :classification :internal}
+   {:path "dotnet/test/Unit/FfiRuntimeHostLifetimeTests.cs" :classification :internal}
+   {:path "go/internal/e2e/testharness/context.go" :classification :internal}
+   {:path "go/internal/e2e/testharness/inprocess_cleanup_disabled.go" :classification :internal}
+   {:path "go/internal/e2e/testharness/inprocess_cleanup_enabled.go" :classification :internal}
+   {:path "go/internal/ffihost/ffihost.go" :classification :internal}
+   {:path "go/internal/ffihost/ffihost_test.go" :classification :internal}
+   {:path "go/rpc/zrpc.go" :classification :language-specific}
+   {:path "go/rpc/zrpc_encoding.go" :classification :language-specific}
+   {:path "go/rpc/zsession_encoding.go" :classification :language-specific}
+   {:path "go/rpc/zsession_events.go" :classification :language-specific}
+   {:path "go/zsession_events.go" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionCarriedForwardEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionCompletedEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionDecisionSource.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionMessageAuthorizationDegradedEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionMessageAuthorizationEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionMessageAuthorizationPolarity.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/PermissionMessageAuthorizationReadEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/SessionEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/ToolExecutionStartEvent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogAiSkillCandidate.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogCapability.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogMcpServerCandidate.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogNegotiationRefusedError.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustEligibility.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustProvenance.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshot.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotAbsent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotCurrent.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotDowngraded.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotMalformed.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotRevoked.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotSchemaVersion.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotStale.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSnapshotUnsupported.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustSource.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CatalogTrustTier.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/CopilotUserResponse.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/EventsCursorStatus.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/PermissionDecisionSource.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionEventLogReadResult.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionFleetApi.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionFleetStartParams.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionModeSetParams.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionModeSetResult.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionModelApplyStartupOverlayParams.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionOpenOptions.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionsReadPersistedEventsParams.java" :classification :language-specific}
+   {:path "java/sdk/src/generated/java/com/github/copilot/generated/rpc/SessionsReadPersistedEventsResult.java" :classification :language-specific}
+   {:path "java/sdk/src/main/java/com/github/copilot/ffi/FfiRuntimeHost.java" :classification :internal}
+   {:path "java/sdk/src/main/java/com/github/copilot/ffi/JnaNativeBinding.java" :classification :internal}
+   {:path "java/sdk/src/test/java/com/github/copilot/ffi/FfiRuntimeHostTest.java" :classification :internal}
+   {:path "java/sdk/src/test/java/com/github/copilot/ffi/JnaNativeBindingTest.java" :classification :internal}
+   {:path "java/sdk/src/test/java/com/github/copilot/generated/rpc/GeneratedRpcApiCoverageTest.java" :classification :language-specific}
+   {:path "java/sdk/src/test/java/com/github/copilot/generated/rpc/GeneratedRpcRecordsCoverageTest.java" :classification :language-specific}
+   {:path "nodejs/package.json" :classification :internal}
+   {:path "nodejs/src/cliVersion.ts" :classification :internal}
+   {:path "nodejs/src/client.ts" :classification :internal}
+   {:path "nodejs/src/ffiRuntimeHost.ts" :classification :internal}
+   {:path "nodejs/src/generated/rpc.ts" :classification :experimental}
+   {:path "nodejs/src/generated/session-events.ts" :classification :stable-public}
+   {:path "nodejs/src/types.ts" :classification :experimental}
+   {:path "nodejs/test/client.test.ts" :classification :internal}
+   {:path "nodejs/test/e2e/inprocess_ffi.e2e.test.ts" :classification :internal}
+   {:path "nodejs/test/ffiRuntimeHost.test.ts" :classification :internal}
+   {:path "nodejs/test/rust-codegen.test.ts" :classification :generated-only}
+   {:path "nodejs/tsconfig.test.json" :classification :internal}
+   {:path "python/copilot/__init__.py" :classification :language-specific}
+   {:path "python/copilot/_ffi_runtime_host.py" :classification :internal}
+   {:path "python/copilot/generated/rpc.py" :classification :language-specific}
+   {:path "python/copilot/generated/session_events.py" :classification :language-specific}
+   {:path "python/copilot/rpc.py" :classification :language-specific}
+   {:path "python/test_ffi_runtime_host.py" :classification :internal}
+   {:path "rust/src/ffi.rs" :classification :internal}
+   {:path "rust/src/generated/api_types.rs" :classification :language-specific}
+   {:path "rust/src/generated/rpc.rs" :classification :language-specific}
+   {:path "rust/src/generated/session_events.rs" :classification :language-specific}
+   {:path "rust/tests/api_types_test.rs" :classification :language-specific}
+   {:path "rust/tests/e2e/abort.rs" :classification :language-specific}
+   {:path "scripts/codegen/go.ts" :classification :generated-only}
+   {:path "scripts/codegen/python.ts" :classification :generated-only}
+   {:path "scripts/codegen/rust.ts" :classification :generated-only}
+   {:path "test/snapshots/session/should_accept_blob_attachments.yaml" :classification :generated-only}
+   {:path "test/snapshots/session_config/should_accept_blob_attachments.yaml" :classification :generated-only}
+   {:path "test/snapshots/session_config/vision_disabled_then_enabled_via_setmodel.yaml" :classification :generated-only}]}
+
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/package.json"
+   {:base "4918bc7274e24a0e76ada567e933429493d21c94"
+    :target "8805d0d4d86381e1b103b23199c0c61d62339b00"}
+   "nodejs/src/index.ts"
+   {:base "6251df4fc766e40730a57d5f668a91efbd5bed73"
+    :target "6251df4fc766e40730a57d5f668a91efbd5bed73"}
+   "nodejs/src/types.ts"
+   {:base "efff9b47df4be818e28e0794e05a3a08ce8d9f12"
+    :target "9c4258d9c92b9ad396bf25bb070386ef3d51f258"}
+   "nodejs/src/client.ts"
+   {:base "035f0f5e6056968fa8a010bfef514e62770b7a96"
+    :target "6e4b4fb5b4e9b656a21c0fc5fd6988a848ae8501"}
+   "nodejs/src/session.ts"
+   {:base "4c2be1429921b0c6cb397b2d45266c1b41b3dc7d"
+    :target "4c2be1429921b0c6cb397b2d45266c1b41b3dc7d"}
+   "nodejs/src/extension.ts"
+   {:base "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"
+    :target "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"}
+   "nodejs/src/toolSet.ts"
+   {:base "559e9234e5b178036d88a7045a632bd16a97f534"
+    :target "559e9234e5b178036d88a7045a632bd16a97f534"}
+   "nodejs/src/factory.ts"
+   {:base "6212f462b4aff716417baf2180b9a8b887c12ad1"
+    :target "6212f462b4aff716417baf2180b9a8b887c12ad1"}
+   "nodejs/src/canvas.ts"
+   {:base "aeb1f00ec42926977c010df2471123dc18ddddd3"
+    :target "aeb1f00ec42926977c010df2471123dc18ddddd3"}
+   "nodejs/src/ffiRuntimeHost.ts"
+   {:base "4795e325ce45fb11b9b918f684519fe2ceb58a40"
+    :target "f2db8eb163f1404609a6f1a2a03c6360c91e6f36"}
+   "nodejs/src/generated/rpc.ts"
+   {:base "b2ce8c05e96f5e993ac0c268b21e931aaf37956c"
+    :target "09bfc8ffa750cfa138eb4a6f2a882db891fb736e"}
+   "nodejs/src/generated/session-events.ts"
+   {:base "b33830dc7dc5c5d7a71ae49297c02927125cc22e"
+    :target "5bd67b80423643ec7a6416d6e331f856e3ff71ac"}}
+  :trees
+  {"nodejs"
+   {:base "c9eaae989d60866bf650606bba99032e2fe4e63b"
+    :target "e4992f186074f412dee23eeda89ca454f9512b09"}
+   "nodejs/src/generated"
+   {:base "6850a4c55c0e65adda6ff0602e09d6ec5a1dfc2e"
+    :target "c0acf2163f88205d06f4ec3102cd76cdc242cc83"}
+   "nodejs/test"
+   {:base "f7e25b184a4882f41f1717864ded5ed53de41b1f"
+    :target "d089de141f21082bf28338fe520e78702a3c8987"}}
+  :package-root
+  {:path "nodejs/src/index.ts"
+   :explicit-symbol-count 199
+   :explicit-symbols-sha256
+   "051a48c091329ccb9e386c396c5a0cf03a2fc30c21fad4222150cd64626291cc"
+   :session-events
+   {:path "nodejs/src/generated/session-events.ts"
+    :symbol-count 545
+    :symbols-sha256
+    "3978a7994abec36d2d22aedabca5c396808a5f636435909bc0b877675f331928"}
+   :symbol-count 734
+   :symbols-sha256
+   "074c122b5852adac41ba48412aac9b47182a042c771d773f8c079a6bfd79bade"
+   :classification-counts
+   {:stable-public 566 :experimental 163 :internal 5}
+   :delta
+   {:stable-public #{}
+    :experimental
+    #{"PermissionCarriedForwardData"
+      "PermissionCarriedForwardEvent"
+      "PermissionMessageAuthorizationData"
+      "PermissionMessageAuthorizationDegradedData"
+      "PermissionMessageAuthorizationDegradedEvent"
+      "PermissionMessageAuthorizationEvent"
+      "PermissionMessageAuthorizationPolarity"
+      "PermissionMessageAuthorizationReadData"
+      "PermissionMessageAuthorizationReadEvent"}
+    :internal #{}
+    :removed #{}}
+   :provenance
+   {:baseline-resource "resources/stable_upstream_delta_bba92dd.edn"
+    :baseline-symbol-count 725
+    :baseline-classification-counts
+    {:stable-public 566 :experimental 154 :internal 5}}}
+  :types
+  {:path "nodejs/src/types.ts"
+   :symbol-count 207
+   :symbols-sha256
+   "ac251977aae64ea16c156a4d8d7a10dab4d5a3a89bd201bf5856459cd668aeff"}
+  :extension
+  {:path "nodejs/src/extension.ts"
+   :symbol-count 39
+   :symbols-sha256
+   "13316e0859171d9c8be79a0bdbe2626b9c21a1947dae04a24fc51ddede17b52c"}
+  :tool-set
+  {:path "nodejs/src/toolSet.ts"
+   :symbol-count 2
+   :symbols-sha256
+   "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"}
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts"
+    :class-name "CopilotClient"
+    :method-count 20
+    :methods-sha256
+    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"}
+   :session
+   {:path "nodejs/src/session.ts"
+    :class-name "CopilotSession"
+    :method-count 41
+    :methods-sha256
+    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"}}}
+
+ :symbol-inventory
+ {:added-exported-symbols
+  {"nodejs/src/generated/session-events.ts"
+   {:experimental
+    #{"PermissionCarriedForwardData"
+      "PermissionCarriedForwardEvent"
+      "PermissionDecisionSource"
+      "PermissionMessageAuthorizationData"
+      "PermissionMessageAuthorizationDegradedData"
+      "PermissionMessageAuthorizationDegradedEvent"
+      "PermissionMessageAuthorizationEvent"
+      "PermissionMessageAuthorizationPolarity"
+      "PermissionMessageAuthorizationReadData"
+      "PermissionMessageAuthorizationReadEvent"}}
+   "nodejs/src/generated/rpc.ts"
+   {:experimental
+    #{"CatalogTrustEligibility"
+      "CatalogTrustProvenance"
+      "CatalogTrustSnapshot"
+      "CatalogTrustSnapshotAbsent"
+      "CatalogTrustSnapshotAbsentStatus"
+      "CatalogTrustSnapshotCurrent"
+      "CatalogTrustSnapshotCurrentStatus"
+      "CatalogTrustSnapshotDowngraded"
+      "CatalogTrustSnapshotDowngradedStatus"
+      "CatalogTrustSnapshotMalformed"
+      "CatalogTrustSnapshotMalformedStatus"
+      "CatalogTrustSnapshotRevoked"
+      "CatalogTrustSnapshotRevokedStatus"
+      "CatalogTrustSnapshotSchemaVersion"
+      "CatalogTrustSnapshotStale"
+      "CatalogTrustSnapshotStaleStatus"
+      "CatalogTrustSnapshotUnsupported"
+      "CatalogTrustSnapshotUnsupportedStatus"
+      "CatalogTrustSource"
+      "CatalogTrustTier"}}}
+  :removed-exported-symbols
+  {"nodejs/src/generated/rpc.ts"
+   {:experimental #{"PermissionDecisionSource"}}}
+  :reexport-changes
+  [{:path "nodejs/src/types.ts"
+    :symbol "PermissionDecisionSource"
+    :classification :experimental
+    :base-module "./generated/rpc.js"
+    :target-module "./generated/session-events.js"}]
+  :event-interface-fields
+  {"ToolExecutionStartData"
+   {:stable-public #{"mcpTransport"}}
+   "PermissionCompletedData"
+   {:experimental #{"decisionSource"}}
+   "PermissionPromptRequestRead"
+   {:experimental #{"resolvedPath"}}
+   "PermissionPromptRequestWrite"
+   {:experimental #{"resolvedPath"}}
+   "PermissionRequestRead"
+   {:experimental #{"resolvedPath"}}
+   "PermissionRequestShell"
+   {:experimental #{"resolvedPaths" "resolvedWorkingDirectory"}}
+   "PermissionRequestWrite"
+   {:experimental #{"resolvedPath"}}}
+  :changed-declarations
+  {"nodejs/src/generated/session-events.ts"
+   {:stable-public #{"ToolExecutionStartData"}
+    :experimental
+    #{"PermissionCompletedData"
+      "PermissionPromptRequestRead"
+      "PermissionPromptRequestWrite"
+      "PermissionRequestRead"
+      "PermissionRequestShell"
+      "PermissionRequestWrite"
+      "SessionEvent"}}
+   "nodejs/src/generated/rpc.ts"
+   {:experimental
+    #{"CatalogAiSkillCandidate"
+      "CatalogCapability"
+      "CatalogMcpServerCandidate"
+      "CatalogNegotiationRefusedError"
+      "CopilotUserResponse"
+      "FleetStartRequest"
+      "ModeSetRequest"
+      "ModeSetResult"
+      "ModelApplyStartupOverlayRequest"
+      "SessionOpenOptions"}}}}
+
+ :stable-delta-ids
+ #{:events/tool-execution-mcp-transport
+   :runtime/schema-1.0.84-5}
+
+ :stable-deltas
+ [{:id :runtime/schema-1.0.84-5
+   :classification :stable-public
+   :status :regenerated
+   :upstream-pr 2634
+   :evidence [:runtime-version]
+   :inventory-items []
+   :clojure-paths
+   [".copilot-schema-version"
+    "schemas/README.md"
+    "schemas/api.schema.json"
+    "schemas/session-events.schema.json"
+    "src/github/copilot_sdk/generated/event_metadata.clj"
+    "src/github/copilot_sdk/generated/event_specs.clj"]}
+  {:id :events/tool-execution-mcp-transport
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2634
+   :evidence [:tool-execution-mcp-transport]
+   :inventory-items
+   [[:event-interface-field "ToolExecutionStartData" "mcpTransport"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "ToolExecutionStartData"]]
+   :contract
+   {:node-type "ToolExecutionStartData"
+    :wire-key "mcpTransport"
+    :clojure-key :mcp-transport
+    :values #{"stdio" "http" "sse" "memory"}
+    :omission :preserved
+    :explicit-nil :rejected
+    :builders #{}
+    :fdef-impact :none
+    :api-snapshot-impact
+    [:idiom-spec-key "github.copilot-sdk.specs/mcp-transport"]}
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "src/github/copilot_sdk/generated/event_specs.clj"
+    "doc/reference/API.md"]
+   :clojure-evidence
+   [{:path "src/github/copilot_sdk/specs.clj"
+     :contains
+     ["(s/def ::mcp-transport"
+      "::mcp-transport"]}
+    {:path "doc/reference/API.md"
+     :contains
+     [":mcp-transport"
+      "runtime schema `1.0.84-5`"]}]}]
+
+ :decision-authorities
+ #{:generated-wire-is-not-independent-api
+   :language-scope
+   :repository-maintenance
+   :upstream-experimental-subsystem
+   :upstream-internal-implementation}
+
+ :intentional-exclusions
+ [{:id :permissions/message-authorization-events
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "Permission carry-forward and message-authorization events and their polarity/data types are explicitly experimental."
+   :evidence
+   [:permission-carried-forward :permission-message-authorization]
+   :inventory-items
+   [[:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionCarriedForwardData"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionCarriedForwardEvent"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationData"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationDegradedData"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationDegradedEvent"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationEvent"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationPolarity"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationReadData"]
+    [:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionMessageAuthorizationReadEvent"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "SessionEvent"]]}
+  {:id :permissions/decision-source-relocation
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "PermissionDecisionSource remains part of the experimental permission subsystem while its generated declaration moves from RPC types to session-event types."
+   :evidence [:permission-decision-source]
+   :inventory-items
+   [[:exported-symbol
+     "nodejs/src/generated/session-events.ts"
+     "PermissionDecisionSource"]
+    [:removed-exported-symbol
+     "nodejs/src/generated/rpc.ts"
+     "PermissionDecisionSource"]
+    [:reexport-change
+     "nodejs/src/types.ts"
+     "PermissionDecisionSource"]
+    [:event-interface-field
+     "PermissionCompletedData"
+     "decisionSource"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "PermissionCompletedData"]]}
+  {:id :permissions/resolved-paths
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "Runtime-resolved authorization identity paths are explicitly marked internal and experimental."
+   :evidence [:permission-resolved-paths]
+   :inventory-items
+   [[:event-interface-field "PermissionPromptRequestRead" "resolvedPath"]
+    [:event-interface-field "PermissionPromptRequestWrite" "resolvedPath"]
+    [:event-interface-field "PermissionRequestRead" "resolvedPath"]
+    [:event-interface-field "PermissionRequestShell" "resolvedPaths"]
+    [:event-interface-field
+     "PermissionRequestShell"
+     "resolvedWorkingDirectory"]
+    [:event-interface-field "PermissionRequestWrite" "resolvedPath"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "PermissionPromptRequestRead"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "PermissionPromptRequestWrite"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "PermissionRequestRead"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "PermissionRequestShell"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "PermissionRequestWrite"]]}
+  {:id :catalog/trust-snapshots
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "Catalog trust snapshots, capability negotiation, and candidate trust fields are explicitly experimental."
+   :evidence [:catalog-trust]
+   :inventory-items
+   [[:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustEligibility"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustProvenance"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshot"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotAbsent"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotAbsentStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotCurrent"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotCurrentStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotDowngraded"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotDowngradedStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotMalformed"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotMalformedStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotRevoked"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotRevokedStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotSchemaVersion"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotStale"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotStaleStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotUnsupported"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSnapshotUnsupportedStatus"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustSource"]
+    [:exported-symbol "nodejs/src/generated/rpc.ts" "CatalogTrustTier"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "CatalogAiSkillCandidate"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "CatalogCapability"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "CatalogMcpServerCandidate"]
+    [:changed-declaration
+     "nodejs/src/generated/rpc.ts"
+     "CatalogNegotiationRefusedError"]]}
+  {:id :rpc/experimental-schema-changes
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :generated-wire-is-not-independent-api
+   :reason
+   "The remaining changed generated RPC declarations are explicitly experimental and are not stable CopilotClient or CopilotSession APIs."
+   :evidence [:experimental-rpc-additions]
+   :inventory-items
+   [[:changed-declaration "nodejs/src/generated/rpc.ts" "CopilotUserResponse"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "FleetStartRequest"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "ModeSetRequest"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "ModeSetResult"]
+    [:changed-declaration
+     "nodejs/src/generated/rpc.ts"
+     "ModelApplyStartupOverlayRequest"]
+    [:changed-declaration "nodejs/src/generated/rpc.ts" "SessionOpenOptions"]]}
+  {:id :ffi/teardown-lifecycle
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "FFI host disposal and callback reclamation are internal to the experimental in-process runtime."
+   :evidence [:ffi-teardown]
+   :inventory-items []}
+  {:id :rust/codegen-validation
+   :classification :generated-only
+   :decision :exclude
+   :status :approved
+   :authority :generated-wire-is-not-independent-api
+   :reason
+   "Rust codegen fixes and generated validation do not create a stable Clojure surface."
+   :evidence [:rust-codegen]
+   :inventory-items []}
+  {:id :abort/recovery-test-race
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "The abort recovery change is test-only synchronization in the .NET SDK."
+   :evidence [:abort-race]
+   :inventory-items []}
+  {:id :other-sdks/language-specific
+   :classification :language-specific
+   :decision :exclude
+   :status :approved
+   :authority :language-scope
+   :reason
+   "Non-Node generated bindings and validation are comparison evidence, not Clojure parity obligations."
+   :evidence [:other-sdk-generated]
+   :inventory-items []}
+  {:id :repository/tooling
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :repository-maintenance
+   :reason
+   "Upstream workflow and test-harness maintenance does not alter stable SDK behavior."
+   :evidence [:repository-tooling]
+   :inventory-items []}]
+
+ :source-evidence
+ {:runtime-version
+  {:path "nodejs/package.json"
+   :symbol "\"copilotCliVersion\": \"1.0.84-5\""}
+  :tool-execution-mcp-transport
+  {:path "nodejs/src/generated/session-events.ts"
+   :symbol "mcpTransport?: McpServerTransport;"}
+  :permission-carried-forward
+  {:path "nodejs/src/generated/session-events.ts"
+   :symbol "export interface PermissionCarriedForwardEvent {"}
+  :permission-message-authorization
+  {:path "nodejs/src/generated/session-events.ts"
+   :symbol "export interface PermissionMessageAuthorizationEvent {"}
+  :permission-decision-source
+  {:path "nodejs/src/types.ts"
+   :symbol
+   "export type { PermissionDecisionSource } from \"./generated/session-events.js\";"}
+  :permission-resolved-paths
+  {:path "nodejs/src/generated/session-events.ts"
+   :symbol "resolvedWorkingDirectory?: string;"}
+  :catalog-trust
+  {:path "nodejs/src/generated/rpc.ts"
+   :symbol "export type CatalogTrustSnapshot ="}
+  :experimental-rpc-additions
+  {:path "nodejs/src/generated/rpc.ts"
+   :symbol "refreshCustomInstructions?: boolean;"}
+  :ffi-teardown
+  {:path "nodejs/src/client.ts"
+   :symbol "await host.dispose();"}
+  :rust-codegen
+  {:path "nodejs/test/rust-codegen.test.ts"}
+  :abort-race
+  {:path "dotnet/test/Unit/ClientSessionLifetimeTests.cs"}
+  :other-sdk-generated
+  {:path "dotnet/src/Generated/SessionEvents.cs"}
+  :repository-tooling
+  {:path ".github/workflows/required-checks.yml"}}
+
+ :local-artifacts
+ {".copilot-schema-version"
+  "3ab3284c75db7a7d71375e16b5ab2dfb977d97615b2d940badf4eb88b54a8ff2"
+  "schemas/README.md"
+  "76c42ad46f57874065dfd9d4d3adf4ecd0c79fcc8b5fb11cc8b283875fe7a4f5"
+  "schemas/api.schema.json"
+  "5835517c600d1661bb857aa74deeb2abd2cfb9ed1e69cdedd1402181ea9eca98"
+  "schemas/session-events.schema.json"
+  "fded8ae9faa212cc84adae273c8b107a450b90ab66a723ee03e9057d41f8e4c5"
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "4daf61b23897a37453aec06f9e778a5ed0114e484702389cfc3c33e7b62f938e"
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e"
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "a0b290e55628304797849abdade026fe1a4b9023d9b0ad6164dcdb8ce41ef979"
+  "resources/github/copilot_sdk/api_surface.edn"
+  "1105d6c3cb210ee12af5154981bec2e2e47fcca5f32e2a02d90cfd27ba0aea2d"}}

@@ -2153,11 +2153,13 @@
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
+(s/def ::mcp-transport #{"stdio" "http" "sse" "memory"})
 
 (s/def ::tool.execution_start-data
   (s/and
    (s/keys :req-un [::tool-call-id ::tool-name]
-           :opt-un [::parent-tool-call-id ::mcp-server-name ::mcp-tool-name ::model])
+           :opt-un [::parent-tool-call-id ::mcp-server-name ::mcp-tool-name
+                    ::mcp-transport ::model])
    #(optional-field? % :arguments opaque-json-value?)))
 
 (s/def ::progress-message string?)

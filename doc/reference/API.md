@@ -1801,7 +1801,9 @@ intentionally excluded from every curated public event set. Experimental
 HydraFusion routing events likewise remain generated wire evidence and are not
 curated as public idiom events. The experimental `reasoningBlocks` field on
 `assistant.message` also remains generated wire evidence rather than a stable
-curated idiom field.
+curated idiom field. Runtime schema `1.0.84-5` also adds experimental
+permission carry-forward and message-authorization events plus experimental
+catalog trust types; these remain outside the stable Clojure API.
 
 ### `evt` — Event Keyword Helper
 
@@ -1878,7 +1880,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/model.call_finished` | Completed model dispatch metadata; data requires `:turn-id`, non-negative `:dispatch-duration-ms`, `:outcome` (`"success"`, `"error"`, `"cancelled"`, or `"rejected"`), and positive `:edit-classifier-version`. Optional fields: `:interaction-id` and `:contains-built-in-file-edit-request`. The payload remains open for additive runtime fields. |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments` (an opaque JSON object with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:model` |
+| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments` (an opaque JSON object with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, optional `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model` (runtime schema `1.0.84-5`; [upstream PR #2634](https://github.com/github/copilot-sdk/pull/2634)) |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. |
