@@ -823,7 +823,7 @@
       },
       "readPersistedEvents": {
         "rpcMethod": "sessions.readPersistedEvents",
-        "description": "Reads a page of durable events directly from a local session's persisted journal without creating, resuming, or activating the session. The initial backward read uses a bounded tail scan for fast first paint; cursor continuations preserve the session event-log paging semantics. Persisted events may omit payloads that are reconstructed only for an active session.",
+        "description": "Reads a page of durable events directly from a local session's persisted journal without creating, resuming, or activating the session. The first read pins the currently opened journal generation and its byte-length boundary; opaque cursor continuations remain on that generation across runtime-owned compaction, truncation, and rewrite operations, which replace the live path atomically, and events appended after the boundary are excluded. For cold hydration, await the first successful page before activation and establish lossless live-event buffering before resume; merge subsequent live events by ID, preserving persisted order and letting live payloads win. Continuations are process-local, single-use capabilities bound to the originating session and storage context and must be paged sequentially; concurrent or repeated use of the same cursor expires that duplicate read rather than reading the generation twice. A complete snapshot has cursorStatus 'ok' and hasMore false. Snapshots expire after five idle minutes, with at most eight retained per process and idle-only eviction under pressure; completion and cancelled-worker exit release their handles. No transcript copy is created, but retained handles may keep replaced files' disk blocks alive until release. Pages have a soft 1 MiB serialized event-array budget including resolved binary assets; one oversized event is returned alone to guarantee progress. Working memory also includes a record/lookahead and asset resolution; resolving the first binary reference may scan the full pinned generation to build a bounded offset index. If the snapshot expires, is evicted, is cancelled before a continuation is established, or becomes unreadable after an observable unsupported in-place shortening, the continuation returns cursorStatus 'expired' with an empty terminal page and never falls back to a different generation. A missing or initially unreadable journal is an RPC error. Persisted history excludes ephemeral events and may omit payloads that are reconstructed only for an active session; use the active session event stream for post-resume live events.",
         "params": {
           "$ref": "#/definitions/SessionsReadPersistedEventsRequest",
           "description": "Pagination options for reading an inactive or active local session's persisted event journal."
@@ -2929,6 +2929,10 @@
               "type": "string",
               "description": "Context tier selected by repository settings, when configured."
             },
+            "repoAutoTier": {
+              "type": "string",
+              "description": "Auto routing preference selected by repository settings, when configured. Applied only when the overlay selects the Auto model; beside a concrete model it stays dormant."
+            },
             "cliModel": {
               "type": "string",
               "description": "Model explicitly selected by the CLI, when provided."
@@ -3097,6 +3101,10 @@
             "mode": {
               "$ref": "#/definitions/SessionMode",
               "description": "The session mode the agent is operating in"
+            },
+            "expectedMode": {
+              "$ref": "#/definitions/SessionMode",
+              "description": "Mode the session must currently be in for the change to apply. When set and the session is in a different mode the request is a no-op and reports status 'unchanged'."
             },
             "inheritPlanBaseFromSessionId": {
               "type": "string",
@@ -3945,13 +3953,30 @@
             "prompt": {
               "type": "string",
               "description": "Optional user prompt to combine with fleet instructions"
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Attachment",
+                "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload"
+              },
+              "description": "Optional attachments (files, directories, selections, blobs, GitHub references) to include with the fleet request"
+            },
+            "billable": {
+              "type": "boolean",
+              "description": "If false, this request will not trigger a Premium Request Unit charge. User requests default to billable.",
+              "visibility": "internal"
+            },
+            "wait": {
+              "type": "boolean",
+              "description": "If true, await completion of the agentic loop for this fleet request before returning. Defaults to false."
             }
           },
           "required": [
             "sessionId"
           ],
           "additionalProperties": false,
-          "description": "Optional user prompt to combine with the fleet orchestration instructions.",
+          "description": "Parameters for starting fleet orchestration: an optional user prompt combined with the fleet instructions, plus the send options forwarded to the resulting turn.",
           "title": "FleetStartRequest",
           "stability": "experimental"
         },
@@ -14000,6 +14025,10 @@
         "provenance": {
           "$ref": "#/definitions/CatalogAiSkillCandidateProvenance",
           "description": "Where the catalog reference was observed, without the card itself or any content digest."
+        },
+        "trust": {
+          "$ref": "#/definitions/CatalogTrustSnapshot",
+          "description": "Versioned trust metadata observed from the catalog authority. Optional for protocol-3 compatibility with runtimes that predate trust snapshots. A trust-capable runtime emits an explicit snapshot even when the authority omitted or malformed its trust field."
         }
       },
       "required": [
@@ -14171,7 +14200,8 @@
         "legacy-mcp-server-card",
         "ai-skill-discovery",
         "mcp-install-planning",
-        "multiple-transport-choice"
+        "multiple-transport-choice",
+        "trust-snapshot"
       ],
       "description": "A wire feature a caller can require of the catalog surface, negotiated per request. A grant means the runtime understands the feature's contract, not that the deployment has enabled the operation; typed unavailable results report availability separately.",
       "title": "CatalogCapability",
@@ -14180,7 +14210,8 @@
         "legacy-mcp-server-card": "Understands the legacy `application/mcp-server+json` media type.",
         "ai-skill-discovery": "Understands `application/ai-skill` candidates as discovery-only and typed non-installable.",
         "mcp-install-planning": "Understands side-effect-free MCP install-plan requests, results, and plan handles; `planning-unavailable` separately reports that planning is not enabled.",
-        "multiple-transport-choice": "Understands plans that enumerate every eligible transport rather than a single preferred one."
+        "multiple-transport-choice": "Understands plans that enumerate every eligible transport rather than a single preferred one.",
+        "trust-snapshot": "Understands versioned candidate trust snapshots. Protocol-3 callers must require this capability before the runtime adds the optional snapshot field."
       }
     },
     "CatalogCapabilityId": {
@@ -14472,6 +14503,10 @@
         "provenance": {
           "$ref": "#/definitions/CatalogMcpServerCandidateProvenance",
           "description": "Where the catalog reference was observed, without the card itself or any content digest."
+        },
+        "trust": {
+          "$ref": "#/definitions/CatalogTrustSnapshot",
+          "description": "Versioned trust metadata observed from the catalog authority. Optional for protocol-3 compatibility with runtimes that predate trust snapshots. A trust-capable runtime emits an explicit snapshot even when the authority omitted or malformed its trust field."
         }
       },
       "required": [
@@ -14592,10 +14627,12 @@
         "supportedCapabilities": {
           "type": "array",
           "items": {
-            "$ref": "#/definitions/CatalogCapability",
-            "description": "A wire feature a caller can require of the catalog surface, negotiated per request. A grant means the runtime understands the feature's contract, not that the deployment has enabled the operation; typed unavailable results report availability separately."
+            "$ref": "#/definitions/CatalogCapabilityId",
+            "description": "Bounded extensible wire-feature identifier. Known values are described by `CatalogCapability`; newer callers may send future identifiers so an older runtime can return a typed negotiation refusal instead of failing schema validation. Capability negotiation establishes contract understanding, while each operation's result separately reports runtime availability."
           },
-          "description": "Every wire feature this runtime understands, so the caller can retry within that contract. This list does not imply that every deployment has enabled every operation."
+          "maxItems": 32,
+          "uniqueItems": true,
+          "description": "Capabilities this runtime can safely advertise to this caller. The complete five-capability protocol-3 legacy set is always present; every capability added after that baseline appears only when the caller required it, so an older closed-enum decoder can still consume a refusal. This list does not imply that every deployment has enabled every operation."
         },
         "unsupportedCapabilities": {
           "type": "array",
@@ -14912,6 +14949,414 @@
       "additionalProperties": false,
       "description": "A completed catalog search: inert candidate summaries, each carrying a single-use handle.",
       "title": "CatalogSearchSucceeded"
+    },
+    "CatalogTrustEligibility": {
+      "type": "string",
+      "enum": [
+        "default",
+        "expanded",
+        "hidden",
+        "unknown"
+      ],
+      "description": "Authority-computed exposure eligibility, kept separate from tier. The current tier-only Agent Finder response maps to `unknown`, never to a locally inferred eligibility.",
+      "title": "CatalogTrustEligibility",
+      "x-enumDescriptions": {
+        "default": "Eligible for default catalogue exposure.",
+        "expanded": "Eligible only when expanded or community results are requested.",
+        "hidden": "Not eligible for normal catalogue exposure.",
+        "unknown": "The authority did not supply an eligibility decision."
+      }
+    },
+    "CatalogTrustProvenance": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/CatalogTrustSource",
+          "description": "Bounded authority that supplied the trust field."
+        },
+        "observedAt": {
+          "type": "string",
+          "minLength": 20,
+          "maxLength": 64,
+          "format": "date-time",
+          "description": "ISO 8601 timestamp with a timezone offset at which the runtime observed the search result carrying this trust field."
+        }
+      },
+      "required": [
+        "source",
+        "observedAt"
+      ],
+      "additionalProperties": false,
+      "description": "Where and when the runtime observed the trust metadata. Observation time is not the authority's evaluation time and must not be used to infer staleness.",
+      "title": "CatalogTrustProvenance"
+    },
+    "CatalogTrustSnapshot": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotCurrent",
+          "description": "A recognised current Agent Finder T1 or T2 trust tier."
+        },
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotAbsent",
+          "description": "Discriminator: the authority omitted trust metadata."
+        },
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotStale",
+          "description": "Discriminator: the authority explicitly marked the assessment stale."
+        },
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotDowngraded",
+          "description": "Discriminator: the authority explicitly reported a downgraded assessment."
+        },
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotRevoked",
+          "description": "Discriminator: the authority explicitly revoked the assessment."
+        },
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotUnsupported",
+          "description": "Discriminator: the authority supplied a bounded trust value this runtime does not understand."
+        },
+        {
+          "$ref": "#/definitions/CatalogTrustSnapshotMalformed",
+          "description": "Discriminator: the trust field was empty, unbounded, or had the wrong JSON type."
+        }
+      ],
+      "description": "A versioned, bounded trust observation carried unchanged with a catalog candidate and its private handle context. Current observations require a recognised T1/T2 tier; every non-current state structurally forbids a tier. Eligibility remains `unknown` while Agent Finder supplies no exposure decision, and states absent from its current wire are never inferred from age, relevance, popularity, or a tier transition.",
+      "title": "CatalogTrustSnapshot"
+    },
+    "CatalogTrustSnapshotAbsent": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotAbsentStatus",
+          "const": "absent",
+          "description": "Discriminator: the authority omitted trust metadata."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Discriminator: the authority omitted trust metadata.",
+      "title": "CatalogTrustSnapshotAbsent"
+    },
+    "CatalogTrustSnapshotAbsentStatus": {
+      "type": "string",
+      "enum": [
+        "absent"
+      ],
+      "description": "The authority omitted trust metadata.",
+      "title": "CatalogTrustSnapshotAbsentStatus",
+      "x-enumDescriptions": {
+        "absent": "The authority omitted trust metadata."
+      }
+    },
+    "CatalogTrustSnapshotCurrent": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotCurrentStatus",
+          "const": "current",
+          "description": "Discriminator: a recognised current trust tier was observed."
+        },
+        "tier": {
+          "$ref": "#/definitions/CatalogTrustTier",
+          "description": "Service-computed T1 or T2 trust tier."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "tier",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "A recognised current Agent Finder T1 or T2 trust tier.",
+      "title": "CatalogTrustSnapshotCurrent"
+    },
+    "CatalogTrustSnapshotCurrentStatus": {
+      "type": "string",
+      "enum": [
+        "current"
+      ],
+      "description": "A recognised T1 or T2 service tier was observed.",
+      "title": "CatalogTrustSnapshotCurrentStatus",
+      "x-enumDescriptions": {
+        "current": "A recognised T1 or T2 service tier was observed."
+      }
+    },
+    "CatalogTrustSnapshotDowngraded": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotDowngradedStatus",
+          "const": "downgraded",
+          "description": "Discriminator: the authority explicitly reported a downgraded assessment."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Discriminator: the authority explicitly reported a downgraded assessment.",
+      "title": "CatalogTrustSnapshotDowngraded"
+    },
+    "CatalogTrustSnapshotDowngradedStatus": {
+      "type": "string",
+      "enum": [
+        "downgraded"
+      ],
+      "description": "The authority explicitly reported a downgraded assessment.",
+      "title": "CatalogTrustSnapshotDowngradedStatus",
+      "x-enumDescriptions": {
+        "downgraded": "The authority explicitly reported a downgraded assessment."
+      }
+    },
+    "CatalogTrustSnapshotMalformed": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotMalformedStatus",
+          "const": "malformed",
+          "description": "Discriminator: the trust field was empty, unbounded, or had the wrong JSON type."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Discriminator: the trust field was empty, unbounded, or had the wrong JSON type.",
+      "title": "CatalogTrustSnapshotMalformed"
+    },
+    "CatalogTrustSnapshotMalformedStatus": {
+      "type": "string",
+      "enum": [
+        "malformed"
+      ],
+      "description": "The trust field was empty, unbounded, or had the wrong JSON type.",
+      "title": "CatalogTrustSnapshotMalformedStatus",
+      "x-enumDescriptions": {
+        "malformed": "The trust field was empty, unbounded, or had the wrong JSON type."
+      }
+    },
+    "CatalogTrustSnapshotRevoked": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotRevokedStatus",
+          "const": "revoked",
+          "description": "Discriminator: the authority explicitly revoked the assessment."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Discriminator: the authority explicitly revoked the assessment.",
+      "title": "CatalogTrustSnapshotRevoked"
+    },
+    "CatalogTrustSnapshotRevokedStatus": {
+      "type": "string",
+      "enum": [
+        "revoked"
+      ],
+      "description": "The authority explicitly revoked its assessment.",
+      "title": "CatalogTrustSnapshotRevokedStatus",
+      "x-enumDescriptions": {
+        "revoked": "The authority explicitly revoked its assessment."
+      }
+    },
+    "CatalogTrustSnapshotSchemaVersion": {
+      "type": "string",
+      "enum": [
+        "v1"
+      ],
+      "description": "Schema version of the catalogue trust snapshot envelope",
+      "title": "CatalogTrustSnapshotSchemaVersion",
+      "x-enumDescriptions": {
+        "v1": "Initial envelope carrying one bounded service tier or one explicit unavailable state."
+      }
+    },
+    "CatalogTrustSnapshotStale": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotStaleStatus",
+          "const": "stale",
+          "description": "Discriminator: the authority explicitly marked the assessment stale."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Discriminator: the authority explicitly marked the assessment stale.",
+      "title": "CatalogTrustSnapshotStale"
+    },
+    "CatalogTrustSnapshotStaleStatus": {
+      "type": "string",
+      "enum": [
+        "stale"
+      ],
+      "description": "The authority explicitly marked its assessment stale.",
+      "title": "CatalogTrustSnapshotStaleStatus",
+      "x-enumDescriptions": {
+        "stale": "The authority explicitly marked its assessment stale."
+      }
+    },
+    "CatalogTrustSnapshotUnsupported": {
+      "type": "object",
+      "properties": {
+        "schemaVersion": {
+          "$ref": "#/definitions/CatalogTrustSnapshotSchemaVersion",
+          "description": "Schema version of this runtime-owned snapshot envelope."
+        },
+        "status": {
+          "$ref": "#/definitions/CatalogTrustSnapshotUnsupportedStatus",
+          "const": "unsupported",
+          "description": "Discriminator: the authority supplied a bounded trust value this runtime does not understand."
+        },
+        "eligibility": {
+          "$ref": "#/definitions/CatalogTrustEligibility",
+          "description": "Service-computed exposure eligibility. `unknown` is required while Agent Finder returns no explicit eligibility field."
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogTrustProvenance",
+          "description": "Bounded source and observation time for this snapshot. This is distinct from evidence used by the authority to calculate trust."
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "status",
+        "eligibility",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "Discriminator: the authority supplied a bounded trust value this runtime does not understand.",
+      "title": "CatalogTrustSnapshotUnsupported"
+    },
+    "CatalogTrustSnapshotUnsupportedStatus": {
+      "type": "string",
+      "enum": [
+        "unsupported"
+      ],
+      "description": "The authority supplied a bounded trust value this runtime does not understand.",
+      "title": "CatalogTrustSnapshotUnsupportedStatus",
+      "x-enumDescriptions": {
+        "unsupported": "The authority supplied a bounded trust value this runtime does not understand."
+      }
+    },
+    "CatalogTrustSource": {
+      "type": "string",
+      "enum": [
+        "agent-finder"
+      ],
+      "description": "Bounded authority that supplied a catalogue trust observation",
+      "title": "CatalogTrustSource",
+      "x-enumDescriptions": {
+        "agent-finder": "GitHub Agent Finder supplied the trust field on its search result."
+      }
+    },
+    "CatalogTrustTier": {
+      "type": "string",
+      "enum": [
+        "T1",
+        "T2"
+      ],
+      "description": "Service-computed trust tier currently emitted by Agent Finder. It is independent of search score, popularity, and client-side ranking.",
+      "title": "CatalogTrustTier",
+      "x-enumDescriptions": {
+        "T1": "Tier one as assigned by the catalogue authority.",
+        "T2": "Tier two as assigned by the catalogue authority."
+      }
     },
     "CatalogUnavailableError": {
       "type": "object",
@@ -15874,6 +16319,10 @@
                       {
                         "type": "object",
                         "properties": {
+                          "id": {
+                            "type": "number",
+                            "description": "Numeric database ID of the organization."
+                          },
                           "login": {
                             "anyOf": [
                               {
@@ -15925,7 +16374,7 @@
               "type": "null"
             }
           ],
-          "description": "Organizations the user belongs to, each with an optional login and display name."
+          "description": "Organizations the user belongs to, each with an optional ID, login, and display name."
         },
         "codex_agent_enabled": {
           "type": "boolean",
@@ -17198,11 +17647,11 @@
         "ok",
         "expired"
       ],
-      "description": "Cursor status: 'ok' means the cursor was applied successfully; 'expired' means the cursor referred to an event that no longer exists in history (e.g. truncated or compacted away) and the read fell back to a boundary of the remaining history (the beginning for a forward read, the tail for a backward read). The fallback page is a fresh boundary snapshot, not a continuation of the requested cursor, so it may overlap already-rendered events; on 'expired' a consumer should reset/rebase its pagination state (or deduplicate by event id) before continuing from the returned cursor.",
+      "description": "Cursor status: 'ok' means the read succeeded against the requested history; 'expired' means the requested continuation is unavailable. Recovery is endpoint-specific: session.eventLog.read returns a boundary window of remaining active history that may overlap prior pages, while sessions.readPersistedEvents returns an empty terminal page and never switches journal generations. An expired persisted read is not successful completion; a complete persisted snapshot requires cursorStatus 'ok' and hasMore false.",
       "title": "EventsCursorStatus",
       "x-enumDescriptions": {
-        "ok": "The cursor was applied successfully.",
-        "expired": "The cursor referred to history that is no longer available."
+        "ok": "The read succeeded against the requested history.",
+        "expired": "The requested continuation is unavailable; see the endpoint's recovery semantics."
       }
     },
     "EventsReadDirection": {
@@ -17234,11 +17683,11 @@
         },
         "hasMore": {
           "type": "boolean",
-          "description": "True when more events are available in the read's direction. For a forward read, true means the batch returned `max` events and more are available immediately. For a backward read, true means older persisted events remain before the returned window."
+          "description": "True when more events are available in the read's direction. For a backward read, true means older persisted events remain before the returned window. A persisted-event page may contain fewer than `max` events because of its byte budget while still reporting hasMore true; continue according to this flag rather than the event count."
         },
         "cursorStatus": {
           "$ref": "#/definitions/EventsCursorStatus",
-          "description": "Cursor status: 'ok' means the cursor was applied successfully; 'expired' means the cursor referred to an event that no longer exists in history (e.g. truncated or compacted away) and the read fell back to a boundary of the remaining history. For a forward read the fallback starts from the beginning of the remaining history; for a backward read it falls back to the tail (the newest window). Because the fallback page is a fresh boundary snapshot rather than a continuation of the requested cursor, it may overlap events the consumer has already rendered — a backward fallback to the tail in particular can repeat the newest window. On 'expired', consumers should reset or rebase their local pagination state (or deduplicate by event id) before continuing from the returned cursor rather than blindly appending/prepending the fallback page."
+          "description": "Cursor status: 'ok' means the cursor was applied successfully. For session.eventLog.read, 'expired' means the cursor referred to an event that no longer exists in active history and the read fell back to a boundary of the remaining history: the beginning for a forward read or the newest window for a backward read. That fallback may overlap already rendered events, so active-session consumers should reset, rebase, or deduplicate before continuing. sessions.readPersistedEvents has stricter snapshot semantics: 'expired' returns an empty terminal page and never switches to a replacement journal generation. Other persisted-read I/O failures are RPC errors with diagnostics, not cursor expiry."
         }
       },
       "required": [
@@ -19660,10 +20109,27 @@
         "prompt": {
           "type": "string",
           "description": "Optional user prompt to combine with fleet instructions"
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Attachment",
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload"
+          },
+          "description": "Optional attachments (files, directories, selections, blobs, GitHub references) to include with the fleet request"
+        },
+        "billable": {
+          "type": "boolean",
+          "description": "If false, this request will not trigger a Premium Request Unit charge. User requests default to billable.",
+          "visibility": "internal"
+        },
+        "wait": {
+          "type": "boolean",
+          "description": "If true, await completion of the agentic loop for this fleet request before returning. Defaults to false."
         }
       },
       "additionalProperties": false,
-      "description": "Optional user prompt to combine with the fleet orchestration instructions.",
+      "description": "Parameters for starting fleet orchestration: an optional user prompt combined with the fleet instructions, plus the send options forwarded to the resulting turn.",
       "title": "FleetStartRequest",
       "stability": "experimental"
     },
@@ -26232,6 +26698,10 @@
           "type": "string",
           "description": "Context tier selected by repository settings, when configured."
         },
+        "repoAutoTier": {
+          "type": "string",
+          "description": "Auto routing preference selected by repository settings, when configured. Applied only when the overlay selects the Auto model; beside a concrete model it stays dormant."
+        },
         "cliModel": {
           "type": "string",
           "description": "Model explicitly selected by the CLI, when provided."
@@ -27166,6 +27636,10 @@
           "$ref": "#/definitions/SessionMode",
           "description": "The session mode the agent is operating in"
         },
+        "expectedMode": {
+          "$ref": "#/definitions/SessionMode",
+          "description": "Mode the session must currently be in for the change to apply. When set and the session is in a different mode the request is a no-op and reports status 'unchanged'."
+        },
         "inheritPlanBaseFromSessionId": {
           "type": "string",
           "description": "Session whose plan-mode base state should be inherited."
@@ -27225,6 +27699,10 @@
         "modelChanged": {
           "type": "boolean",
           "description": "Whether applying the mode changed the active model."
+        },
+        "modeApplied": {
+          "type": "boolean",
+          "description": "Whether the requested mode was applied to the session. False only when an 'expectedMode' precondition did not hold, in which case any model change reported alongside it was still applied."
         },
         "confirmation": {
           "$ref": "#/definitions/ModelSwitchConfirmation",
@@ -28670,7 +29148,8 @@
         "assisted_approval",
         "human_response",
         "host_policy",
-        "unattended_fallback"
+        "unattended_fallback",
+        "authorization_carry_forward"
       ],
       "description": "Controlled reason or actor responsible for a permission response.",
       "title": "PermissionDecisionSource",
@@ -28678,7 +29157,8 @@
         "assisted_approval": "The response followed the assisted-approval judge recommendation.",
         "human_response": "A human supplied the response through an interactive prompt.",
         "host_policy": "The host applied a standing policy or override rather than a judge recommendation or human decision.",
-        "unattended_fallback": "The host denied the request because no interactive user response was available."
+        "unattended_fallback": "The host denied the request because no interactive user response was available.",
+        "authorization_carry_forward": "A live authorization record from an earlier human decision in this session contained the proposal, so it ran without another prompt. This is not a new human decision and never mints authority of its own."
       }
     },
     "PermissionDecisionSurface": {
@@ -36121,6 +36601,10 @@
           "type": "boolean",
           "description": "Whether to skip custom instruction sources."
         },
+        "refreshCustomInstructions": {
+          "type": "boolean",
+          "description": "Whether to invalidate cached custom-instruction discovery before constructing the session. Use when instruction files may have changed earlier in the same runtime process."
+        },
         "disabledInstructionSources": {
           "type": "array",
           "items": {
@@ -37766,17 +38250,17 @@
         },
         "cursor": {
           "type": "string",
-          "description": "Opaque cursor returned by a previous persisted-event read. Omit on the first call."
+          "description": "Opaque, process-local, single-use cursor returned by the previous persisted-event read. Omit on the first call and issue continuations sequentially; reusing the same cursor returns an expired terminal page."
         },
         "max": {
           "type": "integer",
           "exclusiveMinimum": 0,
           "maximum": 1000,
-          "description": "Maximum number of events to return in this batch (1–1000, default 200)."
+          "description": "Maximum number of events to return in this batch (1–1000, default 200). Pages may contain fewer events to keep the serialized event array within a soft 1 MiB budget including resolved binary assets; one oversized event is returned alone to guarantee progress."
         },
         "direction": {
           "$ref": "#/definitions/EventsReadDirection",
-          "description": "Direction to page through persisted history. Forward starts at the beginning; backward starts with the newest events. Events in each page remain chronological."
+          "description": "Direction to page through persisted history. Forward starts at the beginning; backward starts with the newest events. Events in each page remain chronological. This selects the initial read only; a continuation always uses the direction bound into its cursor."
         }
       },
       "required": [

@@ -489,7 +489,7 @@
     (mapcat :evidence (:stable-deltas report))
     (mapcat :evidence (:intentional-exclusions report)))))
 
-(deftest report-pins-history-and-local-artifacts
+(deftest report-pins-history-and-historical-artifacts
   (let [report (report)
         historical (read-resource historical-resource)]
     (is (some? report) "The bba92dd parity oracle must be committed")
@@ -515,10 +515,10 @@
                   (sh/sh "git" "merge-base" "--is-ancestor"
                          expected-clojure-base "HEAD")))
           "the certification must remain descended from its Clojure base")
-      (is (= "1.0.84-4" (str/trim (slurp ".copilot-schema-version"))))
-      (doseq [[path expected-hash] (:local-artifacts report)]
-        (testing path
-          (is (= expected-hash (sha256-file path))))))))
+      (is (= "1.0.84-4" (get-in report [:upstream :runtime-version])))
+      (is (= "a31f232cdf6600d26586b456c44dd11fdeec8aa51aeb55f765306cc190b9c89c"
+             (get-in report
+                     [:local-artifacts ".copilot-schema-version"]))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [report (report)

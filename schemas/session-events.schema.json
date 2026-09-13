@@ -12035,6 +12035,96 @@
       "description": "Permission response variant indicating the request was cancelled before use, with an optional reason.",
       "title": "PermissionCancelled"
     },
+    "PermissionCarriedForwardData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Authorization edge minted for this admission. Not a prompt id: no prompt was raised, so no client should expect a request with this id.",
+          "stability": "experimental"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call this admission authorizes. Its execution receipts the prior grant, which is how a single-effect approval is spent rather than carried forward again.",
+          "stability": "experimental"
+        },
+        "recordId": {
+          "type": "string",
+          "description": "Identity of the prior authorization record that contained the proposal.",
+          "stability": "experimental"
+        },
+        "decisionSource": {
+          "$ref": "#/definitions/PermissionDecisionSource",
+          "description": "Always `authorization_carry_forward`. Stated explicitly so a consumer reading this event cannot mistake it for a human, host-policy, or assisted-approval decision.",
+          "stability": "experimental"
+        }
+      },
+      "required": [
+        "requestId",
+        "toolCallId",
+        "recordId",
+        "decisionSource"
+      ],
+      "additionalProperties": false,
+      "description": "Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left.",
+      "title": "PermissionCarriedForwardData",
+      "stability": "experimental"
+    },
+    "PermissionCarriedForwardEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "permission.carriedForward",
+          "description": "Type discriminator. Always \"permission.carriedForward\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PermissionCarriedForwardData",
+          "description": "Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"permission.carriedForward\". Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left.",
+      "title": "PermissionCarriedForwardEvent",
+      "stability": "experimental"
+    },
     "PermissionCompletedData": {
       "type": "object",
       "properties": {
@@ -12049,6 +12139,11 @@
         "result": {
           "$ref": "#/definitions/PermissionResult",
           "description": "The result of the permission request"
+        },
+        "decisionSource": {
+          "$ref": "#/definitions/PermissionDecisionSource",
+          "description": "Who decided this permission request. Absent on completions recorded before this field existed, which consumers must treat as \"not a human decision\" rather than assuming one. Authorization records are minted only for `human_response`; an assisted-approval verdict, a host policy, an unattended fallback, and a hook resolution all produce the same `result` a person does, so this is the only field that distinguishes them.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -12112,6 +12207,25 @@
       "additionalProperties": false,
       "description": "Session event \"permission.completed\". Permission request completion notification signaling UI dismissal",
       "title": "PermissionCompletedEvent"
+    },
+    "PermissionDecisionSource": {
+      "type": "string",
+      "enum": [
+        "assisted_approval",
+        "human_response",
+        "host_policy",
+        "unattended_fallback",
+        "authorization_carry_forward"
+      ],
+      "description": "Controlled reason or actor responsible for a permission response.",
+      "title": "PermissionDecisionSource",
+      "x-enumDescriptions": {
+        "assisted_approval": "The response followed the assisted-approval judge recommendation.",
+        "human_response": "A human supplied the response through an interactive prompt.",
+        "host_policy": "The host applied a standing policy or override rather than a judge recommendation or human decision.",
+        "unattended_fallback": "The host denied the request because no interactive user response was available.",
+        "authorization_carry_forward": "A live authorization record from an earlier human decision in this session contained the proposal, so it ran without another prompt. This is not a new human decision and never mints authority of its own."
+      }
     },
     "PermissionDeniedByContentExclusionPolicy": {
       "type": "object",
@@ -12227,6 +12341,290 @@
       "additionalProperties": false,
       "description": "Permission response variant denied because no approval rule matched and user confirmation was unavailable.",
       "title": "PermissionDeniedNoApprovalRuleAndCouldNotRequestFromUser"
+    },
+    "PermissionMessageAuthorizationData": {
+      "type": "object",
+      "properties": {
+        "recordId": {
+          "type": "string",
+          "description": "Deterministic identity of the record, derived from the turn and span offsets so re-extracting the same span mints nothing new.",
+          "stability": "experimental"
+        },
+        "turnIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The human turn the quoted span was read from.",
+          "stability": "experimental"
+        },
+        "polarity": {
+          "$ref": "#/definitions/PermissionMessageAuthorizationPolarity",
+          "description": "Whether the claim granted or denied authority.",
+          "stability": "experimental"
+        },
+        "actionClass": {
+          "type": "string",
+          "description": "The kind of effect authorized, as an action-class identifier.",
+          "stability": "experimental"
+        },
+        "spanStart": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Start byte offset of the authorizing span within the turn.",
+          "stability": "experimental"
+        },
+        "spanEnd": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "End byte offset of the authorizing span within the turn.",
+          "stability": "experimental"
+        },
+        "targetMembers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Concrete named targets that appear verbatim inside the span.",
+          "stability": "experimental"
+        },
+        "task": {
+          "type": "string",
+          "description": "The task the permission is scoped to, when the human named one.",
+          "stability": "experimental"
+        },
+        "world": {
+          "description": "The trusted version discriminator, when one exists. Exact shell-command grants carry the byte-identical commands grounded in the human span; world-derived classes carry a file object, remote tip, or runner only when that state was captured safely. An opaque object mirroring the runtime's adjacently-tagged resolution.",
+          "x-opaque-json": true,
+          "stability": "experimental"
+        }
+      },
+      "required": [
+        "recordId",
+        "turnIndex",
+        "polarity",
+        "actionClass",
+        "spanStart",
+        "spanEnd"
+      ],
+      "additionalProperties": false,
+      "description": "Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume.",
+      "title": "PermissionMessageAuthorizationData",
+      "stability": "experimental"
+    },
+    "PermissionMessageAuthorizationDegradedData": {
+      "type": "object",
+      "properties": {
+        "turnIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The human turn that could not be represented safely.",
+          "stability": "experimental"
+        }
+      },
+      "required": [
+        "turnIndex"
+      ],
+      "additionalProperties": false,
+      "description": "Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt.",
+      "title": "PermissionMessageAuthorizationDegradedData",
+      "stability": "experimental"
+    },
+    "PermissionMessageAuthorizationDegradedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "permission.messageAuthorizationDegraded",
+          "description": "Type discriminator. Always \"permission.messageAuthorizationDegraded\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PermissionMessageAuthorizationDegradedData",
+          "description": "Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"permission.messageAuthorizationDegraded\". Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt.",
+      "title": "PermissionMessageAuthorizationDegradedEvent",
+      "stability": "experimental"
+    },
+    "PermissionMessageAuthorizationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "permission.messageAuthorization",
+          "description": "Type discriminator. Always \"permission.messageAuthorization\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PermissionMessageAuthorizationData",
+          "description": "Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"permission.messageAuthorization\". Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume.",
+      "title": "PermissionMessageAuthorizationEvent",
+      "stability": "experimental"
+    },
+    "PermissionMessageAuthorizationPolarity": {
+      "type": "string",
+      "enum": [
+        "grant",
+        "denial"
+      ],
+      "description": "Which direction a message-backed authorization claim moves authority in.",
+      "title": "PermissionMessageAuthorizationPolarity",
+      "x-enumDescriptions": {
+        "grant": "The human's words authorized an effect.",
+        "denial": "The human's words refused an effect."
+      },
+      "stability": "experimental"
+    },
+    "PermissionMessageAuthorizationReadData": {
+      "type": "object",
+      "properties": {
+        "turnIndex": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "The human turn that was read by the proposer.",
+          "stability": "experimental"
+        }
+      },
+      "required": [
+        "turnIndex"
+      ],
+      "additionalProperties": false,
+      "description": "Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Persisted purely to avoid wasted model calls across resume; it is never a correctness mechanism.",
+      "title": "PermissionMessageAuthorizationReadData",
+      "stability": "experimental"
+    },
+    "PermissionMessageAuthorizationReadEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "permission.messageAuthorizationRead",
+          "description": "Type discriminator. Always \"permission.messageAuthorizationRead\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PermissionMessageAuthorizationReadData",
+          "description": "Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Persisted purely to avoid wasted model calls across resume; it is never a correctness mechanism."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"permission.messageAuthorizationRead\". Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Persisted purely to avoid wasted model calls across resume; it is never a correctness mechanism.",
+      "title": "PermissionMessageAuthorizationReadEvent",
+      "stability": "experimental"
     },
     "PermissionMode": {
       "type": "string",
@@ -12833,6 +13231,11 @@
           "type": "string",
           "description": "Path of the file or directory being read"
         },
+        "resolvedPath": {
+          "type": "string",
+          "description": "Runtime-resolved canonical path used for authorization identity checks. Internal and experimental; clients should continue to display path.",
+          "stability": "experimental"
+        },
         "assistedApproval": {
           "$ref": "#/definitions/PermissionAssistedApproval",
           "description": "Assisted-approval judge information for this request; present only in assisted mode.",
@@ -12922,6 +13325,11 @@
         "fileName": {
           "type": "string",
           "description": "Path of the file being written to"
+        },
+        "resolvedPath": {
+          "type": "string",
+          "description": "Runtime-resolved canonical path used for authorization identity checks. Internal and experimental; clients should continue to display fileName.",
+          "stability": "experimental"
         },
         "diff": {
           "type": "string",
@@ -13540,6 +13948,11 @@
           "type": "string",
           "description": "Path of the file or directory being read"
         },
+        "resolvedPath": {
+          "type": "string",
+          "description": "Runtime-resolved canonical path used for authorization identity checks. Internal and experimental; clients should continue to display path.",
+          "stability": "experimental"
+        },
         "requestSandboxBypass": {
           "type": "boolean",
           "description": "True when the tool is asking to re-run this search outside the sandbox, after a sandboxed run looked blocked (host opted in via sandbox.allowBypass). The model cannot ask for this; only the tool raises it. This is a request, not a grant: the search runs unsandboxed only if the user approves this permission request. Hosts should highlight the elevated risk in the approval UI."
@@ -13604,6 +14017,19 @@
             "type": "string"
           },
           "description": "File paths that may be read or written by the command"
+        },
+        "resolvedWorkingDirectory": {
+          "type": "string",
+          "description": "Runtime-resolved canonical working directory the command runs in, used for authorization identity checks. Internal and experimental; clients should not display it.",
+          "stability": "experimental"
+        },
+        "resolvedPaths": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Runtime-resolved canonical object each possiblePaths entry names, keyed by the requested spelling, used for authorization identity checks. Internal and experimental; clients should continue to display possiblePaths.",
+          "stability": "experimental"
         },
         "possibleUrls": {
           "type": "array",
@@ -13776,6 +14202,11 @@
         "fileName": {
           "type": "string",
           "description": "Path of the file being written to"
+        },
+        "resolvedPath": {
+          "type": "string",
+          "description": "Runtime-resolved canonical path used for authorization identity checks. Internal and experimental; clients should continue to display fileName.",
+          "stability": "experimental"
         },
         "diff": {
           "type": "string",
@@ -16322,6 +16753,22 @@
         {
           "$ref": "#/definitions/PermissionCompletedEvent",
           "description": "Session event \"permission.completed\". Permission request completion notification signaling UI dismissal"
+        },
+        {
+          "$ref": "#/definitions/PermissionCarriedForwardEvent",
+          "description": "Session event \"permission.carriedForward\". Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left."
+        },
+        {
+          "$ref": "#/definitions/PermissionMessageAuthorizationEvent",
+          "description": "Session event \"permission.messageAuthorization\". Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume."
+        },
+        {
+          "$ref": "#/definitions/PermissionMessageAuthorizationReadEvent",
+          "description": "Session event \"permission.messageAuthorizationRead\". Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Persisted purely to avoid wasted model calls across resume; it is never a correctness mechanism."
+        },
+        {
+          "$ref": "#/definitions/PermissionMessageAuthorizationDegradedEvent",
+          "description": "Session event \"permission.messageAuthorizationDegraded\". Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt."
         },
         {
           "$ref": "#/definitions/UserInputRequestedEvent",
@@ -20099,6 +20546,10 @@
         "mcpToolName": {
           "type": "string",
           "description": "Original tool name on the MCP server, when the tool is an MCP tool"
+        },
+        "mcpTransport": {
+          "$ref": "#/definitions/McpServerTransport",
+          "description": "Transport the MCP server hosting this tool is connected over, when the tool is an MCP tool and the server is configured"
         },
         "turnId": {
           "type": "string",

@@ -808,6 +808,7 @@
     :github.copilot-sdk.specs/mcp-timeout
     :github.copilot-sdk.specs/mcp-tool-name
     :github.copilot-sdk.specs/mcp-tools
+    :github.copilot-sdk.specs/mcp-transport
     :github.copilot-sdk.specs/mcp-url
     :github.copilot-sdk.specs/memory
     :github.copilot-sdk.specs/memory-action

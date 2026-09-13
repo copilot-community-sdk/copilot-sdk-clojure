@@ -3,6 +3,20 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.84-5 sync)
+- Added stable `:mcp-transport` metadata to
+  `:copilot/tool.execution_start` events, with the values `"stdio"`,
+  `"http"`, `"sse"`, and `"memory"`.
+  ([upstream PR #2634](https://github.com/github/copilot-sdk/pull/2634))
+
+### Changed (v1.0.84-5 sync)
+- Updated the runtime and schema pin to `1.0.84-5` and recertified the complete
+  stable Node SDK public surface through upstream commit
+  [`f45c46fd1812f8bed5b4cbc250f47177c83068f0`](https://github.com/github/copilot-sdk/commit/f45c46fd1812f8bed5b4cbc250f47177c83068f0).
+  Experimental permission carry-forward, message-authorization, and catalog
+  trust additions remain generated wire evidence only.
+  ([upstream PR #2634](https://github.com/github/copilot-sdk/pull/2634))
+
 ### Added (upstream parity)
 - Added stable message provenance to every send API. Use `:source :user`,
   `:source :system`, or `:source {:agent-id "..."}`; identified agents
