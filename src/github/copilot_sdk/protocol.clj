@@ -440,23 +440,45 @@
   "Submit an incoming request message (e.g. hooks.invoke) to the connection's
    bounded reverse-request worker pool.
 
-   Called on the reader thread. Submission is non-blocking, so the reader keeps
-   routing responses and notifications while handlers run."
+   Called on the reader thread. An optional request preparer may perform
+   non-blocking, order-sensitive SDK bookkeeping before submission. Handler
+   execution remains on the bounded worker pool."
   [conn msg]
   (let [{:keys [state-atom outgoing-ch]} conn
         ^ThreadPoolExecutor executor (:request-executor conn)
-        request-handler (:request-handler (conn-state state-atom))
+        {:keys [request-handler request-preparer]} (conn-state state-atom)
         id (:id msg)
         method (:method msg)
         params (:params msg)]
     (log/debug "Received request: method=" method " id=" id)
     (try
-      (.execute executor
-                ^Runnable (fn []
-                            (run-request-handler! request-handler outgoing-ch
-                                                  method id params)))
+      (let [preparation
+            (if request-preparer
+              (request-preparer method params)
+              {:params params})
+            on-reject (:on-reject preparation)
+            prepared-params (:params preparation)]
+        (try
+          (.execute executor
+                    ^Runnable (fn []
+                                (run-request-handler!
+                                 request-handler outgoing-ch
+                                 method id prepared-params)))
+          (catch RejectedExecutionException failure
+            (when on-reject
+              (on-reject))
+            (throw failure))))
       (catch RejectedExecutionException _
-        (reject-request! executor (:rejected-requests conn) outgoing-ch method id)))))
+        (reject-request! executor (:rejected-requests conn) outgoing-ch method id))
+      (catch Exception failure
+        (log/error failure
+                   "Reverse request preparation failed"
+                   {:method method :id id})
+        (put! outgoing-ch
+              {:jsonrpc "2.0"
+               :id id
+               :error {:code -32603
+                       :message "Internal error preparing reverse request"}})))))
 
 (defn- restore-opaque-path
   [raw converted wire-path idiom-path]
@@ -779,6 +801,7 @@
   {:running? true
    :pending-requests {}
    :request-handler nil
+   :request-preparer nil
    :writer-thread nil})
 
 (defn connect
@@ -1105,11 +1128,18 @@
              :params wire-params}]
     (put! (:outgoing-ch conn) msg)))
 
+(defn ^:no-doc set-request-dispatch!
+  "Set reverse-request handling and non-blocking inline preparation atomically."
+  [conn handler request-preparer]
+  (update-conn! (:state-atom conn) assoc
+                :request-handler handler
+                :request-preparer request-preparer))
+
 (defn set-request-handler!
-  "Set handler for incoming requests. 
+  "Set handler for incoming requests.
    Handler is (fn [method params] -> channel with {:result ...} or {:error ...})"
   [conn handler]
-  (update-conn! (:state-atom conn) assoc :request-handler handler))
+  (set-request-dispatch! conn handler nil))
 
 (defn notifications
   "Returns the channel that receives incoming notifications."

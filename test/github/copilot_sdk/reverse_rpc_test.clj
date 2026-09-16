@@ -4,6 +4,7 @@
    These tests drive the real NIO/JSON-RPC transport over piped streams -- no
    protocol mocking -- and assert the bounded worker contract:
 
+   - order-sensitive request preparation runs inline on the reader thread
    - arbitrary handler code runs on the connection's own bounded worker pool,
      never on core.async `go` dispatch
    - concurrency never exceeds the configured bound
@@ -160,6 +161,37 @@
           (.countDown release)
           (protocol/disconnect conn))))))
 
+(deftest test-request-preparer-runs-before-worker-dispatch
+  (testing "order-sensitive preparation runs on the reader before worker handling"
+    (let [{:keys [conn ->client <-client]} (open-connection {})
+          prepared (promise)
+          handled (promise)]
+      (try
+        (protocol/set-request-dispatch!
+         conn
+         (fn [_method params]
+           (deliver handled {:params params
+                             :thread (.getName (Thread/currentThread))})
+           (delivered {:result {}}))
+         (fn [method params]
+           (deliver prepared {:method method
+                              :thread (.getName (Thread/currentThread))})
+           {:params (assoc params :prepared true)}))
+        (write-framed! ->client (request "r1" "factory.execute" {:value 1}))
+        (let [{prepared-thread :thread
+               prepared-method :method}
+              (deref prepared 2000 ::timeout)
+              {handled-thread :thread
+               handled-params :params}
+              (deref handled 2000 ::timeout)]
+          (is (= "factory.execute" prepared-method))
+          (is (not (str/starts-with? prepared-thread worker-thread-name-prefix)))
+          (is (str/starts-with? handled-thread worker-thread-name-prefix))
+          (is (= {:value 1 :prepared true} handled-params)))
+        (is (not= ::timeout (collect-by-id! <-client 1 3000)))
+        (finally
+          (protocol/disconnect conn))))))
+
 (deftest test-concurrency-is-bounded
   (testing "no more handlers run concurrently than :request-handler-threads"
     (let [{:keys [conn ->client]} (open-connection {:request-handler-threads 2
@@ -189,10 +221,15 @@
     (let [{:keys [conn ->client <-client]} (open-connection {:request-handler-threads 2
                                                              :request-handler-queue-size 2})
           release (CountDownLatch. 1)
-          entered (atom 0)]
+          entered (atom 0)
+          rejected-preparations (atom 0)]
       (try
-        (protocol/set-request-handler!
-         conn (blocking-handler {:entered entered :release release}))
+        (protocol/set-request-dispatch!
+         conn
+         (blocking-handler {:entered entered :release release})
+         (fn [_method params]
+           {:params params
+            :on-reject #(swap! rejected-preparations inc)}))
         ;; 2 execute, 2 queue, the 5th has nowhere to go.
         (dotimes [i 5]
           (write-framed! ->client (request (str "r" i) "hooks.invoke" {})))
@@ -208,6 +245,7 @@
               (is (= 2 (get-in msg [:error :data :maxConcurrency])))
               (is (= 2 (get-in msg [:error :data :queueSize]))))))
         (is (= 1 (:rejected-requests (connection-stats conn))))
+        (is (= 1 @rejected-preparations))
         (testing "accepted requests still complete once handlers unblock"
           (.countDown release)
           (let [responses (collect-by-id! <-client 4 5000)]

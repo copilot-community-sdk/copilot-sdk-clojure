@@ -290,7 +290,7 @@
     handle-command-execute! {:kind :fn, :arglists ([client session-id {:keys [command-name command args]}])}
     handle-elicitation-request! {:kind :fn, :arglists ([client session-id context])}
     handle-exit-plan-mode-request! {:kind :fn, :arglists ([client session-id request])}
-    handle-factory-abort! {:kind :fn, :arglists ([client session-id run-id])}
+    handle-factory-abort! {:kind :fn, :arglists ([client session-id run-id] [client session-id run-id execution-token])}
     handle-factory-execute! {:kind :fn, :arglists ([client session-id {:as params, :keys [name run-id execution-token]}])}
     handle-hooks-invoke! {:kind :fn, :arglists ([client session-id hook-type input])}
     handle-mcp-auth-request! {:kind :fn, :arglists ([client session-id request])}
@@ -792,8 +792,12 @@
     :github.copilot-sdk.specs/max-total-subagents
     :github.copilot-sdk.specs/mcp-args
     :github.copilot-sdk.specs/mcp-command
+    :github.copilot-sdk.specs/mcp-config-server-name
+    :github.copilot-sdk.specs/mcp-config-source
     :github.copilot-sdk.specs/mcp-defer-tools
     :github.copilot-sdk.specs/mcp-headers
+    :github.copilot-sdk.specs/mcp-headers-refresh-completed-outcome
+    :github.copilot-sdk.specs/mcp-headers-refresh-required-reason
     :github.copilot-sdk.specs/mcp-http-server
     :github.copilot-sdk.specs/mcp-loaded-server
     :github.copilot-sdk.specs/mcp-local-server
@@ -810,6 +814,8 @@
     :github.copilot-sdk.specs/mcp-tools
     :github.copilot-sdk.specs/mcp-transport
     :github.copilot-sdk.specs/mcp-url
+    :github.copilot-sdk.specs/mcp.headers_refresh_completed-data
+    :github.copilot-sdk.specs/mcp.headers_refresh_required-data
     :github.copilot-sdk.specs/memory
     :github.copilot-sdk.specs/memory-action
     :github.copilot-sdk.specs/memory-direction
@@ -879,6 +885,7 @@
     :github.copilot-sdk.specs/operation
     :github.copilot-sdk.specs/options
     :github.copilot-sdk.specs/organization-custom-instructions
+    :github.copilot-sdk.specs/originating-message-id
     :github.copilot-sdk.specs/otlp-endpoint
     :github.copilot-sdk.specs/otlp-protocol
     :github.copilot-sdk.specs/outcome

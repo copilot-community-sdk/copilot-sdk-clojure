@@ -196,7 +196,7 @@ A thunk or stage that throws is either **fatal** or **ordinary**:
 There are three distinct cancellation mechanisms, and they don't overlap:
 
 1. **Cooperative, inside `:run`** — react to `:cancel-chan` closing or poll `:cancelled?` to stop early. Cancellation does not interrupt `:run` automatically; the factory must check for it.
-2. **From outside, server-side** - `cancel-factory-run!` asks the CLI to cancel a run. The runtime then sends a reverse `factory.abort` request, which closes the run's `:cancel-chan` and eventually delivers a `:cancelled` terminal status.
+2. **From outside, server-side** - `cancel-factory-run!` asks the CLI to cancel a run. The runtime then sends a reverse `factory.abort` request for the active execution token, which closes only that attempt's `:cancel-chan` and eventually delivers a `:cancelled` terminal status. An older attempt cannot cancel a replacement that shares the durable run ID.
 3. **Aborting a local wait, not the run** — `wait-for-factory-run!` accepts an optional `:cancel-chan`; closing it makes the *wait* throw `ex-info` with `{:type :factory-wait-cancelled}` without cancelling the run itself. Use this to stop blocking on a run you still want to keep executing.
 
 ## Limits

@@ -1825,8 +1825,11 @@
         session? (fn [session-id] (get-in @(:state client) [:sessions session-id]))
         unknown-session (fn [session-id]
                           (delivered-chan
-                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}))]
-    (proto/set-request-handler!
+                           {:error {:code -32001 :message (str "Unknown session: " session-id)}}))
+        prepare-request
+        (fn [method params]
+          (session/prepare-factory-request! client method params))]
+    (proto/set-request-dispatch!
      connection-io
      (fn [method params]
        (case method
@@ -1884,10 +1887,13 @@
              (session/handle-factory-execute! client session-id params)))
 
          "factory.abort"
-         (let [{:keys [session-id run-id]} params]
+         (let [{:keys [session-id run-id execution-token]} params]
            (if-not (session? session-id)
              (unknown-session session-id)
-             (session/handle-factory-abort! client session-id run-id)))
+             (if (::session/factory-abort-prepared? params)
+               (session/prepared-factory-abort-response)
+               (session/handle-factory-abort!
+                client session-id run-id execution-token))))
 
          ;; System message transform (PR #816). Runs inline on the reverse-request
          ;; worker, so the registered transform callbacks are covered by the
@@ -1914,7 +1920,8 @@
              (session/handle-session-fs-request! client session-id method params)))
 
          (delivered-chan
-          {:error {:code -32601 :message (str "Unknown method: " method)}}))))))
+          {:error {:code -32601 :message (str "Unknown method: " method)}})))
+     prepare-request)))
 
 (defn- connect-stdio!
   "Connect via stdio to the CLI process."

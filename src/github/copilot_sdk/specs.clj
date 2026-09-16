@@ -1801,6 +1801,9 @@
     :copilot/external_tool.requested :copilot/external_tool.completed
     ;; MCP OAuth events
     :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+    ;; MCP dynamic-header refresh lifecycle
+    :copilot/mcp.headers_refresh_required
+    :copilot/mcp.headers_refresh_completed
     ;; Command events
     :copilot/command.queued :copilot/command.execute :copilot/command.completed
     :copilot/commands.changed
@@ -2043,13 +2046,15 @@
         (s/valid? ::assistant-message-tool-request-type (:type %)))))
 (s/def ::tool-requests
   (s/coll-of ::assistant-message-tool-request :kind vector?))
+(s/def ::originating-message-id string?)
 (s/def ::assistant.message-data
   (s/keys :req-un [::message-id ::content]
           :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
                    ::interaction-id ::output-tokens ::phase ::reasoning-opaque
                    ::reasoning-text ::request-id ::api-call-id
                    ::server-tools ::service-request-id ::turn-id ::model
-                   ::chunk-index ::chunk-count ::rte]))
+                   ::chunk-index ::chunk-count ::rte
+                   ::originating-message-id]))
 
 (s/def ::total-response-size-bytes nat-int?)
 (s/def ::turn-id ::non-blank-string)
@@ -2153,12 +2158,16 @@
 
 (s/def ::mcp-server-name string?)
 (s/def ::mcp-tool-name string?)
+(s/def ::mcp-config-server-name string?)
+(s/def ::mcp-config-source
+  #{"user" "workspace" "plugin" "builtin" "managed"})
 (s/def ::mcp-transport #{"stdio" "http" "sse" "memory"})
 
 (s/def ::tool.execution_start-data
   (s/and
    (s/keys :req-un [::tool-call-id ::tool-name]
            :opt-un [::parent-tool-call-id ::mcp-server-name ::mcp-tool-name
+                    ::mcp-config-server-name ::mcp-config-source
                     ::mcp-transport ::model])
    #(optional-field? % :arguments opaque-json-value?)))
 
@@ -2499,7 +2508,8 @@
    (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name
                     ::agent-description]
            :opt-un [::factory-run-id ::model ::resumable
-                    ::agent-type ::execution-mode ::task-model-source])
+                    ::agent-type ::execution-mode ::task-model-source
+                    ::model-selection-source])
    #(or (not (contains? % :parent-id))
         (s/valid? ::subagent-parent-id (:parent-id %)))))
 
@@ -2576,9 +2586,11 @@
   (s/keys :req-un [::instructions]))
 (s/def ::mcp-loaded-server
   (s/and (s/keys :req-un [::name ::status]
-                 :opt-un [::source ::plugin-name ::plugin-version
+                 :opt-un [::display-name ::source ::plugin-name ::plugin-version
                           ::server-metadata])
          #(optional-field? % :error string?)
+         #(optional-field? % :source
+                           (partial s/valid? ::mcp-config-source))
          #(s/valid? ::mcp-server-status (:status %))))
 (s/def ::servers (s/coll-of ::mcp-loaded-server))
 (s/def ::session.mcp_servers_loaded-data
@@ -2751,6 +2763,23 @@
 (s/def ::session-event
   (s/merge ::base-event
            (s/keys :req-un [::event-type ::data])))
+
+(s/def ::mcp-headers-refresh-required-reason
+  #{"auth-failed" "startup" "ttl-expired"})
+(s/def ::mcp-headers-refresh-completed-outcome
+  #{"headers" "none" "error" "timeout"})
+(s/def ::mcp.headers_refresh_required-data
+  (s/and
+   map?
+   #(s/valid? ::request-id (:request-id %))
+   #(s/valid? ::server-name (:server-name %))
+   #(string? (:server-url %))
+   #(s/valid? ::mcp-headers-refresh-required-reason (:reason %))))
+(s/def ::mcp.headers_refresh_completed-data
+  (s/and
+   map?
+   #(s/valid? ::request-id (:request-id %))
+   #(s/valid? ::mcp-headers-refresh-completed-outcome (:outcome %))))
 
 ;; -----------------------------------------------------------------------------
 ;; Tool call/result types

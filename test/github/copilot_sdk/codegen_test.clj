@@ -449,6 +449,16 @@
    {:server-name "server-1"
     :status "connected"}
 
+   "mcp.headers_refresh_required"
+   {:request-id "refresh-1"
+    :server-name "server-1"
+    :server-url "https://example.test/mcp"
+    :reason "ttl-expired"}
+
+   "mcp.headers_refresh_completed"
+   {:request-id "refresh-1"
+    :outcome "error"}
+
    "permission.requested"
    {:request-id "permission-1"
     :permission-request {:kind "memory"

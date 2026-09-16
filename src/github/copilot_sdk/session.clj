@@ -1113,11 +1113,16 @@
                 value)))
           futures)))
 
+(defn- new-factory-execution
+  [run-id execution-token]
+  {:run-id run-id
+   :execution-token execution-token
+   :cancelled? (atom false)
+   :cancel-chan (chan)})
+
 (defn- register-factory-execution! [client session-id run-id execution-token]
-  (let [execution {:run-id run-id
-                   :execution-token execution-token
-                   :cancelled? (atom false)
-                   :cancel-chan (chan)}]
+  (let [path [:sessions session-id :factory-executions run-id execution-token]
+        execution (new-factory-execution run-id execution-token)]
     (when (identical?
            execution
            (get-in
@@ -1125,11 +1130,9 @@
                    (fn [state]
                      (let [session (get-in state [:sessions session-id])]
                        (if (and session (not (:destroyed? session)))
-                         (assoc-in state
-                                   [:sessions session-id :factory-executions run-id execution-token]
-                                   execution)
+                         (assoc-in state path execution)
                          state))))
-            [:sessions session-id :factory-executions run-id execution-token]))
+            path))
       execution)))
 
 (defn- remove-factory-execution!
@@ -1158,6 +1161,44 @@
   (cancel-executions!
    (vals (get-in @(:state client)
                  [:sessions session-id :factory-executions run-id]))))
+
+(defn- cancel-factory-execution!
+  [client session-id run-id execution-token]
+  (when-let [execution
+             (get-in @(:state client)
+                     [:sessions session-id :factory-executions
+                      run-id execution-token])]
+    (cancel-executions! [execution])))
+
+(defn ^:no-doc prepare-factory-request!
+  "Apply order-sensitive factory bookkeeping before reverse-request dispatch."
+  [client method params]
+  (case method
+    "factory.execute"
+    (let [{:keys [session-id name run-id execution-token]} params
+          handle (get-in @(:state client)
+                         [:sessions session-id :factories name])
+          execution
+          (when handle
+            (register-factory-execution!
+             client session-id run-id execution-token))]
+      (cond-> {:params
+               (cond-> params
+                 execution
+                 (assoc ::prepared-factory-handle handle
+                        ::prepared-factory-execution execution))}
+        execution
+        (assoc :on-reject
+               #(remove-factory-execution!
+                 client session-id run-id execution-token execution))))
+
+    "factory.abort"
+    (let [{:keys [session-id run-id execution-token]} params]
+      (cancel-factory-execution!
+       client session-id run-id execution-token)
+      {:params (assoc params ::factory-abort-prepared? true)})
+
+    {:params params}))
 
 (defn- throw-cleanup-failures!
   [failures]
@@ -1327,11 +1368,27 @@
 (defn handle-factory-execute!
   "Execute an extension-authored factory for a runtime reverse RPC."
   [client session-id {:keys [name run-id execution-token] :as params}]
-  (async/thread-call
-   (fn []
-     (if-let [handle (get-in @(:state client) [:sessions session-id :factories name])]
-       (if-let [execution (register-factory-execution!
-                           client session-id run-id execution-token)]
+  (let [handle
+        (or (::prepared-factory-handle params)
+            (get-in @(:state client) [:sessions session-id :factories name]))
+        execution
+        (when handle
+          (or (::prepared-factory-execution params)
+              (register-factory-execution!
+               client session-id run-id execution-token)))]
+    (async/thread-call
+     (fn []
+       (cond
+         (nil? handle)
+         {:error {:code -32602
+                  :message (str "No factory registered with name " (pr-str name))
+                  :data {:code "factory_not_found" :name name}}}
+
+         (nil? execution)
+         {:error {:code -32001
+                  :message (str "Session has been disconnected: " session-id)}}
+
+         :else
          (let [flush!* (volatile! nil)]
            (try
              (let [context (factory-context client session-id params execution)
@@ -1361,18 +1418,30 @@
                                 :run-id run-id
                                 :error (ex-message error)}))))
                (remove-factory-execution!
-                client session-id run-id execution-token execution))))
-         {:error {:code -32001
-                  :message (str "Session has been disconnected: " session-id)}})
-       {:error {:code -32602
-                :message (str "No factory registered with name " (pr-str name))
-                :data {:code "factory_not_found" :name name}}}))
-   :io))
+                client session-id run-id execution-token execution))))))
+     :io)))
 
 (defn handle-factory-abort!
-  "Cooperatively cancel active executions for a durable factory run."
-  [client session-id run-id]
-  (cancel-factory-executions! client session-id run-id)
+  "Cooperatively cancel factory executions.
+
+   The four-arity form targets one execution attempt. The three-arity form
+   retains run-wide cancellation for direct callers of this low-level handler."
+  ([client session-id run-id]
+   (cancel-factory-executions! client session-id run-id)
+   (let [result (chan 1)]
+     (put! result {:result {}})
+     (close! result)
+     result))
+  ([client session-id run-id execution-token]
+   (cancel-factory-execution! client session-id run-id execution-token)
+   (let [result (chan 1)]
+     (put! result {:result {}})
+     (close! result)
+     result)))
+
+(defn ^:no-doc prepared-factory-abort-response
+  "Acknowledge an abort already applied by [[prepare-factory-request!]]."
+  []
   (let [result (chan 1)]
     (put! result {:result {}})
     (close! result)

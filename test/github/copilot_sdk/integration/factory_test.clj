@@ -313,9 +313,168 @@
                 *mock-server*
                 "factory.abort"
                 {:sessionId session-id
-                 :runId "run-abort"}))))
+                 :runId "run-abort"
+                 :executionToken "attempt-1"}))))
     (is (= {:cancelled true}
            (get-in (deref execution 1000 :github.copilot-sdk.integration-test/timeout)
+                   [:result :result])))))
+
+(deftest test-agent-factory-abort-before-registration-is-observed
+  (let [handler-entered (promise)
+        allow-handler (promise)
+        observed-cancellation (promise)
+        handle
+        (factory/define-factory
+          {:meta {:name "early-abort"
+                  :description "Observe an abort that overtakes registration"
+                  :phases []}
+           :run
+           (fn [{:keys [cancel-chan cancelled?]}]
+             (let [observed {:cancelled? (cancelled?)
+                             :channel-closed?
+                             (async-protocols/closed? cancel-chan)}]
+               (deliver observed-cancellation observed)
+               observed))})
+        session-id "factory-early-abort-session"
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})
+        original-execute @#'session/handle-factory-execute!]
+    (with-redefs-fn
+      {#'session/handle-factory-execute!
+       (fn [& args]
+         (deliver handler-entered true)
+         @allow-handler
+         (apply original-execute args))}
+      (fn []
+        (let [execution
+              (future
+                (mock/send-rpc-request!
+                 *mock-server*
+                 "factory.execute"
+                 {:sessionId session-id
+                  :name "early-abort"
+                  :runId "run-early-abort"
+                  :executionToken "attempt-1"
+                  :args {}}))]
+          (try
+            (is (true? (deref handler-entered 1000 false)))
+            (let [registered
+                  (get-in @(:state *test-client*)
+                          [:sessions session-id :factory-executions
+                           "run-early-abort" "attempt-1"])]
+              (is (some? registered))
+              (is (false? @(:cancelled? registered)))
+              (is (= {}
+                     (:result
+                      (mock/send-rpc-request!
+                       *mock-server*
+                       "factory.abort"
+                       {:sessionId session-id
+                        :runId "run-early-abort"
+                        :executionToken "attempt-1"}))))
+              (is (true? @(:cancelled? registered)))
+              (is (true? (async-protocols/closed? (:cancel-chan registered)))))
+            (finally
+              (deliver allow-handler true)))
+          (is (= {:cancelled? true
+                  :channel-closed? true}
+                 (deref observed-cancellation
+                        1000
+                        :github.copilot-sdk.integration-test/timeout)))
+          (is (= {:cancelled? true
+                  :channel-closed? true}
+                 (get-in (deref execution
+                                1000
+                                :github.copilot-sdk.integration-test/timeout)
+                         [:result :result])))
+          (is (empty? (get-in @(:state *test-client*)
+                              [:sessions session-id :factory-executions]))))))))
+
+(deftest test-agent-factory-abort-miss-does-not-retain-state
+  (let [handle
+        (factory/define-factory
+          {:meta {:name "abort-miss"
+                  :description "No execution is active"
+                  :phases []}
+           :run (fn [_] {:unreachable true})})
+        session-id "factory-abort-miss-session"
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})]
+    (doseq [execution-token ["missing-attempt" nil]]
+      (is (= {:result {}}
+             (<!! (session/handle-factory-abort!
+                   *test-client*
+                   session-id
+                   "run-abort-miss"
+                   execution-token))))
+      (is (empty? (get-in @(:state *test-client*)
+                          [:sessions session-id :factory-executions]))))))
+
+(deftest test-agent-factory-abort-targets-one-execution-attempt
+  (let [invocations (atom 0)
+        first-started (promise)
+        second-started (promise)
+        handle
+        (factory/define-factory
+          {:meta {:name "targeted-abort"
+                  :description "Abort one execution attempt"
+                  :phases []}
+           :run
+           (fn [{:keys [cancel-chan]}]
+             (let [attempt (swap! invocations inc)]
+               (deliver (if (= 1 attempt) first-started second-started) true)
+               (<!! cancel-chan)
+               {:cancelled-attempt attempt}))})
+        session-id "factory-targeted-abort-session"
+        _ (session/create-session *test-client* session-id
+                                  {:config {:factories [handle]}})
+        first-execution
+        (future
+          (mock/send-rpc-request!
+           *mock-server*
+           "factory.execute"
+           {:sessionId session-id
+            :name "targeted-abort"
+            :runId "shared-run"
+            :executionToken "attempt-1"
+            :args {}}))
+        _ (is (true? (deref first-started 1000 false)))
+        second-execution
+        (future
+          (mock/send-rpc-request!
+           *mock-server*
+           "factory.execute"
+           {:sessionId session-id
+            :name "targeted-abort"
+            :runId "shared-run"
+            :executionToken "attempt-2"
+            :args {}}))
+        _ (is (true? (deref second-started 1000 false)))
+        second-state
+        (get-in @(:state *test-client*)
+                [:sessions session-id :factory-executions
+                 "shared-run" "attempt-2"])]
+    (is (= {} (:result
+               (mock/send-rpc-request!
+                *mock-server*
+                "factory.abort"
+                {:sessionId session-id
+                 :runId "shared-run"
+                 :executionToken "attempt-1"}))))
+    (is (= {:cancelled-attempt 1}
+           (get-in (deref first-execution 1000 :github.copilot-sdk.integration-test/timeout)
+                   [:result :result])))
+    (is (false? @(:cancelled? second-state)))
+    (is (false? (async-protocols/closed? (:cancel-chan second-state))))
+    (is (= {} (:result
+               (mock/send-rpc-request!
+                *mock-server*
+                "factory.abort"
+                {:sessionId session-id
+                 :runId "shared-run"
+                 :executionToken "attempt-2"}))))
+    (is (= {:cancelled-attempt 2}
+           (get-in (deref second-execution 1000 :github.copilot-sdk.integration-test/timeout)
                    [:result :result])))))
 
 (deftest test-agent-factory-context-failure-returns-error-and-cleans-up-once
@@ -393,7 +552,9 @@
            (get-in (deref first-execution 1000 :github.copilot-sdk.integration-test/timeout)
                    [:result :result])))
     (mock/send-rpc-request! *mock-server* "factory.abort"
-                            {:sessionId session-id :runId "run-overlap"})
+                            {:sessionId session-id
+                             :runId "run-overlap"
+                             :executionToken "same-token"})
     (is (= {:second true}
            (get-in (deref second-execution 1000 :github.copilot-sdk.integration-test/timeout)
                    [:result :result])))))
