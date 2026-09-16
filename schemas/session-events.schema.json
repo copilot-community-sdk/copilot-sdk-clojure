@@ -637,6 +637,10 @@
           "type": "string",
           "description": "Unique identifier for this assistant message"
         },
+        "originatingMessageId": {
+          "type": "string",
+          "description": "Logical ID of the primary user message that initiated this run, matching the messageId returned by session.send (or the last messageId of session.sendMessages). Stable across model/tool iterations, steering messages, and stop-hook corrections. Subagent runs use their own initiating message ID, not the parent's. Absent for runs without an associated initiating message, such as empty batches."
+        },
         "model": {
           "type": "string",
           "description": "Model that produced this assistant message, if known"
@@ -9010,7 +9014,7 @@
           "description": "Type of hook that was invoked (e.g., \"preToolUse\", \"postToolUse\", \"sessionStart\")"
         },
         "output": {
-          "description": "Output data produced by the hook",
+          "description": "Output data produced by the hook. Durable and resumed postToolUse receipts may omit messages owned by a successful skill invocation and replace an unchanged skill sessionLog copy with an elision marker; hook-modified or re-sourced values are preserved, and the authoritative body remains in the skill invocation event.",
           "x-opaque-json": true
         },
         "success": {
@@ -9199,7 +9203,7 @@
           "description": "Type of hook being invoked (e.g., \"preToolUse\", \"postToolUse\", \"sessionStart\")"
         },
         "input": {
-          "description": "Input data passed to the hook. For postToolUse hooks the retained copy served by session.eventLog.read (and by a resumed session) elides the tool result's inline `contents`/`uiResource` and replaces an over-long `textResultForLlm` with a `[copilot:elided ...]` marker, to keep a multi-megabyte payload out of the durable event log; the live subscription stream still delivers the full value. Read the adjacent tool.execution_complete event for the tool result itself.",
+          "description": "Input data passed to the hook. For postToolUse hooks the retained copy served by session.eventLog.read (and by a resumed session) drops the tool result's inline `contents`/`uiResource`/`skillInvocation` and replaces duplicated text result fields with a `[copilot:elided ...]` marker; the live subscription stream still delivers the full value. Canonical tool output remains in the adjacent tool.execution_complete event, while an invoked skill's authoritative body remains in its skill invocation event.",
           "x-opaque-json": true
         },
         "parentToolCallId": {
@@ -9922,6 +9926,7 @@
       "enum": [
         "headers",
         "none",
+        "error",
         "timeout"
       ],
       "description": "How the pending MCP headers refresh request resolved.",
@@ -9929,6 +9934,7 @@
       "x-enumDescriptions": {
         "headers": "The host supplied dynamic headers.",
         "none": "The host responded with no dynamic headers.",
+        "error": "The host credential broker rejected or failed the refresh.",
         "timeout": "No response arrived within the bounded window."
       }
     },
@@ -10694,7 +10700,11 @@
         },
         "source": {
           "$ref": "#/definitions/McpServerSource",
-          "description": "Configuration source: user, workspace, plugin, or builtin"
+          "description": "Configuration source: user, workspace, plugin, builtin, or managed"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable display name supplied by a managed server catalog."
         },
         "error": {
           "type": "string",
@@ -10731,15 +10741,17 @@
         "user",
         "workspace",
         "plugin",
-        "builtin"
+        "builtin",
+        "managed"
       ],
-      "description": "Configuration source: user, workspace, plugin, or builtin",
+      "description": "Configuration source: user, workspace, plugin, builtin, or managed",
       "title": "McpServerSource",
       "x-enumDescriptions": {
         "user": "Server configured in the user's global MCP configuration.",
         "workspace": "Server configured by the current workspace.",
         "plugin": "Server contributed by an installed plugin.",
-        "builtin": "Server bundled with the runtime."
+        "builtin": "Server bundled with the runtime.",
+        "managed": "Server supplied by a trusted host-managed catalog."
       }
     },
     "McpServerStatus": {
@@ -15956,6 +15968,7 @@
         "service_access",
         "network_outbound",
         "network_local",
+        "network_host",
         "other_access"
       ],
       "description": "Bounded class of access an enforcement check refused. Raw resources, commands, and process names accompany it only when content capture is enabled; diagnostic text and matched rules are never exported.",
@@ -15972,6 +15985,7 @@
         "service_access": "Windows service-control-manager access was refused and correlated with capture evidence.",
         "network_outbound": "An outbound connection was refused by `network.allowOutbound`.",
         "network_local": "A connection to a local or loopback destination was refused by `network.allowLocalNetwork`.",
+        "network_host": "A destination was refused by the sandbox host allow/deny rules.",
         "other_access": "The sandbox's denial capture recorded a refusal its record does not attribute to a more specific control: an unclassified resource (registry, COM, section object) or an AppContainer capability with no network meaning. Deliberately generic — the capture proves the denial happened, and naming a narrower class than the record supports would be a guess."
       }
     },
@@ -16692,6 +16706,21 @@
         {
           "$ref": "#/definitions/SkillInvokedEvent",
           "description": "Session event \"skill.invoked\". Skill invocation details including content, allowed tools, and plugin metadata"
+        },
+        {
+          "$ref": "#/definitions/SkillInvokedRefEvent",
+          "description": "Session event \"skill.invoked_ref\". Internal durable skill invocation receipt whose content resolves from an earlier inline skill event in the same session.",
+          "visibility": "internal"
+        },
+        {
+          "$ref": "#/definitions/SkillContextDeliveredEvent",
+          "description": "Session event \"skill.context_delivered\". Exact skill context delivered to the model during a tool phase. This is not a user submission or another skill invocation.",
+          "visibility": "internal"
+        },
+        {
+          "$ref": "#/definitions/SkillContextDeliveredRefEvent",
+          "description": "Session event \"skill.context_delivered_ref\". Internal durable receipt that reconstructs exact model-visible skill context from earlier session content.",
+          "visibility": "internal"
         },
         {
           "$ref": "#/definitions/SandboxDecisionEvent",
@@ -17647,6 +17676,174 @@
         "error": "The session ended because of a crash or fatal error."
       }
     },
+    "SkillContextDeliveredData": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Exact model-facing skill wrapper, including its invocation-time file context"
+        },
+        "source": {
+          "type": "string",
+          "description": "Unmodified injection provenance, in the form skill-<invocation-name>"
+        },
+        "interactionId": {
+          "type": "string",
+          "description": "Interaction that delivered this context, when known"
+        }
+      },
+      "required": [
+        "content",
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Exact skill context delivered to the model during a tool phase. This is not a user submission or another skill invocation.",
+      "title": "SkillContextDeliveredData"
+    },
+    "SkillContextDeliveredEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "skill.context_delivered",
+          "description": "Type discriminator. Always \"skill.context_delivered\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SkillContextDeliveredData",
+          "description": "Exact skill context delivered to the model during a tool phase. This is not a user submission or another skill invocation."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"skill.context_delivered\". Exact skill context delivered to the model during a tool phase. This is not a user submission or another skill invocation.",
+      "title": "SkillContextDeliveredEvent",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "SkillContextDeliveredRefData": {
+      "type": "object",
+      "properties": {
+        "contentId": {
+          "type": "string",
+          "description": "Content identifier of an earlier inline skill event in this session, in the prefixed form `sha256:<lowercase hex digest>` over the UTF-8 bytes of that event's `content`"
+        },
+        "prefix": {
+          "type": "string",
+          "description": "Exact text preceding the referenced content in the delivered wrapper"
+        },
+        "suffix": {
+          "type": "string",
+          "description": "Exact text following the referenced content in the delivered wrapper"
+        },
+        "source": {
+          "type": "string",
+          "description": "Unmodified injection provenance, in the form skill-<invocation-name>"
+        },
+        "interactionId": {
+          "type": "string",
+          "description": "Interaction that delivered this context, when known"
+        }
+      },
+      "required": [
+        "contentId",
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Internal durable receipt that reconstructs exact model-visible skill context from earlier session content.",
+      "title": "SkillContextDeliveredRefData"
+    },
+    "SkillContextDeliveredRefEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "skill.context_delivered_ref",
+          "description": "Type discriminator. Always \"skill.context_delivered_ref\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SkillContextDeliveredRefData",
+          "description": "Internal durable receipt that reconstructs exact model-visible skill context from earlier session content."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"skill.context_delivered_ref\". Internal durable receipt that reconstructs exact model-visible skill context from earlier session content.",
+      "title": "SkillContextDeliveredRefEvent",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
     "SkillInvokedData": {
       "type": "object",
       "properties": {
@@ -17760,6 +17957,128 @@
       "additionalProperties": false,
       "description": "Session event \"skill.invoked\". Skill invocation details including content, allowed tools, and plugin metadata",
       "title": "SkillInvokedEvent"
+    },
+    "SkillInvokedRefData": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the invoked skill"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier active when the skill was invoked, when known"
+        },
+        "path": {
+          "type": "string",
+          "description": "File path to the SKILL.md definition, or an empty string for an SDK-provided skill without a filesystem identity"
+        },
+        "contentId": {
+          "type": "string",
+          "description": "Content identifier of an earlier inline skill event in this session, in the prefixed form `sha256:<lowercase hex digest>` over the UTF-8 bytes of that event's `content`"
+        },
+        "contentLength": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "UTF-16 code unit length of the referenced skill content. Derived from the referenced body and validated against it when the reference is expanded; a reference whose length disagrees with the body it names is rejected instead of expanded"
+        },
+        "allowedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tool names that should be auto-approved when this skill is active"
+        },
+        "disableModelInvocation": {
+          "type": "boolean",
+          "description": "Whether model invocation is disabled for this skill"
+        },
+        "source": {
+          "type": "string",
+          "description": "Source identifier for where the skill was discovered"
+        },
+        "pluginName": {
+          "type": "string",
+          "description": "Name of the plugin this skill originated from, when applicable"
+        },
+        "pluginVersion": {
+          "type": "string",
+          "description": "Version of the plugin this skill originated from, when applicable"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the skill from its SKILL.md frontmatter"
+        },
+        "trigger": {
+          "$ref": "#/definitions/SkillInvokedTrigger",
+          "description": "What triggered the skill invocation"
+        }
+      },
+      "required": [
+        "name",
+        "path",
+        "contentId",
+        "contentLength"
+      ],
+      "additionalProperties": false,
+      "description": "Internal durable skill invocation receipt whose content resolves from an earlier inline skill event in the same session.",
+      "title": "SkillInvokedRefData"
+    },
+    "SkillInvokedRefEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "skill.invoked_ref",
+          "description": "Type discriminator. Always \"skill.invoked_ref\"."
+        },
+        "data": {
+          "$ref": "#/definitions/SkillInvokedRefData",
+          "description": "Internal durable skill invocation receipt whose content resolves from an earlier inline skill event in the same session."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"skill.invoked_ref\". Internal durable skill invocation receipt whose content resolves from an earlier inline skill event in the same session.",
+      "title": "SkillInvokedRefEvent",
+      "visibility": "internal",
+      "stability": "experimental"
     },
     "SkillInvokedTrigger": {
       "type": "string",
@@ -18690,6 +19009,10 @@
         "taskModelSource": {
           "$ref": "#/definitions/SubagentTaskModelSource",
           "description": "Where the model input for this sub-agent came from. Present when the task planner resolved the launch (the task tool and factory agents); absent for sub-agents created through other runtime paths."
+        },
+        "modelSelectionSource": {
+          "$ref": "#/definitions/SubagentModelSelectionSource",
+          "description": "Authority or runtime mechanism responsible for sub-agent model selection, when known at start."
         },
         "factoryRunId": {
           "type": "string",
@@ -19987,6 +20310,11 @@
           "type": "boolean",
           "description": "Whether this tool execution ran inside a sandbox container"
         },
+        "shellExecution": {
+          "$ref": "#/definitions/ToolExecutionCompleteShellExecution",
+          "description": "Experimental shell completion facts captured before the persisted result contents are stripped.",
+          "stability": "experimental"
+        },
         "parentToolCallId": {
           "type": "string",
           "description": "Tool call ID of the parent tool invocation when this event originates from a sub-agent",
@@ -20092,7 +20420,7 @@
         },
         "detailedContent": {
           "type": "string",
-          "description": "Full detailed tool result for UI/timeline display, preserving complete content such as diffs. Falls back to content when absent."
+          "description": "Detailed tool result for UI/timeline display, preserving complete content such as diffs for most tools. Successful skill invocations intentionally use the concise model-facing content here; the authoritative skill body is carried by the corresponding skill invocation event. Falls back to content when absent."
         },
         "contents": {
           "type": "array",
@@ -20140,6 +20468,22 @@
       "additionalProperties": false,
       "description": "Tool execution result on success",
       "title": "ToolExecutionCompleteResult"
+    },
+    "ToolExecutionCompleteShellExecution": {
+      "type": "object",
+      "properties": {
+        "exitCode": {
+          "type": "integer",
+          "description": "Process exit code reported by the shell driver."
+        }
+      },
+      "required": [
+        "exitCode"
+      ],
+      "additionalProperties": false,
+      "description": "Experimental shell completion facts retained independently of the full tool result.",
+      "title": "ToolExecutionCompleteShellExecution",
+      "stability": "experimental"
     },
     "ToolExecutionCompleteToolDescription": {
       "type": "object",
@@ -20543,6 +20887,10 @@
           "type": "string",
           "description": "Name of the MCP server hosting this tool, when the tool is an MCP tool"
         },
+        "mcpConfigServerName": {
+          "type": "string",
+          "description": "Preferred lookup name for the MCP server hosting this tool: the configured (namespaced) config-map key when the tool carries one, otherwise the display name from `mcpServerName`. Present when the tool is an MCP tool; this is the name unrestricted provenance telemetry hashes so it joins with `mcp_server_setup`, which keys off the configured name too."
+        },
         "mcpToolName": {
           "type": "string",
           "description": "Original tool name on the MCP server, when the tool is an MCP tool"
@@ -20550,6 +20898,10 @@
         "mcpTransport": {
           "$ref": "#/definitions/McpServerTransport",
           "description": "Transport the MCP server hosting this tool is connected over, when the tool is an MCP tool and the server is configured"
+        },
+        "mcpConfigSource": {
+          "$ref": "#/definitions/McpServerSource",
+          "description": "Where the MCP server's configuration came from (`user`, `workspace`, `plugin`, or `builtin`), when the tool is an MCP tool and the server is configured"
         },
         "turnId": {
           "type": "string",

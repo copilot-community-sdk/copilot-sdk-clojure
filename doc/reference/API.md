@@ -1794,16 +1794,17 @@ For schema 1.0.83-1, `:copilot/assistant.server_tool_progress` also belongs to
 `:copilot/tool_search.activated` intentionally belongs only to the master
 `copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
 
-The generated wire schemas also contain the internal `assistant.turn_retry`
-(additional model inference metadata within an existing turn) and
-`model.call_start` (model API dispatch metadata) events. They are wire-only and
-intentionally excluded from every curated public event set. Experimental
-HydraFusion routing events likewise remain generated wire evidence and are not
-curated as public idiom events. The experimental `reasoningBlocks` field on
-`assistant.message` also remains generated wire evidence rather than a stable
-curated idiom field. Runtime schema `1.0.84-5` also adds experimental
-permission carry-forward and message-authorization events plus experimental
-catalog trust types; these remain outside the stable Clojure API.
+The generated wire schemas also contain internal events such as
+`assistant.turn_retry`, `model.call_start`, and the durable skill-context
+reference events. They are wire-only and intentionally excluded from every
+curated public event set. Experimental HydraFusion routing events likewise
+remain generated wire evidence and are not curated as public idiom events.
+The experimental `reasoningBlocks` field on `assistant.message` and
+`:shell-execution` field on `tool.execution_complete` also remain generated
+wire evidence rather than stable curated idiom fields. Runtime schema
+`1.0.84-8` additionally carries experimental factory pause/checkpoint,
+permission, workspace, and managed-catalog protocol declarations that are not
+part of the stable Clojure API.
 
 ### `evt` — Event Keyword Helper
 
@@ -1868,7 +1869,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/assistant.reasoning` | Model reasoning (if supported); optional data: `:rte` (opaque round-trip encrypted reasoning token, for providers that require it to be replayed back) (upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
 | `:copilot/assistant.message_start` | Streaming assistant message start metadata |
-| `:copilot/assistant.message` | Complete assistant response; optional data: `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:citations` (see [Citations](#citations-experimental)), and `:rte` (upstream schema 1.0.79-5/6). Each `:tool-requests` entry may include `:type` (`"function"` or `"custom"`) and hosted-program attribution as `:caller {:caller-id "..." :type "program"}`. Its `:arguments` is validated only as recursive JSON (`nil`, strings, booleans, finite non-ratio numbers, vectors, and maps with string or keyword keys); source-defined keys are preserved verbatim rather than kebab-cased. |
+| `:copilot/assistant.message` | Complete assistant response; optional data includes `:originating-message-id`, the logical primary user message that initiated the run, plus `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:citations` (see [Citations](#citations-experimental)), and `:rte` (upstream schema 1.0.79-5/6). Each `:tool-requests` entry may include `:type` (`"function"` or `"custom"`) and hosted-program attribution as `:caller {:caller-id "..." :type "program"}`. Its `:arguments` is validated only as recursive JSON (`nil`, strings, booleans, finite non-ratio numbers, vectors, and maps with string or keyword keys); source-defined keys are preserved verbatim rather than kebab-cased. |
 | `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
 | `:copilot/assistant.turn_end` | Assistant turn completed |
@@ -1880,20 +1881,20 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/model.call_finished` | Completed model dispatch metadata; data requires `:turn-id`, non-negative `:dispatch-duration-ms`, `:outcome` (`"success"`, `"error"`, `"cancelled"`, or `"rejected"`), and positive `:edit-classifier-version`. Optional fields: `:interaction-id` and `:contains-built-in-file-edit-request`. The payload remains open for additive runtime fields. |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments` (an opaque JSON object with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, optional `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model` (runtime schema `1.0.84-5`; [upstream PR #2634](https://github.com/github/copilot-sdk/pull/2634)) |
+| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments` (an opaque JSON object with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. Transport metadata was added in runtime schema `1.0.84-5`; configured-server provenance was added by [upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658) and is pinned through runtime schema `1.0.84-8`. |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
-| `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. |
+| `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. Successful skill invocations may keep concise model-facing `:detailed-content`; the authoritative skill body remains on the corresponding `:copilot/skill.invoked` event. |
 | `:copilot/tool_search.activated` | Persisted generic client-side tool activations restored when a session resumes. Data: `{:strategy <string> :tool-names [<string> ...]}`. |
-| `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and `:agent-description`, with optional `:factory-run-id`, `:model`, `:resumable` (boolean), `:agent-type` (string), `:execution-mode` (string), `:parent-id` (string — task-registry id of the spawning subagent; unrelated to the envelope-level `:parent-id`), and `:task-model-source` (`"task_argument"`, `"subagent_configuration"`, `"custom_agent_definition"`, or `"unset"`). ([upstream PR #2072](https://github.com/github/copilot-sdk/pull/2072); runtime schema `1.0.84-4`) |
+| `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and `:agent-description`, with optional `:factory-run-id`, `:model`, `:resumable` (boolean), `:agent-type` (string), `:execution-mode` (string), `:parent-id` (string — task-registry id of the spawning subagent; unrelated to the envelope-level `:parent-id`), `:task-model-source` (`"task_argument"`, `"subagent_configuration"`, `"custom_agent_definition"`, or `"unset"`), and `:model-selection-source` using the same values as `subagent.completed`. ([upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658); runtime schema `1.0.84-8`) |
 | `:copilot/subagent.configured` | Effective subagent execution configuration; data requires string `:model` and boolean `:multi-turn`, with optional string `:reasoning-effort` and `:context-tier`. The payload remains open for additive runtime fields. |
 | `:copilot/subagent.completed` | Subagent completed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and optional `:cancelled`, `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`, `:first-dispatched-model`, `:configured-model-preference`, `:explicit-model-override`, `:model-override-reason` (strings), `:explicit-model-matches-preference`, `:configured-model-matches-actual` (booleans), and `:model-selection-source` (`"explicit_override"`, `"configured_required"`, `"configured_preference"`, `"complementary_default"`, `"session_inheritance"`, `"agent_definition_default"`, or `"runtime_policy"`). `:cancelled true` means cancellation tore down the subagent; cancellation still reports completion rather than failure. |
 | `:copilot/subagent.failed` | Subagent failed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, `:error`, optional `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`, `:first-dispatched-model`, `:configured-model-preference`, `:explicit-model-override`, `:model-override-reason` (strings), `:explicit-model-matches-preference`, `:configured-model-matches-actual` (booleans), and the same `:model-selection-source` values as `subagent.completed`. |
 | `:copilot/subagent.selected` | Subagent selected |
 | `:copilot/subagent.deselected` | Subagent deselected |
-| `:copilot/hook.start` | Hook invocation started; data requires `:hook-invocation-id`, `:hook-type`, with optional `:parent-tool-call-id` (upstream schema 1.0.83-1) |
+| `:copilot/hook.start` | Hook invocation started; data requires `:hook-invocation-id`, `:hook-type`, with optional `:parent-tool-call-id` (upstream schema 1.0.83-1). Durable or resumed `postToolUse` copies may elide duplicated tool and successful skill payloads; canonical output remains on the adjacent tool and skill events. |
 | `:copilot/hook.progress` | Ephemeral progress update from a long-running hook; data: `{:message "..."}` (upstream schema 1.0.56). |
-| `:copilot/hook.end` | Hook invocation finished; data requires `:hook-invocation-id`, `:hook-type`, and `:success`, with optional `:parent-tool-call-id` and closed `:error` map. The error requires string `:message`, permits optional string `:stack` and `:source`, and rejects other keys (upstream schema 1.0.83-1). |
+| `:copilot/hook.end` | Hook invocation finished; data requires `:hook-invocation-id`, `:hook-type`, and `:success`, with optional `:parent-tool-call-id` and closed `:error` map. The error requires string `:message`, permits optional string `:stack` and `:source`, and rejects other keys (upstream schema 1.0.83-1). Durable or resumed `postToolUse` receipts may elide unchanged successful skill output while preserving hook-modified values. |
 | `:copilot/system.message` | System message emitted |
 | `:copilot/system.notification` | System notification with a structured `:kind` discriminator: `agent_completed`, `agent_idle`, `new_inbox_message`, `shell_completed`, `shell_detached_completed`, `instruction_discovered`, `factory_completed`, or `unclassified`. Each known kind validates its required and optional fields; agent kinds may include `:display-name`. |
 | `:copilot/permission.requested` | Permission request initiated; optional `:agent-mode` identifies the requesting mode (`"interactive"`, `"plan"`, or `"autopilot"`), and `:resolved-by-hook` indicates a hook already handled it. For the MCP tool-permission variant (`:server-name`/`:tool-name`/`:tool-title` present), optional `:can-offer-server-wide-approval` indicates the host may offer a server-wide approval option. Shell requests may include `:request-sandbox-bypass`, `:request-sandbox-bypass-reason`, and `:request-sandbox-permissive`; the permissive form remains sandboxed while recording otherwise-blocked file and process access. |
@@ -1906,8 +1907,8 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/external_tool.completed` | External tool call completed (v3) |
 | `:copilot/mcp.oauth_required` | MCP server requires OAuth authentication |
 | `:copilot/mcp.oauth_completed` | MCP OAuth authentication completed |
-| `:copilot/mcp.headers_refresh_required` | Dynamic headers refresh request for a remote MCP server (upstream schema 1.0.66) |
-| `:copilot/mcp.headers_refresh_completed` | MCP headers refresh request completed (upstream schema 1.0.66) |
+| `:copilot/mcp.headers_refresh_required` | Dynamic headers refresh request for a remote MCP server. Data requires `:request-id`, `:server-name`, `:server-url`, and `:reason` (`"auth-failed"`, `"startup"`, or `"ttl-expired"`). |
+| `:copilot/mcp.headers_refresh_completed` | MCP headers refresh request completed. Data requires `:request-id` and `:outcome` (`"headers"`, `"none"`, `"error"`, or `"timeout"`); `"error"` was added in runtime schema `1.0.84-6`. |
 | `:copilot/mcp.tools.list_changed` | Remote MCP server signalled its tool list changed; data includes `:server-name` (upstream schema 1.0.70) |
 | `:copilot/mcp.resources.list_changed` | Remote MCP server signalled its resource list changed; data includes `:server-name` (upstream schema 1.0.70) |
 | `:copilot/mcp.prompts.list_changed` | Remote MCP server signalled its prompt list changed; data includes `:server-name` (upstream schema 1.0.70) |
@@ -1922,7 +1923,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.tools_updated` | Session tools list updated (e.g., after model change) |
 | `:copilot/session.background_tasks_changed` | Background tasks status changed |
 | `:copilot/session.skills_loaded` | Skills loaded for the session |
-| `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session. Each server may include `:source`, plugin identity, `:error`, and `:server-metadata {:instructions <string-or-nil>}`. |
+| `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session. Each server may include a managed-catalog `:display-name`, `:source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), plugin identity, `:error`, and `:server-metadata {:instructions <string-or-nil>}`. |
 | `:copilot/session.mcp_server_status_changed` | MCP server status changed |
 | `:copilot/session.mcp_server_removed` | MCP server was removed; data: `{:server-name "..."}` |
 | `:copilot/session.mcp_server_needs_reconnect` | MCP server requires reconnection; data: `{:server-name "..."}` |
@@ -2890,7 +2891,7 @@ and an async `<`-prefixed twin returning a core.async channel:
 | `list-runs` | `list-factory-runs` | `session.factory.listRuns` | List all durable runs for the session, in creation order. `[session]`. |
 | `get-run-detail` | `get-factory-run-detail` | `session.factory.getRunDetail` | Read durable phases, agent turns, and recent progress for a run. `[session run-id]`. |
 | `get-run-progress` | `get-factory-run-progress` | `session.factory.getRunProgress` | Page durable progress lines. 2-arity or 3-arity with an options map merged into the wire params (e.g. pagination cursors). |
-| `cancel!` | `cancel-factory-run!` | `session.factory.cancel` | Request cancellation from the CLI. The runtime's reverse `factory.abort` request then marks active local executions cancelled and closes their `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
+| `cancel!` | `cancel-factory-run!` | `session.factory.cancel` | Request cancellation from the CLI. The runtime's reverse `factory.abort` request targets the active execution token, marks only that attempt cancelled, and closes its `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
 
 All of the above return a run envelope map with at least `:run-id` and a keywordized
 `:status` (one of `:running`, `:completed`, `:halted`, `:cancelled`, `:error`, or other

@@ -154,7 +154,7 @@
 <p>There are three distinct cancellation mechanisms, and they don’t overlap:</p>
 <ol>
 <li><strong>Cooperative, inside <code>:run</code></strong> — react to <code>:cancel-chan</code> closing or poll <code>:cancelled?</code> to stop early. Cancellation does not interrupt <code>:run</code> automatically; the factory must check for it.</li>
-<li><strong>From outside, server-side</strong> - <code>cancel-factory-run!</code> asks the CLI to cancel a run. The runtime then sends a reverse <code>factory.abort</code> request, which closes the run’s <code>:cancel-chan</code> and eventually delivers a <code>:cancelled</code> terminal status.</li>
+<li><strong>From outside, server-side</strong> - <code>cancel-factory-run!</code> asks the CLI to cancel a run. The runtime then sends a reverse <code>factory.abort</code> request for the active execution token, which closes only that attempt’s <code>:cancel-chan</code> and eventually delivers a <code>:cancelled</code> terminal status. An older attempt cannot cancel a replacement that shares the durable run ID.</li>
 <li><strong>Aborting a local wait, not the run</strong> — <code>wait-for-factory-run!</code> accepts an optional <code>:cancel-chan</code>; closing it makes the <em>wait</em> throw <code>ex-info</code> with <code>{:type :factory-wait-cancelled}</code> without cancelling the run itself. Use this to stop blocking on a run you still want to keep executing.</li>
 </ol>
 <h2><a href="#limits" id="limits"></a>Limits</h2>

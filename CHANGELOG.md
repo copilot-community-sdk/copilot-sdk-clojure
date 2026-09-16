@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.84-8 sync)
+- Added stable event provenance for assistant originating messages, configured
+  MCP server identity/source, subagent model selection, and managed MCP server
+  display names, and added the `"error"` outcome to the public MCP
+  headers-refresh completion contract.
+  ([upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658))
+
+### Changed (v1.0.84-8 sync)
+- Updated the runtime and schema pin to `1.0.84-8` and recertified the complete
+  stable Node SDK public surface through upstream commit
+  [`e9df3938b0f2bb028b203f4095d48b75f155c008`](https://github.com/github/copilot-sdk/commit/e9df3938b0f2bb028b203f4095d48b75f155c008).
+  Factory pause/checkpoint APIs, shell completion facts, managed catalog and
+  workspace RPC additions, and internal skill-reference events remain outside
+  the stable Clojure API.
+  ([upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658),
+  [upstream PR #2662](https://github.com/github/copilot-sdk/pull/2662))
+
+### Fixed (v1.0.84-8 sync)
+- Factory abort requests now cancel only the matching execution token, so a
+  stale attempt cannot cancel another attempt sharing the durable run ID.
+  The new factory pause/checkpoint API remains intentionally excluded.
+  ([upstream PR #2537](https://github.com/github/copilot-sdk/pull/2537))
+
 ### Added (v1.0.84-5 sync)
 - Added stable `:mcp-transport` metadata to
   `:copilot/tool.execution_start` events. The optional field accepts `"stdio"`,

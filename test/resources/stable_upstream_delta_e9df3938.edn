@@ -1,0 +1,696 @@
+{:certification
+ {:clojure-base-commit "27bd8e8353964eb10e425bfaef84683e9c013f2e"
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_f45c46fd.edn"
+   :sha256
+   "75800967a04b20a5a17ba6edae7d20ba4ce52eabea2dc301c950f4d3eda5dc82"}}
+
+ :upstream
+ {:base-commit "f45c46fd1812f8bed5b4cbc250f47177c83068f0"
+  :target-commit "e9df3938b0f2bb028b203f4095d48b75f155c008"
+  :commit-count 16
+  :commits-sha256
+  "0fd64deb00fe2a4ff0e52e5f2f6b0a40f40183aaf6781e4003c0104e7dcbada6"
+  :hash-format :newline-joined-without-trailing-newline
+  :target-package-version "0.0.0-dev"
+  :runtime-version "1.0.84-8"}
+
+ :commit-classifications
+ [{:commit "8aab138e899dde9426aec6a671a824790e780089"
+   :subject "Disable failing Java docs deployment (#2653)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2653"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Disables a repository Java documentation workflow."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "3a6b64f37927ae56132274fe6e469afb5529a7a1ebc041ccfa53f0890492e272"}
+  {:commit "ef64ceaf881ccc0e694be3d24101641bf9938f1a"
+   :subject "Fix SDK test completion races and timeout cleanup (#2642)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2642"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes cross-SDK test harness synchronization and timeout diagnostics."
+   :changed-path-count 47
+   :changed-paths-sha256
+   "01c489725406058581cc3f3507a522f2c68cc856d1ae297312e91ed3d9fec3a6"}
+  {:commit "ad0d5e7299454cadec20cd0f015cd408a2b7ab7b"
+   :subject "docs: update version references to 1.0.14-preview.0"
+   :source-url "https://github.com/github/copilot-sdk/commit/ad0d5e7299454cadec20cd0f015cd408a2b7ab7b"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java preview-release documentation only."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "f948844641038add31a81e2623ebac512d7d1686fdeb60f1191b92c117742772"}
+  {:commit "7bd35d769652cb73960353288707c589b7d04524"
+   :subject "[maven-release-plugin] prepare release java/v1.0.14-preview.0"
+   :source-url "https://github.com/github/copilot-sdk/commit/7bd35d769652cb73960353288707c589b7d04524"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java release metadata."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "e82a33e17eaa61919d80232a6690c48963cd2e1ab5e3bb7f22eae122c6ce7668"}
+  {:commit "bab21f2f599e933e5657ee364b6fa75d0794363e"
+   :subject "[maven-release-plugin] prepare for next development iteration"
+   :source-url "https://github.com/github/copilot-sdk/commit/bab21f2f599e933e5657ee364b6fa75d0794363e"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java development-version metadata."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "e82a33e17eaa61919d80232a6690c48963cd2e1ab5e3bb7f22eae122c6ce7668"}
+  {:commit "557e496195c5c8dc1a964812f25790636930763e"
+   :subject "[Core] Add Factory Pause Checkpoints (#2537)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2537"
+   :classification :experimental
+   :status :ported-compatible-fix
+   :reason
+   "Adds experimental factory pause/checkpoint APIs. Those APIs remain excluded; the execution-token abort routing fix is ported because the existing Clojure factory runtime already receives the same reverse RPC."
+   :changed-path-count 7
+   :changed-paths-sha256
+   "777bfb4b7dd2acaebacf24f6628449462cf6beda0f8556e394b506c0c013c848"}
+  {:commit "d494785763c6a5a93e37916cee6572f0d6943c16"
+   :subject "docs: update version references to 1.0.14-preview.1"
+   :source-url "https://github.com/github/copilot-sdk/commit/d494785763c6a5a93e37916cee6572f0d6943c16"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java preview-release documentation only."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "f948844641038add31a81e2623ebac512d7d1686fdeb60f1191b92c117742772"}
+  {:commit "81be283a5d9b043fcb0d115bb5f8c7adf7e561eb"
+   :subject "[maven-release-plugin] prepare release java/v1.0.14-preview.1"
+   :source-url "https://github.com/github/copilot-sdk/commit/81be283a5d9b043fcb0d115bb5f8c7adf7e561eb"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java release metadata."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "e82a33e17eaa61919d80232a6690c48963cd2e1ab5e3bb7f22eae122c6ce7668"}
+  {:commit "dcf488292b1f7852efe7da79de378836e1e144ab"
+   :subject "[maven-release-plugin] prepare for next development iteration"
+   :source-url "https://github.com/github/copilot-sdk/commit/dcf488292b1f7852efe7da79de378836e1e144ab"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java development-version metadata."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "e82a33e17eaa61919d80232a6690c48963cd2e1ab5e3bb7f22eae122c6ce7668"}
+  {:commit "8d1545db2e33a4e1435c55ca96a02a8059c2fa07"
+   :subject "Fix C# codegen for runtime schema unions (#2656)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2656"
+   :classification :generated-only
+   :status :reviewed-no-port
+   :reason "Changes C# generator behavior and its generated validation."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "e9d04a7ecbd947086533df525933f6b5bb4a7412cde35d3c5d4f2450becdd6af"}
+  {:commit "e5c53790c6a8aa253aa3887ebb8958646bd60452"
+   :subject "Update Copilot CLI to 1.0.84-6 (#2658)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2658"
+   :classification :stable-public
+   :status :ported
+   :reason
+   "Adds stable event provenance, managed MCP source metadata, the MCP refresh error outcome, and durable skill-output elision semantics alongside generated and experimental changes."
+   :changed-path-count 64
+   :changed-paths-sha256
+   "18ea2472eda96b8ae2e10ef85f914d8d5c46c3a1bd600650ec27a223479387ee"}
+  {:commit "22e860719494262832504b1301237c05b0f4fab8"
+   :subject "[Java] Replace maven-release-plugin with CI-friendly versions (#2603)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2603"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes Java publishing and release tooling."
+   :changed-path-count 15
+   :changed-paths-sha256
+   "641cc4ccae645cbdff66441cd207cb9ea8a207e2a41e4c5083ec87ff5c131546"}
+  {:commit "c03400d12d2175efdc557ef9eb04b36d0d055ff3"
+   :subject "Update Copilot CLI to 1.0.84-8 (#2662)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2662"
+   :classification :stable-public
+   :status :regenerated
+   :reason
+   "Advances the bundled runtime/schema pin to 1.0.84-8; its additional RPC declarations are generated wire evidence rather than new stable Node SDK APIs."
+   :changed-path-count 31
+   :changed-paths-sha256
+   "231f7d0fc3eba340f23fd07549477f3efb7486a6c214f83feb5e23608794510a"}
+  {:commit "a675b55531a9dfc647ee015e32d74279568550f3"
+   :subject "Stabilize C# rewind E2E initialization (#2661)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2661"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes C# end-to-end test initialization."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "dc27e1a2f1c1866d9dfb726d12a64594ad3f0b78e4d7d0ea994a265cecd14e51"}
+  {:commit "9553d5224c73df2d02aee5ec01eeb8353acc736a"
+   :subject "Isolate hostless runtime cache (#2659)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2659"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes Rust hostless runtime cache isolation and resolution tests."
+   :changed-path-count 6
+   :changed-paths-sha256
+   "0c44831ef5a8d357a198ef52441b472144b925fab615498c5db1351320afff6a"}
+  {:commit "e9df3938b0f2bb028b203f4095d48b75f155c008"
+   :subject "Publish .NET SDK to the internal feed (#2614)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2614"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Adds .NET publication steps to the repository release workflow."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "551d1fcf87f78cc3bc18a7b332a4dc5d8773a512062df881c5aba28a6f5c48d7"}]
+
+ :changed-paths
+ {:count 157
+  :sha256
+  "0e499a8d33d295d714f737cd3b806c9441c1f5a536fbcd19775269c93d2f40cc"
+  :hash-format :newline-joined-without-trailing-newline
+  :classification-counts
+  {:stable-public 1
+   :experimental 7
+   :generated-only 4
+   :internal 16
+   :language-specific 129}
+  :exact-classifications
+  {"nodejs/src/generated/session-events.ts" :stable-public
+
+   "nodejs/docs/factories.md" :experimental
+   "nodejs/src/factory.ts" :experimental
+   "nodejs/src/index.ts" :experimental
+   "nodejs/src/session.ts" :experimental
+   "nodejs/test/e2e/factory.e2e.test.ts" :experimental
+   "nodejs/test/e2e/fixtures/factory-extension.mjs" :experimental
+   "nodejs/test/factory.test.ts" :experimental
+
+   "nodejs/src/generated/rpc.ts" :generated-only
+   "nodejs/test/csharp-codegen.test.ts" :generated-only
+   "scripts/codegen/csharp.ts" :generated-only
+   "scripts/codegen/rust.ts" :generated-only
+
+   ".github/workflows/java-publish-maven.yml" :internal
+   ".github/workflows/java-publish-snapshot.yml" :internal
+   ".github/workflows/java-sdk-tests.yml" :internal
+   ".github/workflows/java-smoke-test.yml" :internal
+   ".github/workflows/publish.yml" :internal
+   ".github/workflows/required-checks.yml" :internal
+   "docs/developer-docs/secrets.md" :internal
+   "nodejs/package.json" :internal
+   "nodejs/src/cliVersion.ts" :internal
+   "nodejs/test/e2e/harness/sdkTestHelper.ts" :internal
+   "nodejs/test/e2e/mcp_oauth.e2e.test.ts" :internal
+   "nodejs/test/e2e/permissions.e2e.test.ts" :internal
+   "nodejs/test/e2e/session.e2e.test.ts" :internal
+   "nodejs/test/e2e/session_lifecycle.e2e.test.ts" :internal
+   "nodejs/test/e2e/telemetry.e2e.test.ts" :internal
+   "nodejs/test/session-send-and-wait.test.ts" :internal}
+  :language-specific-prefixes
+  #{"dotnet/" "go/" "java/" "python/" "rust/"}}
+
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/package.json"
+   {:base "8805d0d4d86381e1b103b23199c0c61d62339b00"
+    :target "152726d2064c9e8e713afe057b0b2631ca2cb49c"}
+   "nodejs/src/index.ts"
+   {:base "6251df4fc766e40730a57d5f668a91efbd5bed73"
+    :target "8a5a730b5a5cb8f329b245298e132c7a77e085d5"}
+   "nodejs/src/types.ts"
+   {:base "9c4258d9c92b9ad396bf25bb070386ef3d51f258"
+    :target "9c4258d9c92b9ad396bf25bb070386ef3d51f258"}
+   "nodejs/src/client.ts"
+   {:base "6e4b4fb5b4e9b656a21c0fc5fd6988a848ae8501"
+    :target "6e4b4fb5b4e9b656a21c0fc5fd6988a848ae8501"}
+   "nodejs/src/session.ts"
+   {:base "4c2be1429921b0c6cb397b2d45266c1b41b3dc7d"
+    :target "896eded0bda69f9e08454ea8866fb1c335ce2415"}
+   "nodejs/src/extension.ts"
+   {:base "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"
+    :target "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"}
+   "nodejs/src/toolSet.ts"
+   {:base "559e9234e5b178036d88a7045a632bd16a97f534"
+    :target "559e9234e5b178036d88a7045a632bd16a97f534"}
+   "nodejs/src/factory.ts"
+   {:base "6212f462b4aff716417baf2180b9a8b887c12ad1"
+    :target "174318394f98c735e54f9bd80d75901e77ce17fa"}
+   "nodejs/src/generated/session-events.ts"
+   {:base "5bd67b80423643ec7a6416d6e331f856e3ff71ac"
+    :target "08bf03b5d74cd4af78cad67652e2cd1d1b8026c5"}
+   "nodejs/src/generated/rpc.ts"
+   {:base "09bfc8ffa750cfa138eb4a6f2a882db891fb736e"
+    :target "b0bbbb56e4e58cc9ff57b4498763e83a29bd425f"}}
+  :trees
+  {"nodejs"
+   {:base "e4992f186074f412dee23eeda89ca454f9512b09"
+    :target "0a2a277deba48afe26765af5a173be23315462e3"}
+   "nodejs/src/generated"
+   {:base "c0acf2163f88205d06f4ec3102cd76cdc242cc83"
+    :target "27e9418fbe6f6c98e9aed1445b11aae9633245e4"}
+   "nodejs/test"
+   {:base "d089de141f21082bf28338fe520e78702a3c8987"
+    :target "0471055418b2be08dafc463b322f2276afc3e414"}}
+  :package-root
+  {:path "nodejs/src/index.ts"
+   :explicit-symbol-count 200
+   :explicit-symbols-sha256
+   "1b2816aedc2309f5558aefec744b9b88e9343cad2a14ad5d6c4622b7063c637c"
+   :session-events
+   {:path "nodejs/src/generated/session-events.ts"
+    :symbol-count 546
+    :symbols-sha256
+    "a115d977b4aedf9618f1004ccb20b4655f27e5a23c06dcd6de4e7258c9515e8f"}
+   :symbol-count 736
+   :symbols-sha256
+   "3de6498a42d7b61980030896e1fca113a05dbe1371c5596e6bd271c1e7f7ce46"
+   :added
+   {:experimental #{"FactoryLimitOverrides"
+                    "ToolExecutionCompleteShellExecution"}}
+   :removed #{}}
+  :types
+  {:path "nodejs/src/types.ts"
+   :symbol-count 207
+   :symbols-sha256
+   "ac251977aae64ea16c156a4d8d7a10dab4d5a3a89bd201bf5856459cd668aeff"}
+  :extension
+  {:path "nodejs/src/extension.ts"
+   :symbol-count 39
+   :symbols-sha256
+   "13316e0859171d9c8be79a0bdbe2626b9c21a1947dae04a24fc51ddede17b52c"}
+  :tool-set
+  {:path "nodejs/src/toolSet.ts"
+   :symbol-count 2
+   :symbols-sha256
+   "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"}
+  :factory
+  {:path "nodejs/src/factory.ts"
+   :symbol-count 29
+   :symbols-sha256
+   "ba187595890c21116008b7276801db3a64510815df0c744e32e85c20c961afba"}
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts"
+    :class-name "CopilotClient"
+    :method-count 20
+    :methods-sha256
+    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"}
+   :session
+   {:path "nodejs/src/session.ts"
+    :class-name "CopilotSession"
+    :method-count 41
+    :methods-sha256
+    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"}}}
+
+ :symbol-inventory
+ {:added-exported-symbols
+  {"nodejs/src/index.ts"
+   {:experimental #{"FactoryLimitOverrides"}}
+   "nodejs/src/factory.ts"
+   {:experimental #{"FactoryLimitOverrides"}}
+   "nodejs/src/generated/session-events.ts"
+   {:experimental #{"ToolExecutionCompleteShellExecution"}}
+   "nodejs/src/generated/rpc.ts"
+   {:generated-only
+    #{"JsonSchemaResponseFormat"
+      "ManagedMcpServerConfig"
+      "ProtocolAppendMode"
+      "ProtocolCustomizeMode"
+      "ProtocolMarkerSectionOverride"
+      "ProtocolReplaceMode"
+      "ProtocolSectionOverride"
+      "ProtocolStaticSectionAction"
+      "ProtocolStaticSectionOverride"
+      "ProtocolSystemMessageAppendConfig"
+      "ProtocolSystemMessageConfig"
+      "ProtocolSystemMessageCustomizeConfig"
+      "ProtocolSystemMessageReplaceConfig"
+      "ResponseFormat"
+      "SandboxSessionChange"
+      "SystemMessageBlock"
+      "WorkspacesCreateDirectoryRequest"
+      "WorkspacesRemovePathRequest"
+      "WorkspacesRenamePathRequest"
+      "WorkspacesStatFileRequest"
+      "WorkspacesStatFileResult"}}}
+  :removed-exported-symbols
+  {"nodejs/src/generated/rpc.ts"
+   {:generated-only
+    #{"RegisterExtensionToolsParams"
+      "RegisterExtensionToolsResult"
+      "SessionsRegisterExtensionToolsOnSessionOptions"}}}
+  :event-interface-fields
+  {"AssistantMessageData"
+   {:stable-public #{"originatingMessageId"}}
+   "ToolExecutionStartData"
+   {:stable-public #{"mcpConfigServerName" "mcpConfigSource"}}
+   "ToolExecutionCompleteData"
+   {:experimental #{"shellExecution"}}
+   "SubagentStartedData"
+   {:stable-public #{"modelSelectionSource"}}
+   "McpServersLoadedServer"
+   {:stable-public #{"displayName"}}}
+  :changed-type-values
+  {"McpHeadersRefreshCompletedOutcome"
+   {:stable-public #{"error"}}
+   "McpServerSource"
+   {:stable-public #{"managed"}}}
+  :changed-declarations
+  {"nodejs/src/factory.ts"
+   {:experimental
+    #{"FactoryContext" "ResumeOptions" "RunOptions" "SessionFactoryApi"}}
+   "nodejs/src/generated/session-events.ts"
+   {:stable-public
+    #{"AssistantMessageData"
+      "McpHeadersRefreshCompletedOutcome"
+      "McpServerSource"
+      "McpServersLoadedServer"
+      "SubagentStartedData"
+      "ToolExecutionStartData"}
+    :experimental #{"ToolExecutionCompleteData"}}
+   "nodejs/src/generated/rpc.ts"
+   {:generated-only
+    #{"AdaptiveThinkingSupport"
+      "DebugCollectLogsRedaction"
+      "InstalledPluginInfo"
+      "McpHeadersHandlePendingHeadersRefreshRequest"
+      "McpServer"
+      "PermissionModeSource"
+      "ProviderModelConfig"
+      "SandboxConfigUserPolicyNetwork"
+      "SendMessagesRequest"
+      "SendRequest"
+      "SessionOpenOptions"
+      "ShutdownRequest"
+      "SlashCommandTextResult"}}}}
+
+ :stable-delta-ids
+ #{:events/assistant-originating-message
+   :events/mcp-headers-refresh-error
+   :events/mcp-managed-source
+   :events/mcp-server-display-name
+   :events/mcp-tool-provenance
+   :events/skill-output-elision
+   :events/subagent-model-selection-source
+   :runtime/schema-1.0.84-8}
+
+ :stable-deltas
+ [{:id :runtime/schema-1.0.84-8
+   :classification :stable-public
+   :status :regenerated
+   :upstream-pr 2662
+   :evidence [:runtime-version]
+   :inventory-items []
+   :clojure-paths
+   [".copilot-schema-version"
+    "schemas/README.md"
+    "schemas/api.schema.json"
+    "schemas/session-events.schema.json"
+    "src/github/copilot_sdk/generated/event_specs.clj"]}
+  {:id :events/assistant-originating-message
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2658
+   :evidence [:assistant-originating-message]
+   :inventory-items
+   [[:event-interface-field "AssistantMessageData" "originatingMessageId"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "AssistantMessageData"]]
+   :contract
+   {:node-type "AssistantMessageData"
+    :wire-key "originatingMessageId"
+    :clojure-key :originating-message-id
+    :omission :preserved
+    :explicit-nil :rejected}
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+    "doc/reference/API.md"]}
+  {:id :events/mcp-tool-provenance
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2658
+   :evidence [:mcp-tool-provenance]
+   :inventory-items
+   [[:event-interface-field
+     "ToolExecutionStartData"
+     "mcpConfigServerName"]
+    [:event-interface-field "ToolExecutionStartData" "mcpConfigSource"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "ToolExecutionStartData"]]
+   :contract
+   {:node-type "ToolExecutionStartData"
+    :wire-keys #{"mcpConfigServerName" "mcpConfigSource"}
+    :clojure-keys #{:mcp-config-server-name :mcp-config-source}
+    :omission :preserved
+    :explicit-nil :rejected}
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+    "doc/reference/API.md"]}
+  {:id :events/mcp-managed-source
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2658
+   :evidence [:mcp-managed-source]
+   :inventory-items
+   [[:changed-type-value "McpServerSource" "managed"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "McpServerSource"]]
+   :contract
+   {:node-type "McpServerSource"
+    :values #{"user" "workspace" "plugin" "builtin" "managed"}
+    :explicit-nil :rejected}
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+    "doc/reference/API.md"]}
+  {:id :events/mcp-headers-refresh-error
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2658
+   :evidence [:mcp-refresh-error]
+   :inventory-items
+   [[:changed-type-value "McpHeadersRefreshCompletedOutcome" "error"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "McpHeadersRefreshCompletedOutcome"]]
+   :contract
+   {:node-type "McpHeadersRefreshCompletedOutcome"
+    :values #{"headers" "none" "error" "timeout"}
+    :explicit-nil :rejected}
+   :clojure-paths
+   ["src/github/copilot_sdk.clj"
+    "src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+    "doc/reference/API.md"]}
+  {:id :events/subagent-model-selection-source
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2658
+   :evidence [:subagent-model-selection]
+   :inventory-items
+   [[:event-interface-field "SubagentStartedData" "modelSelectionSource"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "SubagentStartedData"]]
+   :contract
+   {:node-type "SubagentStartedData"
+    :wire-key "modelSelectionSource"
+    :clojure-key :model-selection-source
+    :omission :preserved
+    :explicit-nil :rejected}
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+    "doc/reference/API.md"]}
+  {:id :events/mcp-server-display-name
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2658
+   :evidence [:mcp-server-display-name]
+   :inventory-items
+   [[:event-interface-field "McpServersLoadedServer" "displayName"]
+    [:changed-declaration
+     "nodejs/src/generated/session-events.ts"
+     "McpServersLoadedServer"]]
+   :contract
+   {:node-type "McpServersLoadedServer"
+    :wire-key "displayName"
+    :clojure-key :display-name
+    :omission :preserved
+    :explicit-nil :rejected}
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+    "doc/reference/API.md"]}
+  {:id :events/skill-output-elision
+   :classification :stable-public
+   :status :documented
+   :upstream-pr 2658
+   :evidence [:skill-output-elision]
+   :inventory-items []
+   :contract
+   {:node-type "ToolExecutionCompleteResult"
+    :behavior
+    "Successful skill invocations may retain concise model-facing detailedContent while the corresponding skill event owns the authoritative body."}
+   :clojure-paths ["doc/reference/API.md"]}]
+
+ :compatibility-deltas
+ [{:id :factory/execution-token-abort
+   :classification :experimental
+   :status :ported
+   :upstream-pr 2537
+   :evidence [:factory-execution-token-abort]
+   :reason
+   "The existing experimental Clojure factory runtime already accepts reverse factory.abort requests, so it must honor the required executionToken and isolate concurrent attempts sharing a durable run ID. Factory execute registration and abort cancellation are prepared inline in wire order before bounded worker dispatch, matching Node's synchronous pre-await registration without blocking arbitrary factory work on the protocol reader."
+   :clojure-paths
+   ["src/github/copilot_sdk/client.clj"
+    "src/github/copilot_sdk/session.clj"
+    "test/github/copilot_sdk/integration/factory_test.clj"
+    "doc/guides/agent-factories.md"
+    "doc/reference/API.md"]}]
+
+ :intentional-exclusions
+ [{:id :factory/pause-checkpoints
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "FactoryLimitOverrides, FactoryContext.pause, SessionFactoryApi.pause, paused run status, and checkpoint behavior are explicitly experimental."
+   :evidence [:factory-limit-overrides :factory-pause]
+   :inventory-groups
+   [[:added-exported-symbols "nodejs/src/index.ts" :experimental]
+    [:added-exported-symbols "nodejs/src/factory.ts" :experimental]
+    [:changed-declarations "nodejs/src/factory.ts" :experimental]]}
+  {:id :events/tool-shell-execution
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "ToolExecutionCompleteData.shellExecution and its exported shape are explicitly experimental."
+   :evidence [:tool-shell-execution]
+   :inventory-groups
+   [[:added-exported-symbols
+     "nodejs/src/generated/session-events.ts"
+     :experimental]
+    [:event-interface-fields "ToolExecutionCompleteData" :experimental]
+    [:changed-declarations
+     "nodejs/src/generated/session-events.ts"
+     :experimental]]}
+  {:id :events/skill-reference-events
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "Skill invocation and context reference events are explicitly experimental wire events."
+   :evidence [:skill-reference-events]
+   :inventory-groups []}
+  {:id :rpc/generated-additions
+   :classification :generated-only
+   :decision :exclude
+   :status :approved
+   :authority :generated-wire-is-not-independent-api
+   :reason
+   "Response formats, managed MCP configuration, system-message protocol customization, shutdown hook detachment, sandbox changes, and workspace mutation RPCs are not exposed by the stable Node SDK at this pin."
+   :evidence [:generated-rpc]
+   :inventory-groups
+   [[:added-exported-symbols "nodejs/src/generated/rpc.ts" :generated-only]
+    [:removed-exported-symbols
+     "nodejs/src/generated/rpc.ts"
+     :generated-only]
+    [:changed-declarations "nodejs/src/generated/rpc.ts" :generated-only]]}
+  {:id :sandbox/network-host
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "The network_host denial class belongs to an internal sandbox event."
+   :evidence [:sandbox-network-host]
+   :inventory-groups []}
+  {:id :other-sdks/language-specific
+   :classification :language-specific
+   :decision :exclude
+   :status :approved
+   :authority :language-scope
+   :reason
+   "Java, .NET, Go, Python, and Rust implementation, release, generated, and test changes do not create Clojure parity obligations."
+   :evidence [:language-specific-changes]
+   :inventory-groups []}]
+
+ :decision-authorities
+ #{:generated-wire-is-not-independent-api
+   :language-scope
+   :upstream-experimental-subsystem
+   :upstream-internal-implementation}
+
+ :source-evidence
+ {:runtime-version
+  {:path "nodejs/package.json" :contains "1.0.84-8"}
+  :factory-limit-overrides
+  {:path "nodejs/src/index.ts" :contains "FactoryLimitOverrides"}
+  :factory-pause
+  {:path "nodejs/src/factory.ts" :contains "pause(runId"}
+  :factory-execution-token-abort
+  {:path "nodejs/src/session.ts" :contains "executionToken"}
+  :assistant-originating-message
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "originatingMessageId"}
+  :mcp-tool-provenance
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "mcpConfigServerName"}
+  :mcp-managed-source
+  {:path "nodejs/src/generated/session-events.ts" :contains "\"managed\""}
+  :mcp-refresh-error
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "\"error\""}
+  :tool-shell-execution
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "shellExecution"}
+  :skill-output-elision
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "authoritative skill body"}
+  :subagent-model-selection
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "modelSelectionSource"}
+  :mcp-server-display-name
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "Human-readable display name"}
+  :skill-reference-events
+  {:path "schemas/session-events.schema.json"
+   :contains "\"SkillInvokedRefEvent\""
+   :local true}
+  :sandbox-network-host
+  {:path "schemas/session-events.schema.json"
+   :contains "\"network_host\""
+   :local true}
+  :generated-rpc
+  {:path "nodejs/src/generated/rpc.ts" :contains "ResponseFormat"}
+  :language-specific-changes
+  {:path ".github/workflows/publish.yml" :contains "dotnet"}}
+
+ :local-artifacts
+ {".copilot-schema-version"
+  "fccb6f593bdc8422342c25c4adc3a6d223ff55c420a2a2a8fd54aa92dee4f24d"
+  "schemas/README.md"
+  "e6b15a843d36401d1c071ac4677691e860c3f996d6c4d59169c0c7156ca89d8d"
+  "schemas/api.schema.json"
+  "c8e04f9ad4ebed1e568c95243fce6f11ba7e5e92b934184632ded13ece4787f8"
+  "schemas/session-events.schema.json"
+  "0300faefeb301498acd29d00d504820fa7aabb903ce1e3ad56532ce0528cd7d0"
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "4daf61b23897a37453aec06f9e778a5ed0114e484702389cfc3c33e7b62f938e"
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e"
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "7fd6b5ba0d635ef098407a310a1638d7d2d42dc1e087c5282b725359daf0f8a4"
+  "resources/github/copilot_sdk/api_surface.edn"
+  "d2e53642f706ecc71ea29d2501198e3a1e66bc0fb295543658e384fb962d3bf6"}}

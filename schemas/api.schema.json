@@ -1144,25 +1144,9 @@
         },
         "stability": "experimental"
       },
-      "registerExtensionToolsOnSession": {
-        "rpcMethod": "sessions.registerExtensionToolsOnSession",
-        "description": "Registers extension-provided tools on the given session, gated by an optional `enabled` callback. Returns an opaque unsubscribe function the caller must invoke to deregister the tools when the extension is torn down. Marked internal because `loader`, `enabled`, and the returned `unsubscribe` are in-process handles that cannot cross the JSON-RPC boundary. Disappears once extension discovery / launch / tool registration are owned by the runtime: SDK consumers will pass pure config (search paths, disabled ids) via `SessionOptions` and the runtime will resolve, launch, register, and tear down extensions itself.",
-        "params": {
-          "$ref": "#/definitions/RegisterExtensionToolsParams",
-          "description": "Params to attach an extension loader's tools to a session.",
-          "visibility": "internal"
-        },
-        "result": {
-          "$ref": "#/definitions/RegisterExtensionToolsResult",
-          "description": "Handle for releasing the extension tool registration.",
-          "visibility": "internal"
-        },
-        "stability": "experimental",
-        "visibility": "internal"
-      },
       "configureSessionExtensions": {
         "rpcMethod": "sessions.configureSessionExtensions",
-        "description": "Attaches (or detaches) an in-process ExtensionController delegate for the given session, used by shared-API surfaces that need to query or modify the session's extension state. Pass `controller: undefined` to detach. Marked internal because the controller is an in-process object that cannot cross the JSON-RPC boundary. Disappears alongside `registerExtensionToolsOnSession`: once the runtime owns extension management, the public surface exposes list/enable/disable/reload as dedicated RPCs served by the runtime.",
+        "description": "Attaches (or detaches) an in-process ExtensionController delegate for the given session in a local host adapter. Pass `controller: undefined` to detach. Internal because the controller cannot cross the JSON-RPC boundary; the runtime manages its own session extension service.",
         "params": {
           "$ref": "#/definitions/ConfigureSessionExtensionsParams",
           "description": "Params to attach or detach an in-process ExtensionController delegate.",
@@ -1273,6 +1257,10 @@
             },
             "description": "Custom HTTP headers to include in outbound model requests for this turn. Merged with session-level provider headers; per-turn headers augment and overwrite session-level headers with the same key."
           },
+          "responseFormat": {
+            "$ref": "#/definitions/ResponseFormat",
+            "description": "Provider-native output format for this turn, including all tool-call iterations. Not inherited by later turns or subagents. Ordinary steering inherits the active format; specifying responseFormat with mode: immediate is an error, even while idle. Returned assistant content remains text; the runtime does not parse or validate it. Unsupported models or schemas produce provider errors."
+          },
           "traceparent": {
             "type": "string",
             "description": "W3C Trace Context traceparent header for distributed tracing of this agent turn"
@@ -1317,7 +1305,7 @@
               "$ref": "#/definitions/SendMessageItem",
               "description": "A single user message to append to the session as part of a `session.sendMessages` turn"
             },
-            "description": "The user messages to append to the conversation, in order. May be empty, in which case a single turn runs over the existing history with no new user message."
+            "description": "The user messages to append to the conversation, in order, before running one agent loop. When the batch starts a run, its final message is the primary initiating message; earlier messages provide context, not separate runs or replies. May be empty, in which case a single turn runs over the existing history with no new user message or originatingMessageId."
           },
           "mode": {
             "$ref": "#/definitions/SendMode",
@@ -1337,6 +1325,10 @@
               "type": "string"
             },
             "description": "Custom HTTP headers to include in outbound model requests for this turn. Merged with session-level provider headers; per-turn headers augment and overwrite session-level headers with the same key."
+          },
+          "responseFormat": {
+            "$ref": "#/definitions/ResponseFormat",
+            "description": "Provider-native output format for the whole turn, including an empty message batch and all tool-call iterations. Not inherited by later turns or subagents. Ordinary steering inherits the active format; specifying responseFormat with mode: immediate is an error, even while idle. Returned assistant content remains text; the runtime does not parse or validate it. Unsupported models or schemas produce provider errors."
           },
           "traceparent": {
             "type": "string",
@@ -1561,6 +1553,10 @@
           "reason": {
             "type": "string",
             "description": "Optional human-readable reason. Typically the message of the error that triggered shutdown when type is 'error'."
+          },
+          "detachSessionEndHooks": {
+            "type": "boolean",
+            "description": "Dispatch deferred sessionEnd hooks in the background with their full per-hook timeoutSec instead of awaiting them under the short shared shutdown budget. Set this when the host process keeps running after the session closes (for example the CLI's /clear), so a slow hook neither blocks the close nor is aborted. Hooks still detached when the process later exits are terminated with it. Defaults to false."
           }
         },
         "required": [
@@ -1867,7 +1863,7 @@
     "debug": {
       "collectLogs": {
         "rpcMethod": "session.debug.collectLogs",
-        "description": "Collects a redacted session debug log bundle into a local archive or staging directory. The runtime includes session-owned logs by default and accepts caller-provided diagnostic entries so host applications can add their own files without changing this API shape.",
+        "description": "Collects a session debug log bundle into a local archive or staging directory. Logs are redacted by default; redaction can be configured per caller-provided diagnostic entry. The runtime includes session-owned logs by default and accepts caller-provided diagnostic entries so host applications can add their own files without changing this API shape.",
         "params": {
           "type": "object",
           "properties": {
@@ -1877,7 +1873,7 @@
             },
             "destination": {
               "$ref": "#/definitions/DebugCollectLogsDestination",
-              "description": "Where the redacted bundle should be written. Use `archive` to produce a .tgz, or `directory` to stage redacted files for caller-managed upload/post-processing."
+              "description": "Where the bundle should be written. Use `archive` to produce a .tgz, or `directory` to stage files for caller-managed upload/post-processing."
             },
             "include": {
               "$ref": "#/definitions/DebugCollectLogsInclude",
@@ -1897,13 +1893,13 @@
             "destination"
           ],
           "additionalProperties": false,
-          "description": "Options for collecting a redacted session debug bundle.",
+          "description": "Options for collecting a session debug bundle with configurable redaction.",
           "title": "DebugCollectLogsRequest",
           "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/DebugCollectLogsResult",
-          "description": "Result of collecting a redacted debug bundle."
+          "description": "Result of collecting a session debug bundle."
         },
         "stability": "experimental"
       }
@@ -3492,7 +3488,7 @@
             },
             "path": {
               "type": "string",
-              "description": "Relative path within the workspace files directory"
+              "description": "Slash-separated relative path within the workspace files directory"
             }
           },
           "required": [
@@ -3522,7 +3518,7 @@
             },
             "path": {
               "type": "string",
-              "description": "Relative path within the workspace files directory"
+              "description": "Slash-separated relative path within the workspace files directory"
             },
             "content": {
               "type": "string",
@@ -3537,6 +3533,140 @@
           "additionalProperties": false,
           "description": "Relative path and UTF-8 content for the workspace file to create or overwrite.",
           "title": "WorkspacesCreateFileRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "statFile": {
+        "rpcMethod": "session.workspaces.statFile",
+        "description": "Returns metadata for a file or directory in the session workspace files directory.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "path": {
+              "type": "string",
+              "description": "Slash-separated relative path within the workspace files directory"
+            }
+          },
+          "required": [
+            "sessionId",
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "Relative path of the workspace file or directory to inspect.",
+          "title": "WorkspacesStatFileRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkspacesStatFileResult",
+          "description": "Filesystem metadata for a path in the session workspace files directory."
+        },
+        "stability": "experimental"
+      },
+      "createDirectory": {
+        "rpcMethod": "session.workspaces.createDirectory",
+        "description": "Creates a directory in the session workspace files directory.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "path": {
+              "type": "string",
+              "description": "Slash-separated relative path within the workspace files directory"
+            },
+            "recursive": {
+              "type": "boolean",
+              "description": "Whether to create missing parent directories. Defaults to false."
+            }
+          },
+          "required": [
+            "sessionId",
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "Directory to create within the session workspace files directory.",
+          "title": "WorkspacesCreateDirectoryRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "removePath": {
+        "rpcMethod": "session.workspaces.removePath",
+        "description": "Removes a file or directory from the session workspace files directory.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "path": {
+              "type": "string",
+              "description": "Slash-separated relative path within the workspace files directory"
+            },
+            "recursive": {
+              "type": "boolean",
+              "description": "Whether to remove directory contents recursively. Defaults to false."
+            },
+            "force": {
+              "type": "boolean",
+              "description": "Whether a missing path should be treated as success. Defaults to false."
+            }
+          },
+          "required": [
+            "sessionId",
+            "path"
+          ],
+          "additionalProperties": false,
+          "description": "File or directory to remove from the session workspace files directory.",
+          "title": "WorkspacesRemovePathRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "renamePath": {
+        "rpcMethod": "session.workspaces.renamePath",
+        "description": "Renames a file or directory within the session workspace files directory.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "source": {
+              "type": "string",
+              "description": "Slash-separated source path relative to the workspace files directory"
+            },
+            "destination": {
+              "type": "string",
+              "description": "Slash-separated destination path relative to the workspace files directory"
+            }
+          },
+          "required": [
+            "sessionId",
+            "source",
+            "destination"
+          ],
+          "additionalProperties": false,
+          "description": "Source and destination paths for a rename within the session workspace files directory.",
+          "title": "WorkspacesRenamePathRequest",
           "stability": "experimental"
         },
         "result": {
@@ -11469,14 +11599,16 @@
       "enum": [
         "unsupported",
         "optional",
-        "required"
+        "required",
+        "adaptive_only"
       ],
       "description": "Resolved Anthropic adaptive-thinking capability for a model.",
       "title": "AdaptiveThinkingSupport",
       "x-enumDescriptions": {
         "unsupported": "The model does not accept thinking.type='adaptive'",
         "optional": "The model accepts adaptive thinking but also accepts thinking.type='enabled'",
-        "required": "The model only accepts adaptive thinking and rejects thinking.type='enabled' with HTTP 400 (e.g. opus-4.7/4.8)"
+        "required": "The model defaults to adaptive thinking and rejects thinking.type='enabled' with HTTP 400, but still accepts thinking.type='disabled' (e.g. opus-4.7/4.8/5, sonnet-5)",
+        "adaptive_only": "The model accepts only thinking.type='adaptive'; 'enabled', 'disabled', and an omitted thinking block all fail with HTTP 400 (e.g. fable, mythos)"
       }
     },
     "AgentDiscoveryPath": {
@@ -16840,7 +16972,7 @@
         "sizeBytes"
       ],
       "additionalProperties": false,
-      "description": "A file included in the redacted debug bundle.",
+      "description": "A file included in the session debug bundle.",
       "title": "DebugCollectLogsCollectedEntry"
     },
     "DebugCollectLogsDestination": {
@@ -16873,7 +17005,7 @@
           "properties": {
             "outputDirectory": {
               "type": "string",
-              "description": "Directory where redacted files should be staged. The directory is created if needed."
+              "description": "Directory where files should be staged. The directory is created if needed."
             },
             "kind": {
               "type": "string",
@@ -16888,7 +17020,7 @@
           "additionalProperties": false
         }
       ],
-      "description": "Destination for the redacted debug bundle.",
+      "description": "Destination for the session debug bundle.",
       "title": "DebugCollectLogsDestination"
     },
     "DebugCollectLogsEntry": {
@@ -16908,7 +17040,7 @@
         },
         "redaction": {
           "$ref": "#/definitions/DebugCollectLogsRedaction",
-          "description": "How text content from this entry should be redacted. Defaults to plain-text."
+          "description": "How text content from this entry should be redacted. Defaults to plain-text. With none, no redaction is applied; the caller must ensure any necessary redaction is performed before this call."
         },
         "required": {
           "type": "boolean",
@@ -16978,13 +17110,15 @@
       "type": "string",
       "enum": [
         "plain-text",
-        "events-jsonl"
+        "events-jsonl",
+        "none"
       ],
       "description": "How a collected debug entry should be redacted before being staged.",
       "title": "DebugCollectLogsRedaction",
       "x-enumDescriptions": {
         "plain-text": "Redact the file as plain UTF-8 log text.",
-        "events-jsonl": "Redact each non-empty line as a session event JSON object, falling back to plain-text redaction for malformed lines."
+        "events-jsonl": "Redact each non-empty line as a session event JSON object, falling back to plain-text redaction for malformed lines.",
+        "none": "No redaction is applied. The caller must ensure any necessary redaction is performed before this call."
       }
     },
     "DebugCollectLogsRequest": {
@@ -16992,7 +17126,7 @@
       "properties": {
         "destination": {
           "$ref": "#/definitions/DebugCollectLogsDestination",
-          "description": "Where the redacted bundle should be written. Use `archive` to produce a .tgz, or `directory` to stage redacted files for caller-managed upload/post-processing."
+          "description": "Where the bundle should be written. Use `archive` to produce a .tgz, or `directory` to stage files for caller-managed upload/post-processing."
         },
         "include": {
           "$ref": "#/definitions/DebugCollectLogsInclude",
@@ -17011,7 +17145,7 @@
         "destination"
       ],
       "additionalProperties": false,
-      "description": "Options for collecting a redacted session debug bundle.",
+      "description": "Options for collecting a session debug bundle with configurable redaction.",
       "title": "DebugCollectLogsRequest",
       "stability": "experimental"
     },
@@ -17030,9 +17164,9 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/DebugCollectLogsCollectedEntry",
-            "description": "A file included in the redacted debug bundle."
+            "description": "A file included in the session debug bundle."
           },
-          "description": "Files included in the redacted bundle."
+          "description": "Files included in the bundle."
         },
         "skippedEntries": {
           "type": "array",
@@ -17049,7 +17183,7 @@
         "entries"
       ],
       "additionalProperties": false,
-      "description": "Result of collecting a redacted debug bundle.",
+      "description": "Result of collecting a session debug bundle.",
       "title": "DebugCollectLogsResult"
     },
     "DebugCollectLogsResultKind": {
@@ -17062,7 +17196,7 @@
       "title": "DebugCollectLogsResultKind",
       "x-enumDescriptions": {
         "archive": "A .tgz archive was written.",
-        "directory": "A directory containing redacted files was written."
+        "directory": "A directory containing the collected files was written."
       }
     },
     "DebugCollectLogsSkippedEntry": {
@@ -21361,6 +21495,10 @@
         "installedFrom": {
           "type": "string",
           "description": "Absolute path of the marketplace directory a live plugin was resolved from. Present only on live, never-persisted records — a plugin belonging to a directory/local marketplace, which is loaded from its real directory on every pass instead of a copy under the installed-plugins cache. Its presence is what marks a listed plugin as live: such a plugin is always present on disk, so `enabled` is its only meaningful state and it is never \"not installed\"."
+        },
+        "source": {
+          "type": "string",
+          "description": "Runtime-reported plugin provenance. Currently set to \"builtin\" only for plugins registered through the trusted host built-in boundary; absent for installed, marketplace, direct, and live plugins."
         }
       },
       "required": [
@@ -21754,6 +21892,34 @@
       "description": "Result of interrupting the main agent turn.",
       "title": "InterruptMainTurnResult"
     },
+    "JsonSchemaResponseFormat": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the output schema, subject to the provider's naming restrictions."
+        },
+        "schema": {
+          "description": "JSON Schema passed unchanged to the inference provider. Schemas larger than 32 MiB when JSON-encoded are rejected before admission, using the runtime's existing request-size ceiling. This is not a guarantee that the entire model request fits. Supported keywords and schema restrictions are determined by the provider.",
+          "x-opaque-json": true
+        },
+        "description": {
+          "type": "string",
+          "description": "Optional description passed to OpenAI providers."
+        },
+        "strict": {
+          "type": "boolean",
+          "description": "Optional strict enforcement setting for OpenAI providers. Omitted uses the provider default. Anthropic always enforces its supported schema subset."
+        }
+      },
+      "required": [
+        "name",
+        "schema"
+      ],
+      "additionalProperties": false,
+      "description": "A JSON Schema output contract. OpenAI receives the name, description, schema and strict setting; Anthropic receives the schema in output_config.format and always uses its native strict enforcement.",
+      "title": "JsonSchemaResponseFormat"
+    },
     "LlmInferenceHeaders": {
       "type": "object",
       "additionalProperties": {
@@ -22139,6 +22305,45 @@
       "description": "Parameters for (re)loading the merged LSP configuration set.",
       "title": "LspInitializeRequest",
       "stability": "experimental"
+    },
+    "ManagedMcpServerConfig": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable catalog display name."
+        },
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Hosted MCP streamable HTTP endpoint."
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Tools to include. Defaults to all tools when omitted."
+        },
+        "timeout": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "format": "duration",
+          "description": "Timeout in milliseconds for tool discovery and tool calls."
+        },
+        "headersRefreshTtlMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum dynamic-header cache lifetime in milliseconds."
+        }
+      },
+      "required": [
+        "displayName",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Non-secret host-managed HTTP MCP server configuration. The containing map key is the stable managed identity; credentials are supplied dynamically by the host.",
+      "title": "ManagedMcpServerConfig"
     },
     "ManagedSettingsReadResult": {
       "type": "object",
@@ -23196,6 +23401,11 @@
               },
               "description": "Headers to overlay onto the MCP request. Dynamic headers override static config headers but do not replace SDK-managed request headers."
             },
+            "ttlMs": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Optional lifetime in milliseconds for these returned headers. The runtime clamps its configured cache lifetime to this value."
+            },
             "kind": {
               "type": "string",
               "const": "headers",
@@ -23218,6 +23428,24 @@
           },
           "required": [
             "kind"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "message": {
+              "type": "string",
+              "description": "Host credential broker failure, denial, or revocation reason."
+            },
+            "kind": {
+              "type": "string",
+              "const": "error",
+              "description": "Headers-refresh response variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "message"
           ]
         }
       ],
@@ -25224,7 +25452,7 @@
         },
         "source": {
           "$ref": "#/definitions/McpServerSource",
-          "description": "Configuration source: user, workspace, plugin, or builtin"
+          "description": "Configuration source: user, workspace, plugin, builtin, or managed"
         },
         "sourcePlugin": {
           "type": "string",
@@ -25233,6 +25461,10 @@
         "sourcePluginVersion": {
           "type": "string",
           "description": "Plugin version that provided this server, when source is plugin."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable display name supplied by a managed server catalog."
         },
         "error": {
           "type": "string",
@@ -25937,15 +26169,17 @@
         "user",
         "workspace",
         "plugin",
-        "builtin"
+        "builtin",
+        "managed"
       ],
-      "description": "Configuration source: user, workspace, plugin, or builtin",
+      "description": "Configuration source: user, workspace, plugin, builtin, or managed",
       "title": "McpServerSource",
       "x-enumDescriptions": {
         "user": "Server configured in the user's global MCP configuration.",
         "workspace": "Server configured by the current workspace.",
         "plugin": "Server contributed by an installed plugin.",
-        "builtin": "Server bundled with the runtime."
+        "builtin": "Server bundled with the runtime.",
+        "managed": "Server supplied by a trusted host-managed catalog."
       }
     },
     "McpServerStatus": {
@@ -27031,7 +27265,7 @@
         },
         "adaptive_thinking": {
           "$ref": "#/definitions/AdaptiveThinkingSupport",
-          "description": "Resolved Anthropic adaptive-thinking capability — unsupported / optional / required. 'required' models reject thinking.type='enabled' with HTTP 400 (e.g. opus-4.7/4.8)."
+          "description": "Resolved Anthropic adaptive-thinking capability — unsupported / optional / required / adaptive_only. 'required' models reject thinking.type='enabled' with HTTP 400 but still accept 'disabled' (e.g. opus-4.7/4.8/5, sonnet-5); 'adaptive_only' models accept nothing but 'adaptive' (e.g. fable, mythos)."
         }
       },
       "additionalProperties": false,
@@ -27051,7 +27285,7 @@
         },
         "adaptive_thinking": {
           "$ref": "#/definitions/AdaptiveThinkingSupport",
-          "description": "Resolved Anthropic adaptive-thinking capability — unsupported / optional / required. 'required' models reject thinking.type='enabled' with HTTP 400 (e.g. opus-4.7/4.8)."
+          "description": "Resolved Anthropic adaptive-thinking capability — unsupported / optional / required / adaptive_only. 'required' models reject thinking.type='enabled' with HTTP 400 but still accept 'disabled' (e.g. opus-4.7/4.8/5, sonnet-5); 'adaptive_only' models accept nothing but 'adaptive' (e.g. fable, mythos)."
         }
       },
       "additionalProperties": false,
@@ -29351,6 +29585,7 @@
         "slash_command",
         "autopilot_confirmation",
         "user_setting",
+        "organization_targeting",
         "rpc"
       ],
       "description": "Optional source for permission-mode telemetry. Defaults to `rpc` when omitted for SDK callers.",
@@ -29360,6 +29595,7 @@
         "slash_command": "The mode was set by a slash command.",
         "autopilot_confirmation": "The mode was set by confirming autopilot behavior.",
         "user_setting": "The mode was set at startup by the `defaultPermissionMode` user setting.",
+        "organization_targeting": "The mode was set at startup by authenticated organization targeting.",
         "rpc": "The mode was set through an RPC caller."
       },
       "stability": "experimental"
@@ -31028,6 +31264,18 @@
       "description": "Result of updating a single plugin.",
       "title": "PluginUpdateResult"
     },
+    "ProtocolAppendMode": {
+      "type": "string",
+      "enum": [
+        "append"
+      ]
+    },
+    "ProtocolCustomizeMode": {
+      "type": "string",
+      "enum": [
+        "customize"
+      ]
+    },
     "ProtocolExternalToolDefer": {
       "type": "string",
       "enum": [
@@ -31096,6 +31344,162 @@
       "description": "Serializable definition of a caller-implemented tool whose execution is handled over the SDK connection.",
       "title": "ProtocolExternalToolDefinition",
       "stability": "experimental"
+    },
+    "ProtocolMarkerSectionOverride": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "transform",
+              "description": "Section override action discriminator."
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "const": "preserve",
+              "description": "Section override action discriminator."
+            }
+          },
+          "required": [
+            "action"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ProtocolReplaceMode": {
+      "type": "string",
+      "enum": [
+        "replace"
+      ]
+    },
+    "ProtocolSectionOverride": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProtocolStaticSectionOverride"
+        },
+        {
+          "$ref": "#/definitions/ProtocolMarkerSectionOverride"
+        }
+      ]
+    },
+    "ProtocolStaticSectionAction": {
+      "type": "string",
+      "enum": [
+        "replace",
+        "remove",
+        "append",
+        "prepend"
+      ],
+      "x-enumDescriptions": {
+        "replace": "Replace the section content.",
+        "remove": "Remove the section content.",
+        "append": "Append content to the section.",
+        "prepend": "Prepend content to the section."
+      }
+    },
+    "ProtocolStaticSectionOverride": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/ProtocolStaticSectionAction",
+          "description": "Declarative operation applied to the section."
+        },
+        "content": {
+          "type": "string",
+          "description": "Optional content used by replace, append, and prepend operations."
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "ProtocolSystemMessageAppendConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/ProtocolAppendMode",
+          "description": "Append-mode discriminator. Omission also selects append mode."
+        },
+        "content": {
+          "type": "string",
+          "description": "Text appended to the standard system prompt."
+        }
+      },
+      "additionalProperties": false
+    },
+    "ProtocolSystemMessageConfig": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ProtocolSystemMessageAppendConfig"
+        },
+        {
+          "$ref": "#/definitions/ProtocolSystemMessageReplaceConfig"
+        },
+        {
+          "$ref": "#/definitions/ProtocolSystemMessageCustomizeConfig"
+        }
+      ]
+    },
+    "ProtocolSystemMessageCustomizeConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/ProtocolCustomizeMode",
+          "description": "Customize-mode discriminator."
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ProtocolSectionOverride"
+          },
+          "description": "Named standard-prompt section overrides."
+        },
+        "content": {
+          "type": "string",
+          "description": "Text appended after the customized sections."
+        }
+      },
+      "required": [
+        "mode"
+      ],
+      "additionalProperties": false
+    },
+    "ProtocolSystemMessageReplaceConfig": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/definitions/ProtocolReplaceMode",
+          "description": "Replace-mode discriminator."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete replacement system-message text."
+        },
+        "contentBlocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SystemMessageBlock"
+          },
+          "description": "Optional structured blocks corresponding to the replacement content."
+        }
+      },
+      "required": [
+        "mode",
+        "content"
+      ],
+      "additionalProperties": false
     },
     "ProviderAddRequest": {
       "type": "object",
@@ -31417,6 +31821,10 @@
         "capabilities": {
           "$ref": "#/definitions/ModelCapabilitiesOverride",
           "description": "Optional capability overrides (vision, tool_calls, reasoning, etc.)."
+        },
+        "systemMessage": {
+          "$ref": "#/definitions/ProtocolSystemMessageConfig",
+          "description": "System-message configuration used when the runtime builds the standard prompt for this provider-qualified model, including general-purpose subagents. It uses the same object hierarchy as session-level systemMessage configuration, except transform actions are rejected because the current callback protocol is not model-scoped. When present, it overrides the session-wide configuration on those prompt paths. Selected custom-agent and specialized-subagent prompts remain authoritative."
         }
       },
       "required": [
@@ -32853,49 +33261,6 @@
       "description": "Opaque handle representing an event-type interest registration.",
       "title": "RegisterEventInterestResult"
     },
-    "RegisterExtensionToolsParams": {
-      "type": "object",
-      "properties": {
-        "sessionId": {
-          "type": "string",
-          "description": "Session to register extension tools on."
-        },
-        "loader": {
-          "description": "In-process ExtensionLoader handle used only by the CLI and excluded from the public SDK surface.",
-          "visibility": "internal",
-          "x-opaque-in-process": true
-        },
-        "options": {
-          "$ref": "#/definitions/SessionsRegisterExtensionToolsOnSessionOptions",
-          "description": "Optional registration options."
-        }
-      },
-      "required": [
-        "sessionId",
-        "loader"
-      ],
-      "additionalProperties": false,
-      "description": "Params to attach an extension loader's tools to a session.",
-      "title": "RegisterExtensionToolsParams",
-      "visibility": "internal"
-    },
-    "RegisterExtensionToolsResult": {
-      "type": "object",
-      "properties": {
-        "unsubscribe": {
-          "description": "In-process unsubscribe function used only by the CLI.",
-          "visibility": "internal",
-          "x-opaque-in-process": true
-        }
-      },
-      "required": [
-        "unsubscribe"
-      ],
-      "additionalProperties": false,
-      "description": "Handle for releasing the extension tool registration.",
-      "title": "RegisterExtensionToolsResult",
-      "visibility": "internal"
-    },
     "ReleaseEventInterestParams": {
       "type": "object",
       "properties": {
@@ -33423,6 +33788,31 @@
       "description": "Repository context for the remote session.",
       "title": "RemoteSessionRepository"
     },
+    "ResponseFormat": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "jsonSchema": {
+              "$ref": "#/definitions/JsonSchemaResponseFormat",
+              "description": "JSON Schema and provider options for the turn's output."
+            },
+            "type": {
+              "type": "string",
+              "const": "json_schema",
+              "description": "Output format discriminator. Currently only json_schema is supported."
+            }
+          },
+          "required": [
+            "type",
+            "jsonSchema"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Provider-native structured output format. JSON Schema is forwarded without rewriting or validating the schema or the generated output.",
+      "title": "ResponseFormat"
+    },
     "RunOptions": {
       "type": "object",
       "properties": {
@@ -33626,6 +34016,20 @@
     "SandboxConfigUserPolicyNetwork": {
       "type": "object",
       "properties": {
+        "allowedHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Hosts allowed through the built-in sandbox proxy. A non-empty list denies unmatched hosts; an absent or empty list allows all hosts not blocked. Supports exact hostnames, IP addresses, and *.example.com for strict subdomains. Host rules do not override the outbound or local-network toggles."
+        },
+        "blockedHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Hosts denied by the built-in sandbox proxy. Deny rules take precedence over allowedHosts. A domain also denies all its subdomains. IP addresses match exactly; *.example.com matches strict subdomains, and * denies every host."
+        },
         "allowOutbound": {
           "type": "boolean",
           "description": "Whether outbound network traffic is allowed at all."
@@ -33636,7 +34040,7 @@
         },
         "proxy": {
           "$ref": "#/definitions/SandboxConfigUserPolicyNetworkProxy",
-          "description": "HTTP proxy for sandboxed process traffic. Linux restricts egress to the proxy endpoint, requires that endpoint to be reachable over IPv4 (the [::] dual-stack wildcard is accepted and routed through the IPv4 gateway), and does not support proxy credentials. macOS relies on applications honoring proxy environment variables. Windows also configures a per-AppContainer WinHTTP proxy, but enforcement depends on the application's networking stack. Configure supported credentials in the separate `username` and `password` fields. A credential-free http:// loopback URL uses the localhost proxy form, while an https:// or authenticated loopback URL uses the URL form."
+          "description": "HTTP(S) proxy for sandboxed traffic. With host rules, this is the built-in local proxy's upstream; credentials stay in the runtime, and Linux and macOS restrict the child to the local listener. Without host rules, Linux restricts egress to this endpoint but rejects credentials, and macOS proxying is cooperative. Windows enforcement depends on the application's networking stack. Configure credentials in the separate username/password fields. The transient local listener URL is never persisted."
         }
       },
       "additionalProperties": false,
@@ -33741,6 +34145,19 @@
       "additionalProperties": false,
       "description": "Managed sandbox enforcement state for a session.",
       "title": "SandboxEnforcementStatus"
+    },
+    "SandboxSessionChange": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "restored"
+      ],
+      "description": "A session-scoped sandbox transition applied while handling a slash command",
+      "title": "SandboxSessionChange",
+      "x-enumDescriptions": {
+        "disabled": "The sandbox is off for the rest of this session; nothing was persisted and a new session starts from managed policy.",
+        "restored": "A previous session-scoped opt-out was cleared and the sandbox is enforced again."
+      }
     },
     "ScheduleAddAtRequest": {
       "type": "object",
@@ -34139,7 +34556,7 @@
             "$ref": "#/definitions/SendMessageItem",
             "description": "A single user message to append to the session as part of a `session.sendMessages` turn"
           },
-          "description": "The user messages to append to the conversation, in order. May be empty, in which case a single turn runs over the existing history with no new user message."
+          "description": "The user messages to append to the conversation, in order, before running one agent loop. When the batch starts a run, its final message is the primary initiating message; earlier messages provide context, not separate runs or replies. May be empty, in which case a single turn runs over the existing history with no new user message or originatingMessageId."
         },
         "mode": {
           "$ref": "#/definitions/SendMode",
@@ -34159,6 +34576,10 @@
             "type": "string"
           },
           "description": "Custom HTTP headers to include in outbound model requests for this turn. Merged with session-level provider headers; per-turn headers augment and overwrite session-level headers with the same key."
+        },
+        "responseFormat": {
+          "$ref": "#/definitions/ResponseFormat",
+          "description": "Provider-native output format for the whole turn, including an empty message batch and all tool-call iterations. Not inherited by later turns or subagents. Ordinary steering inherits the active format; specifying responseFormat with mode: immediate is an error, even while idle. Returned assistant content remains text; the runtime does not parse or validate it. Unsupported models or schemas produce provider errors."
         },
         "traceparent": {
           "type": "string",
@@ -34189,7 +34610,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Unique identifiers assigned to the messages, one per provided message in order. Empty when no messages were provided."
+          "description": "Unique identifiers assigned to the messages, one per provided message in order. For a batch that starts a run, assistant messages use the final ID as originatingMessageId throughout that run, including tool iterations and stop-hook corrections. Immediate steering does not replace the active run's origin. Empty when no messages were provided; that run has no originatingMessageId."
         }
       },
       "required": [
@@ -34263,6 +34684,10 @@
             "type": "string"
           },
           "description": "Custom HTTP headers to include in outbound model requests for this turn. Merged with session-level provider headers; per-turn headers augment and overwrite session-level headers with the same key."
+        },
+        "responseFormat": {
+          "$ref": "#/definitions/ResponseFormat",
+          "description": "Provider-native output format for this turn, including all tool-call iterations. Not inherited by later turns or subagents. Ordinary steering inherits the active format; specifying responseFormat with mode: immediate is an error, even while idle. Returned assistant content remains text; the runtime does not parse or validate it. Unsupported models or schemas produce provider errors."
         },
         "traceparent": {
           "type": "string",
@@ -36392,7 +36817,7 @@
         },
         "enableManagedSettings": {
           "type": "boolean",
-          "description": "Opt-in: self-fetch and enforce enterprise managed settings at session bootstrap."
+          "description": "Opt-in: self-fetch and enforce enterprise managed settings, including managed hook policies, at session bootstrap."
         },
         "managedSettings": {
           "$ref": "#/definitions/SessionManagedSettings",
@@ -36549,6 +36974,15 @@
             "type": "string"
           },
           "description": "MCP server names disabled for this session. Disabled servers are not started or authenticated on create or cold resume."
+        },
+        "managedMcpServers": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/ManagedMcpServerConfig",
+            "description": "Non-secret host-managed HTTP MCP server configuration. The containing map key is the stable managed identity; credentials are supplied dynamically by the host."
+          },
+          "description": "Non-secret host-managed HTTP MCP servers keyed by stable managed identity. Managed provenance is runtime-established from this separate field and credentials are supplied through dynamic-header refresh.",
+          "stability": "experimental"
         },
         "allowAllMcpServerInstructions": {
           "type": "boolean",
@@ -38270,19 +38704,6 @@
       "description": "Pagination options for reading an inactive or active local session's persisted event journal.",
       "title": "SessionsReadPersistedEventsRequest"
     },
-    "SessionsRegisterExtensionToolsOnSessionOptions": {
-      "type": "object",
-      "properties": {
-        "enabled": {
-          "description": "In-process `() => boolean` gating callback used only by the CLI.",
-          "visibility": "internal",
-          "x-opaque-in-process": true
-        }
-      },
-      "additionalProperties": false,
-      "description": "Optional registration options.",
-      "title": "SessionsRegisterExtensionToolsOnSessionOptions"
-    },
     "SessionsReleaseLockRequest": {
       "type": "object",
       "properties": {
@@ -39166,6 +39587,10 @@
         "reason": {
           "type": "string",
           "description": "Optional human-readable reason. Typically the message of the error that triggered shutdown when type is 'error'."
+        },
+        "detachSessionEndHooks": {
+          "type": "boolean",
+          "description": "Dispatch deferred sessionEnd hooks in the background with their full per-hook timeoutSec instead of awaiting them under the short shared shutdown budget. Set this when the host process keeps running after the session closes (for example the CLI's /clear), so a slow hook neither blocks the close nor is aborted. Hooks still detached when the process later exits are terminated with it. Defaults to false."
         }
       },
       "additionalProperties": false,
@@ -40100,6 +40525,10 @@
         "runtimeSettingsChanged": {
           "type": "boolean",
           "description": "True when the invocation mutated user runtime settings; consumers caching settings should refresh"
+        },
+        "sandboxSessionChange": {
+          "$ref": "#/definitions/SandboxSessionChange",
+          "description": "Present when the invocation changed the sandbox for this session only. Nothing was persisted, so consumers must mirror the change onto the live session rather than reloading settings, and must not treat it as a settings change."
         }
       },
       "required": [
@@ -40221,6 +40650,23 @@
         "default": "Use the model's default context window.",
         "long_context": "Pin the subagent to the long-context tier when supported."
       }
+    },
+    "SystemMessageBlock": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Text content for this system-message block."
+        },
+        "isStatic": {
+          "type": "boolean",
+          "description": "Whether the block is static and may be cached independently of dynamic prompt content."
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false
     },
     "TaskAgentInfo": {
       "type": "object",
@@ -43908,12 +44354,32 @@
       "description": "Workspace checkpoint metadata with assigned number, human-readable title, and checkpoint filename.",
       "title": "WorkspacesCheckpoints"
     },
+    "WorkspacesCreateDirectoryRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Slash-separated relative path within the workspace files directory"
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Whether to create missing parent directories. Defaults to false."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "Directory to create within the session workspace files directory.",
+      "title": "WorkspacesCreateDirectoryRequest",
+      "stability": "experimental"
+    },
     "WorkspacesCreateFileRequest": {
       "type": "object",
       "properties": {
         "path": {
           "type": "string",
-          "description": "Relative path within the workspace files directory"
+          "description": "Slash-separated relative path within the workspace files directory"
         },
         "content": {
           "type": "string",
@@ -44110,7 +44576,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Relative file paths in the workspace files directory"
+          "description": "Slash-separated relative file paths in the workspace files directory"
         }
       },
       "required": [
@@ -44179,7 +44645,7 @@
       "properties": {
         "path": {
           "type": "string",
-          "description": "Relative path within the workspace files directory"
+          "description": "Slash-separated relative path within the workspace files directory"
         }
       },
       "required": [
@@ -44204,6 +44670,51 @@
       "additionalProperties": false,
       "description": "Contents of the requested workspace file as a UTF-8 string.",
       "title": "WorkspacesReadFileResult"
+    },
+    "WorkspacesRemovePathRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Slash-separated relative path within the workspace files directory"
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Whether to remove directory contents recursively. Defaults to false."
+        },
+        "force": {
+          "type": "boolean",
+          "description": "Whether a missing path should be treated as success. Defaults to false."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "File or directory to remove from the session workspace files directory.",
+      "title": "WorkspacesRemovePathRequest",
+      "stability": "experimental"
+    },
+    "WorkspacesRenamePathRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Slash-separated source path relative to the workspace files directory"
+        },
+        "destination": {
+          "type": "string",
+          "description": "Slash-separated destination path relative to the workspace files directory"
+        }
+      },
+      "required": [
+        "source",
+        "destination"
+      ],
+      "additionalProperties": false,
+      "description": "Source and destination paths for a rename within the session workspace files directory.",
+      "title": "WorkspacesRenamePathRequest",
+      "stability": "experimental"
     },
     "WorkspacesSaveLargePasteRequest": {
       "type": "object",
@@ -44263,6 +44774,57 @@
       "additionalProperties": false,
       "description": "Descriptor for the saved paste file, or null when the workspace is unavailable.",
       "title": "WorkspacesSaveLargePasteResult"
+    },
+    "WorkspacesStatFileRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Slash-separated relative path within the workspace files directory"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "Relative path of the workspace file or directory to inspect.",
+      "title": "WorkspacesStatFileRequest",
+      "stability": "experimental"
+    },
+    "WorkspacesStatFileResult": {
+      "type": "object",
+      "properties": {
+        "isFile": {
+          "type": "boolean",
+          "description": "Whether the path identifies a regular file"
+        },
+        "isDirectory": {
+          "type": "boolean",
+          "description": "Whether the path identifies a directory"
+        },
+        "size": {
+          "type": "number",
+          "description": "Size in bytes"
+        },
+        "mtimeMs": {
+          "type": "number",
+          "description": "Last modification time in Unix epoch milliseconds"
+        },
+        "birthtimeMs": {
+          "type": "number",
+          "description": "Creation time in Unix epoch milliseconds"
+        }
+      },
+      "required": [
+        "isFile",
+        "isDirectory",
+        "size",
+        "mtimeMs",
+        "birthtimeMs"
+      ],
+      "additionalProperties": false,
+      "description": "Filesystem metadata for a path in the session workspace files directory.",
+      "title": "WorkspacesStatFileResult"
     },
     "WorkspacesTruncateSummariesRequest": {
       "type": "object",
