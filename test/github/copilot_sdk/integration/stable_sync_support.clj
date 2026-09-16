@@ -85,6 +85,8 @@
                       {:commit commit :path path :exit exit :stderr err})))
     (sha256-bytes (.getBytes out StandardCharsets/UTF_8))))
 
+(declare strip-typescript-comments)
+
 (defn- declaration-symbols
   [source]
   (into #{}
@@ -99,19 +101,27 @@
    #{}
    (comp
     (map second)
-    (map #(str/replace % #"(?s)/\*.*?\*/|//[^\n]*" ""))
     (mapcat #(str/split % #","))
     (map str/trim)
     (remove str/blank?)
     (map #(str/replace % #"^type\s+" ""))
     (map #(last (str/split % #"\s+as\s+")))
-    (map str/trim))
-   (re-seq #"(?s)export(?:\s+type)?\s*\{(.*?)\}\s*from" source)))
+    (map str/trim)
+    (map
+     (fn [symbol]
+       (when-not (re-matches #"[A-Za-z_$][A-Za-z0-9_$]*" symbol)
+         (throw (ex-info "Parsed invalid TypeScript export symbol"
+                         {:symbol symbol})))
+       symbol)))
+   (re-seq
+    #"(?s)export(?:\s+type)?\s*\{(.*?)\}\s*(?:from\s+[\"'][^\"']+[\"'])?\s*;"
+    source)))
 
 (defn exported-symbols
   [source]
-  (set/union (declaration-symbols source)
-             (export-list-symbols source)))
+  (let [source (strip-typescript-comments source)]
+    (set/union (declaration-symbols source)
+               (export-list-symbols source))))
 
 (defn star-export-modules
   [source]
@@ -156,6 +166,22 @@
    (interface-fields
     (git-output upstream "show" (str base ":" path))
     interface-name)))
+
+(defn string-union-values
+  [source type-name]
+  (let [pattern
+        (re-pattern
+         (str "(?ms)^export type "
+              (java.util.regex.Pattern/quote type-name)
+              "\\s*=\\s*(.*?);"))
+        body (second (re-find pattern source))]
+    (when-not body
+      (throw (ex-info "Expected exported string union was not found"
+                      {:type-name type-name})))
+    (->> (str/replace body #"(?s)/\*.*?\*/|//[^\n]*" "")
+         (re-seq #"[\"']([^\"']+)[\"']")
+         (map second)
+         set)))
 
 (def ^:private exported-declaration-pattern
   #"(?m)^\s*export\s+(type|interface)\s+([A-Za-z_$][A-Za-z0-9_$]*)\b")

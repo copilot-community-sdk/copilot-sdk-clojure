@@ -14,13 +14,13 @@
              :refer [changed-exported-declarations
                      changed-source-lines
                      exported-symbols
+                     git-file-sha256
                      git-lines
                      git-output
                      interface-fields
                      public-class-methods
                      read-resource
                      referenced-evidence
-                     sha256-file
                      sha256-items
                      sha256-lines
                      sha256-resource
@@ -37,6 +37,9 @@
 
 (def ^:private expected-clojure-base
   "d8c211a3f6c089477ce9146aef14def4330f4e7a")
+
+(def ^:private expected-certification-commit
+  "8420921849992d5876c2e0b37094c9ac24eed832")
 
 (def ^:private expected-upstream-base
   "bba92dda4c4c5a34340817112968bd78485df006")
@@ -107,7 +110,7 @@
           declaration (get by-class classification)]
       [:changed-declaration path declaration]))))
 
-(deftest report-pins-history-and-local-artifacts
+(deftest report-pins-history-and-historical-artifacts
   (let [report (report)
         historical (read-resource historical-resource)]
     (is (some? report) "The f45c46fd parity oracle must be committed")
@@ -137,10 +140,15 @@
                   (sh/sh "git" "merge-base" "--is-ancestor"
                          expected-clojure-base "HEAD")))
           "the certification must remain descended from its Clojure base")
-      (is (= "1.0.84-5" (str/trim (slurp ".copilot-schema-version"))))
+      (is (= "1.0.84-5" (get-in report [:upstream :runtime-version])))
+      (is (zero? (:exit
+                  (sh/sh "git" "cat-file" "-e"
+                         (str expected-certification-commit "^{commit}"))))
+          "the commit containing the certified local artifacts must resolve")
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
-          (is (= expected-hash (sha256-file path))))))))
+          (is (= expected-hash
+                 (git-file-sha256 expected-certification-commit path))))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [report (report)
