@@ -216,7 +216,9 @@
     "assistant.fusion_phase_started"
     "factory.run_settled"
     "factory.run_started"
+    "permission.assentDetected"
     "permission.carriedForward"
+    "permission.contextualAuthorization"
     "permission.messageAuthorization"
     "permission.messageAuthorizationDegraded"
     "permission.messageAuthorizationRead"
@@ -904,6 +906,13 @@
             (is (= orig-v rt-v)
                 (str "round-trip lost equality for "
                      event-type "/" field))))))))
+
+(deftest fast-auto-tier-coercion-round-trips
+  (let [event {:type "session.start"
+               :data {:auto-tier "fast"}}
+        idiom (coerce/event-wire->idiom event)]
+    (is (= :fast (get-in idiom [:data :auto-tier])))
+    (is (= event (coerce/event-idiom->wire idiom)))))
 
 (deftest enum-coercion-rejects-values-outside-the-idiom-domain
   (doseq [[direction value]

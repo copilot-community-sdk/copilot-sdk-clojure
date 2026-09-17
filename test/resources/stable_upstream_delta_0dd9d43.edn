@@ -1,0 +1,566 @@
+{:certification
+ {:clojure-base-commit "fb02b1a622da2e98859475abb91f7d5c721f3fd7"
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_e9df3938.edn"
+   :sha256
+   "1fa05c952f5436d3aec820a59deb6f8d00a553cc407d99ce242ebef9a04f6c68"}}
+
+ :upstream
+ {:base-commit "e9df3938b0f2bb028b203f4095d48b75f155c008"
+  :target-commit "0dd9d4324339b84835c915b0700fdc5c25cec5af"
+  :commit-count 15
+  :commits-sha256
+  "b4ec8f4b6a0c7285e7bce5289de93de5e0e512e55ff95ba1182df9905832e686"
+  :hash-format :newline-joined-without-trailing-newline
+  :target-package-version "0.0.0-dev"
+  :runtime-version "1.0.86-0"
+  :release-tag
+  {:name "v1.0.14"
+   :commit "e60d9037353249ef16b349eb4012e8c1d113fda5"}}
+
+ :commit-classifications
+ [{:commit "f60f9d4053f39ab60aa222843db8a32772331478"
+   :subject "Add Rust SDK model allowlist support (#2512)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2512"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Adds Rust-only model allowlist configuration and tests."
+   :changed-path-count 7
+   :changed-paths-sha256
+   "bdaed02733124fe87a8febbcd293072088726fb13aff574e2dde3c1dd8ae878e"}
+  {:commit "b47310c92d65671a93223a76b70d1949a94d9b4a"
+   :subject "Add runtime-driven canary and unstable SDK publishing (#2544)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2544"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes Node release manifests, runtime artifact acquisition, and publishing workflows."
+   :changed-path-count 19
+   :changed-paths-sha256
+   "a59025a882c07724a58761b4e6bb19e915be4615e278ed4fa7d7bea54a598bba"}
+  {:commit "7f86a900789ac71633e74ae3063c8df38642bcd8"
+   :subject "Harden Rust CLI download retries (#2663)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2663"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes Rust runtime download retries and diagnostics."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "ba05aea3c3024675795fa714e0d9098b992f624422500417ebac2b3d3b3b8825"}
+  {:commit "062ee6055ae10120fb310339557ec03a4f876353"
+   :subject "Stabilize session lifecycle E2E tests (#2687)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2687"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes Node and Python end-to-end synchronization without changing SDK contracts."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "2eb5fcc5a11fb11371bc6d9a8782adb2391d01b4bbc5f25010039e7fe8ac12a6"}
+  {:commit "583f8f1ae0a66d786b90a313dafe7b21c6bdd93c"
+   :subject "Update Copilot CLI to 1.0.85 (#2688)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2688"
+   :classification :stable-public
+   :status :regenerated
+   :reason
+   "Advances the bundled runtime and generated schemas; the newly exported permission declarations are explicitly experimental."
+   :changed-path-count 16
+   :changed-paths-sha256
+   "da2db28108f041537461b6b9ded8481b5d1b3dd285695bfa38482cafb1e84153"}
+  {:commit "db6bd6ff7e638360497d873023c7ea8de2c5c549"
+   :subject "Clarify runtime-backed SDK publishing (#2689)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2689"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Clarifies runtime-backed Node publishing documentation and workflow behavior."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "4450d931f329615b3cac954463fec6c2f7eb26a3e8afccaf2c1a244efb2824ca"}
+  {:commit "e60d9037353249ef16b349eb4012e8c1d113fda5"
+   :subject "Complete Fast Auto-tier support across SDKs (#2669)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2669"
+   :classification :stable-public
+   :status :ported
+   :reason
+   "Completes Fast Auto-tier create, resume, event, error, and persistence coverage while keeping live switching APIs experimental."
+   :changed-path-count 35
+   :changed-paths-sha256
+   "8b7b253d7610b4404d7d8d40f0803c2afa27b5e3531aeed80b3eddf731088ab1"}
+  {:commit "ff3ef7524dd14b26f274c8a814449d0d928f3a8d"
+   :subject "Preserve image replay compatibility across CLI image limits (#2670)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2670"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes replay fixtures and cross-SDK test harness behavior."
+   :changed-path-count 27
+   :changed-paths-sha256
+   "9a76ade7bb863dd5b275e7ef76219ea051d08be8163475e2727e4b7bd5375a63"}
+  {:commit "620b34776fd9c9fd6868d9cf1d668c341d33ddc1"
+   :subject "build(deps): bump the java-maven-deps group in /java with 2 updates (#2691)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2691"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Updates Java build dependencies."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "d8225ebcfc11b480a6e4f54e183b67c3ead51635a167c106d928c2abf1f9ef66"}
+  {:commit "cd9fb1686c7ebfd79fc0bb089b32ce15b749bc41"
+   :subject "fix(aw): allow jq for runtime triage payloads (#2671)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2671"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes an internal issue-analysis workflow and lock file."
+   :changed-path-count 2
+   :changed-paths-sha256
+   "10041af21f34e9cff5085c4cb0bf8db1af7a0c4fb5ba250d544405ac1352abe0"}
+  {:commit "f541d4de344b1b1bb900b920f00f0abda25d2c0d"
+   :subject "Add changelog for v1.0.14 (#2690)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2690"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Adds release metadata for the already-classified v1.0.14 surface."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "06572a96a58dc510037d5efa622f9bec8519bc1beab13c9f251e97e657a9d4ed"}
+  {:commit "7dc8827f0a1a326d54ce4740cd4a82a7e4d15477"
+   :subject "Update Copilot CLI to 1.0.86-0 (#2694)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2694"
+   :classification :stable-public
+   :status :regenerated
+   :reason "Advances the bundled runtime pin to 1.0.86-0 without changing stable Node source."
+   :changed-path-count 12
+   :changed-paths-sha256
+   "10bf8e3018484e9cd7c7a0202f6cc87c5eec154092aebbe9072a9f9aa91e62ea"}
+  {:commit "5ea60a61940901751c64aa0ed560ddc94d5b837a"
+   :subject "Add support for Java on `darwin-x64` (#2701)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2701"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Adds Java native packaging and validation for darwin-x64."
+   :changed-path-count 12
+   :changed-paths-sha256
+   "b29f61da5956e49eb552113201fffda9d70a52af92044db6d84b85ef060c4a7d"}
+  {:commit "d4580777d46e1c1baf082a11c924b0138c2d00ab"
+   :subject "fix(rust): cut retained runtime-install memory by ~99% (#2676)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2676"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes Rust runtime-install memory usage."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "c4594efa99b4da70b97f1b18af59ff299271a7b47b2adf189e2426360ab710dc"}
+  {:commit "0dd9d4324339b84835c915b0700fdc5c25cec5af"
+   :subject "docs: clarify Azure project URL support (#2593)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2593"
+   :classification :stable-public
+   :status :documented
+   :reason
+   "Documents resource-host and project-URL forms for stable Azure provider configuration."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "c6e3cc91dbc76d5a763fd22e770ebc1f515f01be79b96680f394c80cc6d7bfeb"}]
+
+ :changed-paths
+ {:count 126
+  :sha256
+  "ae1b3f9cfd52c75c2ffc88cfd2d1f0220b922b1c33bdbf001d6fe12035b0311f"
+  :hash-format :newline-joined-without-trailing-newline
+  :classification-counts
+  {:stable-public 11
+   :experimental 1
+   :internal 27
+   :language-specific 87}
+  :exact-classifications
+  {"docs/auth/byok.md" :stable-public
+   "docs/features/session-persistence.md" :stable-public
+   "nodejs/README.md" :stable-public
+   "nodejs/test/client.test.ts" :stable-public
+   "nodejs/test/e2e/auto_tier.e2e.test.ts" :stable-public
+   "nodejs/test/session-event-types.test.ts" :stable-public
+   "test/harness/replayingCapiProxy.test.ts" :stable-public
+   "test/harness/replayingCapiProxy.ts" :stable-public
+   "test/snapshots/auto_tier/should_commit_fast_auto_tier_after_successful_turn.yaml"
+   :stable-public
+   "test/snapshots/auto_tier/should_preserve_effective_tier_when_fast_activation_fails.yaml"
+   :stable-public
+   "test/snapshots/auto_tier/should_restore_and_override_fast_auto_tier_on_cold_resume.yaml"
+   :stable-public
+
+   "nodejs/src/generated/session-events.ts" :experimental
+
+   ".github/workflows/cross-repo-issue-analysis.lock.yml" :internal
+   ".github/workflows/cross-repo-issue-analysis.md" :internal
+   ".github/workflows/publish.yml" :internal
+   ".github/workflows/sdk-canary.yml" :internal
+   "CHANGELOG.md" :internal
+   "docs/developer-docs/secrets.md" :internal
+   "nodejs/package.json" :internal
+   "nodejs/scripts/npm-release.js" :internal
+   "nodejs/scripts/package-set-manifest.js" :internal
+   "nodejs/scripts/release-manifest.ts" :internal
+   "nodejs/scripts/releaseArtifacts.ts" :internal
+   "nodejs/scripts/runtime-package-acquisition.ts" :internal
+   "nodejs/scripts/runtime-release-identity.ts" :internal
+   "nodejs/scripts/set-cli-version.js" :internal
+   "nodejs/scripts/unstable-version.ts" :internal
+   "nodejs/src/cliVersion.ts" :internal
+   "nodejs/test/e2e/session.e2e.test.ts" :internal
+   "nodejs/test/npm-release.test.ts" :internal
+   "nodejs/test/release-manifest.test.ts" :internal
+   "nodejs/test/runtime-package-acquisition.test.ts" :internal
+   "nodejs/test/runtime-release-identity.test.ts" :internal
+   "nodejs/test/runtimeArtifacts.test.ts" :internal
+   "nodejs/test/unstable-version.test.ts" :internal
+   "test/harness/subagentHooksReplay.test.ts" :internal
+   "test/snapshots/session_config/should_accept_blob_attachments.yaml" :internal
+   "test/snapshots/session_config/vision_disabled_then_enabled_via_setmodel.yaml"
+   :internal
+   "test/snapshots/subagent_hooks/should_invoke_pretooluse_and_posttooluse_hooks_for_sub_agent_tool_calls.yaml"
+   :internal
+
+   ".github/workflows/java-publish-maven.yml" :language-specific
+   ".github/workflows/java-publish-snapshot.yml" :language-specific
+   ".github/workflows/java-sdk-tests.yml" :language-specific
+   ".github/workflows/python-sdk-tests.yml" :language-specific}
+  :language-specific-prefixes
+  #{"dotnet/" "go/" "java/" "python/" "rust/"}}
+
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/package.json"
+   {:base "152726d2064c9e8e713afe057b0b2631ca2cb49c"
+    :target "1c255f7e09ab3081461e736670e0b0127b5a8b99"}
+   "nodejs/src/index.ts"
+   {:base "8a5a730b5a5cb8f329b245298e132c7a77e085d5"
+    :target "8a5a730b5a5cb8f329b245298e132c7a77e085d5"}
+   "nodejs/src/types.ts"
+   {:base "9c4258d9c92b9ad396bf25bb070386ef3d51f258"
+    :target "9c4258d9c92b9ad396bf25bb070386ef3d51f258"}
+   "nodejs/src/client.ts"
+   {:base "6e4b4fb5b4e9b656a21c0fc5fd6988a848ae8501"
+    :target "6e4b4fb5b4e9b656a21c0fc5fd6988a848ae8501"}
+   "nodejs/src/session.ts"
+   {:base "896eded0bda69f9e08454ea8866fb1c335ce2415"
+    :target "896eded0bda69f9e08454ea8866fb1c335ce2415"}
+   "nodejs/src/extension.ts"
+   {:base "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"
+    :target "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"}
+   "nodejs/src/toolSet.ts"
+   {:base "559e9234e5b178036d88a7045a632bd16a97f534"
+    :target "559e9234e5b178036d88a7045a632bd16a97f534"}
+   "nodejs/src/factory.ts"
+   {:base "174318394f98c735e54f9bd80d75901e77ce17fa"
+    :target "174318394f98c735e54f9bd80d75901e77ce17fa"}
+   "nodejs/src/generated/session-events.ts"
+   {:base "08bf03b5d74cd4af78cad67652e2cd1d1b8026c5"
+    :target "acaf4851469df2faf606aac29ded469ddea2801d"}
+   "nodejs/src/generated/rpc.ts"
+   {:base "b0bbbb56e4e58cc9ff57b4498763e83a29bd425f"
+    :target "b0bbbb56e4e58cc9ff57b4498763e83a29bd425f"}}
+  :trees
+  {"nodejs"
+   {:base "0a2a277deba48afe26765af5a173be23315462e3"
+    :target "4fda0e7b38f51884c82dad9631e918966ee03bb7"}
+   "nodejs/src/generated"
+   {:base "27e9418fbe6f6c98e9aed1445b11aae9633245e4"
+    :target "6ba58a38cd0a4a8faae25198d21864b83a32dec0"}
+   "nodejs/test"
+   {:base "0471055418b2be08dafc463b322f2276afc3e414"
+    :target "3bf924daa0c261fe4b62d9a1e29a4b05263866e9"}}
+  :package-root
+  {:path "nodejs/src/index.ts"
+   :explicit-symbol-count 200
+   :explicit-symbols-sha256
+   "1b2816aedc2309f5558aefec744b9b88e9343cad2a14ad5d6c4622b7063c637c"
+   :session-events
+   {:path "nodejs/src/generated/session-events.ts"
+    :symbol-count 550
+    :symbols-sha256
+    "fa862a691ac0fe8a29446761fb362dfe63aeb5ea2ff3521ad68a7c4c9808f125"}
+   :symbol-count 740
+   :symbols-sha256
+   "df05fcc54f6389982c70665ed1cae85f2d59cdc79fda4b0f2dc9b55b54a004ca"
+   :added
+   {:experimental
+    #{"PermissionAssentDetectedData"
+      "PermissionAssentDetectedEvent"
+      "PermissionContextualAuthorizationData"
+      "PermissionContextualAuthorizationEvent"}}
+   :removed #{}}
+  :types
+  {:path "nodejs/src/types.ts"
+   :symbol-count 207
+   :symbols-sha256
+   "ac251977aae64ea16c156a4d8d7a10dab4d5a3a89bd201bf5856459cd668aeff"}
+  :extension
+  {:path "nodejs/src/extension.ts"
+   :symbol-count 39
+   :symbols-sha256
+   "13316e0859171d9c8be79a0bdbe2626b9c21a1947dae04a24fc51ddede17b52c"}
+  :tool-set
+  {:path "nodejs/src/toolSet.ts"
+   :symbol-count 2
+   :symbols-sha256
+   "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"}
+  :factory
+  {:path "nodejs/src/factory.ts"
+   :symbol-count 29
+   :symbols-sha256
+   "ba187595890c21116008b7276801db3a64510815df0c744e32e85c20c961afba"}
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts"
+    :class-name "CopilotClient"
+    :method-count 20
+    :methods-sha256
+    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"}
+   :session
+   {:path "nodejs/src/session.ts"
+    :class-name "CopilotSession"
+    :method-count 41
+    :methods-sha256
+    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"}}}
+
+ :symbol-inventory
+ {:added-exported-symbols
+  {"nodejs/src/generated/session-events.ts"
+   {:experimental
+    #{"PermissionAssentDetectedData"
+      "PermissionAssentDetectedEvent"
+      "PermissionContextualAuthorizationData"
+      "PermissionContextualAuthorizationEvent"}}}
+  :removed-exported-symbols {}
+  :event-interface-fields
+  {"PermissionMessageAuthorizationReadData"
+   {:experimental #{"activatesExtraction"}}}
+  :changed-type-values {}
+  :changed-declarations
+  {"nodejs/src/generated/session-events.ts"
+   {:experimental #{"PermissionMessageAuthorizationReadData" "SessionEvent"}}}}
+
+ :stable-delta-ids
+ #{:byok/azure-project-url
+   :release/version-1.0.14
+   :runtime/schema-1.0.86-0
+   :session/auto-tier-fast-lifecycle}
+
+ :stable-deltas
+ [{:id :release/version-1.0.14
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2690
+   :evidence [:release-changelog]
+   :inventory-items []
+   :clojure-paths
+   ["build.clj"
+    "README.md"
+    "doc/getting-started.md"
+    "CHANGELOG.md"]}
+  {:id :runtime/schema-1.0.86-0
+   :classification :stable-public
+   :status :regenerated
+   :upstream-prs [2688 2694]
+   :evidence [:runtime-version]
+   :inventory-items []
+   :clojure-paths
+   [".copilot-schema-version"
+    "schemas/README.md"
+    "schemas/api.schema.json"
+    "schemas/session-events.schema.json"
+    "src/github/copilot_sdk/generated/event_specs.clj"]}
+  {:id :session/auto-tier-fast-lifecycle
+   :classification :stable-public
+   :status :ported
+   :upstream-pr 2669
+   :evidence [:fast-auto-tier-client
+              :fast-auto-tier-events
+              :fast-auto-tier-doc]
+   :inventory-items []
+   :contract
+   {:wire-value "fast"
+    :idiom-value :fast
+    :create-resume :forwarded
+    :event-coercion #{:copilot/session.start :copilot/session.resume}
+    :runtime-errors :forwarded-unchanged}
+   :clojure-paths
+   ["script/codegen/emit_coerce.clj"
+    "src/github/copilot_sdk/generated/coerce.clj"
+    "test/github/copilot_sdk/codegen_test.clj"
+    "test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
+    "doc/reference/API.md"
+    "CHANGELOG.md"]}
+  {:id :byok/azure-project-url
+   :classification :stable-public
+   :status :documented
+   :upstream-pr 2593
+   :evidence [:azure-project-url]
+   :inventory-items []
+   :contract
+   {:provider-type :azure
+    :base-url-forms #{:resource-host :project-url}
+    :trailing-slash :optional
+    :versionless-responses-path :preserves-project-prefix}
+   :clojure-paths
+   ["test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
+    "doc/auth/byok.md"
+    "doc/reference/API.md"
+    "CHANGELOG.md"]}]
+
+ :compatibility-deltas
+ [{:id :schemas/checksummed-release-acquisition
+   :classification :internal
+   :status :ported
+   :reason
+   "Runtime 1.0.86-0 no longer ships schemas in the npm artifacts, so deterministic code generation now verifies and extracts the canonical files from the GitHub CLI release archive."
+   :evidence [:schema-release-asset]
+   :clojure-paths
+   ["script/codegen/fetch_schemas.clj"
+    "test/github/copilot_sdk/schema_fetch_test.clj"
+    "schemas/README.md"]}]
+
+ :intentional-exclusions
+ [{:id :events/contextual-permission-authorization
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "PermissionAssentDetectedEvent, PermissionContextualAuthorizationEvent, and PermissionMessageAuthorizationReadData.activatesExtraction are explicitly experimental."
+   :evidence [:permission-assent
+              :permission-contextual-authorization
+              :permission-extraction-activation]
+   :inventory-groups
+   [[:added-exported-symbols
+     "nodejs/src/generated/session-events.ts"
+     :experimental]
+    [:event-interface-fields
+     "PermissionMessageAuthorizationReadData"
+     :experimental]
+    [:changed-declarations
+     "nodejs/src/generated/session-events.ts"
+     :experimental]]}
+  {:id :session/live-auto-tier-switching
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "setAutoTier, nullable reset, live setModel autoTier options, recommendation events, and authoritative tier-status RPCs remain explicitly experimental."
+   :evidence [:live-auto-tier-experimental]
+   :inventory-groups []}
+  {:id :publishing/runtime-driven-release-tooling
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "Runtime-driven canary and unstable publishing is repository release infrastructure, not SDK API."
+   :evidence [:runtime-release-tooling]
+   :inventory-groups []}
+  {:id :tests/replay-and-lifecycle
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "Image replay, lifecycle synchronization, workflow triage, and fixture-only changes do not alter stable SDK contracts."
+   :evidence [:replay-compatibility]
+   :inventory-groups []}
+  {:id :other-sdks/language-specific
+   :classification :language-specific
+   :decision :exclude
+   :status :approved
+   :authority :language-scope
+   :reason
+   "Java, .NET, Go, Python, and Rust implementation, packaging, generated, and test changes do not create independent Clojure parity obligations."
+   :evidence [:language-specific-changes]
+   :inventory-groups []}]
+
+ :decision-authorities
+ #{:language-scope
+   :upstream-experimental-subsystem
+   :upstream-internal-implementation}
+
+ :source-evidence
+ {:release-changelog
+  {:path "CHANGELOG.md" :contains "## [v1.0.14]"}
+  :runtime-version
+  {:path "nodejs/package.json" :contains "\"copilotCliVersion\": \"1.0.86-0\""}
+  :fast-auto-tier-client
+  {:path "nodejs/test/client.test.ts" :contains "{ autoTier: \"fast\" }"}
+  :fast-auto-tier-events
+  {:path "nodejs/test/session-event-types.test.ts"
+   :contains "\"intelligence\", \"fast\", undefined"}
+  :fast-auto-tier-doc
+  {:path "docs/features/session-persistence.md"
+   :contains "`fast` is an integrator-only latency preset"}
+  :azure-project-url
+  {:path "docs/auth/byok.md"
+   :contains "accepts a resource host or a full project URL"}
+  :schema-release-asset
+  {:path "script/codegen/fetch_schemas.clj"
+   :contains "SHA256SUMS.txt"
+   :local true}
+  :permission-assent
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "export interface PermissionAssentDetectedEvent"}
+  :permission-contextual-authorization
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "export interface PermissionContextualAuthorizationEvent"}
+  :permission-extraction-activation
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "activatesExtraction?: boolean"}
+  :live-auto-tier-experimental
+  {:path "nodejs/src/session.ts"
+   :contains "@experimental Part of an experimental Auto routing surface"
+   :changed false}
+  :runtime-release-tooling
+  {:path "nodejs/scripts/runtime-release-identity.ts"
+   :contains "export interface RuntimeReleaseIdentity"}
+  :replay-compatibility
+  {:path "test/harness/replayingCapiProxy.ts"
+   :contains "autoResponses?: AutoResponseStub[]"}
+  :language-specific-changes
+  {:path "rust/src/types.rs" :contains "pub allowed_models"}}
+
+ :local-artifacts
+ {".copilot-schema-version"
+  "1d84ebc11ee6ba1a25ee485d0a83c258e9b301043c66f2f89a35381e31f26f80"
+  "build.clj"
+  "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
+  "README.md"
+  "e0540791219ecfbd382932d2ea3abfa81af929baa82f2e6cfa694cd82956840b"
+  "doc/getting-started.md"
+  "c6a6306484c86d8023c0b1d53af74c9ec6c1ccdaa728e456c07b9f1b3a74ae47"
+  "schemas/README.md"
+  "3c840cb578a770f8d2ab2bf7551897846ac172e2ae9c29845d92e31abae4af11"
+  "schemas/api.schema.json"
+  "c8e04f9ad4ebed1e568c95243fce6f11ba7e5e92b934184632ded13ece4787f8"
+  "schemas/session-events.schema.json"
+  "20e13b3f689f554814142d3467fa1dd68469ddf16533954bd29ff89cbd8e805d"
+  "script/codegen/emit_coerce.clj"
+  "80ef6aac919674e05a871169701ff2a1edb0547183237f98ce958b3a69b65dec"
+  "script/codegen/fetch_schemas.clj"
+  "6ae86c27d92a11629f6a6f0486ea75cf012db879a78b75a25bd025e91c9e75a7"
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "e4750f4689fff5ef7bac5dcec3ee77eaaaae6b244e9b5c9c659eb198d56b8c58"
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e"
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "ecd811efd78aed5a046e4b0f747ecb8e504b05fc1f9dc3c5ab1d3e08f1b17fdb"
+  "test/github/copilot_sdk/codegen_test.clj"
+  "16ba14ac366ba7544821d920154f9b4fc21296fcb8eb6673a3dfe85b88ea14dc"
+  "test/github/copilot_sdk/schema_fetch_test.clj"
+  "be689cef1543d878013d5958d546776532cea1630bb3e491f1a0a86ff8ce0856"
+  "doc/auth/byok.md"
+  "421eb10ccadaf9b6597ce086c65545d8e96cda28fd73925d70e2ccaca81bb6d5"
+  "doc/reference/API.md"
+  "55f28086acd2db59a2e2981470c25cd7d17ac7fb45364a5956c5db5228e8f280"
+  "CHANGELOG.md"
+  "a6f50ba90c7dfd63ad2991cfe93bead95a29ba5430c9287865da50114033182e"
+  "doc/api/API.html"
+  "76f32eec8dbdd029abb48086833c5d4c67d442fcdda40eceed26e3f72844ebf2"
+  "doc/api/byok.html"
+  "59e34f4558f8bf9dd32b78b9cf7917dd83e2d0468b709dc10c74d30926bb3ba5"
+  "doc/api/getting-started.html"
+  "b0db22748927227f187b19e7173f07d8296b094ae5639e2627534b8093a8a696"
+  "resources/github/copilot_sdk/api_surface.edn"
+  "d2e53642f706ecc71ea29d2501198e3a1e66bc0fb295543658e384fb962d3bf6"}}

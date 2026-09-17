@@ -112,7 +112,7 @@
 
    ;; auto-tier-string <-> auto-tier-keyword
    `(~'def ~(with-meta 'auto-tiers {:private true})
-           #{:efficiency :balance :intelligence})
+           #{:efficiency :balance :intelligence :fast})
 
    `(~'defn ~'auto-tier-string->keyword
             "Convert a wire auto-tier string to its closed idiomatic keyword domain."

@@ -116,7 +116,7 @@ foundry service status
 </ul>
 <h3><a href="#provider-type-notes" id="provider-type-notes"></a>Provider-Type Notes</h3>
 <p><strong><code>:openai</code></strong> — Works with OpenAI API and any OpenAI-compatible endpoint. <code>:base-url</code> should include the full path (e.g., <code>"https://api.openai.com/v1"</code>).</p>
-<p><strong><code>:azure</code></strong> — For native Azure OpenAI endpoints. <code>:base-url</code> should be just the host (e.g., <code>"https://my-resource.openai.azure.com"</code>). Do NOT include <code>/openai/v1/</code> in the URL — the SDK handles path construction.</p>
+<p><strong><code>:azure</code></strong> — For native Azure OpenAI endpoints. <code>:base-url</code> may be the resource host (for example, <code>"https://my-resource.openai.azure.com"</code>) or a full Azure AI Foundry project URL. Do not append <code>/openai/v1/</code>; the runtime preserves any project prefix and constructs the API path. A trailing slash is optional.</p>
 <p><strong><code>:anthropic</code></strong> — For direct Anthropic API access. Uses Claude-specific API format.</p>
 <h2><a href="#example-configurations" id="example-configurations"></a>Example Configurations</h2>
 <h3><a href="#azure-openai-native-azure-endpoint" id="azure-openai-native-azure-endpoint"></a>Azure OpenAI (Native Azure Endpoint)</h3>
@@ -133,6 +133,15 @@ foundry service status
             :api-key (System/getenv "AZURE_OPENAI_KEY")
             :azure-options {:azure-api-version "2024-10-21"}}}
 </code></pre>
+<h3><a href="#azure-ai-foundry-project-url" id="azure-ai-foundry-project-url"></a>Azure AI Foundry (Project URL)</h3>
+<p>Use <code>:azure</code> with the complete project URL. For the versionless Responses API, omit <code>:azure-api-version</code> and select <code>:wire-api :responses</code>:</p>
+<pre><code class="language-clojure">{:model "gpt-5.4"
+ :provider {:provider-type :azure
+            :base-url "https://my-resource.services.ai.azure.com/api/projects/my-project"
+            :api-key (System/getenv "AZURE_OPENAI_KEY")
+            :wire-api :responses}}
+</code></pre>
+<p>The runtime preserves <code>/api/projects/my-project</code> and appends <code>/openai/v1/responses</code>. Project URLs require an updated Copilot CLI runtime; the bundled <code>1.0.86-0</code> runtime supports them.</p>
 <h3><a href="#azure-ai-foundry-openai-compatible-endpoint" id="azure-ai-foundry-openai-compatible-endpoint"></a>Azure AI Foundry (OpenAI-Compatible Endpoint)</h3>
 <p>For Azure AI Foundry deployments with <code>/openai/v1/</code> endpoints, use <code>:openai</code>:</p>
 <pre><code class="language-clojure">{:model "gpt-5.3-codex"

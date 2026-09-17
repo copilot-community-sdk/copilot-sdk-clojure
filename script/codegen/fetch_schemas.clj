@@ -1,30 +1,39 @@
 #!/usr/bin/env bb
-;; Fetch the upstream @github/copilot npm package at the version pinned in
-;; .copilot-schema-version, extract its `schemas/` directory, and copy it
-;; to schemas/.
+;; Fetch the Copilot CLI GitHub Release package at the version pinned in
+;; .copilot-schema-version, verify it against SHA256SUMS.txt, and copy its
+;; canonical JSON schemas to schemas/.
 ;;
 ;; Usage:
-;;   bb schemas:fetch                  ;; uses pinned version from .copilot-schema-version
-;;   bb schemas:fetch --version 0.0.404 ;; one-shot override (does not change the pin)
+;;   bb schemas:fetch                   ;; uses .copilot-schema-version
+;;   bb schemas:fetch --version 1.0.86-0 ;; one-shot override
 ;;
-;; The fetched schemas are committed to the repo for reproducible offline builds.
-;; To bump the pinned version, edit .copilot-schema-version and re-run
-;; `bb schemas:fetch` followed by `bb codegen`.
+;; The fetched schemas are committed for reproducible offline builds.
 
 (ns codegen.fetch-schemas
   (:require [babashka.fs :as fs]
             [babashka.process :as p]
             [cheshire.core :as json]
-            [clojure.string :as str]))
+            [clojure.java.io :as io]
+            [clojure.string :as str])
+  (:import (java.math BigInteger)
+           (java.security MessageDigest)))
 
 (def repo-root
   (-> *file* fs/parent fs/parent fs/parent fs/canonicalize str))
 
-(def schemas-dir
+(def default-schemas-dir
   (str (fs/path repo-root "schemas")))
 
 (def version-file
   (str (fs/path repo-root ".copilot-schema-version")))
+
+(def schema-platform "linux-x64")
+
+(def schema-names
+  ["api.schema.json" "session-events.schema.json"])
+
+(def default-release-base-url
+  "https://github.com/github/copilot-cli/releases/download")
 
 (defn read-pinned-version []
   (-> (slurp version-file) str/trim))
@@ -36,151 +45,163 @@
       (= a "--version")
       (let [v (first rst)]
         (when (or (nil? v) (str/blank? v))
-          (println "Error: --version requires a non-blank value")
-          (println "Usage: bb schemas:fetch [--version VERSION]")
-          (System/exit 2))
+          (throw (ex-info "--version requires a non-blank value" {})))
         (recur (assoc acc :version v) (rest rst)))
-      :else (do (println "Unknown arg:" a)
-                (println "Usage: bb schemas:fetch [--version VERSION]")
-                (System/exit 2)))))
+      :else
+      (throw (ex-info (str "Unknown argument: " a) {})))))
 
-;; Canonical platform package to source schemas from when the main
-;; `@github/copilot` package no longer bundles them (see `-main`). Schemas are
-;; platform-independent JSON, so any platform package yields byte-identical
-;; files; we pin one deterministically for reproducible offline builds.
-(def schema-platform-package "@github/copilot-linux-x64")
+(defn- release-asset-name [version]
+  (format "github-copilot-%s-%s.tgz" version schema-platform))
 
-(defn- unscoped-name [pkg]
-  ;; "@github/copilot-linux-x64" -> "copilot-linux-x64"; "@github/copilot" -> "copilot".
-  (last (str/split pkg #"/")))
-
-(defn fetch-tarball! [pkg version dest-dir]
-  (let [unscoped (unscoped-name pkg)
-        url      (format "https://registry.npmjs.org/%s/-/%s-%s.tgz"
-                         pkg unscoped version)
-        tgz      (str (fs/path dest-dir (format "%s-%s.tgz" unscoped version)))]
-    (println (format "Fetching %s" url))
-    (let [{:keys [exit err]}
-          @(p/process ["curl" "-fsSL" "-o" tgz url] {:err :string})]
-      (when-not (zero? exit)
-        (println "curl failed:" err)
-        (System/exit exit)))
-    tgz))
-
-(defn extract-schemas! [tgz dest-dir]
-  ;; Tarball layout: package/schemas/*.json (npm convention prepends `package/`).
-  ;; Extract into a dedicated `schemas` subdir so we can copy from a
-  ;; clean directory (avoids accidentally picking up package.json or
-  ;; other extracted files). Returns true on success, false only when the
-  ;; tarball legitimately carries no `package/schemas` directory (newer
-  ;; split-package layout — both GNU and BSD tar report "Not found in
-  ;; archive"). Any other tar failure (corrupt download, missing `tar`,
-  ;; permissions) is fatal, so a real error can't be silently masked as a
-  ;; split-package fallback.
-  (println (format "Extracting schemas from %s" tgz))
-  (fs/create-dirs dest-dir)
+(defn- download! [url destination]
+  (println (format "Fetching %s" url))
   (let [{:keys [exit err]}
-        @(p/process ["tar" "-xzf" tgz "-C" dest-dir
-                     "--strip-components=1"
-                     "package/schemas"]
-                    {:err :string :out :string})]
-    (cond
-      (zero? exit) true
-      (str/includes? (str/lower-case (or err "")) "not found in archive") false
-      :else (do
-              (println "tar (schemas) failed:" err)
-              (System/exit exit)))))
-
-(defn extract-package-json! [tgz dest-dir]
-  ;; Extract package/package.json into dest-dir so we can verify its declared
-  ;; version matches the URL-pinned version (defends against mirror caches /
-  ;; redirected tags / corrupted artifacts). dest-dir is per-package so a
-  ;; second tarball's package.json does not clobber the first.
-  (fs/create-dirs dest-dir)
-  (let [{:keys [exit err]}
-        @(p/process ["tar" "-xzf" tgz "-C" dest-dir
-                     "--strip-components=1"
-                     "package/package.json"]
+        @(p/process ["curl" "-fsSL"
+                     "--retry" "2"
+                     "--retry-delay" "1"
+                     "--connect-timeout" "30"
+                     "--max-time" "600"
+                     "-o" destination
+                     url]
                     {:err :string})]
     (when-not (zero? exit)
-      (println "tar (package.json) failed:" err)
-      (System/exit exit))))
+      (throw (ex-info (str "Download failed: " url)
+                      {:exit exit :stderr err}))))
+  destination)
 
-(defn verify-tarball-version! [pkg-json-path expected]
-  (let [pkg     (json/parse-string (slurp pkg-json-path) true)
-        actual  (:version pkg)]
-    (when-not (= actual expected)
-      (println (format "ERROR: tarball version mismatch — expected %s, got %s"
-                       expected actual))
-      (System/exit 1))
-    (println (format "Verified tarball package.json version: %s" actual))))
+(defn- sha256-file [file]
+  (let [digest (MessageDigest/getInstance "SHA-256")
+        buffer (byte-array 65536)]
+    (with-open [input (io/input-stream file)]
+      (loop []
+        (let [read-count (.read input buffer)]
+          (when (pos? read-count)
+            (.update digest buffer 0 read-count)
+            (recur)))))
+    (format "%064x" (BigInteger. 1 (.digest digest)))))
 
-(defn fetch-verified-tarball! [pkg version tmp]
-  ;; Fetch a package tarball and confirm its package.json version matches the
-  ;; pinned version. Returns the tarball path.
-  (let [tgz      (fetch-tarball! pkg version tmp)
-        meta-dir (str (fs/path tmp (str (unscoped-name pkg) "-meta")))]
-    (extract-package-json! tgz meta-dir)
-    (verify-tarball-version! (str (fs/path meta-dir "package.json")) version)
-    tgz))
+(defn- find-checksum [checksums asset-name]
+  (or
+   (some
+    (fn [line]
+      (let [[hash name] (str/split (str/trim line) #"\s+" 2)]
+        (when (and (= asset-name (some-> name (str/replace #"^\*" "")))
+                   (re-matches #"[0-9a-fA-F]{64}" (or hash "")))
+          (str/lower-case hash))))
+    (str/split-lines checksums))
+   (throw (ex-info (str "SHA256SUMS.txt does not contain " asset-name)
+                   {:asset asset-name}))))
+
+(defn- verify-sha256! [archive expected-hash asset-name]
+  (when-not (re-matches #"[0-9a-fA-F]{64}" (or expected-hash ""))
+    (throw (ex-info (str "Missing or invalid SHA-256 for " asset-name)
+                    {:asset asset-name})))
+  (let [actual-hash (sha256-file archive)
+        expected-hash (str/lower-case expected-hash)]
+    (when-not (= expected-hash actual-hash)
+      (throw
+       (ex-info
+        (format
+         "Integrity verification failed for %s: expected %s, got %s"
+         asset-name expected-hash actual-hash)
+        {:asset asset-name
+         :expected expected-hash
+         :actual actual-hash}))))
+  archive)
+
+(defn- archive-members [archive]
+  (let [{:keys [exit out err]}
+        @(p/process ["tar" "-tzf" archive]
+                    {:out :string :err :string})]
+    (when-not (zero? exit)
+      (throw (ex-info (str "Could not inspect " archive)
+                      {:exit exit :stderr err})))
+    (remove str/blank? (str/split-lines out))))
+
+(defn- extract-schema! [archive members staging-dir schema-name]
+  (let [member (str "package/schemas/" schema-name)]
+    (when-not (= 1 (count (filter #{member} members)))
+      (throw (ex-info
+              (format "%s must contain exactly one %s" archive member)
+              {:archive archive :member member})))
+    (let [{:keys [exit out err]}
+          @(p/process ["tar" "-xOzf" archive member]
+                      {:out :string :err :string})]
+      (when-not (zero? exit)
+        (throw (ex-info (str "Could not extract " member)
+                        {:exit exit :stderr err})))
+      (json/parse-string out)
+      (spit (str (fs/path staging-dir schema-name)) out))))
+
+(defn- write-readme! [staging-dir asset-name version]
+  (spit
+   (str (fs/path staging-dir "README.md"))
+   (format
+    (str "# Upstream Copilot CLI JSON Schemas\n\n"
+         "These files are fetched verbatim from the `%s` GitHub Release "
+         "asset at the version pinned in `.copilot-schema-version` and "
+         "verified against the release `SHA256SUMS.txt`.\n\n"
+         "**Do not edit by hand.** To update, run `bb schemas:fetch` after "
+         "bumping `.copilot-schema-version`.\n\n"
+         "Currently pinned version: `%s`\n")
+    asset-name version)))
+
+(defn- resolve-release-archive! [version tmp]
+  (let [asset-name (release-asset-name version)]
+    (if-let [archive (System/getenv "COPILOT_CLI_RELEASE_TARBALL")]
+      {:archive archive
+       :asset-name asset-name
+       :expected-hash (System/getenv "COPILOT_CLI_RELEASE_SHA256")}
+      (let [release-base
+            (str/replace
+             (or (System/getenv "COPILOT_CLI_DOWNLOAD_BASE_URL")
+                 default-release-base-url)
+             #"/+$" "")
+            release-url (str release-base "/v" version)
+            checksums-path (str (fs/path tmp "SHA256SUMS.txt"))
+            archive-path (str (fs/path tmp asset-name))]
+        (download! (str release-url "/SHA256SUMS.txt") checksums-path)
+        (download! (str release-url "/" asset-name) archive-path)
+        {:archive archive-path
+         :asset-name asset-name
+         :expected-hash
+         (find-checksum (slurp checksums-path) asset-name)}))))
+
+(defn- install-schemas! [staging-dir schemas-dir]
+  (when (fs/exists? schemas-dir)
+    (fs/delete-tree schemas-dir))
+  (fs/create-dirs (fs/parent schemas-dir))
+  (fs/copy-tree staging-dir schemas-dir)
+  (doseq [schema-name schema-names]
+    (println (format "  -> %s" (fs/path schemas-dir schema-name)))))
 
 (defn -main [& args]
-  (let [opts    (parse-args args)
+  (let [opts (parse-args args)
         version (or (:version opts) (read-pinned-version))
-        tmp     (str (fs/create-temp-dir {:prefix "copilot-schemas-"}))]
+        schemas-dir (or (System/getenv "COPILOT_CLI_SCHEMA_OUTPUT")
+                        default-schemas-dir)
+        tmp (str (fs/create-temp-dir {:prefix "copilot-schemas-"}))]
     (try
       (println (format "Pinned schema version: %s" version))
-      (fs/create-dirs tmp)
-      (let [schemas-extract-dir (str (fs/path tmp "schemas"))
-            ;; Schemas used to ship in the main `@github/copilot` package, but
-            ;; from CLI 1.0.64 onward that package is a thin platform-loader
-            ;; stub and the schemas live in the per-platform packages
-            ;; (e.g. `@github/copilot-linux-x64`). Try the main package first
-            ;; for backward compatibility with older pins, then fall back to a
-            ;; canonical platform package.
-            main-tgz (fetch-verified-tarball! "@github/copilot" version tmp)
-            schema-source
-            (if (extract-schemas! main-tgz tmp)
-              "@github/copilot"
-              (do
-                (println
-                  (format
-                    (str "Main package carries no schemas (split-package layout); "
-                         "falling back to %s.")
-                    schema-platform-package))
-                (let [plat-tgz (fetch-verified-tarball!
-                                 schema-platform-package version tmp)]
-                  (when-not (extract-schemas! plat-tgz tmp)
-                    (println
-                      (format "ERROR: %s carries no package/schemas directory."
-                              schema-platform-package))
-                    (System/exit 1))
-                  schema-platform-package)))]
-        (println (format "Schemas sourced from: %s" schema-source))
-        ;; Wipe destination to avoid stale schemas, then copy fresh ones from
-        ;; the extracted `schemas/` subdir.
-        (when (fs/exists? schemas-dir)
-          (fs/delete-tree schemas-dir))
-        (fs/create-dirs schemas-dir)
-        (doseq [f (fs/list-dir schemas-extract-dir)
-                :when (and (fs/regular-file? f)
-                           (str/ends-with? (str f) ".json"))]
-          (let [target (fs/path schemas-dir (fs/file-name f))]
-            (fs/copy f target)
-            (println (format "  → %s" target))))
-        ;; Drop a small README in the schemas dir so its purpose is obvious.
-        (spit (str (fs/path schemas-dir "README.md"))
-              (format
-                (str "# Upstream Copilot CLI JSON Schemas\n\n"
-                     "These files are fetched verbatim from the `%s` "
-                     "npm package at the version pinned in `.copilot-schema-version`.\n\n"
-                     "**Do not edit by hand.** To update, run `bb schemas:fetch` after "
-                     "bumping `.copilot-schema-version`.\n\n"
-                     "Currently pinned version: `%s`\n")
-                schema-source version)))
+      (let [{:keys [archive asset-name expected-hash]}
+            (resolve-release-archive! version tmp)
+            staging-dir (str (fs/path tmp "staged-schemas"))]
+        (verify-sha256! archive expected-hash asset-name)
+        (println (format "Verified release asset: %s" asset-name))
+        (fs/create-dirs staging-dir)
+        (let [members (archive-members archive)]
+          (doseq [schema-name schema-names]
+            (extract-schema! archive members staging-dir schema-name)))
+        (write-readme! staging-dir asset-name version)
+        (install-schemas! staging-dir schemas-dir))
       (println "Schemas updated successfully.")
       (finally
         (fs/delete-tree tmp)))))
 
 (when (= *file* (System/getProperty "babashka.file"))
-  (apply -main *command-line-args*))
+  (try
+    (apply -main *command-line-args*)
+    (catch Throwable error
+      (binding [*out* *err*]
+        (println "ERROR:" (.getMessage error)))
+      (System/exit 1))))

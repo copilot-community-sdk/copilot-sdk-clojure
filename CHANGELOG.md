@@ -3,6 +3,34 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.14 sync)
+- Documented Azure AI Foundry project URLs for native `:azure` BYOK
+  configuration. Resource hosts and full project URLs are accepted with or
+  without a trailing slash, and versionless Responses API paths preserve the
+  project prefix.
+  ([upstream PR #2593](https://github.com/github/copilot-sdk/pull/2593))
+
+### Changed (v1.0.14 sync)
+- Updated the library version to `1.0.14.0`, advanced the runtime and schema pin
+  to `1.0.86-0`, and recertified the complete stable Node SDK public surface
+  through upstream commit
+  [`0dd9d4324339b84835c915b0700fdc5c25cec5af`](https://github.com/github/copilot-sdk/commit/0dd9d4324339b84835c915b0700fdc5c25cec5af).
+  Experimental permission assent/contextual-authorization events and the
+  related message-extraction field remain generated wire evidence only.
+  ([upstream PR #2688](https://github.com/github/copilot-sdk/pull/2688),
+  [upstream PR #2694](https://github.com/github/copilot-sdk/pull/2694))
+- Changed `bb schemas:fetch` to download the checksummed GitHub CLI release
+  archive, verify its published SHA-256 digest, require both canonical schema
+  members, and parse them before replacing the checked-in schemas. Runtime
+  `1.0.86-0` no longer publishes schemas in the npm artifacts.
+
+### Fixed (v1.0.14 sync)
+- Completed Fast Auto-tier lifecycle parity: session start and resume events now
+  round-trip the `"fast"` wire value as idiomatic `:fast` instead of logging a
+  coercion failure and returning the raw string. Fast remains an
+  integrator-only latency preset and requires runtime `1.0.84-0` or later.
+  ([upstream PR #2669](https://github.com/github/copilot-sdk/pull/2669))
+
 ### Added (v1.0.84-8 sync)
 - Added stable event provenance for assistant originating messages, configured
   MCP server identity/source, subagent model selection, and managed MCP server

@@ -7,7 +7,7 @@
 
 (defn instant->iso-string "Render a java.time.Instant as an ISO-8601 string. nil-safe and\n      idempotent: returns nil for nil, the same string for a string input,\n      and throws ex-info for any other value class." [v] (cond (nil? v) nil (string? v) v (instance? java.time.Instant v) (.toString v) :else (throw (ex-info "Expected Instant or ISO string" {:value v, :value-class (class v)}))))
 
-(def ^{:private true} auto-tiers #{:intelligence :balance :efficiency})
+(def ^{:private true} auto-tiers #{:fast :intelligence :balance :efficiency})
 
 (defn auto-tier-string->keyword "Convert a wire auto-tier string to its closed idiomatic keyword domain." [v] (let [tier (cond (nil? v) nil (keyword? v) v (string? v) (keyword v) :else (throw (ex-info "Expected auto-tier string or keyword" {:value v, :value-class (class v)})))] (when-not (or (nil? tier) (contains? auto-tiers tier)) (throw (ex-info "Unknown auto-tier value" {:value v}))) tier))
 
