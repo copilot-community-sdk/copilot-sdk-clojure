@@ -15,12 +15,12 @@
              :refer [changed-exported-declarations
                      changed-source-lines
                      exported-symbols
+                     git-file-sha256
                      git-lines
                      git-output
                      interface-fields
                      public-class-methods
                      read-resource
-                     sha256-file
                      sha256-items
                      sha256-lines
                      sha256-resource
@@ -38,6 +38,9 @@
 
 (def ^:private expected-clojure-base
   "fb02b1a622da2e98859475abb91f7d5c721f3fd7")
+
+(def ^:private expected-certification-commit
+  "a81ef9df1e866c3f95be277f15707cff879a035c")
 
 (def ^:private expected-upstream-base
   "e9df3938b0f2bb028b203f4095d48b75f155c008")
@@ -138,12 +141,17 @@
       (is (zero? (:exit
                   (sh/sh "git" "merge-base" "--is-ancestor"
                          expected-clojure-base "HEAD"))))
-      (is (= "1.0.86-0" (str/trim (slurp ".copilot-schema-version"))))
+      (is (= "1.0.86-0" (get-in report [:upstream :runtime-version])))
+      (is (zero? (:exit
+                  (sh/sh "git" "cat-file" "-e"
+                         (str expected-certification-commit "^{commit}"))))
+          "the commit containing the certified local artifacts must resolve")
       (is (seq (:local-artifacts report)))
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
           (is (re-matches #"[0-9a-f]{64}" expected-hash))
-          (is (= expected-hash (sha256-file path))))))))
+          (is (= expected-hash
+                 (git-file-sha256 expected-certification-commit path))))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [report (report)
