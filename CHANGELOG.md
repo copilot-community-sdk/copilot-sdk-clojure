@@ -6,8 +6,9 @@ All notable changes to this project will be documented in this file. This change
 ### Added (v1.0.14 sync)
 - Documented Azure AI Foundry project URLs for native `:azure` BYOK
   configuration. Resource hosts and full project URLs are accepted with or
-  without a trailing slash, and versionless Responses API paths preserve the
-  project prefix.
+  without a trailing slash. The SDK forwards the configured URL unchanged; the
+  installed Copilot CLI runtime preserves the project prefix when constructing
+  versionless Responses API paths.
   ([upstream PR #2593](https://github.com/github/copilot-sdk/pull/2593))
 
 ### Changed (v1.0.14 sync)
@@ -19,10 +20,12 @@ All notable changes to this project will be documented in this file. This change
   related message-extraction field remain generated wire evidence only.
   ([upstream PR #2688](https://github.com/github/copilot-sdk/pull/2688),
   [upstream PR #2694](https://github.com/github/copilot-sdk/pull/2694))
-- Changed `bb schemas:fetch` to download the checksummed GitHub CLI release
-  archive, verify its published SHA-256 digest, require both canonical schema
-  members, and parse them before replacing the checked-in schemas. Runtime
-  `1.0.86-0` no longer publishes schemas in the npm artifacts.
+- Changed `bb schemas:fetch` to download the checksummed Copilot CLI release
+  archive over HTTPS, verify its published SHA-256 digest, discover all
+  top-level JSON schemas, require both canonical members, and validate them
+  before replacing the checked-in schemas. Local archive and mirror overrides
+  now retain explicit provenance. Runtime `1.0.86-0` no longer publishes
+  schemas in the npm artifacts.
 
 ### Fixed (v1.0.14 sync)
 - Completed Fast Auto-tier lifecycle parity: session start and resume events now

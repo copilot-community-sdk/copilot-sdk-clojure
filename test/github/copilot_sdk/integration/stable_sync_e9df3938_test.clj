@@ -156,6 +156,7 @@
                   (sh/sh "git" "cat-file" "-e"
                          (str expected-certification-commit "^{commit}"))))
           "the commit containing the certified local artifacts must resolve")
+      (is (seq (:local-artifacts report)))
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
           (is (= expected-hash

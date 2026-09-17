@@ -40,7 +40,7 @@
   validate-docs {:doc "Validate documentation: links, code blocks, and structure."
                  :task (shell "bb" "-cp" "script" "script/validate_docs.clj")}
 
-  schemas:fetch {:doc "Fetch upstream @github/copilot JSON Schemas at the pinned version into schemas/."
+  schemas:fetch {:doc "Fetch pinned Copilot CLI JSON Schemas into schemas/."
                  :task (shell "bb" "script/codegen/fetch_schemas.clj")}
 
   codegen {:doc "Regenerate Clojure code from upstream JSON Schemas in schemas/."

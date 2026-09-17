@@ -68,6 +68,13 @@
 (def ^:private allowed-classifications
   #{:experimental :generated-only :internal :language-specific :stable-public})
 
+(def ^:private inventory-sections
+  [[:added-exported-symbols :exported-symbol]
+   [:removed-exported-symbols :removed-exported-symbol]
+   [:event-interface-fields :event-interface-field]
+   [:changed-type-values :changed-type-value]
+   [:changed-declarations :changed-declaration]])
+
 (defn- report
   []
   (read-resource report-resource))
@@ -81,36 +88,16 @@
 (defn- inventory-items
   [inventory classifications]
   (set
-   (concat
-    (for [[path by-class] (:added-exported-symbols inventory)
-          classification classifications
-          symbol (get by-class classification)]
-      [:exported-symbol path symbol])
-    (for [[path by-class] (:removed-exported-symbols inventory)
-          classification classifications
-          symbol (get by-class classification)]
-      [:removed-exported-symbol path symbol])
-    (for [[interface-name by-class] (:event-interface-fields inventory)
-          classification classifications
-          field (get by-class classification)]
-      [:event-interface-field interface-name field])
-    (for [[type-name by-class] (:changed-type-values inventory)
-          classification classifications
-          value (get by-class classification)]
-      [:changed-type-value type-name value])
-    (for [[path by-class] (:changed-declarations inventory)
-          classification classifications
-          declaration (get by-class classification)]
-      [:changed-declaration path declaration]))))
+   (for [[section item-type] inventory-sections
+         [owner by-class] (get inventory section)
+         classification classifications
+         item (get by-class classification)]
+     [item-type owner item])))
 
 (defn- inventory-group-ids
   [inventory classifications]
   (set
-   (for [section [:added-exported-symbols
-                  :removed-exported-symbols
-                  :event-interface-fields
-                  :changed-type-values
-                  :changed-declarations]
+   (for [[section] inventory-sections
          [owner by-class] (get inventory section)
          classification classifications
          :when (seq (get by-class classification))]
@@ -402,22 +389,35 @@
       (is (str/includes?
            (json/write-str (util/clj->wire params))
            "\"autoTier\":\"fast\""))))
-  (let [project-url
-        "https://resource.services.ai.azure.com/api/projects/project"
-        config
-        {:provider {:provider-type :azure
-                    :base-url project-url
-                    :wire-api :responses}}
-        create-params
-        ((var-get (var client/build-create-session-params)) config)
-        resume-params
-        ((var-get (var client/build-resume-session-params))
-         "session-1"
-         config)]
-    (doseq [params [create-params resume-params]]
-      (is (= project-url (get-in params [:provider :baseUrl])))
-      (is (= :azure (get-in params [:provider :type])))
-      (is (= :responses (get-in params [:provider :wireApi]))))))
+  (doseq [project-url
+          ["https://resource.services.ai.azure.com/api/projects/project"
+           "https://resource.services.ai.azure.com/api/projects/project/"]
+          :let [config
+                {:provider {:provider-type :azure
+                            :base-url project-url
+                            :wire-api :responses}}
+                create-params
+                ((var-get (var client/build-create-session-params)) config)
+                resume-params
+                ((var-get (var client/build-resume-session-params))
+                 "session-1"
+                 config)]]
+    (testing project-url
+      (doseq [params [create-params resume-params]]
+        (is (= project-url (get-in params [:provider :baseUrl])))
+        (is (= :azure (get-in params [:provider :type])))
+        (is (= :responses (get-in params [:provider :wireApi]))))))
+  (let [azure-delta
+        (first
+         (filter #(= :byok/azure-project-url (:id %))
+                 (:stable-deltas (report))))]
+    (is (= {:base-url-forms #{:resource-host :project-url}
+            :forwarding :unchanged
+            :trailing-slash-forms #{:present :absent}}
+           (get-in azure-delta [:contract :clojure-sdk])))
+    (is (= {:authority :upstream-documentation
+            :versionless-responses-path :preserves-project-prefix}
+           (get-in azure-delta [:contract :copilot-cli-runtime])))))
 
 (deftest experimental-permission-events-remain-generated-only
   (let [event-schema

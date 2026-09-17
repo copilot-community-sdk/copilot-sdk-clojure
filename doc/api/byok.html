@@ -141,7 +141,7 @@ foundry service status
             :api-key (System/getenv "AZURE_OPENAI_KEY")
             :wire-api :responses}}
 </code></pre>
-<p>The runtime preserves <code>/api/projects/my-project</code> and appends <code>/openai/v1/responses</code>. Project URLs require an updated Copilot CLI runtime; the bundled <code>1.0.86-0</code> runtime supports them.</p>
+<p>The SDK forwards the project URL unchanged. The installed Copilot CLI runtime preserves <code>/api/projects/my-project</code> and appends <code>/openai/v1/responses</code>. Project URLs require an updated runtime; Copilot CLI <code>1.0.86-0</code> supports them. The Clojure SDK launches your installed <code>copilot</code> executable and does not bundle that runtime.</p>
 <h3><a href="#azure-ai-foundry-openai-compatible-endpoint" id="azure-ai-foundry-openai-compatible-endpoint"></a>Azure AI Foundry (OpenAI-Compatible Endpoint)</h3>
 <p>For Azure AI Foundry deployments with <code>/openai/v1/</code> endpoints, use <code>:openai</code>:</p>
 <pre><code class="language-clojure">{:model "gpt-5.3-codex"

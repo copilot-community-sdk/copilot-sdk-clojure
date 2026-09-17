@@ -391,13 +391,16 @@
    :classification :stable-public
    :status :documented
    :upstream-pr 2593
-   :evidence [:azure-project-url]
+   :evidence [:azure-project-url :azure-project-runtime-path]
    :inventory-items []
    :contract
-   {:provider-type :azure
-    :base-url-forms #{:resource-host :project-url}
-    :trailing-slash :optional
-    :versionless-responses-path :preserves-project-prefix}
+   {:clojure-sdk
+    {:base-url-forms #{:resource-host :project-url}
+     :forwarding :unchanged
+     :trailing-slash-forms #{:present :absent}}
+    :copilot-cli-runtime
+    {:authority :upstream-documentation
+     :versionless-responses-path :preserves-project-prefix}}
    :clojure-paths
    ["test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
     "doc/auth/byok.md"
@@ -409,12 +412,14 @@
    :classification :internal
    :status :ported
    :reason
-   "Runtime 1.0.86-0 no longer ships schemas in the npm artifacts, so deterministic code generation now verifies and extracts the canonical files from the GitHub CLI release archive."
+   "Runtime 1.0.86-0 no longer ships schemas in the npm artifacts, so deterministic code generation now verifies and extracts the canonical files from the Copilot CLI release archive."
    :evidence [:schema-release-asset]
    :clojure-paths
    ["script/codegen/fetch_schemas.clj"
     "test/github/copilot_sdk/schema_fetch_test.clj"
-    "schemas/README.md"]}]
+    "schemas/README.md"
+    "doc/codegen.md"
+    "doc/api/codegen.html"]}]
 
  :intentional-exclusions
  [{:id :events/contextual-permission-authorization
@@ -494,7 +499,10 @@
    :contains "`fast` is an integrator-only latency preset"}
   :azure-project-url
   {:path "docs/auth/byok.md"
-   :contains "accepts a resource host or a full project URL"}
+   :contains "with or without a trailing slash"}
+  :azure-project-runtime-path
+  {:path "docs/auth/byok.md"
+   :contains "project URL above produces `https://<host>/api/projects/hosted-agents-ncus/openai/v1/responses`"}
   :schema-release-asset
   {:path "script/codegen/fetch_schemas.clj"
    :contains "SHA256SUMS.txt"
