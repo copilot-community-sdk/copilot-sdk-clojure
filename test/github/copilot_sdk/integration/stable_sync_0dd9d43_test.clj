@@ -40,7 +40,7 @@
   "fb02b1a622da2e98859475abb91f7d5c721f3fd7")
 
 (def ^:private expected-certification-commit
-  "a81ef9df1e866c3f95be277f15707cff879a035c")
+  "a398e61520f5d29bd1931eb1b1cd3f659d4b47a8")
 
 (def ^:private expected-upstream-base
   "e9df3938b0f2bb028b203f4095d48b75f155c008")
