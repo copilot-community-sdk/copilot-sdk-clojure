@@ -41,7 +41,7 @@
   "fb02b1a622da2e98859475abb91f7d5c721f3fd7")
 
 (def ^:private expected-certification-commit
-  "a398e61520f5d29bd1931eb1b1cd3f659d4b47a8")
+  "33e3f25a2c4d96c6a56f10c35fb6390c7bc92cf9")
 
 (def ^:private expected-upstream-base
   "e9df3938b0f2bb028b203f4095d48b75f155c008")
