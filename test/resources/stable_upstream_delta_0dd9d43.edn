@@ -1,9 +1,10 @@
 {:certification
  {:clojure-base-commit "fb02b1a622da2e98859475abb91f7d5c721f3fd7"
+  :local-artifact-commit "406c12fc0eb46aab45ea5c220ed1842bb60fd8d7"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_e9df3938.edn"
    :sha256
-   "1fa05c952f5436d3aec820a59deb6f8d00a553cc407d99ce242ebef9a04f6c68"}}
+   "a8437f9a14ef577e3d35f044794de23a86a9bf89024601d8cb8bd5821a34bf66"}}
 
  :upstream
  {:base-commit "e9df3938b0f2bb028b203f4095d48b75f155c008"
@@ -346,7 +347,7 @@
  [{:id :release/version-1.0.14
    :classification :stable-public
    :status :ported
-   :upstream-pr 2690
+   :upstream-prs [2690]
    :evidence [:release-changelog]
    :inventory-items []
    :clojure-paths
@@ -369,7 +370,7 @@
   {:id :session/auto-tier-fast-value
    :classification :stable-public
    :status :ported
-   :upstream-pr 2669
+   :upstream-prs [2669]
    :evidence [:fast-auto-tier-client
               :fast-auto-tier-events
               :fast-auto-tier-doc]
@@ -378,6 +379,7 @@
    {:wire-value "fast"
     :idiom-value :fast
     :create-resume :forwarded
+    :unsupported-runtime :native-error
     :event-coercion #{:copilot/session.start :copilot/session.resume}}
    :clojure-paths
    ["script/codegen/emit_coerce.clj"
@@ -389,7 +391,7 @@
   {:id :byok/azure-project-url
    :classification :stable-public
    :status :documented
-   :upstream-pr 2593
+   :upstream-prs [2593]
    :evidence [:azure-project-url :azure-project-runtime-path]
    :inventory-items []
    :contract
@@ -410,6 +412,7 @@
  [{:id :schemas/checksummed-release-acquisition
    :classification :internal
    :status :ported
+   :upstream-prs [2544 2688 2694]
    :reason
     "Copilot CLI 1.0.86-0 no longer ships schemas in the npm artifacts, so deterministic code generation now snapshots, verifies, version-checks, and extracts the canonical files from the Copilot CLI release archive."
    :evidence [:schema-release-asset]

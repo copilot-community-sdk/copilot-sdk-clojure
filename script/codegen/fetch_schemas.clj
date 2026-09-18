@@ -21,7 +21,8 @@
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [clojure.string :as str])
-  (:import (java.math BigInteger)
+  (:import (java.io StringReader)
+           (java.math BigInteger)
            (java.nio ByteBuffer)
            (java.nio.charset CharacterCodingException
                              CodingErrorAction
@@ -44,6 +45,11 @@
 
 (def default-release-base-url
   "https://github.com/github/copilot-cli/releases/download")
+
+(def ^:private source-labels
+  {:github-release "GitHub Release asset"
+   :release-mirror "release mirror asset"
+   :local-override "local archive override"})
 
 (def usage
   "Usage: bb schemas:fetch [--version VERSION]")
@@ -149,6 +155,18 @@
          :actual actual-hash}))))
   archive)
 
+(defn- validate-archive-member-name! [archive member]
+  (let [path (str/replace member #"/$" "")
+        segments (str/split path #"/" -1)]
+    (when (or (str/blank? path)
+              (str/starts-with? path "/")
+              (str/includes? path "\\")
+              (str/includes? path "//")
+              (some #{"." ".."} segments))
+      (throw (ex-info (str "Non-canonical archive member: " member)
+                      {:archive archive :member member}))))
+  member)
+
 (defn- list-archive-members [archive]
   (let [{:keys [exit out err]}
         @(p/process ["tar" "-tzf" archive]
@@ -156,9 +174,12 @@
     (when-not (zero? exit)
       (throw (ex-info (str "Could not inspect " archive)
                       {:exit exit :stderr err})))
-    (->> (str/split-lines out)
-         (remove str/blank?)
-         vec)))
+    (let [members
+          (->> (str/split-lines out)
+               (remove str/blank?)
+               vec)]
+      (run! #(validate-archive-member-name! archive %) members)
+      members)))
 
 (defn- extract-archive-member [archive member]
   (let [{:keys [exit out err]}
@@ -184,7 +205,13 @@
 (defn- parse-json [archive member content]
   (let [text (decode-utf8 archive member content)]
     (try
-      (json/parse-string text)
+      (with-open [reader (StringReader. text)]
+        (let [documents (doall (take 2 (json/parsed-seq reader)))]
+          (when-not (= 1 (count documents))
+            (throw
+             (ex-info (str member " must contain exactly one JSON document")
+                      {:archive archive :member member})))
+          (first documents)))
       (catch Exception error
         (throw (ex-info (str "Invalid JSON in " member)
                         {:archive archive :member member}
@@ -192,8 +219,8 @@
 
 (defn- verify-archive-version! [archive members expected-version]
   (let [member "package/package.json"
-        matches (filterv #(= member %) members)]
-    (when-not (= 1 (count matches))
+        match-count (count (filter #(= member %) members))]
+    (when-not (= 1 match-count)
       (throw (ex-info
               (format "%s must contain exactly one %s" archive member)
               {:archive archive :member member})))
@@ -219,8 +246,13 @@
   (when (str/starts-with? member schema-member-prefix)
     (let [schema-name (subs member (count schema-member-prefix))]
       (cond
-        (str/includes? schema-name "/")
+        (or (str/blank? schema-name)
+            (str/ends-with? schema-name "/"))
         nil
+
+        (str/includes? schema-name "/")
+        (throw (ex-info (str "Nested schema member is not supported: " member)
+                        {:archive archive :member member}))
 
         (not (str/ends-with? schema-name ".json"))
         nil
@@ -235,15 +267,19 @@
 (defn- schema-members [archive members]
   (let [entries
         (into [] (keep #(schema-entry archive %)) members)
-        counts (frequencies (map first entries))
-        schema-names
-        (sort (distinct (concat required-schema-names (keys counts))))]
-    (doseq [schema-name schema-names
+        counts (frequencies (map first entries))]
+    (doseq [schema-name required-schema-names
             :let [member (str schema-member-prefix schema-name)]]
-      (when-not (= 1 (get counts schema-name 0))
+      (when-not (contains? counts schema-name)
         (throw (ex-info
-                (format "%s must contain exactly one %s" archive member)
+                (format "%s is missing required %s" archive member)
                 {:archive archive :member member}))))
+    (doseq [[schema-name count] counts
+            :when (not= 1 count)
+            :let [member (str schema-member-prefix schema-name)]]
+      (throw (ex-info
+              (format "%s must contain exactly one %s" archive member)
+              {:archive archive :member member})))
     (sort-by first entries)))
 
 (defn- extract-schema! [archive staging-dir [schema-name member]]
@@ -290,7 +326,7 @@
         url (str/replace (or override default-release-base-url) #"/+$" "")]
     (when-not (re-matches #"(?i)(?:https|file)://.+" url)
       (throw (ex-info
-              (str "COPILOT_CLI_DOWNLOAD_BASE_URL must use https:// or file://")
+              "COPILOT_CLI_DOWNLOAD_BASE_URL must use https:// or file://"
               {:url url})))
     {:base-url url
      :source (if override :release-mirror :github-release)}))
@@ -324,12 +360,13 @@
             checksums-path (str (fs/path tmp "SHA256SUMS.txt"))
             archive-path (str (fs/path tmp asset-name))]
         (download! (str release-url "/SHA256SUMS.txt") checksums-path)
-        (download! (str release-url "/" asset-name) archive-path)
-        {:archive archive-path
-         :asset-name asset-name
-         :expected-hash
-         (find-checksum (slurp checksums-path) asset-name)
-         :source source}))))
+        (let [expected-hash
+              (find-checksum (slurp checksums-path) asset-name)]
+          (download! (str release-url "/" asset-name) archive-path)
+          {:archive archive-path
+           :asset-name asset-name
+           :expected-hash expected-hash
+           :source source})))))
 
 (defn- resolve-schemas-destination []
   (if-let [override (env-value "COPILOT_CLI_SCHEMA_OUTPUT")]
@@ -376,16 +413,44 @@
     (str (fs/create-temp-dir
           {:dir parent :prefix ".copilot-schemas-"}))))
 
+(defn- posix-permissions [path]
+  (try
+    (fs/posix-file-permissions path)
+    (catch UnsupportedOperationException _
+      nil)))
+
+(defn- destination-directory-permissions [schemas-dir]
+  (if (fs/exists? schemas-dir)
+    (posix-permissions schemas-dir)
+    (when (posix-permissions (fs/parent schemas-dir))
+      "rwxr-xr-x")))
+
 (defn- install-schemas!
   [staging-dir schemas-dir replace-existing?]
-  (let [prepared-dir (create-prepared-dir! schemas-dir)]
+  (let [prepared-dir (create-prepared-dir! schemas-dir)
+        permissions (destination-directory-permissions schemas-dir)]
     (with-delete-tree-cleanup
       prepared-dir
       (fn []
         (fs/copy-tree staging-dir prepared-dir)
+        (when permissions
+          (fs/set-posix-file-permissions prepared-dir permissions))
         (when (and replace-existing? (fs/exists? schemas-dir))
           (fs/delete-tree schemas-dir))
         (fs/move prepared-dir schemas-dir)))))
+
+(defn- prepare-staged-schemas!
+  [archive staging-dir source asset-name version]
+  (let [archive-entries (list-archive-members archive)]
+    (verify-archive-version! archive archive-entries version)
+    (println
+     (format "Verified %s: %s" (source-labels source) asset-name))
+    (fs/create-dirs staging-dir)
+    (let [members (schema-members archive archive-entries)]
+      (doseq [member members]
+        (extract-schema! archive staging-dir member))
+      (write-readme! staging-dir source asset-name version)
+      (mapv first members))))
 
 (defn- fetch-schemas! [args]
   (let [opts (parse-args args)
@@ -400,29 +465,14 @@
               (resolve-release-archive! version tmp)
               staging-dir (str (fs/path tmp "staged-schemas"))]
           (verify-sha256! archive expected-hash asset-name)
-          (let [archive-entries (list-archive-members archive)]
-            (verify-archive-version! archive archive-entries version)
-            (case source
-              :github-release
-              (println (format "Verified GitHub Release asset: %s" asset-name))
-
-              :release-mirror
-              (println (format "Verified release mirror asset: %s" asset-name))
-
-              :local-override
-              (println (format "Verified local archive override: %s"
-                               asset-name)))
-            (fs/create-dirs staging-dir)
-            (let [members (schema-members archive archive-entries)
-                  schema-names (mapv first members)]
-              (doseq [member members]
-                (extract-schema! archive staging-dir member))
-              (write-readme! staging-dir source asset-name version)
-              (install-schemas! staging-dir path replace-existing?)
-              (doseq [schema-name schema-names]
-                (println
-                 (format "  -> %s" (fs/path path schema-name)))))))
-        (println "Schemas updated successfully.")))))
+          (let [schema-names
+                (prepare-staged-schemas!
+                 archive staging-dir source asset-name version)]
+            (install-schemas! staging-dir path replace-existing?)
+            (doseq [schema-name schema-names]
+              (println
+               (format "  -> %s" (fs/path path schema-name)))))
+          (println "Schemas updated successfully."))))))
 
 (defn -main [& args]
   (try

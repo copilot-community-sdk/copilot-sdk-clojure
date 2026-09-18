@@ -40,9 +40,6 @@
 (def ^:private expected-clojure-base
   "fb02b1a622da2e98859475abb91f7d5c721f3fd7")
 
-(def ^:private expected-certification-commit
-  "406c12fc0eb46aab45ea5c220ed1842bb60fd8d7")
-
 (def ^:private expected-upstream-base
   "e9df3938b0f2bb028b203f4095d48b75f155c008")
 
@@ -114,6 +111,13 @@
   [classifications]
   (apply set/union #{} (vals classifications)))
 
+(defn- valid-upstream-prs?
+  [prs]
+  (and (vector? prs)
+       (seq prs)
+       (every? pos-int? prs)
+       (= (count prs) (count (distinct prs)))))
+
 (defn- upstream-repo-or-skip
   [scope]
   (if-let [upstream @upstream-repo]
@@ -127,7 +131,9 @@
 
 (deftest report-pins-history-release-and-local-artifacts
   (let [report (report)
-        release-tag (get-in report [:upstream :release-tag])]
+        release-tag (get-in report [:upstream :release-tag])
+        artifact-commit
+        (get-in report [:certification :local-artifact-commit])]
     (is (some? report) "The 0dd9d43 parity oracle must be committed")
     (when report
       (is (= expected-clojure-base
@@ -151,16 +157,17 @@
                   (sh/sh "git" "merge-base" "--is-ancestor"
                          expected-clojure-base "HEAD"))))
       (is (= "1.0.86-0" (get-in report [:upstream :runtime-version])))
+      (is (re-matches #"[0-9a-f]{40}" artifact-commit))
       (is (zero? (:exit
                   (sh/sh "git" "cat-file" "-e"
-                         (str expected-certification-commit "^{commit}"))))
+                         (str artifact-commit "^{commit}"))))
           "the commit containing the certified local artifacts must resolve")
       (is (seq (:local-artifacts report)))
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
           (is (re-matches #"[0-9a-f]{64}" expected-hash))
           (is (= expected-hash
-                 (git-file-sha256 expected-certification-commit path))
+                 (git-file-sha256 artifact-commit path))
               "the sealed certification commit must match the ledger")
           (is (= expected-hash (sha256-file path))
               "the checked-out artifact must match the certified bytes"))))))
@@ -252,9 +259,12 @@
     (is (every? #(and (= :stable-public (:classification %))
                       (contains? #{:documented :ported :regenerated}
                                  (:status %))
+                      (valid-upstream-prs? (:upstream-prs %))
                       (seq (:evidence %))
                       (seq (:clojure-paths %)))
                 (:stable-deltas report)))
+    (is (every? #(valid-upstream-prs? (:upstream-prs %))
+                (:compatibility-deltas report)))
     (is (every? #(and (= :exclude (:decision %))
                       (= :approved (:status %))
                       (contains? (:decision-authorities report)

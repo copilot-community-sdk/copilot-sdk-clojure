@@ -6,6 +6,7 @@
             [clojure.test :refer [deftest is testing]])
   (:import (java.math BigInteger)
            (java.nio.file Files)
+           (java.nio.file.attribute PosixFilePermissions)
            (java.security MessageDigest)))
 
 (def ^:private script-path
@@ -94,12 +95,25 @@
      ["-C" (.getPath base-root) "package"
       "-C" (.getPath duplicate-root) member])))
 
+(defn- create-release-archive-with-aliased-duplicate!
+  [root member]
+  (let [base-root (io/file root "base")
+        duplicate-root (io/file root "duplicate")
+        archive (io/file root "release.tgz")]
+    (write-release-tree! base-root fixture-version default-schemas)
+    (write-release-tree! duplicate-root fixture-version default-schemas)
+    (create-tar!
+     archive
+     ["-C" (.getPath base-root) "package"
+      "-C" (.getPath duplicate-root) (str "./" member)])))
+
 (defn- run-fetch
   [{:keys [args dir env]
     :or {args ["--version" fixture-version]}}]
   (let [clean-env (apply dissoc (into {} (System/getenv)) fetch-env-vars)
-        command (cond-> (into ["bb" script-path] args)
-                  true (conj :env (merge clean-env env))
+        command (cond-> (conj (into ["bb" script-path] args)
+                              :env
+                              (merge clean-env env))
                   dir (conj :dir (str dir)))]
     (apply sh/sh command)))
 
@@ -119,6 +133,13 @@
                    expected-hash
                    (assoc "COPILOT_CLI_RELEASE_SHA256" expected-hash))
                  env)})))
+
+(defn- assert-fetch-failure!
+  [{:keys [exit out err]} output-dir expected-message]
+  (let [output (str out err)]
+    (is (not (zero? exit)) output)
+    (is (str/includes? output expected-message) output)
+    (is (not (.exists output-dir)))))
 
 (defn- create-release-download!
   [root archive checksums]
@@ -155,35 +176,29 @@
   (with-temp-root [root]
     (let [archive (create-release-archive! root)
           output-dir (io/file root "output")
-          {:keys [exit out err]}
-          (run-local-fetch archive nil output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "Missing or invalid SHA-256 for release.tgz"))
-      (is (not (.exists output-dir))))))
+          result (run-local-fetch archive nil output-dir)]
+      (assert-fetch-failure!
+       result output-dir "Missing or invalid SHA-256 for release.tgz"))))
 
 (deftest rejects-release-archive-with-wrong-checksum
   (with-temp-root [root]
     (let [archive (create-release-archive! root)
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-local-fetch archive (apply str (repeat 64 "0")) output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes? (str out err) "Integrity verification failed"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result output-dir "Integrity verification failed"))))
 
 (deftest rejects-release-archive-with-mismatched-version
   (with-temp-root [root]
     (let [archive (create-release-archive! root "8.8.8" default-schemas)
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-local-fetch archive (sha256-file archive) output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "Archive version mismatch: expected 9.9.9, got 8.8.8"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result
+       output-dir
+       "Archive version mismatch: expected 9.9.9, got 8.8.8"))))
 
 (deftest requires-exactly-one-package-manifest
   (doseq [[label archive-fn]
@@ -200,13 +215,12 @@
       (with-temp-root [root]
         (let [archive (archive-fn root)
               output-dir (io/file root "output")
-              {:keys [exit out err]}
+              result
               (run-local-fetch archive (sha256-file archive) output-dir)]
-          (is (not (zero? exit)))
-          (is (str/includes?
-               (str out err)
-               "must contain exactly one package/package.json"))
-          (is (not (.exists output-dir))))))))
+          (assert-fetch-failure!
+           result
+           output-dir
+           "must contain exactly one package/package.json"))))))
 
 (deftest identifies-malformed-package-json
   (with-temp-root [root]
@@ -215,13 +229,10 @@
       (write-release-tree! root fixture-version default-schemas)
       (spit (io/file root "package" "package.json") "{")
       (create-tar! archive ["-C" (.getPath root) "package"])
-      (let [{:keys [exit out err]}
-            (run-local-fetch archive (sha256-file archive) output-dir)]
-        (is (not (zero? exit)))
-        (is (str/includes?
-             (str out err)
-             "Invalid JSON in package/package.json"))
-        (is (not (.exists output-dir)))))))
+      (assert-fetch-failure!
+       (run-local-fetch archive (sha256-file archive) output-dir)
+       output-dir
+       "Invalid JSON in package/package.json"))))
 
 (deftest extracts-from-the-verified-local-archive-snapshot
   (with-temp-root [root]
@@ -275,13 +286,12 @@
                                    (dissoc default-schemas
                                            "session-events.schema.json"))
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-local-fetch archive (sha256-file archive) output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "must contain exactly one package/schemas/session-events.schema.json"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result
+       output-dir
+       "is missing required package/schemas/session-events.schema.json"))))
 
 (deftest rejects-duplicate-schema-members
   (with-temp-root [root]
@@ -289,13 +299,51 @@
           (create-release-archive-with-duplicate!
            root "package/schemas/api.schema.json")
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-local-fetch archive (sha256-file archive) output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "must contain exactly one package/schemas/api.schema.json"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result
+       output-dir
+       "must contain exactly one package/schemas/api.schema.json"))))
+
+(deftest rejects-noncanonical-archive-member-aliases
+  (doseq [member ["package/package.json"
+                  "package/schemas/api.schema.json"]]
+    (testing member
+      (with-temp-root [root]
+        (let [archive
+              (create-release-archive-with-aliased-duplicate! root member)
+              output-dir (io/file root "output")]
+          (assert-fetch-failure!
+           (run-local-fetch archive (sha256-file archive) output-dir)
+           output-dir
+           (str "Non-canonical archive member: ./" member)))))))
+
+(deftest rejects-nested-and-traversal-shaped-schema-members
+  (doseq [[label member-path]
+          [["nested" ["nested" "future.schema.json"]]
+           ["traversal" [".." "evil.schema.json"]]]]
+    (testing label
+      (with-temp-root [root]
+        (let [archive (io/file root "release.tgz")
+              output-dir (io/file root "output")
+              member-file
+              (apply io/file root "package" "schemas" member-path)]
+          (write-release-tree! root fixture-version default-schemas)
+          (.mkdirs (.getParentFile member-file))
+          (spit member-file "{\"title\":\"unexpected\"}\n")
+          (create-tar!
+           archive
+           (cond-> ["-C" (.getPath root) "package"]
+             (= label "traversal")
+             (conj "-C" (.getPath root)
+                   "package/schemas/../evil.schema.json")))
+          (assert-fetch-failure!
+           (run-local-fetch archive (sha256-file archive) output-dir)
+           output-dir
+           (if (= label "traversal")
+             "Non-canonical archive member: package/schemas/../evil.schema.json"
+             "Nested schema member is not supported: package/schemas/nested/future.schema.json")))))))
 
 (deftest rejects-nonportable-top-level-schema-names
   (with-temp-root [root]
@@ -305,13 +353,10 @@
       (spit (io/file root "package" "schemas" "D:package.json")
             "{\"title\":\"unsafe\"}\n")
       (create-tar! archive ["-C" (.getPath root) "package"])
-      (let [{:keys [exit out err]}
-            (run-local-fetch archive (sha256-file archive) output-dir)]
-        (is (not (zero? exit)))
-        (is (str/includes?
-             (str out err)
-             "Unsafe top-level schema member: package/schemas/D:package.json"))
-        (is (not (.exists output-dir)))))))
+      (assert-fetch-failure!
+       (run-local-fetch archive (sha256-file archive) output-dir)
+       output-dir
+       "Unsafe top-level schema member: package/schemas/D:package.json"))))
 
 (deftest copies-additional-top-level-schema-files
   (with-temp-root [root]
@@ -332,9 +377,12 @@
                 (slurp (io/file output-dir "future.schema.json")))))))))
 
 (deftest rejects-non-object-schema-content-before-installation
-  (doseq [[label content] [["empty" ""]
-                           ["whitespace" " \n\t"]
-                           ["null" "null\n"]]]
+  (doseq [[label content expected-message]
+          [["empty" "" "Invalid JSON in package/schemas/api.schema.json"]
+           ["whitespace" " \n\t"
+            "Invalid JSON in package/schemas/api.schema.json"]
+           ["null" "null\n"
+            "package/schemas/api.schema.json must contain a JSON object"]]]
     (testing label
       (with-temp-root [root]
         (let [archive
@@ -349,24 +397,26 @@
             (is (not (zero? exit)))
             (is (str/includes?
                  (str out err)
-                 "package/schemas/api.schema.json must contain a JSON object"))
+                 expected-message))
             (is (.exists sentinel))
             (is (= "preserve" (slurp sentinel)))))))))
 
 (deftest identifies-the-member-containing-malformed-json
-  (with-temp-root [root]
-    (let [archive
-          (create-release-archive!
-           root
-           (assoc default-schemas "api.schema.json" "{"))
-          output-dir (io/file root "output")
-          {:keys [exit out err]}
-          (run-local-fetch archive (sha256-file archive) output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "Invalid JSON in package/schemas/api.schema.json"))
-      (is (not (.exists output-dir))))))
+  (doseq [[label content]
+          [["truncated" "{"]
+           ["trailing token" "{\"title\":\"API\"} trailing"]
+           ["second document" "{\"title\":\"API\"}{\"title\":\"extra\"}"]]]
+    (testing label
+      (with-temp-root [root]
+        (let [archive
+              (create-release-archive!
+               root
+               (assoc default-schemas "api.schema.json" content))
+              output-dir (io/file root "output")]
+          (assert-fetch-failure!
+           (run-local-fetch archive (sha256-file archive) output-dir)
+           output-dir
+           "Invalid JSON in package/schemas/api.schema.json"))))))
 
 (deftest rejects-schema-content-with-malformed-utf8
   (with-temp-root [root]
@@ -383,13 +433,10 @@
                 (.getBytes "\"}\n"
                            java.nio.charset.StandardCharsets/UTF_8)))
       (create-tar! archive ["-C" (.getPath root) "package"])
-      (let [{:keys [exit out err]}
-            (run-local-fetch archive (sha256-file archive) output-dir)]
-        (is (not (zero? exit)))
-        (is (str/includes?
-             (str out err)
-             "Invalid UTF-8 in package/schemas/api.schema.json"))
-        (is (not (.exists output-dir)))))))
+      (assert-fetch-failure!
+       (run-local-fetch archive (sha256-file archive) output-dir)
+       output-dir
+       "Invalid UTF-8 in package/schemas/api.schema.json"))))
 
 (deftest rejects-blank-output-without-deleting-the-working-directory
   (with-temp-root [root]
@@ -482,6 +529,18 @@
                (json/read-str
                 (slurp (io/file output-dir "api.schema.json")))))))))
 
+(deftest creates-missing-output-parent-directories
+  (with-temp-root [root]
+    (let [archive (create-release-archive! root)
+          output-dir (io/file root "nested" "output")
+          {:keys [exit err]}
+          (run-local-fetch archive (sha256-file archive) output-dir)]
+      (is (zero? exit) err)
+      (when (zero? exit)
+        (is (= {"title" "API"}
+               (json/read-str
+                (slurp (io/file output-dir "api.schema.json")))))))))
+
 (deftest downloads-release-manifest-and-archive
   (with-temp-root [root]
     (let [archive (create-release-archive! root)
@@ -504,6 +563,27 @@
                   (slurp (io/file output-dir "README.md"))
                   "fetched verbatim from the")))))))
 
+(deftest accepts-standard-checksum-manifest-variants
+  (doseq [[label checksum-line]
+          [["binary-mode filename"
+            (fn [hash] (str hash " *" fixture-asset-name "\n"))]
+           ["uppercase hash"
+            (fn [hash]
+              (str (str/upper-case hash) "  " fixture-asset-name "\n"))]]]
+    (testing label
+      (with-temp-root [root]
+        (let [archive (create-release-archive! root)
+              release-base
+              (create-release-download!
+               root archive (checksum-line (sha256-file archive)))
+              output-dir (io/file root "output")
+              {:keys [exit err]}
+              (run-fetch
+               {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
+                      "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
+          (is (zero? exit) err)
+          (is (.exists (io/file output-dir "api.schema.json"))))))))
+
 (deftest rejects-download-checksum-without-local-archive
   (with-temp-root [root]
     (let [archive (create-release-archive! root)
@@ -512,46 +592,62 @@
           (create-release-download!
            root archive (str hash "  " fixture-asset-name "\n"))
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-fetch
            {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
                   "COPILOT_CLI_RELEASE_SHA256" hash
                   "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "COPILOT_CLI_RELEASE_SHA256 requires COPILOT_CLI_RELEASE_TARBALL"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result
+       output-dir
+       "COPILOT_CLI_RELEASE_SHA256 requires COPILOT_CLI_RELEASE_TARBALL"))))
 
 (deftest identifies-missing-local-archive-override
   (with-temp-root [root]
     (let [missing (io/file root "missing.tgz")
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-local-fetch
            missing
            (apply str (repeat 64 "0"))
            output-dir)]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "COPILOT_CLI_RELEASE_TARBALL must name an existing file"))
-      (is (str/includes? (str out err) (.getPath missing)))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result
+       output-dir
+       "COPILOT_CLI_RELEASE_TARBALL must name an existing file")
+      (is (str/includes? (str (:out result) (:err result))
+                         (.getPath missing))))))
 
 (deftest reports-release-download-failures
   (with-temp-root [root]
     (let [release-base (str "file://"
                             (.getCanonicalPath (io/file root "missing")))
           output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-fetch
            {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
                   "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (is (not (zero? exit)))
-      (is (str/includes? (str out err) "Download failed:"))
-      (is (str/includes? (str out err) "SHA256SUMS.txt"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure! result output-dir "Download failed:")
+      (is (str/includes? (str (:out result) (:err result))
+                         "SHA256SUMS.txt")))))
+
+(deftest validates-checksum-manifest-before-downloading-archive
+  (with-temp-root [root]
+    (let [archive (create-release-archive! root)
+          release-base
+          (create-release-download!
+           root archive (str "not-a-sha256  " fixture-asset-name "\n"))
+          release-archive
+          (io/file root "download" (str "v" fixture-version)
+                   fixture-asset-name)
+          output-dir (io/file root "output")]
+      (is (.delete release-archive))
+      (assert-fetch-failure!
+       (run-fetch
+        {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
+               "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})
+       output-dir
+       "SHA256SUMS.txt contains an invalid entry"))))
 
 (deftest rejects-invalid-checksum-manifests
   (doseq [[label checksums-fn expected-message]
@@ -575,27 +671,24 @@
               release-base
               (create-release-download! root archive (checksums-fn archive))
               output-dir (io/file root "output")
-              {:keys [exit out err]}
+              result
               (run-fetch
                {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
                       "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-          (is (not (zero? exit)))
-          (is (str/includes? (str out err) expected-message))
-          (is (not (.exists output-dir))))))))
+          (assert-fetch-failure! result output-dir expected-message))))))
 
 (deftest rejects-insecure-release-download-base-url
   (with-temp-root [root]
     (let [output-dir (io/file root "output")
-          {:keys [exit out err]}
+          result
           (run-fetch
            {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL"
                   "http://127.0.0.1:1/releases/download"
                   "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "COPILOT_CLI_DOWNLOAD_BASE_URL must use https:// or file://"))
-      (is (not (.exists output-dir))))))
+      (assert-fetch-failure!
+       result
+       output-dir
+       "COPILOT_CLI_DOWNLOAD_BASE_URL must use https:// or file://"))))
 
 (deftest preserves-command-diagnostics
   (with-temp-root [root]
@@ -625,11 +718,15 @@
   (with-temp-root [root]
     (let [staging-dir (io/file root "staging")
           output-dir (io/file root "schemas")
-          stale-file (io/file output-dir "stale.schema.json")]
+          stale-file (io/file output-dir "stale.schema.json")
+          expected-permissions
+          (PosixFilePermissions/fromString "rwxr-x---")]
       (.mkdirs staging-dir)
       (.mkdirs output-dir)
       (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
       (spit stale-file "{\"title\":\"Stale\"}\n")
+      (Files/setPosixFilePermissions (.toPath output-dir)
+                                     expected-permissions)
       (let [{:keys [exit err]}
             (run-script-eval
              (format
@@ -642,7 +739,11 @@
         (is (not (.exists stale-file)))
         (is (= {"title" "API"}
                (json/read-str
-                (slurp (io/file output-dir "api.schema.json")))))))))
+                (slurp (io/file output-dir "api.schema.json")))))
+        (is (= expected-permissions
+               (Files/getPosixFilePermissions
+                (.toPath output-dir)
+                (make-array java.nio.file.LinkOption 0))))))))
 
 (deftest cleanup-failures-are-visible-without-changing-the-primary-outcome
   (let [success

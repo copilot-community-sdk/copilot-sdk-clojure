@@ -46,14 +46,17 @@ src/github/copilot_sdk/generated/event_specs.clj
 1. `.copilot-schema-version` records the Copilot CLI release used as the schema
    provenance and compatibility pin (for example, `1.0.86-0`). It does not
    select the executable runtime used by SDK clients.
-2. `bb schemas:fetch` downloads the release checksum manifest and archive,
-   restricts network transfers and redirects to HTTPS, verifies the published
-   SHA-256 digest and `package/package.json` version, and discovers every
-   portable top-level `package/schemas/*.json` member. It requires
-   `api.schema.json` and `session-events.schema.json`, strictly decodes each
-   schema as UTF-8 for JSON-object validation, and writes the original
-   checksummed member bytes to the staged set before replacing `schemas/`.
-   The committed schemas keep builds reproducible offline.
+2. `bb schemas:fetch` downloads and validates the release checksum manifest
+   before transferring the archive, restricts network transfers and redirects
+   to HTTPS, verifies the published SHA-256 digest and
+   `package/package.json` version, and discovers every portable top-level
+   `package/schemas/*.json` member. It rejects non-canonical archive aliases
+   and nested schema paths, requires `api.schema.json` and
+   `session-events.schema.json`, strictly decodes each schema as UTF-8, and
+   requires exactly one JSON object document. The fetcher writes the original
+   checksummed member bytes to the staged set and preserves the destination
+   directory permissions when replacing `schemas/`. The committed schemas
+   keep builds reproducible offline.
 3. `bb codegen` reads `schemas/session-events.schema.json` and writes
    `src/github/copilot_sdk/generated/event_specs.clj`.
 4. The CI workflow `.github/workflows/codegen-check.yml` regenerates on every

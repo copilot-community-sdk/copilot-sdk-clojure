@@ -37,9 +37,6 @@
 (def ^:private expected-clojure-base
   "27bd8e8353964eb10e425bfaef84683e9c013f2e")
 
-(def ^:private expected-certification-commit
-  "627341b10bb0fa0040bcf8df507998a5f7444256")
-
 (def ^:private expected-upstream-base
   "f45c46fd1812f8bed5b4cbc250f47177c83068f0")
 
@@ -131,7 +128,9 @@
                "*/\n")))))
 
 (deftest report-pins-history-and-local-artifacts
-  (let [report (report)]
+  (let [report (report)
+        artifact-commit
+        (get-in report [:certification :local-artifact-commit])]
     (is (some? report) "The e9df3938 parity oracle must be committed")
     (when report
       (is (= expected-clojure-base
@@ -152,9 +151,10 @@
                   (sh/sh "git" "merge-base" "--is-ancestor"
                          expected-clojure-base "HEAD"))))
       (is (= "1.0.84-8" (get-in report [:upstream :runtime-version])))
+      (is (re-matches #"[0-9a-f]{40}" artifact-commit))
       (is (zero? (:exit
                   (sh/sh "git" "cat-file" "-e"
-                         (str expected-certification-commit "^{commit}"))))
+                         (str artifact-commit "^{commit}"))))
           "the commit containing the certified local artifacts must resolve")
       (is (seq (:local-artifacts report)))
       ;; Historical certificates stay sealed to their own commit. The latest
@@ -162,7 +162,7 @@
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
           (is (= expected-hash
-                 (git-file-sha256 expected-certification-commit path))))))))
+                 (git-file-sha256 artifact-commit path))))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [report (report)

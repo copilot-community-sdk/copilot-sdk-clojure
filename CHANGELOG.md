@@ -22,24 +22,27 @@ All notable changes to this project will be documented in this file. This change
   ([upstream PR #2688](https://github.com/github/copilot-sdk/pull/2688),
   [upstream PR #2694](https://github.com/github/copilot-sdk/pull/2694))
 - Changed `bb schemas:fetch` to download the checksummed Copilot CLI release
-  archive over HTTPS, verify its published SHA-256 digest and internal package
-  version, discover all top-level JSON schemas, require both canonical members,
-  strictly validate portable schema names and UTF-8 JSON objects, and preserve
-  the exact checksummed member bytes when replacing the checked-in schemas.
-  Local archives must be existing files and are copied to a private snapshot
-  before verification and extraction. Checksum overrides are rejected unless
-  paired with a local archive. Mirror and local-archive overrides retain
-  distinct provenance; output overrides are create-only so the fetcher never
-  recursively replaces a caller-selected existing directory. Cleanup failures
-  remain visible as warnings without replacing the fetch outcome. Copilot CLI
-  `1.0.86-0` no longer publishes schemas in the npm artifacts.
+  archive over HTTPS, validate the checksum manifest before transferring the
+  archive, verify its published SHA-256 digest and internal package version,
+  reject non-canonical archive aliases and nested schema paths, discover all
+  top-level JSON schemas, require both canonical members, strictly validate
+  portable schema names and single-document UTF-8 JSON objects, preserve the
+  exact checksummed member bytes, and retain destination directory permissions
+  when replacing the checked-in schemas. Local archives must be existing files
+  and are copied to a private snapshot before verification and extraction.
+  Checksum overrides are rejected unless paired with a local archive. Mirror
+  and local-archive overrides retain distinct provenance; output overrides are
+  create-only so the fetcher never recursively replaces a caller-selected
+  existing directory. Cleanup failures remain visible as warnings without
+  replacing the fetch outcome. Copilot CLI `1.0.86-0` no longer publishes
+  schemas in the npm artifacts.
 
 ### Fixed (v1.0.14 sync)
 - Completed stable Fast Auto-tier value parity: create and resume configuration
   accepts idiomatic `:fast`, while session start and resume events round-trip
   the `"fast"` wire value instead of logging a coercion failure and returning
-  the raw string. Fast remains an integrator-only latency preset and requires
-  runtime `1.0.84-0` or later.
+  the raw string. Fast remains an integrator-only latency preset. The SDK
+  forwards it unchanged, and unsupported runtimes return their native error.
   ([upstream PR #2669](https://github.com/github/copilot-sdk/pull/2669))
 
 ### Added (v1.0.84-8 sync)
