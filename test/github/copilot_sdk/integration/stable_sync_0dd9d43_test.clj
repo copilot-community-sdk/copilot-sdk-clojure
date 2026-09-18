@@ -21,6 +21,7 @@
                      interface-fields
                      public-class-methods
                      read-resource
+                     sha256-file
                      sha256-items
                      sha256-lines
                      sha256-resource
@@ -68,6 +69,12 @@
 (def ^:private allowed-classifications
   #{:experimental :generated-only :internal :language-specific :stable-public})
 
+(def ^:private expected-stable-delta-ids
+  #{:byok/azure-project-url
+    :release/version-1.0.14
+    :runtime/schema-1.0.86-0
+    :session/auto-tier-fast-lifecycle})
+
 (def ^:private inventory-sections
   [[:added-exported-symbols :exported-symbol]
    [:removed-exported-symbols :removed-exported-symbol]
@@ -102,6 +109,17 @@
          classification classifications
          :when (seq (get by-class classification))]
      [section owner classification])))
+
+(defn- upstream-repo-or-skip
+  [scope]
+  (if-let [upstream @upstream-repo]
+    upstream
+    (do
+      (println
+       (format
+        "SKIP %s: set COPILOT_UPSTREAM_VALIDATION=true for exact upstream checks"
+        scope))
+      nil)))
 
 (deftest report-pins-history-release-and-local-artifacts
   (let [report (report)
@@ -138,7 +156,10 @@
         (testing path
           (is (re-matches #"[0-9a-f]{64}" expected-hash))
           (is (= expected-hash
-                 (git-file-sha256 expected-certification-commit path))))))))
+                 (git-file-sha256 expected-certification-commit path))
+              "the sealed certification commit must match the ledger")
+          (is (= expected-hash (sha256-file path))
+              "the checked-out artifact must match the certified bytes"))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [report (report)
@@ -158,7 +179,8 @@
                       (re-matches #"[0-9a-f]{64}"
                                   (:changed-paths-sha256 %)))
                 commit-classifications))
-    (when-let [upstream-repo @upstream-repo]
+    (when-let [upstream-repo
+               (upstream-repo-or-skip "0dd9d43 commit/path classification")]
       (let [base (:base-commit upstream)
             target (:target-commit upstream)
             actual-commits
@@ -215,7 +237,8 @@
           (mapcat :evidence (:stable-deltas report))
           (mapcat :evidence (:compatibility-deltas report))
           (mapcat :evidence (:intentional-exclusions report))))]
-    (is (= (:stable-delta-ids report)
+    (is (= expected-stable-delta-ids (:stable-delta-ids report)))
+    (is (= expected-stable-delta-ids
            (set (map :id (:stable-deltas report)))))
     (is (= stable-items (set traced-stable-items)))
     (is (= (count stable-items) (count traced-stable-items)))
@@ -241,7 +264,8 @@
                     (:compatibility-deltas report))
             path clojure-paths]
       (is (.isFile (io/file path)) (str "missing Clojure evidence: " path)))
-    (when-let [upstream-repo @upstream-repo]
+    (when-let [upstream-repo
+               (upstream-repo-or-skip "0dd9d43 public-surface evidence")]
       (let [base (get-in report [:upstream :base-commit])
             target (get-in report [:upstream :target-commit])
             read-source

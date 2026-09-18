@@ -296,7 +296,7 @@ src/github/copilot_sdk/
 
 script/codegen/          # Babashka generator (build-time only; not in JAR)
 schemas/       # Pinned upstream JSON Schemas (committed)
-.copilot-schema-version  # Pinned @github/copilot npm version
+.copilot-schema-version  # Copilot CLI release pin used for schema provenance
 ```
 
 See [`doc/codegen.md`](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/doc/codegen.md) for the schema-driven code generation

@@ -173,11 +173,12 @@ omit `:azure-api-version` and select `:wire-api :responses`:
             :wire-api :responses}}
 ```
 
-The SDK forwards the project URL unchanged. The installed Copilot CLI runtime
+The SDK forwards the project URL unchanged. The connected Copilot CLI runtime
 preserves `/api/projects/my-project` and appends `/openai/v1/responses`.
 Project URLs require an updated runtime; Copilot CLI `1.0.86-0` supports them.
-The Clojure SDK launches your installed `copilot` executable and does not
-bundle that runtime.
+The Clojure SDK does not bundle that runtime. In the default process mode it
+launches the installed or configured `:cli-path`; with `:cli-url` or child
+process mode, upgrade the external or parent runtime instead.
 
 ### Azure AI Foundry (OpenAI-Compatible Endpoint)
 

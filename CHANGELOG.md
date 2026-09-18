@@ -7,25 +7,29 @@ All notable changes to this project will be documented in this file. This change
 - Documented Azure AI Foundry project URLs for native `:azure` BYOK
   configuration. Resource hosts and full project URLs are accepted with or
   without a trailing slash. The SDK forwards the configured URL unchanged; the
-  installed Copilot CLI runtime preserves the project prefix when constructing
-  versionless Responses API paths.
+  connected Copilot CLI runtime preserves the project prefix when constructing
+  versionless Responses API paths. Copilot CLI `1.0.86-0` is a known
+  supporting runtime.
   ([upstream PR #2593](https://github.com/github/copilot-sdk/pull/2593))
 
 ### Changed (v1.0.14 sync)
-- Updated the library version to `1.0.14.0`, advanced the runtime and schema pin
-  to `1.0.86-0`, and recertified the complete stable Node SDK public surface
-  through upstream commit
+- Updated the library version to `1.0.14.0`, advanced the Copilot CLI
+  compatibility and schema-provenance pin to `1.0.86-0`, and recertified the
+  complete stable Node SDK public surface through upstream commit
   [`0dd9d4324339b84835c915b0700fdc5c25cec5af`](https://github.com/github/copilot-sdk/commit/0dd9d4324339b84835c915b0700fdc5c25cec5af).
   Experimental permission assent/contextual-authorization events and the
   related message-extraction field remain generated wire evidence only.
   ([upstream PR #2688](https://github.com/github/copilot-sdk/pull/2688),
   [upstream PR #2694](https://github.com/github/copilot-sdk/pull/2694))
 - Changed `bb schemas:fetch` to download the checksummed Copilot CLI release
-  archive over HTTPS, verify its published SHA-256 digest, discover all
-  top-level JSON schemas, require both canonical members, and validate them
-  before replacing the checked-in schemas. Local archive and mirror overrides
-  now retain explicit provenance. Runtime `1.0.86-0` no longer publishes
-  schemas in the npm artifacts.
+  archive over HTTPS, verify its published SHA-256 digest and internal package
+  version, discover all top-level JSON schemas, require both canonical members,
+  and validate them before replacing the checked-in schemas. Local archives
+  are copied to a private snapshot before verification and extraction. Mirror
+  and local-archive overrides retain distinct provenance; output overrides are
+  create-only so the fetcher never recursively replaces a caller-selected
+  existing directory. Copilot CLI `1.0.86-0` no longer publishes schemas in the
+  npm artifacts.
 
 ### Fixed (v1.0.14 sync)
 - Completed Fast Auto-tier lifecycle parity: session start and resume events now

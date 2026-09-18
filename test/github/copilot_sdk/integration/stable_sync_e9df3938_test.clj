@@ -157,6 +157,8 @@
                          (str expected-certification-commit "^{commit}"))))
           "the commit containing the certified local artifacts must resolve")
       (is (seq (:local-artifacts report)))
+      ;; Historical certificates stay sealed to their own commit. The latest
+      ;; certificate separately validates the checked-out artifact bytes.
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
           (is (= expected-hash
