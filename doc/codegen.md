@@ -88,9 +88,10 @@ manifests may be at most 1 MiB, release archives 256 MiB, archive listings
 downloads use `curl`'s file-size limit, and local overrides are copied into the
 private verified snapshot through a bounded stream that never writes more than
 256 MiB. Archive listing and extraction commands must finish within 300
-seconds. Output overflow and timeout paths gracefully terminate the process
-tree, forcibly terminate non-cooperative processes, and reap them before the
-fetch fails.
+seconds; their diagnostic standard error is capped at 1 MiB. Standard-output or
+standard-error overflow and timeout paths gracefully terminate the process tree,
+forcibly terminate non-cooperative processes, and reap them before the fetch
+fails.
 
 ## Workflows
 

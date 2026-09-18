@@ -36,9 +36,10 @@ All notable changes to this project will be documented in this file. This change
   with a local archive. Mirror and local-archive overrides retain distinct
   provenance; output overrides are create-only, including when the destination
   appears during installation. Overflowing, timed-out, or non-cooperative
-  archive commands are terminated and reaped. Cleanup failures remain visible
-  with their exception type without replacing the fetch outcome. Copilot CLI
-  `1.0.86-0` no longer publishes schemas in the npm artifacts.
+  archive commands are terminated and reaped, with both standard output and
+  diagnostic standard error bounded before buffering. Cleanup failures remain
+  visible with their exception type without replacing the fetch outcome.
+  Copilot CLI `1.0.86-0` no longer publishes schemas in the npm artifacts.
 
 ### Fixed (v1.0.14 sync)
 - Completed stable Fast Auto-tier value parity: create and resume configuration

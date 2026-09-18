@@ -889,6 +889,79 @@
       (is (not (str/includes? err "fixture timed out")))
       (is (every? #(or (nil? %) (not (.isAlive %))) handles)))))
 
+(deftest bounded-stderr-overflow-precedes-timeout-and-reaps-process
+  (with-temp-root [root]
+    (let [pid-file (io/file root "pid")
+          command
+          (format
+           (str "trap '' TERM; "
+                "printf '%%s' \"$$\" > %s; "
+                "printf 12345 >&2; while :; do sleep 1; done")
+           (pr-str (.getPath pid-file)))
+          {:keys [exit err]}
+          (run-script-eval
+           (str
+            "(let [limit (or (ns-resolve "
+            "'codegen.fetch-schemas 'max-command-stderr-bytes) "
+            "(intern 'codegen.fetch-schemas 'max-command-stderr-bytes 4)) "
+            "run! " (private-var-form 'run-bounded-command-output) "] "
+            "(with-redefs-fn {limit 4} "
+            "#(run! " (pr-str ["sh" "-c" command])
+            " 1024 1 \"fixture\")))"))
+          pid (parse-long (slurp pid-file))
+          handle (.orElse (java.lang.ProcessHandle/of pid) nil)]
+      (is (not (zero? exit)))
+      (is (str/includes? err "fixture stderr exceeds 4 bytes"))
+      (is (not (str/includes? err "fixture timed out")))
+      (is (or (nil? handle) (not (.isAlive handle)))))))
+
+(deftest interrupted-command-wait-reaps-process
+  (with-temp-root [root]
+    (let [pid-file (io/file root "pid")
+          command
+          (format "printf '%%s' \"$$\" > %s; while :; do sleep 1; done"
+                  (pr-str (.getPath pid-file)))
+          {:keys [exit out err]}
+          (run-script-eval
+           (str
+            "(let [run! " (private-var-form 'run-bounded-command-output)
+            "\n      failure (atom nil)"
+            "\n      runner"
+            "\n      (Thread."
+            "\n       (fn []"
+            "\n         (try"
+            "\n           (run! " (pr-str ["sh" "-c" command])
+            " 1024 30 \"fixture\")"
+            "\n           (catch Throwable error"
+            "\n             (reset! failure error)))))"
+            "\n      deadline (+ (System/nanoTime) 5000000000)]"
+            "\n  (.start runner)"
+            "\n  (loop []"
+            "\n    (when (and (not (babashka.fs/exists? "
+            (pr-str (.getPath pid-file)) "))"
+            "\n               (< (System/nanoTime) deadline))"
+            "\n      (Thread/sleep 10)"
+            "\n      (recur)))"
+            "\n  (when-not (babashka.fs/exists? "
+            (pr-str (.getPath pid-file)) ")"
+            "\n    (throw (ex-info \"process did not start\" {})))"
+            "\n  (.interrupt runner)"
+            "\n  (.join runner 5000)"
+            "\n  (println (some-> @failure class .getName))"
+            "\n  (println (.isAlive runner)))"))
+          pid (parse-long (slurp pid-file))
+          handle (.orElse (java.lang.ProcessHandle/of pid) nil)
+          process-alive? (and handle (.isAlive handle))]
+      (try
+        (is (zero? exit) err)
+        (is (str/includes? out "java.lang.InterruptedException"))
+        (is (str/includes? out "false"))
+        (is (not process-alive?))
+        (finally
+          (when process-alive?
+            (.destroyForcibly handle)
+            (.get (.onExit handle))))))))
+
 (deftest bounded-output-preserves-termination-diagnostics
   (let [{:keys [exit out err]}
         (run-script-eval

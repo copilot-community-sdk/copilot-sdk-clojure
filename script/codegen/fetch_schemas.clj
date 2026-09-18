@@ -56,6 +56,7 @@
 (def ^:private max-archive-members 4096)
 (def ^:private max-package-json-bytes (* 1024 1024))
 (def ^:private max-schema-bytes (* 32 1024 1024))
+(def ^:private max-command-stderr-bytes (* 1024 1024))
 (def ^:private archive-command-timeout-seconds 300)
 (def ^:private process-termination-grace-seconds 1)
 (def ^:private process-termination-force-seconds 1)
@@ -328,6 +329,22 @@
     (.addSuppressed ^Throwable primary cleanup))
   primary)
 
+(defn- output-limit-error
+  [command description max-bytes stdout-snapshot stderr-snapshot]
+  (cond
+    (:overflow? stdout-snapshot)
+    (ex-info
+     (format "%s output exceeds %d bytes" description max-bytes)
+     {:command command
+      :max-bytes max-bytes})
+
+    (:overflow? stderr-snapshot)
+    (ex-info
+     (format "%s stderr exceeds %d bytes"
+             description max-command-stderr-bytes)
+     {:command command
+      :max-stderr-bytes max-command-stderr-bytes})))
+
 (defn- run-bounded-command-output
   [command max-bytes timeout-seconds description]
   (let [process-holder (atom nil)
@@ -346,52 +363,64 @@
                 (deliver termination-outcome outcome)
                 outcome)
               @termination-outcome)))
-        {:keys [stream snapshot]}
+        {stdout-stream :stream
+         stdout-snapshot :snapshot}
         (bounded-output max-bytes terminate-once!)
-        process (p/process command {:out stream :err :string})
+        {stderr-stream :stream
+         stderr-snapshot :snapshot}
+        (bounded-output max-command-stderr-bytes terminate-once!)
+        process (p/process command {:out stdout-stream :err stderr-stream})
         _ (reset! process-holder process)
-        initial-snapshot (snapshot)
-        _ (when (:overflow? initial-snapshot)
+        initial-stdout (stdout-snapshot)
+        initial-stderr (stderr-snapshot)
+        _ (when (or (:overflow? initial-stdout)
+                    (:overflow? initial-stderr))
             (terminate-once!))
         ^Process java-process (:proc process)
         completed?
-        (.waitFor java-process timeout-seconds TimeUnit/SECONDS)]
+        (try
+          (.waitFor java-process timeout-seconds TimeUnit/SECONDS)
+          (catch InterruptedException primary
+            (let [termination (terminate-once!)]
+              (.interrupt (Thread/currentThread))
+              (throw (attach-cleanup-error! primary termination))))
+          (catch Throwable primary
+            (throw
+             (attach-cleanup-error! primary (terminate-once!)))))]
     (if-not completed?
       (let [termination (terminate-once!)
             _ (when-not (.isAlive java-process)
                 @process)
-            final-snapshot (snapshot)
+            final-stdout (stdout-snapshot)
+            final-stderr (stderr-snapshot)
             primary
-            (if (:overflow? final-snapshot)
-              (ex-info
-               (format "%s output exceeds %d bytes"
-                       description max-bytes)
-               {:command command
-                :max-bytes max-bytes})
-              (ex-info
-               (format "%s timed out after %d seconds"
-                       description timeout-seconds)
-               {:command command
-                :timeout-seconds timeout-seconds}))]
+            (or
+             (output-limit-error
+              command description max-bytes final-stdout final-stderr)
+             (ex-info
+              (format "%s timed out after %d seconds"
+                      description timeout-seconds)
+              {:command command
+               :timeout-seconds timeout-seconds}))]
         (throw (attach-cleanup-error! primary termination)))
       (let [result @process
-            final-snapshot (snapshot)]
-        (when (:overflow? final-snapshot)
-          (let [primary
-                (ex-info
-                 (format "%s output exceeds %d bytes"
-                         description max-bytes)
-                 {:command command
-                  :max-bytes max-bytes})]
-            (throw
-             (attach-cleanup-error! primary (terminate-once!)))))
-        (when-not (zero? (:exit result))
+            final-stdout (stdout-snapshot)
+            final-stderr (stderr-snapshot)]
+        (when-let [primary
+                   (output-limit-error
+                    command description max-bytes final-stdout final-stderr)]
           (throw
-           (ex-info (str description " failed")
-                    {:command command
-                     :exit (:exit result)
-                     :stderr (:err result)})))
-        (:bytes final-snapshot)))))
+           (attach-cleanup-error! primary (terminate-once!))))
+        (when-not (zero? (:exit result))
+          (let [stderr
+                (String. ^bytes (:bytes final-stderr)
+                         StandardCharsets/UTF_8)]
+            (throw
+             (ex-info (str description " failed")
+                      {:command command
+                       :exit (:exit result)
+                       :stderr stderr}))))
+        (:bytes final-stdout)))))
 
 (defn- validate-archive-member-name! [archive member]
   (let [path (str/replace member #"/$" "")

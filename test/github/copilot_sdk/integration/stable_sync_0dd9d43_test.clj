@@ -506,6 +506,22 @@
                   (str "evidence marker did not change in " path)))))))))
 
 (deftest fast-auto-tier-value-and-azure-project-url-contracts
+  (let [deltas (into {} (map (juxt :id identity)) (:stable-deltas (report)))]
+    (is (= {:wire-value "fast"
+            :idiom-value :fast
+            :create-resume :forwarded
+            :unsupported-runtime :native-error
+            :event-coercion
+            #{:copilot/session.start :copilot/session.resume}}
+           (get-in deltas [:session/auto-tier-fast-value :contract])))
+    (is (= {:clojure-sdk
+            {:base-url-forms #{:resource-host :project-url}
+             :forwarding :unchanged
+             :trailing-slash-forms #{:present :absent}}
+            :copilot-cli-runtime
+            {:authority :upstream-documentation
+             :versionless-responses-path :preserves-project-prefix}}
+           (get-in deltas [:byok/azure-project-url :contract]))))
   (doseq [event-type ["session.start" "session.resume"]
           :let [wire-event {:type event-type :data {:auto-tier "fast"}}
                 idiom-event (coerce/event-wire->idiom wire-event)]]
