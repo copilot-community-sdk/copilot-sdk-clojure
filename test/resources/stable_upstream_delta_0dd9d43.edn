@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "fb02b1a622da2e98859475abb91f7d5c721f3fd7"
-  :local-artifact-commit "bdc01aeac0007c8e171ccbd3495a16a746ffb5e7"
+  :local-artifact-commit "a4d5a88a5ee572c9b3b56e13e237d3b947f5de33"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_e9df3938.edn"
    :sha256
@@ -585,11 +585,11 @@
   "build.clj"
   "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
   "README.md"
-  "a4f0fd5c9be0c7fb210e2d5d16dfe3337d621e2e728f9e50bc873b0521cd0992"
+  "8896db247746437f70fd2440cce0090dd02d65738c60667f4eadca3667b7a8a0"
   "bb.edn"
   "c9dc5f8e2f6aa7cbc047db584c17fa1dd52ebc0a4d3c01584e4d85a87e9397f7"
   "doc/getting-started.md"
-  "47aec8a1450000210138173013deb3f501fa971fa5d703b88f9bd4e7d13b4f10"
+  "4703e41307f5b69a1c8418a4966a6dd6a049feb0ad346cdcdd860c420db3ffcb"
   "schemas/README.md"
   "923a86e920355753df1f8ac4ad87fa761b3aaca6f28cd0aef7c2e1bcc15a5ec7"
   "schemas/api.schema.json"
@@ -625,7 +625,7 @@
   "doc/api/byok.html"
   "64230702a581d0261ab3e8e89da9bb8021cbb9dea6f404adda7f3afcee7a512c"
   "doc/api/getting-started.html"
-  "5d9d52b2cea8892c24e1f105da8149969a71e39d9011efdb65c248ad0a4f7e46"
+  "e02e8f75454626f20c9f29155efe818d270bd2cd7a752c3cf38d603aeef17fcc"
   "doc/api/codegen.html"
   "9f67656e31c1b69556897a2d57f8a2b43cef9f02ffb2815a67b88d5da059b274"
   "resources/github/copilot_sdk/api_surface.edn"
