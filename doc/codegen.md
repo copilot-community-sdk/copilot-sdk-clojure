@@ -1,9 +1,9 @@
 # Schema-Driven Code Generation
 
 The Clojure SDK generates portions of its `clojure.spec` registry from the
-upstream `@github/copilot` JSON Schemas instead of maintaining them by hand.
-This guarantees the SDK's view of the wire protocol cannot drift from what the
-Copilot CLI actually emits.
+JSON Schemas distributed with the Copilot CLI instead of maintaining them by
+hand. This guarantees the SDK's view of the wire protocol cannot drift from
+what the Copilot CLI actually emits.
 
 ## What is generated
 
@@ -25,25 +25,82 @@ hand** — your edits will be overwritten by the next `bb codegen` run.
 ## How it works
 
 ```
-                                     bb codegen
-schemas/session-events.schema.json ──► script/codegen/main.clj ──► src/github/copilot_sdk/generated/event_specs.clj
-                       ▲
-                       │ bb schemas:fetch
-                       │
-        npm registry: @github/copilot @ <pinned version>
-                       ▲
-                       │
-              .copilot-schema-version
+.copilot-schema-version
+          |
+          v
+Copilot CLI GitHub Release
+(SHA256SUMS.txt + linux-x64 archive)
+          |
+          | bb schemas:fetch
+          v
+schemas/session-events.schema.json
+          |
+          | bb codegen
+          v
+script/codegen/main.clj
+          |
+          v
+src/github/copilot_sdk/generated/event_specs.clj
 ```
 
-1. `.copilot-schema-version` records the pinned upstream version (e.g. `0.0.403`).
-2. `bb schemas:fetch` downloads that exact version from the npm registry and
-   extracts schema JSON files into `schemas/` (committed to the repo
-   so builds are reproducible offline).
+1. `.copilot-schema-version` records the Copilot CLI release used as the schema
+   provenance and compatibility pin (for example, `1.0.86-0`). It does not
+   select the executable runtime used by SDK clients.
+2. `bb schemas:fetch` downloads and validates the release checksum manifest
+   before transferring the archive, restricts network transfers and redirects
+   to HTTPS, verifies the published SHA-256 digest and
+   `package/package.json` version, and discovers every portable top-level
+   `package/schemas/*.json` member. It rejects non-canonical archive aliases
+   and nested schema paths, requires `api.schema.json` and
+   `session-events.schema.json`, strictly decodes each schema as UTF-8, and
+   requires exactly one JSON object document. The fetcher writes the original
+   checksummed member bytes to the staged set. When replacing `schemas/`, it
+   moves the existing tree to a same-parent backup before installing the
+   prepared tree, restores that backup if installation fails, and reports the
+   retained backup path if rollback is blocked. Replacement preserves the
+   existing POSIX owner/group/other `rwx` mode when that attribute view is
+   available; ACLs and special mode bits are outside this guarantee. A new
+   output directory retains the process umask-derived mode. The committed
+   schemas keep builds reproducible offline.
 3. `bb codegen` reads `schemas/session-events.schema.json` and writes
    `src/github/copilot_sdk/generated/event_specs.clj`.
 4. The CI workflow `.github/workflows/codegen-check.yml` regenerates on every
    PR and fails if the committed output differs.
+
+### Fetch overrides
+
+The fetcher supports controlled mirrors and isolated test fixtures. Normal
+repository updates use the defaults.
+
+| Environment variable | Use | Constraints |
+|----------------------|-----|-------------|
+| `COPILOT_CLI_DOWNLOAD_BASE_URL` | Override the Copilot CLI release download root | Must use `https://` or `file://`; redirects from network requests remain HTTPS; generated provenance identifies a configured release mirror |
+| `COPILOT_CLI_RELEASE_SHA256` | Supply the expected digest for a local archive | Required with `COPILOT_CLI_RELEASE_TARBALL`; rejected without it; must be a 64-character hexadecimal SHA-256 |
+| `COPILOT_CLI_RELEASE_TARBALL` | Read a local Copilot CLI archive instead of downloading | Must name an existing file. The archive is copied to a private temporary snapshot before hashing and extraction; the output README and logs identify local-override provenance |
+| `COPILOT_CLI_SCHEMA_OUTPUT` | Write to an isolated output directory instead of replacing `schemas/` | The path must not already exist; relative paths are normalized before creation. Only the fixed default `schemas/` destination is replaced |
+
+Temporary-directory cleanup failures are reported as warnings on standard
+error, including the path and exception type. They do not replace the fetch
+result or its primary failure. A create-only output still fails if the path
+appears after validation; the final move never nests the prepared schemas under
+that directory.
+
+The fetcher bounds every external artifact before parsing it: checksum
+manifests may be at most 1 MiB, release archives 256 MiB, archive listings
+1 MiB and 4,096 entries, package metadata 1 MiB, each schema 32 MiB, and all
+extracted schemas together 256 MiB. Archive downloads stream through a
+write-bounded output that never writes past the configured limit, while
+`curl`'s file-size limit rejects known oversized responses earlier. Failed or
+interrupted downloads terminate and reap the `curl` process tree and remove
+the partial destination. Transient curl failures retry as separate attempts
+only after that partial destination is removed, so bytes from failed attempts
+cannot prefix a later successful response. Local overrides are copied into the
+private verified snapshot through the same kind of bounded stream. Download,
+archive listing, and extraction commands cap diagnostic standard error at
+1 MiB; archive commands must finish within 300 seconds. Standard-output or
+standard-error overflow and timeout paths gracefully terminate the process
+tree, forcibly terminate non-cooperative processes, and reap them before the
+fetch fails.
 
 ## Workflows
 
@@ -60,7 +117,8 @@ bb test                                       # ensure no regressions
 ### Bumping the upstream schema version
 
 ```bash
-echo "0.0.404" > .copilot-schema-version
+: "${COPILOT_SCHEMA_VERSION:?Set COPILOT_SCHEMA_VERSION to the target release}"
+printf '%s\n' "$COPILOT_SCHEMA_VERSION" > .copilot-schema-version
 bb schemas:fetch        # downloads the new version
 bb codegen              # regenerate Clojure
 git diff                # review the schema diff and the generated diff
@@ -122,7 +180,7 @@ strings and numbers. The codegen pipeline does **not** flatten these — it
 reinforces the separation:
 
 ```
-WIRE SHAPE          ─►  COERCION         ─►  IDIOM SHAPE
+WIRE SHAPE          ->  COERCION         ->  IDIOM SHAPE
 (generated specs)       (generated +          (hand-curated specs)
 ISO strings,            curated table)         Instants, keywords, sets,
 raw enum strings,                              kebab-case maps
@@ -165,10 +223,10 @@ governs the API.
 
 ## What is NOT generated (yet)
 
-- RPC method names and `*Params`/`*Result` specs. Upstream has not yet
-  published `api.schema.json` to the `@github/copilot` npm artifact. When it
-  becomes available, Phase 5 of the codegen plan will generate the RPC
-  registry and `s/fdef`s for all wrappers.
+- RPC method names and `*Params`/`*Result` specs. The fetched and pinned
+  `api.schema.json` is available as an input, but the generator does not yet
+  consume it. Phase 5 of the codegen plan will generate the RPC registry and
+  `s/fdef`s for all wrappers.
 - The wire-key registry in `util.clj`. The current camel↔kebab conversion via
   `camel-snake-kebab` is deterministic for every key in the events schema, so
   generating a static registry is unnecessary until non-roundtripping keys

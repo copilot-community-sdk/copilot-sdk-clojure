@@ -3,6 +3,63 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (v1.0.14 sync)
+- Documented Azure AI Foundry project URLs for native `:azure` BYOK
+  configuration. Resource hosts and full project URLs are accepted with or
+  without a trailing slash. The SDK forwards the configured URL unchanged; the
+  connected Copilot CLI runtime preserves the project prefix when constructing
+  versionless Responses API paths. Copilot CLI `1.0.86-0` is a known
+  supporting runtime.
+  ([upstream PR #2593](https://github.com/github/copilot-sdk/pull/2593))
+
+### Changed (v1.0.14 sync)
+- Updated the library version to `1.0.14.0`, advanced the Copilot CLI
+  compatibility and schema-provenance pin to `1.0.86-0`, and recertified the
+  complete stable Node SDK public surface through upstream commit
+  [`0dd9d4324339b84835c915b0700fdc5c25cec5af`](https://github.com/github/copilot-sdk/commit/0dd9d4324339b84835c915b0700fdc5c25cec5af).
+  Experimental permission assent/contextual-authorization events and the
+  related message-extraction field remain generated wire evidence only.
+  ([upstream PR #2688](https://github.com/github/copilot-sdk/pull/2688),
+  [upstream PR #2694](https://github.com/github/copilot-sdk/pull/2694))
+- Changed `bb schemas:fetch` to download the checksummed Copilot CLI release
+  archive over HTTPS, validate the checksum manifest before transferring the
+  archive, verify its published SHA-256 digest and internal package version,
+  reject non-canonical archive aliases and nested schema paths, discover all
+  top-level JSON schemas, require both canonical members, strictly validate
+  portable schema names and single-document UTF-8 JSON objects, preserve the
+  exact checksummed member bytes, and bound archive, listing, member, schema,
+  and command resources before parsing. Replacing the checked-in schemas
+  retains the existing POSIX owner/group/other `rwx` mode when supported; new
+  outputs retain the process umask-derived mode. Local archives must be
+  existing files and are copied to a size-bounded private snapshot before
+  verification and extraction. Checksum overrides are rejected unless paired
+  with a local archive. Mirror and local-archive overrides retain distinct
+  provenance; output overrides are create-only, including when the destination
+  appears during installation. Overflowing, timed-out, or non-cooperative
+  archive commands are terminated and reaped, with both standard output and
+  diagnostic standard error bounded before buffering. Cleanup failures remain
+  visible with their exception type without replacing the fetch outcome.
+  Copilot CLI `1.0.86-0` no longer publishes schemas in the npm artifacts.
+
+### Fixed (v1.0.14 sync)
+- Completed stable Fast Auto-tier value parity: create and resume configuration
+  accepts idiomatic `:fast`, while session start and resume events round-trip
+  the `"fast"` wire value instead of logging a coercion failure and returning
+  the raw string. Fast remains an integrator-only latency preset. The SDK
+  forwards it unchanged, and unsupported runtimes return their native error.
+  ([upstream PR #2669](https://github.com/github/copilot-sdk/pull/2669))
+- Hardened `bb schemas:fetch` to reject path-unsafe release identifiers before
+  constructing release URLs or archive paths. Checked-in schema replacement
+  now retains the previous tree in a same-parent backup until installation
+  succeeds, restores it after a failed move, and reports the retained backup
+  path if rollback is blocked. Network downloads now stream through the same
+  bounded command lifecycle as archive extraction, terminate and reap `curl`
+  after output or diagnostic overflow and interruption, and remove partial
+  destination files after failure. Transient retries restart with a fresh
+  destination so failed partial responses cannot prefix a successful download.
+  Schema extraction now also caps total staged schema bytes at 256 MiB so many
+  individually bounded members cannot exhaust disk.
+
 ### Added (v1.0.84-8 sync)
 - Added stable event provenance for assistant originating messages, configured
   MCP server identity/source, subagent model selection, and managed MCP server

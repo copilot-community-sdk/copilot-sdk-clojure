@@ -129,7 +129,10 @@ The `:wire-api` setting determines which OpenAI API format to use:
 
 **`:openai`** — Works with OpenAI API and any OpenAI-compatible endpoint. `:base-url` should include the full path (e.g., `"https://api.openai.com/v1"`).
 
-**`:azure`** — For native Azure OpenAI endpoints. `:base-url` should be just the host (e.g., `"https://my-resource.openai.azure.com"`). Do NOT include `/openai/v1/` in the URL — the SDK handles path construction.
+**`:azure`** — For native Azure OpenAI endpoints. `:base-url` may be the
+resource host (for example, `"https://my-resource.openai.azure.com"`) or a full
+Azure AI Foundry project URL. Do not append `/openai/v1/`; the runtime preserves
+any project prefix and constructs the API path. A trailing slash is optional.
 
 **`:anthropic`** — For direct Anthropic API access. Uses Claude-specific API format.
 
@@ -156,6 +159,26 @@ Set `:azure-api-version` when you need an explicit versioned deployment route:
             :api-key (System/getenv "AZURE_OPENAI_KEY")
             :azure-options {:azure-api-version "2024-10-21"}}}
 ```
+
+### Azure AI Foundry (Project URL)
+
+Use `:azure` with the complete project URL. For the versionless Responses API,
+omit `:azure-api-version` and select `:wire-api :responses`:
+
+```clojure
+{:model "gpt-5.4"
+ :provider {:provider-type :azure
+            :base-url "https://my-resource.services.ai.azure.com/api/projects/my-project"
+            :api-key (System/getenv "AZURE_OPENAI_KEY")
+            :wire-api :responses}}
+```
+
+The SDK forwards the project URL unchanged. The connected Copilot CLI runtime
+preserves `/api/projects/my-project` and appends `/openai/v1/responses`.
+Project URLs require an updated runtime; Copilot CLI `1.0.86-0` supports them.
+The Clojure SDK does not bundle that runtime. In the default process mode it
+launches the installed or configured `:cli-path`; with `:cli-url` or child
+process mode, upgrade the external or parent runtime instead.
 
 ### Azure AI Foundry (OpenAI-Compatible Endpoint)
 

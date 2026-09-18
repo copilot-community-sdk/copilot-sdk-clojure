@@ -1,7 +1,7 @@
 # Upstream Copilot CLI JSON Schemas
 
-These files are fetched verbatim from the `@github/copilot-linux-x64` npm package at the version pinned in `.copilot-schema-version`.
+These files are fetched verbatim from the `github-copilot-1.0.86-0-linux-x64.tgz` GitHub Release asset for Copilot CLI version `1.0.86-0` and verified against the release `SHA256SUMS.txt`.
 
 **Do not edit by hand.** To update, run `bb schemas:fetch` after bumping `.copilot-schema-version`.
 
-Currently pinned version: `1.0.84-8`
+Schema version: `1.0.86-0`

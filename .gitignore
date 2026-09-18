@@ -3,6 +3,7 @@
 .classpath
 .clj-kondo/.cache
 .cpcache
+.copilot-schemas-*
 .eastwood
 .factorypath
 .hg/
