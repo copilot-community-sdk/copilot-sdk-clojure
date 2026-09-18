@@ -412,14 +412,17 @@
    :classification :internal
    :status :ported
    :reason
-   "Runtime 1.0.86-0 no longer ships schemas in the npm artifacts, so deterministic code generation now verifies and extracts the canonical files from the Copilot CLI release archive."
+    "Copilot CLI 1.0.86-0 no longer ships schemas in the npm artifacts, so deterministic code generation now snapshots, verifies, version-checks, and extracts the canonical files from the Copilot CLI release archive."
    :evidence [:schema-release-asset]
    :clojure-paths
-   ["script/codegen/fetch_schemas.clj"
-    "test/github/copilot_sdk/schema_fetch_test.clj"
-    "schemas/README.md"
-    "doc/codegen.md"
-    "doc/api/codegen.html"]}]
+    [".github/copilot-instructions.md"
+     "bb.edn"
+     "script/codegen/fetch_schemas.clj"
+     "test/github/copilot_sdk/schema_fetch_test.clj"
+     "schemas/README.md"
+     "doc/codegen.md"
+     "CHANGELOG.md"
+     "doc/api/codegen.html"]}]
 
  :intentional-exclusions
  [{:id :events/contextual-permission-authorization
@@ -530,14 +533,18 @@
   {:path "rust/src/types.rs" :contains "pub allowed_models"}}
 
  :local-artifacts
- {".copilot-schema-version"
+ {".github/copilot-instructions.md"
+  "e6f7bb7c614fc835c50fed5362bcd3cf7e8bd1e001cb102421edba0a93bb08eb"
+  ".copilot-schema-version"
   "1d84ebc11ee6ba1a25ee485d0a83c258e9b301043c66f2f89a35381e31f26f80"
   "build.clj"
   "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
   "README.md"
-  "0ecf88f01103de89182eb8bb502c8a068a621fbf8f47228beff907f36e2d35cd"
+  "173e09563b76a49abd7fac1e74b6bae83a9f22f1cbb0af2e422b8863f0966657"
+  "bb.edn"
+  "c9dc5f8e2f6aa7cbc047db584c17fa1dd52ebc0a4d3c01584e4d85a87e9397f7"
   "doc/getting-started.md"
-  "919f08b4754116dcde0bebc2e88e65414eb288fde1802030302f6e19d4e80fee"
+  "c6ad96113a06144e126bc312be8dd2770dcd4fce17d144cb5844618dc67c2cd2"
   "schemas/README.md"
   "923a86e920355753df1f8ac4ad87fa761b3aaca6f28cd0aef7c2e1bcc15a5ec7"
   "schemas/api.schema.json"
@@ -547,7 +554,7 @@
   "script/codegen/emit_coerce.clj"
   "80ef6aac919674e05a871169701ff2a1edb0547183237f98ce958b3a69b65dec"
   "script/codegen/fetch_schemas.clj"
-  "e98726e5ca22bfbca2a5f6172d382cb26a17911e3e3eb4d0523b96b8e6a0af72"
+  "6e951e228e1f865c34e1f7fad6e95bb4e7df0f6815fd60afb997e70dd03e7887"
   "src/github/copilot_sdk/generated/coerce.clj"
   "e4750f4689fff5ef7bac5dcec3ee77eaaaae6b244e9b5c9c659eb198d56b8c58"
   "src/github/copilot_sdk/generated/event_metadata.clj"
@@ -557,22 +564,22 @@
   "test/github/copilot_sdk/codegen_test.clj"
   "16ba14ac366ba7544821d920154f9b4fc21296fcb8eb6673a3dfe85b88ea14dc"
   "test/github/copilot_sdk/schema_fetch_test.clj"
-  "2497486a80fde1ab8c17ee105c1edee989556dbf53c2bedf1b743b00398a743f"
+  "c3adcd1383fdc2fdf912df8ec1674af186c339d8351a2349ca35111bb7048802"
   "doc/auth/byok.md"
-  "a235af28c93668ea9c485c101bcddc340533ef4460543ccbb982fb1d309d5db5"
+  "9f80041f1d6409b66678e65e93f6b8c12079e3ce9d213c9a0da14562a0534eaf"
   "doc/reference/API.md"
-  "0244cd927d3832c25129211f3b030c327eebf2a5ccc6cd90d6c9fb068f47ff83"
+  "4c02fe4c060f720f402cee086062202cef4b94d3048f589073beb20c9a3d95a8"
   "doc/codegen.md"
-  "d9d5b56b5c487fb1ab8ef504f13bc5d9d32adf8310db80d6b84bfa9e1a1d296e"
+  "2c4e8abd6e9b887da86f356a730f31a15977e425fa6c3ca205ce212e9b34a4eb"
   "CHANGELOG.md"
-  "c1d43eb785cb8346096aad88e786e47ed9362eb81071b8b7d5822813d328928d"
+  "ad234d80f5a41d83443a312ef21acec0a1b555949d46c0611dcdf82d1c1df478"
   "doc/api/API.html"
-  "3f85ff835401ee71dbddbe13ef07e0524a2b9e5d7f8a0612f15e34c4d16d6380"
+  "a672425b1c5ae9149dec92bff982f248dd79a351133c5474645f3a37be2fe55a"
   "doc/api/byok.html"
-  "a412fe89f23d14a3894316e28dfd2875ab6c463fe44be99a0db997506d90db5e"
+  "64230702a581d0261ab3e8e89da9bb8021cbb9dea6f404adda7f3afcee7a512c"
   "doc/api/getting-started.html"
-  "6ce5d61ed86fbc3949112f0dfe4a6a539a754eaf5cfa11ffee16f88ffcc1ac90"
+  "5c204b9dd1236711d36c85c4a87f90e8c33c3dd822108ceb28e848bdf76b6772"
   "doc/api/codegen.html"
-  "a1133bba63df7f299d6235f1c9a41cd44f4c3932f8113e08548ecc8f26e0d4b4"
+  "32c278cbb1a75da918c154b1e85f4f4b33311d5bbe0f6bf1ce07004a4382f34d"
   "resources/github/copilot_sdk/api_surface.edn"
   "d2e53642f706ecc71ea29d2501198e3a1e66bc0fb295543658e384fb962d3bf6"}}
