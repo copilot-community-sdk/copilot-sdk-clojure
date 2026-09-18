@@ -787,6 +787,22 @@
       (is (zero? exit) err)
       (is (.exists (io/file output-dir "api.schema.json"))))))
 
+(deftest rejects-path-unsafe-schema-versions
+  (with-temp-root [root]
+    (let [version "../../../outside"
+          archive (create-release-archive! root version default-schemas)
+          output-dir (io/file root "output")
+          result
+          (run-local-fetch
+           archive
+           (sha256-file archive)
+           output-dir
+           {:args ["--version" version]})]
+      (assert-fetch-failure!
+       result
+       output-dir
+       "Schema version must be a path-safe release identifier"))))
+
 (deftest resource-limits-reject-oversized-files-and-command-output
   (with-temp-root [root]
     (let [oversized (io/file root "oversized")
@@ -1182,7 +1198,87 @@
         (is (= expected-permissions
                (Files/getPosixFilePermissions
                 (.toPath output-dir)
-                (make-array java.nio.file.LinkOption 0))))))))
+                (make-array java.nio.file.LinkOption 0))))
+        (is (empty?
+             (filter #(str/starts-with? (.getName %) ".copilot-schemas-")
+                     (.listFiles root))))))))
+
+(deftest preserves-existing-schema-directory-when-replacement-fails
+  (with-temp-root [root]
+    (let [staging-dir (io/file root "staging")
+          output-dir (io/file root "schemas")
+          stale-file (io/file output-dir "stale.schema.json")
+          installed-file (io/file output-dir "api.schema.json")]
+      (.mkdirs staging-dir)
+      (.mkdirs output-dir)
+      (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
+      (spit stale-file "{\"title\":\"Stale\"}\n")
+      (let [{:keys [exit out err]}
+            (run-script-eval
+             (str
+              "(let [move-var (ns-resolve "
+              "'codegen.fetch-schemas 'move-directory!)"
+              "\n      move! (deref move-var)"
+              "\n      calls (atom 0)"
+              "\n      install! " (private-var-form 'install-schemas!) "]"
+              "\n  (with-redefs-fn"
+              "\n    {move-var"
+              "\n     (fn [source destination]"
+              "\n       (if (= 2 (swap! calls inc))"
+              "\n         (throw (ex-info \"replacement move failed\" {}))"
+              "\n         (move! source destination)))}"
+              "\n    #(install! " (pr-str (.getPath staging-dir)) " "
+              (pr-str (.getPath output-dir)) " true)))"))]
+        (is (not (zero? exit)) (str out err))
+        (is (str/includes? (str out err) "replacement move failed"))
+        (is (.exists stale-file))
+        (when (.exists stale-file)
+          (is (= "{\"title\":\"Stale\"}\n" (slurp stale-file))))
+        (is (not (.exists installed-file)))
+        (is (empty?
+             (filter #(str/starts-with? (.getName %) ".copilot-schemas-")
+                     (.listFiles root))))))))
+
+(deftest retains-the-schema-backup-when-rollback-is-blocked
+  (with-temp-root [root]
+    (let [staging-dir (io/file root "staging")
+          output-dir (io/file root "schemas")
+          stale-file (io/file output-dir "stale.schema.json")
+          race-file (io/file output-dir "race.txt")]
+      (.mkdirs staging-dir)
+      (.mkdirs output-dir)
+      (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
+      (spit stale-file "{\"title\":\"Stale\"}\n")
+      (let [{:keys [exit out err]}
+            (run-script-eval
+             (str
+              "(let [move-var (ns-resolve "
+              "'codegen.fetch-schemas 'move-directory!)"
+              "\n      move! (deref move-var)"
+              "\n      calls (atom 0)"
+              "\n      install! " (private-var-form 'install-schemas!) "]"
+              "\n  (with-redefs-fn"
+              "\n    {move-var"
+              "\n     (fn [source destination]"
+              "\n       (when (= 2 (swap! calls inc))"
+              "\n         (babashka.fs/create-dirs destination)"
+              "\n         (spit " (pr-str (.getPath race-file)) " \"preserve\"))"
+              "\n       (move! source destination))}"
+              "\n    #(install! " (pr-str (.getPath staging-dir)) " "
+              (pr-str (.getPath output-dir)) " true)))"))
+            backup-dirs
+            (filter
+             #(str/starts-with? (.getName %) ".copilot-schemas-backup-")
+             (.listFiles root))]
+        (is (not (zero? exit)) (str out err))
+        (is (= "preserve" (slurp race-file)))
+        (is (= 1 (count backup-dirs)))
+        (when-let [backup-dir (first backup-dirs)]
+          (is (= "{\"title\":\"Stale\"}\n"
+                 (slurp (io/file backup-dir "stale.schema.json")))))
+        (is (str/includes?
+             (str out err)
+             "could not restore previous schemas"))))))
 
 (deftest cleanup-failures-are-visible-without-changing-the-primary-outcome
   (let [success

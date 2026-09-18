@@ -98,6 +98,12 @@
                       {::usage-error true})))))
 
 (defn- release-asset-name [version]
+  (when-not (re-matches #"[A-Za-z0-9][A-Za-z0-9._-]*" version)
+    (throw
+     (ex-info
+      (str "Schema version must be a path-safe release identifier containing "
+           "only letters, digits, '.', '_', and '-'")
+      {:version version})))
   (format "github-copilot-%s-%s.tgz" version schema-platform))
 
 (defn- download! [url destination max-bytes]
@@ -720,6 +726,48 @@
   (when (fs/exists? schemas-dir)
     (posix-permissions schemas-dir)))
 
+(defn- move-directory! [source destination]
+  (Files/move
+   (fs/path source)
+   (fs/path destination)
+   (make-array CopyOption 0)))
+
+(defn- create-backup-path [schemas-dir]
+  (str
+   (fs/path
+    (fs/parent schemas-dir)
+    (str ".copilot-schemas-backup-" (UUID/randomUUID)))))
+
+(defn- restore-schema-backup!
+  [backup-dir schemas-dir primary]
+  (try
+    (move-directory! backup-dir schemas-dir)
+    (catch Throwable restore
+      (.addSuppressed
+       ^Throwable primary
+       (ex-info
+        (format
+         "Could not restore previous schemas from %s to %s"
+         backup-dir schemas-dir)
+        {:backup backup-dir
+         :destination schemas-dir}
+        restore))
+      (binding [*out* *err*]
+        (println
+         (format
+          "WARNING: could not restore previous schemas from %s to %s: %s"
+          backup-dir schemas-dir (.getMessage ^Throwable restore)))))))
+
+(defn- replace-schemas! [prepared-dir schemas-dir]
+  (let [backup-dir (create-backup-path schemas-dir)]
+    (move-directory! schemas-dir backup-dir)
+    (try
+      (move-directory! prepared-dir schemas-dir)
+      (catch Throwable primary
+        (restore-schema-backup! backup-dir schemas-dir primary)
+        (throw primary)))
+    (delete-tree-preserving! backup-dir nil)))
+
 (defn- install-schemas!
   [staging-dir schemas-dir replace-existing?]
   (let [prepared-dir (create-prepared-dir! schemas-dir)]
@@ -732,12 +780,9 @@
           (fs/copy-tree staging-dir prepared-dir)
           (when permissions
             (fs/set-posix-file-permissions prepared-dir permissions))
-          (when (and replace-existing? (fs/exists? schemas-dir))
-            (fs/delete-tree schemas-dir))
-          (Files/move
-           (fs/path prepared-dir)
-           (fs/path schemas-dir)
-           (make-array CopyOption 0)))))))
+          (if (and replace-existing? (fs/exists? schemas-dir))
+            (replace-schemas! prepared-dir schemas-dir)
+            (move-directory! prepared-dir schemas-dir)))))))
 
 (defn- prepare-staged-schemas!
   [archive staging-dir source asset-name version]

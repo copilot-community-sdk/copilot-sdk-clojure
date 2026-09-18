@@ -55,10 +55,13 @@ src/github/copilot_sdk/generated/event_specs.clj
    `session-events.schema.json`, strictly decodes each schema as UTF-8, and
    requires exactly one JSON object document. The fetcher writes the original
    checksummed member bytes to the staged set. When replacing `schemas/`, it
-   preserves the existing POSIX owner/group/other `rwx` mode when that
-   attribute view is available; ACLs and special mode bits are outside this
-   guarantee. A new output directory retains the process umask-derived mode.
-   The committed schemas keep builds reproducible offline.
+   moves the existing tree to a same-parent backup before installing the
+   prepared tree, restores that backup if installation fails, and reports the
+   retained backup path if rollback is blocked. Replacement preserves the
+   existing POSIX owner/group/other `rwx` mode when that attribute view is
+   available; ACLs and special mode bits are outside this guarantee. A new
+   output directory retains the process umask-derived mode. The committed
+   schemas keep builds reproducible offline.
 3. `bb codegen` reads `schemas/session-events.schema.json` and writes
    `src/github/copilot_sdk/generated/event_specs.clj`.
 4. The CI workflow `.github/workflows/codegen-check.yml` regenerates on every
@@ -214,10 +217,10 @@ governs the API.
 
 ## What is NOT generated (yet)
 
-- RPC method names and `*Params`/`*Result` specs. Upstream has not yet
-  published `api.schema.json` to the `@github/copilot` npm artifact. When it
-  becomes available, Phase 5 of the codegen plan will generate the RPC
-  registry and `s/fdef`s for all wrappers.
+- RPC method names and `*Params`/`*Result` specs. The fetched and pinned
+  `api.schema.json` is available as an input, but the generator does not yet
+  consume it. Phase 5 of the codegen plan will generate the RPC registry and
+  `s/fdef`s for all wrappers.
 - The wire-key registry in `util.clj`. The current camel↔kebab conversion via
   `camel-snake-kebab` is deterministic for every key in the events schema, so
   generating a static registry is unnecessary until non-roundtripping keys

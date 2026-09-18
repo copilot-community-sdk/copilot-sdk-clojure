@@ -48,6 +48,11 @@ All notable changes to this project will be documented in this file. This change
   the raw string. Fast remains an integrator-only latency preset. The SDK
   forwards it unchanged, and unsupported runtimes return their native error.
   ([upstream PR #2669](https://github.com/github/copilot-sdk/pull/2669))
+- Hardened `bb schemas:fetch` to reject path-unsafe release identifiers before
+  constructing release URLs or archive paths. Checked-in schema replacement
+  now retains the previous tree in a same-parent backup until installation
+  succeeds, restores it after a failed move, and reports the retained backup
+  path if rollback is blocked.
 
 ### Added (v1.0.84-8 sync)
 - Added stable event provenance for assistant originating messages, configured
