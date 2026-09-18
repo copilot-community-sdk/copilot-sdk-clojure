@@ -1213,6 +1213,37 @@
           (is (str/includes? (str out err) expected-message)
               (name limit-symbol)))))))
 
+(deftest bounds-total-extracted-schema-output
+  (with-temp-root [root]
+    (let [archive (create-release-archive! root)
+          staging-dir (io/file root "staging")
+          api-content (get default-schemas "api.schema.json")
+          total-limit (count (.getBytes ^String api-content
+                                        StandardCharsets/UTF_8))
+          {:keys [exit out err]}
+          (run-script-eval
+           (str
+            "(let [limit (ns-resolve "
+            "'codegen.fetch-schemas 'max-total-schema-bytes) "
+            "prepare! " (private-var-form 'prepare-staged-schemas!) "] "
+            "(with-redefs-fn {limit " total-limit "} "
+            "#(prepare! " (pr-str (.getPath archive)) " "
+            (pr-str (.getPath staging-dir))
+            " :local-override \"fixture.tgz\" "
+            (pr-str fixture-version) ")))"))
+          api-schema (io/file staging-dir "api.schema.json")
+          session-events-schema
+          (io/file staging-dir "session-events.schema.json")]
+      (is (not (zero? exit)))
+      (is (str/includes?
+           (str out err)
+           (format "Total schema extraction output exceeds %d bytes"
+                   total-limit)))
+      (is (.exists api-schema))
+      (when (.exists api-schema)
+        (is (same-bytes? api-content api-schema)))
+      (is (not (.exists session-events-schema))))))
+
 (deftest rejects-archive-listings-over-the-member-limit
   (let [{:keys [exit out err]}
         (run-script-eval

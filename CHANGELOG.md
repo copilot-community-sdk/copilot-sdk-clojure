@@ -57,6 +57,8 @@ All notable changes to this project will be documented in this file. This change
   after output or diagnostic overflow and interruption, and remove partial
   destination files after failure. Transient retries restart with a fresh
   destination so failed partial responses cannot prefix a successful download.
+  Schema extraction now also caps total staged schema bytes at 256 MiB so many
+  individually bounded members cannot exhaust disk.
 
 ### Added (v1.0.84-8 sync)
 - Added stable event provenance for assistant originating messages, configured

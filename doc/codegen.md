@@ -87,19 +87,20 @@ that directory.
 
 The fetcher bounds every external artifact before parsing it: checksum
 manifests may be at most 1 MiB, release archives 256 MiB, archive listings
-1 MiB and 4,096 entries, package metadata 1 MiB, and each schema 32 MiB. Archive
-downloads stream through a write-bounded output that never writes past the
-configured limit, while `curl`'s file-size limit rejects known oversized
-responses earlier. Failed or interrupted downloads terminate and reap the
-`curl` process tree and remove the partial destination. Transient curl failures
-retry as separate attempts only after that partial destination is removed, so
-bytes from failed attempts cannot prefix a later successful response. Local
-overrides are copied into the private verified snapshot through the same kind
-of bounded stream. Download, archive listing, and extraction commands cap
-diagnostic standard error at 1 MiB; archive commands must finish within 300
-seconds. Standard-output or standard-error overflow and timeout paths
-gracefully terminate the process tree, forcibly terminate non-cooperative
-processes, and reap them before the fetch fails.
+1 MiB and 4,096 entries, package metadata 1 MiB, each schema 32 MiB, and all
+extracted schemas together 256 MiB. Archive downloads stream through a
+write-bounded output that never writes past the configured limit, while
+`curl`'s file-size limit rejects known oversized responses earlier. Failed or
+interrupted downloads terminate and reap the `curl` process tree and remove
+the partial destination. Transient curl failures retry as separate attempts
+only after that partial destination is removed, so bytes from failed attempts
+cannot prefix a later successful response. Local overrides are copied into the
+private verified snapshot through the same kind of bounded stream. Download,
+archive listing, and extraction commands cap diagnostic standard error at
+1 MiB; archive commands must finish within 300 seconds. Standard-output or
+standard-error overflow and timeout paths gracefully terminate the process
+tree, forcibly terminate non-cooperative processes, and reap them before the
+fetch fails.
 
 ## Workflows
 

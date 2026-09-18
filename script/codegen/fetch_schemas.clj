@@ -56,6 +56,7 @@
 (def ^:private max-archive-members 4096)
 (def ^:private max-package-json-bytes (* 1024 1024))
 (def ^:private max-schema-bytes (* 32 1024 1024))
+(def ^:private max-total-schema-bytes (* 256 1024 1024))
 (def ^:private max-command-stderr-bytes (* 1024 1024))
 (def ^:private download-max-attempts 3)
 (def ^:private download-retry-delay-ms 1000)
@@ -699,15 +700,28 @@
               {:archive archive :member member})))
     (sort-by first entries)))
 
-(defn- extract-schema! [archive staging-dir [schema-name member]]
+(defn- extract-schema!
+  [archive staging-dir extracted-bytes [schema-name member]]
   (let [content (extract-archive-member archive member max-schema-bytes)
-        schema (parse-json archive member content)]
-    (when-not (map? schema)
-      (throw (ex-info (str member " must contain a JSON object")
-                      {:archive archive :member member})))
-    (with-open [output
-                (io/output-stream (str (fs/path staging-dir schema-name)))]
-      (.write output content))))
+        total-bytes (+ extracted-bytes (alength ^bytes content))]
+    (when (> total-bytes max-total-schema-bytes)
+      (throw
+       (ex-info
+        (format "Total schema extraction output exceeds %d bytes"
+                max-total-schema-bytes)
+        {:archive archive
+         :member member
+         :failure :total-schema-output-limit
+         :max-bytes max-total-schema-bytes
+         :total-bytes total-bytes})))
+    (let [schema (parse-json archive member content)]
+      (when-not (map? schema)
+        (throw (ex-info (str member " must contain a JSON object")
+                        {:archive archive :member member})))
+      (with-open [output
+                  (io/output-stream (str (fs/path staging-dir schema-name)))]
+        (.write output content))
+      total-bytes)))
 
 (defn- write-readme! [staging-dir source asset-name version]
   (spit
@@ -919,8 +933,11 @@
      (format "Verified %s: %s" (source-labels source) asset-name))
     (fs/create-dirs staging-dir)
     (let [members (schema-members archive archive-entries)]
-      (doseq [member members]
-        (extract-schema! archive staging-dir member))
+      (reduce
+       (fn [extracted-bytes member]
+         (extract-schema! archive staging-dir extracted-bytes member))
+       0
+       members)
       (write-readme! staging-dir source asset-name version)
       (mapv first members))))
 
