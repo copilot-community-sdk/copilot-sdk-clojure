@@ -22,6 +22,10 @@
             [clojure.java.io :as io]
             [clojure.string :as str])
   (:import (java.math BigInteger)
+           (java.nio ByteBuffer)
+           (java.nio.charset CharacterCodingException
+                             CodingErrorAction
+                             StandardCharsets)
            (java.security MessageDigest)))
 
 (def repo-root
@@ -145,7 +149,7 @@
          :actual actual-hash}))))
   archive)
 
-(defn- archive-members [archive]
+(defn- list-archive-members [archive]
   (let [{:keys [exit out err]}
         @(p/process ["tar" "-tzf" archive]
                     {:out :string :err :string})]
@@ -159,11 +163,32 @@
 (defn- extract-archive-member [archive member]
   (let [{:keys [exit out err]}
         @(p/process ["tar" "-xOzf" archive member]
-                    {:out :string :err :string})]
+                    {:out :bytes :err :string})]
     (when-not (zero? exit)
       (throw (ex-info (str "Could not extract " member)
                       {:exit exit :stderr err})))
     out))
+
+(defn- decode-utf8 [archive member content]
+  (let [decoder
+        (doto (.newDecoder StandardCharsets/UTF_8)
+          (.onMalformedInput CodingErrorAction/REPORT)
+          (.onUnmappableCharacter CodingErrorAction/REPORT))]
+    (try
+      (str (.decode decoder (ByteBuffer/wrap content)))
+      (catch CharacterCodingException error
+        (throw (ex-info (str "Invalid UTF-8 in " member)
+                        {:archive archive :member member}
+                        error))))))
+
+(defn- parse-json [archive member content]
+  (let [text (decode-utf8 archive member content)]
+    (try
+      (json/parse-string text)
+      (catch Exception error
+        (throw (ex-info (str "Invalid JSON in " member)
+                        {:archive archive :member member}
+                        error))))))
 
 (defn- verify-archive-version! [archive members expected-version]
   (let [member "package/package.json"
@@ -172,13 +197,8 @@
       (throw (ex-info
               (format "%s must contain exactly one %s" archive member)
               {:archive archive :member member})))
-    (let [package
-          (try
-            (json/parse-string (extract-archive-member archive member))
-            (catch Exception error
-              (throw (ex-info (str "Invalid JSON in " member)
-                              {:archive archive :member member}
-                              error))))
+    (let [package (parse-json archive member
+                              (extract-archive-member archive member))
           actual-version (get package "version")]
       (when-not (= expected-version actual-version)
         (throw (ex-info
@@ -190,45 +210,51 @@
       (println (format "Verified archive package version: %s"
                        actual-version)))))
 
+(def ^:private schema-member-prefix "package/schemas/")
+
+(def ^:private schema-name-pattern
+  #"[A-Za-z0-9][A-Za-z0-9._-]*\.json")
+
+(defn- schema-entry [archive member]
+  (when (str/starts-with? member schema-member-prefix)
+    (let [schema-name (subs member (count schema-member-prefix))]
+      (cond
+        (str/includes? schema-name "/")
+        nil
+
+        (not (str/ends-with? schema-name ".json"))
+        nil
+
+        (not (re-matches schema-name-pattern schema-name))
+        (throw (ex-info (str "Unsafe top-level schema member: " member)
+                        {:archive archive :member member}))
+
+        :else
+        [schema-name member]))))
+
 (defn- schema-members [archive members]
   (let [entries
-        (into
-         []
-         (keep
-          (fn [member]
-            (when-let [[_ schema-name]
-                       (re-matches #"package/schemas/([^/]+\.json)" member)]
-              [schema-name member])))
-         members)
-        counts (frequencies (map first entries))]
-    (doseq [schema-name required-schema-names]
-      (let [member (str "package/schemas/" schema-name)]
-        (when-not (contains? counts schema-name)
-          (throw (ex-info
-                  (format "%s must contain exactly one %s" archive member)
-                  {:archive archive :member member})))))
-    (doseq [[schema-name count] counts]
-      (when-not (= 1 count)
+        (into [] (keep #(schema-entry archive %)) members)
+        counts (frequencies (map first entries))
+        schema-names
+        (sort (distinct (concat required-schema-names (keys counts))))]
+    (doseq [schema-name schema-names
+            :let [member (str schema-member-prefix schema-name)]]
+      (when-not (= 1 (get counts schema-name 0))
         (throw (ex-info
-                (format "%s must contain exactly one package/schemas/%s"
-                        archive schema-name)
-                {:archive archive
-                 :member (str "package/schemas/" schema-name)}))))
+                (format "%s must contain exactly one %s" archive member)
+                {:archive archive :member member}))))
     (sort-by first entries)))
 
 (defn- extract-schema! [archive staging-dir [schema-name member]]
-  (let [out (extract-archive-member archive member)]
-    (let [schema
-          (try
-            (json/parse-string out)
-            (catch Exception error
-              (throw (ex-info (str "Invalid JSON in " member)
-                              {:archive archive :member member}
-                              error))))]
-      (when-not (map? schema)
-        (throw (ex-info (str member " must contain a JSON object")
-                        {:archive archive :member member})))
-      (spit (str (fs/path staging-dir schema-name)) out))))
+  (let [content (extract-archive-member archive member)
+        schema (parse-json archive member content)]
+    (when-not (map? schema)
+      (throw (ex-info (str member " must contain a JSON object")
+                      {:archive archive :member member})))
+    (with-open [output
+                (io/output-stream (str (fs/path staging-dir schema-name)))]
+      (.write output content))))
 
 (defn- write-readme! [staging-dir source asset-name version]
   (spit
@@ -270,15 +296,29 @@
      :source (if override :release-mirror :github-release)}))
 
 (defn- resolve-release-archive! [version tmp]
-  (let [asset-name (release-asset-name version)]
-    (if-let [source-archive (env-value "COPILOT_CLI_RELEASE_TARBALL")]
-      (let [source-archive (str (fs/canonicalize source-archive))
-            archive (str (fs/path tmp "local-release.tgz"))]
-        (fs/copy source-archive archive)
-        {:archive archive
-         :asset-name (str (fs/file-name source-archive))
-         :expected-hash (env-value "COPILOT_CLI_RELEASE_SHA256")
-         :source :local-override})
+  (let [asset-name (release-asset-name version)
+        source-archive (env-value "COPILOT_CLI_RELEASE_TARBALL")
+        supplied-hash (env-value "COPILOT_CLI_RELEASE_SHA256")]
+    (when (and supplied-hash (nil? source-archive))
+      (throw
+       (ex-info
+        "COPILOT_CLI_RELEASE_SHA256 requires COPILOT_CLI_RELEASE_TARBALL"
+        {:environment-variable "COPILOT_CLI_RELEASE_SHA256"})))
+    (if source-archive
+      (do
+        (when-not (fs/regular-file? source-archive)
+          (throw
+           (ex-info
+            "COPILOT_CLI_RELEASE_TARBALL must name an existing file"
+            {:environment-variable "COPILOT_CLI_RELEASE_TARBALL"
+             :path source-archive})))
+        (let [source-archive (str (fs/canonicalize source-archive))
+              archive (str (fs/path tmp "local-release.tgz"))]
+          (fs/copy source-archive archive)
+          {:archive archive
+           :asset-name (str (fs/file-name source-archive))
+           :expected-hash supplied-hash
+           :source :local-override}))
       (let [{:keys [base-url source]} (release-source)
             release-url (str base-url "/v" version)
             checksums-path (str (fs/path tmp "SHA256SUMS.txt"))
@@ -303,45 +343,51 @@
     {:path default-schemas-dir
      :replace-existing? true}))
 
+(defn- warn-cleanup-failure! [path cleanup]
+  (binding [*out* *err*]
+    (println
+     (format "WARNING: could not remove %s: %s"
+             path
+             (or (.getMessage ^Throwable cleanup)
+                 (.getName (class cleanup)))))))
+
 (defn- delete-tree-preserving! [path primary]
   (try
     (when (fs/exists? path)
       (fs/delete-tree path))
     (catch Throwable cleanup
-      (.addSuppressed ^Throwable primary cleanup))))
+      (when primary
+        (.addSuppressed ^Throwable primary cleanup))
+      (warn-cleanup-failure! path cleanup))))
 
 (defn- with-delete-tree-cleanup [path f]
-  (let [completed? (volatile! false)]
-    (try
-      (let [result (f)]
-        (vreset! completed? true)
-        result)
-      (catch Throwable primary
-        (delete-tree-preserving! path primary)
-        (throw primary))
-      (finally
-        (when @completed?
-          (when (fs/exists? path)
-            (fs/delete-tree path)))))))
+  (let [result
+        (try
+          (f)
+          (catch Throwable primary
+            (delete-tree-preserving! path primary)
+            (throw primary)))]
+    (delete-tree-preserving! path nil)
+    result))
 
-(defn- install-schemas!
-  [staging-dir schemas-dir replace-existing? schema-names]
+(defn- create-prepared-dir! [schemas-dir]
   (let [parent (fs/parent schemas-dir)]
     (fs/create-dirs parent)
-    (let [prepared-dir
-          (str (fs/create-temp-dir
-                {:dir parent :prefix ".copilot-schemas-"}))]
-      (with-delete-tree-cleanup
-        prepared-dir
-        (fn []
-          (fs/copy-tree staging-dir prepared-dir)
-          (when (and replace-existing? (fs/exists? schemas-dir))
-            (fs/delete-tree schemas-dir))
-          (fs/move prepared-dir schemas-dir)))))
-  (doseq [schema-name schema-names]
-    (println (format "  -> %s" (fs/path schemas-dir schema-name)))))
+    (str (fs/create-temp-dir
+          {:dir parent :prefix ".copilot-schemas-"}))))
 
-(defn- run! [args]
+(defn- install-schemas!
+  [staging-dir schemas-dir replace-existing?]
+  (let [prepared-dir (create-prepared-dir! schemas-dir)]
+    (with-delete-tree-cleanup
+      prepared-dir
+      (fn []
+        (fs/copy-tree staging-dir prepared-dir)
+        (when (and replace-existing? (fs/exists? schemas-dir))
+          (fs/delete-tree schemas-dir))
+        (fs/move prepared-dir schemas-dir)))))
+
+(defn- fetch-schemas! [args]
   (let [opts (parse-args args)
         version (or (:version opts) (read-pinned-version))
         {:keys [path replace-existing?]} (resolve-schemas-destination)
@@ -354,8 +400,8 @@
               (resolve-release-archive! version tmp)
               staging-dir (str (fs/path tmp "staged-schemas"))]
           (verify-sha256! archive expected-hash asset-name)
-          (let [archive-members (archive-members archive)]
-            (verify-archive-version! archive archive-members version)
+          (let [archive-entries (list-archive-members archive)]
+            (verify-archive-version! archive archive-entries version)
             (case source
               :github-release
               (println (format "Verified GitHub Release asset: %s" asset-name))
@@ -367,18 +413,20 @@
               (println (format "Verified local archive override: %s"
                                asset-name)))
             (fs/create-dirs staging-dir)
-            (let [members (schema-members archive archive-members)
+            (let [members (schema-members archive archive-entries)
                   schema-names (mapv first members)]
               (doseq [member members]
                 (extract-schema! archive staging-dir member))
               (write-readme! staging-dir source asset-name version)
-              (install-schemas! staging-dir path replace-existing?
-                                schema-names))))
+              (install-schemas! staging-dir path replace-existing?)
+              (doseq [schema-name schema-names]
+                (println
+                 (format "  -> %s" (fs/path path schema-name)))))))
         (println "Schemas updated successfully.")))))
 
 (defn -main [& args]
   (try
-    (run! args)
+    (fetch-schemas! args)
     (catch clojure.lang.ExceptionInfo error
       (if (::usage-error (ex-data error))
         (do

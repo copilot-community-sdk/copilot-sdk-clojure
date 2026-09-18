@@ -52,26 +52,47 @@
                         (Files/readAllBytes (.toPath file)))]
     (format "%064x" (BigInteger. 1 digest))))
 
+(defn- write-release-tree!
+  [root version schemas]
+  (let [schemas-dir (io/file root "package" "schemas")]
+    (.mkdirs schemas-dir)
+    (spit (io/file root "package" "package.json")
+          (json/write-str {"name" "@github/copilot"
+                           "version" version}))
+    (doseq [[schema-name content] schemas]
+      (spit (io/file schemas-dir schema-name) content))))
+
+(defn- create-tar!
+  [archive args]
+  (let [{:keys [exit err]}
+        (apply sh/sh
+               (into ["tar" "-czf" (.getPath archive)] args))]
+    (when-not (zero? exit)
+      (throw (ex-info "Could not create schema fixture archive"
+                      {:exit exit :stderr err}))))
+  archive)
+
 (defn- create-release-archive!
   ([root]
    (create-release-archive! root fixture-version default-schemas))
   ([root schemas]
    (create-release-archive! root fixture-version schemas))
   ([root version schemas]
-   (let [schemas-dir (io/file root "package" "schemas")
-         archive (io/file root "release.tgz")]
-     (.mkdirs schemas-dir)
-     (spit (io/file root "package" "package.json")
-           (json/write-str {"name" "@github/copilot"
-                            "version" version}))
-     (doseq [[schema-name content] schemas]
-       (spit (io/file schemas-dir schema-name) content))
-     (let [{:keys [exit err]}
-           (sh/sh "tar" "-czf" (.getPath archive) "-C" (.getPath root) "package")]
-       (when-not (zero? exit)
-         (throw (ex-info "Could not create schema fixture archive"
-                         {:exit exit :stderr err}))))
-     archive)))
+   (let [archive (io/file root "release.tgz")]
+     (write-release-tree! root version schemas)
+     (create-tar! archive ["-C" (.getPath root) "package"]))))
+
+(defn- create-release-archive-with-duplicate!
+  [root member]
+  (let [base-root (io/file root "base")
+        duplicate-root (io/file root "duplicate")
+        archive (io/file root "release.tgz")]
+    (write-release-tree! base-root fixture-version default-schemas)
+    (write-release-tree! duplicate-root fixture-version default-schemas)
+    (create-tar!
+     archive
+     ["-C" (.getPath base-root) "package"
+      "-C" (.getPath duplicate-root) member])))
 
 (defn- run-fetch
   [{:keys [args dir env]
@@ -82,12 +103,17 @@
                   dir (conj :dir (str dir)))]
     (apply sh/sh command)))
 
+(defn- run-script-eval
+  [form]
+  (sh/sh "bb" "-e" (str "(load-file " (pr-str script-path) ")\n" form)))
+
 (defn- run-local-fetch
   ([archive expected-hash output-dir]
    (run-local-fetch archive expected-hash output-dir {}))
-  ([archive expected-hash output-dir {:keys [dir env]}]
+  ([archive expected-hash output-dir {:keys [args dir env]}]
    (run-fetch
-    {:dir dir
+    {:args (or args ["--version" fixture-version])
+     :dir dir
      :env (merge (cond-> {"COPILOT_CLI_RELEASE_TARBALL" (str archive)
                           "COPILOT_CLI_SCHEMA_OUTPUT" (str output-dir)}
                    expected-hash
@@ -159,6 +185,44 @@
            "Archive version mismatch: expected 9.9.9, got 8.8.8"))
       (is (not (.exists output-dir))))))
 
+(deftest requires-exactly-one-package-manifest
+  (doseq [[label archive-fn]
+          [["missing"
+            (fn [root]
+              (write-release-tree! root fixture-version default-schemas)
+              (create-tar!
+               (io/file root "release.tgz")
+               ["-C" (.getPath root) "package/schemas"]))]
+           ["duplicate"
+            #(create-release-archive-with-duplicate!
+              % "package/package.json")]]]
+    (testing label
+      (with-temp-root [root]
+        (let [archive (archive-fn root)
+              output-dir (io/file root "output")
+              {:keys [exit out err]}
+              (run-local-fetch archive (sha256-file archive) output-dir)]
+          (is (not (zero? exit)))
+          (is (str/includes?
+               (str out err)
+               "must contain exactly one package/package.json"))
+          (is (not (.exists output-dir))))))))
+
+(deftest identifies-malformed-package-json
+  (with-temp-root [root]
+    (let [archive (io/file root "release.tgz")
+          output-dir (io/file root "output")]
+      (write-release-tree! root fixture-version default-schemas)
+      (spit (io/file root "package" "package.json") "{")
+      (create-tar! archive ["-C" (.getPath root) "package"])
+      (let [{:keys [exit out err]}
+            (run-local-fetch archive (sha256-file archive) output-dir)]
+        (is (not (zero? exit)))
+        (is (str/includes?
+             (str out err)
+             "Invalid JSON in package/package.json"))
+        (is (not (.exists output-dir)))))))
+
 (deftest extracts-from-the-verified-local-archive-snapshot
   (with-temp-root [root]
     (let [original-root (io/file root "original")
@@ -219,6 +283,36 @@
            "must contain exactly one package/schemas/session-events.schema.json"))
       (is (not (.exists output-dir))))))
 
+(deftest rejects-duplicate-schema-members
+  (with-temp-root [root]
+    (let [archive
+          (create-release-archive-with-duplicate!
+           root "package/schemas/api.schema.json")
+          output-dir (io/file root "output")
+          {:keys [exit out err]}
+          (run-local-fetch archive (sha256-file archive) output-dir)]
+      (is (not (zero? exit)))
+      (is (str/includes?
+           (str out err)
+           "must contain exactly one package/schemas/api.schema.json"))
+      (is (not (.exists output-dir))))))
+
+(deftest rejects-nonportable-top-level-schema-names
+  (with-temp-root [root]
+    (let [archive (io/file root "release.tgz")
+          output-dir (io/file root "output")]
+      (write-release-tree! root fixture-version default-schemas)
+      (spit (io/file root "package" "schemas" "D:package.json")
+            "{\"title\":\"unsafe\"}\n")
+      (create-tar! archive ["-C" (.getPath root) "package"])
+      (let [{:keys [exit out err]}
+            (run-local-fetch archive (sha256-file archive) output-dir)]
+        (is (not (zero? exit)))
+        (is (str/includes?
+             (str out err)
+             "Unsafe top-level schema member: package/schemas/D:package.json"))
+        (is (not (.exists output-dir)))))))
+
 (deftest copies-additional-top-level-schema-files
   (with-temp-root [root]
     (let [archive
@@ -257,8 +351,7 @@
                  (str out err)
                  "package/schemas/api.schema.json must contain a JSON object"))
             (is (.exists sentinel))
-            (when (.exists sentinel)
-              (is (= "preserve" (slurp sentinel))))))))))
+            (is (= "preserve" (slurp sentinel)))))))))
 
 (deftest identifies-the-member-containing-malformed-json
   (with-temp-root [root]
@@ -275,6 +368,29 @@
            "Invalid JSON in package/schemas/api.schema.json"))
       (is (not (.exists output-dir))))))
 
+(deftest rejects-schema-content-with-malformed-utf8
+  (with-temp-root [root]
+    (let [archive (io/file root "release.tgz")
+          schema-file (io/file root "package" "schemas" "api.schema.json")
+          output-dir (io/file root "output")]
+      (write-release-tree! root fixture-version default-schemas)
+      (with-open [output (io/output-stream schema-file)]
+        (.write output
+                (.getBytes "{\"title\":\""
+                           java.nio.charset.StandardCharsets/UTF_8))
+        (.write output 255)
+        (.write output
+                (.getBytes "\"}\n"
+                           java.nio.charset.StandardCharsets/UTF_8)))
+      (create-tar! archive ["-C" (.getPath root) "package"])
+      (let [{:keys [exit out err]}
+            (run-local-fetch archive (sha256-file archive) output-dir)]
+        (is (not (zero? exit)))
+        (is (str/includes?
+             (str out err)
+             "Invalid UTF-8 in package/schemas/api.schema.json"))
+        (is (not (.exists output-dir)))))))
+
 (deftest rejects-blank-output-without-deleting-the-working-directory
   (with-temp-root [root]
     (let [archive (create-release-archive! root)
@@ -288,8 +404,7 @@
              (str out err)
              "COPILOT_CLI_SCHEMA_OUTPUT must be non-blank"))
         (is (.exists sentinel))
-        (when (.exists sentinel)
-          (is (= "preserve" (slurp sentinel))))))))
+        (is (= "preserve" (slurp sentinel)))))))
 
 (deftest rejects-existing-output-without-deleting-it
   (with-temp-root [root]
@@ -389,6 +504,41 @@
                   (slurp (io/file output-dir "README.md"))
                   "fetched verbatim from the")))))))
 
+(deftest rejects-download-checksum-without-local-archive
+  (with-temp-root [root]
+    (let [archive (create-release-archive! root)
+          hash (sha256-file archive)
+          release-base
+          (create-release-download!
+           root archive (str hash "  " fixture-asset-name "\n"))
+          output-dir (io/file root "output")
+          {:keys [exit out err]}
+          (run-fetch
+           {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
+                  "COPILOT_CLI_RELEASE_SHA256" hash
+                  "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
+      (is (not (zero? exit)))
+      (is (str/includes?
+           (str out err)
+           "COPILOT_CLI_RELEASE_SHA256 requires COPILOT_CLI_RELEASE_TARBALL"))
+      (is (not (.exists output-dir))))))
+
+(deftest identifies-missing-local-archive-override
+  (with-temp-root [root]
+    (let [missing (io/file root "missing.tgz")
+          output-dir (io/file root "output")
+          {:keys [exit out err]}
+          (run-local-fetch
+           missing
+           (apply str (repeat 64 "0"))
+           output-dir)]
+      (is (not (zero? exit)))
+      (is (str/includes?
+           (str out err)
+           "COPILOT_CLI_RELEASE_TARBALL must name an existing file"))
+      (is (str/includes? (str out err) (.getPath missing)))
+      (is (not (.exists output-dir))))))
+
 (deftest reports-release-download-failures
   (with-temp-root [root]
     (let [release-base (str "file://"
@@ -403,60 +553,35 @@
       (is (str/includes? (str out err) "SHA256SUMS.txt"))
       (is (not (.exists output-dir))))))
 
-(deftest rejects-checksum-manifest-without-release-asset
-  (with-temp-root [root]
-    (let [archive (create-release-archive! root)
-          release-base
-          (create-release-download!
-           root archive
-           (str (sha256-file archive) "  another-asset.tgz\n"))
-          output-dir (io/file root "output")
-          {:keys [exit out err]}
-          (run-fetch
-           {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
-                  "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "SHA256SUMS.txt does not contain"))
-      (is (not (.exists output-dir))))))
-
-(deftest rejects-invalid-checksum-entry
-  (with-temp-root [root]
-    (let [archive (create-release-archive! root)
-          release-base
-          (create-release-download!
-           root archive (str "not-a-sha256  " fixture-asset-name "\n"))
-          output-dir (io/file root "output")
-          {:keys [exit out err]}
-          (run-fetch
-           {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
-                  "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "SHA256SUMS.txt contains an invalid entry"))
-      (is (not (.exists output-dir))))))
-
-(deftest rejects-conflicting-checksum-entries
-  (with-temp-root [root]
-    (let [archive (create-release-archive! root)
-          hash (sha256-file archive)
-          release-base
-          (create-release-download!
-           root archive
-           (str hash "  " fixture-asset-name "\n"
-                (apply str (repeat 64 "0")) "  " fixture-asset-name "\n"))
-          output-dir (io/file root "output")
-          {:keys [exit out err]}
-          (run-fetch
-           {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
-                  "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (is (not (zero? exit)))
-      (is (str/includes?
-           (str out err)
-           "SHA256SUMS.txt contains conflicting entries"))
-      (is (not (.exists output-dir))))))
+(deftest rejects-invalid-checksum-manifests
+  (doseq [[label checksums-fn expected-message]
+          [["missing release asset"
+            (fn [archive]
+              (str (sha256-file archive) "  another-asset.tgz\n"))
+            "SHA256SUMS.txt does not contain"]
+           ["invalid entry"
+            (constantly
+             (str "not-a-sha256  " fixture-asset-name "\n"))
+            "SHA256SUMS.txt contains an invalid entry"]
+           ["conflicting entries"
+            (fn [archive]
+              (str (sha256-file archive) "  " fixture-asset-name "\n"
+                   (apply str (repeat 64 "0")) "  "
+                   fixture-asset-name "\n"))
+            "SHA256SUMS.txt contains conflicting entries"]]]
+    (testing label
+      (with-temp-root [root]
+        (let [archive (create-release-archive! root)
+              release-base
+              (create-release-download! root archive (checksums-fn archive))
+              output-dir (io/file root "output")
+              {:keys [exit out err]}
+              (run-fetch
+               {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
+                      "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
+          (is (not (zero? exit)))
+          (is (str/includes? (str out err) expected-message))
+          (is (not (.exists output-dir))))))))
 
 (deftest rejects-insecure-release-download-base-url
   (with-temp-root [root]
@@ -484,6 +609,73 @@
         (is (str/includes? output "Could not inspect"))
         (is (str/includes? output ":stderr"))
         (is (str/includes? output ":exit"))))))
+
+(deftest reads-the-pinned-version-when-version-is-omitted
+  (with-temp-root [root]
+    (let [version (str/trim (slurp ".copilot-schema-version"))
+          archive (create-release-archive! root version default-schemas)
+          output-dir (io/file root "output")
+          {:keys [exit err]}
+          (run-local-fetch archive (sha256-file archive) output-dir
+                           {:args []})]
+      (is (zero? exit) err)
+      (is (.exists (io/file output-dir "api.schema.json"))))))
+
+(deftest replaces-an-existing-schema-directory
+  (with-temp-root [root]
+    (let [staging-dir (io/file root "staging")
+          output-dir (io/file root "schemas")
+          stale-file (io/file output-dir "stale.schema.json")]
+      (.mkdirs staging-dir)
+      (.mkdirs output-dir)
+      (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
+      (spit stale-file "{\"title\":\"Stale\"}\n")
+      (let [{:keys [exit err]}
+            (run-script-eval
+             (format
+              (str "(let [install! (ns-resolve "
+                   "'codegen.fetch-schemas 'install-schemas!)] "
+                   "((deref install!) %s %s true))")
+              (pr-str (.getPath staging-dir))
+              (pr-str (.getPath output-dir))))]
+        (is (zero? exit) err)
+        (is (not (.exists stale-file)))
+        (is (= {"title" "API"}
+               (json/read-str
+                (slurp (io/file output-dir "api.schema.json")))))))))
+
+(deftest cleanup-failures-are-visible-without-changing-the-primary-outcome
+  (let [success
+        (run-script-eval
+         (str
+          "(let [cleanup (ns-resolve "
+          "'codegen.fetch-schemas 'with-delete-tree-cleanup)] "
+          "(with-redefs [babashka.fs/exists? (constantly true) "
+          "babashka.fs/delete-tree "
+          "(fn [_] (throw (ex-info \"cleanup failed\" {})))] "
+          "(println ((deref cleanup) \"victim\" (constantly :installed)))))"))
+        failure
+        (run-script-eval
+         (str
+          "(let [cleanup (ns-resolve "
+          "'codegen.fetch-schemas 'with-delete-tree-cleanup)] "
+          "(with-redefs [babashka.fs/exists? (constantly true) "
+          "babashka.fs/delete-tree "
+          "(fn [_] (throw (ex-info \"cleanup failed\" {})))] "
+          "((deref cleanup) \"victim\" "
+          "(fn [] (throw (ex-info \"primary failed\" {}))))))"))]
+    (is (zero? (:exit success)) (:err success))
+    (is (str/includes? (:out success) ":installed"))
+    (is (str/includes?
+         (str (:out success) (:err success))
+         "WARNING: could not remove victim: cleanup failed"))
+    (is (not (zero? (:exit failure))))
+    (is (str/includes?
+         (str (:out failure) (:err failure))
+         "primary failed"))
+    (is (str/includes?
+         (str (:out failure) (:err failure))
+         "WARNING: could not remove victim: cleanup failed"))))
 
 (deftest reports-usage-errors-with-exit-code-two
   (doseq [[label args expected-message]

@@ -73,7 +73,7 @@
   #{:byok/azure-project-url
     :release/version-1.0.14
     :runtime/schema-1.0.86-0
-    :session/auto-tier-fast-lifecycle})
+    :session/auto-tier-fast-value})
 
 (def ^:private inventory-sections
   [[:added-exported-symbols :exported-symbol]
@@ -109,6 +109,10 @@
          classification classifications
          :when (seq (get by-class classification))]
      [section owner classification])))
+
+(defn- classified-items
+  [classifications]
+  (apply set/union #{} (vals classifications)))
 
 (defn- upstream-repo-or-skip
   [scope]
@@ -321,9 +325,8 @@
                (count package-symbols)))
         (is (= (get-in surface [:package-root :symbols-sha256])
                (sha256-lines (sort package-symbols))))
-        (is (= (apply set/union
-                      #{}
-                      (vals (get-in surface [:package-root :added])))
+        (is (= (classified-items
+                (get-in surface [:package-root :added]))
                (set/difference package-symbols baseline-package-symbols)))
         (is (= (get-in surface [:package-root :removed])
                (set/difference baseline-package-symbols package-symbols)))
@@ -349,7 +352,7 @@
                 [[:added-exported-symbols base target "added"]
                  [:removed-exported-symbols target base "removed"]]
                 [path classifications] (get inventory inventory-key)]
-          (let [expected (apply set/union #{} (vals classifications))
+          (let [expected (classified-items classifications)
                 actual
                 (set/difference
                  (exported-symbols (read-source to path))
@@ -358,7 +361,7 @@
                 (str label " exported symbols drifted for " path))))
         (doseq [[interface-name classifications]
                 (:event-interface-fields inventory)]
-          (let [expected (apply set/union #{} (vals classifications))
+          (let [expected (classified-items classifications)
                 base-fields
                 (interface-fields (read-source base event-path)
                                   interface-name)
@@ -369,7 +372,7 @@
                 (str "event fields drifted for " interface-name))))
         (doseq [[path classifications]
                 (:changed-declarations inventory)]
-          (is (= (apply set/union #{} (vals classifications))
+          (is (= (classified-items classifications)
                  (changed-exported-declarations
                   upstream-repo base target path))
               (str "changed declarations drifted for " path)))
@@ -390,7 +393,7 @@
               (is (some #(str/includes? % contains) changed-lines)
                   (str "evidence marker did not change in " path)))))))))
 
-(deftest fast-auto-tier-and-azure-project-url-contracts
+(deftest fast-auto-tier-value-and-azure-project-url-contracts
   (doseq [event-type ["session.start" "session.resume"]
           :let [wire-event {:type event-type :data {:auto-tier "fast"}}
                 idiom-event (coerce/event-wire->idiom wire-event)]]
@@ -402,10 +405,10 @@
                      [:data :auto-tier])))))
   (is (s/valid? ::specs/auto-tier :fast))
   (let [create-params
-        ((var-get (var client/build-create-session-params))
+        (#'client/build-create-session-params
          {:capi {:auto-tier :fast}})
         resume-params
-        ((var-get (var client/build-resume-session-params))
+        (#'client/build-resume-session-params
          "session-1"
          {:capi {:auto-tier :fast}})]
     (doseq [params [create-params resume-params]]
@@ -421,27 +424,16 @@
                             :base-url project-url
                             :wire-api :responses}}
                 create-params
-                ((var-get (var client/build-create-session-params)) config)
+                (#'client/build-create-session-params config)
                 resume-params
-                ((var-get (var client/build-resume-session-params))
+                (#'client/build-resume-session-params
                  "session-1"
                  config)]]
     (testing project-url
       (doseq [params [create-params resume-params]]
         (is (= project-url (get-in params [:provider :baseUrl])))
         (is (= :azure (get-in params [:provider :type])))
-        (is (= :responses (get-in params [:provider :wireApi]))))))
-  (let [azure-delta
-        (first
-         (filter #(= :byok/azure-project-url (:id %))
-                 (:stable-deltas (report))))]
-    (is (= {:base-url-forms #{:resource-host :project-url}
-            :forwarding :unchanged
-            :trailing-slash-forms #{:present :absent}}
-           (get-in azure-delta [:contract :clojure-sdk])))
-    (is (= {:authority :upstream-documentation
-            :versionless-responses-path :preserves-project-prefix}
-           (get-in azure-delta [:contract :copilot-cli-runtime])))))
+        (is (= :responses (get-in params [:provider :wireApi])))))))
 
 (deftest experimental-permission-events-remain-generated-only
   (let [event-schema

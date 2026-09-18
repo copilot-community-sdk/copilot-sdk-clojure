@@ -49,10 +49,11 @@ src/github/copilot_sdk/generated/event_specs.clj
 2. `bb schemas:fetch` downloads the release checksum manifest and archive,
    restricts network transfers and redirects to HTTPS, verifies the published
    SHA-256 digest and `package/package.json` version, and discovers every
-   top-level `package/schemas/*.json` member. It requires `api.schema.json` and
-   `session-events.schema.json`, validates every schema as a JSON object, and
-   stages the complete set before replacing `schemas/`. The committed schemas
-   keep builds reproducible offline.
+   portable top-level `package/schemas/*.json` member. It requires
+   `api.schema.json` and `session-events.schema.json`, strictly decodes each
+   schema as UTF-8 for JSON-object validation, and writes the original
+   checksummed member bytes to the staged set before replacing `schemas/`.
+   The committed schemas keep builds reproducible offline.
 3. `bb codegen` reads `schemas/session-events.schema.json` and writes
    `src/github/copilot_sdk/generated/event_specs.clj`.
 4. The CI workflow `.github/workflows/codegen-check.yml` regenerates on every
@@ -66,9 +67,13 @@ repository updates use the defaults.
 | Environment variable | Use | Constraints |
 |----------------------|-----|-------------|
 | `COPILOT_CLI_DOWNLOAD_BASE_URL` | Override the Copilot CLI release download root | Must use `https://` or `file://`; redirects from network requests remain HTTPS; generated provenance identifies a configured release mirror |
-| `COPILOT_CLI_RELEASE_SHA256` | Supply the expected digest for a local archive | Required with `COPILOT_CLI_RELEASE_TARBALL`; must be a 64-character hexadecimal SHA-256 |
-| `COPILOT_CLI_RELEASE_TARBALL` | Read a local Copilot CLI archive instead of downloading | The archive is copied to a private temporary snapshot before hashing and extraction; the output README and logs identify local-override provenance |
+| `COPILOT_CLI_RELEASE_SHA256` | Supply the expected digest for a local archive | Required with `COPILOT_CLI_RELEASE_TARBALL`; rejected without it; must be a 64-character hexadecimal SHA-256 |
+| `COPILOT_CLI_RELEASE_TARBALL` | Read a local Copilot CLI archive instead of downloading | Must name an existing file. The archive is copied to a private temporary snapshot before hashing and extraction; the output README and logs identify local-override provenance |
 | `COPILOT_CLI_SCHEMA_OUTPUT` | Write to an isolated output directory instead of replacing `schemas/` | The path must not already exist; relative paths are normalized before creation. Only the fixed default `schemas/` destination is replaced |
+
+Temporary-directory cleanup failures are reported as warnings on standard
+error, including the path that could not be removed. They do not replace the
+fetch result or its primary failure.
 
 ## Workflows
 
@@ -85,7 +90,8 @@ bb test                                       # ensure no regressions
 ### Bumping the upstream schema version
 
 ```bash
-echo "1.0.86-0" > .copilot-schema-version
+: "${COPILOT_SCHEMA_VERSION:?Set COPILOT_SCHEMA_VERSION to the target release}"
+printf '%s\n' "$COPILOT_SCHEMA_VERSION" > .copilot-schema-version
 bb schemas:fetch        # downloads the new version
 bb codegen              # regenerate Clojure
 git diff                # review the schema diff and the generated diff

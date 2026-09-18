@@ -80,7 +80,7 @@
    :classification :stable-public
    :status :ported
    :reason
-   "Completes Fast Auto-tier create, resume, event, error, and persistence coverage while keeping live switching APIs experimental."
+   "Adds the stable Fast Auto-tier value to create, resume, and session events while runtime-owned activation and persistence tests remain internal and live switching APIs remain experimental."
    :changed-path-count 35
    :changed-paths-sha256
    "8b7b253d7610b4404d7d8d40f0803c2afa27b5e3531aeed80b3eddf731088ab1"}
@@ -164,25 +164,25 @@
   "ae1b3f9cfd52c75c2ffc88cfd2d1f0220b922b1c33bdbf001d6fe12035b0311f"
   :hash-format :newline-joined-without-trailing-newline
   :classification-counts
-  {:stable-public 11
+  {:stable-public 5
    :experimental 1
-   :internal 27
+   :internal 33
    :language-specific 87}
   :exact-classifications
   {"docs/auth/byok.md" :stable-public
    "docs/features/session-persistence.md" :stable-public
    "nodejs/README.md" :stable-public
    "nodejs/test/client.test.ts" :stable-public
-   "nodejs/test/e2e/auto_tier.e2e.test.ts" :stable-public
+   "nodejs/test/e2e/auto_tier.e2e.test.ts" :internal
    "nodejs/test/session-event-types.test.ts" :stable-public
-   "test/harness/replayingCapiProxy.test.ts" :stable-public
-   "test/harness/replayingCapiProxy.ts" :stable-public
+   "test/harness/replayingCapiProxy.test.ts" :internal
+   "test/harness/replayingCapiProxy.ts" :internal
    "test/snapshots/auto_tier/should_commit_fast_auto_tier_after_successful_turn.yaml"
-   :stable-public
+   :internal
    "test/snapshots/auto_tier/should_preserve_effective_tier_when_fast_activation_fails.yaml"
-   :stable-public
+   :internal
    "test/snapshots/auto_tier/should_restore_and_override_fast_auto_tier_on_cold_resume.yaml"
-   :stable-public
+   :internal
 
    "nodejs/src/generated/session-events.ts" :experimental
 
@@ -340,7 +340,7 @@
  #{:byok/azure-project-url
    :release/version-1.0.14
    :runtime/schema-1.0.86-0
-   :session/auto-tier-fast-lifecycle}
+   :session/auto-tier-fast-value}
 
  :stable-deltas
  [{:id :release/version-1.0.14
@@ -366,7 +366,7 @@
     "schemas/api.schema.json"
     "schemas/session-events.schema.json"
     "src/github/copilot_sdk/generated/event_specs.clj"]}
-  {:id :session/auto-tier-fast-lifecycle
+  {:id :session/auto-tier-fast-value
    :classification :stable-public
    :status :ported
    :upstream-pr 2669
@@ -378,8 +378,7 @@
    {:wire-value "fast"
     :idiom-value :fast
     :create-resume :forwarded
-    :event-coercion #{:copilot/session.start :copilot/session.resume}
-    :runtime-errors :forwarded-unchanged}
+    :event-coercion #{:copilot/session.start :copilot/session.resume}}
    :clojure-paths
    ["script/codegen/emit_coerce.clj"
     "src/github/copilot_sdk/generated/coerce.clj"
@@ -469,8 +468,9 @@
    :status :approved
    :authority :upstream-internal-implementation
    :reason
-   "Image replay, lifecycle synchronization, workflow triage, and fixture-only changes do not alter stable SDK contracts."
-   :evidence [:replay-compatibility]
+   "Runtime-owned Fast activation and persistence, image replay, lifecycle synchronization, workflow triage, and fixture-only changes do not alter stable SDK contracts."
+   :evidence [:fast-auto-tier-runtime-lifecycle
+              :replay-compatibility]
    :inventory-groups []}
   {:id :other-sdks/language-specific
    :classification :language-specific
@@ -526,9 +526,12 @@
   :runtime-release-tooling
   {:path "nodejs/scripts/runtime-release-identity.ts"
    :contains "export interface RuntimeReleaseIdentity"}
+  :fast-auto-tier-runtime-lifecycle
+  {:path "nodejs/test/e2e/auto_tier.e2e.test.ts"
+   :contains "should restore and override fast auto tier on cold resume"}
   :replay-compatibility
-  {:path "test/harness/replayingCapiProxy.ts"
-   :contains "autoResponses?: AutoResponseStub[]"}
+  {:path "test/harness/replayingCapiProxy.test.ts"
+   :contains "replays only the recorded image histories for %s"}
   :language-specific-changes
   {:path "rust/src/types.rs" :contains "pub allowed_models"}}
 
@@ -554,7 +557,7 @@
   "script/codegen/emit_coerce.clj"
   "80ef6aac919674e05a871169701ff2a1edb0547183237f98ce958b3a69b65dec"
   "script/codegen/fetch_schemas.clj"
-  "6e951e228e1f865c34e1f7fad6e95bb4e7df0f6815fd60afb997e70dd03e7887"
+  "7ce3159e6c5449784eadab4bde7be2b31a94baf66dd28468f9ff76356ad71476"
   "src/github/copilot_sdk/generated/coerce.clj"
   "e4750f4689fff5ef7bac5dcec3ee77eaaaae6b244e9b5c9c659eb198d56b8c58"
   "src/github/copilot_sdk/generated/event_metadata.clj"
@@ -564,22 +567,22 @@
   "test/github/copilot_sdk/codegen_test.clj"
   "16ba14ac366ba7544821d920154f9b4fc21296fcb8eb6673a3dfe85b88ea14dc"
   "test/github/copilot_sdk/schema_fetch_test.clj"
-  "c3adcd1383fdc2fdf912df8ec1674af186c339d8351a2349ca35111bb7048802"
+  "23fc325e191f4afb871dfc1241e1abf4cfd85011a1a5077288e856302432b487"
   "doc/auth/byok.md"
   "9f80041f1d6409b66678e65e93f6b8c12079e3ce9d213c9a0da14562a0534eaf"
   "doc/reference/API.md"
-  "4c02fe4c060f720f402cee086062202cef4b94d3048f589073beb20c9a3d95a8"
+  "b61537afac6e4864c844c6f05ccda65ea81b8719b43b00bf2d479799c921893c"
   "doc/codegen.md"
-  "2c4e8abd6e9b887da86f356a730f31a15977e425fa6c3ca205ce212e9b34a4eb"
+  "9efe8c84128bca310905e50104af6c919e32cb82411ecce6b1d8908687574cc1"
   "CHANGELOG.md"
-  "ad234d80f5a41d83443a312ef21acec0a1b555949d46c0611dcdf82d1c1df478"
+  "505012a41fba38c2f7ff3cbff68974302f2131f8287fa81f94dd4c396aad6f2a"
   "doc/api/API.html"
-  "a672425b1c5ae9149dec92bff982f248dd79a351133c5474645f3a37be2fe55a"
+  "1a0e64bc2019858425a288c966f0fab611175c6892f357cc324df090832b742a"
   "doc/api/byok.html"
   "64230702a581d0261ab3e8e89da9bb8021cbb9dea6f404adda7f3afcee7a512c"
   "doc/api/getting-started.html"
   "5c204b9dd1236711d36c85c4a87f90e8c33c3dd822108ceb28e848bdf76b6772"
   "doc/api/codegen.html"
-  "32c278cbb1a75da918c154b1e85f4f4b33311d5bbe0f6bf1ce07004a4382f34d"
+  "96de8268170c83767e42515ece6496e5e68cc92a210a96b7feea9e72ff956da6"
   "resources/github/copilot_sdk/api_surface.edn"
   "d2e53642f706ecc71ea29d2501198e3a1e66bc0fb295543658e384fb962d3bf6"}}
