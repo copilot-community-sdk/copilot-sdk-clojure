@@ -57,6 +57,8 @@
 (def ^:private max-package-json-bytes (* 1024 1024))
 (def ^:private max-schema-bytes (* 32 1024 1024))
 (def ^:private max-command-stderr-bytes (* 1024 1024))
+(def ^:private download-max-attempts 3)
+(def ^:private download-retry-delay-ms 1000)
 (def ^:private download-command-timeout-seconds 600)
 (def ^:private archive-command-timeout-seconds 300)
 (def ^:private process-termination-grace-seconds 1)
@@ -112,39 +114,75 @@
 (defn- delete-partial-download! [destination primary]
   (try
     (Files/deleteIfExists (fs/path destination))
+    true
     (catch Throwable cleanup
       (.addSuppressed ^Throwable primary cleanup)
       (binding [*out* *err*]
         (println
          (format
           "WARNING: could not remove partial download %s: %s"
-          destination (.getMessage ^Throwable cleanup)))))))
+          destination (.getMessage ^Throwable cleanup))))
+      false)))
+
+(def ^:private retryable-curl-exit-codes
+  ;; Curl's built-in retry cannot reset piped output. Mirror its HTTPS retry
+  ;; categories with fresh bounded destinations instead.
+  #{22 28})
+
+(defn- retryable-download-error? [error]
+  (let [{:keys [failure exit]} (ex-data error)]
+    (and (= :command-exit failure)
+         (contains? retryable-curl-exit-codes exit))))
+
+(defn- wait-before-download-retry! []
+  (try
+    (Thread/sleep download-retry-delay-ms)
+    (catch InterruptedException error
+      (.interrupt (Thread/currentThread))
+      (throw error))))
 
 (defn- download! [url destination max-bytes]
   (println (format "Fetching %s" url))
-  (try
-    (run-bounded-command-to-file
-     ["curl"
-      "--fail"
-      "--silent"
-      "--show-error"
-      "--location"
-      "--proto" "=https,file"
-      "--proto-redir" "=https"
-      "--retry" "2"
-      "--retry-delay" "1"
-      "--connect-timeout" "30"
-      "--max-time" "600"
-      "--max-filesize" (str max-bytes)
-      url]
-     destination
-     max-bytes
-     download-command-timeout-seconds
-     (str "Download from " url))
-    destination
-    (catch Throwable primary
-      (delete-partial-download! destination primary)
-      (throw primary))))
+  (loop [attempt 1]
+    (let [outcome
+          (try
+            (run-bounded-command-to-file
+             ["curl"
+              "--fail"
+              "--silent"
+              "--show-error"
+              "--location"
+              "--proto" "=https,file"
+              "--proto-redir" "=https"
+              "--connect-timeout" "30"
+              "--max-time" "600"
+              "--max-filesize" (str max-bytes)
+              url]
+             destination
+             max-bytes
+             download-command-timeout-seconds
+             (str "Download from " url))
+            {:error nil}
+            (catch Throwable primary
+              {:error primary}))]
+      (if-let [primary (:error outcome)]
+        (let [cleaned? (delete-partial-download! destination primary)]
+          (if (and cleaned?
+                   (< attempt download-max-attempts)
+                   (retryable-download-error? primary))
+            (do
+              (binding [*out* *err*]
+                (println
+                 (format
+                  "Retrying download after curl exit %d (%d/%d): %s"
+                  (:exit (ex-data primary))
+                  (inc attempt)
+                  download-max-attempts
+                  url)))
+              (wait-before-download-retry!)
+              (recur (inc attempt)))
+            (throw primary)))
+        destination))))
 
 (defn- sha256-file [file]
   (let [digest (MessageDigest/getInstance "SHA-256")
@@ -365,6 +403,7 @@
     (ex-info
      (format "%s output exceeds %d bytes" description max-bytes)
      {:command command
+      :failure :output-limit
       :max-bytes max-bytes})
 
     (:overflow? stderr-snapshot)
@@ -372,6 +411,7 @@
      (format "%s stderr exceeds %d bytes"
              description max-command-stderr-bytes)
      {:command command
+      :failure :stderr-limit
       :max-stderr-bytes max-command-stderr-bytes})))
 
 (defn- close-command-streams [streams]
@@ -468,6 +508,7 @@
                       (format "%s timed out after %d seconds"
                               description timeout-seconds)
                       {:command command
+                       :failure :timeout
                        :timeout-seconds timeout-seconds}))]
                 (throw
                  (attach-cleanup-error! primary termination)))
@@ -493,6 +534,7 @@
                      (ex-info
                       (str description " failed")
                       {:command command
+                       :failure :command-exit
                        :exit (:exit result)
                        :stderr stderr}))))
                 final-stdout))))

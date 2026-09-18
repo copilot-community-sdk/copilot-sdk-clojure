@@ -55,7 +55,8 @@ All notable changes to this project will be documented in this file. This change
   path if rollback is blocked. Network downloads now stream through the same
   bounded command lifecycle as archive extraction, terminate and reap `curl`
   after output or diagnostic overflow and interruption, and remove partial
-  destination files after failure.
+  destination files after failure. Transient retries restart with a fresh
+  destination so failed partial responses cannot prefix a successful download.
 
 ### Added (v1.0.84-8 sync)
 - Added stable event provenance for assistant originating messages, configured

@@ -1041,7 +1041,15 @@
 
 (deftest download-bounds-bytes-while-writing
   (with-temp-root [root]
-    (let [_ (create-fake-curl! root "printf 12345")
+    (let [attempt-file (io/file root "attempts")
+          _ (create-fake-curl!
+             root
+             (str "attempt=0\n"
+                  "[ ! -f \"$CURL_ATTEMPT_FILE\" ] || "
+                  "attempt=$(cat \"$CURL_ATTEMPT_FILE\")\n"
+                  "attempt=$((attempt + 1))\n"
+                  "printf '%s' \"$attempt\" > \"$CURL_ATTEMPT_FILE\"\n"
+                  "printf 12345"))
           destination (io/file root "download.bin")
           {:keys [exit err]}
           (run-script-eval
@@ -1050,10 +1058,45 @@
             "\"https://example.invalid/archive.tgz\""
             (pr-str (.getPath destination))
             "4")
-           {"PATH" (path-with root)})]
+           {"CURL_ATTEMPT_FILE" (.getPath attempt-file)
+            "PATH" (path-with root)})]
       (is (not (zero? exit)))
       (is (str/includes? err "output exceeds 4 bytes"))
-      (is (not (.exists destination))))))
+      (is (not (.exists destination)))
+      (is (= "1" (slurp attempt-file))))))
+
+(deftest download-retries-with-a-fresh-destination
+  (with-temp-root [root]
+    (let [attempt-file (io/file root "attempts")
+          _ (create-fake-curl!
+             root
+             (str "attempt=0\n"
+                  "[ ! -f \"$CURL_ATTEMPT_FILE\" ] || "
+                  "attempt=$(cat \"$CURL_ATTEMPT_FILE\")\n"
+                  "attempt=$((attempt + 1))\n"
+                  "printf '%s' \"$attempt\" > \"$CURL_ATTEMPT_FILE\"\n"
+                  "if [ \"$attempt\" -eq 1 ]; then\n"
+                  "  printf partial\n"
+                  "  exit 28\n"
+                  "fi\n"
+                  "printf complete"))
+          destination (io/file root "download.bin")
+          {:keys [exit err]}
+          (run-script-eval
+           (str
+            "(let [delay (ns-resolve "
+            "'codegen.fetch-schemas 'download-retry-delay-ms) "
+            "download! " (private-var-form 'download!) "] "
+            "(with-redefs-fn {delay 0} "
+            "#(download! \"https://example.invalid/archive.tgz\" "
+            (pr-str (.getPath destination)) " 1024)))")
+           {"CURL_ATTEMPT_FILE" (.getPath attempt-file)
+            "PATH" (path-with root)})]
+      (is (zero? exit) err)
+      (is (= "2" (slurp attempt-file)))
+      (is (.exists destination))
+      (when (.exists destination)
+        (is (= "complete" (slurp destination)))))))
 
 (deftest bounded-command-file-output-never-writes-past-the-limit
   (with-temp-root [root]
