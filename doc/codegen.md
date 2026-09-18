@@ -54,9 +54,11 @@ src/github/copilot_sdk/generated/event_specs.clj
    and nested schema paths, requires `api.schema.json` and
    `session-events.schema.json`, strictly decodes each schema as UTF-8, and
    requires exactly one JSON object document. The fetcher writes the original
-   checksummed member bytes to the staged set and preserves the destination
-   directory permissions when replacing `schemas/`. The committed schemas
-   keep builds reproducible offline.
+   checksummed member bytes to the staged set. When replacing `schemas/`, it
+   preserves the existing POSIX owner/group/other `rwx` mode when that
+   attribute view is available; ACLs and special mode bits are outside this
+   guarantee. A new output directory retains the process umask-derived mode.
+   The committed schemas keep builds reproducible offline.
 3. `bb codegen` reads `schemas/session-events.schema.json` and writes
    `src/github/copilot_sdk/generated/event_specs.clj`.
 4. The CI workflow `.github/workflows/codegen-check.yml` regenerates on every
@@ -75,8 +77,15 @@ repository updates use the defaults.
 | `COPILOT_CLI_SCHEMA_OUTPUT` | Write to an isolated output directory instead of replacing `schemas/` | The path must not already exist; relative paths are normalized before creation. Only the fixed default `schemas/` destination is replaced |
 
 Temporary-directory cleanup failures are reported as warnings on standard
-error, including the path that could not be removed. They do not replace the
-fetch result or its primary failure.
+error, including the path and exception type. They do not replace the fetch
+result or its primary failure. A create-only output still fails if the path
+appears after validation; the final move never nests the prepared schemas under
+that directory.
+
+The fetcher bounds every external artifact before parsing it: checksum
+manifests may be at most 1 MiB, release archives 256 MiB, archive listings
+1 MiB and 4,096 entries, package metadata 1 MiB, and each schema 32 MiB. Archive
+listing and extraction commands must finish within 300 seconds.
 
 ## Workflows
 

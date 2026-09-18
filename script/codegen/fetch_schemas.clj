@@ -21,12 +21,16 @@
             [cheshire.core :as json]
             [clojure.java.io :as io]
             [clojure.string :as str])
-  (:import (java.io StringReader)
+  (:import (java.io ByteArrayOutputStream
+                    OutputStream
+                    StringReader)
            (java.math BigInteger)
            (java.nio ByteBuffer)
            (java.nio.charset CharacterCodingException
                              CodingErrorAction
                              StandardCharsets)
+           (java.nio.file CopyOption
+                          Files)
            (java.security MessageDigest)))
 
 (def repo-root
@@ -42,6 +46,14 @@
 
 (def required-schema-names
   ["api.schema.json" "session-events.schema.json"])
+
+(def ^:private max-checksum-manifest-bytes (* 1024 1024))
+(def ^:private max-release-archive-bytes (* 256 1024 1024))
+(def ^:private max-archive-listing-bytes (* 1024 1024))
+(def ^:private max-archive-members 4096)
+(def ^:private max-package-json-bytes (* 1024 1024))
+(def ^:private max-schema-bytes (* 32 1024 1024))
+(def ^:private archive-command-timeout-seconds 300)
 
 (def default-release-base-url
   "https://github.com/github/copilot-cli/releases/download")
@@ -81,7 +93,7 @@
 (defn- release-asset-name [version]
   (format "github-copilot-%s-%s.tgz" version schema-platform))
 
-(defn- download! [url destination]
+(defn- download! [url destination max-bytes]
   (println (format "Fetching %s" url))
   (let [{:keys [exit err]}
         @(p/process ["curl"
@@ -95,6 +107,7 @@
                      "--retry-delay" "1"
                      "--connect-timeout" "30"
                      "--max-time" "600"
+                     "--max-filesize" (str max-bytes)
                      "-o" destination
                      url]
                     {:err :string})]
@@ -155,6 +168,86 @@
          :actual actual-hash}))))
   archive)
 
+(defn- ensure-file-size! [path max-bytes label]
+  (let [size (fs/size path)]
+    (when (> size max-bytes)
+      (throw (ex-info (format "%s exceeds %d bytes" label max-bytes)
+                      {:path (str path)
+                       :size size
+                       :max-bytes max-bytes}))))
+  path)
+
+(defn- bounded-output [max-bytes process-holder]
+  (let [buffer (ByteArrayOutputStream.)
+        total (atom 0)
+        overflow? (atom false)
+        destroyed? (atom false)
+        destroy-error (atom nil)
+        record!
+        (fn [bytes offset length]
+          (let [new-total (swap! total + length)
+                remaining (- (inc max-bytes) (.size buffer))
+                write-count (min length (max 0 remaining))]
+            (when (pos? write-count)
+              (.write buffer bytes offset write-count))
+            (when (> new-total max-bytes)
+              (reset! overflow? true)
+              (when (and @process-holder
+                         (compare-and-set! destroyed? false true))
+                (try
+                  (p/destroy-tree @process-holder)
+                  (catch Throwable cleanup
+                    (reset! destroy-error cleanup)))))))]
+    {:stream
+     (proxy [OutputStream] []
+       (write
+         ([value]
+          (let [bytes (byte-array [(unchecked-byte value)])]
+            (record! bytes 0 1)))
+         ([bytes offset length]
+          (record! bytes offset length))))
+     :bytes #(.toByteArray buffer)
+     :overflow? overflow?
+     :destroy-error destroy-error}))
+
+(defn- run-bounded-command-output
+  [command max-bytes timeout-seconds label]
+  (let [process-holder (atom nil)
+        {:keys [stream bytes overflow? destroy-error]}
+        (bounded-output max-bytes process-holder)
+        process (p/process command {:out stream :err :string})
+        _ (reset! process-holder process)
+        waiter (future @process)
+        result (deref waiter (* 1000 timeout-seconds) ::timeout)]
+    (when (= ::timeout result)
+      (let [primary
+            (ex-info
+             (format "%s timed out after %d seconds"
+                     label timeout-seconds)
+             {:command command
+              :timeout-seconds timeout-seconds})]
+        (try
+          (p/destroy-tree process)
+          (catch Throwable cleanup
+            (.addSuppressed ^Throwable primary cleanup)))
+        (future-cancel waiter)
+        (throw primary)))
+    (when @overflow?
+      (let [primary
+            (ex-info (format "%s output exceeds %d bytes" label max-bytes)
+                     {:command command
+                      :max-bytes max-bytes})]
+        (when-let [cleanup @destroy-error]
+          (.addSuppressed ^Throwable primary cleanup))
+        (throw primary)))
+    (when-not (zero? (:exit result))
+      (throw
+       (ex-info label
+                {:command command
+                 :exit (:exit result)
+                 :stderr (:err result)})))
+    (bytes)))
+
 (defn- validate-archive-member-name! [archive member]
   (let [path (str/replace member #"/$" "")
         segments (str/split path #"/" -1)]
@@ -167,28 +260,21 @@
                       {:archive archive :member member}))))
   member)
 
-(defn- list-archive-members [archive]
-  (let [{:keys [exit out err]}
-        @(p/process ["tar" "-tzf" archive]
-                    {:out :string :err :string})]
-    (when-not (zero? exit)
-      (throw (ex-info (str "Could not inspect " archive)
-                      {:exit exit :stderr err})))
-    (let [members
-          (->> (str/split-lines out)
-               (remove str/blank?)
-               vec)]
-      (run! #(validate-archive-member-name! archive %) members)
-      members)))
-
-(defn- extract-archive-member [archive member]
-  (let [{:keys [exit out err]}
-        @(p/process ["tar" "-xOzf" archive member]
-                    {:out :bytes :err :string})]
-    (when-not (zero? exit)
-      (throw (ex-info (str "Could not extract " member)
-                      {:exit exit :stderr err})))
-    out))
+(defn- parse-archive-members [archive listing]
+  (let [members
+        (->> (str/split-lines listing)
+             (remove str/blank?)
+             vec)]
+    (when (> (count members) max-archive-members)
+      (throw
+       (ex-info
+        (format "%s contains more than %d members"
+                archive max-archive-members)
+        {:archive archive
+         :member-count (count members)
+         :max-members max-archive-members})))
+    (run! #(validate-archive-member-name! archive %) members)
+    members))
 
 (defn- decode-utf8 [archive member content]
   (let [decoder
@@ -201,6 +287,24 @@
         (throw (ex-info (str "Invalid UTF-8 in " member)
                         {:archive archive :member member}
                         error))))))
+
+(defn- list-archive-members [archive]
+  (let [output
+        (run-bounded-command-output
+         ["tar" "-tzf" archive]
+         max-archive-listing-bytes
+         archive-command-timeout-seconds
+         (str "Could not inspect " archive))]
+    (parse-archive-members
+     archive
+     (decode-utf8 archive "archive member listing" output))))
+
+(defn- extract-archive-member [archive member max-bytes]
+  (run-bounded-command-output
+   ["tar" "-xOzf" archive member]
+   max-bytes
+   archive-command-timeout-seconds
+   (str "Could not extract " member)))
 
 (defn- parse-json [archive member content]
   (let [text (decode-utf8 archive member content)]
@@ -224,8 +328,10 @@
       (throw (ex-info
               (format "%s must contain exactly one %s" archive member)
               {:archive archive :member member})))
-    (let [package (parse-json archive member
-                              (extract-archive-member archive member))
+    (let [package
+          (parse-json archive member
+                      (extract-archive-member
+                       archive member max-package-json-bytes))
           actual-version (get package "version")]
       (when-not (= expected-version actual-version)
         (throw (ex-info
@@ -283,7 +389,7 @@
     (sort-by first entries)))
 
 (defn- extract-schema! [archive staging-dir [schema-name member]]
-  (let [content (extract-archive-member archive member)
+  (let [content (extract-archive-member archive member max-schema-bytes)
         schema (parse-json archive member content)]
     (when-not (map? schema)
       (throw (ex-info (str member " must contain a JSON object")
@@ -350,6 +456,8 @@
              :path source-archive})))
         (let [source-archive (str (fs/canonicalize source-archive))
               archive (str (fs/path tmp "local-release.tgz"))]
+          (ensure-file-size!
+           source-archive max-release-archive-bytes "Local release archive")
           (fs/copy source-archive archive)
           {:archive archive
            :asset-name (str (fs/file-name source-archive))
@@ -359,10 +467,18 @@
             release-url (str base-url "/v" version)
             checksums-path (str (fs/path tmp "SHA256SUMS.txt"))
             archive-path (str (fs/path tmp asset-name))]
-        (download! (str release-url "/SHA256SUMS.txt") checksums-path)
+        (download! (str release-url "/SHA256SUMS.txt")
+                   checksums-path
+                   max-checksum-manifest-bytes)
+        (ensure-file-size!
+         checksums-path max-checksum-manifest-bytes "SHA256SUMS.txt")
         (let [expected-hash
               (find-checksum (slurp checksums-path) asset-name)]
-          (download! (str release-url "/" asset-name) archive-path)
+          (download! (str release-url "/" asset-name)
+                     archive-path
+                     max-release-archive-bytes)
+          (ensure-file-size!
+           archive-path max-release-archive-bytes asset-name)
           {:archive archive-path
            :asset-name asset-name
            :expected-hash expected-hash
@@ -381,12 +497,16 @@
      :replace-existing? true}))
 
 (defn- warn-cleanup-failure! [path cleanup]
-  (binding [*out* *err*]
-    (println
-     (format "WARNING: could not remove %s: %s"
-             path
-             (or (.getMessage ^Throwable cleanup)
-                 (.getName (class cleanup)))))))
+  (let [message (.getMessage ^Throwable cleanup)
+        class-name (.getSimpleName (class cleanup))
+        detail
+        (if (or (str/blank? message)
+                (= (str path) message))
+          class-name
+          (str class-name ": " message))]
+    (binding [*out* *err*]
+      (println
+       (format "WARNING: could not remove %s: %s" path detail)))))
 
 (defn- delete-tree-preserving! [path primary]
   (try
@@ -420,24 +540,27 @@
       nil)))
 
 (defn- destination-directory-permissions [schemas-dir]
-  (if (fs/exists? schemas-dir)
-    (posix-permissions schemas-dir)
-    (when (posix-permissions (fs/parent schemas-dir))
-      "rwxr-xr-x")))
+  (when (fs/exists? schemas-dir)
+    (posix-permissions schemas-dir)))
 
 (defn- install-schemas!
   [staging-dir schemas-dir replace-existing?]
-  (let [prepared-dir (create-prepared-dir! schemas-dir)
-        permissions (destination-directory-permissions schemas-dir)]
+  (let [prepared-dir (create-prepared-dir! schemas-dir)]
     (with-delete-tree-cleanup
       prepared-dir
       (fn []
-        (fs/copy-tree staging-dir prepared-dir)
-        (when permissions
-          (fs/set-posix-file-permissions prepared-dir permissions))
-        (when (and replace-existing? (fs/exists? schemas-dir))
-          (fs/delete-tree schemas-dir))
-        (fs/move prepared-dir schemas-dir)))))
+        (let [permissions
+              (or (destination-directory-permissions schemas-dir)
+                  (posix-permissions prepared-dir))]
+          (fs/copy-tree staging-dir prepared-dir)
+          (when permissions
+            (fs/set-posix-file-permissions prepared-dir permissions))
+          (when (and replace-existing? (fs/exists? schemas-dir))
+            (fs/delete-tree schemas-dir))
+          (Files/move
+           (fs/path prepared-dir)
+           (fs/path schemas-dir)
+           (make-array CopyOption 0)))))))
 
 (defn- prepare-staged-schemas!
   [archive staging-dir source asset-name version]

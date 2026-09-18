@@ -5,9 +5,11 @@
             [clojure.string :as str]
             [clojure.test :refer [deftest is testing]])
   (:import (java.math BigInteger)
+           (java.nio.charset StandardCharsets)
            (java.nio.file Files)
            (java.nio.file.attribute PosixFilePermissions)
-           (java.security MessageDigest)))
+           (java.security MessageDigest)
+           (java.util Arrays)))
 
 (def ^:private script-path
   (.getCanonicalPath (io/file "script/codegen/fetch_schemas.clj")))
@@ -83,7 +85,7 @@
      (write-release-tree! root version schemas)
      (create-tar! archive ["-C" (.getPath root) "package"]))))
 
-(defn- create-release-archive-with-duplicate!
+(defn- create-release-archive-with-duplicate-member!
   [root member]
   (let [base-root (io/file root "base")
         duplicate-root (io/file root "duplicate")
@@ -95,17 +97,53 @@
      ["-C" (.getPath base-root) "package"
       "-C" (.getPath duplicate-root) member])))
 
+(defn- create-release-archive-with-duplicate!
+  [root member]
+  (create-release-archive-with-duplicate-member! root member))
+
 (defn- create-release-archive-with-aliased-duplicate!
   [root member]
-  (let [base-root (io/file root "base")
-        duplicate-root (io/file root "duplicate")
-        archive (io/file root "release.tgz")]
-    (write-release-tree! base-root fixture-version default-schemas)
-    (write-release-tree! duplicate-root fixture-version default-schemas)
+  (create-release-archive-with-duplicate-member!
+   root
+   (str "./" member)))
+
+(defn- tar-flavor
+  []
+  (let [{:keys [exit out err]} (sh/sh "tar" "--version")
+        output (str/lower-case (str out err))]
+    (when-not (zero? exit)
+      (throw (ex-info "Could not identify tar implementation"
+                      {:exit exit :output output})))
+    (cond
+      (str/includes? output "gnu tar") :gnu
+      (str/includes? output "bsdtar") :bsd
+      :else
+      (throw (ex-info "Unsupported tar implementation"
+                      {:output output})))))
+
+(defn- create-release-archive-with-traversal-member!
+  [root]
+  (let [archive (io/file root "release.tgz")
+        source-name "traversal-entry"
+        member-name "package/schemas/../evil.schema.json"
+        transform
+        (case (tar-flavor)
+          :gnu ["--transform"
+                (str "s|^" source-name "$|" member-name "|")]
+          :bsd ["-s"
+                (str ",^" source-name "$," member-name ",")])]
+    (write-release-tree! root fixture-version default-schemas)
+    (spit (io/file root source-name) "{\"title\":\"unexpected\"}\n")
     (create-tar!
      archive
-     ["-C" (.getPath base-root) "package"
-      "-C" (.getPath duplicate-root) (str "./" member)])))
+     (into transform
+           ["-C" (.getPath root) "package" source-name]))))
+
+(defn- same-bytes?
+  [expected file]
+  (Arrays/equals
+   (.getBytes ^String expected StandardCharsets/UTF_8)
+   (Files/readAllBytes (.toPath file))))
 
 (defn- run-fetch
   [{:keys [args dir env]
@@ -120,6 +158,16 @@
 (defn- run-script-eval
   [form]
   (sh/sh "bb" "-e" (str "(load-file " (pr-str script-path) ")\n" form)))
+
+(defn- run-script-eval-with-umask
+  [root mask form]
+  (let [script (io/file root "eval-with-umask.clj")]
+    (spit script (str "(load-file " (pr-str script-path) ")\n" form))
+    (sh/sh "sh" "-c"
+           "umask \"$1\"; exec bb \"$2\""
+           "schema-fetch-test"
+           mask
+           (.getPath script))))
 
 (defn- run-local-fetch
   ([archive expected-hash output-dir]
@@ -158,12 +206,12 @@
           (run-local-fetch archive (sha256-file archive) output-dir)]
       (is (zero? exit) err)
       (when (zero? exit)
-        (is (= {"title" "API"}
-               (json/read-str
-                (slurp (io/file output-dir "api.schema.json")))))
-        (is (= {"title" "Events"}
-               (json/read-str
-                (slurp (io/file output-dir "session-events.schema.json")))))
+        (is (same-bytes?
+             (get default-schemas "api.schema.json")
+             (io/file output-dir "api.schema.json")))
+        (is (same-bytes?
+             (get default-schemas "session-events.schema.json")
+             (io/file output-dir "session-events.schema.json")))
         (is (str/includes?
              (slurp (io/file output-dir "README.md"))
              "local archive override"))
@@ -319,31 +367,29 @@
            output-dir
            (str "Non-canonical archive member: ./" member)))))))
 
-(deftest rejects-nested-and-traversal-shaped-schema-members
-  (doseq [[label member-path]
-          [["nested" ["nested" "future.schema.json"]]
-           ["traversal" [".." "evil.schema.json"]]]]
-    (testing label
-      (with-temp-root [root]
-        (let [archive (io/file root "release.tgz")
-              output-dir (io/file root "output")
-              member-file
-              (apply io/file root "package" "schemas" member-path)]
-          (write-release-tree! root fixture-version default-schemas)
-          (.mkdirs (.getParentFile member-file))
-          (spit member-file "{\"title\":\"unexpected\"}\n")
-          (create-tar!
-           archive
-           (cond-> ["-C" (.getPath root) "package"]
-             (= label "traversal")
-             (conj "-C" (.getPath root)
-                   "package/schemas/../evil.schema.json")))
-          (assert-fetch-failure!
-           (run-local-fetch archive (sha256-file archive) output-dir)
-           output-dir
-           (if (= label "traversal")
-             "Non-canonical archive member: package/schemas/../evil.schema.json"
-             "Nested schema member is not supported: package/schemas/nested/future.schema.json")))))))
+(deftest rejects-nested-schema-members
+  (with-temp-root [root]
+    (let [archive (io/file root "release.tgz")
+          output-dir (io/file root "output")
+          member-file
+          (io/file root "package" "schemas" "nested" "future.schema.json")]
+      (write-release-tree! root fixture-version default-schemas)
+      (.mkdirs (.getParentFile member-file))
+      (spit member-file "{\"title\":\"unexpected\"}\n")
+      (create-tar! archive ["-C" (.getPath root) "package"])
+      (assert-fetch-failure!
+       (run-local-fetch archive (sha256-file archive) output-dir)
+       output-dir
+       "Nested schema member is not supported: package/schemas/nested/future.schema.json"))))
+
+(deftest rejects-traversal-shaped-schema-members
+  (with-temp-root [root]
+    (let [archive (create-release-archive-with-traversal-member! root)
+          output-dir (io/file root "output")]
+      (assert-fetch-failure!
+       (run-local-fetch archive (sha256-file archive) output-dir)
+       output-dir
+       "Non-canonical archive member: package/schemas/../evil.schema.json"))))
 
 (deftest rejects-nonportable-top-level-schema-names
   (with-temp-root [root]
@@ -714,6 +760,121 @@
       (is (zero? exit) err)
       (is (.exists (io/file output-dir "api.schema.json"))))))
 
+(deftest resource-limits-reject-oversized-files-and-command-output
+  (with-temp-root [root]
+    (let [oversized (io/file root "oversized")
+          _ (spit oversized "12345")
+          file-result
+          (run-script-eval
+           (format
+            (str "(let [check! (ns-resolve "
+                 "'codegen.fetch-schemas 'ensure-file-size!)] "
+                 "((deref check!) %s 4 \"fixture\"))")
+            (pr-str (.getPath oversized))))
+          output-result
+          (run-script-eval
+           (str
+            "(let [run! (ns-resolve "
+            "'codegen.fetch-schemas 'run-bounded-command-output)] "
+            "((deref run!) [\"sh\" \"-c\" \"printf 12345\"] "
+            "4 5 \"fixture\")))"))]
+      (is (not (zero? (:exit file-result))))
+      (is (str/includes?
+           (str (:out file-result) (:err file-result))
+           "fixture exceeds 4 bytes"))
+      (is (not (zero? (:exit output-result))))
+      (is (str/includes?
+           (str (:out output-result) (:err output-result))
+           "fixture output exceeds 4 bytes")))))
+
+(deftest rejects-archive-listings-over-the-member-limit
+  (let [{:keys [exit out err]}
+        (run-script-eval
+         (str
+          "(let [limit (ns-resolve "
+          "'codegen.fetch-schemas 'max-archive-members) "
+          "parse! (ns-resolve "
+          "'codegen.fetch-schemas 'parse-archive-members)] "
+          "(with-redefs-fn {limit 2} "
+          "#((deref parse!) \"fixture.tgz\" \"a\\nb\\nc\\n\")))"))]
+    (is (not (zero? exit)))
+    (is (str/includes? (str out err)
+                       "fixture.tgz contains more than 2 members"))))
+
+(deftest fresh-schema-directory-honors-the-process-umask
+  (with-temp-root [root]
+    (let [staging-dir (io/file root "staging")
+          output-dir (io/file root "schemas")
+          expected-permissions
+          (PosixFilePermissions/fromString "rwx------")]
+      (.mkdirs staging-dir)
+      (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
+      (let [{:keys [exit err]}
+            (run-script-eval-with-umask
+             root
+             "077"
+             (format
+              (str "(let [install! (ns-resolve "
+                   "'codegen.fetch-schemas 'install-schemas!)] "
+                   "((deref install!) %s %s false))")
+              (pr-str (.getPath staging-dir))
+              (pr-str (.getPath output-dir))))]
+        (is (zero? exit) err)
+        (when (zero? exit)
+          (is (= expected-permissions
+                 (Files/getPosixFilePermissions
+                  (.toPath output-dir)
+                  (make-array java.nio.file.LinkOption 0)))))))))
+
+(deftest create-only-install-refuses-a-destination-that-appears
+  (with-temp-root [root]
+    (let [staging-dir (io/file root "staging")
+          output-dir (io/file root "schemas")
+          sentinel (io/file output-dir "sentinel.txt")]
+      (.mkdirs staging-dir)
+      (.mkdirs output-dir)
+      (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
+      (spit sentinel "preserve")
+      (let [{:keys [exit out err]}
+            (run-script-eval
+             (format
+              (str "(let [install! (ns-resolve "
+                   "'codegen.fetch-schemas 'install-schemas!)] "
+                   "((deref install!) %s %s false))")
+              (pr-str (.getPath staging-dir))
+              (pr-str (.getPath output-dir))))]
+        (is (not (zero? exit)) (str out err))
+        (is (= "preserve" (slurp sentinel)))
+        (is (empty?
+             (filter #(str/starts-with? (.getName %) ".copilot-schemas-")
+                     (.listFiles output-dir))))))))
+
+(deftest prepared-directory-is-owned-before-permission-lookup
+  (with-temp-root [root]
+    (let [staging-dir (io/file root "staging")
+          output-dir (io/file root "schemas")]
+      (.mkdirs staging-dir)
+      (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
+      (let [{:keys [exit out err]}
+            (run-script-eval
+             (format
+              (str "(let [install! (ns-resolve "
+                   "'codegen.fetch-schemas 'install-schemas!) "
+                   "permissions (ns-resolve "
+                   "'codegen.fetch-schemas "
+                   "'destination-directory-permissions)] "
+                   "(with-redefs-fn "
+                   "{permissions "
+                   "(fn [_] (throw (ex-info \"permission failed\" {})))} "
+                   "#((deref install!) %s %s false)))")
+              (pr-str (.getPath staging-dir))
+              (pr-str (.getPath output-dir))))]
+        (is (not (zero? exit)))
+        (is (str/includes? (str out err) "permission failed"))
+        (is (empty?
+             (filter #(str/starts-with? (.getName %) ".copilot-schemas-")
+                     (.listFiles root))))))))
+
 (deftest replaces-an-existing-schema-directory
   (with-temp-root [root]
     (let [staging-dir (io/file root "staging")
@@ -753,7 +914,7 @@
           "'codegen.fetch-schemas 'with-delete-tree-cleanup)] "
           "(with-redefs [babashka.fs/exists? (constantly true) "
           "babashka.fs/delete-tree "
-          "(fn [_] (throw (ex-info \"cleanup failed\" {})))] "
+          "(fn [_] (throw (ex-info \"victim\" {})))] "
           "(println ((deref cleanup) \"victim\" (constantly :installed)))))"))
         failure
         (run-script-eval
@@ -769,14 +930,14 @@
     (is (str/includes? (:out success) ":installed"))
     (is (str/includes?
          (str (:out success) (:err success))
-         "WARNING: could not remove victim: cleanup failed"))
+         "WARNING: could not remove victim: ExceptionInfo"))
     (is (not (zero? (:exit failure))))
     (is (str/includes?
          (str (:out failure) (:err failure))
          "primary failed"))
     (is (str/includes?
          (str (:out failure) (:err failure))
-         "WARNING: could not remove victim: cleanup failed"))))
+         "WARNING: could not remove victim: ExceptionInfo: cleanup failed"))))
 
 (deftest reports-usage-errors-with-exit-code-two
   (doseq [[label args expected-message]

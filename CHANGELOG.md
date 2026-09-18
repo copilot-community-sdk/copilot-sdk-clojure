@@ -27,15 +27,17 @@ All notable changes to this project will be documented in this file. This change
   reject non-canonical archive aliases and nested schema paths, discover all
   top-level JSON schemas, require both canonical members, strictly validate
   portable schema names and single-document UTF-8 JSON objects, preserve the
-  exact checksummed member bytes, and retain destination directory permissions
-  when replacing the checked-in schemas. Local archives must be existing files
-  and are copied to a private snapshot before verification and extraction.
-  Checksum overrides are rejected unless paired with a local archive. Mirror
-  and local-archive overrides retain distinct provenance; output overrides are
-  create-only so the fetcher never recursively replaces a caller-selected
-  existing directory. Cleanup failures remain visible as warnings without
-  replacing the fetch outcome. Copilot CLI `1.0.86-0` no longer publishes
-  schemas in the npm artifacts.
+  exact checksummed member bytes, and bound archive, listing, member, schema,
+  and command resources before parsing. Replacing the checked-in schemas
+  retains the existing POSIX owner/group/other `rwx` mode when supported; new
+  outputs retain the process umask-derived mode. Local archives must be
+  existing files and are copied to a private snapshot before verification and
+  extraction. Checksum overrides are rejected unless paired with a local
+  archive. Mirror and local-archive overrides retain distinct provenance;
+  output overrides are atomically create-only, including when the destination
+  appears during installation. Cleanup failures remain visible with their
+  exception type without replacing the fetch outcome. Copilot CLI `1.0.86-0`
+  no longer publishes schemas in the npm artifacts.
 
 ### Fixed (v1.0.14 sync)
 - Completed stable Fast Auto-tier value parity: create and resume configuration

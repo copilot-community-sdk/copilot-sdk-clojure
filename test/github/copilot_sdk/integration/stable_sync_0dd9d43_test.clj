@@ -118,6 +118,18 @@
        (every? pos-int? prs)
        (= (count prs) (count (distinct prs)))))
 
+(defn- public-authority-paths
+  [surface]
+  (set
+   (concat
+    [(get-in surface [:package-root :path])
+     (get-in surface [:package-root :session-events :path])
+     (get-in surface [:types :path])
+     (get-in surface [:extension :path])
+     (get-in surface [:tool-set :path])
+     (get-in surface [:factory :path])]
+    (map :path (vals (:classes surface))))))
+
 (defn- upstream-repo-or-skip
   [scope]
   (if-let [upstream @upstream-repo]
@@ -236,8 +248,25 @@
   (let [report (report)
         surface (:target-public-surface report)
         inventory (:symbol-inventory report)
+        continuity (:stable-surface-continuity report)
+        historical-report (read-resource historical-resource)
         stable-items (inventory-items inventory #{:stable-public})
         traced-stable-items (mapcat :inventory-items (:stable-deltas report))
+        stable-changed-paths
+        (set
+         (for [[path classification]
+               (get-in report [:changed-paths :exact-classifications])
+               :when (= :stable-public classification)]
+           path))
+        traced-stable-paths
+        (mapcat :upstream-paths (:stable-deltas report))
+        traced-stable-contracts
+        (mapcat :upstream-contracts (:stable-deltas report))
+        authority-paths (public-authority-paths surface)
+        unchanged-authority-paths
+        (set (:unchanged-authority-paths continuity))
+        inventoried-authority-paths
+        (set (:inventoried-authority-paths continuity))
         nonstable-groups
         (inventory-group-ids inventory #{:experimental :generated-only})
         traced-nonstable-groups
@@ -251,6 +280,30 @@
     (is (= expected-stable-delta-ids (:stable-delta-ids report)))
     (is (= expected-stable-delta-ids
            (set (map :id (:stable-deltas report)))))
+    (is (= expected-upstream-base
+           (get-in historical-report [:upstream :target-commit])
+           (:baseline-target continuity)))
+    (is (= authority-paths
+           (set/union unchanged-authority-paths
+                      inventoried-authority-paths)))
+    (is (empty?
+         (set/intersection unchanged-authority-paths
+                           inventoried-authority-paths)))
+    (doseq [path unchanged-authority-paths]
+      (is (= (get-in surface [:source-blobs path :base])
+             (get-in surface [:source-blobs path :target]))
+          (str "public authority changed without delta inventory: " path)))
+    (doseq [path inventoried-authority-paths]
+      (is (not= (get-in surface [:source-blobs path :base])
+                (get-in surface [:source-blobs path :target]))
+          (str "inventoried authority did not change: " path)))
+    (is (= stable-changed-paths (set traced-stable-paths)))
+    (is (= (count stable-changed-paths)
+           (count traced-stable-paths)))
+    (is (seq traced-stable-contracts))
+    (is (= (count traced-stable-contracts)
+           (count (distinct traced-stable-contracts))))
+    (is (every? vector? traced-stable-contracts))
     (is (= stable-items (set traced-stable-items)))
     (is (= (count stable-items) (count traced-stable-items)))
     (is (= nonstable-groups (set traced-nonstable-groups)))
@@ -260,6 +313,8 @@
                       (contains? #{:documented :ported :regenerated}
                                  (:status %))
                       (valid-upstream-prs? (:upstream-prs %))
+                      (vector? (:upstream-paths %))
+                      (seq (:upstream-contracts %))
                       (seq (:evidence %))
                       (seq (:clojure-paths %)))
                 (:stable-deltas report)))
