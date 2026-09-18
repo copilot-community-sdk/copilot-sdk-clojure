@@ -88,13 +88,16 @@ that directory.
 The fetcher bounds every external artifact before parsing it: checksum
 manifests may be at most 1 MiB, release archives 256 MiB, archive listings
 1 MiB and 4,096 entries, package metadata 1 MiB, and each schema 32 MiB. Archive
-downloads use `curl`'s file-size limit, and local overrides are copied into the
-private verified snapshot through a bounded stream that never writes more than
-256 MiB. Archive listing and extraction commands must finish within 300
-seconds; their diagnostic standard error is capped at 1 MiB. Standard-output or
-standard-error overflow and timeout paths gracefully terminate the process tree,
-forcibly terminate non-cooperative processes, and reap them before the fetch
-fails.
+downloads stream through a write-bounded output that never writes past the
+configured limit, while `curl`'s file-size limit rejects known oversized
+responses earlier. Failed or interrupted downloads terminate and reap the
+`curl` process tree and remove the partial destination. Local overrides are
+copied into the private verified snapshot through the same kind of bounded
+stream. Download, archive listing, and extraction commands cap diagnostic
+standard error at 1 MiB; archive commands must finish within 300 seconds.
+Standard-output or standard-error overflow and timeout paths gracefully
+terminate the process tree, forcibly terminate non-cooperative processes, and
+reap them before the fetch fails.
 
 ## Workflows
 

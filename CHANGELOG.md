@@ -52,7 +52,10 @@ All notable changes to this project will be documented in this file. This change
   constructing release URLs or archive paths. Checked-in schema replacement
   now retains the previous tree in a same-parent backup until installation
   succeeds, restores it after a failed move, and reports the retained backup
-  path if rollback is blocked.
+  path if rollback is blocked. Network downloads now stream through the same
+  bounded command lifecycle as archive extraction, terminate and reap `curl`
+  after output or diagnostic overflow and interruption, and remove partial
+  destination files after failure.
 
 ### Added (v1.0.84-8 sync)
 - Added stable event provenance for assistant originating messages, configured

@@ -211,6 +211,21 @@
     (spit (io/file release-dir "SHA256SUMS.txt") checksums)
     (str "file://" (.getCanonicalPath (io/file root "download")))))
 
+(defn- create-fake-curl!
+  [root body]
+  (let [curl (io/file root "curl")]
+    (spit curl (str "#!/bin/sh\nset -eu\n" body "\n"))
+    (when-not (.setExecutable curl true)
+      (throw (ex-info "Could not make fake curl executable"
+                      {:path (.getPath curl)})))
+    curl))
+
+(defn- path-with
+  [directory]
+  (str (.getPath directory)
+       java.io.File/pathSeparator
+       (System/getenv "PATH")))
+
 (deftest extracts-schemas-from-verified-release-archive
   (with-temp-root [root]
     (let [archive (create-release-archive! root)
@@ -700,7 +715,7 @@
           (run-fetch
            {:env {"COPILOT_CLI_DOWNLOAD_BASE_URL" release-base
                   "COPILOT_CLI_SCHEMA_OUTPUT" (.getPath output-dir)}})]
-      (assert-fetch-failure! result output-dir "Download failed:")
+      (assert-fetch-failure! result output-dir "Download from")
       (is (str/includes? (str (:out result) (:err result))
                          "SHA256SUMS.txt")))))
 
@@ -803,18 +818,9 @@
        output-dir
        "Schema version must be a path-safe release identifier"))))
 
-(deftest resource-limits-reject-oversized-files-and-command-output
+(deftest bounded-command-output-rejects-overflow-and-reaps-process
   (with-temp-root [root]
-    (let [oversized (io/file root "oversized")
-          output-pid-file (io/file root "overflow-pid")
-          _ (spit oversized "12345")
-          file-result
-          (run-script-eval
-           (private-call-form
-            'ensure-file-size!
-            (pr-str (.getPath oversized))
-            "4"
-            "\"fixture\""))
+    (let [output-pid-file (io/file root "overflow-pid")
           output-result
           (run-script-eval
            (private-call-form
@@ -830,10 +836,6 @@
           output-pid (Long/parseLong (slurp output-pid-file))
           output-handle
           (.orElse (java.lang.ProcessHandle/of output-pid) nil)]
-      (is (not (zero? (:exit file-result))))
-      (is (str/includes?
-           (str (:out file-result) (:err file-result))
-           "fixture exceeds 4 bytes"))
       (is (not (zero? (:exit output-result))))
       (is (str/includes?
            (str (:out output-result) (:err output-result))
@@ -1037,20 +1039,110 @@
       (is (str/includes? err "Local release archive exceeds 4 bytes"))
       (is (<= (.length (io/file tmp "local-release.tgz")) 4)))))
 
-(deftest download-enforces-curl-file-size-limit
+(deftest download-bounds-bytes-while-writing
   (with-temp-root [root]
-    (let [source (io/file root "source.bin")
+    (let [_ (create-fake-curl! root "printf 12345")
           destination (io/file root "download.bin")
-          _ (spit source "12345")
           {:keys [exit err]}
           (run-script-eval
            (private-call-form
             'download!
-            (pr-str (str (.toURI source)))
+            "\"https://example.invalid/archive.tgz\""
             (pr-str (.getPath destination))
-            "4"))]
+            "4")
+           {"PATH" (path-with root)})]
       (is (not (zero? exit)))
-      (is (str/includes? err "Download failed:")))))
+      (is (str/includes? err "output exceeds 4 bytes"))
+      (is (not (.exists destination))))))
+
+(deftest bounded-command-file-output-never-writes-past-the-limit
+  (with-temp-root [root]
+    (let [destination (io/file root "download.bin")
+          {:keys [exit err]}
+          (run-script-eval
+           (private-call-form
+            'run-bounded-command-to-file
+            (pr-str ["sh" "-c" "printf 12345"])
+            (pr-str (.getPath destination))
+            "4"
+            "2"
+            "\"fixture\""))]
+      (is (not (zero? exit)))
+      (is (str/includes? err "fixture output exceeds 4 bytes"))
+      (is (= 4 (.length destination))))))
+
+(deftest download-bounds-stderr-and-cleans-up
+  (with-temp-root [root]
+    (let [_ (create-fake-curl! root "printf 12345 >&2; exit 1")
+          destination (io/file root "download.bin")
+          {:keys [exit err]}
+          (run-script-eval
+           (str
+            "(let [limit (ns-resolve "
+            "'codegen.fetch-schemas 'max-command-stderr-bytes) "
+            "download! " (private-var-form 'download!) "] "
+            "(with-redefs-fn {limit 4} "
+            "#(download! \"https://example.invalid/archive.tgz\" "
+            (pr-str (.getPath destination)) " 1024)))")
+           {"PATH" (path-with root)})]
+      (is (not (zero? exit)))
+      (is (str/includes? err "stderr exceeds 4 bytes"))
+      (is (not (.exists destination))))))
+
+(deftest interrupted-download-reaps-curl-and-removes-partial-file
+  (with-temp-root [root]
+    (let [pid-file (io/file root "curl.pid")
+          destination (io/file root "download.bin")
+          _ (create-fake-curl!
+             root
+             (str "printf '%s' \"$$\" > \"$CURL_PID_FILE\"\n"
+                  "printf x\n"
+                  "while :; do sleep 1; done"))
+          {:keys [exit out err]}
+          (run-script-eval
+           (str
+            "(let [download! " (private-var-form 'download!)
+            "\n      failure (atom nil)"
+            "\n      runner"
+            "\n      (Thread."
+            "\n       (fn []"
+            "\n         (try"
+            "\n           (download! \"https://example.invalid/archive.tgz\" "
+            (pr-str (.getPath destination)) " 1024)"
+            "\n           (catch Throwable error"
+            "\n             (reset! failure error)))))"
+            "\n      deadline (+ (System/nanoTime) 5000000000)]"
+            "\n  (.start runner)"
+            "\n  (loop []"
+            "\n    (when (and (not (babashka.fs/exists? "
+            (pr-str (.getPath pid-file)) "))"
+            "\n               (< (System/nanoTime) deadline))"
+            "\n      (Thread/sleep 10)"
+            "\n      (recur)))"
+            "\n  (when-not (babashka.fs/exists? "
+            (pr-str (.getPath pid-file)) ")"
+            "\n    (throw (ex-info \"curl did not start\" {})))"
+            "\n  (.interrupt runner)"
+            "\n  (.join runner 5000)"
+            "\n  (let [pid (parse-long (slurp "
+            (pr-str (.getPath pid-file)) "))"
+            "\n        handle (.orElse (java.lang.ProcessHandle/of pid) nil)"
+            "\n        process-alive? (boolean (and handle (.isAlive handle)))"
+            "\n        runner-alive? (.isAlive runner)]"
+            "\n    (println (some-> @failure class .getName))"
+            "\n    (println runner-alive?)"
+            "\n    (println process-alive?)"
+            "\n    (when process-alive?"
+            "\n      (.destroyForcibly handle)"
+            "\n      (.get (.onExit handle)))"
+            "\n    (when runner-alive?"
+            "\n      (.join runner 5000))))")
+           {"CURL_PID_FILE" (.getPath pid-file)
+            "PATH" (path-with root)})]
+      (is (zero? exit) err)
+      (is (str/includes? out "java.lang.InterruptedException"))
+      (is (str/includes? out "false\nfalse"))
+      (is (not (.exists destination))))))
 
 (deftest production-extraction-path-enforces-resource-limits
   (with-temp-root [root]

@@ -57,6 +57,7 @@
 (def ^:private max-package-json-bytes (* 1024 1024))
 (def ^:private max-schema-bytes (* 32 1024 1024))
 (def ^:private max-command-stderr-bytes (* 1024 1024))
+(def ^:private download-command-timeout-seconds 600)
 (def ^:private archive-command-timeout-seconds 300)
 (def ^:private process-termination-grace-seconds 1)
 (def ^:private process-termination-force-seconds 1)
@@ -106,28 +107,44 @@
       {:version version})))
   (format "github-copilot-%s-%s.tgz" version schema-platform))
 
+(declare run-bounded-command-to-file)
+
+(defn- delete-partial-download! [destination primary]
+  (try
+    (Files/deleteIfExists (fs/path destination))
+    (catch Throwable cleanup
+      (.addSuppressed ^Throwable primary cleanup)
+      (binding [*out* *err*]
+        (println
+         (format
+          "WARNING: could not remove partial download %s: %s"
+          destination (.getMessage ^Throwable cleanup)))))))
+
 (defn- download! [url destination max-bytes]
   (println (format "Fetching %s" url))
-  (let [{:keys [exit err]}
-        @(p/process ["curl"
-                     "--fail"
-                     "--silent"
-                     "--show-error"
-                     "--location"
-                     "--proto" "=https,file"
-                     "--proto-redir" "=https"
-                     "--retry" "2"
-                     "--retry-delay" "1"
-                     "--connect-timeout" "30"
-                     "--max-time" "600"
-                     "--max-filesize" (str max-bytes)
-                     "-o" destination
-                     url]
-                    {:err :string})]
-    (when-not (zero? exit)
-      (throw (ex-info (str "Download failed: " url)
-                      {:exit exit :stderr err}))))
-  destination)
+  (try
+    (run-bounded-command-to-file
+     ["curl"
+      "--fail"
+      "--silent"
+      "--show-error"
+      "--location"
+      "--proto" "=https,file"
+      "--proto-redir" "=https"
+      "--retry" "2"
+      "--retry-delay" "1"
+      "--connect-timeout" "30"
+      "--max-time" "600"
+      "--max-filesize" (str max-bytes)
+      url]
+     destination
+     max-bytes
+     download-command-timeout-seconds
+     (str "Download from " url))
+    destination
+    (catch Throwable primary
+      (delete-partial-download! destination primary)
+      (throw primary))))
 
 (defn- sha256-file [file]
   (let [digest (MessageDigest/getInstance "SHA-256")
@@ -181,15 +198,6 @@
          :actual actual-hash}))))
   archive)
 
-(defn- ensure-file-size! [path max-bytes label]
-  (let [size (fs/size path)]
-    (when (> size max-bytes)
-      (throw (ex-info (format "%s exceeds %d bytes" label max-bytes)
-                      {:path (str path)
-                       :size size
-                       :max-bytes max-bytes}))))
-  path)
-
 (defn- snapshot-local-archive! [source destination]
   (let [buffer (byte-array 65536)]
     (with-open [input (io/input-stream source)
@@ -220,45 +228,60 @@
                    :max-bytes max-release-archive-bytes})))
               (recur new-total))))))))
 
-(defn- bounded-output [max-bytes on-overflow]
-  (let [buffer (ByteArrayOutputStream.)
-        lock (Object.)
-        total (atom 0)
-        overflow? (atom false)
-        record!
-        (fn [bytes offset length]
-          (let [became-overflow?
-                (locking lock
-                  (let [new-total (+ @total length)
-                        remaining (- max-bytes (.size buffer))
-                        write-count (min length (max 0 remaining))
-                        overflow-now? (> new-total max-bytes)
-                        became-overflow?
-                        (and overflow-now? (not @overflow?))]
-                    (when (pos? write-count)
-                      (.write buffer bytes offset write-count))
-                    (reset! total new-total)
-                    (reset! overflow? overflow-now?)
-                    became-overflow?))]
-            (when became-overflow?
-              (on-overflow))))
-        snapshot
-        (fn []
+(defn- bounded-output
+  ([max-bytes on-overflow]
+   (bounded-output max-bytes on-overflow nil))
+  ([max-bytes on-overflow destination]
+   (let [buffer (when-not destination (ByteArrayOutputStream.))
+         output (or buffer (io/output-stream destination))
+         lock (Object.)
+         total (atom 0)
+         written (atom 0)
+         overflow? (atom false)
+         record!
+         (fn [bytes offset length]
+           (let [became-overflow?
+                 (locking lock
+                   (let [new-total (+ @total length)
+                         remaining (- max-bytes @written)
+                         write-count (min length (max 0 remaining))
+                         overflow-now? (> new-total max-bytes)
+                         became-overflow?
+                         (and overflow-now? (not @overflow?))]
+                     (when (pos? write-count)
+                       (.write ^OutputStream output
+                               bytes offset write-count))
+                     (reset! total new-total)
+                     (swap! written + write-count)
+                     (reset! overflow? overflow-now?)
+                     became-overflow?))]
+             (when became-overflow?
+               (on-overflow))))
+         snapshot
+         (fn []
+           (locking lock
+             (cond-> {:total @total
+                      :overflow? @overflow?}
+               buffer
+               (assoc :bytes
+                      (.toByteArray ^ByteArrayOutputStream buffer)))))]
+     {:stream
+      (proxy [OutputStream] []
+        (write
+          ([value]
+           (if (instance? byte-array-class value)
+             (record! value 0 (alength ^bytes value))
+             (let [bytes (byte-array [(unchecked-byte value)])]
+               (record! bytes 0 1))))
+          ([bytes offset length]
+           (record! bytes offset length)))
+        (flush []
           (locking lock
-            {:bytes (.toByteArray buffer)
-             :total @total
-             :overflow? @overflow?}))]
-    {:stream
-     (proxy [OutputStream] []
-       (write
-         ([value]
-          (if (instance? byte-array-class value)
-            (record! value 0 (alength ^bytes value))
-            (let [bytes (byte-array [(unchecked-byte value)])]
-              (record! bytes 0 1))))
-         ([bytes offset length]
-          (record! bytes offset length))))
-     :snapshot snapshot}))
+            (.flush ^OutputStream output)))
+        (close []
+          (locking lock
+            (.close ^OutputStream output))))
+      :snapshot snapshot})))
 
 (defn- process-tree-handles [process]
   (let [^Process java-process (:proc process)
@@ -351,8 +374,32 @@
      {:command command
       :max-stderr-bytes max-command-stderr-bytes})))
 
-(defn- run-bounded-command-output
-  [command max-bytes timeout-seconds description]
+(defn- close-command-streams [streams]
+  (reduce
+   (fn [errors stream]
+     (try
+       (.close ^OutputStream stream)
+       errors
+       (catch Throwable cleanup
+         (conj errors cleanup))))
+   []
+   streams))
+
+(defn- throw-with-cleanup-errors! [outcome cleanup-errors]
+  (if-let [primary (:error outcome)]
+    (do
+      (doseq [cleanup cleanup-errors]
+        (.addSuppressed ^Throwable primary cleanup))
+      (throw primary))
+    (if-let [[primary & suppressed] (seq cleanup-errors)]
+      (do
+        (doseq [cleanup suppressed]
+          (.addSuppressed ^Throwable primary cleanup))
+        (throw primary))
+      (:value outcome))))
+
+(defn- run-bounded-command
+  [command max-bytes timeout-seconds description destination]
   (let [process-holder (atom nil)
         termination-started? (atom false)
         termination-outcome (promise)
@@ -371,62 +418,104 @@
               @termination-outcome)))
         {stdout-stream :stream
          stdout-snapshot :snapshot}
-        (bounded-output max-bytes terminate-once!)
+        (bounded-output max-bytes terminate-once! destination)
         {stderr-stream :stream
          stderr-snapshot :snapshot}
         (bounded-output max-command-stderr-bytes terminate-once!)
-        process (p/process command {:out stdout-stream :err stderr-stream})
-        _ (reset! process-holder process)
-        initial-stdout (stdout-snapshot)
-        initial-stderr (stderr-snapshot)
-        _ (when (or (:overflow? initial-stdout)
-                    (:overflow? initial-stderr))
-            (terminate-once!))
-        ^Process java-process (:proc process)
-        completed?
-        (try
-          (.waitFor java-process timeout-seconds TimeUnit/SECONDS)
-          (catch InterruptedException primary
-            (let [termination (terminate-once!)]
-              (.interrupt (Thread/currentThread))
-              (throw (attach-cleanup-error! primary termination))))
-          (catch Throwable primary
-            (throw
-             (attach-cleanup-error! primary (terminate-once!)))))]
-    (if-not completed?
-      (let [termination (terminate-once!)
-            _ (when-not (.isAlive java-process)
-                @process)
-            final-stdout (stdout-snapshot)
-            final-stderr (stderr-snapshot)
-            primary
-            (or
-             (output-limit-error
-              command description max-bytes final-stdout final-stderr)
-             (ex-info
-              (format "%s timed out after %d seconds"
-                      description timeout-seconds)
-              {:command command
-               :timeout-seconds timeout-seconds}))]
-        (throw (attach-cleanup-error! primary termination)))
-      (let [result @process
-            final-stdout (stdout-snapshot)
-            final-stderr (stderr-snapshot)]
-        (when-let [primary
-                   (output-limit-error
-                    command description max-bytes final-stdout final-stderr)]
-          (throw
-           (attach-cleanup-error! primary (terminate-once!))))
-        (when-not (zero? (:exit result))
-          (let [stderr
-                (String. ^bytes (:bytes final-stderr)
-                         StandardCharsets/UTF_8)]
-            (throw
-             (ex-info (str description " failed")
+        execute!
+        (fn []
+          (let [process
+                (p/process command
+                           {:out stdout-stream
+                            :err stderr-stream})
+                _ (reset! process-holder process)
+                initial-stdout (stdout-snapshot)
+                initial-stderr (stderr-snapshot)
+                _ (when (or (:overflow? initial-stdout)
+                            (:overflow? initial-stderr))
+                    (terminate-once!))
+                ^Process java-process (:proc process)
+                completed?
+                (try
+                  (.waitFor java-process
+                            timeout-seconds
+                            TimeUnit/SECONDS)
+                  (catch InterruptedException primary
+                    (let [termination (terminate-once!)]
+                      (.interrupt (Thread/currentThread))
+                      (throw
+                       (attach-cleanup-error! primary termination))))
+                  (catch Throwable primary
+                    (throw
+                     (attach-cleanup-error!
+                      primary
+                      (terminate-once!)))))]
+            (if-not completed?
+              (let [termination (terminate-once!)
+                    _ (when-not (.isAlive java-process)
+                        @process)
+                    final-stdout (stdout-snapshot)
+                    final-stderr (stderr-snapshot)
+                    primary
+                    (or
+                     (output-limit-error
+                      command
+                      description
+                      max-bytes
+                      final-stdout
+                      final-stderr)
+                     (ex-info
+                      (format "%s timed out after %d seconds"
+                              description timeout-seconds)
+                      {:command command
+                       :timeout-seconds timeout-seconds}))]
+                (throw
+                 (attach-cleanup-error! primary termination)))
+              (let [result @process
+                    final-stdout (stdout-snapshot)
+                    final-stderr (stderr-snapshot)]
+                (when-let [primary
+                           (output-limit-error
+                            command
+                            description
+                            max-bytes
+                            final-stdout
+                            final-stderr)]
+                  (throw
+                   (attach-cleanup-error!
+                    primary
+                    (terminate-once!))))
+                (when-not (zero? (:exit result))
+                  (let [stderr
+                        (String. ^bytes (:bytes final-stderr)
+                                 StandardCharsets/UTF_8)]
+                    (throw
+                     (ex-info
+                      (str description " failed")
                       {:command command
                        :exit (:exit result)
                        :stderr stderr}))))
-        (:bytes final-stdout)))))
+                final-stdout))))
+        outcome
+        (try
+          {:value (execute!)}
+          (catch Throwable primary
+            {:error primary}))
+        cleanup-errors
+        (close-command-streams [stdout-stream stderr-stream])]
+    (throw-with-cleanup-errors! outcome cleanup-errors)))
+
+(defn- run-bounded-command-output
+  [command max-bytes timeout-seconds description]
+  (:bytes
+   (run-bounded-command
+    command max-bytes timeout-seconds description nil)))
+
+(defn- run-bounded-command-to-file
+  [command destination max-bytes timeout-seconds description]
+  (run-bounded-command
+   command max-bytes timeout-seconds description destination)
+  destination)
 
 (defn- validate-archive-member-name! [archive member]
   (let [path (str/replace member #"/$" "")
@@ -648,15 +737,11 @@
         (download! (str release-url "/SHA256SUMS.txt")
                    checksums-path
                    max-checksum-manifest-bytes)
-        (ensure-file-size!
-         checksums-path max-checksum-manifest-bytes "SHA256SUMS.txt")
         (let [expected-hash
               (find-checksum (slurp checksums-path) asset-name)]
           (download! (str release-url "/" asset-name)
                      archive-path
                      max-release-archive-bytes)
-          (ensure-file-size!
-           archive-path max-release-archive-bytes asset-name)
           {:archive archive-path
            :asset-name asset-name
            :expected-hash expected-hash
