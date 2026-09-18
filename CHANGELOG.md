@@ -31,13 +31,14 @@ All notable changes to this project will be documented in this file. This change
   and command resources before parsing. Replacing the checked-in schemas
   retains the existing POSIX owner/group/other `rwx` mode when supported; new
   outputs retain the process umask-derived mode. Local archives must be
-  existing files and are copied to a private snapshot before verification and
-  extraction. Checksum overrides are rejected unless paired with a local
-  archive. Mirror and local-archive overrides retain distinct provenance;
-  output overrides are atomically create-only, including when the destination
-  appears during installation. Cleanup failures remain visible with their
-  exception type without replacing the fetch outcome. Copilot CLI `1.0.86-0`
-  no longer publishes schemas in the npm artifacts.
+  existing files and are copied to a size-bounded private snapshot before
+  verification and extraction. Checksum overrides are rejected unless paired
+  with a local archive. Mirror and local-archive overrides retain distinct
+  provenance; output overrides are create-only, including when the destination
+  appears during installation. Overflowing, timed-out, or non-cooperative
+  archive commands are terminated and reaped. Cleanup failures remain visible
+  with their exception type without replacing the fetch outcome. Copilot CLI
+  `1.0.86-0` no longer publishes schemas in the npm artifacts.
 
 ### Fixed (v1.0.14 sync)
 - Completed stable Fast Auto-tier value parity: create and resume configuration

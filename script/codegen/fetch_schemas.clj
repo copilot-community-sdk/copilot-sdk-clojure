@@ -31,7 +31,10 @@
                              StandardCharsets)
            (java.nio.file CopyOption
                           Files)
-           (java.security MessageDigest)))
+           (java.security MessageDigest)
+           (java.util UUID)
+           (java.util.concurrent TimeUnit
+                                 TimeoutException)))
 
 (def repo-root
   (-> *file* fs/parent fs/parent fs/parent fs/canonicalize str))
@@ -54,6 +57,9 @@
 (def ^:private max-package-json-bytes (* 1024 1024))
 (def ^:private max-schema-bytes (* 32 1024 1024))
 (def ^:private archive-command-timeout-seconds 300)
+(def ^:private process-termination-grace-seconds 1)
+(def ^:private process-termination-force-seconds 1)
+(def ^:private byte-array-class (class (byte-array 0)))
 
 (def default-release-base-url
   "https://github.com/github/copilot-cli/releases/download")
@@ -177,76 +183,215 @@
                        :max-bytes max-bytes}))))
   path)
 
-(defn- bounded-output [max-bytes process-holder]
+(defn- snapshot-local-archive! [source destination]
+  (let [buffer (byte-array 65536)]
+    (with-open [input (io/input-stream source)
+                output (io/output-stream destination)]
+      (loop [total 0]
+        (let [read-count (.read input buffer)]
+          (cond
+            (neg? read-count)
+            destination
+
+            (zero? read-count)
+            (recur total)
+
+            :else
+            (let [new-total (+ total read-count)
+                  write-count
+                  (min read-count
+                       (max 0 (- max-release-archive-bytes total)))]
+              (when (pos? write-count)
+                (.write output buffer 0 write-count))
+              (when (> new-total max-release-archive-bytes)
+                (throw
+                 (ex-info
+                  (format "Local release archive exceeds %d bytes"
+                          max-release-archive-bytes)
+                  {:path (str source)
+                   :size-at-least new-total
+                   :max-bytes max-release-archive-bytes})))
+              (recur new-total))))))))
+
+(defn- bounded-output [max-bytes on-overflow]
   (let [buffer (ByteArrayOutputStream.)
+        lock (Object.)
         total (atom 0)
         overflow? (atom false)
-        destroyed? (atom false)
-        destroy-error (atom nil)
         record!
         (fn [bytes offset length]
-          (let [new-total (swap! total + length)
-                remaining (- (inc max-bytes) (.size buffer))
-                write-count (min length (max 0 remaining))]
-            (when (pos? write-count)
-              (.write buffer bytes offset write-count))
-            (when (> new-total max-bytes)
-              (reset! overflow? true)
-              (when (and @process-holder
-                         (compare-and-set! destroyed? false true))
-                (try
-                  (p/destroy-tree @process-holder)
-                  (catch Throwable cleanup
-                    (reset! destroy-error cleanup)))))))]
+          (let [became-overflow?
+                (locking lock
+                  (let [new-total (+ @total length)
+                        remaining (- max-bytes (.size buffer))
+                        write-count (min length (max 0 remaining))
+                        overflow-now? (> new-total max-bytes)
+                        became-overflow?
+                        (and overflow-now? (not @overflow?))]
+                    (when (pos? write-count)
+                      (.write buffer bytes offset write-count))
+                    (reset! total new-total)
+                    (reset! overflow? overflow-now?)
+                    became-overflow?))]
+            (when became-overflow?
+              (on-overflow))))
+        snapshot
+        (fn []
+          (locking lock
+            {:bytes (.toByteArray buffer)
+             :total @total
+             :overflow? @overflow?}))]
     {:stream
      (proxy [OutputStream] []
        (write
          ([value]
-          (let [bytes (byte-array [(unchecked-byte value)])]
-            (record! bytes 0 1)))
+          (if (instance? byte-array-class value)
+            (record! value 0 (alength ^bytes value))
+            (let [bytes (byte-array [(unchecked-byte value)])]
+              (record! bytes 0 1))))
          ([bytes offset length]
           (record! bytes offset length))))
-     :bytes #(.toByteArray buffer)
-     :overflow? overflow?
-     :destroy-error destroy-error}))
+     :snapshot snapshot}))
+
+(defn- process-tree-handles [process]
+  (let [^Process java-process (:proc process)
+        root (.toHandle java-process)
+        descendants
+        (with-open [stream (.descendants root)]
+          (vec (iterator-seq (.iterator stream))))]
+    (conj descendants root)))
+
+(defn- await-process-handle-until! [handle deadline]
+  (if-not (.isAlive handle)
+    true
+    (let [remaining (- deadline (System/nanoTime))]
+      (if-not (pos? remaining)
+        false
+        (try
+          (.get (.onExit handle) remaining TimeUnit/NANOSECONDS)
+          true
+          (catch TimeoutException _
+            false)
+          (catch InterruptedException error
+            (.interrupt (Thread/currentThread))
+            (throw error)))))))
+
+(defn- await-process-tree! [handles timeout-seconds]
+  (let [deadline
+        (+ (System/nanoTime)
+           (.toNanos TimeUnit/SECONDS timeout-seconds))]
+    (every? #(await-process-handle-until! % deadline) handles)))
+
+(defn- terminate-process-tree! [process]
+  (let [handles (process-tree-handles process)
+        cleanup-errors (atom [])]
+    (when (some #(.isAlive %) handles)
+      (try
+        (p/destroy-tree process)
+        (catch Throwable cleanup
+          (swap! cleanup-errors conj cleanup)))
+      (when-not
+       (try
+         (await-process-tree! handles process-termination-grace-seconds)
+         (catch Throwable cleanup
+           (swap! cleanup-errors conj cleanup)
+           false))
+        (let [force-handles
+              (vec (distinct (concat handles
+                                     (process-tree-handles process))))]
+          (doseq [handle force-handles
+                  :when (.isAlive handle)]
+            (try
+              (.destroyForcibly handle)
+              (catch Throwable cleanup
+                (swap! cleanup-errors conj cleanup))))
+          (when-not
+           (try
+             (await-process-tree!
+              force-handles process-termination-force-seconds)
+             (catch Throwable cleanup
+               (swap! cleanup-errors conj cleanup)
+               false))
+            (swap! cleanup-errors conj
+                   (ex-info
+                    "Process tree remained alive after forceful termination"
+                    {:pids
+                     (mapv #(.pid %)
+                           (filter #(.isAlive %) force-handles))}))))))
+    (when-let [[primary & suppressed] (seq @cleanup-errors)]
+      (doseq [cleanup suppressed]
+        (.addSuppressed ^Throwable primary cleanup))
+      (throw primary))))
+
+(defn- attach-cleanup-error! [primary termination-outcome]
+  (when-let [cleanup (:error termination-outcome)]
+    (.addSuppressed ^Throwable primary cleanup))
+  primary)
 
 (defn- run-bounded-command-output
-  [command max-bytes timeout-seconds label]
+  [command max-bytes timeout-seconds description]
   (let [process-holder (atom nil)
-        {:keys [stream bytes overflow? destroy-error]}
-        (bounded-output max-bytes process-holder)
+        termination-started? (atom false)
+        termination-outcome (promise)
+        terminate-once!
+        (fn []
+          (when-let [process @process-holder]
+            (if (compare-and-set! termination-started? false true)
+              (let [outcome
+                    (try
+                      (terminate-process-tree! process)
+                      {:error nil}
+                      (catch Throwable cleanup
+                        {:error cleanup}))]
+                (deliver termination-outcome outcome)
+                outcome)
+              @termination-outcome)))
+        {:keys [stream snapshot]}
+        (bounded-output max-bytes terminate-once!)
         process (p/process command {:out stream :err :string})
         _ (reset! process-holder process)
-        waiter (future @process)
-        result (deref waiter (* 1000 timeout-seconds) ::timeout)]
-    (when (= ::timeout result)
-      (let [primary
-            (ex-info
-             (format "%s timed out after %d seconds"
-                     label timeout-seconds)
-             {:command command
-              :timeout-seconds timeout-seconds})]
-        (try
-          (p/destroy-tree process)
-          (catch Throwable cleanup
-            (.addSuppressed ^Throwable primary cleanup)))
-        (future-cancel waiter)
-        (throw primary)))
-    (when @overflow?
-      (let [primary
-            (ex-info (format "%s output exceeds %d bytes" label max-bytes)
-                     {:command command
-                      :max-bytes max-bytes})]
-        (when-let [cleanup @destroy-error]
-          (.addSuppressed ^Throwable primary cleanup))
-        (throw primary)))
-    (when-not (zero? (:exit result))
-      (throw
-       (ex-info label
-                {:command command
-                 :exit (:exit result)
-                 :stderr (:err result)})))
-    (bytes)))
+        initial-snapshot (snapshot)
+        _ (when (:overflow? initial-snapshot)
+            (terminate-once!))
+        ^Process java-process (:proc process)
+        completed?
+        (.waitFor java-process timeout-seconds TimeUnit/SECONDS)]
+    (if-not completed?
+      (let [termination (terminate-once!)
+            _ (when-not (.isAlive java-process)
+                @process)
+            final-snapshot (snapshot)
+            primary
+            (if (:overflow? final-snapshot)
+              (ex-info
+               (format "%s output exceeds %d bytes"
+                       description max-bytes)
+               {:command command
+                :max-bytes max-bytes})
+              (ex-info
+               (format "%s timed out after %d seconds"
+                       description timeout-seconds)
+               {:command command
+                :timeout-seconds timeout-seconds}))]
+        (throw (attach-cleanup-error! primary termination)))
+      (let [result @process
+            final-snapshot (snapshot)]
+        (when (:overflow? final-snapshot)
+          (let [primary
+                (ex-info
+                 (format "%s output exceeds %d bytes"
+                         description max-bytes)
+                 {:command command
+                  :max-bytes max-bytes})]
+            (throw
+             (attach-cleanup-error! primary (terminate-once!)))))
+        (when-not (zero? (:exit result))
+          (throw
+           (ex-info (str description " failed")
+                    {:command command
+                     :exit (:exit result)
+                     :stderr (:err result)})))
+        (:bytes final-snapshot)))))
 
 (defn- validate-archive-member-name! [archive member]
   (let [path (str/replace member #"/$" "")
@@ -294,7 +439,7 @@
          ["tar" "-tzf" archive]
          max-archive-listing-bytes
          archive-command-timeout-seconds
-         (str "Could not inspect " archive))]
+         (str "Archive listing for " archive))]
     (parse-archive-members
      archive
      (decode-utf8 archive "archive member listing" output))))
@@ -304,7 +449,7 @@
    ["tar" "-xOzf" archive member]
    max-bytes
    archive-command-timeout-seconds
-   (str "Could not extract " member)))
+   (str member " extraction")))
 
 (defn- parse-json [archive member content]
   (let [text (decode-utf8 archive member content)]
@@ -456,9 +601,7 @@
              :path source-archive})))
         (let [source-archive (str (fs/canonicalize source-archive))
               archive (str (fs/path tmp "local-release.tgz"))]
-          (ensure-file-size!
-           source-archive max-release-archive-bytes "Local release archive")
-          (fs/copy source-archive archive)
+          (snapshot-local-archive! source-archive archive)
           {:archive archive
            :asset-name (str (fs/file-name source-archive))
            :expected-hash supplied-hash
@@ -500,6 +643,7 @@
   (let [message (.getMessage ^Throwable cleanup)
         class-name (.getSimpleName (class cleanup))
         detail
+        ;; babashka.fs may report only the path; avoid printing it twice.
         (if (or (str/blank? message)
                 (= (str path) message))
           class-name
@@ -528,10 +672,14 @@
     result))
 
 (defn- create-prepared-dir! [schemas-dir]
-  (let [parent (fs/parent schemas-dir)]
+  (let [parent (fs/parent schemas-dir)
+        prepared-dir
+        (fs/path parent (str ".copilot-schemas-" (UUID/randomUUID)))]
     (fs/create-dirs parent)
-    (str (fs/create-temp-dir
-          {:dir parent :prefix ".copilot-schemas-"}))))
+    (str
+     (Files/createDirectory
+      prepared-dir
+      (make-array java.nio.file.attribute.FileAttribute 0)))))
 
 (defn- posix-permissions [path]
   (try

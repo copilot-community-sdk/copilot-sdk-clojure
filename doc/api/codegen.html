@@ -47,7 +47,7 @@ src/github/copilot_sdk/generated/event_specs.clj
 </tbody>
 </table>
 <p>Temporary-directory cleanup failures are reported as warnings on standard error, including the path and exception type. They do not replace the fetch result or its primary failure. A create-only output still fails if the path appears after validation; the final move never nests the prepared schemas under that directory.</p>
-<p>The fetcher bounds every external artifact before parsing it: checksum manifests may be at most 1 MiB, release archives 256 MiB, archive listings 1 MiB and 4,096 entries, package metadata 1 MiB, and each schema 32 MiB. Archive listing and extraction commands must finish within 300 seconds.</p>
+<p>The fetcher bounds every external artifact before parsing it: checksum manifests may be at most 1 MiB, release archives 256 MiB, archive listings 1 MiB and 4,096 entries, package metadata 1 MiB, and each schema 32 MiB. Archive downloads use <code>curl</code>’s file-size limit, and local overrides are copied into the private verified snapshot through a bounded stream that never writes more than 256 MiB. Archive listing and extraction commands must finish within 300 seconds. Output overflow and timeout paths gracefully terminate the process tree, forcibly terminate non-cooperative processes, and reap them before the fetch fails.</p>
 <h2><a href="#workflows" id="workflows"></a>Workflows</h2>
 <h3><a href="#local-development" id="local-development"></a>Local development</h3>
 <p>After editing the generator or bumping the pinned schema version:</p>

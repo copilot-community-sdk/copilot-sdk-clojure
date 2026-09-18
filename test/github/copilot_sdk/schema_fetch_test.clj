@@ -97,10 +97,6 @@
      ["-C" (.getPath base-root) "package"
       "-C" (.getPath duplicate-root) member])))
 
-(defn- create-release-archive-with-duplicate!
-  [root member]
-  (create-release-archive-with-duplicate-member! root member))
-
 (defn- create-release-archive-with-aliased-duplicate!
   [root member]
   (create-release-archive-with-duplicate-member!
@@ -156,8 +152,25 @@
     (apply sh/sh command)))
 
 (defn- run-script-eval
-  [form]
-  (sh/sh "bb" "-e" (str "(load-file " (pr-str script-path) ")\n" form)))
+  ([form]
+   (run-script-eval form {}))
+  ([form env]
+   (let [clean-env
+         (apply dissoc (into {} (System/getenv)) fetch-env-vars)]
+     (sh/sh "bb" "-e"
+            (str "(load-file " (pr-str script-path) ")\n" form)
+            :env (merge clean-env env)))))
+
+(defn- private-var-form
+  [symbol]
+  (format "(deref (ns-resolve 'codegen.fetch-schemas '%s))" symbol))
+
+(defn- private-call-form
+  [symbol & arguments]
+  (str "(" (private-var-form symbol)
+       (when (seq arguments) " ")
+       (str/join " " arguments)
+       ")"))
 
 (defn- run-script-eval-with-umask
   [root mask form]
@@ -257,7 +270,7 @@
                (io/file root "release.tgz")
                ["-C" (.getPath root) "package/schemas"]))]
            ["duplicate"
-            #(create-release-archive-with-duplicate!
+            #(create-release-archive-with-duplicate-member!
               % "package/package.json")]]]
     (testing label
       (with-temp-root [root]
@@ -344,7 +357,7 @@
 (deftest rejects-duplicate-schema-members
   (with-temp-root [root]
     (let [archive
-          (create-release-archive-with-duplicate!
+          (create-release-archive-with-duplicate-member!
            root "package/schemas/api.schema.json")
           output-dir (io/file root "output")
           result
@@ -483,6 +496,20 @@
        (run-local-fetch archive (sha256-file archive) output-dir)
        output-dir
        "Invalid UTF-8 in package/schemas/api.schema.json"))))
+
+(deftest rejects-invalid-utf8-archive-listings
+  (let [{:keys [exit out err]}
+        (run-script-eval
+         (str
+          "(let [run! (ns-resolve "
+          "'codegen.fetch-schemas 'run-bounded-command-output) "
+          "list! " (private-var-form 'list-archive-members) "] "
+          "(with-redefs-fn "
+          "{run! (fn [& _] (byte-array [(unchecked-byte 255)]))} "
+          "#(list! \"fixture.tgz\")))"))]
+    (is (not (zero? exit)))
+    (is (str/includes? (str out err)
+                       "Invalid UTF-8 in archive member listing"))))
 
 (deftest rejects-blank-output-without-deleting-the-working-directory
   (with-temp-root [root]
@@ -745,7 +772,7 @@
             (run-local-fetch archive (sha256-file archive) output-dir)
             output (str out err)]
         (is (not (zero? exit)))
-        (is (str/includes? output "Could not inspect"))
+        (is (str/includes? output "Archive listing for"))
         (is (str/includes? output ":stderr"))
         (is (str/includes? output ":exit"))))))
 
@@ -763,21 +790,30 @@
 (deftest resource-limits-reject-oversized-files-and-command-output
   (with-temp-root [root]
     (let [oversized (io/file root "oversized")
+          output-pid-file (io/file root "overflow-pid")
           _ (spit oversized "12345")
           file-result
           (run-script-eval
-           (format
-            (str "(let [check! (ns-resolve "
-                 "'codegen.fetch-schemas 'ensure-file-size!)] "
-                 "((deref check!) %s 4 \"fixture\"))")
-            (pr-str (.getPath oversized))))
+           (private-call-form
+            'ensure-file-size!
+            (pr-str (.getPath oversized))
+            "4"
+            "\"fixture\""))
           output-result
           (run-script-eval
-           (str
-            "(let [run! (ns-resolve "
-            "'codegen.fetch-schemas 'run-bounded-command-output)] "
-            "((deref run!) [\"sh\" \"-c\" \"printf 12345\"] "
-            "4 5 \"fixture\")))"))]
+           (private-call-form
+            'run-bounded-command-output
+            (pr-str
+             ["sh" "-c"
+              (format
+               "printf '%%s' \"$$\" > %s; printf 12345; while :; do sleep 1; done"
+               (pr-str (.getPath output-pid-file)))])
+            "4"
+            "2"
+            "\"fixture\""))
+          output-pid (Long/parseLong (slurp output-pid-file))
+          output-handle
+          (.orElse (java.lang.ProcessHandle/of output-pid) nil)]
       (is (not (zero? (:exit file-result))))
       (is (str/includes?
            (str (:out file-result) (:err file-result))
@@ -785,7 +821,173 @@
       (is (not (zero? (:exit output-result))))
       (is (str/includes?
            (str (:out output-result) (:err output-result))
-           "fixture output exceeds 4 bytes")))))
+           "fixture output exceeds 4 bytes"))
+      (is (or (nil? output-handle)
+              (not (.isAlive output-handle)))))))
+
+(deftest bounded-output-supports-byte-array-writes
+  (let [{:keys [exit out err]}
+        (run-script-eval
+         (str
+          "(let [make-output " (private-var-form 'bounded-output)
+          "\n      output (make-output 4 (constantly nil))"
+          "\n      stream (:stream output)]"
+          "\n  (.write stream (.getBytes \"1234\" java.nio.charset.StandardCharsets/UTF_8))"
+          "\n  (println (String. (:bytes ((:snapshot output)))"
+          " java.nio.charset.StandardCharsets/UTF_8)))"))]
+    (is (zero? exit) err)
+    (is (= "1234\n" out))))
+
+(deftest bounded-command-output-times-out-and-reaps-process
+  (with-temp-root [root]
+    (let [pid-file (io/file root "pid")
+          command
+          (format
+           (str "trap '' TERM; "
+                "sh -c 'trap \"\" TERM; while :; do sleep 1; done' & "
+                "child=$!; printf '%%s %%s' \"$$\" \"$child\" > %s; "
+                "wait \"$child\"")
+           (pr-str (.getPath pid-file)))
+          {:keys [exit err]}
+          (run-script-eval
+           (private-call-form
+            'run-bounded-command-output
+            (pr-str ["sh" "-c" command])
+            "1024"
+            "1"
+            "\"fixture\""))
+          pids (mapv parse-long (str/split (slurp pid-file) #" "))
+          handles
+          (mapv #(.orElse (java.lang.ProcessHandle/of %) nil) pids)]
+      (is (not (zero? exit)))
+      (is (str/includes? err "fixture timed out after 1 seconds"))
+      (is (every? #(or (nil? %) (not (.isAlive %))) handles)))))
+
+(deftest bounded-output-overflow-precedes-timeout-and-reaps-process
+  (with-temp-root [root]
+    (let [pid-file (io/file root "pid")
+          command
+          (format
+           (str "trap '' TERM; "
+                "sh -c 'trap \"\" TERM; while :; do sleep 1; done' & "
+                "child=$!; printf '%%s %%s' \"$$\" \"$child\" > %s; "
+                "printf 12345; wait \"$child\"")
+           (pr-str (.getPath pid-file)))
+          {:keys [exit err]}
+          (run-script-eval
+           (private-call-form
+            'run-bounded-command-output
+            (pr-str ["sh" "-c" command])
+            "4"
+            "1"
+            "\"fixture\""))
+          pids (mapv parse-long (str/split (slurp pid-file) #" "))
+          handles
+          (mapv #(.orElse (java.lang.ProcessHandle/of %) nil) pids)]
+      (is (not (zero? exit)))
+      (is (str/includes? err "fixture output exceeds 4 bytes"))
+      (is (not (str/includes? err "fixture timed out")))
+      (is (every? #(or (nil? %) (not (.isAlive %))) handles)))))
+
+(deftest bounded-output-preserves-termination-diagnostics
+  (let [{:keys [exit out err]}
+        (run-script-eval
+         (str
+          "(let [terminate-var (ns-resolve "
+          "'codegen.fetch-schemas 'terminate-process-tree!) "
+          "run! " (private-var-form 'run-bounded-command-output) "] "
+          "(with-redefs-fn "
+          "{terminate-var (fn [_] (throw (ex-info \"cleanup failed\" {})))} "
+          "(fn [] "
+          " (try "
+          "   (run! [\"sh\" \"-c\" \"printf 12345\"] 4 2 \"fixture\") "
+          "   (catch Throwable error "
+          "     (println (.getMessage error)) "
+          "     (println (mapv (fn [suppressed] (.getMessage suppressed)) "
+          "                    (.getSuppressed error))))))))"))]
+    (is (zero? exit) err)
+    (is (str/includes? out "fixture output exceeds 4 bytes"))
+    (is (str/includes? out "cleanup failed"))))
+
+(deftest local-archive-snapshot-is-bounded-during-copy
+  (with-temp-root [root]
+    (let [source (io/file root "source.tgz")
+          destination (io/file root "snapshot.tgz")
+          _ (spit source "12345")
+          {:keys [exit err]}
+          (run-script-eval
+           (str
+            "(let [limit (ns-resolve "
+            "'codegen.fetch-schemas 'max-release-archive-bytes) "
+            "snapshot! " (private-var-form 'snapshot-local-archive!) "] "
+            "(with-redefs-fn {limit 4} "
+            "#(snapshot! " (pr-str (.getPath source)) " "
+            (pr-str (.getPath destination)) ")))"))]
+      (is (not (zero? exit)))
+      (is (str/includes? err "Local release archive exceeds 4 bytes"))
+      (is (<= (.length destination) 4)))))
+
+(deftest local-archive-resolution-uses-the-bounded-snapshot
+  (with-temp-root [root]
+    (let [source (io/file root "source.tgz")
+          tmp (io/file root "tmp")
+          _ (.mkdirs tmp)
+          _ (spit source "12345")
+          {:keys [exit err]}
+          (run-script-eval
+           (str
+            "(let [limit (ns-resolve "
+            "'codegen.fetch-schemas 'max-release-archive-bytes) "
+            "resolve! " (private-var-form 'resolve-release-archive!) "] "
+            "(with-redefs-fn {limit 4} "
+            "#(resolve! " (pr-str fixture-version) " "
+            (pr-str (.getPath tmp)) ")))")
+           {"COPILOT_CLI_RELEASE_TARBALL" (.getPath source)
+            "COPILOT_CLI_RELEASE_SHA256" (apply str (repeat 64 "0"))})]
+      (is (not (zero? exit)))
+      (is (str/includes? err "Local release archive exceeds 4 bytes"))
+      (is (<= (.length (io/file tmp "local-release.tgz")) 4)))))
+
+(deftest download-enforces-curl-file-size-limit
+  (with-temp-root [root]
+    (let [source (io/file root "source.bin")
+          destination (io/file root "download.bin")
+          _ (spit source "12345")
+          {:keys [exit err]}
+          (run-script-eval
+           (private-call-form
+            'download!
+            (pr-str (str (.toURI source)))
+            (pr-str (.getPath destination))
+            "4"))]
+      (is (not (zero? exit)))
+      (is (str/includes? err "Download failed:")))))
+
+(deftest production-extraction-path-enforces-resource-limits
+  (with-temp-root [root]
+    (let [archive (create-release-archive! root)]
+      (doseq [[limit-symbol expected-message]
+              [['max-archive-listing-bytes
+                "Archive listing for"]
+               ['max-package-json-bytes
+                "package/package.json extraction output exceeds 4 bytes"]
+               ['max-schema-bytes
+                "package/schemas/api.schema.json extraction output exceeds 4 bytes"]]]
+        (let [staging-dir (io/file root (name limit-symbol))
+              {:keys [exit out err]}
+              (run-script-eval
+               (str
+                "(let [limit (ns-resolve 'codegen.fetch-schemas '"
+                limit-symbol ") "
+                "prepare! " (private-var-form 'prepare-staged-schemas!) "] "
+                "(with-redefs-fn {limit 4} "
+                "#(prepare! " (pr-str (.getPath archive)) " "
+                (pr-str (.getPath staging-dir))
+                " :local-override \"fixture.tgz\" "
+                (pr-str fixture-version) ")))"))]
+          (is (not (zero? exit)) (name limit-symbol))
+          (is (str/includes? (str out err) expected-message)
+              (name limit-symbol)))))))
 
 (deftest rejects-archive-listings-over-the-member-limit
   (let [{:keys [exit out err]}
@@ -806,19 +1008,18 @@
     (let [staging-dir (io/file root "staging")
           output-dir (io/file root "schemas")
           expected-permissions
-          (PosixFilePermissions/fromString "rwx------")]
+          (PosixFilePermissions/fromString "rwxr-xr-x")]
       (.mkdirs staging-dir)
       (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
       (let [{:keys [exit err]}
             (run-script-eval-with-umask
              root
-             "077"
-             (format
-              (str "(let [install! (ns-resolve "
-                   "'codegen.fetch-schemas 'install-schemas!)] "
-                   "((deref install!) %s %s false))")
+             "022"
+             (private-call-form
+              'install-schemas!
               (pr-str (.getPath staging-dir))
-              (pr-str (.getPath output-dir))))]
+              (pr-str (.getPath output-dir))
+              "false"))]
         (is (zero? exit) err)
         (when (zero? exit)
           (is (= expected-permissions
@@ -826,28 +1027,32 @@
                   (.toPath output-dir)
                   (make-array java.nio.file.LinkOption 0)))))))))
 
-(deftest create-only-install-refuses-a-destination-that-appears
+(deftest create-only-install-refuses-a-destination-that-appears-during-copy
   (with-temp-root [root]
     (let [staging-dir (io/file root "staging")
           output-dir (io/file root "schemas")
           sentinel (io/file output-dir "sentinel.txt")]
       (.mkdirs staging-dir)
-      (.mkdirs output-dir)
       (spit (io/file staging-dir "api.schema.json") "{\"title\":\"API\"}\n")
-      (spit sentinel "preserve")
       (let [{:keys [exit out err]}
             (run-script-eval
-             (format
-              (str "(let [install! (ns-resolve "
-                   "'codegen.fetch-schemas 'install-schemas!)] "
-                   "((deref install!) %s %s false))")
-              (pr-str (.getPath staging-dir))
-              (pr-str (.getPath output-dir))))]
+             (str
+              "(let [copy-tree-var (ns-resolve 'babashka.fs 'copy-tree)"
+              "\n      copy-tree (deref copy-tree-var)"
+              "\n      install! " (private-var-form 'install-schemas!) "]"
+              "\n  (with-redefs-fn"
+              "\n    {copy-tree-var"
+              "\n     (fn [& args]"
+              "\n       (apply copy-tree args)"
+              "\n       (babashka.fs/create-dirs " (pr-str (.getPath output-dir)) ")"
+              "\n       (spit " (pr-str (.getPath sentinel)) " \"preserve\"))}"
+              "\n    #(install! " (pr-str (.getPath staging-dir)) " "
+              (pr-str (.getPath output-dir)) " false)))"))]
         (is (not (zero? exit)) (str out err))
         (is (= "preserve" (slurp sentinel)))
         (is (empty?
              (filter #(str/starts-with? (.getName %) ".copilot-schemas-")
-                     (.listFiles output-dir))))))))
+                     (.listFiles root))))))))
 
 (deftest prepared-directory-is-owned-before-permission-lookup
   (with-temp-root [root]

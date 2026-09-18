@@ -118,6 +118,31 @@
        (every? pos-int? prs)
        (= (count prs) (count (distinct prs)))))
 
+(defn- expected-upstream-contract-ids
+  [report]
+  (let [release-version
+        (str/replace-first
+         (get-in report [:upstream :release-tag :name]) #"^v" "")
+        runtime-version (get-in report [:upstream :runtime-version])]
+    #{[:release :sdk-version release-version]
+      [:runtime :schema-version runtime-version]
+      [:session-config :capi :auto-tier "fast"]
+      [:resume-session-config :capi :auto-tier "fast"]
+      [:session-event "session.start" :auto-tier "fast"]
+      [:session-event "session.resume" :auto-tier "fast"]
+      [:provider-config :azure :base-url :project-url]}))
+
+(defn- public-surface-version
+  [surface version]
+  {:source-blobs
+   (into {}
+         (map (fn [[path hashes]] [path (get hashes version)]))
+         (:source-blobs surface))
+   :trees
+   (into {}
+         (map (fn [[path hashes]] [path (get hashes version)]))
+         (:trees surface))})
+
 (defn- public-authority-paths
   [surface]
   (set
@@ -262,6 +287,10 @@
         (mapcat :upstream-paths (:stable-deltas report))
         traced-stable-contracts
         (mapcat :upstream-contracts (:stable-deltas report))
+        traced-stable-contract-ids
+        (map :id traced-stable-contracts)
+        expected-contract-ids
+        (expected-upstream-contract-ids report)
         authority-paths (public-authority-paths surface)
         unchanged-authority-paths
         (set (:unchanged-authority-paths continuity))
@@ -283,6 +312,10 @@
     (is (= expected-upstream-base
            (get-in historical-report [:upstream :target-commit])
            (:baseline-target continuity)))
+    (is (= (public-surface-version
+            (:target-public-surface historical-report) :target)
+           (public-surface-version surface :base))
+        "the prior certified target surface must equal this certificate's base")
     (is (= authority-paths
            (set/union unchanged-authority-paths
                       inventoried-authority-paths)))
@@ -303,7 +336,21 @@
     (is (seq traced-stable-contracts))
     (is (= (count traced-stable-contracts)
            (count (distinct traced-stable-contracts))))
-    (is (every? vector? traced-stable-contracts))
+    (is (every? #(and (map? %)
+                      (= #{:id :evidence} (set (keys %)))
+                      (vector? (:id %))
+                      (keyword? (:evidence %)))
+                traced-stable-contracts))
+    (is (= expected-contract-ids (set traced-stable-contract-ids)))
+    (is (= (count expected-contract-ids)
+           (count traced-stable-contract-ids)))
+    (doseq [delta (:stable-deltas report)
+            contract (:upstream-contracts delta)]
+      (testing (str (:id delta) " " (:id contract))
+        (is (contains? (set (:evidence delta)) (:evidence contract)))
+        (is (string?
+             (get-in report
+                     [:source-evidence (:evidence contract) :path])))))
     (is (= stable-items (set traced-stable-items)))
     (is (= (count stable-items) (count traced-stable-items)))
     (is (= nonstable-groups (set traced-nonstable-groups)))

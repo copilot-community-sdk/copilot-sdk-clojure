@@ -85,7 +85,12 @@ that directory.
 The fetcher bounds every external artifact before parsing it: checksum
 manifests may be at most 1 MiB, release archives 256 MiB, archive listings
 1 MiB and 4,096 entries, package metadata 1 MiB, and each schema 32 MiB. Archive
-listing and extraction commands must finish within 300 seconds.
+downloads use `curl`'s file-size limit, and local overrides are copied into the
+private verified snapshot through a bounded stream that never writes more than
+256 MiB. Archive listing and extraction commands must finish within 300
+seconds. Output overflow and timeout paths gracefully terminate the process
+tree, forcibly terminate non-cooperative processes, and reap them before the
+fetch fails.
 
 ## Workflows
 

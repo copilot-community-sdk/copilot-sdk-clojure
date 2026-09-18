@@ -362,7 +362,9 @@
    :status :ported
    :upstream-prs [2690]
    :upstream-paths []
-   :upstream-contracts [[:release :sdk-version "1.0.14"]]
+   :upstream-contracts
+   [{:id [:release :sdk-version "1.0.14"]
+     :evidence :release-changelog}]
    :evidence [:release-changelog]
    :inventory-items []
    :clojure-paths
@@ -375,7 +377,9 @@
    :status :regenerated
    :upstream-prs [2688 2694]
    :upstream-paths []
-   :upstream-contracts [[:runtime :schema-version "1.0.86-0"]]
+   :upstream-contracts
+   [{:id [:runtime :schema-version "1.0.86-0"]
+     :evidence :runtime-version}]
    :evidence [:runtime-version]
    :inventory-items []
    :clojure-paths
@@ -394,10 +398,14 @@
     "nodejs/test/client.test.ts"
     "nodejs/test/session-event-types.test.ts"]
    :upstream-contracts
-   [[:session-config :capi :auto-tier "fast"]
-    [:resume-session-config :capi :auto-tier "fast"]
-    [:session-event "session.start" :auto-tier "fast"]
-    [:session-event "session.resume" :auto-tier "fast"]]
+    [{:id [:session-config :capi :auto-tier "fast"]
+      :evidence :fast-auto-tier-client}
+     {:id [:resume-session-config :capi :auto-tier "fast"]
+      :evidence :fast-auto-tier-client}
+     {:id [:session-event "session.start" :auto-tier "fast"]
+      :evidence :fast-auto-tier-events}
+     {:id [:session-event "session.resume" :auto-tier "fast"]
+      :evidence :fast-auto-tier-events}]
    :evidence [:fast-auto-tier-client
               :fast-auto-tier-events
               :fast-auto-tier-doc]
@@ -421,7 +429,8 @@
    :upstream-prs [2593]
    :upstream-paths ["docs/auth/byok.md"]
    :upstream-contracts
-   [[:provider-config :azure :base-url :project-url]]
+   [{:id [:provider-config :azure :base-url :project-url]
+     :evidence :azure-project-url}]
    :evidence [:azure-project-url :azure-project-runtime-path]
    :inventory-items []
    :contract
@@ -590,7 +599,7 @@
   "script/codegen/emit_coerce.clj"
   "80ef6aac919674e05a871169701ff2a1edb0547183237f98ce958b3a69b65dec"
   "script/codegen/fetch_schemas.clj"
-  "ac77d842f8f3417a2db693ca2f6214b832820f67f3031e1d10c10c5d04751ec1"
+  "bf49e65d2a3f34e1036442cec09b959093fc4a8d0d9f089c7dd26eb4e1308996"
   "src/github/copilot_sdk/generated/coerce.clj"
   "e4750f4689fff5ef7bac5dcec3ee77eaaaae6b244e9b5c9c659eb198d56b8c58"
   "src/github/copilot_sdk/generated/event_metadata.clj"
@@ -600,17 +609,17 @@
   "test/github/copilot_sdk/codegen_test.clj"
   "16ba14ac366ba7544821d920154f9b4fc21296fcb8eb6673a3dfe85b88ea14dc"
   "test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
-  "9a521ee9668ca24955cd8ef7af5678403c66822311d1610745369460484e3bfa"
+  "2c6d847b67604f2a00f6a7e24ee12d30acb5d6b80e14593374ba2f5c7069a1be"
   "test/github/copilot_sdk/schema_fetch_test.clj"
-  "d7e08c2678ff1e0d7e9b5d8a2f5e005ef2150f6290c107e7c65ac129ffad4b97"
+  "3296e36e0c17cc1b7c8007c5cc771ca654bdeea8b9d7641f5cc918d0eb350f35"
   "doc/auth/byok.md"
   "9f80041f1d6409b66678e65e93f6b8c12079e3ce9d213c9a0da14562a0534eaf"
   "doc/reference/API.md"
   "d86aa5bae4a4b668871b5fba0f2dcd054e5fd2cb7c9ecd6cd785ba8d49d8795c"
   "doc/codegen.md"
-  "f02743db90f0e9762b1a614864b352e171f0312f10fa19ed20cdbeeb61ecdadd"
+  "1d64f784cf53c609a1ba3a37a416ec5d36152a238324f39db68a565f01b8c6b5"
   "CHANGELOG.md"
-  "1ee00e9e25f50d96eee2424b373ce259c012debff5875c3955ee2b1a2ff9b8f6"
+  "f427146ca62a9288a9d99094682aa4535c313f2de68363aa5645172cc11c3660"
   "doc/api/API.html"
   "813865827fc04c564661fa5f2f5380bafd5babbb2ba768e017195683e548783b"
   "doc/api/byok.html"
@@ -618,6 +627,6 @@
   "doc/api/getting-started.html"
   "5d9d52b2cea8892c24e1f105da8149969a71e39d9011efdb65c248ad0a4f7e46"
   "doc/api/codegen.html"
-  "5b2585b30a2491ed38082ac6d2431b5bab358b31b6f2050fb8c26c764a166b6e"
+  "dfea3b968f2ae8a00b2cfc7ed0a1dd204c85f8f5645d3c70e2e11d6414dfc3ca"
   "resources/github/copilot_sdk/api_surface.edn"
   "d2e53642f706ecc71ea29d2501198e3a1e66bc0fb295543658e384fb962d3bf6"}}
