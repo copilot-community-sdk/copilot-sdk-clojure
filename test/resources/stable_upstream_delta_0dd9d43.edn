@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "fb02b1a622da2e98859475abb91f7d5c721f3fd7"
-  :local-artifact-commit "cd674acd7dca8e41dfe30bbd7e6ed18c3b2a6964"
+  :local-artifact-commit "e5570d986928284d906ef3578506823175ced4b0"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_e9df3938.edn"
    :sha256
