@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "85a8037200f6c761f632c60110ee00c0a72d8821"
-  :local-artifact-commit "45df25f4d0e2f8a98579ba6127b9baa8f992723a"
+  :local-artifact-commit "30412791b47370de830fc1daaa08a95be69eb6c5"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_0dd9d43.edn"
    :sha256
@@ -677,7 +677,7 @@
   "examples/README.md"
   "b2c27e1d59bb922c0f65e4753c2c9f812353a16c7c4cf584e96d85ab4a3935b5"
   "examples/structured_output.clj"
-  "28479aa2e868b0f45a11f206202d02e78f00efcf70f34aca304c10c15e3f2c1d"
+  "786ad6ff73ebc07fbee215f57805e6ce7eae934377937d9fb6d2aa9d40533ce5"
   "resources/github/copilot_sdk/api_surface.edn"
   "5080d9e81746240476037938793c9138febf9d7e47fe1a31e978c05f3aeaa458"
   "run-all-examples.sh"
