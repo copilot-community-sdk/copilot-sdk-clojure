@@ -32,6 +32,7 @@ Q: How about Tokyo?
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
          :git/sha "6b42d7dd2dad068dd6793eeffd2d6e68e88b16e3"}}}
 </code></pre>
+<p>Features documented under <strong>Unreleased</strong>, including structured outputs, require the Git dependency until the next Maven Central release.</p>
 <h2><a href="#step-2-send-your-first-message" id="step-2-send-your-first-message"></a>Step 2: Send Your First Message</h2>
 <p>The simplest way to use the SDK — about 3 lines of code:</p>
 <pre><code class="language-clojure">(require '[github.copilot-sdk.helpers :as h])
@@ -62,7 +63,8 @@ Q: How about Tokyo?
    "required" ["answer"]
    "additionalProperties" false})
 
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-4.1"}]
   (copilot/send-and-wait!
    session
    {:prompt "What is 2 + 2?"}

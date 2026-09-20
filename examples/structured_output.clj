@@ -18,8 +18,7 @@
         confidence (get value "confidence")]
     (when-not (and (map? value)
                    (string? answer)
-                   (number? confidence)
-                   (<= 0 confidence 1))
+                   (number? confidence))
       (throw
        (ex-info
         "Structured response did not match the expected result"
@@ -30,9 +29,10 @@
 (defn run
   [{:keys [prompt]
     :or {prompt
-         "What is the capital of France? Return a concise answer and confidence."}}]
+         "What is the capital of France? Return a concise answer and confidence from 0 through 1."}}]
   (copilot/with-client-session
     [session {:on-permission-request copilot/approve-all
+              :model "gpt-4.1"
               :available-tools []}]
     (let [result
           (copilot/send-and-wait!

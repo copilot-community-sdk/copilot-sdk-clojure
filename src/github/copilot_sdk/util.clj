@@ -82,20 +82,59 @@
 
 (defn ^:no-doc opaque-json->wire
   "Prepare opaque JSON for transport without camel-casing caller-defined keys."
-  [value]
-  (cond
-    (map? value)
-    (into {}
-          (map (fn [[k v]]
-                 [(if (keyword? k) (name k) k)
-                  (opaque-json->wire v)]))
-          value)
+  [root]
+  (letfn [(wire-key [key]
+            (if (keyword? key)
+              (subs (str key) 1)
+              key))]
+    (loop [pending [[:visit root]]
+           completed []]
+      (if-let [[operation value] (peek pending)]
+        (let [pending (pop pending)]
+          (case operation
+            :visit
+            (cond
+              (map? value)
+              (let [entries (vec value)
+                    keys (mapv (comp wire-key first) entries)
+                    values (mapv second entries)]
+                (recur
+                 (into (conj pending [:build-map {:keys keys
+                                                  :count (count entries)}])
+                       (map (fn [item] [:visit item]) (rseq values)))
+                 completed))
 
-    (coll? value)
-    (mapv opaque-json->wire value)
+              (sequential? value)
+              (let [items (vec value)]
+                (recur
+                 (into (conj pending [:build-vector (count items)])
+                       (map (fn [item] [:visit item]) (rseq items)))
+                 completed))
 
-    :else
-    value))
+              (coll? value)
+              (throw
+               (ex-info
+                "Unsupported opaque JSON collection; use a sequential value for arrays."
+                {:value value
+                 :type (type value)}))
+
+              :else
+              (recur pending (conj completed value)))
+
+            :build-map
+            (let [{:keys [keys] child-count :count} value
+                  start (- (count completed) child-count)
+                  values (subvec completed start)]
+              (recur pending
+                     (conj (subvec completed 0 start)
+                           (into {} (map vector keys values)))))
+
+            :build-vector
+            (let [start (- (count completed) value)]
+              (recur pending
+                     (conj (subvec completed 0 start)
+                           (subvec completed start))))))
+        (peek completed)))))
 
 ;; -----------------------------------------------------------------------------
 ;; System prompt section key mapping

@@ -1024,14 +1024,19 @@ Selection range is a map with `:start` and `:end` positions, each containing `:l
 (copilot/send-and-wait! session options parsed-response-schema)
 (copilot/send-and-wait! session options parsed-response-schema timeout-ms)
 ```
-Send a message and block until the session becomes idle. Returns the final assistant message event.
+Send a message and block until the session becomes idle. The ordinary and raw
+schema forms return the final assistant message event. The parsed schema forms
+return the parser result.
 Default timeout is `60000` ms (60 seconds), matching the upstream Node.js SDK. The timeout controls how long to wait for `session.idle`; it does not abort in-flight agent work.
 An idle event whose wire `:mode` is the string `"autopilot"` is a turn boundary,
 not a terminal event, so the wait continues. Keyword `:autopilot` is not a
 supported event payload value. Ordinary waits are serialized per session;
-structured waits correlate by originating message ID and may run concurrently.
+structured waits correlate by originating message ID and may run concurrently
+with one another. A structured wait and an ordinary wait on the same session
+run serially so their session-wide idle/error events cannot cross-contaminate
+results.
 
-### Structured Output
+#### Structured Output
 
 Use `:response-schema` in the options map when the caller needs the normal
 assistant message event:
@@ -1071,19 +1076,22 @@ correlated assistant response and return the parser result:
 ;; => 4
 ```
 
-The schema map is closed: it must contain exactly `:to-json-schema` and
-`:parse`, both functions. `:to-json-schema` must return a JSON object.
+The schema map must provide `:to-json-schema` and `:parse`, both functions.
+Additional adapter metadata is ignored. `:to-json-schema` must return a JSON
+object.
 Caller-defined keys in JSON Schemas and extension-context payloads are opaque:
-keyword keys serialize by literal name rather than camel case.
+keyword keys serialize by their full literal name rather than camel case.
+JSON arrays must use sequential Clojure values; unordered collections such as
+sets are rejected.
 
 The parsed form rejects `:response-schema` in `options` and rejects
 `:mode :immediate`. It ignores subagent messages, correlates the root assistant
 message to the message ID returned by `send!`, ignores assistant messages with
 pending tool requests, decodes JSON, then invokes `:parse` on the calling
-thread. It throws if the run is aborted, the response is not valid JSON, or the
-run completes without a final structured assistant message. Its timeout starts
-before the underlying send request, so send admission and event collection
-share one deadline.
+thread. It throws with the source event attached when the run is aborted or the
+response is not valid JSON, and throws if the run completes without a final
+structured assistant message. Its timeout starts before the underlying send
+request, so send admission and event collection share one deadline.
 
 #### `send-async`
 

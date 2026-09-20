@@ -1479,14 +1479,17 @@
       (is (= valid?
              (nil? (specs/github-token-provider-result-constraint result))))))
 
-  (testing "provider-result fields accept collections supported by the JSON writer"
+  (testing "provider-result fields accept ordered JSON array representations"
     (doseq [value [(list "repo" "read:org")
                    (range 3)
-                   (map identity ["repo" "read:org"])
-                   #{"repo" "read:org"}]]
+                   (map identity ["repo" "read:org"])]]
       (is (s/valid?
            ::specs/github-token-provider-result
            {:kind :cancelled :metadata value})))
+    (is (not
+         (s/valid?
+          ::specs/github-token-provider-result
+          {:kind :cancelled :metadata #{"repo" "read:org"}})))
     (is (not
          (s/valid?
           ::specs/github-token-provider-result

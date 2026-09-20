@@ -77,3 +77,29 @@
              (first (keys (util/wire->clj {key true})))))
       (is (= (csk/->camelCaseKeyword key)
              (first (keys (util/clj->wire {key true}))))))))
+
+(deftest opaque-json-conversion-preserves-key-identity
+  (is (= {"tenant/id" 1
+          "account/id" 2
+          "plain" {"nested/key" true}}
+         (util/opaque-json->wire
+          {:tenant/id 1
+           :account/id 2
+           :plain {:nested/key true}}))))
+
+(deftest opaque-json-conversion-rejects-non-array-collections
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"Unsupported opaque JSON collection"
+       (util/opaque-json->wire {:values #{1 2 3}}))))
+
+(deftest opaque-json-conversion-is-stack-safe
+  (let [depth 10000
+        nested (reduce (fn [value _] [value]) :leaf (range depth))
+        converted (util/opaque-json->wire nested)]
+    (is (= :leaf
+           (loop [value converted
+                  remaining depth]
+             (if (zero? remaining)
+               value
+               (recur (first value) (dec remaining))))))))

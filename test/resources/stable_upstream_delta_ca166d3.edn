@@ -11,7 +11,7 @@
   :target-commit "ca166d3eeec17b8efe0294af4b1ef9ca0f4445de"
   :commit-count 10
   :commits-sha256
-  "c4c11e9f472e1909e4bd60a5b370aa7ef2e83dacbc27132530dd0766ce793a2b"
+  "cbc608d5177f860e50e1bbe0a47634573956893afac71abd9c04fecca73a6206"
   :hash-format :newline-joined-without-trailing-newline
   :target-package-version "0.0.0-dev"
   :runtime-version "1.0.87-0"
@@ -28,7 +28,7 @@
    :reason "Changes Node dependency pinning and repository validation policy."
    :changed-path-count 9
    :changed-paths-sha256
-   "115f4ff1bd8e35394e422ea2f0e4354bf3c27081e977c99148b8b1cf56696533"}
+   "9ff1ece36d9522e1b3ce0242a0dd8eabcab48801bc9e38f12b258a502a363fe4"}
   {:commit "fc44743a1d75a9349828434ef6fbff9b5fe9910c"
    :subject "Typed structured outputs (#2590)"
    :source-url "https://github.com/github/copilot-sdk/pull/2590"
@@ -38,7 +38,7 @@
    "Adds stable response-schema sends, typed sendAndWait results, correlated structured waits, and extension-context message attachments."
    :changed-path-count 62
    :changed-paths-sha256
-   "fd8c47691b33ce721bf0b098b3f538a9f4c7a72544d5706a475faa7b086b0b88"}
+   "1fe6e5c4e2644535430e95ab3a4eb8605fae5b3e85788114a1c1d8b3871001c2"}
   {:commit "ad69ee168680728872434817191ef8cc5e449431"
    :subject "Add Java linuxmusl-x64 native classifier support (#2715)"
    :source-url "https://github.com/github/copilot-sdk/pull/2715"
@@ -47,7 +47,7 @@
    :reason "Adds Java native packaging support for linux-musl x64."
    :changed-path-count 12
    :changed-paths-sha256
-   "fc6f6320905cc8b441ad5359f2bd254123cacbed6b9fb45077ff1d4e947cb780"}
+   "b29f61da5956e49eb552113201fffda9d70a52af92044db6d84b85ef060c4a7d"}
   {:commit "791f7fb7dab1ddc843e4796079f256ccd40c4082"
    :subject "Update Copilot CLI to 1.0.87-0 (#2731)"
    :source-url "https://github.com/github/copilot-sdk/pull/2731"
@@ -57,7 +57,7 @@
    "Advances the runtime and generated schemas, including stable indexed-search, permission-recovery, and event provenance contracts."
    :changed-path-count 223
    :changed-paths-sha256
-   "8b49c42fca2ca3dab0931df748ef56abe8254f6c2fccce9ba6e02a4e7178a960"}
+   "aafeb04e0ffa6af5213121fef0ec737dd94be71aa290124a87aab54e9a545d8e"}
   {:commit "782c45dcdd1746acf7310096bafa8dbc488e5286"
    :subject "Pin GitHub Actions to commit SHAs (#2712)"
    :source-url "https://github.com/github/copilot-sdk/pull/2712"
@@ -66,7 +66,7 @@
    :reason "Changes upstream CI supply-chain pinning only."
    :changed-path-count 1
    :changed-paths-sha256
-   "1e1ff8de7b8a82c9d2aab10a9e4f32e65bf0c1349e7d9b92d311f0285176bfa6"}
+   "551d1fcf87f78cc3bc18a7b332a4dc5d8773a512062df881c5aba28a6f5c48d7"}
   {:commit "8045fb74c7d8684fd388b09e324c00b02e9347a5"
    :subject "Preserve structured JSON-RPC error data (#2664)"
    :source-url "https://github.com/github/copilot-sdk/pull/2664"
@@ -76,7 +76,7 @@
    "Changes the Rust SDK, while documenting a cross-SDK boundary behavior that the Clojure protocol now preserves."
    :changed-path-count 3
    :changed-paths-sha256
-   "0efc0cc2396b55ab448e3b81eaabfd3b0b3505c92c29f2e7482613978b014b11"}
+   "66223b894802a535b558eae24e54ac79928d52badeaef8bb121dfcd0e18f128b"}
   {:commit "8b22f15e28e210c9b90f822d92c4a38e53d079aa"
    :subject "perf(rust): coalesce intercepted HTTP response chunks (#2717)"
    :source-url "https://github.com/github/copilot-sdk/pull/2717"
@@ -85,7 +85,7 @@
    :reason "Changes Rust HTTP interception performance only."
    :changed-path-count 3
    :changed-paths-sha256
-   "724a72ea3cbd9e2b1ceab86e57f6e8e08875fe3bbfcc2ba37fa5744b26950f6e"}
+   "7b0f9eece633821291d15c359cc6ea38bf14bb1e555a52d6542d64e09dbef8b8"}
   {:commit "0a7113bf0ade366558f922c7665d0ee21fe02df6"
    :subject "perf(rust): avoid rebuilding and copying JSON payloads (#2711)"
    :source-url "https://github.com/github/copilot-sdk/pull/2711"
@@ -94,7 +94,7 @@
    :reason "Changes Rust JSON serialization performance only."
    :changed-path-count 4
    :changed-paths-sha256
-   "285c1a2ed6e021382b341f9b6401d7a2f76f8441852f1e8974885a86ee7fe843"}
+   "4b6f326efc970c235a4fe82be112a48af6cac7d556ae73657f9c110d06a8fb1e"}
   {:commit "9515b5e85c71b21e82381d22d69c2486561fd531"
    :subject "Expand cross-SDK scenario and RPC E2E coverage (#2724)"
    :source-url "https://github.com/github/copilot-sdk/pull/2724"
@@ -104,7 +104,7 @@
    "Adds cross-SDK scenario coverage and the explicitly experimental extension launch-provider surface."
    :changed-path-count 153
    :changed-paths-sha256
-   "546498f11fa4c17d1f7e60b2ca6c11597ec0cae7636000e90c28721c0aa1dd42"}
+   "0ab624bb6c6e7355674a75b2f617092f27d78ad191e03bc9d9fbd2c30047fb57"}
   {:commit "ca166d3eeec17b8efe0294af4b1ef9ca0f4445de"
    :subject "perf(dotnet): avoid redundant JSON event materialization (#2733)"
    :source-url "https://github.com/github/copilot-sdk/pull/2733"
@@ -113,12 +113,12 @@
    :reason "Changes .NET event deserialization performance only."
    :changed-path-count 4
    :changed-paths-sha256
-   "49b74ffb2ff6eccb403ba05af3ef109212ca557b5703be6f9e1e6908269f78eb"}]
+   "645287cc5464926720debda7b17f5576a9d7fa96a660c4f559abc0f5996b480f"}]
 
  :changed-paths
  {:count 445
   :sha256
-  "eac3cc709cc52c3ecd434eaf46b146397caf1a3b2eea9a0ce0237833b189a718"
+  "6f97cc75c6feb9b3527332323d212d9bacb1ba3d0e26576cd8b3f6a83622c6d0"
   :hash-format :newline-joined-without-trailing-newline
   :classification-counts
   {:stable-public 10
@@ -372,12 +372,12 @@
       "ModelChangeSource"
       "PermissionCompletedData"
       "PermissionRequestedData"
+      "SessionEvent"
       "SkillInvokedData"
       "SystemNotificationData"
       "UserMessageData"}
     :experimental #{"PermissionAssistedApproval" "TaskCompleteData"}
-    :internal #{"AssistantUsageData"}
-    :generated-only #{"SessionEvent"}}}}
+    :internal #{"AssistantUsageData"}}}}
 
  :stable-delta-ids
  #{:events/runtime-1.0.87
@@ -399,6 +399,11 @@
     "nodejs/src/types.ts"
     "nodejs/test/e2e/structured_output.e2e.test.ts"
     "nodejs/test/structured-output.test.ts"]
+    :inventory-groups
+    [[:added-exported-symbols "nodejs/src/index.ts" :stable-public]
+     [:added-exported-symbols "nodejs/src/types.ts" :stable-public]
+     [:interface-fields "nodejs/src/types.ts" "MessageOptions" :stable-public]
+     [:changed-declarations "nodejs/src/types.ts" :stable-public]]
    :upstream-contracts
    [{:id [:message-options :response-schema :raw-json-schema]
      :evidence :structured-output-schema}
@@ -429,6 +434,9 @@
    ["nodejs/src/index.ts"
     "nodejs/src/types.ts"
     "nodejs/test/message-source.test.ts"]
+   :inventory-groups
+   [[:added-exported-symbols "nodejs/src/index.ts" :stable-public]
+    [:added-exported-symbols "nodejs/src/types.ts" :stable-public]]
    :upstream-contracts
    [{:id [:message-options :attachments :extension-context]
      :evidence :extension-context}]
@@ -444,6 +452,41 @@
    :status :ported
    :upstream-prs [2731]
    :upstream-paths ["nodejs/src/generated/session-events.ts"]
+   :inventory-groups
+   [[:added-exported-symbols
+     "nodejs/src/generated/session-events.ts"
+     :stable-public]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "CompactionCompleteData"
+     :stable-public]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "PermissionCompletedData"
+     :stable-public]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "PermissionRequestedData"
+     :stable-public]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "SkillInvokedData"
+     :stable-public]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "SystemNotificationData"
+     :stable-public]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "UserMessageData"
+     :stable-public]
+    [:changed-type-values
+     "nodejs/src/generated/session-events.ts"
+     "ModelChangeSource"
+     :stable-public]
+    [:changed-declarations
+     "nodejs/src/generated/session-events.ts"
+     :stable-public]]
    :upstream-contracts
    [{:id [:session-event "session.indexed_search"]
      :evidence :indexed-search-event}
@@ -453,12 +496,17 @@
      :evidence :responses-reasoning}
     {:id [:session-event "skill.invoked" :invoked-at-turn]
      :evidence :skill-invoked-turn}
+    {:id [:session-event "permission.requested" :recovery-episode-id]
+     :evidence :permission-recovery-correlation}
+    {:id [:session-event "permission.completed" :recovery-episode-id]
+     :evidence :permission-recovery-correlation}
     {:id [:session-event "session.model_change" :source
           "changeboarding_shortcut"]
      :evidence :model-change-source}]
    :evidence
    [:indexed-search-event
     :permission-recovery-event
+    :permission-recovery-correlation
     :responses-reasoning
     :skill-invoked-turn
     :model-change-source]
@@ -473,6 +521,7 @@
    :status :regenerated
    :upstream-prs [2731]
    :upstream-paths []
+   :inventory-groups []
    :upstream-contracts
    [{:id [:runtime :schema-version "1.0.87-0"]
      :evidence :runtime-version}]
@@ -567,10 +616,7 @@
    :reason
    "Generated workflow, catalog, plugin, queue, and workspace-checkpoint RPC declarations are wire evidence, not independent stable SDK API."
    :evidence [:generated-workflow-rpc]
-   :inventory-groups
-   [[:changed-declarations
-     "nodejs/src/generated/session-events.ts"
-     :generated-only]]}
+   :inventory-groups []}
   {:id :node/dependency-and-scenario-infrastructure
    :classification :internal
    :decision :exclude
@@ -618,6 +664,9 @@
   :permission-recovery-event
   {:path "nodejs/src/generated/session-events.ts"
    :contains "export interface PermissionRecoveryEvent"}
+  :permission-recovery-correlation
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "recoveryEpisodeId?: string;"}
   :responses-reasoning
   {:path "nodejs/src/generated/session-events.ts"
    :contains "export interface ResponsesReasoning"}

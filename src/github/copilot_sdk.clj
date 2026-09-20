@@ -873,7 +873,7 @@
 
    Options:
    - :prompt       - The message text (required)
-   - :attachments  - Vector of supported file, selection, blob, GitHub
+   - :attachments  - Vector of supported file, directory, selection, blob, GitHub
                      reference, or extension-context attachment maps
    - :mode         - :enqueue (default) or :immediate
    - :response-schema - Raw JSON Schema or a map with `:to-json-schema` and
@@ -890,7 +890,8 @@
   "Send a message and wait until the session becomes idle.
    Returns the final assistant message event, or nil if none received.
    Ordinary waits are serialized per session. Structured waits correlate by
-   originating message ID and may run concurrently.
+   originating message ID and may run concurrently with one another. Structured
+   and ordinary waits on the same session run serially.
    An idle event whose `:data :mode` is the string \"autopilot\" is a
    nonterminal turn boundary (the agent keeps working), so the wait
    continues past it to the next session.idle/session.error.

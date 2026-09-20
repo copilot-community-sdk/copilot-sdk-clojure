@@ -53,7 +53,7 @@
           (and (every? #(or (keyword? %) (string? %)) (keys value))
                (recur (into remaining (vals value))))
 
-          (coll? value)
+          (sequential? value)
           (recur (into remaining value))
 
           :else
@@ -1644,13 +1644,8 @@
         :blob ::blob-attachment
         :extension-context ::extension-context-attachment))
 
-;; Inbound attachment (identical to ::attachment, kept as a semantic alias
-;; for event data contexts where attachments are received rather than sent)
-(s/def ::inbound-attachment
-  (s/or :file-or-directory ::file-or-directory-attachment
-        :selection ::selection-attachment
-        :github-reference ::github-reference-attachment
-        :blob ::blob-attachment))
+;; Semantic alias for event data contexts where attachments are received.
+(s/def ::inbound-attachment ::attachment)
 
 (s/def ::attachments (s/coll-of ::attachment))
 (s/def ::inbound-attachments (s/coll-of ::inbound-attachment))
@@ -1690,7 +1685,6 @@
 (defn- parsed-response-schema?
   [value]
   (and (map? value)
-       (= #{:to-json-schema :parse} (set (keys value)))
        (fn? (:to-json-schema value))
        (fn? (:parse value))))
 
@@ -1705,7 +1699,9 @@
    (s/keys :req-un [::prompt]
            :opt-un [::attachments ::mode ::timeout-ms ::request-headers
                     ::agent-mode ::display-prompt ::response-schema])
-   #(optional-field? % :source message-source?)))
+   #(optional-field? % :source message-source?)
+   #(not (and (= :immediate (:mode %))
+              (contains? % :response-schema)))))
 
 ;; :timeout-ms as used in option maps for send-async / <send! /
 ;; send-async-with-id / send-and-wait! allows nil to "disable" the timeout per
@@ -3085,8 +3081,6 @@
    #(optional-field? % :resolved-by-hook boolean?)
    #(optional-field? % :risk-assessment opaque-json-value?)
    #(optional-field? % :agent-mode session-modes)
-   #(optional-field? % :permission-mode
-                     (partial s/valid? ::permission-mode))
    #(optional-field? % :recovery-episode-id string?)))
 
 (s/def ::permission.completed-data

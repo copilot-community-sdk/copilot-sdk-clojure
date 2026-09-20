@@ -32,15 +32,25 @@
       (is (s/valid? ::specs/response-schema response-json-schema))
       (is (s/valid? ::specs/response-schema
                     (parsed-response-schema identity)))
+      (is (s/valid? ::specs/parsed-response-schema
+                    (assoc (parsed-response-schema identity)
+                           :schema-name "answer")))
       (doseq [invalid [nil
                        {:to-json-schema (constantly response-json-schema)}
                        {:parse identity}
-                       {:to-json-schema (constantly response-json-schema)
-                        :parse identity
-                        :extra true}
+                       {"type" "object"
+                        "properties" {"values" #{1 2 3}}}
                        {"type" "object" "metadata" (Object.)}]]
         (is (not (s/valid? ::specs/response-schema invalid))
             (str "must reject " (pr-str invalid)))))))
+
+(deftest response-schema-rejects-immediate-mode
+  (is (not
+       (s/valid?
+        ::specs/send-options
+        {:prompt "Do not admit"
+         :mode :immediate
+         :response-schema response-json-schema}))))
 
 (deftest response-schema-wire-contract
   (let [requests (atom [])
@@ -123,6 +133,9 @@
                      :content "{\"answer\":0}"}})
             (session/dispatch-event!
              client session-id
+             {:type :copilot/session.idle :data {}})
+            (session/dispatch-event!
+             client session-id
              {:type :copilot/user.message
               :data {:message-id "request-1" :content "Question"}})
             (session/dispatch-event!
@@ -156,6 +169,38 @@
     (is (= {"answer" 4} @parsed-value))
     (is (= schema (:response-schema @sent-opts)))))
 
+(deftest raw-response-schema-returns-correlated-assistant-event
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        result
+        (with-redefs
+         [session/send-with-timeout!
+          (fn [_ _ _]
+            (session/dispatch-event!
+             client session-id
+             {:type :copilot/user.message
+              :data {:message-id "request-1" :content "Question"}})
+            (session/dispatch-event!
+             client session-id
+             {:type :copilot/assistant.message
+              :data {:originating-message-id "request-1"
+                     :content "{\"answer-value\":4}"}})
+            (session/dispatch-event!
+             client session-id
+             {:type :copilot/session.idle :data {}})
+            "request-1")]
+          (sdk/send-and-wait!
+           copilot-session
+           {:prompt "What is 2+2?"
+            :response-schema response-json-schema}
+           5000))]
+    (is (= :copilot/assistant.message (:type result)))
+    (is (= "{\"answer-value\":4}" (get-in result [:data :content])))))
+
 (deftest typed-send-and-wait-rejects-invalid-combinations
   (let [copilot-session
         (sdk/create-session
@@ -177,6 +222,20 @@
           copilot-session
           {:prompt "Immediate" :mode :immediate}
           schema)))))
+
+(deftest typed-send-and-wait-rejects-invalid-json-schema-output
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        schema {:to-json-schema (constantly [])
+                :parse identity}]
+    (is (thrown-with-msg?
+         clojure.lang.ExceptionInfo
+         #"Response schema must resolve to a JSON object"
+         (sdk/send! copilot-session
+                    {:prompt "Return JSON"
+                     :response-schema schema})))))
 
 (deftest typed-send-and-wait-requires-final-structured-message
   (let [copilot-session
@@ -200,6 +259,104 @@
       (is (thrown-with-msg?
            clojure.lang.ExceptionInfo
            #"completed without a structured assistant response"
+           (sdk/send-and-wait!
+            copilot-session
+            {:prompt "Return JSON"}
+            schema
+            5000))))))
+
+(deftest typed-send-and-wait-surfaces-session-error-before-correlation
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        schema (parsed-response-schema identity)]
+    (with-redefs
+     [session/send!
+      (fn [_ _]
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/session.error
+          :data {:message "response schema rejected"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/session.idle :data {}})
+        "request-1")]
+      (let [pending
+            (future
+              (try
+                (sdk/send-and-wait!
+                 copilot-session
+                 {:prompt "Return JSON"}
+                 schema
+                 nil)
+                :completed
+                (catch Exception e
+                  [:threw (ex-message e)])))]
+        (try
+          (is (= [:threw "response schema rejected"]
+                 (deref pending 1000 ::timeout)))
+          (finally
+            (future-cancel pending)))))))
+
+(deftest typed-send-and-wait-reports-invalid-json-with-context
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        schema (parsed-response-schema identity)]
+    (with-redefs
+     [session/send-with-timeout!
+      (fn [_ _ _]
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/user.message
+          :data {:message-id "request-1" :content "Question"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/assistant.message
+          :data {:originating-message-id "request-1"
+                 :content "not JSON"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/session.idle :data {}})
+        "request-1")]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"Failed to parse the structured assistant response as JSON"
+           (sdk/send-and-wait!
+            copilot-session
+            {:prompt "Return JSON"}
+            schema
+            5000))))))
+
+(deftest typed-send-and-wait-surfaces-aborted-run
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        schema (parsed-response-schema identity)]
+    (with-redefs
+     [session/send-with-timeout!
+      (fn [_ _ _]
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/user.message
+          :data {:message-id "request-1" :content "Question"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/session.idle
+          :data {:aborted true}})
+        "request-1")]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"aborted before a structured result"
            (sdk/send-and-wait!
             copilot-session
             {:prompt "Return JSON"}
@@ -253,6 +410,63 @@
             [@first-result @second-result]))]
     (is (= [1 2] results))))
 
+(deftest structured-wait-does-not-overlap-an-ordinary-wait
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        ordinary-entered (promise)
+        release-ordinary (promise)
+        structured-entered (promise)
+        schema (parsed-response-schema #(get % "answer"))]
+    (with-redefs
+     [session/send!
+      (fn [_ _]
+        (deliver ordinary-entered true)
+        @release-ordinary
+        "ordinary-1")
+      session/send-with-timeout!
+      (fn [_ _ _]
+        (deliver structured-entered true)
+        "structured-1")]
+      (let [ordinary
+            (future
+              (sdk/send-and-wait!
+               copilot-session {:prompt "ordinary"} 5000))]
+        (is (true? (deref ordinary-entered 1000 ::timeout)))
+        (let [structured
+              (future
+                (sdk/send-and-wait!
+                 copilot-session {:prompt "structured"} schema 5000))]
+          (is (= ::timeout (deref structured-entered 100 ::timeout))
+              "structured admission must wait while an ordinary wait owns the session")
+          (deliver release-ordinary true)
+          (session/dispatch-event!
+           client session-id
+           {:type :copilot/assistant.message
+            :data {:content "ordinary result"}})
+          (session/dispatch-event!
+           client session-id
+           {:type :copilot/session.idle :data {}})
+          (is (= "ordinary result"
+                 (get-in (deref ordinary 1000 ::timeout) [:data :content])))
+          (is (true? (deref structured-entered 1000 ::timeout)))
+          (session/dispatch-event!
+           client session-id
+           {:type :copilot/user.message
+            :data {:message-id "structured-1" :content "Question"}})
+          (session/dispatch-event!
+           client session-id
+           {:type :copilot/assistant.message
+            :data {:originating-message-id "structured-1"
+                   :content "{\"answer\":4}"}})
+          (session/dispatch-event!
+           client session-id
+           {:type :copilot/session.idle :data {}})
+          (is (= 4 (deref structured 1000 ::timeout))))))))
+
 (deftest structured-timeout-bounds-send-admission
   (let [copilot-session
         (sdk/create-session
@@ -278,6 +492,23 @@
     (is (pos-int? @observed-timeout))
     (is (<= @observed-timeout 250))))
 
+(deftest structured-timeout-bounds-event-wait
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        schema (parsed-response-schema identity)]
+    (with-redefs
+     [session/send-with-timeout! (fn [_ _ _] "request-1")]
+      (is (thrown-with-msg?
+           clojure.lang.ExceptionInfo
+           #"Timeout after 50ms waiting for the structured response"
+           (sdk/send-and-wait!
+            copilot-session
+            {:prompt "Return JSON"}
+            schema
+            50))))))
+
 (deftest extension-context-attachment-contract
   (let [attachment-spec
         (s/get-spec ::specs/extension-context-attachment)
@@ -293,6 +524,7 @@
     (is (some? attachment-spec))
     (when attachment-spec
       (is (s/valid? ::specs/extension-context-attachment attachment))
+      (is (s/valid? ::specs/inbound-attachment attachment))
       (is (not
            (s/valid? ::specs/extension-context-attachment
                      {:type :extension-context

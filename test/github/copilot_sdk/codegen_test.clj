@@ -617,6 +617,20 @@
             (str "generated spec rejected wire payload for " event-type
                  ": " (s/explain-str spec-kw payload)))))))
 
+(deftest generated-indexed-search-data-enforces-discriminated-variants
+  (let [spec ::gen/session.indexed_search-data]
+    (doseq [payload [{}
+                     {:kind "status"}
+                     {:kind "startup"
+                      :outcome "started"
+                      :startup-duration-ms -1
+                      :forced-by-env false
+                      :warm-start true}
+                     {:kind "server_error"}
+                     {:kind "incremental" :phase "unknown"}]]
+      (is (not (s/valid? spec payload))
+          (str "must reject " (pr-str payload))))))
+
 (deftest generated-dictionary-specs-enforce-additional-property-values
   (let [shell-request
         {:request-id "permission-1"

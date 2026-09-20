@@ -18,6 +18,8 @@
                      interface-fields
                      public-class-methods
                      read-resource
+                     sha256-file
+                     sha256-items
                      sha256-lines
                      sha256-resource
                      star-export-modules
@@ -155,7 +157,10 @@
           (is (re-matches #"[0-9a-f]{64}" expected-hash))
           (is (= expected-hash
                  (git-file-sha256 artifact-commit path))
-              "the sealed implementation commit must match the ledger"))))))
+              "the sealed implementation commit must match the ledger")
+          (is (= expected-hash
+                 (sha256-file path))
+              "the checked-out artifact must match the certified bytes"))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [{:keys [upstream commit-classifications changed-paths]} (report)]
@@ -186,9 +191,9 @@
             actual-counts (frequencies classifications)]
         (is (= commits expected-commits))
         (is (= (:commits-sha256 upstream)
-               (sha256-lines commits)))
+               (sha256-items commits)))
         (is (= (:count changed-paths) (count paths)))
-        (is (= (:sha256 changed-paths) (sha256-lines paths)))
+        (is (= (:sha256 changed-paths) (sha256-items paths)))
         (is (every? some? classifications)
             "Every changed path needs a deliberate classification")
         (is (= (:classification-counts changed-paths) actual-counts))
@@ -201,7 +206,22 @@
           (testing commit
             (is (= changed-path-count (count commit-paths)))
             (is (= changed-paths-sha256
-                   (sha256-lines commit-paths)))))))))
+                   (sha256-items commit-paths)))
+            (let [subject
+                  (git-output upstream-repo "show" "-s" "--format=%s" commit)
+                  pr-number
+                  (second (re-find #"\(#(\d+)\)$" subject))]
+              (is (= subject
+                     (:subject
+                      (first
+                       (filter #(= commit (:commit %))
+                               commit-classifications)))))
+              (is (= (str "https://github.com/github/copilot-sdk/pull/"
+                          pr-number)
+                     (:source-url
+                      (first
+                       (filter #(= commit (:commit %))
+                               commit-classifications))))))))))))
 
 (deftest stable-deltas-and-exclusions-are-traceable
   (let [report (report)
@@ -218,6 +238,10 @@
         nonstable-groups
         (inventory-group-ids
          inventory #{:experimental :generated-only :internal})
+        stable-groups
+        (inventory-group-ids inventory #{:stable-public})
+        traced-stable-groups
+        (set (mapcat :inventory-groups stable-deltas))
         traced-nonstable-groups
         (set (mapcat :inventory-groups exclusions))
         referenced-evidence
@@ -228,6 +252,7 @@
     (is (= (:stable-delta-ids report) (set (map :id stable-deltas))))
     (is (= (count stable-deltas) (count (distinct (map :id stable-deltas)))))
     (is (= stable-paths traced-stable-paths))
+    (is (= stable-groups traced-stable-groups))
     (is (= (count contract-ids) (count (distinct contract-ids))))
     (is (= nonstable-groups traced-nonstable-groups))
     (is (= (set (keys (:source-evidence report))) referenced-evidence))
@@ -236,6 +261,7 @@
                                  (:status %))
                       (valid-upstream-prs? (:upstream-prs %))
                       (vector? (:upstream-paths %))
+                      (vector? (:inventory-groups %))
                       (seq (:upstream-contracts %))
                       (seq (:evidence %))
                       (seq (:clojure-paths %)))

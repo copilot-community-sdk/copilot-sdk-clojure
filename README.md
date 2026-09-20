@@ -40,6 +40,8 @@ io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.co
 > **Note:** The Clojars artifact `net.clojars.krukow/copilot-sdk` is deprecated.
 > Starting from version `0.1.22.0`, releases are published to Maven Central only.
 > Versioning follows the upstream [github/copilot-sdk](https://github.com/github/copilot-sdk/releases) releases.
+> Features documented under **Unreleased**, including structured outputs, require
+> the Git dependency until the next Maven Central release.
 
 ## Quick Start
 
@@ -95,7 +97,8 @@ Return validated data instead of parsing assistant text at each call site:
    "required" ["answer"]
    "additionalProperties" false})
 
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-4.1"}]
   (copilot/send-and-wait!
    session
    {:prompt "What is the capital of France?"}

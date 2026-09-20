@@ -45,6 +45,9 @@ Or use as a Git dependency:
          :git/sha "6b42d7dd2dad068dd6793eeffd2d6e68e88b16e3"}}}
 ```
 
+Features documented under **Unreleased**, including structured outputs, require
+the Git dependency until the next Maven Central release.
+
 ## Step 2: Send Your First Message
 
 The simplest way to use the SDK — about 3 lines of code:
@@ -91,7 +94,8 @@ assistant prose:
    "required" ["answer"]
    "additionalProperties" false})
 
-(copilot/with-client-session [session {:on-permission-request copilot/approve-all}]
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-4.1"}]
   (copilot/send-and-wait!
    session
    {:prompt "What is 2 + 2?"}

@@ -290,6 +290,7 @@
         event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
         send-lock (doto (chan 1) (>!! :token))
+        structured-wait-count (atom 0)
         ;; Upstream PR #1308: declaration-only tools (no :tool-handler) are
         ;; left out of the handler map — they're distinguished from tools with
         ;; handlers, and unhandled invocations are left pending for manual
@@ -342,7 +343,9 @@
                                      {:registration-token registration-token
                                       :event-chan event-chan
                                       :event-mult event-mult
-                                      :send-lock send-lock}))]
+                                      :send-lock send-lock
+                                      :structured-wait-count
+                                      structured-wait-count}))]
                             (if setup-token
                               (if snapshot
                                 (assoc-in
@@ -2236,7 +2239,8 @@
 
    Options:
    - :prompt          - The message text (required)
-   - :attachments     - Vector of attachments (file/directory/selection)
+   - :attachments     - Vector of attachments (file/directory/selection/blob/
+                        GitHub reference/extension context)
    - :mode            - :enqueue (default) or :immediate
    - :agent-mode      - **Optional**. One of :interactive (default), :plan,
                        :autopilot, or :shell. Selects the agent mode for
@@ -2350,10 +2354,21 @@
 
     (let [send-opts (dissoc opts :timeout-ms)
           event-ch (chan 1024)
-          {:keys [event-mult]} (session-io client session-id)
+          {:keys [event-mult send-lock structured-wait-count]}
+          (session-io client session-id)
           deadline-nanos
           (when timeout-ms
-            (+ (System/nanoTime) (* timeout-ms 1000000)))]
+            (+ (System/nanoTime) (* timeout-ms 1000000)))
+          acquired?
+          (locking structured-wait-count
+            (when (zero? @structured-wait-count)
+              (when-not (<!! send-lock)
+                (throw
+                 (ex-info
+                  "Session has been disconnected"
+                  {:session-id session-id}))))
+            (swap! structured-wait-count inc)
+            true)]
 
       (try
         (tap event-mult event-ch)
@@ -2378,9 +2393,14 @@
                     (send-with-timeout!
                      session send-opts (remaining-timeout-ms))
                     (catch clojure.lang.ExceptionInfo e
-                      (if (and (= "Request timeout" (.getMessage e))
-                               (= "session.send" (:method (ex-data e))))
-                        (throw (timeout-error))
+                      (if (and (= "session.send" (:method (ex-data e)))
+                               (contains? (ex-data e) :timeout-ms)
+                               (not (contains? (ex-data e) :error)))
+                        (throw
+                         (ex-info
+                          (ex-message (timeout-error))
+                          {:timeout-ms timeout-ms}
+                          e))
                         (throw e))))
                   (send! session send-opts))
                 deadline-ch
@@ -2418,6 +2438,12 @@
                          (when-not (seq (get-in event [:data :tool-requests]))
                            event))
 
+                  (= :copilot/session.error (:type event))
+                  (throw
+                   (ex-info
+                    (get-in event [:data :message] "Session error")
+                    {:event event}))
+
                   (and consumed? (terminal-idle-event? event))
                   (if (true? (get-in event [:data :aborted]))
                     (throw
@@ -2426,19 +2452,16 @@
                       {:event event}))
                     last-message)
 
-                  (and consumed?
-                       (= :copilot/session.error (:type event)))
-                  (throw
-                   (ex-info
-                    (get-in event [:data :message] "Session error")
-                    {:event event}))
-
                   :else
                   (recur consumed? last-message))))))
 
         (finally
           (untap event-mult event-ch)
-          (close! event-ch))))))
+          (close! event-ch)
+          (when acquired?
+            (locking structured-wait-count
+              (when (zero? (swap! structured-wait-count dec))
+                (put! send-lock :token)))))))))
 
 (defn- parse-structured-message
   [message response-schema]
@@ -2447,9 +2470,22 @@
      (ex-info
       "The requested run completed without a structured assistant response."
       {})))
-  (let [content (get-in message [:data :content])
-        parsed (json/read-str content)]
-    ((:parse response-schema) parsed)))
+  (let [content (get-in message [:data :content])]
+    (when-not (string? content)
+      (throw
+       (ex-info
+        "The structured assistant response did not contain JSON text."
+        {:event message})))
+    (let [parsed
+          (try
+            (json/read-str content)
+            (catch Exception e
+              (throw
+               (ex-info
+                "Failed to parse the structured assistant response as JSON."
+                {:event message}
+                e))))]
+      ((:parse response-schema) parsed))))
 
 (defn- send-and-wait-event!
   [session opts timeout-ms]
@@ -2506,8 +2542,8 @@
                      wire.
 
    Parsed response schema:
-   - {:to-json-schema (fn [] <raw JSON Schema map>)
-      :parse          (fn [decoded-json] <result>)}
+   - `{:to-json-schema (fn [] raw-json-schema-map)
+       :parse          (fn [decoded-json] result)}`
 
    Supply it as the third argument, with an optional timeout as the fourth.
    The SDK correlates the root assistant response to the returned message ID,
@@ -2519,7 +2555,7 @@
      (send-and-wait-event! session (dissoc opts :timeout-ms) timeout-ms)))
   ([session opts timeout-or-response-schema]
    (if (or (nil? timeout-or-response-schema)
-           (pos-int? timeout-or-response-schema))
+           (number? timeout-or-response-schema))
      (send-and-wait-event!
       session
       (dissoc opts :timeout-ms)
