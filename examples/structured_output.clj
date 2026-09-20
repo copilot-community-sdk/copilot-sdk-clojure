@@ -8,9 +8,7 @@
   {"type" "object"
    "properties"
    {"answer" {"type" "string"}
-    "confidence" {"type" "number"
-                  "minimum" 0
-                  "maximum" 1}}
+    "confidence" {"type" "number"}}
    "required" ["answer" "confidence"]
    "additionalProperties" false})
 
