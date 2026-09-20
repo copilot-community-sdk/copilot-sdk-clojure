@@ -2161,6 +2161,27 @@
     (name source)
     (str "agent-" (:agent-id source))))
 
+(defn- response-schema->json-schema
+  [response-schema]
+  (let [json-schema
+        (if (s/valid? ::specs/parsed-response-schema response-schema)
+          ((:to-json-schema response-schema))
+          response-schema)]
+    (when-not (s/valid? ::specs/response-json-schema json-schema)
+      (throw
+       (ex-info
+        "Response schema must resolve to a JSON object"
+        {:explain
+         (s/explain-data ::specs/response-json-schema json-schema)})))
+    (util/opaque-json->wire json-schema)))
+
+(defn- response-format
+  [response-schema]
+  {:type "json_schema"
+   :json-schema {:name "response"
+                 :strict true
+                 :schema (response-schema->json-schema response-schema)}})
+
 (defn- build-send-params
   [client session-id opts]
   (let [wire-attachments (when (:attachments opts)
@@ -2178,6 +2199,8 @@
       (:agent-mode opts) (assoc :agent-mode (name (:agent-mode opts)))
       (some? (:display-prompt opts)) (assoc :display-prompt (:display-prompt opts))
       (:request-headers opts) (assoc :request-headers (:request-headers opts))
+      (contains? opts :response-schema)
+      (assoc :response-format (response-format (:response-schema opts)))
       (contains? opts :source) (assoc :source
                                       (message-source->wire (:source opts))))))
 
@@ -2229,7 +2252,10 @@
                        upstream LLM on this send (upstream PR #1094).
                        Keys and values must both be strings (do not use
                        Clojure keywords — they would be camelized by the
-                       wire-conversion layer)."
+                       wire-conversion layer).
+   - :response-schema - Optional raw JSON Schema map or parsed response schema
+                        map with `:to-json-schema` and `:parse` functions.
+                        Requests strict JSON output from the runtime."
   [session opts]
   (send-with-timeout! session opts 60000))
 
@@ -2250,14 +2276,224 @@
   (or (terminal-idle-event? event)
       (= :copilot/session.error (:type event))))
 
+(defn- send-and-wait-for-last-message!
+  [session opts timeout-ms]
+  (let [{:keys [session-id client]} session]
+    (log/debug "send-and-wait! called for session " session-id)
+    (when (session-disconnected? client session-id)
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+
+    (let [send-opts (dissoc opts :timeout-ms)
+          event-ch (chan 1024)
+          last-assistant-msg (atom nil)
+          {:keys [event-mult send-lock]} (session-io client session-id)]
+      (<!! send-lock)
+
+      (try
+        (log/debug "send-and-wait! tapping event mult for session " session-id)
+        (tap event-mult event-ch)
+
+        (log/debug "send-and-wait! sending message")
+        (send! session send-opts)
+
+        (log/debug "send-and-wait! waiting for result with timeout " timeout-ms "ms")
+        (let [deadline-ch (when timeout-ms (async/timeout timeout-ms))]
+          (loop []
+            (let [[event ch] (if deadline-ch
+                               (alts!! [event-ch deadline-ch])
+                               [(<!! event-ch) event-ch])]
+              (cond
+                (and deadline-ch (= ch deadline-ch))
+                (do
+                  (log/error "send-and-wait! timeout after " timeout-ms "ms for session " session-id)
+                  (throw (ex-info (str "Timeout after " timeout-ms "ms waiting for session.idle")
+                                  {:timeout-ms timeout-ms})))
+
+                (nil? event)
+                (do
+                  (log/debug "send-and-wait! event channel closed for session " session-id)
+                  (throw (ex-info "Event channel closed unexpectedly" {})))
+
+                (= :copilot/assistant.message (:type event))
+                (do
+                  (log/debug "send-and-wait! got assistant.message, continuing to wait for idle")
+                  (reset! last-assistant-msg event)
+                  (recur))
+
+                (terminal-idle-event? event)
+                (do
+                  (log/debug "send-and-wait! got session.idle, returning result for session " session-id)
+                  @last-assistant-msg)
+
+                (= :copilot/session.error (:type event))
+                (do
+                  (log/error "send-and-wait! got session.error for session " session-id)
+                  (throw (ex-info (get-in event [:data :message] "Session error")
+                                  {:event event})))
+
+                :else
+                (do
+                  (log/debug "send-and-wait! ignoring event type: " (:type event))
+                  (recur))))))
+
+        (finally
+          (log/debug "send-and-wait! cleaning up subscription")
+          (untap event-mult event-ch)
+          (close! event-ch)
+          (put! send-lock :token))))))
+
+(defn- send-and-wait-for-structured-message!
+  [session opts timeout-ms]
+  (let [{:keys [session-id client]} session]
+    (when (session-disconnected? client session-id)
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+
+    (let [send-opts (dissoc opts :timeout-ms)
+          event-ch (chan 1024)
+          {:keys [event-mult]} (session-io client session-id)
+          deadline-nanos
+          (when timeout-ms
+            (+ (System/nanoTime) (* timeout-ms 1000000)))]
+
+      (try
+        (tap event-mult event-ch)
+        (letfn [(timeout-error []
+                  (ex-info
+                   (str "Timeout after " timeout-ms
+                        "ms waiting for the structured response")
+                   {:timeout-ms timeout-ms}))
+                (remaining-timeout-ms []
+                  (when deadline-nanos
+                    (let [remaining-nanos
+                          (- deadline-nanos (System/nanoTime))]
+                      (when-not (pos? remaining-nanos)
+                        (throw (timeout-error)))
+                      (max 1
+                           (long
+                            (Math/ceil
+                             (/ (double remaining-nanos) 1000000.0)))))))]
+          (let [message-id
+                (if timeout-ms
+                  (try
+                    (send-with-timeout!
+                     session send-opts (remaining-timeout-ms))
+                    (catch clojure.lang.ExceptionInfo e
+                      (if (and (= "Request timeout" (.getMessage e))
+                               (= "session.send" (:method (ex-data e))))
+                        (throw (timeout-error))
+                        (throw e))))
+                  (send! session send-opts))
+                deadline-ch
+                (when timeout-ms
+                  (async/timeout (remaining-timeout-ms)))]
+            (when-not (and (string? message-id)
+                           (not (str/blank? message-id)))
+              (throw
+               (ex-info
+                "The runtime did not return a message ID for the structured send."
+                {:message-id message-id})))
+            (loop [consumed? false
+                   last-message nil]
+              (let [[event ch] (if deadline-ch
+                                 (alts!! [event-ch deadline-ch])
+                                 [(<!! event-ch) event-ch])]
+                (cond
+                  (and deadline-ch (= ch deadline-ch))
+                  (throw (timeout-error))
+
+                  (nil? event)
+                  (throw (ex-info "Event channel closed unexpectedly" {}))
+
+                  (:agent-id event)
+                  (recur consumed? last-message)
+
+                  (and (= :copilot/user.message (:type event))
+                       (= message-id (get-in event [:data :message-id])))
+                  (recur true last-message)
+
+                  (and (= :copilot/assistant.message (:type event))
+                       (= message-id
+                          (get-in event [:data :originating-message-id])))
+                  (recur true
+                         (when-not (seq (get-in event [:data :tool-requests]))
+                           event))
+
+                  (and consumed? (terminal-idle-event? event))
+                  (if (true? (get-in event [:data :aborted]))
+                    (throw
+                     (ex-info
+                      "The requested run was aborted before a structured result was completed."
+                      {:event event}))
+                    last-message)
+
+                  (and consumed?
+                       (= :copilot/session.error (:type event)))
+                  (throw
+                   (ex-info
+                    (get-in event [:data :message] "Session error")
+                    {:event event}))
+
+                  :else
+                  (recur consumed? last-message))))))
+
+        (finally
+          (untap event-mult event-ch)
+          (close! event-ch))))))
+
+(defn- parse-structured-message
+  [message response-schema]
+  (when-not message
+    (throw
+     (ex-info
+      "The requested run completed without a structured assistant response."
+      {})))
+  (let [content (get-in message [:data :content])
+        parsed (json/read-str content)]
+    ((:parse response-schema) parsed)))
+
+(defn- send-and-wait-event!
+  [session opts timeout-ms]
+  (if (contains? opts :response-schema)
+    (send-and-wait-for-structured-message! session opts timeout-ms)
+    (send-and-wait-for-last-message! session opts timeout-ms)))
+
+(defn- send-and-wait-typed!
+  [session opts response-schema timeout-ms]
+  (when-not (s/valid? ::specs/parsed-response-schema response-schema)
+    (throw
+     (ex-info
+      "The response schema must provide :to-json-schema and :parse functions."
+      {:response-schema response-schema
+       :explain
+       (s/explain-data ::specs/parsed-response-schema response-schema)})))
+  (when (contains? opts :response-schema)
+    (throw
+     (ex-info
+      "Do not specify :response-schema in opts when requesting a parsed response."
+      {})))
+  (when (= :immediate (:mode opts))
+    (throw
+     (ex-info
+      "Structured output cannot be requested on an immediate steering message."
+      {})))
+  (-> (send-and-wait-for-structured-message!
+       session
+       (assoc opts :response-schema response-schema)
+       timeout-ms)
+      (parse-structured-message response-schema)))
+
 (defn send-and-wait!
   "Send a message and wait until the session becomes idle.
-   Returns the final assistant message event, or nil if none received.
-   Serialized per session to avoid mixing concurrent sends.
+   Returns the final assistant message event, or nil if none received. When a
+   parsed response schema is supplied as the third argument, returns the
+   parser's result instead.
+   Ordinary waits are serialized per session. Structured waits correlate by
+   originating message ID and may run concurrently.
    An idle event whose wire `:mode` is the string `\"autopilot\"` is a
    nonterminal turn boundary, so the wait continues.
 
-   Options: same as send!
+   Options: same as send!. `:response-schema` requests strict JSON output while
+   retaining the normal assistant-message event return value.
 
    Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 60000). The 2-arity form
@@ -2267,82 +2503,38 @@
                      indefinitely for `session.idle`/`session.error`. In every
                      case `:timeout-ms` is stripped from `opts` before the
                      underlying `session.send`, so it is never forwarded on the
-                     wire."
+                     wire.
+
+   Parsed response schema:
+   - {:to-json-schema (fn [] <raw JSON Schema map>)
+      :parse          (fn [decoded-json] <result>)}
+
+   Supply it as the third argument, with an optional timeout as the fourth.
+   The SDK correlates the root assistant response to the returned message ID,
+   parses its content as JSON, and calls `:parse` on the calling thread."
   ([session opts]
    (let [timeout-ms (if (contains? opts :timeout-ms)
                       (:timeout-ms opts)
                       default-send-and-wait-timeout-ms)]
-     (send-and-wait! session (dissoc opts :timeout-ms) timeout-ms)))
-  ([session opts timeout-ms]
-   (let [{:keys [session-id client]} session]
-     (log/debug "send-and-wait! called for session " session-id)
-     (when (session-disconnected? client session-id)
-       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
-
-     (let [send-opts (dissoc opts :timeout-ms)
-           event-ch (chan 1024)
-           last-assistant-msg (atom nil)
-           {:keys [event-mult send-lock]} (session-io client session-id)]
-        ;; Acquire channel-based lock (blocks calling thread)
-       (<!! send-lock)
-
-       (try
-         ;; Tap the mult BEFORE sending - ensures we don't miss events
-         (log/debug "send-and-wait! tapping event mult for session " session-id)
-         (tap event-mult event-ch)
-
-         ;; Send the message (never forward :timeout-ms on the wire)
-         (log/debug "send-and-wait! sending message")
-         (send! session send-opts)
-
-         ;; Wait for events with a single optional deadline. A nil timeout-ms
-         ;; disables the deadline: the wait set is event-ch alone rather than
-         ;; calling (async/timeout nil).
-         (log/debug "send-and-wait! waiting for result with timeout " timeout-ms "ms")
-         (let [deadline-ch (when timeout-ms (async/timeout timeout-ms))]
-           (loop []
-             (let [[event ch] (if deadline-ch
-                                (alts!! [event-ch deadline-ch])
-                                [(<!! event-ch) event-ch])]
-               (cond
-                 (and deadline-ch (= ch deadline-ch))
-                 (do
-                   (log/error "send-and-wait! timeout after " timeout-ms "ms for session " session-id)
-                   (throw (ex-info (str "Timeout after " timeout-ms "ms waiting for session.idle")
-                                   {:timeout-ms timeout-ms})))
-
-                 (nil? event)
-                 (do
-                   (log/debug "send-and-wait! event channel closed for session " session-id)
-                   (throw (ex-info "Event channel closed unexpectedly" {})))
-
-                 (= :copilot/assistant.message (:type event))
-                 (do
-                   (log/debug "send-and-wait! got assistant.message, continuing to wait for idle")
-                   (reset! last-assistant-msg event)
-                   (recur))
-
-                 (terminal-idle-event? event)
-                 (do
-                   (log/debug "send-and-wait! got session.idle, returning result for session " session-id)
-                   @last-assistant-msg)
-
-                 (= :copilot/session.error (:type event))
-                 (do
-                   (log/error "send-and-wait! got session.error for session " session-id)
-                   (throw (ex-info (get-in event [:data :message] "Session error")
-                                   {:event event})))
-
-                 :else
-                 (do
-                   (log/debug "send-and-wait! ignoring event type: " (:type event))
-                   (recur))))))
-
-         (finally
-           (log/debug "send-and-wait! cleaning up subscription")
-           (untap event-mult event-ch)
-           (close! event-ch)
-           (put! send-lock :token)))))))
+     (send-and-wait-event! session (dissoc opts :timeout-ms) timeout-ms)))
+  ([session opts timeout-or-response-schema]
+   (if (or (nil? timeout-or-response-schema)
+           (pos-int? timeout-or-response-schema))
+     (send-and-wait-event!
+      session
+      (dissoc opts :timeout-ms)
+      timeout-or-response-schema)
+     (send-and-wait-typed!
+      session
+      (dissoc opts :timeout-ms)
+      timeout-or-response-schema
+      default-send-and-wait-timeout-ms)))
+  ([session opts response-schema timeout-ms]
+   (send-and-wait-typed!
+    session
+    (dissoc opts :timeout-ms)
+    response-schema
+    timeout-ms)))
 
 (defn- send-async*
   "Send a message and return {:message-id :events-ch}."

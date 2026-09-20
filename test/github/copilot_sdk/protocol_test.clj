@@ -126,6 +126,43 @@
           (.close server-out)
           (protocol/disconnect conn))))))
 
+(deftest test-rpc-error-data-preserves-source-key-spelling
+  (testing "structured JSON-RPC error data remains opaque"
+    (let [state-atom (atom {:connection (protocol/initial-connection-state)})
+          in (PipedInputStream.)
+          server-out (PipedOutputStream. in)
+          out (ByteArrayOutputStream.)
+          conn (protocol/connect in out state-atom)
+          result (future
+                   (try
+                     (protocol/send-request! conn "session.send" {} nil)
+                     (catch Throwable failure
+                       failure)))]
+      (try
+        (is (true? (wait-for #(seq (get-in @state-atom
+                                           [:connection :pending-requests]))
+                             500)))
+        (let [request-id
+              (first
+               (keys
+                (get-in @state-atom [:connection :pending-requests])))]
+          (write-framed-json!
+           server-out
+           {:jsonrpc "2.0"
+            :id request-id
+            :error {:code -32001
+                    :message "Structured failure"
+                    :data {:retryAfterMs 250
+                           :nestedPayload {:userId 7}}}}))
+        (let [failure (deref result 1000 ::timeout)]
+          (is (instance? clojure.lang.ExceptionInfo failure))
+          (is (= {:retryAfterMs 250
+                  :nestedPayload {:userId 7}}
+                 (get-in (ex-data failure) [:error :data]))))
+        (finally
+          (.close server-out)
+          (protocol/disconnect conn))))))
+
 (deftest test-async-send-request-timeout-clears-pending
   (testing "Async timeout resolves with an error and removes the pending request"
     (let [state-atom (atom {:connection (protocol/initial-connection-state)})

@@ -80,6 +80,23 @@
   [m]
   (->wire-keys m))
 
+(defn ^:no-doc opaque-json->wire
+  "Prepare opaque JSON for transport without camel-casing caller-defined keys."
+  [value]
+  (cond
+    (map? value)
+    (into {}
+          (map (fn [[k v]]
+                 [(if (keyword? k) (name k) k)
+                  (opaque-json->wire v)]))
+          value)
+
+    (coll? value)
+    (mapv opaque-json->wire value)
+
+    :else
+    value))
+
 ;; -----------------------------------------------------------------------------
 ;; System prompt section key mapping
 ;; Wire uses snake_case identifiers (e.g., "tool_efficiency");
@@ -196,6 +213,16 @@
              :data (:data att)
              :mimeType (:mime-type att)}
       (:display-name att) (assoc :displayName (:display-name att)))
+
+    :extension-context
+    (cond-> {:type "extension_context"
+             :extensionId (:extension-id att)
+             :title (:title att)
+             :capturedAt (:captured-at att)}
+      (contains? att :canvas-id) (assoc :canvasId (:canvas-id att))
+      (contains? att :instance-id) (assoc :instanceId (:instance-id att))
+      (contains? att :payload) (assoc :payload
+                                      (opaque-json->wire (:payload att))))
 
     ;; :file and :directory
     (cond-> {:type (name (:type att))

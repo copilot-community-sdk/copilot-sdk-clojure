@@ -77,6 +77,35 @@ For more control, use the explicit client/session API:
 
 Congratulations! You just built your first Copilot-powered app in Clojure.
 
+### Return Structured Data
+
+Pass a JSON Schema plus a parser when the application needs data rather than
+assistant prose:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def answer-schema
+  {"type" "object"
+   "properties" {"answer" {"type" "integer"}}
+   "required" ["answer"]
+   "additionalProperties" false})
+
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all}]
+  (copilot/send-and-wait!
+   session
+   {:prompt "What is 2 + 2?"}
+   {:to-json-schema (constantly answer-schema)
+    :parse #(get % "answer")}
+   60000))
+;; => 4
+```
+
+The runtime enforces the JSON Schema. The SDK decodes the final correlated
+assistant response and passes it to `:parse`. See
+[Structured Output](reference/API.md#structured-output) for the raw event form,
+errors, and attachment details.
+
 ## Step 3: Add Streaming Responses
 
 Right now, you wait for the complete response before seeing anything. Stream the response as it is generated.

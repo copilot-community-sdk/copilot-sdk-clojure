@@ -8,6 +8,7 @@ A fully-featured Clojure port of the official [GitHub Copilot SDK](https://githu
 
 Key features:
 - **Blocking and async APIs** — `send-and-wait!` for simple use cases, `send!` + event channels for reactive patterns
+- **Structured outputs** — Request strict JSON Schema responses and parse them into Clojure values
 - **Custom tools** — Let the LLM call back into your application
 - **Streaming** — Incremental response deltas via `:assistant.message_delta` events
 - **Multi-session support** — Run multiple independent conversations concurrently
@@ -80,6 +81,33 @@ Or use the full API for maximum flexibility:
   (println (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
                (get-in [:data :content]))))
 ```
+
+### Structured Outputs
+
+Return validated data instead of parsing assistant text at each call site:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def answer-schema
+  {"type" "object"
+   "properties" {"answer" {"type" "string"}}
+   "required" ["answer"]
+   "additionalProperties" false})
+
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all}]
+  (copilot/send-and-wait!
+   session
+   {:prompt "What is the capital of France?"}
+   {:to-json-schema (constantly answer-schema)
+    :parse #(get % "answer")}
+   60000))
+;; => "Paris"
+```
+
+See [`structured_output.clj`](./examples/structured_output.clj) and the
+[API reference](./doc/reference/API.md#structured-output) for raw-schema and
+parsed-result forms.
 
 ### Async Example
 

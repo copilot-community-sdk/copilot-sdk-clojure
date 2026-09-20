@@ -569,7 +569,11 @@
   [msg]
   (let [method (:method msg)
         params (:params msg)
-        converted (util/wire->clj msg)
+        converted
+        (cond-> (util/wire->clj msg)
+          (and (map? (:error msg))
+               (contains? (:error msg) :data))
+          (assoc-in [:error :data] (get-in msg [:error :data])))
         raw-events (get-in msg [:result :events])]
     (cond
       ;; Upstream PR #1299: SQL bind parameters are opaque keyed values

@@ -1859,6 +1859,20 @@
           "minimum": 0,
           "description": "Number of output tokens used for reasoning (e.g., chain-of-thought)"
         },
+        "thinkingDroppedBlocks": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of prior thinking blocks the provider dropped while transforming the request",
+          "visibility": "internal"
+        },
+        "thinkingDroppedReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Recognized provider-reported reasons for dropped thinking blocks, in response order",
+          "visibility": "internal"
+        },
         "cost": {
           "type": "number",
           "description": "Model multiplier cost for billing purposes",
@@ -5307,6 +5321,10 @@
         "summaryContent": {
           "type": "string",
           "description": "LLM-generated summary of the compacted conversation history"
+        },
+        "responsesReasoning": {
+          "$ref": "#/definitions/ResponsesReasoning",
+          "description": "Reasoning baseline on the replacement summary, preserved when replay skips the compacted history"
         },
         "activeFactorySummary": {
           "type": "string",
@@ -9345,6 +9363,315 @@
       "description": "Session event \"session.idle\". Payload indicating the session is idle with no background agents or attached shell commands in flight",
       "title": "IdleEvent"
     },
+    "IndexedSearchData": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "state": {
+              "$ref": "#/definitions/IndexedSearchState",
+              "description": "Current indexed-search state for this session activation."
+            },
+            "kind": {
+              "type": "string",
+              "const": "status",
+              "description": "Indexed-search event variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "state"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "outcome": {
+              "$ref": "#/definitions/IndexedSearchOutcome",
+              "description": "Outcome of this startup attempt."
+            },
+            "fileCount": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Number of text files counted in the repository."
+            },
+            "startupDurationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Wall-clock duration of startup in milliseconds."
+            },
+            "forcedByEnv": {
+              "type": "boolean",
+              "description": "Whether indexed search was explicitly enabled through the environment."
+            },
+            "warmStart": {
+              "type": "boolean",
+              "description": "Whether waiting for index readiness was requested, including skipped attempts."
+            },
+            "disabledReason": {
+              "$ref": "#/definitions/IndexedSearchDisabledReason",
+              "description": "Why indexed search was disabled, when applicable."
+            },
+            "errorMessage": {
+              "type": "string",
+              "description": "Startup failure details. May contain sensitive user data; restricted telemetry only."
+            },
+            "eligible": {
+              "type": "boolean",
+              "description": "Whether the repository meets the automatic indexing file-count threshold, when known."
+            },
+            "kind": {
+              "type": "string",
+              "const": "startup",
+              "description": "Indexed-search event variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "outcome",
+            "startupDurationMs",
+            "forcedByEnv",
+            "warmStart"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "errorType": {
+              "$ref": "#/definitions/IndexedSearchErrorType",
+              "description": "Category of the server failure."
+            },
+            "exitCode": {
+              "type": "number",
+              "description": "Process exit code, when available."
+            },
+            "errorMessage": {
+              "type": "string",
+              "description": "Server failure details. May contain sensitive user data; restricted telemetry only."
+            },
+            "kind": {
+              "type": "string",
+              "const": "server_error",
+              "description": "Indexed-search event variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "errorType"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "phase": {
+              "$ref": "#/definitions/IndexedSearchIncrementalPhase",
+              "description": "Phase of the incremental index update."
+            },
+            "changedFileCount": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Number of modified files."
+            },
+            "addedFileCount": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Number of added files."
+            },
+            "deletedFileCount": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Number of deleted files."
+            },
+            "totalChangeCount": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Total number of detected changes."
+            },
+            "walkDurationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Workspace scan duration in milliseconds."
+            },
+            "updateDurationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Index update duration in milliseconds."
+            },
+            "totalDurationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Total incremental indexing duration in milliseconds."
+            },
+            "kind": {
+              "type": "string",
+              "const": "incremental",
+              "description": "Indexed-search event variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "phase"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "Transient indexed-search status and diagnostics from the live runtime service. Never persisted or used to infer activation from session history.",
+      "title": "IndexedSearchData"
+    },
+    "IndexedSearchDisabledReason": {
+      "type": "string",
+      "enum": [
+        "use_tgrep_false",
+        "use_builtin_ripgrep_false",
+        "organization",
+        "organization_policy_auth_pending",
+        "organization_policy_unknown",
+        "virtual_filesystem",
+        "cloud_sync_root",
+        "cloud_sync_detection_failed",
+        "workspace_not_local"
+      ],
+      "description": "Configuration, policy, or workspace condition that disabled indexed search.",
+      "title": "IndexedSearchDisabledReason",
+      "x-enumDescriptions": {
+        "use_tgrep_false": "Indexed search was explicitly disabled by the environment.",
+        "use_builtin_ripgrep_false": "Search uses the external ripgrep binary instead of bundled search.",
+        "organization": "Organization policy disables indexed search.",
+        "organization_policy_auth_pending": "Authentication has not resolved organization policy.",
+        "organization_policy_unknown": "Organization policy could not be determined.",
+        "virtual_filesystem": "The workspace uses a virtualized or network filesystem.",
+        "cloud_sync_root": "The workspace is inside a Windows cloud-sync root.",
+        "cloud_sync_detection_failed": "The Windows cloud-sync safety check failed.",
+        "workspace_not_local": "The workspace is not available on the runtime's local filesystem."
+      }
+    },
+    "IndexedSearchErrorType": {
+      "type": "string",
+      "enum": [
+        "spawn_error",
+        "unexpected_exit",
+        "killed_by_signal"
+      ],
+      "description": "Category of an indexed-search server failure.",
+      "title": "IndexedSearchErrorType",
+      "x-enumDescriptions": {
+        "spawn_error": "The indexed-search server could not be spawned.",
+        "unexpected_exit": "The indexed-search server exited unexpectedly.",
+        "killed_by_signal": "The indexed-search server was terminated by a signal."
+      }
+    },
+    "IndexedSearchEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.indexed_search",
+          "description": "Type discriminator. Always \"session.indexed_search\"."
+        },
+        "data": {
+          "$ref": "#/definitions/IndexedSearchData",
+          "description": "Transient indexed-search status and diagnostics from the live runtime service. Never persisted or used to infer activation from session history."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.indexed_search\". Transient indexed-search status and diagnostics from the live runtime service. Never persisted or used to infer activation from session history.",
+      "title": "IndexedSearchEvent"
+    },
+    "IndexedSearchIncrementalPhase": {
+      "type": "string",
+      "enum": [
+        "changes_detected",
+        "updated"
+      ],
+      "description": "Phase of an incremental indexed-search update.",
+      "title": "IndexedSearchIncrementalPhase",
+      "x-enumDescriptions": {
+        "changes_detected": "A workspace scan found changes to index.",
+        "updated": "The incremental index update completed."
+      }
+    },
+    "IndexedSearchOutcome": {
+      "type": "string",
+      "enum": [
+        "started",
+        "skipped_below_threshold",
+        "skipped_no_gitroot",
+        "skipped_disabled",
+        "reused_existing",
+        "failed"
+      ],
+      "description": "Result of an indexed-search startup attempt.",
+      "title": "IndexedSearchOutcome",
+      "x-enumDescriptions": {
+        "started": "A new indexed-search server was started.",
+        "skipped_below_threshold": "The repository has too few files for automatic indexing.",
+        "skipped_no_gitroot": "No Git repository was found and indexing was not forced.",
+        "skipped_disabled": "Configuration, policy, or workspace safety disabled indexing.",
+        "reused_existing": "An existing indexed-search server was reused.",
+        "failed": "The startup attempt failed."
+      }
+    },
+    "IndexedSearchState": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "starting",
+        "enabled",
+        "ready",
+        "failed"
+      ],
+      "description": "Live indexed-search state for this session activation, never inferred from persisted history.",
+      "title": "IndexedSearchState",
+      "x-enumDescriptions": {
+        "disabled": "Indexed search is not active for this session.",
+        "starting": "Indexed-search startup is in progress.",
+        "enabled": "The indexed-search server started successfully; its index may still be warming.",
+        "ready": "The indexed-search server and its index are ready.",
+        "failed": "Indexed-search startup or the active server failed."
+      }
+    },
     "InfoData": {
       "type": "object",
       "properties": {
@@ -11701,6 +12028,7 @@
         "agent",
         "plan_mode",
         "automatic",
+        "changeboarding_shortcut",
         "sdk"
       ],
       "description": "Origin of an effective session model change.",
@@ -11716,6 +12044,7 @@
         "agent": "Selecting an agent selected its configured model.",
         "plan_mode": "Entering, leaving, or reconfiguring plan mode selected the model.",
         "automatic": "The runtime selected the model automatically, such as rate-limit recovery or refusal fallback.",
+        "changeboarding_shortcut": "The user selected the promoted model from the changeboarding card or its keyboard shortcut.",
         "sdk": "An SDK or RPC caller selected the model."
       }
     },
@@ -11924,6 +12253,121 @@
       "description": "Session event \"pending_messages.modified\". Empty payload; the event signals that the pending message queue has changed",
       "title": "PendingMessagesModifiedEvent"
     },
+    "PermissionApprovalEvaluation": {
+      "type": "object",
+      "properties": {
+        "reasonCode": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "not-reached",
+            "inactive",
+            "authorization-history-incomplete",
+            "managed-approval-required",
+            "sandbox-bypass",
+            "action-too-long",
+            "path-not-authorized",
+            "invalid-working-directory",
+            "unreadable",
+            "not-regular-file",
+            "too-large",
+            "non-utf8",
+            "interpreter-unavailable",
+            "interpreter-too-large",
+            "shell-environment-unreviewable",
+            "unrepresentable-path",
+            "interpreter-wrapped-script",
+            "unreviewable-script-invocation",
+            "argument-binding-unreviewable",
+            "malformed-script-action-review",
+            "malformed-script-action-manifest",
+            "unavailable",
+            "judge-verdict",
+            "judge-error",
+            "inherited"
+          ],
+          "description": "Machine-readable runtime gate reason, never a command, path or human rationale.",
+          "x-enumDescriptions": {
+            "unknown": "Attribution is missing or outside the supported vocabulary.",
+            "not-reached": "The request resolved before assisted-approval evaluation.",
+            "inactive": "Assisted approval was inactive for this request.",
+            "authorization-history-incomplete": "The judge was skipped because authorization extraction could not safely establish a complete recent history.",
+            "managed-approval-required": "Managed policy required a human decision.",
+            "sandbox-bypass": "The request asked to bypass sandbox restrictions.",
+            "action-too-long": "An action field exceeded the judge input limit.",
+            "path-not-authorized": "The script path was not authorized for inspection.",
+            "invalid-working-directory": "The script working directory was invalid.",
+            "unreadable": "The script snapshot could not be read.",
+            "not-regular-file": "The script path was not a regular file.",
+            "too-large": "The script snapshot exceeded the size limit.",
+            "non-utf8": "The script snapshot was not UTF-8.",
+            "interpreter-unavailable": "The script interpreter could not be inspected.",
+            "interpreter-too-large": "The interpreter snapshot exceeded the size limit.",
+            "shell-environment-unreviewable": "The shell environment could not be reviewed.",
+            "unrepresentable-path": "A script path could not be represented for review.",
+            "interpreter-wrapped-script": "An interpreter wrapped a script that could not be reviewed.",
+            "unreviewable-script-invocation": "The script invocation could not be reviewed.",
+            "argument-binding-unreviewable": "The script argument binding could not be reviewed.",
+            "malformed-script-action-review": "The script review metadata was malformed.",
+            "malformed-script-action-manifest": "The script snapshot manifest was malformed.",
+            "unavailable": "Script review was unavailable.",
+            "judge-verdict": "The judge interface returned a usable verdict.",
+            "judge-error": "The judge interface returned an error.",
+            "inherited": "The request inherited an outcome from another decision."
+          }
+        },
+        "judgeStatus": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "not_called",
+            "completed",
+            "failed",
+            "cached",
+            "inherited"
+          ],
+          "description": "Status of the local judge interface, not proof of a model network call.",
+          "x-enumDescriptions": {
+            "unknown": "No authoritative attribution is available.",
+            "not_called": "This evaluation did not invoke the judge interface.",
+            "completed": "The judge interface returned a usable verdict.",
+            "failed": "The judge interface returned an error.",
+            "cached": "This evaluation reused a cached recommendation.",
+            "inherited": "This request inherited another decision without local judge attribution."
+          }
+        },
+        "evaluationStage": {
+          "type": "string",
+          "enum": [
+            "unknown",
+            "not_reached",
+            "pre_judge",
+            "judge",
+            "reuse"
+          ],
+          "description": "Stage that produced this attribution.",
+          "x-enumDescriptions": {
+            "unknown": "The attribution stage is unknown.",
+            "not_reached": "The request resolved before assisted-approval evaluation.",
+            "pre_judge": "A runtime gate skipped the judge.",
+            "judge": "The judge interface produced the evaluation.",
+            "reuse": "A cached recommendation or another request's outcome was reused."
+          }
+        },
+        "judgeAttempted": {
+          "type": "boolean",
+          "description": "Whether the request invoked the judge interface. A cached recommendation retains the original attempt fact. Omitted means unknown, including inherited outcomes."
+        }
+      },
+      "required": [
+        "reasonCode",
+        "judgeStatus",
+        "evaluationStage"
+      ],
+      "additionalProperties": false,
+      "description": "Bounded runtime attribution, independent of free-text rationale. Telemetry revalidates this vocabulary before standard collection.",
+      "title": "PermissionApprovalEvaluation"
+    },
     "PermissionApproved": {
       "type": "object",
       "properties": {
@@ -12081,6 +12525,10 @@
     "PermissionAssistedApproval": {
       "type": "object",
       "properties": {
+        "evaluation": {
+          "$ref": "#/definitions/PermissionApprovalEvaluation",
+          "description": "Runtime reason and judge-call metadata. Absent on older events; missing metadata means unknown, not that the judge was skipped."
+        },
         "recommendation": {
           "$ref": "#/definitions/AssistedApprovalRecommendation",
           "description": "The assisted-approval safety judge's outcome for this request."
@@ -12226,6 +12674,14 @@
         "toolCallId": {
           "type": "string",
           "description": "Optional tool call ID associated with this permission prompt; clients may use it to correlate UI created from tool-scoped prompts"
+        },
+        "recoveryEpisodeId": {
+          "type": "string",
+          "description": "Permission-recovery episode settled by this response, when the request was escalated by Autopilot"
+        },
+        "blocker": {
+          "$ref": "#/definitions/TaskBlocker",
+          "description": "Atomic structured blocked outcome when this permission response ended an Autopilot recovery episode unsuccessfully"
         },
         "result": {
           "$ref": "#/definitions/PermissionResult",
@@ -13577,6 +14033,264 @@
       },
       "stability": "experimental"
     },
+    "PermissionRecoveryAttempt": {
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "description": "Unique identifier for this attempt record"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool-call identifier associated with this attempt, when available"
+        },
+        "permissionKind": {
+          "type": "string",
+          "description": "Controlled permission request kind, such as shell, path, URL, or tool"
+        },
+        "requestFingerprint": {
+          "type": "string",
+          "description": "SHA-256 fingerprint of normalized request data; raw permission arguments are not included"
+        },
+        "relation": {
+          "$ref": "#/definitions/PermissionRecoveryAttemptRelation",
+          "description": "Relationship between this attempt and earlier attempts in the episode"
+        },
+        "disposition": {
+          "$ref": "#/definitions/PermissionRecoveryAttemptDisposition",
+          "description": "How the runtime handled this attempt"
+        },
+        "reason": {
+          "$ref": "#/definitions/PermissionRecoveryAttemptReason",
+          "description": "Controlled reason for the attempt disposition"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "One-based position of this attempt in the episode"
+        }
+      },
+      "required": [
+        "attemptId",
+        "permissionKind",
+        "requestFingerprint",
+        "relation",
+        "disposition",
+        "reason",
+        "ordinal"
+      ],
+      "additionalProperties": false
+    },
+    "PermissionRecoveryAttemptDisposition": {
+      "type": "string",
+      "enum": [
+        "deferred",
+        "prompted",
+        "approved",
+        "denied",
+        "blocked",
+        "succeeded"
+      ],
+      "description": "Runtime handling applied to a recovery attempt",
+      "title": "PermissionRecoveryAttemptDisposition",
+      "x-enumDescriptions": {
+        "deferred": "The request was denied without prompting so the agent could try an alternative.",
+        "prompted": "The request was surfaced to an interactive responder.",
+        "approved": "The interactive responder approved the request.",
+        "denied": "The interactive responder denied the request or became unavailable.",
+        "blocked": "The request exhausted unattended recovery and produced a blocked outcome.",
+        "succeeded": "A tool call succeeded as an equivalent alternative."
+      }
+    },
+    "PermissionRecoveryAttemptReason": {
+      "type": "string",
+      "enum": [
+        "permission_required",
+        "repeated_attempt",
+        "attempts_exhausted",
+        "permission_approved",
+        "permission_denied",
+        "responder_unavailable",
+        "equivalent_alternative_succeeded"
+      ],
+      "description": "Controlled reason for an individual attempt disposition",
+      "title": "PermissionRecoveryAttemptReason",
+      "x-enumDescriptions": {
+        "permission_required": "The attempt required permission that Assisted Permissions could not grant.",
+        "repeated_attempt": "The request repeated an earlier attempt.",
+        "attempts_exhausted": "The request exceeded the bounded number of distinct attempts.",
+        "permission_approved": "The interactive responder approved the request.",
+        "permission_denied": "The interactive responder denied the request.",
+        "responder_unavailable": "The interactive responder became unavailable.",
+        "equivalent_alternative_succeeded": "The tool call succeeded without the blocked permission."
+      }
+    },
+    "PermissionRecoveryAttemptRelation": {
+      "type": "string",
+      "enum": [
+        "initial",
+        "retry",
+        "alternative"
+      ],
+      "description": "Relationship of an attempt to earlier permission requests",
+      "title": "PermissionRecoveryAttemptRelation",
+      "x-enumDescriptions": {
+        "initial": "The first denied permission request in the episode.",
+        "retry": "A request equivalent to an earlier attempt.",
+        "alternative": "A distinct request or a successful alternative tool call."
+      }
+    },
+    "PermissionRecoveryData": {
+      "type": "object",
+      "properties": {
+        "episodeId": {
+          "type": "string",
+          "description": "Stable identifier shared by every transition in this recovery episode"
+        },
+        "status": {
+          "$ref": "#/definitions/PermissionRecoveryStatus",
+          "description": "Current lifecycle state of the recovery episode"
+        },
+        "onBlocked": {
+          "$ref": "#/definitions/PermissionRecoveryOnBlocked",
+          "description": "Policy selected from the current client's response capability; mode or client changes may update it during recovery"
+        },
+        "reason": {
+          "$ref": "#/definitions/PermissionRecoveryReason",
+          "description": "Controlled reason for the latest episode transition"
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of distinct autonomous permission attempts allowed before escalation"
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PermissionRecoveryAttempt"
+          },
+          "description": "Ordered privacy-safe record of permission attempts and the successful alternative, when any"
+        }
+      },
+      "required": [
+        "episodeId",
+        "status",
+        "onBlocked",
+        "reason",
+        "maxAttempts",
+        "attempts"
+      ],
+      "additionalProperties": false,
+      "description": "Authoritative snapshot of an Autopilot permission-recovery episode",
+      "title": "PermissionRecoveryData"
+    },
+    "PermissionRecoveryEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.permission_recovery",
+          "description": "Type discriminator. Always \"session.permission_recovery\"."
+        },
+        "data": {
+          "$ref": "#/definitions/PermissionRecoveryData",
+          "description": "Authoritative snapshot of an Autopilot permission-recovery episode"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.permission_recovery\". Authoritative snapshot of an Autopilot permission-recovery episode",
+      "title": "PermissionRecoveryEvent"
+    },
+    "PermissionRecoveryOnBlocked": {
+      "type": "string",
+      "enum": [
+        "ask",
+        "fail"
+      ],
+      "description": "Action selected when autonomous recovery cannot continue",
+      "title": "PermissionRecoveryOnBlocked",
+      "x-enumDescriptions": {
+        "ask": "Surface the existing permission prompt to a response-capable client.",
+        "fail": "Return a structured unsuccessful blocked outcome because no responder is available."
+      }
+    },
+    "PermissionRecoveryReason": {
+      "type": "string",
+      "enum": [
+        "permission_required",
+        "repeated_attempt",
+        "attempts_exhausted",
+        "permission_approved",
+        "permission_denied",
+        "responder_unavailable",
+        "equivalent_alternative_succeeded"
+      ],
+      "description": "Controlled reason for a permission-recovery episode transition",
+      "title": "PermissionRecoveryReason",
+      "x-enumDescriptions": {
+        "permission_required": "An action required permission that Assisted Permissions could not grant.",
+        "repeated_attempt": "The agent repeated an equivalent permission request instead of making progress.",
+        "attempts_exhausted": "The bounded number of distinct permission attempts was exhausted.",
+        "permission_approved": "A responder approved the escalated permission request.",
+        "permission_denied": "A responder denied the escalated permission request.",
+        "responder_unavailable": "The response-capable client became unavailable while escalation was pending.",
+        "equivalent_alternative_succeeded": "A later tool call succeeded without requiring the blocked permission."
+      }
+    },
+    "PermissionRecoveryStatus": {
+      "type": "string",
+      "enum": [
+        "recovering",
+        "awaiting_approval",
+        "resolved",
+        "blocked"
+      ],
+      "description": "Lifecycle state of a permission-recovery episode",
+      "title": "PermissionRecoveryStatus",
+      "x-enumDescriptions": {
+        "recovering": "Autopilot may try a bounded equivalent alternative.",
+        "awaiting_approval": "An interactive permission response is required.",
+        "resolved": "The episode ended through approval or a successful equivalent alternative.",
+        "blocked": "No autonomous path remains and the task requires intervention."
+      }
+    },
     "PermissionRequest": {
       "anyOf": [
         {
@@ -13684,6 +14398,10 @@
           "$ref": "#/definitions/PermissionPromptRequest",
           "description": "Derived user-facing permission prompt details for UI consumers"
         },
+        "permissionMode": {
+          "$ref": "#/definitions/PermissionMode",
+          "description": "Permission mode captured when evaluation began. Absent on historical events."
+        },
         "agentMode": {
           "$ref": "#/definitions/SessionMode",
           "description": "Agent mode captured from the owning turn when permission evaluation began."
@@ -13695,6 +14413,10 @@
         "resolvedByHook": {
           "type": "boolean",
           "description": "When true, this permission was already resolved by a permissionRequest hook and requires no client action"
+        },
+        "recoveryEpisodeId": {
+          "type": "string",
+          "description": "Permission-recovery episode that authorized this request to surface for interactive attention"
         }
       },
       "required": [
@@ -15083,6 +15805,31 @@
       "additionalProperties": false,
       "description": "Session event \"session.remote_steerable_changed\". Notifies that the session's remote steering capability has changed",
       "title": "RemoteSteerableChangedEvent"
+    },
+    "ResponsesReasoning": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Provider model whose reasoning settings this boundary records"
+        },
+        "initialEffort": {
+          "type": "string",
+          "description": "Original request-level effort, retained while replaying this conversation prefix"
+        },
+        "effort": {
+          "type": "string",
+          "description": "Effective effort selected before this message, independent of the response-level reasoning field"
+        }
+      },
+      "required": [
+        "model",
+        "initialEffort",
+        "effort"
+      ],
+      "additionalProperties": false,
+      "description": "Original request-level and effective conversation reasoning effort for a Responses history boundary",
+      "title": "ResponsesReasoning"
     },
     "ResumeData": {
       "type": "object",
@@ -16638,6 +17385,10 @@
           "description": "Session event \"session.info\". Informational message for timeline display with categorization"
         },
         {
+          "$ref": "#/definitions/IndexedSearchEvent",
+          "description": "Session event \"session.indexed_search\". Transient indexed-search status and diagnostics from the live runtime service. Never persisted or used to infer activation from session history."
+        },
+        {
           "$ref": "#/definitions/WarningEvent",
           "description": "Session event \"session.warning\". Warning message for timeline display with categorization"
         },
@@ -16759,6 +17510,10 @@
         {
           "$ref": "#/definitions/FusionCompletedEvent",
           "description": "Session event \"session.fusion_completed\". Experimental durable aggregate outcome of a HydraFusion turn."
+        },
+        {
+          "$ref": "#/definitions/PermissionRecoveryEvent",
+          "description": "Session event \"session.permission_recovery\". Authoritative snapshot of an Autopilot permission-recovery episode"
         },
         {
           "$ref": "#/definitions/UserMessageEvent",
@@ -18048,6 +18803,12 @@
           "type": "string",
           "description": "Name of the invoked skill"
         },
+        "invokedAtTurn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Projected chat-message count when the skill was invoked. New writers persist this so replay does not need to reconstruct superseded history; readers derive it for legacy events when absent."
+        },
         "model": {
           "type": "string",
           "description": "Model identifier active when the skill was invoked, when known"
@@ -18161,6 +18922,12 @@
         "name": {
           "type": "string",
           "description": "Name of the invoked skill"
+        },
+        "invokedAtTurn": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Projected chat-message count when the skill was invoked. Preserved from the inline event data when the authored body is deduplicated."
         },
         "model": {
           "type": "string",
@@ -19569,6 +20336,10 @@
         "kind": {
           "$ref": "#/definitions/SystemNotification",
           "description": "Structured metadata identifying what triggered this notification"
+        },
+        "responsesReasoning": {
+          "$ref": "#/definitions/ResponsesReasoning",
+          "description": "Responses reasoning settings anchored before this model-facing message, for cache-stable history replay"
         }
       },
       "required": [
@@ -19906,6 +20677,48 @@
       "description": "System notification metadata from an external host that does not match a runtime-owned notification kind.",
       "title": "SystemNotificationUnclassified"
     },
+    "TaskBlocker": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/TaskBlockerKind",
+          "description": "Category of intervention that blocked the task"
+        },
+        "reason": {
+          "$ref": "#/definitions/PermissionRecoveryReason",
+          "description": "Controlled reason for the current blocked state"
+        },
+        "resumable": {
+          "type": "boolean",
+          "description": "Whether a later user response or steering message can resume the task"
+        },
+        "permissionRecovery": {
+          "$ref": "#/definitions/PermissionRecoveryData",
+          "description": "Permission-recovery episode that produced this blocker"
+        }
+      },
+      "required": [
+        "kind",
+        "reason",
+        "resumable",
+        "permissionRecovery"
+      ],
+      "additionalProperties": false,
+      "description": "Structured reason that the task cannot continue without intervention",
+      "title": "TaskBlocker",
+      "stability": "experimental"
+    },
+    "TaskBlockerKind": {
+      "type": "string",
+      "enum": [
+        "permission_recovery"
+      ],
+      "description": "Category of structured task blocker",
+      "title": "TaskBlockerKind",
+      "x-enumDescriptions": {
+        "permission_recovery": "Autopilot permission recovery requires intervention or has no safe autonomous path."
+      }
+    },
     "TaskCompleteData": {
       "type": "object",
       "properties": {
@@ -19929,6 +20742,10 @@
         "objectiveId": {
           "type": "integer",
           "description": "Active autopilot objective ID evaluated by the completion reviewer"
+        },
+        "blocker": {
+          "$ref": "#/definitions/TaskBlocker",
+          "description": "Structured blocker details when outcome is blocked"
         }
       },
       "additionalProperties": false,
@@ -22146,6 +22963,10 @@
         "content": {
           "type": "string",
           "description": "The user's message text as displayed in the timeline"
+        },
+        "responsesReasoning": {
+          "$ref": "#/definitions/ResponsesReasoning",
+          "description": "Responses reasoning settings anchored before this model-facing message, for cache-stable history replay"
         },
         "messageId": {
           "type": "string",

@@ -75,6 +75,10 @@ echo "=== reasoning-effort ==="
 clojure -A:examples -X reasoning-effort/run
 
 echo ""
+echo "=== structured-output ==="
+clojure -A:examples -X structured-output/run
+
+echo ""
 echo "=== elicitation-provider ==="
 clojure -A:examples -X elicitation-provider/run
 

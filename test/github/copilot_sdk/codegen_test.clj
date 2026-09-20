@@ -280,14 +280,19 @@
     :model-metrics {}}
 
    "session.model_change"
-   {:new-model "gpt-4o"}
+   {:new-model "gpt-4o"
+    :source "changeboarding_shortcut"}
 
    "session.handoff"
    {:handoff-time "2024-01-01T00:00:00Z"
     :source-type "remote"}
 
    "user.message"
-   {:content "hello"}
+   {:content "hello"
+    :responses-reasoning
+    {:model "gpt-5.4"
+     :initial-effort "high"
+     :effort "medium"}}
 
    "assistant.turn_start"
    {:turn-id "t-1"}
@@ -327,7 +332,9 @@
    "assistant.usage"
    {:model "gpt-4o"
     :cache-expires-at "2026-07-29T12:00:00Z"
-    :service-request-id "svc-req-1"}
+    :service-request-id "svc-req-1"
+    :thinking-dropped-blocks 1
+    :thinking-dropped-reasons ["provider_transform"]}
 
    "tool.execution_start"
    {:tool-call-id "tc-1"
@@ -348,7 +355,8 @@
    "skill.invoked"
    {:name "my-skill"
     :path "/skills/my-skill"
-    :content "skill body"}
+    :content "skill body"
+    :invoked-at-turn 3}
 
    "subagent.started"
    {:tool-call-id "tc-1"
@@ -413,7 +421,35 @@
    {}
 
    "session.compaction_complete"
-   {:success true}
+   {:success true
+    :responses-reasoning
+    {:model "gpt-5.4"
+     :initial-effort "high"
+     :effort "medium"}}
+
+   "session.indexed_search"
+   {:kind "startup"
+    :outcome "started"
+    :startup-duration-ms 12.5
+    :forced-by-env false
+    :warm-start true
+    :file-count 1000}
+
+   "session.permission_recovery"
+   {:episode-id "recovery-1"
+    :status "recovering"
+    :on-blocked "ask"
+    :reason "permission_required"
+    :max-attempts 3
+    :attempts
+    [{:attempt-id "attempt-1"
+      :tool-call-id "tool-1"
+      :permission-kind "shell"
+      :request-fingerprint "sha256:abc"
+      :relation "initial"
+      :disposition "deferred"
+      :reason "permission_required"
+      :ordinal 1}]}
 
    "factory.run_updated"
    {:run-id "run-1"
@@ -464,7 +500,15 @@
    "permission.requested"
    {:request-id "permission-1"
     :permission-request {:kind "memory"
-                         :fact "Remember this"}}
+                         :fact "Remember this"}
+    :permission-mode "assisted"
+    :recovery-episode-id "recovery-1"}
+
+   "permission.completed"
+   {:request-id "permission-1"
+    :tool-call-id "tool-1"
+    :recovery-episode-id "recovery-1"
+    :result {:kind "approved"}}
 
    "session.skills_loaded"
    {:skills []}
@@ -502,7 +546,11 @@
            :agent-id "agent-1"
            :agent-type "task"
            :status "completed"
-           :display-name "Build verifier"}}
+           :display-name "Build verifier"}
+    :responses-reasoning
+    {:model "gpt-5.4"
+     :initial-effort "high"
+     :effort "medium"}}
 
    "external_tool.requested"
    {:request-id "request-1"

@@ -96,6 +96,10 @@ clojure -A:examples -X lifecycle-hooks/run
 # Reasoning effort
 clojure -A:examples -X reasoning-effort/run
 
+# Structured output
+clojure -A:examples -X structured-output/run
+clojure -A:examples -X structured-output/run :prompt '"Return the year Clojure was first released."'
+
 # Empty (multitenancy) mode
 clojure -A:examples -X empty-mode/run
 
@@ -111,8 +115,8 @@ Or run all examples:
 ./run-all-examples.sh
 ```
 
-> **Portable runner coverage:** `run-all-examples.sh` executes all 22 entry points
-> across the 18 files that require only the Copilot CLI. It closes stdin for
+> **Portable runner coverage:** `run-all-examples.sh` executes all 23 entry points
+> across the 19 files that require only the Copilot CLI. It closes stdin for
 > `user-input/run`, exercising its EOF path without hanging.
 >
 > Four files remain explicit manual runs:
@@ -1069,6 +1073,34 @@ clojure -A:examples -X agent-factories/run
 Trigger the registered `"clj-example-review"` factory from the parent
 session (or another script) with `copilot/run-factory!`; this process
 stays alive to service the run and exits when the parent session ends.
+
+---
+
+## Example 23: Structured Output (`structured_output.clj`)
+
+**Difficulty:** Intermediate
+**Concepts:** JSON Schema responses, correlated assistant messages, parsed results
+
+Request a strict JSON response and convert it to an application-specific
+Clojure value.
+
+### What It Demonstrates
+
+- Defining a JSON Schema with caller-controlled property names
+- Supplying `:to-json-schema` and `:parse` functions
+- Returning the parsed value from `send-and-wait!`
+- Validating the decoded response and failing loudly on invalid data
+- Bounding the wait with an explicit timeout
+
+### Usage
+
+```bash
+clojure -A:examples -X structured-output/run
+clojure -A:examples -X structured-output/run :prompt '"Return the year Clojure was first released."'
+```
+
+See [Structured Output](../doc/reference/API.md#structured-output) for the raw
+assistant-event form and the complete contract.
 
 ---
 
