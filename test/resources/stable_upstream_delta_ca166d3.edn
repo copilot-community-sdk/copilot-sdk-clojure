@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "85a8037200f6c761f632c60110ee00c0a72d8821"
-  :local-artifact-commit "6c6e1025c1601e3f1f7abc956a10a749f68fd1e4"
+  :local-artifact-commit "5e20a9b7943c75ba2203c297fce2273b8b75bfd5"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_0dd9d43.edn"
    :sha256
@@ -714,11 +714,15 @@
   "doc/api/API.html"
   "4598e8d7274ea88a1416cfe49bf1450e8f9d5ae73b7d5ec32dce3f8c4f025500"
   "doc/api/getting-started.html"
-  "af7cf0371f7591c564c949540119fd266e1cadcb510ea3abd37e27616a3e15d7"
+  "1e92720a91e56b137cf4ae08378695e06d186d67c2be11dfb17a1ab34257c5c5"
+  "doc/api/github.copilot-sdk.generated.coerce.html"
+  "1dbb7b9714bd7b3a1c49016778399e4662a0dfc11485f28cf31be901007dab1c"
   "doc/api/github.copilot-sdk.html"
   "dc62bd88427138d2234f3676691226b5ecb2c60dcf226571c401d69de81c1a39"
   "doc/api/github.copilot-sdk.session.html"
   "00f478a7a0921fc79387db2a2c90214524bc0ef3b1e0ed1fc34bed91426f7aec"
+  "doc/api/index.html"
+  "54faaef8fcde73ce7f3d655450a9666f914d82385848a37cb7b80c9ff5b5cbcf"
   "doc/getting-started.md"
   "635b0e8dc18d8e057bbd1f36849fcd02f0a8fdf3807791a80cceb6bab6d10c18"
   "doc/reference/API.md"
