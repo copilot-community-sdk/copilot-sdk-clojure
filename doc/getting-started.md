@@ -95,7 +95,7 @@ assistant prose:
    "additionalProperties" false})
 
 (copilot/with-client-session [session {:on-permission-request copilot/approve-all
-                                       :model "gpt-4.1"}]
+                                       :model "gpt-5.4"}]
   (copilot/send-and-wait!
    session
    {:prompt "What is 2 + 2?"}

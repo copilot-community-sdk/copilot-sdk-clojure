@@ -99,6 +99,7 @@ clojure -A:examples -X reasoning-effort/run
 # Structured output
 clojure -A:examples -X structured-output/run
 clojure -A:examples -X structured-output/run :prompt '"Return the year Clojure was first released and confidence from 0 through 1."'
+clojure -A:examples -X structured-output/run :model '"gpt-5.4"'
 
 # Empty (multitenancy) mode
 clojure -A:examples -X empty-mode/run
@@ -1097,6 +1098,7 @@ Clojure value.
 ```bash
 clojure -A:examples -X structured-output/run
 clojure -A:examples -X structured-output/run :prompt '"Return the year Clojure was first released."'
+clojure -A:examples -X structured-output/run :model '"gpt-5.4"'
 ```
 
 See [Structured Output](../doc/reference/API.md#structured-output) for the raw

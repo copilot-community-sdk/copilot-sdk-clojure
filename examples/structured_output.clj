@@ -27,12 +27,13 @@
      :confidence confidence}))
 
 (defn run
-  [{:keys [prompt]
+  [{:keys [model prompt]
     :or {prompt
-         "What is the capital of France? Return a concise answer and confidence from 0 through 1."}}]
+         "What is the capital of France? Return a concise answer and confidence from 0 through 1."
+         model "gpt-5.4"}}]
   (copilot/with-client-session
     [session {:on-permission-request copilot/approve-all
-              :model "gpt-4.1"
+              :model model
               :available-tools []}]
     (let [result
           (copilot/send-and-wait!
