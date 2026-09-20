@@ -2659,13 +2659,13 @@
 
    Additional options:
    - :timeout-ms   - Timeout in milliseconds (default: 60000). The 2-arity form
-                     reads this from `opts`; an explicit numeric value overrides
-                     the default. A `nil` value (in `opts` or as the positional
-                     3-arity argument) disables the deadline and waits
-                     indefinitely for `session.idle`/`session.error`. In every
-                     case `:timeout-ms` is stripped from `opts` before the
-                     underlying `session.send`, so it is never forwarded on the
-                     wire.
+                     and parsed-schema 3-arity form read this from `opts`; an
+                     explicit numeric value overrides the default. A `nil`
+                     value (in `opts` or as the positional 3-arity argument)
+                     disables the deadline and waits indefinitely for
+                     `session.idle`/`session.error`. In every case
+                     `:timeout-ms` is stripped from `opts` before the underlying
+                     `session.send`, so it is never forwarded on the wire.
 
    Parsed response schema:
    - `{:to-json-schema (fn [] raw-json-schema-map)
