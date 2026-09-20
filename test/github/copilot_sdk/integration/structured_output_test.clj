@@ -171,7 +171,7 @@
     (is (= {"answer" 4} @parsed-value))
     (is (= schema (:response-schema @sent-opts)))))
 
-(deftest raw-response-schema-returns-correlated-assistant-event
+(deftest raw-response-schema-returns-correlated-assistant-event-without-user-event
   (let [copilot-session
         (sdk/create-session
          *test-client*
@@ -182,10 +182,6 @@
         (with-redefs
          [session/send-with-timeout!
           (fn [_ _ _]
-            (session/dispatch-event!
-             client session-id
-             {:type :copilot/user.message
-              :data {:message-id "request-1" :content "Question"}})
             (session/dispatch-event!
              client session-id
              {:type :copilot/assistant.message
