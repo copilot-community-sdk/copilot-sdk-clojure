@@ -232,7 +232,12 @@
                         :opts ::specs/send-options
                         :response-schema ::specs/parsed-response-schema
                         :timeout-ms ::specs/timeout-ms))
-                :ret any?)
+                :ret any?
+                :fn
+                (fn [{:keys [args ret]}]
+                  (if (contains? #{:default :timeout} (first args))
+                    (or (nil? ret) (map? ret))
+                    true)))
 
 (register-fdef! github.copilot-sdk.session/send-async
                 :args (s/cat :session ::specs/session

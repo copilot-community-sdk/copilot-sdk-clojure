@@ -1,5 +1,6 @@
 (ns github.copilot-sdk.integration.structured-output-test
-  (:require [clojure.spec.alpha :as s]
+  (:require [clojure.core.async :as async]
+            [clojure.spec.alpha :as s]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.integration.support
@@ -491,6 +492,73 @@
             250))))
     (is (pos-int? @observed-timeout))
     (is (<= @observed-timeout 250))))
+
+(deftest structured-timeout-bounds-lock-admission
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        send-lock
+        (get-in @(:state (:client copilot-session))
+                [:session-io session-id :send-lock])
+        schema (parsed-response-schema identity)]
+    (is (= :token (async/<!! send-lock)))
+    (let [result
+          (future
+            (try
+              (sdk/send-and-wait!
+               copilot-session
+               {:prompt "Return JSON"}
+               schema
+               50)
+              (catch clojure.lang.ExceptionInfo e
+                e)))]
+      (try
+        (let [outcome (deref result 500 ::blocked)]
+          (is (instance? clojure.lang.ExceptionInfo outcome))
+          (when (instance? clojure.lang.ExceptionInfo outcome)
+            (is (re-find
+                 #"Timeout after 50ms waiting for the structured response"
+                 (ex-message outcome)))))
+        (finally
+          (async/>!! send-lock :token)
+          (deref result 1000 nil))))))
+
+(deftest parsed-three-arity-honors-options-timeout
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        observed-timeout (atom nil)
+        schema (parsed-response-schema #(get % "answer"))]
+    (with-redefs
+     [session/send-with-timeout!
+      (fn [_ _ timeout-ms]
+        (reset! observed-timeout timeout-ms)
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/user.message
+          :data {:message-id "request-1" :content "Question"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/assistant.message
+          :data {:originating-message-id "request-1"
+                 :content "{\"answer\":4}"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/session.idle :data {}})
+        "request-1")]
+      (is (= 4
+             (sdk/send-and-wait!
+              copilot-session
+              {:prompt "Return JSON"
+               :timeout-ms 250}
+              schema)))
+      (is (pos-int? @observed-timeout))
+      (is (<= @observed-timeout 250)))))
 
 (deftest structured-timeout-bounds-event-wait
   (let [copilot-session

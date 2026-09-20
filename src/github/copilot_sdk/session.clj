@@ -290,7 +290,8 @@
         event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
         send-lock (doto (chan 1) (>!! :token))
-        structured-wait-count (atom 0)
+        structured-wait-state (atom {:waiter-count 0
+                                     :admission nil})
         ;; Upstream PR #1308: declaration-only tools (no :tool-handler) are
         ;; left out of the handler map — they're distinguished from tools with
         ;; handlers, and unhandled invocations are left pending for manual
@@ -344,8 +345,8 @@
                                       :event-chan event-chan
                                       :event-mult event-mult
                                       :send-lock send-lock
-                                      :structured-wait-count
-                                      structured-wait-count}))]
+                                      :structured-wait-state
+                                      structured-wait-state}))]
                             (if setup-token
                               (if snapshot
                                 (assoc-in
@@ -2346,6 +2347,145 @@
           (close! event-ch)
           (put! send-lock :token))))))
 
+(defn- structured-timeout-error
+  [timeout-ms]
+  (ex-info
+   (str "Timeout after " timeout-ms
+        "ms waiting for the structured response")
+   {:timeout-ms timeout-ms}))
+
+(defn- remaining-deadline-ms
+  [deadline-nanos]
+  (let [remaining-nanos (- deadline-nanos (System/nanoTime))]
+    (if (pos? remaining-nanos)
+      (max 1
+           (long
+            (Math/ceil
+             (/ (double remaining-nanos) 1000000.0))))
+      0)))
+
+(defn- require-remaining-timeout-ms
+  [deadline-nanos timeout-ms]
+  (let [remaining-ms (remaining-deadline-ms deadline-nanos)]
+    (when-not (pos? remaining-ms)
+      (throw (structured-timeout-error timeout-ms)))
+    remaining-ms))
+
+(defn- wait-for-send-lock-before-deadline!
+  [send-lock deadline-nanos]
+  (if deadline-nanos
+    (let [remaining-ms (remaining-deadline-ms deadline-nanos)]
+      (if (pos? remaining-ms)
+        (let [deadline-ch (async/timeout remaining-ms)
+              [token ch] (alts!! [send-lock deadline-ch] :priority true)]
+          (cond
+            (= ch deadline-ch) :timeout
+            (nil? token) :closed
+            :else :acquired))
+        :timeout))
+    (if (<!! send-lock)
+      :acquired
+      :closed)))
+
+(defn- acquire-structured-wait!
+  [session-id send-lock structured-wait-state deadline-nanos timeout-ms]
+  (loop []
+    (let [[role admission]
+          (locking structured-wait-state
+            (let [{:keys [waiter-count admission]}
+                  @structured-wait-state]
+              (cond
+                (pos? waiter-count)
+                (do
+                  (swap! structured-wait-state update :waiter-count inc)
+                  [:joined nil])
+
+                admission
+                [:waiting admission]
+
+                :else
+                (let [admission (promise)]
+                  (swap! structured-wait-state assoc :admission admission)
+                  [:leader admission]))))]
+      (case role
+        :joined
+        true
+
+        :waiting
+        (let [outcome
+              (if deadline-nanos
+                (let [remaining-ms
+                      (remaining-deadline-ms deadline-nanos)]
+                  (if (pos? remaining-ms)
+                    (deref admission remaining-ms ::timeout)
+                    ::timeout))
+                @admission)]
+          (cond
+            (= ::timeout outcome)
+            (throw (structured-timeout-error timeout-ms))
+
+            (#{:acquired :retry} outcome)
+            (recur)
+
+            (instance? Throwable outcome)
+            (throw outcome)
+
+            :else
+            (throw
+             (ex-info
+              "Unexpected structured-wait admission result."
+              {:outcome outcome}))))
+
+        :leader
+        (let [outcome
+              (try
+                (wait-for-send-lock-before-deadline!
+                 send-lock deadline-nanos)
+                (catch Throwable t
+                  t))]
+          (cond
+            (= :acquired outcome)
+            (do
+              (locking structured-wait-state
+                (reset! structured-wait-state
+                        {:waiter-count 1
+                         :admission nil}))
+              (deliver admission :acquired)
+              true)
+
+            (= :timeout outcome)
+            (do
+              (locking structured-wait-state
+                (swap! structured-wait-state assoc :admission nil))
+              (deliver admission :retry)
+              (throw (structured-timeout-error timeout-ms)))
+
+            (= :closed outcome)
+            (let [error
+                  (ex-info
+                   "Session has been disconnected"
+                   {:session-id session-id})]
+              (locking structured-wait-state
+                (swap! structured-wait-state assoc :admission nil))
+              (deliver admission error)
+              (throw error))
+
+            :else
+            (do
+              (locking structured-wait-state
+                (swap! structured-wait-state assoc :admission nil))
+              (deliver admission outcome)
+              (throw outcome))))))))
+
+(defn- release-structured-wait!
+  [send-lock structured-wait-state]
+  (locking structured-wait-state
+    (let [waiter-count
+          (:waiter-count
+           (swap! structured-wait-state update :waiter-count dec))]
+      (when (zero? waiter-count)
+        (put! send-lock :token)))))
+
 (defn- send-and-wait-for-structured-message!
   [session opts timeout-ms]
   (let [{:keys [session-id client]} session]
@@ -2354,114 +2494,100 @@
 
     (let [send-opts (dissoc opts :timeout-ms)
           event-ch (chan 1024)
-          {:keys [event-mult send-lock structured-wait-count]}
+          {:keys [event-mult send-lock structured-wait-state]}
           (session-io client session-id)
           deadline-nanos
           (when timeout-ms
             (+ (System/nanoTime) (* timeout-ms 1000000)))
           acquired?
-          (locking structured-wait-count
-            (when (zero? @structured-wait-count)
-              (when-not (<!! send-lock)
-                (throw
-                 (ex-info
-                  "Session has been disconnected"
-                  {:session-id session-id}))))
-            (swap! structured-wait-count inc)
-            true)]
+          (acquire-structured-wait!
+           session-id
+           send-lock
+           structured-wait-state
+           deadline-nanos
+           timeout-ms)]
 
       (try
         (tap event-mult event-ch)
-        (letfn [(timeout-error []
-                  (ex-info
-                   (str "Timeout after " timeout-ms
-                        "ms waiting for the structured response")
-                   {:timeout-ms timeout-ms}))
-                (remaining-timeout-ms []
-                  (when deadline-nanos
-                    (let [remaining-nanos
-                          (- deadline-nanos (System/nanoTime))]
-                      (when-not (pos? remaining-nanos)
-                        (throw (timeout-error)))
-                      (max 1
-                           (long
-                            (Math/ceil
-                             (/ (double remaining-nanos) 1000000.0)))))))]
-          (let [message-id
-                (if timeout-ms
-                  (try
-                    (send-with-timeout!
-                     session send-opts (remaining-timeout-ms))
-                    (catch clojure.lang.ExceptionInfo e
-                      (if (and (= "session.send" (:method (ex-data e)))
-                               (contains? (ex-data e) :timeout-ms)
-                               (not (contains? (ex-data e) :error)))
-                        (throw
-                         (ex-info
-                          (ex-message (timeout-error))
-                          {:timeout-ms timeout-ms}
-                          e))
-                        (throw e))))
-                  (send! session send-opts))
-                deadline-ch
-                (when timeout-ms
-                  (async/timeout (remaining-timeout-ms)))]
-            (when-not (and (string? message-id)
-                           (not (str/blank? message-id)))
-              (throw
-               (ex-info
-                "The runtime did not return a message ID for the structured send."
-                {:message-id message-id})))
-            (loop [consumed? false
-                   last-message nil]
-              (let [[event ch] (if deadline-ch
-                                 (alts!! [event-ch deadline-ch])
-                                 [(<!! event-ch) event-ch])]
-                (cond
-                  (and deadline-ch (= ch deadline-ch))
-                  (throw (timeout-error))
+        (let [message-id
+              (if timeout-ms
+                (try
+                  (send-with-timeout!
+                   session
+                   send-opts
+                   (require-remaining-timeout-ms
+                    deadline-nanos timeout-ms))
+                  (catch clojure.lang.ExceptionInfo e
+                    (if (and (= "session.send" (:method (ex-data e)))
+                             (contains? (ex-data e) :timeout-ms)
+                             (not (contains? (ex-data e) :error)))
+                      (throw
+                       (ex-info
+                        (ex-message (structured-timeout-error timeout-ms))
+                        {:timeout-ms timeout-ms}
+                        e))
+                      (throw e))))
+                (send! session send-opts))
+              deadline-ch
+              (when timeout-ms
+                (async/timeout
+                 (require-remaining-timeout-ms
+                  deadline-nanos timeout-ms)))]
+          (when-not (and (string? message-id)
+                         (not (str/blank? message-id)))
+            (throw
+             (ex-info
+              "The runtime did not return a message ID for the structured send."
+              {:message-id message-id})))
+          (loop [consumed? false
+                 last-message nil]
+            (let [[event ch] (if deadline-ch
+                               (alts!! [event-ch deadline-ch])
+                               [(<!! event-ch) event-ch])]
+              (cond
+                (and deadline-ch (= ch deadline-ch))
+                (throw (structured-timeout-error timeout-ms))
 
-                  (nil? event)
-                  (throw (ex-info "Event channel closed unexpectedly" {}))
+                (nil? event)
+                (throw (ex-info "Event channel closed unexpectedly" {}))
 
-                  (:agent-id event)
-                  (recur consumed? last-message)
+                (:agent-id event)
+                (recur consumed? last-message)
 
-                  (and (= :copilot/user.message (:type event))
-                       (= message-id (get-in event [:data :message-id])))
-                  (recur true last-message)
+                (and (= :copilot/user.message (:type event))
+                     (= message-id (get-in event [:data :message-id])))
+                (recur true last-message)
 
-                  (and (= :copilot/assistant.message (:type event))
-                       (= message-id
-                          (get-in event [:data :originating-message-id])))
-                  (recur true
-                         (when-not (seq (get-in event [:data :tool-requests]))
-                           event))
+                (and (= :copilot/assistant.message (:type event))
+                     (= message-id
+                        (get-in event [:data :originating-message-id])))
+                (recur true
+                       (when-not (seq (get-in event [:data :tool-requests]))
+                         event))
 
-                  (= :copilot/session.error (:type event))
+                (= :copilot/session.error (:type event))
+                (throw
+                 (ex-info
+                  (get-in event [:data :message] "Session error")
+                  {:event event}))
+
+                (and consumed? (terminal-idle-event? event))
+                (if (true? (get-in event [:data :aborted]))
                   (throw
                    (ex-info
-                    (get-in event [:data :message] "Session error")
+                    "The requested run was aborted before a structured result was completed."
                     {:event event}))
+                  last-message)
 
-                  (and consumed? (terminal-idle-event? event))
-                  (if (true? (get-in event [:data :aborted]))
-                    (throw
-                     (ex-info
-                      "The requested run was aborted before a structured result was completed."
-                      {:event event}))
-                    last-message)
-
-                  :else
-                  (recur consumed? last-message))))))
+                :else
+                (recur consumed? last-message)))))
 
         (finally
           (untap event-mult event-ch)
           (close! event-ch)
           (when acquired?
-            (locking structured-wait-count
-              (when (zero? (swap! structured-wait-count dec))
-                (put! send-lock :token)))))))))
+            (release-structured-wait!
+             send-lock structured-wait-state)))))))
 
 (defn- parse-structured-message
   [message response-schema]
@@ -2564,7 +2690,9 @@
       session
       (dissoc opts :timeout-ms)
       timeout-or-response-schema
-      default-send-and-wait-timeout-ms)))
+      (if (contains? opts :timeout-ms)
+        (:timeout-ms opts)
+        default-send-and-wait-timeout-ms))))
   ([session opts response-schema timeout-ms]
    (send-and-wait-typed!
     session

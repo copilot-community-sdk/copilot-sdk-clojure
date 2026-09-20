@@ -564,6 +564,7 @@
    verbatim. Assistant `:reasoning-blocks` retain provider-defined key
    spelling. For v3 `mcp_app.tool_call_complete` events (schema 1.0.52-4,
    SEP-1865), the `:arguments` and `:result` payloads are similarly preserved.
+   JSON-RPC response `:error :data` payloads also retain their original keys.
    The same preservation applies to historical events returned in
    `session.getMessages` responses so live and historical event shapes agree."
   [msg]
