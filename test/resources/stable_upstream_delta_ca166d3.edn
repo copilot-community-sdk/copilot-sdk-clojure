@@ -1,0 +1,712 @@
+{:certification
+ {:clojure-base-commit "85a8037200f6c761f632c60110ee00c0a72d8821"
+  :local-artifact-commit "e78b33f97ab98d1480e5a1830f7725dc2b2d1d63"
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_0dd9d43.edn"
+   :sha256
+   "87ef6f15674eeb260924372924de7d84761a9c8c7e0d43a08e95cd480554fb59"}}
+
+ :upstream
+ {:base-commit "0dd9d4324339b84835c915b0700fdc5c25cec5af"
+  :target-commit "ca166d3eeec17b8efe0294af4b1ef9ca0f4445de"
+  :commit-count 10
+  :commits-sha256
+  "c4c11e9f472e1909e4bd60a5b370aa7ef2e83dacbc27132530dd0766ce793a2b"
+  :hash-format :newline-joined-without-trailing-newline
+  :target-package-version "0.0.0-dev"
+  :runtime-version "1.0.87-0"
+  :release-tag
+  {:name "v1.0.14"
+   :commit "e60d9037353249ef16b349eb4012e8c1d113fda5"}}
+
+ :commit-classifications
+ [{:commit "dc2447f107549d7ca404112e8f1d31054287ed2c"
+   :subject "nodejs: enforce exact npm dependency policy (#2700)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2700"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes Node dependency pinning and repository validation policy."
+   :changed-path-count 9
+   :changed-paths-sha256
+   "115f4ff1bd8e35394e422ea2f0e4354bf3c27081e977c99148b8b1cf56696533"}
+  {:commit "fc44743a1d75a9349828434ef6fbff9b5fe9910c"
+   :subject "Typed structured outputs (#2590)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2590"
+   :classification :stable-public
+   :status :ported
+   :reason
+   "Adds stable response-schema sends, typed sendAndWait results, correlated structured waits, and extension-context message attachments."
+   :changed-path-count 62
+   :changed-paths-sha256
+   "fd8c47691b33ce721bf0b098b3f538a9f4c7a72544d5706a475faa7b086b0b88"}
+  {:commit "ad69ee168680728872434817191ef8cc5e449431"
+   :subject "Add Java linuxmusl-x64 native classifier support (#2715)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2715"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Adds Java native packaging support for linux-musl x64."
+   :changed-path-count 12
+   :changed-paths-sha256
+   "fc6f6320905cc8b441ad5359f2bd254123cacbed6b9fb45077ff1d4e947cb780"}
+  {:commit "791f7fb7dab1ddc843e4796079f256ccd40c4082"
+   :subject "Update Copilot CLI to 1.0.87-0 (#2731)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2731"
+   :classification :stable-public
+   :status :regenerated
+   :reason
+   "Advances the runtime and generated schemas, including stable indexed-search, permission-recovery, and event provenance contracts."
+   :changed-path-count 223
+   :changed-paths-sha256
+   "8b49c42fca2ca3dab0931df748ef56abe8254f6c2fccce9ba6e02a4e7178a960"}
+  {:commit "782c45dcdd1746acf7310096bafa8dbc488e5286"
+   :subject "Pin GitHub Actions to commit SHAs (#2712)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2712"
+   :classification :internal
+   :status :reviewed-no-port
+   :reason "Changes upstream CI supply-chain pinning only."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "1e1ff8de7b8a82c9d2aab10a9e4f32e65bf0c1349e7d9b92d311f0285176bfa6"}
+  {:commit "8045fb74c7d8684fd388b09e324c00b02e9347a5"
+   :subject "Preserve structured JSON-RPC error data (#2664)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2664"
+   :classification :language-specific
+   :status :ported-compatible
+   :reason
+   "Changes the Rust SDK, while documenting a cross-SDK boundary behavior that the Clojure protocol now preserves."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "0efc0cc2396b55ab448e3b81eaabfd3b0b3505c92c29f2e7482613978b014b11"}
+  {:commit "8b22f15e28e210c9b90f822d92c4a38e53d079aa"
+   :subject "perf(rust): coalesce intercepted HTTP response chunks (#2717)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2717"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes Rust HTTP interception performance only."
+   :changed-path-count 3
+   :changed-paths-sha256
+   "724a72ea3cbd9e2b1ceab86e57f6e8e08875fe3bbfcc2ba37fa5744b26950f6e"}
+  {:commit "0a7113bf0ade366558f922c7665d0ee21fe02df6"
+   :subject "perf(rust): avoid rebuilding and copying JSON payloads (#2711)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2711"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes Rust JSON serialization performance only."
+   :changed-path-count 4
+   :changed-paths-sha256
+   "285c1a2ed6e021382b341f9b6401d7a2f76f8441852f1e8974885a86ee7fe843"}
+  {:commit "9515b5e85c71b21e82381d22d69c2486561fd531"
+   :subject "Expand cross-SDK scenario and RPC E2E coverage (#2724)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2724"
+   :classification :experimental
+   :status :reviewed-no-port
+   :reason
+   "Adds cross-SDK scenario coverage and the explicitly experimental extension launch-provider surface."
+   :changed-path-count 153
+   :changed-paths-sha256
+   "546498f11fa4c17d1f7e60b2ca6c11597ec0cae7636000e90c28721c0aa1dd42"}
+  {:commit "ca166d3eeec17b8efe0294af4b1ef9ca0f4445de"
+   :subject "perf(dotnet): avoid redundant JSON event materialization (#2733)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2733"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason "Changes .NET event deserialization performance only."
+   :changed-path-count 4
+   :changed-paths-sha256
+   "49b74ffb2ff6eccb403ba05af3ef109212ca557b5703be6f9e1e6908269f78eb"}]
+
+ :changed-paths
+ {:count 445
+  :sha256
+  "eac3cc709cc52c3ecd434eaf46b146397caf1a3b2eea9a0ce0237833b189a718"
+  :hash-format :newline-joined-without-trailing-newline
+  :classification-counts
+  {:stable-public 10
+   :experimental 1
+   :generated-only 3
+   :internal 81
+   :language-specific 350}
+  :exact-classifications
+  {"nodejs/README.md" :stable-public
+   "nodejs/src/client.ts" :stable-public
+   "nodejs/src/generated/session-events.ts" :stable-public
+   "nodejs/src/index.ts" :stable-public
+   "nodejs/src/schema.ts" :stable-public
+   "nodejs/src/session.ts" :stable-public
+   "nodejs/src/types.ts" :stable-public
+   "nodejs/test/e2e/structured_output.e2e.test.ts" :stable-public
+   "nodejs/test/message-source.test.ts" :stable-public
+   "nodejs/test/structured-output.test.ts" :stable-public
+
+   "nodejs/test/e2e/client_options.e2e.test.ts" :experimental
+
+   "nodejs/package-lock.json" :generated-only
+   "nodejs/samples/package-lock.json" :generated-only
+   "nodejs/src/generated/rpc.ts" :generated-only
+
+   "CONTRIBUTING.md" :internal
+   "nodejs/.npmrc" :internal
+   "nodejs/package.json" :internal
+   "nodejs/src/cliVersion.ts" :internal
+   "nodejs/tsconfig.test.json" :internal}
+  :prefix-classifications
+  [{:prefix ".github/" :classification :internal}
+   {:prefix "nodejs/scripts/" :classification :internal}
+   {:prefix "nodejs/test/" :classification :internal}
+   {:prefix "test/" :classification :internal}
+   {:prefix "dotnet/" :classification :language-specific}
+   {:prefix "go/" :classification :language-specific}
+   {:prefix "java/" :classification :language-specific}
+   {:prefix "python/" :classification :language-specific}
+   {:prefix "rust/" :classification :language-specific}
+   {:prefix "scripts/" :classification :language-specific}]}
+
+ :stable-surface-continuity
+ {:baseline-target "0dd9d4324339b84835c915b0700fdc5c25cec5af"
+  :unchanged-authority-paths
+  #{"nodejs/src/extension.ts"
+    "nodejs/src/factory.ts"
+    "nodejs/src/toolSet.ts"}
+  :inventoried-authority-paths
+  #{"nodejs/src/client.ts"
+    "nodejs/src/generated/session-events.ts"
+    "nodejs/src/index.ts"
+    "nodejs/src/session.ts"
+    "nodejs/src/types.ts"}}
+
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/package.json"
+   {:base "1c255f7e09ab3081461e736670e0b0127b5a8b99"
+    :target "8ea4551eae59d04fee7fcd5060c8249664953b8a"}
+   "nodejs/src/index.ts"
+   {:base "8a5a730b5a5cb8f329b245298e132c7a77e085d5"
+    :target "f1879e8f1b9e83f8ae40f04415909ba9e705f67d"}
+   "nodejs/src/types.ts"
+   {:base "9c4258d9c92b9ad396bf25bb070386ef3d51f258"
+    :target "6a19116a37f63c1c355508c70d40a98b100c11b8"}
+   "nodejs/src/client.ts"
+   {:base "6e4b4fb5b4e9b656a21c0fc5fd6988a848ae8501"
+    :target "4b610888b63490a9c7ff5012fd962e5e21153719"}
+   "nodejs/src/session.ts"
+   {:base "896eded0bda69f9e08454ea8866fb1c335ce2415"
+    :target "4a909f64c8f0103ac303046bffa8fcb73a6129b5"}
+   "nodejs/src/extension.ts"
+   {:base "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"
+    :target "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"}
+   "nodejs/src/toolSet.ts"
+   {:base "559e9234e5b178036d88a7045a632bd16a97f534"
+    :target "559e9234e5b178036d88a7045a632bd16a97f534"}
+   "nodejs/src/factory.ts"
+   {:base "174318394f98c735e54f9bd80d75901e77ce17fa"
+    :target "174318394f98c735e54f9bd80d75901e77ce17fa"}
+   "nodejs/src/generated/session-events.ts"
+   {:base "acaf4851469df2faf606aac29ded469ddea2801d"
+    :target "a5fd0337c6345317c376aaf9bf0f1155e38eff27"}
+   "nodejs/src/generated/rpc.ts"
+   {:base "b0bbbb56e4e58cc9ff57b4498763e83a29bd425f"
+    :target "7d517cb9e683f39eea038c053b2bc8eb37645784"}}
+  :trees
+  {"nodejs"
+   {:base "4fda0e7b38f51884c82dad9631e918966ee03bb7"
+    :target "55d22aa3bb7dd508c43b31d69fdc13a218813a78"}
+   "nodejs/src/generated"
+   {:base "6ba58a38cd0a4a8faae25198d21864b83a32dec0"
+    :target "85da1a2b96cce5460da60603692a8b55e42bff04"}
+   "nodejs/test"
+   {:base "3bf924daa0c261fe4b62d9a1e29a4b05263866e9"
+    :target "f15c4c07cb0171c061535c3b2db2290827f318b6"}}
+  :package-root
+  {:path "nodejs/src/index.ts"
+   :explicit-symbol-count 206
+   :explicit-symbols-sha256
+   "5c811a13d92ece0f218b68aaecf50ad08a94b7f943dc842678ece506b2d26f85"
+   :session-events
+   {:path "nodejs/src/generated/session-events.ts"
+    :symbol-count 570
+    :symbols-sha256
+    "fd9ba7b1eb0e1e5139be792176325256fb92cbcd900d0304bcc4165d12cf04a5"}
+   :symbol-count 766
+   :symbols-sha256
+   "6d3d571c07a7251f45cb4f76d60afdff37c991f033a0ef110cc3f52a881dfb47"
+   :added
+   {:stable-public
+    #{"ExtensionContextAttachment"
+      "IndexedSearchData"
+      "IndexedSearchDisabledReason"
+      "IndexedSearchErrorType"
+      "IndexedSearchEvent"
+      "IndexedSearchIncrementalPhase"
+      "IndexedSearchOutcome"
+      "IndexedSearchState"
+      "PermissionRecoveryAttempt"
+      "PermissionRecoveryAttemptDisposition"
+      "PermissionRecoveryAttemptReason"
+      "PermissionRecoveryAttemptRelation"
+      "PermissionRecoveryData"
+      "PermissionRecoveryEvent"
+      "PermissionRecoveryOnBlocked"
+      "PermissionRecoveryReason"
+      "PermissionRecoveryStatus"
+      "ResponseSchema"
+      "ResponsesReasoning"}
+    :experimental
+    #{"ExtensionLaunchProfile"
+      "ExtensionLaunchProvider"
+      "ExtensionLaunchProviderResolveRequest"
+      "ExtensionLaunchProviderResolveResult"
+      "PermissionApprovalEvaluation"
+      "TaskBlocker"
+      "TaskBlockerKind"}}
+   :removed #{}}
+  :types
+  {:path "nodejs/src/types.ts"
+   :symbol-count 213
+   :symbols-sha256
+   "d245838d1f269b25737b328f825dbe01cec6d4149424b4a156c8db5c5fb5519b"}
+  :extension
+  {:path "nodejs/src/extension.ts"
+   :symbol-count 39
+   :symbols-sha256
+   "13316e0859171d9c8be79a0bdbe2626b9c21a1947dae04a24fc51ddede17b52c"}
+  :tool-set
+  {:path "nodejs/src/toolSet.ts"
+   :symbol-count 2
+   :symbols-sha256
+   "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"}
+  :factory
+  {:path "nodejs/src/factory.ts"
+   :symbol-count 29
+   :symbols-sha256
+   "ba187595890c21116008b7276801db3a64510815df0c744e32e85c20c961afba"}
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts"
+    :class-name "CopilotClient"
+    :method-count 20
+    :methods-sha256
+    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"}
+   :session
+   {:path "nodejs/src/session.ts"
+    :class-name "CopilotSession"
+    :method-count 41
+    :methods-sha256
+    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"}}}
+
+ :symbol-inventory
+ {:added-exported-symbols
+  {"nodejs/src/index.ts"
+   {:stable-public #{"ExtensionContextAttachment" "ResponseSchema"}
+    :experimental
+    #{"ExtensionLaunchProfile"
+      "ExtensionLaunchProvider"
+      "ExtensionLaunchProviderResolveRequest"
+      "ExtensionLaunchProviderResolveResult"}}
+   "nodejs/src/types.ts"
+   {:stable-public #{"ExtensionContextAttachment" "ResponseSchema"}
+    :experimental
+    #{"ExtensionLaunchProfile"
+      "ExtensionLaunchProvider"
+      "ExtensionLaunchProviderResolveRequest"
+      "ExtensionLaunchProviderResolveResult"}}
+   "nodejs/src/generated/session-events.ts"
+   {:stable-public
+    #{"IndexedSearchData"
+      "IndexedSearchDisabledReason"
+      "IndexedSearchErrorType"
+      "IndexedSearchEvent"
+      "IndexedSearchIncrementalPhase"
+      "IndexedSearchOutcome"
+      "IndexedSearchState"
+      "PermissionRecoveryAttempt"
+      "PermissionRecoveryAttemptDisposition"
+      "PermissionRecoveryAttemptReason"
+      "PermissionRecoveryAttemptRelation"
+      "PermissionRecoveryData"
+      "PermissionRecoveryEvent"
+      "PermissionRecoveryOnBlocked"
+      "PermissionRecoveryReason"
+      "PermissionRecoveryStatus"
+      "ResponsesReasoning"}
+    :experimental
+    #{"PermissionApprovalEvaluation" "TaskBlocker" "TaskBlockerKind"}}}
+  :removed-exported-symbols {}
+  :interface-fields
+  {"nodejs/src/types.ts"
+   {"CopilotClientOptions"
+    {:experimental #{"extensionLaunchProvider"}}
+    "MessageOptions"
+    {:stable-public #{"responseSchema"}}}
+   "nodejs/src/generated/session-events.ts"
+   {"AssistantUsageData"
+    {:internal #{"thinkingDroppedBlocks" "thinkingDroppedReasons"}}
+    "CompactionCompleteData"
+    {:stable-public #{"responsesReasoning"}}
+    "PermissionAssistedApproval"
+    {:experimental #{"evaluation"}}
+    "PermissionCompletedData"
+    {:stable-public #{"recoveryEpisodeId"}
+     :experimental #{"blocker"}}
+    "PermissionRequestedData"
+    {:stable-public #{"recoveryEpisodeId"}
+     :experimental #{"permissionMode"}}
+    "SkillInvokedData"
+    {:stable-public #{"invokedAtTurn"}}
+    "SystemNotificationData"
+    {:stable-public #{"responsesReasoning"}}
+    "TaskCompleteData"
+    {:experimental #{"blocker"}}
+    "UserMessageData"
+    {:stable-public #{"responsesReasoning"}}}}
+  :changed-type-values
+  {"nodejs/src/generated/session-events.ts"
+   {"ModelChangeSource"
+    {:stable-public #{"changeboarding_shortcut"}}}}
+  :changed-declarations
+  {"nodejs/src/types.ts"
+   {:stable-public #{"MessageOptions"}
+    :experimental #{"CopilotClientOptions"}}
+   "nodejs/src/generated/session-events.ts"
+   {:stable-public
+    #{"CompactionCompleteData"
+      "ModelChangeSource"
+      "PermissionCompletedData"
+      "PermissionRequestedData"
+      "SkillInvokedData"
+      "SystemNotificationData"
+      "UserMessageData"}
+    :experimental #{"PermissionAssistedApproval" "TaskCompleteData"}
+    :internal #{"AssistantUsageData"}
+    :generated-only #{"SessionEvent"}}}}
+
+ :stable-delta-ids
+ #{:events/runtime-1.0.87
+   :message/extension-context-attachment
+   :message/structured-output
+   :runtime/schema-1.0.87-0}
+
+ :stable-deltas
+ [{:id :message/structured-output
+   :classification :stable-public
+   :status :ported
+   :upstream-prs [2590]
+   :upstream-paths
+   ["nodejs/README.md"
+    "nodejs/src/client.ts"
+    "nodejs/src/index.ts"
+    "nodejs/src/schema.ts"
+    "nodejs/src/session.ts"
+    "nodejs/src/types.ts"
+    "nodejs/test/e2e/structured_output.e2e.test.ts"
+    "nodejs/test/structured-output.test.ts"]
+   :upstream-contracts
+   [{:id [:message-options :response-schema :raw-json-schema]
+     :evidence :structured-output-schema}
+    {:id [:session :send-and-wait :parsed-result]
+     :evidence :structured-output-wait}
+    {:id [:session :send-and-wait :originating-message-correlation]
+     :evidence :structured-output-correlation}
+    {:id [:session :send-and-wait :shared-deadline]
+     :evidence :structured-output-timeout}]
+   :evidence
+   [:structured-output-schema
+    :structured-output-wait
+    :structured-output-correlation
+    :structured-output-timeout]
+   :clojure-paths
+   ["src/github/copilot_sdk/session.clj"
+    "src/github/copilot_sdk/specs.clj"
+    "src/github/copilot_sdk/instrument.clj"
+    "test/github/copilot_sdk/integration/structured_output_test.clj"
+    "examples/structured_output.clj"
+    "doc/reference/API.md"
+    "CHANGELOG.md"]}
+  {:id :message/extension-context-attachment
+   :classification :stable-public
+   :status :ported
+   :upstream-prs [2590]
+   :upstream-paths
+   ["nodejs/src/index.ts"
+    "nodejs/src/types.ts"
+    "nodejs/test/message-source.test.ts"]
+   :upstream-contracts
+   [{:id [:message-options :attachments :extension-context]
+     :evidence :extension-context}]
+   :evidence [:extension-context]
+   :clojure-paths
+   ["src/github/copilot_sdk/specs.clj"
+    "src/github/copilot_sdk/util.clj"
+    "test/github/copilot_sdk/integration/structured_output_test.clj"
+    "doc/reference/API.md"
+    "CHANGELOG.md"]}
+  {:id :events/runtime-1.0.87
+   :classification :stable-public
+   :status :ported
+   :upstream-prs [2731]
+   :upstream-paths ["nodejs/src/generated/session-events.ts"]
+   :upstream-contracts
+   [{:id [:session-event "session.indexed_search"]
+     :evidence :indexed-search-event}
+    {:id [:session-event "session.permission_recovery"]
+     :evidence :permission-recovery-event}
+    {:id [:session-event :responses-reasoning]
+     :evidence :responses-reasoning}
+    {:id [:session-event "skill.invoked" :invoked-at-turn]
+     :evidence :skill-invoked-turn}
+    {:id [:session-event "session.model_change" :source
+          "changeboarding_shortcut"]
+     :evidence :model-change-source}]
+   :evidence
+   [:indexed-search-event
+    :permission-recovery-event
+    :responses-reasoning
+    :skill-invoked-turn
+    :model-change-source]
+   :clojure-paths
+   ["src/github/copilot_sdk.clj"
+    "src/github/copilot_sdk/specs.clj"
+    "test/github/copilot_sdk/codegen_test.clj"
+    "doc/reference/API.md"
+    "CHANGELOG.md"]}
+  {:id :runtime/schema-1.0.87-0
+   :classification :stable-public
+   :status :regenerated
+   :upstream-prs [2731]
+   :upstream-paths []
+   :upstream-contracts
+   [{:id [:runtime :schema-version "1.0.87-0"]
+     :evidence :runtime-version}]
+   :evidence [:runtime-version]
+   :clojure-paths
+   [".copilot-schema-version"
+    "schemas/README.md"
+    "schemas/api.schema.json"
+    "schemas/session-events.schema.json"
+    "src/github/copilot_sdk/generated/event_specs.clj"]}]
+
+ :compatibility-deltas
+ [{:id :protocol/structured-error-data
+   :classification :language-specific
+   :status :ported-compatible
+   :upstream-prs [2664]
+   :reason
+   "The Rust SDK made JSON-RPC error data public; the Clojure protocol now preserves the same raw structured payload and source key spelling in ex-data."
+   :evidence [:structured-error-data]
+   :clojure-paths
+   ["src/github/copilot_sdk/protocol.clj"
+    "test/github/copilot_sdk/protocol_test.clj"
+    "CHANGELOG.md"]}]
+
+ :intentional-exclusions
+ [{:id :extensions/launch-provider
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "Extension launch profiles and the connection-level launch provider are explicitly experimental."
+   :evidence [:extension-launch-provider]
+   :inventory-groups
+   [[:added-exported-symbols "nodejs/src/index.ts" :experimental]
+    [:added-exported-symbols "nodejs/src/types.ts" :experimental]
+    [:interface-fields "nodejs/src/types.ts" "CopilotClientOptions"
+     :experimental]
+    [:changed-declarations "nodejs/src/types.ts" :experimental]]}
+  {:id :events/experimental-runtime-payloads
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :upstream-experimental-subsystem
+   :reason
+   "Permission approval evaluation, permission mode snapshots, and structured task blockers belong to experimental runtime permission flows."
+   :evidence [:task-blocker-experimental]
+   :inventory-groups
+   [[:added-exported-symbols
+     "nodejs/src/generated/session-events.ts"
+     :experimental]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "PermissionAssistedApproval"
+     :experimental]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "PermissionCompletedData"
+     :experimental]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "PermissionRequestedData"
+     :experimental]
+    [:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "TaskCompleteData"
+     :experimental]
+    [:changed-declarations
+     "nodejs/src/generated/session-events.ts"
+     :experimental]]}
+  {:id :events/internal-thinking-telemetry
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "Provider thinking-drop counts and reasons are explicitly internal telemetry fields."
+   :evidence [:thinking-drop-internal]
+   :inventory-groups
+   [[:interface-fields
+     "nodejs/src/generated/session-events.ts"
+     "AssistantUsageData"
+     :internal]
+    [:changed-declarations
+     "nodejs/src/generated/session-events.ts"
+     :internal]]}
+  {:id :generated/runtime-rpc
+   :classification :generated-only
+   :decision :exclude
+   :status :approved
+   :authority :upstream-generated-wire
+   :reason
+   "Generated workflow, catalog, plugin, queue, and workspace-checkpoint RPC declarations are wire evidence, not independent stable SDK API."
+   :evidence [:generated-workflow-rpc]
+   :inventory-groups
+   [[:changed-declarations
+     "nodejs/src/generated/session-events.ts"
+     :generated-only]]}
+  {:id :node/dependency-and-scenario-infrastructure
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "Exact npm dependency policy and cross-SDK scenario harness expansion do not add stable Clojure API."
+   :evidence [:dependency-policy :scenario-harness]
+   :inventory-groups []}
+  {:id :other-sdks/language-specific
+   :classification :language-specific
+   :decision :exclude
+   :status :approved
+   :authority :language-scope
+   :reason
+   "Java, .NET, Go, Python, Rust, and shared foreign-language codegen changes do not create independent Clojure parity obligations."
+   :evidence [:language-specific-changes]
+   :inventory-groups []}]
+
+ :decision-authorities
+ #{:language-scope
+   :upstream-experimental-subsystem
+   :upstream-generated-wire
+   :upstream-internal-implementation}
+
+ :source-evidence
+ {:structured-output-schema
+  {:path "nodejs/src/types.ts"
+   :contains "responseSchema?: ZodSchema | Record<string, unknown>;"}
+  :structured-output-wait
+  {:path "nodejs/src/session.ts"
+   :contains "async sendAndWait<TResult>("}
+  :structured-output-correlation
+  {:path "nodejs/src/session.ts"
+   :contains "event.data.originatingMessageId === messageId"}
+  :structured-output-timeout
+  {:path "nodejs/src/session.ts"
+   :contains "const timer = setTimeout("}
+  :extension-context
+  {:path "nodejs/src/types.ts"
+   :contains "export type ExtensionContextAttachment"}
+  :indexed-search-event
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "export interface IndexedSearchEvent"}
+  :permission-recovery-event
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "export interface PermissionRecoveryEvent"}
+  :responses-reasoning
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "export interface ResponsesReasoning"}
+  :skill-invoked-turn
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "invokedAtTurn?: number;"}
+  :model-change-source
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "| \"changeboarding_shortcut\""}
+  :runtime-version
+  {:path "nodejs/package.json"
+   :contains "\"copilotCliVersion\": \"1.0.87-0\""}
+  :structured-error-data
+  {:path "rust/src/errors.rs"
+   :contains "rpc_data: data.map(Box::new)"}
+  :extension-launch-provider
+  {:path "nodejs/src/types.ts"
+   :contains "extensionLaunchProvider?: ExtensionLaunchProvider;"}
+  :task-blocker-experimental
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "export interface TaskBlocker"}
+  :thinking-drop-internal
+  {:path "nodejs/src/generated/session-events.ts"
+   :contains "thinkingDroppedBlocks?: number;"}
+  :generated-workflow-rpc
+  {:path "nodejs/src/generated/rpc.ts"
+   :contains "export interface WorkflowExecuteRequest"}
+  :dependency-policy
+  {:path "nodejs/.npmrc"
+   :contains "save-exact=true"}
+  :scenario-harness
+  {:path "nodejs/test/e2e/scenario_testing_composition.e2e.test.ts"
+   :contains "describe(\"Scenario testing composition\""}
+  :language-specific-changes
+  {:path "dotnet/src/Session.StructuredOutput.cs"
+   :contains "public Task<TResult> SendAndWaitAsync<TResult>"}}
+
+ :local-artifacts
+ {".copilot-schema-version"
+  "5f80bc7b133e10e9dc0c8fd8bafc646b153db15c47f4ab4b24db624e9a38e0a7"
+  "CHANGELOG.md"
+  "e0b19878996d5a10c42d1d80ff087a70c79811198d0f850158127ee97684f81f"
+  "README.md"
+  "747f2aecd15d8f623e604bf686cb789f968da9697d98e6dc144bbefa4f1761be"
+  "doc/api/API.html"
+  "4fc372e34be0644eca972ffd136c176127c3d7249cc87c8cb5ac7aa8792eb586"
+  "doc/api/getting-started.html"
+  "a75785b3c29eef1a98785f7b5428f33203b8455a9902787c7d316b55b7c679e0"
+  "doc/api/github.copilot-sdk.html"
+  "8fa0c7a7ed7b457bd543cdcd9a51ca8ca32832da99109f207c905ca5f1f759dc"
+  "doc/api/github.copilot-sdk.session.html"
+  "349dc612598d1e29b6809677d3cef44319a343104cee91100cc6b008314a4a50"
+  "doc/getting-started.md"
+  "5a65ebc1906af9cfcdaf3ec4b0e1a384eb332b9fd6e1ba13dbc62d8bf3bd1479"
+  "doc/reference/API.md"
+  "9ae0c10bd226929412f3a67d965461c22f61a2b2681a47ddeb355b07535c0f36"
+  "examples/README.md"
+  "b2c27e1d59bb922c0f65e4753c2c9f812353a16c7c4cf584e96d85ab4a3935b5"
+  "examples/structured_output.clj"
+  "28479aa2e868b0f45a11f206202d02e78f00efcf70f34aca304c10c15e3f2c1d"
+  "resources/github/copilot_sdk/api_surface.edn"
+  "5080d9e81746240476037938793c9138febf9d7e47fe1a31e978c05f3aeaa458"
+  "run-all-examples.sh"
+  "7580dc1c43a12f780fbdb72715897825311b0c21af7b3eb59e1f6912332a7c46"
+  "schemas/README.md"
+  "9ce6f42415838c9a2971a75ea0a9a25fb9ebd02902af3d376ea0a80a74ceff73"
+  "schemas/api.schema.json"
+  "cc18ec115e05e10a48022ebbab2550242c37f3ec5211f1c16ca868015f369432"
+  "schemas/session-events.schema.json"
+  "fc602d18d26b35ae4ccb88e79e51b5f8a574f20b85e90c3201eff83659f06aa9"
+  "src/github/copilot_sdk.clj"
+  "3e572158fcc50540c456c1d70137f39ab99783cab3892b1db34a367ba7a16695"
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "74260f0681b0e4b477d1f0a2a5cd788e44237db43143f77e03017f4a76e3d127"
+  "src/github/copilot_sdk/instrument.clj"
+  "1a94ad645a986ca127125490ab2ff2ba450d0c89e770bc893617c2973691b5f5"
+  "src/github/copilot_sdk/protocol.clj"
+  "cb695f41b950c67db81d0a1fcac6ac8579a911c334f65d9c68c30272ba936ecc"
+  "src/github/copilot_sdk/session.clj"
+  "4c4c7e856801f1722f5cba078243479f4ed5a0af3d88532a1ffc73652a29b7cd"
+  "src/github/copilot_sdk/specs.clj"
+  "76ece543b11190e70c590c1b95382a279d8e1c4cd1de8038e2367a781eae1e63"
+  "src/github/copilot_sdk/util.clj"
+  "26f5c0147a13e264b658727725ba42fd792b13942d3ea62fb18215457bef8936"
+  "test/github/copilot_sdk/codegen_test.clj"
+  "4e7701fbdcd2ae4bfd236ebd2dbca186f301f5aa36d8475e28b08996dc58a99d"
+  "test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
+  "29b8d5d3a6df502a0366024b68486435d0cfdf54b1ea11e510b754038ef6216e"
+  "test/github/copilot_sdk/integration/structured_output_test.clj"
+  "5148b83044a9bbfe4a89cbf938a2cbcd1718cdbe101e15f3d4b64cc163ed5b90"
+  "test/github/copilot_sdk/protocol_test.clj"
+  "b0de11a42df3dd85d56b8e2c14de66c23705328196d4e2be8454e11e169fa3d5"}}
