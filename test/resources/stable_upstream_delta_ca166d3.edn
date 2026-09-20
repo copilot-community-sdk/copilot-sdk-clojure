@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "85a8037200f6c761f632c60110ee00c0a72d8821"
-  :local-artifact-commit "5e20a9b7943c75ba2203c297fce2273b8b75bfd5"
+  :local-artifact-commit "0fc38a64ac4f34877b7ffb20ff9c762d85bf5577"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_0dd9d43.edn"
    :sha256
@@ -708,7 +708,7 @@
  {".copilot-schema-version"
   "5f80bc7b133e10e9dc0c8fd8bafc646b153db15c47f4ab4b24db624e9a38e0a7"
   "CHANGELOG.md"
-  "c46e8984e2c98fcc99171f35213c77f8fea7915e832c0330c8d9913dfc4b624f"
+  "c37a2ee973777a34786c782af228af44d1b9396196fb80d6dfe7099f075738ef"
   "README.md"
   "44b68aa140a4fd19db61f045926e0b9b9e1711d34d386afa87b9a7abc23975f2"
   "doc/api/API.html"
@@ -762,7 +762,7 @@
   "src/github/copilot_sdk/specs.clj"
   "187c373fd30e287a7998904d7e6ff574f261e1864eacd35e44356153b886d686"
   "src/github/copilot_sdk/util.clj"
-  "d7715cb0eafa2f8291e953b520361bb227e98c6bad339320681372d50696b7f3"
+  "f319fad9c6a906e34764cc92aeb4264b2fb8c00e38250de3e30967b87851c5d6"
   "test/github/copilot_sdk/codegen_test.clj"
   "c0a93e5b286c73ae457e9cb2b36e8c976573563773294cd5d139ac709bc75e10"
   "test/github/copilot_sdk/integration/post_sync_contracts_test.clj"
@@ -774,8 +774,8 @@
   "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj"
   "b528c877b7294062f3a06ccf5586bde9a0e4c407da58079b09716f7cf9a3525b"
   "test/github/copilot_sdk/integration/structured_output_test.clj"
-  "c979d9d5a492cb2b23c9842e46dda8b65ca5e3cf1889cedad857cb851a180c71"
+  "0226f3126f2eff08839730b838ebf0b2806a1e192e451d682f19613ff26b912f"
   "test/github/copilot_sdk/protocol_test.clj"
   "b0de11a42df3dd85d56b8e2c14de66c23705328196d4e2be8454e11e169fa3d5"
   "test/github/copilot_sdk/util_test.clj"
-  "110c8d3e24af18e7119ca9d0eeeda7c0288fc66367aa6260a6fc31b30062723a"}}
+  "bedba8154122912c92c813807557c8ab92d4132d53940c39ab14300de6965d38"}}
