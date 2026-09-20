@@ -13,9 +13,15 @@
 {"assistant.usage"
  {:cache-expires-at [:iso-string :instant]}
 
+"session.extensions.attachments_pushed"
+{:attachments [:attachment-type-strings :attachment-type-keywords]}
+
 "session.resume"
 {:auto-tier [:auto-tier-string :auto-tier-keyword]}
 
 "session.start"
 {:auto-tier [:auto-tier-string :auto-tier-keyword]
- :start-time [:iso-string :instant]}}
+ :start-time [:iso-string :instant]}
+
+"user.message"
+{:attachments [:attachment-type-strings :attachment-type-keywords]}}

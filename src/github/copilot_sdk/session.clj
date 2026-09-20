@@ -2224,7 +2224,8 @@
        :session-id session-id})))
 
 (defn ^:no-doc send-with-timeout!
-  "Internal bounded send used by helper APIs with an existing deadline."
+  "Internal deadline-aware send used by helper APIs. A nil timeout waits
+   indefinitely for the protocol response."
   [session opts timeout-ms]
   (let [{:keys [connection params session-id]}
         (prepare-send-request session opts)
@@ -2510,24 +2511,24 @@
       (try
         (tap event-mult event-ch)
         (let [message-id
-              (if timeout-ms
-                (try
-                  (send-with-timeout!
-                   session
-                   send-opts
+              (try
+                (send-with-timeout!
+                 session
+                 send-opts
+                 (when timeout-ms
                    (require-remaining-timeout-ms
-                    deadline-nanos timeout-ms))
-                  (catch clojure.lang.ExceptionInfo e
-                    (if (and (= "session.send" (:method (ex-data e)))
-                             (contains? (ex-data e) :timeout-ms)
-                             (not (contains? (ex-data e) :error)))
-                      (throw
-                       (ex-info
-                        (ex-message (structured-timeout-error timeout-ms))
-                        {:timeout-ms timeout-ms}
-                        e))
-                      (throw e))))
-                (send! session send-opts))
+                    deadline-nanos timeout-ms)))
+                (catch clojure.lang.ExceptionInfo e
+                  (if (and timeout-ms
+                           (= "session.send" (:method (ex-data e)))
+                           (contains? (ex-data e) :timeout-ms)
+                           (not (contains? (ex-data e) :error)))
+                    (throw
+                     (ex-info
+                      (ex-message (structured-timeout-error timeout-ms))
+                      {:timeout-ms timeout-ms}
+                      e))
+                    (throw e))))
               deadline-ch
               (when timeout-ms
                 (async/timeout

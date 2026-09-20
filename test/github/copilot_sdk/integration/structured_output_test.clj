@@ -6,6 +6,7 @@
             [github.copilot-sdk.integration.support
              :refer [*mock-server* *test-client* with-mock-server]]
             [github.copilot-sdk.mock-server :as mock]
+            [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.specs :as specs])
   (:import [java.util.concurrent CountDownLatch TimeUnit]))
@@ -275,8 +276,8 @@
         client (:client copilot-session)
         schema (parsed-response-schema identity)]
     (with-redefs
-     [session/send!
-      (fn [_ _]
+     [session/send-with-timeout!
+      (fn [_ _ _]
         (session/dispatch-event!
          client session-id
          {:type :copilot/session.error
@@ -559,6 +560,41 @@
               schema)))
       (is (pos-int? @observed-timeout))
       (is (<= @observed-timeout 250)))))
+
+(deftest parsed-three-arity-preserves-unbounded-timeout
+  (let [copilot-session
+        (sdk/create-session
+         *test-client*
+         {:on-permission-request sdk/approve-all})
+        session-id (sdk/session-id copilot-session)
+        client (:client copilot-session)
+        observed-timeout (atom ::not-called)
+        schema (parsed-response-schema #(get % "answer"))]
+    (with-redefs
+     [protocol/send-request!
+      (fn [_ method _ timeout-ms]
+        (is (= "session.send" method))
+        (reset! observed-timeout timeout-ms)
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/user.message
+          :data {:message-id "request-1" :content "Question"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/assistant.message
+          :data {:originating-message-id "request-1"
+                 :content "{\"answer\":4}"}})
+        (session/dispatch-event!
+         client session-id
+         {:type :copilot/session.idle :data {}})
+        {:message-id "request-1"})]
+      (is (= 4
+             (sdk/send-and-wait!
+              copilot-session
+              {:prompt "Return JSON"
+               :timeout-ms nil}
+              schema)))
+      (is (nil? @observed-timeout)))))
 
 (deftest structured-timeout-bounds-event-wait
   (let [copilot-session

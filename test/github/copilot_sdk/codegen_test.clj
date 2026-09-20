@@ -287,8 +287,19 @@
    {:handoff-time "2024-01-01T00:00:00Z"
     :source-type "remote"}
 
+   "session.extensions.attachments_pushed"
+   {:attachments
+    [{:type "file"
+      :path "/tmp/example.txt"
+      :display-name "example.txt"}]}
+
    "user.message"
    {:content "hello"
+    :attachments
+    [{:type "extension_context"
+      :extension-id "example.extension"
+      :title "Selected dashboard"
+      :captured-at "2026-09-20T18:00:00Z"}]
     :responses-reasoning
     {:model "gpt-5.4"
      :initial-effort "high"
@@ -975,6 +986,29 @@
         idiom (coerce/event-wire->idiom event)]
     (is (= :fast (get-in idiom [:data :auto-tier])))
     (is (= event (coerce/event-idiom->wire idiom)))))
+
+(deftest attachment-type-coercion-round-trips
+  (let [wire-types ["file"
+                    "directory"
+                    "selection"
+                    "github_reference"
+                    "blob"
+                    "extension_context"]
+        idiom-types [:file
+                     :directory
+                     :selection
+                     :github-reference
+                     :blob
+                     :extension-context]
+        wire-event
+        {:type "user.message"
+         :data {:attachments (mapv (fn [attachment-type]
+                                     {:type attachment-type})
+                                   wire-types)}}
+        idiom-event (coerce/event-wire->idiom wire-event)]
+    (is (= idiom-types
+           (mapv :type (get-in idiom-event [:data :attachments]))))
+    (is (= wire-event (coerce/event-idiom->wire idiom-event)))))
 
 (deftest enum-coercion-rejects-values-outside-the-idiom-domain
   (doseq [[direction value]

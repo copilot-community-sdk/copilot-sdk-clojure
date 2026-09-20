@@ -465,6 +465,42 @@
         (is (s/valid? :github.copilot-sdk.specs/user.message-data clj-data)
             (str "inbound user.message-data accepts wire-string :agent-mode " mode))))))
 
+(deftest test-user-message-extension-context-attachment-is-idiomatic
+  (let [normalize @#'protocol/normalize-incoming
+        raw-message
+        {:jsonrpc "2.0"
+         :method "session.event"
+         :params
+         {:sessionId "abc"
+          :event
+          {:id "evt-user-message"
+           :type "user.message"
+           :timestamp "2026-09-20T18:00:00Z"
+           :parentId nil
+           :data
+           {:content "Use the selected dashboard"
+            :attachments
+            [{:type "extension_context"
+              :extensionId "example.extension"
+              :canvasId "example-canvas"
+              :instanceId "canvas-1"
+              :title "Selected dashboard"
+              :payload {:accountId 42
+                        :nestedValue {:userName "octocat"}}
+              :capturedAt "2026-09-20T18:00:00Z"}]}}}}
+        data (-> (normalize raw-message)
+                 (get-in [:params :event])
+                 session/coerce+normalize-event
+                 :data)
+        attachment (first (:attachments data))]
+    (is (= :extension-context (:type attachment)))
+    (is (= {:accountId 42
+            :nestedValue {:userName "octocat"}}
+           (:payload attachment))
+        "opaque extension payload keys retain their source spelling")
+    (is (s/valid? :github.copilot-sdk.specs/user.message-data data)
+        (s/explain-str :github.copilot-sdk.specs/user.message-data data))))
+
 (deftest test-assistant-usage-api-endpoint-field
   (testing "assistant.usage-data accepts optional :api-endpoint string (open enum)"
     (is (s/valid? :github.copilot-sdk.specs/assistant.usage-data
