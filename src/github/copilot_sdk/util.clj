@@ -81,7 +81,8 @@
   (->wire-keys m))
 
 (defn ^:no-doc opaque-json->wire
-  "Prepare opaque JSON for transport without camel-casing caller-defined keys."
+  "Prepare opaque JSON for transport without camel-casing caller-defined keys.
+   Rejects keyword and string keys that collapse to the same JSON member name."
   [root]
   (letfn [(wire-key [key]
             (if (keyword? key)
@@ -97,7 +98,18 @@
               (map? value)
               (let [entries (vec value)
                     keys (mapv (comp wire-key first) entries)
+                    duplicate-wire-keys
+                    (->> keys
+                         frequencies
+                         (keep (fn [[key count]]
+                                 (when (> count 1) key)))
+                         set)
                     values (mapv second entries)]
+                (when (seq duplicate-wire-keys)
+                  (throw
+                   (ex-info
+                    "Duplicate opaque JSON keys after wire conversion."
+                    {:duplicate-wire-keys duplicate-wire-keys})))
                 (recur
                  (into (conj pending [:build-map {:keys keys
                                                   :count (count entries)}])

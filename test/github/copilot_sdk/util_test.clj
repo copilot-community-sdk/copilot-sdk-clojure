@@ -87,6 +87,27 @@
            :account/id 2
            :plain {:nested/key true}}))))
 
+(deftest opaque-json-conversion-rejects-colliding-wire-keys
+  (doseq [[value expected-keys]
+          [[{:foo 1 "foo" 2}
+            #{"foo"}]
+           [{:nested [{:foo-bar 1 "foo-bar" 2}]}
+            #{"foo-bar"}]
+           [{:tenant/id 1 "tenant/id" 2}
+            #{"tenant/id"}]]]
+    (let [error
+          (try
+            (util/opaque-json->wire value)
+            nil
+            (catch clojure.lang.ExceptionInfo e
+              e))]
+      (is (instance? clojure.lang.ExceptionInfo error))
+      (when error
+        (is (re-find #"Duplicate opaque JSON keys after wire conversion"
+                     (ex-message error)))
+        (is (= expected-keys
+               (:duplicate-wire-keys (ex-data error))))))))
+
 (deftest opaque-json-conversion-rejects-non-array-collections
   (is (thrown-with-msg?
        clojure.lang.ExceptionInfo

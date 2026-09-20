@@ -36,9 +36,10 @@ All notable changes to this project will be documented in this file. This change
 - Structured waits now surface session errors even before message correlation,
   serialize safely with ordinary waits while retaining structured-to-structured
   concurrency, and attach the source event to malformed-JSON errors.
-- **BREAKING**: Opaque JSON conversion now preserves namespaced keyword keys, rejects
-  unordered collections, and handles deeply nested payloads without consuming
-  the JVM stack.
+- **BREAKING**: Opaque JSON conversion now preserves namespaced keyword keys,
+  rejects keyword/string keys that collapse to the same JSON member name,
+  rejects unordered collections, and handles deeply nested payloads without
+  consuming the JVM stack.
 - JSON-RPC exceptions now preserve structured server `error.data` with its
   original nested key spelling instead of applying Clojure key normalization.
   ([upstream PR #2664](https://github.com/github/copilot-sdk/pull/2664))
