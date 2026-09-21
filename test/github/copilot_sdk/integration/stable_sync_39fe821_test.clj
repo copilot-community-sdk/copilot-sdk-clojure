@@ -54,7 +54,9 @@
     "resources/github/copilot_sdk/api_surface.edn"
     "schemas/api.schema.json"
     "schemas/session-events.schema.json"
+    "script/codegen/coercions.edn"
     "src/github/copilot_sdk/generated/coerce.clj"
+    "src/github/copilot_sdk/generated/event_metadata.clj"
     "src/github/copilot_sdk/generated/event_specs.clj"
     "test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
     "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj"
@@ -131,7 +133,9 @@
    "resources/github/copilot_sdk/api_surface.edn"
    "schemas/api.schema.json"
    "schemas/session-events.schema.json"
+   "script/codegen/coercions.edn"
    "src/github/copilot_sdk/generated/coerce.clj"
+   "src/github/copilot_sdk/generated/event_metadata.clj"
    "src/github/copilot_sdk/generated/event_specs.clj"])
 
 (defn- report
@@ -486,10 +490,7 @@
               (str "inventoried authority path did not change: " path)))))))
 
 (deftest local-contract-outputs-and-release-policy-are-unchanged
-  (let [report (report)
-        historical-report
-        (read-resource
-         (get-in report [:certification :historical-oracle :resource]))]
+  (let [report (report)]
     (is (= {:runtime-pin "1.0.87-0"
             :changed? false
             :generated-clojure-output
@@ -507,6 +508,6 @@
                        "(def version \"1.0.14.0\")"))
     (doseq [path expected-unchanged-contract-artifact-paths]
       (testing path
-        (is (= (get-in historical-report [:local-artifacts path])
+        (is (= (git-file-sha256 expected-clojure-base path)
                (git-file-sha256 expected-certification-commit path))
             "the sealed recertification commit must preserve no-delta outputs")))))
