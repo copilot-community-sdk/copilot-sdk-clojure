@@ -62,13 +62,47 @@
     "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
     "test/github/copilot_sdk/integration/stable_sync_support.clj"})
 
-(def ^:private expected-symbol-inventory-keys
-  #{:added-exported-symbols
-    :removed-exported-symbols
-    :interface-fields
-    :changed-type-values
-    :changed-declarations
-    :changed-public-method-signatures})
+(def ^:private expected-empty-symbol-inventory
+  {:added-exported-symbols {}
+   :removed-exported-symbols {}
+   :interface-fields {}
+   :changed-type-values {}
+   :changed-declarations {}
+   :changed-public-method-signatures {}})
+
+(def ^:private expected-public-surface-keys
+  #{:source-blobs
+    :trees
+    :package-root
+    :types
+    :extension
+    :tool-set
+    :factory
+    :classes})
+
+(def ^:private expected-package-root-keys
+  #{:path
+    :explicit-symbol-count
+    :explicit-symbols-sha256
+    :session-events
+    :symbol-count
+    :symbols-sha256
+    :added
+    :removed})
+
+(def ^:private expected-export-surface-paths
+  {:types "nodejs/src/types.ts"
+   :extension "nodejs/src/extension.ts"
+   :tool-set "nodejs/src/toolSet.ts"
+   :factory "nodejs/src/factory.ts"})
+
+(def ^:private expected-class-identities
+  {:client
+   {:path "nodejs/src/client.ts"
+    :class-name "CopilotClient"}
+   :session
+   {:path "nodejs/src/session.ts"
+    :class-name "CopilotSession"}})
 
 (def ^:private expected-authority-source-paths
   #{"nodejs/package.json"
@@ -109,10 +143,13 @@
   (is (= ["async send(value: string): Promise<string>"
           "async send(value: number): Promise<number>"
           "async send<T>(value: T, options?: { label: string; transform?: (item: T) => T; }): Promise<T>"
-          "get status(): string"]
+          "get status(): string"
+          "value(): { label: string }"]
          (public-class-method-signatures
           (str "export class Example {\n"
                "    private hidden(value: string): void {}\n"
+               "    /** @internal */\n"
+               "    internalOnly(value: string): void {}\n"
                "    async send(value: string): Promise<string>;\n"
                "    async send(value: number): Promise<number>;\n"
                "    async send<T>(\n"
@@ -126,6 +163,9 @@
                "    }\n"
                "    get status(): string {\n"
                "        return \"ready\";\n"
+               "    }\n"
+               "    value(): { label: string } {\n"
+               "        return { label: \"ready\" };\n"
                "    }\n"
                "}\n")
           "Example"))))
@@ -255,9 +295,8 @@
            (set (keys (:public-surface-audit report)))))
     (is (= {:stable-public-deltas [] :unclassified-deltas []}
            (:public-surface-audit report)))
-    (is (= expected-symbol-inventory-keys
-           (set (keys symbol-inventory))))
-    (is (every? empty? (vals symbol-inventory)))
+    (is (= expected-empty-symbol-inventory symbol-inventory))
+    (is (= expected-public-surface-keys (set (keys surface))))
     (is (= expected-authority-source-paths
            (set (keys (:source-blobs surface)))))
     (is (= expected-authority-tree-paths
@@ -270,10 +309,50 @@
         (is (= #{:base :target} (set (keys hashes))))
         (is (every? #(re-matches #"[0-9a-f]{40}" %)
                     (vals hashes)))))
+    (let [package-root (:package-root surface)
+          session-events (:session-events package-root)]
+      (is (= expected-package-root-keys
+             (set (keys package-root))))
+      (is (= "nodejs/src/index.ts" (:path package-root)))
+      (is (pos-int? (:explicit-symbol-count package-root)))
+      (is (re-matches #"[0-9a-f]{64}"
+                      (:explicit-symbols-sha256 package-root)))
+      (is (= #{:path :symbol-count :symbols-sha256}
+             (set (keys session-events))))
+      (is (= "nodejs/src/generated/session-events.ts"
+             (:path session-events)))
+      (is (pos-int? (:symbol-count session-events)))
+      (is (re-matches #"[0-9a-f]{64}"
+                      (:symbols-sha256 session-events)))
+      (is (<= (max (:explicit-symbol-count package-root)
+                   (:symbol-count session-events))
+              (:symbol-count package-root)
+              (+ (:explicit-symbol-count package-root)
+                 (:symbol-count session-events))))
+      (is (re-matches #"[0-9a-f]{64}"
+                      (:symbols-sha256 package-root)))
+      (is (= {} (:added package-root)))
+      (is (= #{} (:removed package-root))))
+    (doseq [[surface-key expected-path] expected-export-surface-paths
+            :let [inventory (get surface surface-key)]]
+      (testing (name surface-key)
+        (is (= #{:path :symbol-count :symbols-sha256}
+               (set (keys inventory))))
+        (is (= expected-path (:path inventory)))
+        (is (pos-int? (:symbol-count inventory)))
+        (is (re-matches #"[0-9a-f]{64}"
+                        (:symbols-sha256 inventory)))))
     (doseq [[class-key class-inventory] (:classes surface)]
       (testing (name class-key)
-        (is (string? (:path class-inventory)))
-        (is (string? (:class-name class-inventory)))
+        (is (= #{:path
+                 :class-name
+                 :method-count
+                 :methods-sha256
+                 :signature-count
+                 :signatures-sha256}
+               (set (keys class-inventory))))
+        (is (= (get expected-class-identities class-key)
+               (select-keys class-inventory [:path :class-name])))
         (is (pos-int? (:method-count class-inventory)))
         (is (re-matches #"[0-9a-f]{64}"
                         (:methods-sha256 class-inventory)))

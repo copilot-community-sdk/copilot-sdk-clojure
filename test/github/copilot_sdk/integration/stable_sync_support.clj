@@ -422,6 +422,25 @@
 (def ^:private public-class-method-start-pattern
   #"(?m)^    ((?:(?:private|public|protected|async|static|override|readonly)\s+)*)(?:(?:get|set)\s+)?(?:\[Symbol\.[A-Za-z_$][A-Za-z0-9_$]*\]|[A-Za-z_$][A-Za-z0-9_$]*)(?:<[^(){};]*>)?\s*\(")
 
+(defn- previous-non-whitespace-character
+  [source index]
+  (loop [index (dec index)]
+    (when (>= index 0)
+      (let [ch (.charAt source index)]
+        (if (Character/isWhitespace ch)
+          (recur (dec index))
+          ch)))))
+
+(defn- internal-jsdoc?
+  [source start]
+  (let [prefix (str/trimr (subs source 0 start))
+        comment-start (.lastIndexOf prefix "/*")]
+    (and (>= comment-start 0)
+         (str/starts-with? (subs prefix comment-start) "/**")
+         (str/ends-with? prefix "*/")
+         (re-find #"(?m)(?:^|\s)@internal(?:\s|$)"
+                  (subs prefix comment-start)))))
+
 (defn- method-signature-end
   [source start]
   (loop [index start
@@ -430,7 +449,10 @@
          paren-depth 0
          bracket-depth 0
          brace-depth 0
-         angle-depth 0]
+         angle-depth 0
+         parameters-opened? false
+         parameters-closed? false
+         return-type? false]
     (when (>= index (count source))
       (throw (ex-info "Unterminated public TypeScript method signature"
                       {:start start})))
@@ -440,59 +462,88 @@
         (cond
           escaped?
           (recur (inc index) quote-char false
-                 paren-depth bracket-depth brace-depth angle-depth)
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?)
 
           (= ch \\)
           (recur (inc index) quote-char true
-                 paren-depth bracket-depth brace-depth angle-depth)
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?)
 
           (= ch quote-char)
           (recur (inc index) nil false
-                 paren-depth bracket-depth brace-depth angle-depth)
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?)
 
           :else
           (recur (inc index) quote-char false
-                 paren-depth bracket-depth brace-depth angle-depth))
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?))
 
         (#{\" \' \`} ch)
         (recur (inc index) ch false
-               paren-depth bracket-depth brace-depth angle-depth)
+               paren-depth bracket-depth brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)
 
         (= ch \()
         (recur (inc index) nil false
-               (inc paren-depth) bracket-depth brace-depth angle-depth)
+               (inc paren-depth) bracket-depth brace-depth angle-depth
+               true parameters-closed? return-type?)
 
         (= ch \))
-        (recur (inc index) nil false
-               (dec paren-depth) bracket-depth brace-depth angle-depth)
+        (let [next-depth (dec paren-depth)]
+          (recur (inc index) nil false
+                 next-depth bracket-depth brace-depth angle-depth
+                 parameters-opened?
+                 (or parameters-closed?
+                     (and parameters-opened? (zero? next-depth)))
+                 return-type?))
 
         (= ch \[)
         (recur (inc index) nil false
-               paren-depth (inc bracket-depth) brace-depth angle-depth)
+               paren-depth (inc bracket-depth) brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)
 
         (= ch \])
         (recur (inc index) nil false
-               paren-depth (dec bracket-depth) brace-depth angle-depth)
+               paren-depth (dec bracket-depth) brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)
 
         (= ch \<)
         (recur (inc index) nil false
-               paren-depth bracket-depth brace-depth (inc angle-depth))
+               paren-depth bracket-depth brace-depth (inc angle-depth)
+               parameters-opened? parameters-closed? return-type?)
 
         (= ch \>)
         (recur (inc index) nil false
                paren-depth bracket-depth brace-depth
-               (max 0 (dec angle-depth)))
+               (max 0 (dec angle-depth))
+               parameters-opened? parameters-closed? return-type?)
+
+        (and (= ch \:)
+             parameters-closed?
+             (every? zero?
+                     [paren-depth bracket-depth brace-depth angle-depth]))
+        (recur (inc index) nil false
+               paren-depth bracket-depth brace-depth angle-depth
+               parameters-opened? parameters-closed? true)
 
         (= ch \{)
-        (if (every? zero?
-                    [paren-depth bracket-depth brace-depth angle-depth])
+        (if (and (every? zero?
+                         [paren-depth bracket-depth brace-depth angle-depth])
+                 (not
+                  (and return-type?
+                       (#{\: \| \& \?}
+                        (previous-non-whitespace-character source index)))))
           index
           (recur (inc index) nil false
-                 paren-depth bracket-depth (inc brace-depth) angle-depth))
+                 paren-depth bracket-depth (inc brace-depth) angle-depth
+                 parameters-opened? parameters-closed? return-type?))
 
         (= ch \})
         (recur (inc index) nil false
-               paren-depth bracket-depth (dec brace-depth) angle-depth)
+               paren-depth bracket-depth (dec brace-depth) angle-depth
+               parameters-opened? parameters-closed? return-type?)
 
         (and (= ch \;)
              (every? zero?
@@ -501,21 +552,24 @@
 
         :else
         (recur (inc index) nil false
-               paren-depth bracket-depth brace-depth angle-depth)))))
+               paren-depth bracket-depth brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)))))
 
 (defn public-class-method-signatures
   [source class-name]
-  (let [body (class-source (strip-typescript-comments source) class-name)
-        matcher (re-matcher public-class-method-start-pattern body)]
+  (let [body (class-source source class-name)
+        masked-body (strip-typescript-comments body)
+        matcher (re-matcher public-class-method-start-pattern masked-body)]
     (loop [signatures []]
       (if (.find matcher)
-        (let [modifiers (.group matcher 1)]
-          (if (re-find #"\b(?:private|protected)\b" modifiers)
+        (let [modifiers (.group matcher 1)
+              start (.start matcher)]
+          (if (or (re-find #"\b(?:private|protected)\b" modifiers)
+                  (internal-jsdoc? body start))
             (recur signatures)
-            (let [start (.start matcher)
-                  end (method-signature-end body start)
+            (let [end (method-signature-end masked-body start)
                   signature
-                  (-> (subs body start end)
+                  (-> (subs masked-body start end)
                       (str/replace #"\s+" " ")
                       str/trim
                       (str/replace #"^(?:(?:public|override)\s+)+" "")
