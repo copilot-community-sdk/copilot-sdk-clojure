@@ -23,14 +23,20 @@ All notable changes to this project will be documented in this file. This change
 - Advanced the Copilot CLI compatibility and schema-provenance pin to
   `1.0.87-0` and recertified the stable Node SDK public surface through
   upstream commit
-  [`ca166d3eeec17b8efe0294af4b1ef9ca0f4445de`](https://github.com/github/copilot-sdk/commit/ca166d3eeec17b8efe0294af4b1ef9ca0f4445de).
+  [`39fe821dec17fc20bf92250ab3e19935aaf2e6f5`](https://github.com/github/copilot-sdk/commit/39fe821dec17fc20bf92250ab3e19935aaf2e6f5).
   Experimental extension launch-provider APIs and unrelated generated
   workflow/catalog additions remain outside the stable Clojure API. Stable
   event metadata now includes Responses reasoning boundaries, skill invocation
   turn provenance, permission-recovery correlation, and the
   `"changeboarding_shortcut"` model-change source; internal thinking-drop
-  telemetry and experimental structured task blockers remain wire-only.
-  ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731))
+  telemetry and experimental structured task blockers remain wire-only. The
+  additional post-`ca166d3` changes only coalesce response chunks and cancel
+  pending reads inside the experimental host-owned inference boundary, plus a
+  .NET-only JSON-RPC test cleanup; the stable API, runtime, schemas, and Clojure
+  version remain unchanged.
+  ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731),
+  [upstream PR #2734](https://github.com/github/copilot-sdk/pull/2734),
+  [upstream PR #2735](https://github.com/github/copilot-sdk/pull/2735))
 
 ### Fixed (post-v1.0.14 sync)
 - Structured waits now surface session errors even before message correlation,
