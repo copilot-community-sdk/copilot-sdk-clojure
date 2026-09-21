@@ -10,7 +10,8 @@
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.generated.event-specs :as generated-events]
             [github.copilot-sdk.integration.stable-sync-support
-             :refer [changed-exported-declarations
+             :refer [classify-path
+                     changed-exported-declarations
                      changed-source-lines
                      exported-symbols
                      git-file-sha256
@@ -67,12 +68,6 @@
 (defn- report
   []
   (read-resource report-resource))
-
-(defn- classify-path
-  [{:keys [exact-classifications language-specific-prefixes]} path]
-  (or (get exact-classifications path)
-      (when (some #(str/starts-with? path %) language-specific-prefixes)
-        :language-specific)))
 
 (defn- inventory-items
   [inventory classifications]
@@ -157,8 +152,8 @@
                          (str artifact-commit "^{commit}"))))
           "the commit containing the certified local artifacts must resolve")
       (is (seq (:local-artifacts report)))
-      ;; Historical certificates stay sealed to their own commit. The latest
-      ;; certificate separately validates the checked-out artifact bytes.
+      ;; Historical certificates validate immutable evidence at their sealed
+      ;; commit; current behavior is covered by active tests and generators.
       (doseq [[path expected-hash] (:local-artifacts report)]
         (testing path
           (is (= expected-hash

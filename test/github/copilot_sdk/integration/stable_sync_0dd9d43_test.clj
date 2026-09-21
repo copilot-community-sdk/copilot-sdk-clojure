@@ -12,7 +12,8 @@
             [github.copilot-sdk.generated.coerce :as coerce]
             [github.copilot-sdk.generated.event-specs]
             [github.copilot-sdk.integration.stable-sync-support
-             :refer [changed-exported-declarations
+             :refer [classify-path
+                     changed-exported-declarations
                      changed-source-lines
                      exported-symbols
                      git-file-sha256
@@ -25,7 +26,7 @@
                      sha256-lines
                      sha256-resource
                      star-export-modules
-                     upstream-repo]]
+                     upstream-repo-or-skip]]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.util :as util]))
@@ -81,12 +82,6 @@
 (defn- report
   []
   (read-resource report-resource))
-
-(defn- classify-path
-  [{:keys [exact-classifications language-specific-prefixes]} path]
-  (or (get exact-classifications path)
-      (when (some #(str/starts-with? path %) language-specific-prefixes)
-        :language-specific)))
 
 (defn- inventory-items
   [inventory classifications]
@@ -153,17 +148,6 @@
      (get-in surface [:tool-set :path])
      (get-in surface [:factory :path])]
     (map :path (vals (:classes surface))))))
-
-(defn- upstream-repo-or-skip
-  [scope]
-  (if-let [upstream @upstream-repo]
-    upstream
-    (do
-      (println
-       (format
-        "SKIP %s: set COPILOT_UPSTREAM_VALIDATION=true for exact upstream checks"
-        scope))
-      nil)))
 
 (deftest report-pins-history-release-and-local-artifacts
   (let [report (report)

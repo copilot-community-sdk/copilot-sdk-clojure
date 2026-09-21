@@ -32,6 +32,17 @@
     (when upstream-validation-enabled?
       (resolve-upstream))))
 
+(defn upstream-repo-or-skip
+  [scope]
+  (if-let [upstream @upstream-repo]
+    upstream
+    (do
+      (println
+       (format
+        "SKIP external %s: set COPILOT_UPSTREAM_VALIDATION=true; committed oracle checks still ran"
+        scope))
+      nil)))
+
 (defn shell-output
   [& args]
   (let [{:keys [exit out err]} (apply sh/sh args)]
@@ -84,6 +95,19 @@
       (throw (ex-info "Could not read historical artifact"
                       {:commit commit :path path :exit exit :stderr err})))
     (sha256-bytes (.getBytes out StandardCharsets/UTF_8))))
+
+(defn classify-path
+  [{:keys [exact-classifications
+           language-specific-prefixes
+           prefix-classifications]}
+   path]
+  (or (get exact-classifications path)
+      (some (fn [{:keys [prefix classification]}]
+              (when (str/starts-with? path prefix)
+                classification))
+            prefix-classifications)
+      (when (some #(str/starts-with? path %) language-specific-prefixes)
+        :language-specific)))
 
 (declare strip-typescript-comments)
 
@@ -394,6 +418,165 @@
        (remove #(re-find #"\b(?:private|protected)\b" (second %)))
        (map #(nth % 2))
        set))
+
+(def ^:private public-class-method-start-pattern
+  #"(?m)^    ((?:(?:private|public|protected|async|static|override|readonly)\s+)*)(?:(?:get|set)\s+)?(?:\[Symbol\.[A-Za-z_$][A-Za-z0-9_$]*\]|[A-Za-z_$][A-Za-z0-9_$]*)(?:<[^(){};]*>)?\s*\(")
+
+(defn- previous-non-whitespace-character
+  [source index]
+  (loop [index (dec index)]
+    (when (>= index 0)
+      (let [ch (.charAt source index)]
+        (if (Character/isWhitespace ch)
+          (recur (dec index))
+          ch)))))
+
+(defn- internal-jsdoc?
+  [source start]
+  (let [prefix (str/trimr (subs source 0 start))
+        comment-start (.lastIndexOf prefix "/*")]
+    (and (>= comment-start 0)
+         (str/starts-with? (subs prefix comment-start) "/**")
+         (str/ends-with? prefix "*/")
+         (re-find #"(?m)(?:^|\s)@internal(?:\s|$)"
+                  (subs prefix comment-start)))))
+
+(defn- method-signature-end
+  [source start]
+  (loop [index start
+         quote-char nil
+         escaped? false
+         paren-depth 0
+         bracket-depth 0
+         brace-depth 0
+         angle-depth 0
+         parameters-opened? false
+         parameters-closed? false
+         return-type? false]
+    (when (>= index (count source))
+      (throw (ex-info "Unterminated public TypeScript method signature"
+                      {:start start})))
+    (let [ch (.charAt source index)]
+      (cond
+        quote-char
+        (cond
+          escaped?
+          (recur (inc index) quote-char false
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?)
+
+          (= ch \\)
+          (recur (inc index) quote-char true
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?)
+
+          (= ch quote-char)
+          (recur (inc index) nil false
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?)
+
+          :else
+          (recur (inc index) quote-char false
+                 paren-depth bracket-depth brace-depth angle-depth
+                 parameters-opened? parameters-closed? return-type?))
+
+        (#{\" \' \`} ch)
+        (recur (inc index) ch false
+               paren-depth bracket-depth brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)
+
+        (= ch \()
+        (recur (inc index) nil false
+               (inc paren-depth) bracket-depth brace-depth angle-depth
+               true parameters-closed? return-type?)
+
+        (= ch \))
+        (let [next-depth (dec paren-depth)]
+          (recur (inc index) nil false
+                 next-depth bracket-depth brace-depth angle-depth
+                 parameters-opened?
+                 (or parameters-closed?
+                     (and parameters-opened? (zero? next-depth)))
+                 return-type?))
+
+        (= ch \[)
+        (recur (inc index) nil false
+               paren-depth (inc bracket-depth) brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)
+
+        (= ch \])
+        (recur (inc index) nil false
+               paren-depth (dec bracket-depth) brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)
+
+        (= ch \<)
+        (recur (inc index) nil false
+               paren-depth bracket-depth brace-depth (inc angle-depth)
+               parameters-opened? parameters-closed? return-type?)
+
+        (= ch \>)
+        (recur (inc index) nil false
+               paren-depth bracket-depth brace-depth
+               (max 0 (dec angle-depth))
+               parameters-opened? parameters-closed? return-type?)
+
+        (and (= ch \:)
+             parameters-closed?
+             (every? zero?
+                     [paren-depth bracket-depth brace-depth angle-depth]))
+        (recur (inc index) nil false
+               paren-depth bracket-depth brace-depth angle-depth
+               parameters-opened? parameters-closed? true)
+
+        (= ch \{)
+        (if (and (every? zero?
+                         [paren-depth bracket-depth brace-depth angle-depth])
+                 (not
+                  (and return-type?
+                       (#{\: \| \& \?}
+                        (previous-non-whitespace-character source index)))))
+          index
+          (recur (inc index) nil false
+                 paren-depth bracket-depth (inc brace-depth) angle-depth
+                 parameters-opened? parameters-closed? return-type?))
+
+        (= ch \})
+        (recur (inc index) nil false
+               paren-depth bracket-depth (dec brace-depth) angle-depth
+               parameters-opened? parameters-closed? return-type?)
+
+        (and (= ch \;)
+             (every? zero?
+                     [paren-depth bracket-depth brace-depth angle-depth]))
+        index
+
+        :else
+        (recur (inc index) nil false
+               paren-depth bracket-depth brace-depth angle-depth
+               parameters-opened? parameters-closed? return-type?)))))
+
+(defn public-class-method-signatures
+  [source class-name]
+  (let [body (class-source source class-name)
+        masked-body (strip-typescript-comments body)
+        matcher (re-matcher public-class-method-start-pattern masked-body)]
+    (loop [signatures []]
+      (if (.find matcher)
+        (let [modifiers (.group matcher 1)
+              start (.start matcher)]
+          (if (or (re-find #"\b(?:private|protected)\b" modifiers)
+                  (internal-jsdoc? body start))
+            (recur signatures)
+            (let [end (method-signature-end masked-body start)
+                  signature
+                  (-> (subs masked-body start end)
+                      (str/replace #"\s+" " ")
+                      str/trim
+                      (str/replace #"^(?:(?:public|override)\s+)+" "")
+                      (str/replace #"\(\s+" "(")
+                      (str/replace #"\s+\)" ")"))]
+              (recur (conj signatures signature)))))
+        (vec (sort signatures))))))
 
 (defn changed-source-lines
   [upstream base target path]

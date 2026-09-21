@@ -1,0 +1,284 @@
+{:certification
+ {:clojure-base-commit "9e1be3bda6cd642a8a731f1016dd0cc024f792ae"
+  :sealed-local-artifact-commit "433abf8e17f9d6c6afbad9c00d0322089bebf771"
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_ca166d3.edn"
+   :sha256
+   "17dd718f128f8aae5df9d8ac47e9e37e04010eee70fcb385e73727482f1fe3ba"}}
+
+ :upstream
+ {:repository "github/copilot-sdk"
+  :base-commit "ca166d3eeec17b8efe0294af4b1ef9ca0f4445de"
+  :target-commit "39fe821dec17fc20bf92250ab3e19935aaf2e6f5"
+  :commit-count 2
+  :commits-sha256
+  "896e2fd1752ae72a83224deac6c203326ec026c2c7f516ea5d290c6431a39476"
+  :hash-format :newline-joined-without-trailing-newline
+  :target-position :post-v1.0.14-main
+  :target-package-version "0.0.0-dev"
+  :runtime-version "1.0.87-0"
+  :release-tag
+  {:name "v1.0.14"
+   :commit "e60d9037353249ef16b349eb4012e8c1d113fda5"}}
+
+ :commit-classifications
+ [{:commit "c310b247470e8d04a4cd0b5230d435c9d9243ed3"
+   :subject "fix(dotnet): remove duplicate JSON-RPC completion helper (#2735)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2735"
+   :classification :language-specific
+   :status :reviewed-no-port
+   :reason
+   "Removes duplicate test-only JSON-RPC completion logic from the .NET SDK."
+   :changed-path-count 1
+   :changed-paths-sha256
+   "b79ed424204c40d4a3098f8164233b4ab55e3864018dfa441fa78fac5bba4500"}
+  {:commit "39fe821dec17fc20bf92250ab3e19935aaf2e6f5"
+   :subject "Coalesce intercepted HTTP response chunks (#2734)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2734"
+   :classification :experimental
+   :status :reviewed-no-port
+   :reason
+   "Changes the experimental host-owned inference request handler and foreign-language implementations without changing the stable Node API."
+   :changed-path-count 25
+   :changed-paths-sha256
+   "efce2d66fdfbb33b7e9d9a2b8240aba76bc41d61c6c05d69232deef5c9a80ab2"}]
+
+ :changed-paths
+ {:count 26
+  :sha256
+  "c7d5654f075c73db74043e9f90f42f2227e9aeca34691c5217602e9485f82648"
+  :hash-format :newline-joined-without-trailing-newline
+  :classification-counts
+  {:experimental 4
+   :internal 1
+   :language-specific 21}
+  :exact-classifications
+  {"nodejs/src/client.ts" :experimental
+   "nodejs/src/copilotRequestHandler.ts" :experimental
+   "nodejs/test/client.test.ts" :experimental
+   "nodejs/test/copilot-request-handler.test.ts" :experimental
+   "nodejs/tsconfig.test.json" :internal}
+  :prefix-classifications
+  [{:prefix "dotnet/" :classification :language-specific}
+   {:prefix "go/" :classification :language-specific}
+   {:prefix "java/" :classification :language-specific}
+   {:prefix "python/" :classification :language-specific}]}
+
+ :stable-surface-continuity
+ {:unchanged-authority-paths
+  #{"nodejs/package.json"
+    "nodejs/src/extension.ts"
+    "nodejs/src/factory.ts"
+    "nodejs/src/generated/session-events.ts"
+    "nodejs/src/index.ts"
+    "nodejs/src/session.ts"
+    "nodejs/src/toolSet.ts"
+    "nodejs/src/types.ts"}
+  :inventoried-authority-paths #{"nodejs/src/client.ts"}}
+
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/package.json"
+   {:base "8ea4551eae59d04fee7fcd5060c8249664953b8a"
+    :target "8ea4551eae59d04fee7fcd5060c8249664953b8a"}
+   "nodejs/src/index.ts"
+   {:base "f1879e8f1b9e83f8ae40f04415909ba9e705f67d"
+    :target "f1879e8f1b9e83f8ae40f04415909ba9e705f67d"}
+   "nodejs/src/types.ts"
+   {:base "6a19116a37f63c1c355508c70d40a98b100c11b8"
+    :target "6a19116a37f63c1c355508c70d40a98b100c11b8"}
+   "nodejs/src/client.ts"
+   {:base "4b610888b63490a9c7ff5012fd962e5e21153719"
+    :target "39a637a31d24188b8f16456703aadb73c720c44d"}
+   "nodejs/src/session.ts"
+   {:base "4a909f64c8f0103ac303046bffa8fcb73a6129b5"
+    :target "4a909f64c8f0103ac303046bffa8fcb73a6129b5"}
+   "nodejs/src/extension.ts"
+   {:base "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"
+    :target "ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28"}
+   "nodejs/src/toolSet.ts"
+   {:base "559e9234e5b178036d88a7045a632bd16a97f534"
+    :target "559e9234e5b178036d88a7045a632bd16a97f534"}
+   "nodejs/src/factory.ts"
+   {:base "174318394f98c735e54f9bd80d75901e77ce17fa"
+    :target "174318394f98c735e54f9bd80d75901e77ce17fa"}
+   "nodejs/src/generated/session-events.ts"
+   {:base "a5fd0337c6345317c376aaf9bf0f1155e38eff27"
+    :target "a5fd0337c6345317c376aaf9bf0f1155e38eff27"}}
+  :trees
+  {"nodejs"
+   {:base "55d22aa3bb7dd508c43b31d69fdc13a218813a78"
+    :target "f8ac9e7060f67f48c0082ea627d00c4ba953d681"}
+   "nodejs/src/generated"
+   {:base "85da1a2b96cce5460da60603692a8b55e42bff04"
+    :target "85da1a2b96cce5460da60603692a8b55e42bff04"}
+   "nodejs/test"
+   {:base "f15c4c07cb0171c061535c3b2db2290827f318b6"
+    :target "c64e0d454cd195573d9b6611162b0800d2ec645d"}}
+  :package-root
+  {:path "nodejs/src/index.ts"
+   :explicit-symbol-count 206
+   :explicit-symbols-sha256
+   "5c811a13d92ece0f218b68aaecf50ad08a94b7f943dc842678ece506b2d26f85"
+   :session-events
+   {:path "nodejs/src/generated/session-events.ts"
+    :symbol-count 570
+    :symbols-sha256
+    "fd9ba7b1eb0e1e5139be792176325256fb92cbcd900d0304bcc4165d12cf04a5"}
+   :symbol-count 766
+   :symbols-sha256
+   "6d3d571c07a7251f45cb4f76d60afdff37c991f033a0ef110cc3f52a881dfb47"
+   :added {}
+   :removed #{}}
+  :types
+  {:path "nodejs/src/types.ts"
+   :symbol-count 213
+   :symbols-sha256
+   "d245838d1f269b25737b328f825dbe01cec6d4149424b4a156c8db5c5fb5519b"}
+  :extension
+  {:path "nodejs/src/extension.ts"
+   :symbol-count 39
+   :symbols-sha256
+   "13316e0859171d9c8be79a0bdbe2626b9c21a1947dae04a24fc51ddede17b52c"}
+  :tool-set
+  {:path "nodejs/src/toolSet.ts"
+   :symbol-count 2
+   :symbols-sha256
+   "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"}
+  :factory
+  {:path "nodejs/src/factory.ts"
+   :symbol-count 29
+   :symbols-sha256
+   "ba187595890c21116008b7276801db3a64510815df0c744e32e85c20c961afba"}
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts"
+    :class-name "CopilotClient"
+    :signature-count 21
+    :signatures-sha256
+    "067bb17cb9fcc13ebbda9bc97743c7386d4505ba517054eaf0cc2a6e4d52cc8d"}
+   :session
+   {:path "nodejs/src/session.ts"
+    :class-name "CopilotSession"
+    :signature-count 22
+    :signatures-sha256
+    "958a5c536e48e11c7e45c993044f910dc1d15bd67ae9fd59e9a301a5ca288cad"}}}
+
+ :public-surface-audit
+ {:stable-public-deltas []
+  :unclassified-deltas []}
+
+ :symbol-inventory
+ {:added-exported-symbols {}
+  :removed-exported-symbols {}
+  :interface-fields {}
+  :changed-type-values {}
+  :changed-declarations {}
+  :changed-public-method-signatures {}}
+
+ :stable-delta-ids #{}
+ :stable-deltas []
+
+ :intentional-exclusions
+ [{:id :client/host-owned-inference-response-coalescing
+   :classification :experimental
+   :decision :exclude
+   :status :approved
+   :authority :accepted-adr
+   :decision-source "doc/adr/2026-08-10-host-owned-inference-boundary.md"
+   :reason
+   "The response coalescing and shutdown cancellation changes belong to the experimental application-owned inference boundary that the accepted ADR intentionally excludes."
+   :upstream-prs [2734]
+   :upstream-paths
+   ["nodejs/src/client.ts"
+    "nodejs/src/copilotRequestHandler.ts"
+    "nodejs/test/client.test.ts"
+    "nodejs/test/copilot-request-handler.test.ts"]}
+  {:id :node/request-handler-test-configuration
+   :classification :internal
+   :decision :exclude
+   :status :approved
+   :authority :upstream-internal-implementation
+   :reason
+   "The TypeScript test-project configuration change supports upstream request-handler tests without changing the published SDK."
+   :upstream-prs [2734]
+   :upstream-paths ["nodejs/tsconfig.test.json"]}
+  {:id :other-sdks/response-coalescing
+   :classification :language-specific
+   :decision :exclude
+   :status :approved
+   :authority :language-scope
+   :reason
+   "The .NET, Go, Java, and Python implementations and tests do not create independent Clojure parity obligations."
+   :upstream-prs [2734 2735]
+   :upstream-paths
+   ["dotnet/src/Client.cs"
+    "dotnet/src/CopilotRequestHandler.cs"
+    "dotnet/test/E2E/ScenarioTestingEventSubscriptionsE2ETests.cs"
+    "dotnet/test/Unit/CopilotRequestHandlerProtocolTests.cs"
+    "dotnet/test/Unit/JsonRpcTests.cs"
+    "go/client.go"
+    "go/copilot_request_handler.go"
+    "go/http_response_forwarding_test.go"
+    "go/http_response_reader.go"
+    "java/sdk/src/main/java/com/github/copilot/CopilotClient.java"
+    "java/sdk/src/main/java/com/github/copilot/CopilotRequestHandler.java"
+    "java/sdk/src/main/java/com/github/copilot/HttpResponseReader.java"
+    "java/sdk/src/main/java/com/github/copilot/JsonRpcClient.java"
+    "java/sdk/src/main/java/com/github/copilot/LlmInferenceAdapter.java"
+    "java/sdk/src/main/java/com/github/copilot/LlmInferenceExchange.java"
+    "java/sdk/src/test/java/com/github/copilot/HttpResponseForwardingTest.java"
+    "java/sdk/src/test/java/com/github/copilot/JsonRpcClientTest.java"
+    "python/copilot/client.py"
+    "python/copilot/copilot_request_handler.py"
+    "python/test_client_start.py"
+    "python/test_copilot_request_handler_response.py"]}]
+
+ :decision-authorities
+ #{:accepted-adr :language-scope :upstream-internal-implementation}
+
+ :schema
+ {:runtime-pin "1.0.87-0"
+  :changed? false
+  :generated-clojure-output
+  {:session-event-schema-changed? false
+   :event-specs-changed? false
+   :event-metadata-changed? false
+   :coercion-source-changed? false}}
+
+ :version
+ {:sdk "1.0.14.0"
+  :changed? false
+  :release-required? false}
+
+ :sealed-local-artifacts
+ {".copilot-schema-version"
+  "5f80bc7b133e10e9dc0c8fd8bafc646b153db15c47f4ab4b24db624e9a38e0a7"
+  "CHANGELOG.md"
+  "368635685b7db9c3710f9ffb0c3107d24efb7fa34ed413198cc850d81659087d"
+  "build.clj"
+  "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
+  "doc/adr/2026-08-10-host-owned-inference-boundary.md"
+  "f833ee3553ccf197b86109267dfead12ebdce81b546338eaecfdd88ce6602ccd"
+  "resources/github/copilot_sdk/api_surface.edn"
+  "733b5b978810a0257ac7d60f5c8481ff6ce691587a8a78ce1d81efb3a398a06f"
+  "schemas/api.schema.json"
+  "cc18ec115e05e10a48022ebbab2550242c37f3ec5211f1c16ca868015f369432"
+  "schemas/session-events.schema.json"
+  "fc602d18d26b35ae4ccb88e79e51b5f8a574f20b85e90c3201eff83659f06aa9"
+  "script/codegen/coercions.edn"
+  "737c72c477c31d1a2592b19c56ac9418b09e76f3927c0b0bd0531d72d128c6af"
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71"
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e"
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "433aa1557ffdf10d54c950db6c5d28155ed2901718570708e6753eebd5b0bf9e"
+  "test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
+  "3e363b52c01d7cd26ac6658810657092247b345740107e6cd69c9aa9ab9ce5e7"
+  "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj"
+  "eb1d88b34e22fd09b29e690a9bfe6cd5c8c37ae5339e50aafe8e749f04e83b98"
+  "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+  "cb15648fd7845b2f5ec429f6c8edff00fe8165457df236cc52f9a0c95256f41f"
+  "test/github/copilot_sdk/integration/stable_sync_support.clj"
+  "2089c473077856051df63ba43d39dd9c6aa28e66f34509e75d8467738f38f042"}}
