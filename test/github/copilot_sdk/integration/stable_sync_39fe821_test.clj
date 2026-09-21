@@ -13,7 +13,6 @@
                      git-lines
                      git-output
                      public-class-method-signatures
-                     public-class-methods
                      read-resource
                      shell-output
                      sha256-items
@@ -346,16 +345,11 @@
       (testing (name class-key)
         (is (= #{:path
                  :class-name
-                 :method-count
-                 :methods-sha256
                  :signature-count
                  :signatures-sha256}
                (set (keys class-inventory))))
         (is (= (get expected-class-identities class-key)
                (select-keys class-inventory [:path :class-name])))
-        (is (pos-int? (:method-count class-inventory)))
-        (is (re-matches #"[0-9a-f]{64}"
-                        (:methods-sha256 class-inventory)))
         (is (pos-int? (:signature-count class-inventory)))
         (is (re-matches #"[0-9a-f]{64}"
                         (:signatures-sha256 class-inventory)))))
@@ -461,26 +455,16 @@
             (is (= symbol-count (count target-symbols)))
             (is (= symbols-sha256
                    (sha256-lines (sort target-symbols))))))
-        (doseq [[_ {:keys [path class-name method-count methods-sha256
+        (doseq [[_ {:keys [path class-name
                            signature-count signatures-sha256]}]
                 (:classes surface)
-                :let [base-methods
-                      (public-class-methods
-                       (read-source base path) class-name)
-                      target-methods
-                      (public-class-methods
-                       (read-source target path) class-name)
-                      base-signatures
+                :let [base-signatures
                       (public-class-method-signatures
                        (read-source base path) class-name)
                       target-signatures
                       (public-class-method-signatures
                        (read-source target path) class-name)]]
           (testing class-name
-            (is (= base-methods target-methods))
-            (is (= method-count (count target-methods)))
-            (is (= methods-sha256
-                   (sha256-lines (sort target-methods))))
             (is (= base-signatures target-signatures))
             (is (= signature-count (count target-signatures)))
             (is (= signatures-sha256

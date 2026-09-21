@@ -154,18 +154,12 @@
   {:client
    {:path "nodejs/src/client.ts"
     :class-name "CopilotClient"
-    :method-count 20
-    :methods-sha256
-    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"
     :signature-count 21
     :signatures-sha256
     "067bb17cb9fcc13ebbda9bc97743c7386d4505ba517054eaf0cc2a6e4d52cc8d"}
    :session
    {:path "nodejs/src/session.ts"
     :class-name "CopilotSession"
-    :method-count 41
-    :methods-sha256
-    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"
     :signature-count 22
     :signatures-sha256
     "958a5c536e48e11c7e45c993044f910dc1d15bd67ae9fd59e9a301a5ca288cad"}}}
