@@ -35,7 +35,8 @@
 (def supported-tag-pairs
   "Static set of [wire idiom] tag pairs we know how to convert.
    Used at codegen time to validate coercions.edn."
-  #{[:auto-tier-string :auto-tier-keyword]
+  #{[:attachment-type-strings :attachment-type-keywords]
+    [:auto-tier-string :auto-tier-keyword]
     [:iso-string :instant]})
 
 (defn- validate-coercions!
@@ -132,7 +133,79 @@
             "Convert an idiomatic auto-tier keyword to its closed wire enum domain."
             [~'v]
             (~'let [~'tier (~'auto-tier-string->keyword ~'v)]
-                   (~'when ~'tier (~'name ~'tier))))))
+                   (~'when ~'tier (~'name ~'tier))))
+
+   ;; attachment-type-strings <-> attachment-type-keywords
+   `(~'def ~(with-meta 'attachment-type-wire->idiom {:private true})
+           {"file" :file
+            "directory" :directory
+            "selection" :selection
+            "github_reference" :github-reference
+            "blob" :blob
+            "extension_context" :extension-context})
+
+   `(~'def ~(with-meta 'attachment-type-idiom->wire {:private true})
+           {:file "file"
+            :directory "directory"
+            :selection "selection"
+            :github-reference "github_reference"
+            :blob "blob"
+            :extension-context "extension_context"})
+
+   `(~'defn ~'attachment-type-string->keyword
+            "Convert a wire attachment discriminator to its closed idiomatic keyword domain."
+            [~'v]
+            (~'cond
+             (~'nil? ~'v) ~'nil
+             (~'keyword? ~'v)
+             (~'if (~'contains? ~'attachment-type-idiom->wire ~'v)
+                   ~'v
+                   (~'throw (~'ex-info "Unknown attachment type" {:value ~'v})))
+             (~'string? ~'v)
+             (~'or (~'get ~'attachment-type-wire->idiom ~'v)
+                   (~'throw (~'ex-info "Unknown attachment type" {:value ~'v})))
+             :else
+             (~'throw (~'ex-info "Expected attachment type string or keyword"
+                                 {:value ~'v :value-class (~'class ~'v)}))))
+
+   `(~'defn ~'attachment-type-keyword->string
+            "Convert an idiomatic attachment discriminator to its closed wire string domain."
+            [~'v]
+            (~'let [~'attachment-type (~'attachment-type-string->keyword ~'v)]
+                   (~'when ~'attachment-type
+                           (~'get ~'attachment-type-idiom->wire ~'attachment-type))))
+
+   `(~'defn ~(with-meta 'coerce-attachment-types {:private true})
+            [~'attachments ~'converter]
+            (~'cond
+             (~'nil? ~'attachments) ~'nil
+             (~'sequential? ~'attachments)
+             (~'mapv
+              (~'fn [~'attachment]
+                    (~'when-not
+                     (~'and (~'map? ~'attachment)
+                            (~'contains? ~'attachment :type))
+                     (~'throw
+                      (~'ex-info "Expected attachment map with :type"
+                                 {:value ~'attachment
+                                  :value-class (~'class ~'attachment)})))
+                    (~'update ~'attachment :type ~'converter))
+              ~'attachments)
+             :else
+             (~'throw
+              (~'ex-info "Expected attachment collection"
+                         {:value ~'attachments
+                          :value-class (~'class ~'attachments)}))))
+
+   `(~'defn ~'attachment-type-strings->keywords
+            "Convert attachment discriminator strings within a collection to keywords."
+            [~'attachments]
+            (~'coerce-attachment-types ~'attachments ~'attachment-type-string->keyword))
+
+   `(~'defn ~'attachment-type-keywords->strings
+            "Convert attachment discriminator keywords within a collection to wire strings."
+            [~'attachments]
+            (~'coerce-attachment-types ~'attachments ~'attachment-type-keyword->string))))
 
 (defn- emit-converters-map
   "Emit the static converters map referenced by coerce-data."
@@ -144,7 +217,10 @@
             :idiom->wire ~'instant->iso-string}
            [:auto-tier-string :auto-tier-keyword]
            {:wire->idiom ~'auto-tier-string->keyword
-            :idiom->wire ~'auto-tier-keyword->string}}))
+            :idiom->wire ~'auto-tier-keyword->string}
+           [:attachment-type-strings :attachment-type-keywords]
+           {:wire->idiom ~'attachment-type-strings->keywords
+            :idiom->wire ~'attachment-type-keywords->strings}}))
 
 (defn- emit-field-coercions
   "Emit the field-coercions map: event-type-string → {field-kw [wire idiom]}."

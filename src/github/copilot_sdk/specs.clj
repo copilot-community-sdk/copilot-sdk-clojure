@@ -53,7 +53,7 @@
           (and (every? #(or (keyword? %) (string? %)) (keys value))
                (recur (into remaining (vals value))))
 
-          (coll? value)
+          (sequential? value)
           (recur (into remaining value))
 
           :else
@@ -1620,19 +1620,32 @@
          #(string? (:mime-type %))
          #(or (nil? (:display-name %)) (string? (:display-name %)))))
 
+(def ^:private extension-context-attachment-keys
+  #{:type :extension-id :canvas-id :instance-id :title :payload :captured-at})
+
+(s/def ::extension-context-attachment
+  (s/and
+   map?
+   #(set/subset? (set (keys %)) extension-context-attachment-keys)
+   #(= :extension-context (:type %))
+   #(required-value? % :extension-id string?)
+   #(required-value? % :title
+                     (fn [value] (s/valid? ::non-blank-string value)))
+   #(required-value? % :captured-at
+                     (fn [value] (s/valid? ::non-blank-string value)))
+   #(optional-field? % :canvas-id string?)
+   #(optional-field? % :instance-id string?)
+   #(optional-field? % :payload opaque-json-value?)))
+
 (s/def ::attachment
   (s/or :file-or-directory ::file-or-directory-attachment
         :selection ::selection-attachment
         :github-reference ::github-reference-attachment
-        :blob ::blob-attachment))
+        :blob ::blob-attachment
+        :extension-context ::extension-context-attachment))
 
-;; Inbound attachment (identical to ::attachment, kept as a semantic alias
-;; for event data contexts where attachments are received rather than sent)
-(s/def ::inbound-attachment
-  (s/or :file-or-directory ::file-or-directory-attachment
-        :selection ::selection-attachment
-        :github-reference ::github-reference-attachment
-        :blob ::blob-attachment))
+;; Semantic alias for event data contexts where attachments are received.
+(s/def ::inbound-attachment ::attachment)
 
 (s/def ::attachments (s/coll-of ::attachment))
 (s/def ::inbound-attachments (s/coll-of ::inbound-attachment))
@@ -1669,12 +1682,26 @@
 ;; empty or contain characters that are unsuitable for keywords.
 (s/def ::message-source message-source?)
 
+(defn- parsed-response-schema?
+  [value]
+  (and (map? value)
+       (fn? (:to-json-schema value))
+       (fn? (:parse value))))
+
+(s/def ::response-json-schema json-object-value?)
+(s/def ::parsed-response-schema parsed-response-schema?)
+(s/def ::response-schema
+  (s/or :parsed ::parsed-response-schema
+        :json-schema ::response-json-schema))
+
 (s/def ::send-options
   (s/and
    (s/keys :req-un [::prompt]
            :opt-un [::attachments ::mode ::timeout-ms ::request-headers
-                    ::agent-mode ::display-prompt])
-   #(optional-field? % :source message-source?)))
+                    ::agent-mode ::display-prompt ::response-schema])
+   #(optional-field? % :source message-source?)
+   #(not (and (= :immediate (:mode %))
+              (contains? % :response-schema)))))
 
 ;; :timeout-ms as used in option maps for send-async / <send! /
 ;; send-async-with-id / send-and-wait! allows nil to "disable" the timeout per
@@ -1825,6 +1852,8 @@
     :copilot/sampling.requested :copilot/sampling.completed
     ;; Session remote steerable (upstream PR #908)
     :copilot/session.remote_steerable_changed
+    ;; Runtime search and permission-recovery status (schema 1.0.87-0)
+    :copilot/session.indexed_search :copilot/session.permission_recovery
     ;; Capabilities changed (upstream PR #908)
     :copilot/capabilities.changed
     ;; Schedule events (upstream schema 1.0.42)
@@ -1998,11 +2027,17 @@
 ;; while caller-side ::agent-mode is a keyword set used for ::send-options.
 ;; Enum validation of the wire string is handled by the generated wire spec.
 (s/def ::is-autopilot-continuation boolean?)
+(s/def ::responses-reasoning
+  (s/and
+   map?
+   #(required-value? % :model string?)
+   #(required-value? % :initial-effort string?)
+   #(required-value? % :effort string?)))
 (s/def ::user.message-data
   (s/and (s/keys :req-un [::content]
                  :opt-un [::transformed-content ::source
                           ::interaction-id ::is-autopilot-continuation
-                          ::message-id ::turn-id])
+                          ::message-id ::turn-id ::responses-reasoning])
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
 
@@ -2285,7 +2320,7 @@
 (s/def ::model-change-source
   #{"model_command" "config_command" "settings_command" "model_picker"
     "plan_mode" "automatic" "startup" "repo_settings" "managed_settings"
-    "agent" "sdk"})
+    "agent" "sdk" "changeboarding_shortcut"})
 (s/def ::session.model_change-data
   (s/and
    (s/keys :req-un [::new-model]
@@ -2377,8 +2412,109 @@
 (s/def ::session.compaction_complete-data
   (s/and
    (s/keys :req-un [::success]
-           :opt-un [::status-code ::token-limit ::trigger ::behavior-model-id])
+           :opt-un [::status-code ::token-limit ::trigger ::behavior-model-id
+                    ::responses-reasoning])
    #(optional-field? % :error string?)))
+
+;; Transient indexed-search lifecycle and diagnostics (schema 1.0.87-0).
+;; Payload maps stay open for additive fields while each discriminator variant
+;; validates its stable fields.
+(def ^:private indexed-search-states
+  #{"disabled" "starting" "enabled" "ready" "failed"})
+(def ^:private indexed-search-outcomes
+  #{"started" "skipped_below_threshold" "skipped_no_gitroot"
+    "skipped_disabled" "reused_existing" "failed"})
+(def ^:private indexed-search-disabled-reasons
+  #{"use_tgrep_false" "use_builtin_ripgrep_false" "organization"
+    "organization_policy_auth_pending" "organization_policy_unknown"
+    "virtual_filesystem" "cloud_sync_root" "cloud_sync_detection_failed"
+    "workspace_not_local"})
+(def ^:private indexed-search-error-types
+  #{"spawn_error" "unexpected_exit" "killed_by_signal"})
+(def ^:private indexed-search-incremental-phases
+  #{"changes_detected" "updated"})
+
+(defn- non-negative-json-number?
+  [value]
+  (and (json-number? value) (<= 0 value)))
+
+(defn- indexed-search-data?
+  [data]
+  (and
+   (map? data)
+   (case (:kind data)
+     "status"
+     (required-value? data :state indexed-search-states)
+
+     "startup"
+     (and
+      (required-value? data :outcome indexed-search-outcomes)
+      (required-value? data :startup-duration-ms non-negative-json-number?)
+      (required-value? data :forced-by-env boolean?)
+      (required-value? data :warm-start boolean?)
+      (optional-field? data :file-count non-negative-json-number?)
+      (optional-field? data :disabled-reason indexed-search-disabled-reasons)
+      (optional-field? data :error-message string?)
+      (optional-field? data :eligible boolean?))
+
+     "server_error"
+     (and
+      (required-value? data :error-type indexed-search-error-types)
+      (optional-field? data :exit-code json-number?)
+      (optional-field? data :error-message string?))
+
+     "incremental"
+     (and
+      (required-value? data :phase indexed-search-incremental-phases)
+      (every? #(optional-field? data % non-negative-json-number?)
+              [:changed-file-count :added-file-count :deleted-file-count
+               :total-change-count :walk-duration-ms :update-duration-ms
+               :total-duration-ms]))
+
+     false)))
+
+(s/def ::session.indexed_search-data indexed-search-data?)
+
+;; Authoritative snapshots for bounded Autopilot permission recovery
+;; (schema 1.0.87-0).
+(def ^:private permission-recovery-statuses
+  #{"recovering" "awaiting_approval" "resolved" "blocked"})
+(def ^:private permission-recovery-on-blocked-values #{"ask" "fail"})
+(def ^:private permission-recovery-reasons
+  #{"permission_required" "repeated_attempt" "attempts_exhausted"
+    "permission_approved" "permission_denied" "responder_unavailable"
+    "equivalent_alternative_succeeded"})
+(def ^:private permission-recovery-attempt-relations
+  #{"initial" "retry" "alternative"})
+(def ^:private permission-recovery-attempt-dispositions
+  #{"deferred" "prompted" "approved" "denied" "blocked" "succeeded"})
+
+(defn- permission-recovery-attempt?
+  [attempt]
+  (and
+   (map? attempt)
+   (required-value? attempt :attempt-id string?)
+   (optional-field? attempt :tool-call-id string?)
+   (required-value? attempt :permission-kind string?)
+   (required-value? attempt :request-fingerprint string?)
+   (required-value? attempt :relation permission-recovery-attempt-relations)
+   (required-value? attempt :disposition permission-recovery-attempt-dispositions)
+   (required-value? attempt :reason permission-recovery-reasons)
+   (required-value? attempt :ordinal pos-int?)))
+
+(defn- permission-recovery-data?
+  [data]
+  (and
+   (map? data)
+   (required-value? data :episode-id string?)
+   (required-value? data :status permission-recovery-statuses)
+   (required-value? data :on-blocked permission-recovery-on-blocked-values)
+   (required-value? data :reason permission-recovery-reasons)
+   (required-value? data :max-attempts pos-int?)
+   (required-value? data :attempts
+                    (partial vector-of? permission-recovery-attempt?))))
+
+(s/def ::session.permission_recovery-data permission-recovery-data?)
 
 ;; Context-cleared event (upstream PR #2129).
 (s/def ::messages-cleared nat-int?)
@@ -2453,12 +2589,13 @@
     "builtin"
     "sdk"})
 ;; ::description already defined above
+(s/def ::invoked-at-turn nat-int?)
 
 (s/def ::skill.invoked-data
   (s/and
    (s/keys :req-un [::name ::content]
            :opt-un [::allowed-tools ::plugin-name ::plugin-version ::description
-                    ::disable-model-invocation ::source])
+                    ::disable-model-invocation ::source ::invoked-at-turn])
    #(required-value? % :path string?)))
 
 ;; Subagent event data (upstream PR #916)
@@ -2752,7 +2889,9 @@
 (s/def ::system.notification-data
   (s/and map?
          #(string? (:content %))
-         #(s/valid? ::system-notification-kind (:kind %))))
+         #(s/valid? ::system-notification-kind (:kind %))
+         #(optional-field? % :responses-reasoning
+                           (partial s/valid? ::responses-reasoning))))
 
 (s/def ::provider-id (s/nilable string?))
 (s/def ::external_tool.requested-data
@@ -2932,6 +3071,7 @@
 (s/def ::permission-prompt-request map?)
 (s/def ::resolved-by-hook boolean?)
 (s/def ::risk-assessment opaque-json-value?)
+(s/def ::recovery-episode-id string?)
 (s/def ::permission.requested-data
   (s/and
    map?
@@ -2940,7 +3080,16 @@
    #(optional-field? % :prompt-request map?)
    #(optional-field? % :resolved-by-hook boolean?)
    #(optional-field? % :risk-assessment opaque-json-value?)
-   #(optional-field? % :agent-mode session-modes)))
+   #(optional-field? % :agent-mode session-modes)
+   #(optional-field? % :recovery-episode-id string?)))
+
+(s/def ::permission.completed-data
+  (s/and
+   map?
+   #(required-value? % :request-id string?)
+   #(required-value? % :result map?)
+   #(optional-field? % :tool-call-id string?)
+   #(optional-field? % :recovery-episode-id string?)))
 
 (s/def ::permission-result-kind
   #{:approve-once

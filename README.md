@@ -8,6 +8,7 @@ A fully-featured Clojure port of the official [GitHub Copilot SDK](https://githu
 
 Key features:
 - **Blocking and async APIs** — `send-and-wait!` for simple use cases, `send!` + event channels for reactive patterns
+- **Structured outputs** — Request strict JSON Schema responses and parse them into Clojure values
 - **Custom tools** — Let the LLM call back into your application
 - **Streaming** — Incremental response deltas via `:assistant.message_delta` events
 - **Multi-session support** — Run multiple independent conversations concurrently
@@ -33,12 +34,14 @@ io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.14.0"}
 
 ;; Or git dependency
 io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure.git"
-                              :git/sha "163ef2e733da4cbd6d999af7980a18e93f097c33"}
+                              :git/sha "9876dc265c2b41e501638e0295dfc559aebc1ca0"}
 ```
 
 > **Note:** The Clojars artifact `net.clojars.krukow/copilot-sdk` is deprecated.
 > Starting from version `0.1.22.0`, releases are published to Maven Central only.
 > Versioning follows the upstream [github/copilot-sdk](https://github.com/github/copilot-sdk/releases) releases.
+> Features documented under **Unreleased**, including structured outputs, require
+> the Git dependency until the next Maven Central release.
 
 ## Quick Start
 
@@ -80,6 +83,34 @@ Or use the full API for maximum flexibility:
   (println (-> (copilot/send-and-wait! session {:prompt "What is the capital of France?"})
                (get-in [:data :content]))))
 ```
+
+### Structured Outputs
+
+Return validated data instead of parsing assistant text at each call site:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def answer-schema
+  {"type" "object"
+   "properties" {"answer" {"type" "string"}}
+   "required" ["answer"]
+   "additionalProperties" false})
+
+(copilot/with-client-session [session {:on-permission-request copilot/approve-all
+                                       :model "gpt-5.4"}]
+  (copilot/send-and-wait!
+   session
+   {:prompt "What is the capital of France?"}
+   {:to-json-schema (constantly answer-schema)
+    :parse #(get % "answer")}
+   60000))
+;; => "Paris"
+```
+
+See [`structured_output.clj`](./examples/structured_output.clj) and the
+[API reference](./doc/reference/API.md#structured-output) for raw-schema and
+parsed-result forms.
 
 ### Async Example
 

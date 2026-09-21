@@ -81,7 +81,7 @@
     run-factory! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options]), :experimental true}
     select! {:kind :fn, :arglists ([session message options])}
     send! {:kind :fn, :arglists ([session opts])}
-    send-and-wait! {:kind :fn, :arglists ([session opts] [session opts timeout-ms])}
+    send-and-wait! {:kind :fn, :arglists ([session opts] [session opts timeout-or-response-schema] [session opts response-schema timeout-ms])}
     send-async {:kind :fn, :arglists ([session opts])}
     send-async-with-id {:kind :fn, :arglists ([session opts])}
     session-config {:kind :fn, :arglists ([session])}
@@ -326,7 +326,7 @@
     respond-to-queued-command! {:kind :fn, :arglists ([session {:as params, :keys [request-id handled? stop-processing-queue?]}]), :experimental true}
     select! {:kind :fn, :arglists ([session message options])}
     send! {:kind :fn, :arglists ([session opts])}
-    send-and-wait! {:kind :fn, :arglists ([session opts] [session opts timeout-ms])}
+    send-and-wait! {:kind :fn, :arglists ([session opts] [session opts timeout-or-response-schema] [session opts response-schema timeout-ms])}
     send-async {:kind :fn, :arglists ([session opts])}
     send-async-with-id {:kind :fn, :arglists ([session opts])}
     session-fs-sqlite-transaction-failure {:kind :fn, :arglists ([message] [message error-class])}
@@ -409,7 +409,7 @@
     github.copilot-sdk.session/respond-to-queued-command! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :params (clojure.spec.alpha/and (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/request-id :github.copilot-sdk.specs/handled?] :opt-un [:github.copilot-sdk.specs/stop-processing-queue?]) (fn* [p1__gensym] (clojure.core/or (:handled? p1__gensym) (clojure.core/not (clojure.core/contains? p1__gensym :stop-processing-queue?)))))) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/select! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :message clojure.core/string? :options (clojure.spec.alpha/coll-of clojure.core/string?)) :ret (clojure.spec.alpha/nilable clojure.core/string?) :fn nil)
     github.copilot-sdk.session/send! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts :github.copilot-sdk.specs/send-options) :ret clojure.core/string? :fn nil)
-    github.copilot-sdk.session/send-and-wait! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts :github.copilot-sdk.specs/send-options :timeout-ms (clojure.spec.alpha/? :github.copilot-sdk.specs/timeout-ms)) :ret (clojure.spec.alpha/nilable clojure.core/map?) :fn nil)
+    github.copilot-sdk.session/send-and-wait! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/alt :default (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts :github.copilot-sdk.specs/send-options) :timeout (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts :github.copilot-sdk.specs/send-options :timeout-ms :github.copilot-sdk.specs/timeout-ms) :parsed (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts :github.copilot-sdk.specs/send-options :response-schema :github.copilot-sdk.specs/parsed-response-schema) :parsed-timeout (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts :github.copilot-sdk.specs/send-options :response-schema :github.copilot-sdk.specs/parsed-response-schema :timeout-ms :github.copilot-sdk.specs/timeout-ms)) :ret clojure.core/any? :fn (clojure.core/fn [{:keys [args ret]}] (if (clojure.core/contains? #{:default :timeout} (clojure.core/first args)) (clojure.core/or (clojure.core/nil? ret) (clojure.core/map? ret)) true)))
     github.copilot-sdk.session/send-async (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/merge :github.copilot-sdk.specs/send-options (clojure.spec.alpha/keys :opt-un [:github.copilot-sdk.specs/timeout-ms]))) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/send-async-with-id (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/merge :github.copilot-sdk.specs/send-options (clojure.spec.alpha/keys :opt-un [:github.copilot-sdk.specs/timeout-ms]))) :ret (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/message-id :github.copilot-sdk.specs/events-ch]) :fn nil)
     github.copilot-sdk.session/session-fs-sqlite-transaction-failure (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :message clojure.core/string? :error-class (clojure.spec.alpha/? :github.copilot-sdk.specs/sqlite-transaction-error-class)) :ret (clojure.core/fn [%] (clojure.core/instance? clojure.lang.ExceptionInfo %)) :fn nil)
@@ -672,6 +672,7 @@
     :github.copilot-sdk.specs/explicit-model-matches-preference
     :github.copilot-sdk.specs/explicit-model-override
     :github.copilot-sdk.specs/exporter-type
+    :github.copilot-sdk.specs/extension-context-attachment
     :github.copilot-sdk.specs/extension-id
     :github.copilot-sdk.specs/extension-identity
     :github.copilot-sdk.specs/extension-info
@@ -749,6 +750,7 @@
     :github.copilot-sdk.specs/interaction-id
     :github.copilot-sdk.specs/interaction-type
     :github.copilot-sdk.specs/interval-ms
+    :github.copilot-sdk.specs/invoked-at-turn
     :github.copilot-sdk.specs/is-auto
     :github.copilot-sdk.specs/is-autopilot-continuation
     :github.copilot-sdk.specs/is-byok
@@ -901,6 +903,7 @@
     :github.copilot-sdk.specs/parameters
     :github.copilot-sdk.specs/parent-id
     :github.copilot-sdk.specs/parent-tool-call-id
+    :github.copilot-sdk.specs/parsed-response-schema
     :github.copilot-sdk.specs/path
     :github.copilot-sdk.specs/payload
     :github.copilot-sdk.specs/permission-decision-context
@@ -914,6 +917,7 @@
     :github.copilot-sdk.specs/permission-request
     :github.copilot-sdk.specs/permission-result
     :github.copilot-sdk.specs/permission-result-kind
+    :github.copilot-sdk.specs/permission.completed-data
     :github.copilot-sdk.specs/permission.requested-data
     :github.copilot-sdk.specs/permissions
     :github.copilot-sdk.specs/phase
@@ -953,6 +957,7 @@
     :github.copilot-sdk.specs/reasoning-text
     :github.copilot-sdk.specs/reasoning-tokens
     :github.copilot-sdk.specs/recommended-action
+    :github.copilot-sdk.specs/recovery-episode-id
     :github.copilot-sdk.specs/recurring
     :github.copilot-sdk.specs/redirected-from
     :github.copilot-sdk.specs/reference-type
@@ -983,6 +988,9 @@
     :github.copilot-sdk.specs/requested-schema
     :github.copilot-sdk.specs/reset-date
     :github.copilot-sdk.specs/resolved-by-hook
+    :github.copilot-sdk.specs/response-json-schema
+    :github.copilot-sdk.specs/response-schema
+    :github.copilot-sdk.specs/responses-reasoning
     :github.copilot-sdk.specs/restricted
     :github.copilot-sdk.specs/result-type
     :github.copilot-sdk.specs/resumable
@@ -1038,6 +1046,7 @@
     :github.copilot-sdk.specs/session.extensions_loaded-data
     :github.copilot-sdk.specs/session.handoff-data
     :github.copilot-sdk.specs/session.idle-data
+    :github.copilot-sdk.specs/session.indexed_search-data
     :github.copilot-sdk.specs/session.mcp_server_needs_reconnect-data
     :github.copilot-sdk.specs/session.mcp_server_removed-data
     :github.copilot-sdk.specs/session.mcp_server_status_changed-data
@@ -1045,6 +1054,7 @@
     :github.copilot-sdk.specs/session.mode_changed-data
     :github.copilot-sdk.specs/session.mode_notice_delivered-data
     :github.copilot-sdk.specs/session.model_change-data
+    :github.copilot-sdk.specs/session.permission_recovery-data
     :github.copilot-sdk.specs/session.permissions_changed-data
     :github.copilot-sdk.specs/session.plan_changed-data
     :github.copilot-sdk.specs/session.resume-data

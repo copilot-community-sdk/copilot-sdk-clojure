@@ -80,6 +80,74 @@
   [m]
   (->wire-keys m))
 
+(defn ^:no-doc opaque-json->wire
+  "Prepare opaque JSON for transport without camel-casing caller-defined keys.
+   Rejects keyword and string keys that collapse to the same JSON member name."
+  [root]
+  (letfn [(wire-key [key]
+            (if (keyword? key)
+              (subs (str key) 1)
+              key))]
+    (loop [pending [[:visit root]]
+           completed []]
+      (if-let [[operation value] (peek pending)]
+        (let [pending (pop pending)]
+          (case operation
+            :visit
+            (cond
+              (map? value)
+              (let [entries (vec value)
+                    keys (mapv (comp wire-key first) entries)
+                    duplicate-wire-keys
+                    (->> keys
+                         frequencies
+                         (keep (fn [[key count]]
+                                 (when (> count 1) key)))
+                         set)
+                    values (mapv second entries)]
+                (when (seq duplicate-wire-keys)
+                  (throw
+                   (ex-info
+                    "Duplicate opaque JSON keys after wire conversion."
+                    {:duplicate-wire-keys duplicate-wire-keys})))
+                (recur
+                 (into (conj pending [:build-map {:keys keys
+                                                  :count (count entries)}])
+                       (map (fn [item] [:visit item]) (rseq values)))
+                 completed))
+
+              (sequential? value)
+              (let [items (vec value)]
+                (recur
+                 (into (conj pending [:build-vector (count items)])
+                       (map (fn [item] [:visit item]) (rseq items)))
+                 completed))
+
+              (coll? value)
+              (throw
+               (ex-info
+                "Unsupported opaque JSON collection; use a sequential value for arrays."
+                {:value value
+                 :type (type value)}))
+
+              :else
+              (recur pending (conj completed value)))
+
+            :build-map
+            (let [{:keys [keys] child-count :count} value
+                  start (- (count completed) child-count)
+                  values (subvec completed start)]
+              (recur pending
+                     (conj (subvec completed 0 start)
+                           (into {} (map vector keys values)))))
+
+            :build-vector
+            (let [start (- (count completed) value)]
+              (recur pending
+                     (conj (subvec completed 0 start)
+                           (subvec completed start))))))
+        (peek completed)))))
+
 ;; -----------------------------------------------------------------------------
 ;; System prompt section key mapping
 ;; Wire uses snake_case identifiers (e.g., "tool_efficiency");
@@ -196,6 +264,16 @@
              :data (:data att)
              :mimeType (:mime-type att)}
       (:display-name att) (assoc :displayName (:display-name att)))
+
+    :extension-context
+    (cond-> {:type "extension_context"
+             :extensionId (:extension-id att)
+             :title (:title att)
+             :capturedAt (:captured-at att)}
+      (contains? att :canvas-id) (assoc :canvasId (:canvas-id att))
+      (contains? att :instance-id) (assoc :instanceId (:instance-id att))
+      (contains? att :payload) (assoc :payload
+                                      (opaque-json->wire (:payload att))))
 
     ;; :file and :directory
     (cond-> {:type (name (:type att))

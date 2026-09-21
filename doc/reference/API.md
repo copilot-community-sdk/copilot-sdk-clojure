@@ -973,6 +973,7 @@ Send a message to the session. Returns immediately with the message ID.
 | `:agent-mode` | keyword | `#{:interactive :plan :autopilot :shell}`. Per-message agent mode. Wire-encoded as `agentMode`. (upstream PR #1438) |
 | `:display-prompt` | string | Alternate prompt shown in the timeline UI instead of `:prompt`. Useful when the model-facing prompt contains machinery or context that should not be surfaced to the end user. Wire-encoded as `displayPrompt`. (upstream PR #1470) |
 | `:request-headers` | map | Extra HTTP headers (string→string) forwarded to the model provider for this request. Merged with provider-level `:headers`. (upstream PR #1094) |
+| `:response-schema` | JSON Schema map or parsed schema map | Request a strict JSON Schema response. A parsed schema is `{:to-json-schema fn :parse fn}`. Omission sends no `responseFormat`; explicit `nil` is invalid. Caller-defined schema keys are preserved. ([upstream PR #2590](https://github.com/github/copilot-sdk/pull/2590)) |
 | `:source` | keyword or map | Optional message provenance. Use `:user`, `:system`, or `{:agent-id "..."}`. Agent IDs are opaque strings, including the empty string, and serialize as `agent-<id>`. Omission sends no wire key; explicit `nil` is invalid. Remote backends may echo the source locally without forwarding it end to end. ([upstream PR #2573](https://github.com/github/copilot-sdk/pull/2573)) |
 
 ```clojure
@@ -990,6 +991,7 @@ Send a message to the session. Returns immediately with the message ID.
 | `:selection` | `:type`, `:file-path`, `:display-name` | `:selection-range`, `:text` | Code selection attachment |
 | `:github-reference` | `:type`, `:number`, `:title`, `:reference-type`, `:state`, `:url` | — | GitHub issue, PR, or discussion reference |
 | `:blob` | `:type`, `:data`, `:mime-type` | `:display-name` | Inline base64-encoded data (e.g. images) |
+| `:extension-context` | `:type`, `:extension-id`, `:title`, `:captured-at` | `:canvas-id`, `:instance-id`, `:payload` | Context captured by an extension. Payload keys are opaque and retain their source spelling. ([upstream PR #2590](https://github.com/github/copilot-sdk/pull/2590)) |
 
 `:line-range` is a map with `:start` and `:end` line numbers (zero-based) to restrict the attachment to a range of lines:
 
@@ -1019,12 +1021,77 @@ Selection range is a map with `:start` and `:end` positions, each containing `:l
 ```clojure
 (copilot/send-and-wait! session options)
 (copilot/send-and-wait! session options timeout-ms)
+(copilot/send-and-wait! session options parsed-response-schema)
+(copilot/send-and-wait! session options parsed-response-schema timeout-ms)
 ```
-Send a message and block until the session becomes idle. Returns the final assistant message event.
+Send a message and block until the session becomes idle. The ordinary and raw
+schema forms return the final assistant message event. The parsed schema forms
+return the parser result.
 Default timeout is `60000` ms (60 seconds), matching the upstream Node.js SDK. The timeout controls how long to wait for `session.idle`; it does not abort in-flight agent work.
 An idle event whose wire `:mode` is the string `"autopilot"` is a turn boundary,
 not a terminal event, so the wait continues. Keyword `:autopilot` is not a
-supported event payload value.
+supported event payload value. Ordinary waits are serialized per session;
+structured waits correlate by originating message ID and may run concurrently
+with one another. A structured wait and an ordinary wait on the same session
+run serially so their session-wide idle/error events cannot cross-contaminate
+results.
+
+#### Structured Output
+
+Use `:response-schema` in the options map when the caller needs the normal
+assistant message event:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def answer-json-schema
+  {"type" "object"
+   "properties" {"answer-value" {"type" "integer"}}
+   "required" ["answer-value"]
+   "additionalProperties" false})
+
+(def response
+  (copilot/send-and-wait!
+   session
+   {:prompt "What is 2 + 2?"
+    :response-schema answer-json-schema}))
+
+(get-in response [:data :content])
+;; => "{\"answer-value\":4}"
+```
+
+Pass a parsed response schema as the third argument to decode the final
+correlated assistant response and return the parser result:
+
+```clojure
+(def parsed-answer-schema
+  {:to-json-schema (constantly answer-json-schema)
+   :parse #(get % "answer-value")})
+
+(copilot/send-and-wait!
+ session
+ {:prompt "What is 2 + 2?"}
+ parsed-answer-schema
+ 60000)
+;; => 4
+```
+
+The schema map must provide `:to-json-schema` and `:parse`, both functions.
+Additional adapter metadata is ignored. `:to-json-schema` must return a JSON
+object.
+Caller-defined keys in JSON Schemas and extension-context payloads are opaque:
+keyword keys serialize by their full literal name rather than camel case.
+JSON arrays must use sequential Clojure values; unordered collections such as
+sets are rejected.
+
+The parsed form rejects `:response-schema` in `options` and rejects
+`:mode :immediate`. It ignores subagent messages, correlates the root assistant
+message to the message ID returned by `send!`, ignores assistant messages with
+pending tool requests, decodes JSON, then invokes `:parse` on the calling
+thread. It throws with the source event attached when the run is aborted or the
+response is not valid JSON, and throws if the run completes without a final
+structured assistant message. Its timeout starts before the underlying send
+request, so send admission and event collection share one deadline.
 
 #### `send-async`
 
@@ -1788,9 +1855,10 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
-For schema 1.0.83-1, `:copilot/assistant.server_tool_progress` also belongs to
+For schema 1.0.87-0, `:copilot/assistant.server_tool_progress` also belongs to
 `copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
-`:copilot/session.managed_settings_resolved` belong to `copilot/session-events`.
+`:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
+and `:copilot/session.permission_recovery` belong to `copilot/session-events`.
 `:copilot/tool_search.activated` intentionally belongs only to the master
 `copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
 
@@ -1802,12 +1870,13 @@ remain generated wire evidence and are not curated as public idiom events.
 The experimental `reasoningBlocks` field on `assistant.message` and
 `:shell-execution` field on `tool.execution_complete` also remain generated
 wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.86-0` additionally carries experimental factory pause/checkpoint,
+`1.0.87-0` additionally carries experimental factory pause/checkpoint,
 permission, workspace, and managed-catalog protocol declarations that are not
 part of the stable Clojure API. The new experimental permission declarations
 include `permission.assentDetected`, `permission.contextualAuthorization`, and
-the `activatesExtraction` field on `permission.messageAuthorizationRead`;
-these remain generated wire evidence only.
+the `activatesExtraction` field on `permission.messageAuthorizationRead`.
+Experimental extension launch-provider declarations and structured task-blocker
+payloads also remain generated wire evidence only.
 
 ### `evt` — Event Keyword Helper
 
@@ -1834,7 +1903,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:url`, and `:remediation`. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, and `"allow_sandbox_outbound"`. |
 | `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
 | `:copilot/session.info` | Informational session update |
-| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, and `:source`. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, and `"sdk"`. |
+| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, and `:source`. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, and `"changeboarding_shortcut"`. |
 | `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
 | `:copilot/session.usage_info` | Token usage information |
 | `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
@@ -1845,7 +1914,9 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.snapshot_rewind` | Session state rolled back |
 | `:copilot/session.context_cleared` | Conversation context cleared and restarted with a new prompt (via `history-clear-context!`); data: `{:messages-cleared N}` (required) with optional `:initial-message` (the prompt used to start the new context) (upstream PR #2129) |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions); data: `{:model "..." :current-tokens N :token-limit N :trigger "..."}` (all optional). `:trigger` is one of `"threshold"`, `"context_limit_retry"`, `"manual"`, `"memory_pressure"`, `"model_switch"` (upstream schema 1.0.79-5/6) |
-| `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions); data: `{:success bool}` (required) with optional `:error "..."`, `:status-code N`, `:token-limit N`, `:trigger "..."` (same `:trigger` enum as `compaction_start`), `:behavior-model-id` (string — model identifier used for the compaction behavior/summarization pass; upstream schema 1.0.83-1) (upstream schema 1.0.79-5/6) |
+| `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions); data: `{:success bool}` (required) with optional `:error "..."`, `:status-code N`, `:token-limit N`, `:trigger "..."` (same `:trigger` enum as `compaction_start`), `:behavior-model-id`, and `:responses-reasoning {:model "..." :initial-effort "..." :effort "..."}`. |
+| `:copilot/session.indexed_search` | Transient indexed-search lifecycle and diagnostics. `:kind` is `"status"`, `"startup"`, `"server_error"`, or `"incremental"`; each variant carries its corresponding state, outcome, error, count, or duration fields. |
+| `:copilot/session.permission_recovery` | Authoritative snapshot of a bounded Autopilot permission-recovery episode, including `:episode-id`, lifecycle `:status`, `:on-blocked` policy, transition `:reason`, `:max-attempts`, and ordered privacy-safe `:attempts`. |
 | `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
 | `:copilot/session.mode_notice_delivered` | A mode notice was delivered to the model; data requires `:mode` (`"interactive"`, `"plan"`, or `"autopilot"`) and may include string `:content`. The payload remains open for additive runtime fields. |
 | `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
@@ -1864,8 +1935,8 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.schedule_rearmed` | Self-paced schedule re-armed for its next run |
 | `:copilot/session.binary_asset` | Canonical bytes for a content-addressed binary asset shared by reference across events |
 | `:copilot/session.extensions.attachments_pushed` | Extension pushed attachments into the session |
-| `:copilot/skill.invoked` | Skill invocation triggered; data requires `:name`, `:path`, and `:content`, with optional `:description`, `:allowed-tools`, `:plugin-name`, `:plugin-version`, `:disable-model-invocation`, and string `:source`. Known source values include `"project"`, `"inherited"`, `"personal-copilot"`, `"personal-agents"`, `"plugin"`, `"custom"`, `"builtin"`, `"remote"`, and `"sdk"`; the field remains open for additional runtime-provided identifiers. SDK-provided skills may use an empty path. |
-| `:copilot/user.message` | User message added; data requires `:content` and may include correlation fields `:message-id`, `:turn-id`, and `:interaction-id`, plus `:source`, `:transformed-content`, and `:is-autopilot-continuation`. |
+| `:copilot/skill.invoked` | Skill invocation triggered; data requires `:name`, `:path`, and `:content`, with optional `:invoked-at-turn`, `:description`, `:allowed-tools`, `:plugin-name`, `:plugin-version`, `:disable-model-invocation`, and string `:source`. Known source values include `"project"`, `"inherited"`, `"personal-copilot"`, `"personal-agents"`, `"plugin"`, `"custom"`, `"builtin"`, `"remote"`, and `"sdk"`; the field remains open for additional runtime-provided identifiers. SDK-provided skills may use an empty path. |
+| `:copilot/user.message` | User message added; data requires `:content` and may include correlation fields `:message-id`, `:turn-id`, and `:interaction-id`, plus `:source`, `:transformed-content`, `:is-autopilot-continuation`, and `:responses-reasoning {:model "..." :initial-effort "..." :effort "..."}`. |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
 | `:copilot/assistant.turn_start` | Assistant turn started |
 | `:copilot/assistant.intent` | Assistant intent update |
@@ -3605,6 +3676,25 @@ Send inline base64-encoded data (e.g. images) without writing to disk:
                   :display-name "screenshot.png"}]})
 ```
 
+### Extension Context Attachments
+
+Send context captured by an extension without normalizing keys in its opaque
+payload:
+
+```clojure
+(copilot/send! session
+  {:prompt "Use the selected dashboard"
+   :attachments
+   [{:type :extension-context
+     :extension-id "example.extension"
+     :canvas-id "dashboard"
+     :instance-id "dashboard-1"
+     :title "Selected dashboard"
+     :captured-at "2026-09-20T18:00:00Z"
+     :payload {:account-id 42
+               :filters {:userName "octocat"}}}]})
+```
+
 ### Connecting to External Server
 
 ```clojure
@@ -3625,3 +3715,7 @@ Send inline base64-encoded data (e.g. images) without writing to disk:
   (catch Exception e
     (println "Error:" (ex-message e))))
 ```
+
+JSON-RPC failures expose the server error under `[:error]` in `ex-data`.
+Structured `[:error :data]` remains opaque, including the original spelling of
+nested keys.

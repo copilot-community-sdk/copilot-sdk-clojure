@@ -3,6 +3,47 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.14 sync)
+- Added stable structured output support. `:response-schema` requests strict
+  JSON Schema output while retaining the assistant event, and the new
+  `send-and-wait!` parsed-schema overload returns an application value through
+  `{:to-json-schema fn :parse fn}`. Root responses are correlated to the
+  originating message and caller-defined JSON keys retain their spelling.
+  ([upstream PR #2590](https://github.com/github/copilot-sdk/pull/2590))
+- Added stable `:extension-context` send attachments with extension identity,
+  capture metadata, optional canvas identity, and opaque payloads.
+  ([upstream PR #2590](https://github.com/github/copilot-sdk/pull/2590))
+- Added stable `:copilot/session.indexed_search` and
+  `:copilot/session.permission_recovery` events, including curated idiom specs
+  for indexed-search diagnostics and bounded Autopilot permission-recovery
+  snapshots.
+  ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731))
+
+### Changed (post-v1.0.14 sync)
+- Advanced the Copilot CLI compatibility and schema-provenance pin to
+  `1.0.87-0` and recertified the stable Node SDK public surface through
+  upstream commit
+  [`ca166d3eeec17b8efe0294af4b1ef9ca0f4445de`](https://github.com/github/copilot-sdk/commit/ca166d3eeec17b8efe0294af4b1ef9ca0f4445de).
+  Experimental extension launch-provider APIs and unrelated generated
+  workflow/catalog additions remain outside the stable Clojure API. Stable
+  event metadata now includes Responses reasoning boundaries, skill invocation
+  turn provenance, permission-recovery correlation, and the
+  `"changeboarding_shortcut"` model-change source; internal thinking-drop
+  telemetry and experimental structured task blockers remain wire-only.
+  ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731))
+
+### Fixed (post-v1.0.14 sync)
+- Structured waits now surface session errors even before message correlation,
+  serialize safely with ordinary waits while retaining structured-to-structured
+  concurrency, and attach the source event to malformed-JSON errors.
+- **BREAKING**: Opaque JSON conversion now preserves namespaced keyword keys,
+  rejects keyword/string keys that collapse to the same JSON member name,
+  rejects unordered collections, and handles deeply nested payloads without
+  consuming the JVM stack.
+- JSON-RPC exceptions now preserve structured server `error.data` with its
+  original nested key spelling instead of applying Clojure key normalization.
+  ([upstream PR #2664](https://github.com/github/copilot-sdk/pull/2664))
+
 ### Added (v1.0.14 sync)
 - Documented Azure AI Foundry project URLs for native `:azure` BYOK
   configuration. Resource hosts and full project URLs are accepted with or

@@ -334,6 +334,19 @@
           "description": "Outcome of a catalog.search call: either bounded inert candidates, or one typed refusal. Never a partial success."
         },
         "stability": "experimental"
+      },
+      "select": {
+        "rpcMethod": "catalog.select",
+        "description": "Terminates one retained catalog selection group. A selected outcome returns the native host a fresh single-use candidate handle plus the original searchId for a later explicit mcp.planInstall call; non-selected outcomes release the group without producing a planning input. Candidate state, cards, URLs, credentials and private identifiers remain inside the runtime. The model-facing catalog_select tool projects the result separately and never exposes the candidate handle or searchId.",
+        "params": {
+          "$ref": "#/definitions/CatalogSelectionRequest",
+          "description": "Terminates one retained catalog selection group through an opaque reference previously returned by the model-safe search projection."
+        },
+        "result": {
+          "$ref": "#/definitions/CatalogSelectionResult",
+          "description": "Typed outcome of catalog.select. Only the selected host result carries a fresh candidate handle; the model-facing projection removes both that handle and searchId."
+        },
+        "stability": "experimental"
       }
     },
     "plugins": {
@@ -694,7 +707,7 @@
         "description": "Registers an SDK client as the session filesystem provider.",
         "params": {
           "$ref": "#/definitions/SessionFsSetProviderRequest",
-          "description": "Initial working directory, session-state path layout, and path conventions used to register the calling SDK client as the session filesystem provider."
+          "description": "Initial working directory, session-state path layout, and path conventions used to register the calling SDK client as the session filesystem provider. A registered provider is authoritative for path interpretation and filesystem facts used by workspace permission validation. Paths are interpreted lexically; home-relative paths (`~` and `~/...`) and Windows drive-relative paths such as `C:foo` are unsupported. Until provider-side canonicalization is supported, providers must not expose symlinks inside allowed roots that escape those roots."
         },
         "result": {
           "$ref": "#/definitions/SessionFsSetProviderResult",
@@ -2731,6 +2744,597 @@
         }
       }
     },
+    "workflow": {
+      "run": {
+        "rpcMethod": "session.workflow.run",
+        "description": "Runs a registered dynamic workflow by name at the top level.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Registered workflow name."
+            },
+            "args": {
+              "description": "Workflow input value.",
+              "x-opaque-json": true
+            },
+            "options": {
+              "$ref": "#/definitions/WorkflowRunOptions",
+              "description": "Workflow invocation options."
+            }
+          },
+          "required": [
+            "sessionId",
+            "name",
+            "args"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for invoking a registered workflow.",
+          "title": "WorkflowRunRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowRunResult",
+          "description": "Complete current or terminal workflow run envelope."
+        },
+        "stability": "experimental"
+      },
+      "resume": {
+        "rpcMethod": "session.workflow.resume",
+        "description": "Resumes a dynamic workflow run using its persisted name, arguments, journal, and accounting.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "limits": {
+              "$ref": "#/definitions/WorkflowRunLimits",
+              "description": "Optional per-invocation resource ceiling overrides."
+            },
+            "notifyOnComplete": {
+              "type": "boolean",
+              "description": "Whether to notify the originating session when the workflow completes."
+            },
+            "logPhaseNames": {
+              "type": "boolean",
+              "description": "Whether to emit workflow phase names to the session transcript."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for resuming a workflow run from its persisted identity.",
+          "title": "WorkflowResumeRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowResumeResult",
+          "description": "Resolved persisted workflow identity and resumed run envelope."
+        },
+        "stability": "experimental"
+      },
+      "runFromTool": {
+        "rpcMethod": "session.workflow.runFromTool",
+        "description": "Internal tool-originated dynamic workflow invocation.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Registered workflow name."
+            },
+            "args": {
+              "description": "Workflow input value.",
+              "x-opaque-json": true
+            },
+            "options": {
+              "$ref": "#/definitions/WorkflowToolRunOptions",
+              "description": "Tool-originated workflow invocation options."
+            },
+            "toolCallId": {
+              "type": "string",
+              "description": "Opaque identifier of the originating tool call."
+            }
+          },
+          "required": [
+            "sessionId",
+            "name",
+            "args"
+          ],
+          "additionalProperties": false,
+          "description": "Internal parameters for invoking a registered workflow from a tool.",
+          "title": "WorkflowToolRunRequest",
+          "visibility": "internal",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowRunResult",
+          "description": "Complete current or terminal workflow run envelope."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "resumeFromTool": {
+        "rpcMethod": "session.workflow.resumeFromTool",
+        "description": "Internal tool-originated dynamic workflow resume.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "limits": {
+              "$ref": "#/definitions/WorkflowRunLimits",
+              "description": "Optional per-invocation resource ceiling overrides."
+            },
+            "toolCallId": {
+              "type": "string",
+              "description": "Opaque identifier of the originating tool call."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Internal parameters for resuming a workflow run from a tool.",
+          "title": "WorkflowToolResumeRequest",
+          "visibility": "internal",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowResumeResult",
+          "description": "Resolved persisted workflow identity and resumed run envelope."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "getRun": {
+        "rpcMethod": "session.workflow.getRun",
+        "description": "Gets the current or settled envelope for a dynamic workflow run.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for retrieving a workflow run.",
+          "title": "WorkflowGetRunRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowRunResult",
+          "description": "Complete current or terminal workflow run envelope."
+        },
+        "stability": "experimental"
+      },
+      "listRuns": {
+        "rpcMethod": "session.workflow.listRuns",
+        "description": "Lists durable dynamic workflow runs for this session in creation order.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "afterSeq": {
+              "type": "integer",
+              "description": "Exclusive forward cursor."
+            },
+            "beforeSeq": {
+              "type": "integer",
+              "description": "Exclusive backward cursor."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Maximum terminal runs to return. Defaults to 200 and is capped at 500."
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for paging workflow runs.",
+          "title": "WorkflowListRunsRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowListRunsResult",
+          "description": "A page of workflow runs in durable creation order."
+        },
+        "stability": "experimental"
+      },
+      "getRunDetail": {
+        "rpcMethod": "session.workflow.getRunDetail",
+        "description": "Gets durable and live observability detail for one dynamic workflow run.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for retrieving a workflow run.",
+          "title": "WorkflowGetRunRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowRunDetail",
+          "description": "Full workflow run observability detail."
+        },
+        "stability": "experimental"
+      },
+      "getRunProgress": {
+        "rpcMethod": "session.workflow.getRunProgress",
+        "description": "Pages durable progress for one dynamic workflow run.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "phaseId": {
+              "type": "string",
+              "description": "Optional phase identifier used to scope records and cursors."
+            },
+            "afterSeq": {
+              "type": "integer",
+              "description": "Exclusive forward cursor."
+            },
+            "beforeSeq": {
+              "type": "integer",
+              "description": "Exclusive backward cursor."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "description": "Maximum records to return. Defaults to 200 and is capped at 500."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for paging workflow progress.",
+          "title": "WorkflowGetRunProgressRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowProgressPage",
+          "description": "A bidirectional page of workflow progress."
+        },
+        "stability": "experimental"
+      },
+      "cancel": {
+        "rpcMethod": "session.workflow.cancel",
+        "description": "Requests cancellation of a dynamic workflow run and returns its run envelope.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for cancelling a workflow run.",
+          "title": "WorkflowCancelRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowRunResult",
+          "description": "Complete current or terminal workflow run envelope."
+        },
+        "stability": "experimental"
+      },
+      "pause": {
+        "rpcMethod": "session.workflow.pause",
+        "description": "Pauses a running dynamic workflow and returns its settled run envelope.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for pausing a running workflow.",
+          "title": "WorkflowPauseRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowRunResult",
+          "description": "Complete current or terminal workflow run envelope."
+        },
+        "stability": "experimental"
+      },
+      "pauseAtCheckpoint": {
+        "rpcMethod": "session.workflow.pauseAtCheckpoint",
+        "description": "Atomically pauses an owned dynamic workflow attempt at a durable checkpoint.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "executionToken": {
+              "type": "string",
+              "description": "Opaque token identifying the execution attempt that reached the checkpoint."
+            },
+            "key": {
+              "type": "string",
+              "description": "Stable author-defined checkpoint key."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId",
+            "executionToken",
+            "key"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for an owned durable pause checkpoint.",
+          "title": "WorkflowPauseCheckpointRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowPauseCheckpointResult"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "log": {
+        "rpcMethod": "session.workflow.log",
+        "description": "Records a batch of ordered dynamic workflow progress lines.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "executionToken": {
+              "type": "string",
+              "description": "Opaque token identifying the current workflow execution attempt."
+            },
+            "lines": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/WorkflowLogLine",
+                "description": "One ordered workflow progress line."
+              },
+              "description": "Ordered progress lines to append."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId",
+            "executionToken",
+            "lines"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for recording workflow progress.",
+          "title": "WorkflowLogRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowAckResult",
+          "description": "Acknowledgement that a workflow request was accepted."
+        },
+        "stability": "experimental"
+      },
+      "agent": {
+        "rpcMethod": "session.workflow.agent",
+        "description": "Runs one dynamic-workflow-scoped subagent and returns its result.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "workflowRunId": {
+              "type": "string",
+              "description": "Workflow run identifier that owns the subagent."
+            },
+            "executionToken": {
+              "type": "string",
+              "description": "Opaque token identifying the current workflow execution attempt."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Prompt to send to the subagent."
+            },
+            "opts": {
+              "$ref": "#/definitions/WorkflowAgentOptions",
+              "description": "Subagent execution options."
+            }
+          },
+          "required": [
+            "sessionId",
+            "workflowRunId",
+            "executionToken",
+            "prompt",
+            "opts"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for one workflow-scoped subagent call.",
+          "title": "WorkflowAgentRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowAgentResult",
+          "description": "Result of one workflow-scoped subagent call."
+        },
+        "stability": "experimental"
+      },
+      "journal": {
+        "get": {
+          "rpcMethod": "session.workflow.journal.get",
+          "description": "Reads a memoized dynamic workflow journal entry.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "runId": {
+                "type": "string",
+                "description": "Workflow run identifier."
+              },
+              "executionToken": {
+                "type": "string",
+                "description": "Opaque token identifying the current workflow execution attempt."
+              },
+              "key": {
+                "type": "string",
+                "description": "Namespaced journal key."
+              }
+            },
+            "required": [
+              "sessionId",
+              "runId",
+              "executionToken",
+              "key"
+            ],
+            "additionalProperties": false,
+            "description": "Parameters for reading a workflow journal entry.",
+            "title": "WorkflowJournalGetRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/WorkflowJournalGetResult",
+            "description": "Result of reading a workflow journal entry."
+          },
+          "stability": "experimental"
+        },
+        "put": {
+          "rpcMethod": "session.workflow.journal.put",
+          "description": "Stores a memoized dynamic workflow journal entry.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "runId": {
+                "type": "string",
+                "description": "Workflow run identifier."
+              },
+              "executionToken": {
+                "type": "string",
+                "description": "Opaque token identifying the current workflow execution attempt."
+              },
+              "key": {
+                "type": "string",
+                "description": "Namespaced journal key."
+              },
+              "resultJson": {
+                "description": "JSON result to memoize.",
+                "x-opaque-json": true
+              }
+            },
+            "required": [
+              "sessionId",
+              "runId",
+              "executionToken",
+              "key",
+              "resultJson"
+            ],
+            "additionalProperties": false,
+            "description": "Parameters for storing a workflow journal entry.",
+            "title": "WorkflowJournalPutRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/WorkflowAckResult",
+            "description": "Acknowledgement that a workflow request was accepted."
+          },
+          "stability": "experimental"
+        }
+      }
+    },
     "model": {
       "getCurrent": {
         "rpcMethod": "session.model.getCurrent",
@@ -2912,6 +3516,10 @@
             "policyHelperModel": {
               "type": "string",
               "description": "Startup default model from the enterprise policy helper, when configured. Weakest of the managed sources: it applies only when neither device nor server policy names a model, and an explicit user selection still wins."
+            },
+            "autoTier": {
+              "$ref": "#/definitions/AutoTier",
+              "description": "Effective default Auto routing preference from user and managed settings. Applies only to fresh sessions and never replaces a per-session selection."
             },
             "repoModel": {
               "type": "string",
@@ -5985,10 +6593,35 @@
         }
       }
     },
+    "managedSettings": {
+      "get": {
+        "rpcMethod": "session.managedSettings.get",
+        "description": "Waits for the live session's in-flight managed-settings application, then returns the retained effective snapshot used by runtime enforcement and by `session.managed_settings_resolved`. It does not perform another account, device, or server resolution, and rejects when resolution has not produced a snapshot.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/ManagedSettingsResolvedData",
+          "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes."
+        },
+        "stability": "experimental"
+      }
+    },
     "plugins": {
       "list": {
         "rpcMethod": "session.plugins.list",
-        "description": "Lists plugins installed for the session.",
+        "description": "Lists globally installed, live, built-in, and enterprise-managed desired plugins using the live session's authoritative account, working directory, and retained managed policy.",
         "params": {
           "type": "object",
           "properties": {
@@ -6008,6 +6641,319 @@
           "description": "Plugins installed for the session, with their enabled state and version metadata."
         },
         "stability": "experimental"
+      },
+      "install": {
+        "rpcMethod": "session.plugins.install",
+        "description": "Installs a plugin using the live session's authoritative account, working directory, and retained managed policy.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "source": {
+              "type": "string",
+              "description": "Plugin install spec. Accepts the same forms as the CLI: \"plugin@marketplace\" (marketplace install), \"owner/repo\" or \"owner/repo:subpath\" (GitHub direct), an http/https/ssh URL, or a local path. Direct (non-marketplace) installs are deprecated and will produce a deprecationWarning in the result."
+            }
+          },
+          "required": [
+            "sessionId",
+            "source"
+          ],
+          "additionalProperties": false,
+          "description": "Plugin source resolved relative to the session's authoritative working directory.",
+          "title": "SessionPluginsInstallRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/PluginInstallResult",
+          "description": "Result of installing a plugin."
+        },
+        "stability": "experimental"
+      },
+      "uninstall": {
+        "rpcMethod": "session.plugins.uninstall",
+        "description": "Uninstalls a plugin when permitted by the live session's retained managed policy.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Plugin name or \"plugin@marketplace\" spec to uninstall. When ambiguous, prefer the fully-qualified spec."
+            },
+            "directSourceId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Stable source identity for a direct (non-marketplace) install. Disambiguates uninstall when multiple installed plugins share the same name."
+            }
+          },
+          "required": [
+            "sessionId",
+            "name"
+          ],
+          "additionalProperties": false,
+          "description": "Name (or spec) of the plugin to uninstall.",
+          "title": "PluginsUninstallRequest"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "update": {
+        "rpcMethod": "session.plugins.update",
+        "description": "Updates an installed plugin using the live session's authoritative account, working directory, and retained managed policy.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Plugin name or \"plugin@marketplace\" spec to update."
+            }
+          },
+          "required": [
+            "sessionId",
+            "name"
+          ],
+          "additionalProperties": false,
+          "description": "Name (or spec) of the plugin to update.",
+          "title": "PluginsUpdateRequest"
+        },
+        "result": {
+          "$ref": "#/definitions/PluginUpdateResult",
+          "description": "Result of updating a single plugin."
+        },
+        "stability": "experimental"
+      },
+      "enable": {
+        "rpcMethod": "session.plugins.enable",
+        "description": "Enables installed plugins when permitted by the live session's retained managed policy.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Plugin names or \"plugin@marketplace\" specs to enable. Unknown names are ignored. Non-marketplace direct installs are always enabled and cannot be toggled via this API."
+            }
+          },
+          "required": [
+            "sessionId",
+            "names"
+          ],
+          "additionalProperties": false,
+          "description": "Plugin names (or specs) to enable in the session's authoritative working directory.",
+          "title": "SessionPluginsEnableRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "disable": {
+        "rpcMethod": "session.plugins.disable",
+        "description": "Disables installed plugins when permitted by the live session's retained managed policy.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "names": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Plugin names or \"plugin@marketplace\" specs to disable. Unknown names are ignored. Non-marketplace direct installs cannot be disabled via this API; uninstall them instead. Plugin-owned MCP servers are stopped in active sessions immediately; other plugin contributions remain available until each session reloads plugins."
+            }
+          },
+          "required": [
+            "sessionId",
+            "names"
+          ],
+          "additionalProperties": false,
+          "description": "Plugin names (or specs) to disable in the session's authoritative working directory.",
+          "title": "SessionPluginsDisableRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "marketplaces": {
+        "list": {
+          "rpcMethod": "session.plugins.marketplaces.list",
+          "description": "Lists registered and enterprise-managed desired marketplaces using the live session's retained policy.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              }
+            },
+            "required": [
+              "sessionId"
+            ],
+            "additionalProperties": false,
+            "description": "Identifies the target session."
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceListResult",
+            "description": "All registered marketplaces, including built-in defaults."
+          },
+          "stability": "experimental"
+        },
+        "add": {
+          "rpcMethod": "session.plugins.marketplaces.add",
+          "description": "Adds a marketplace when permitted by the live session's retained managed policy.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "source": {
+                "type": "string",
+                "description": "Marketplace source. Accepts the same forms as the CLI: \"owner/repo\" or \"owner/repo#ref\" (GitHub), an http/https/ssh URL (optionally with #ref), a git scp-style URL (user@host:path), or a local path. The marketplace's own name (from its manifest) is used as the registration key."
+              },
+              "workingDirectory": {
+                "type": "string",
+                "description": "Working directory used to resolve relative local paths in `source`. Defaults to the server's current working directory."
+              }
+            },
+            "required": [
+              "sessionId",
+              "source"
+            ],
+            "additionalProperties": false,
+            "description": "Marketplace source and optional working directory for relative-path resolution.",
+            "title": "PluginsMarketplacesAddRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceAddResult",
+            "description": "Result of registering a new marketplace."
+          },
+          "stability": "experimental"
+        },
+        "remove": {
+          "rpcMethod": "session.plugins.marketplaces.remove",
+          "description": "Removes a marketplace when permitted by the live session's retained managed policy.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "name": {
+                "type": "string",
+                "description": "Marketplace name to remove"
+              },
+              "force": {
+                "type": "boolean",
+                "description": "When true, also uninstall every plugin sourced from this marketplace. When false (default), removal is a no-op if any plugin from this marketplace is installed and the dependent plugin names are returned in the result."
+              }
+            },
+            "required": [
+              "sessionId",
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "Name of the marketplace to remove and an optional force flag.",
+            "title": "PluginsMarketplacesRemoveRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceRemoveResult",
+            "description": "Outcome of the remove attempt, including dependent-plugin info when applicable."
+          },
+          "stability": "experimental"
+        },
+        "browse": {
+          "rpcMethod": "session.plugins.marketplaces.browse",
+          "description": "Browses a marketplace resolved through the live session's working directory and retained managed policy.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "name": {
+                "type": "string",
+                "description": "Marketplace name to browse"
+              }
+            },
+            "required": [
+              "sessionId",
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "Name of the marketplace whose plugin catalog to fetch.",
+            "title": "PluginsMarketplacesBrowseRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceBrowseResult",
+            "description": "Plugins advertised by the marketplace."
+          },
+          "stability": "experimental"
+        },
+        "refresh": {
+          "rpcMethod": "session.plugins.marketplaces.refresh",
+          "description": "Refreshes marketplaces resolved through the live session's working directory and retained managed policy.",
+          "params": {
+            "anyOf": [
+              {
+                "not": {}
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "sessionId": {
+                    "type": "string",
+                    "description": "Target session identifier"
+                  },
+                  "name": {
+                    "type": "string",
+                    "description": "Marketplace name to refresh. When omitted, every registered marketplace is refreshed."
+                  }
+                },
+                "required": [
+                  "sessionId"
+                ],
+                "additionalProperties": false
+              }
+            ],
+            "description": "Optional marketplace name; omit to refresh all.",
+            "title": "PluginsMarketplacesRefreshRequest"
+          },
+          "result": {
+            "$ref": "#/definitions/MarketplaceRefreshResult",
+            "description": "Result of refreshing one or more marketplace catalogs."
+          },
+          "stability": "experimental"
+        }
       },
       "reload": {
         "rpcMethod": "session.plugins.reload",
@@ -9364,6 +10310,100 @@
         },
         "stability": "experimental"
       },
+      "withdrawMessage": {
+        "rpcMethod": "session.queue.withdrawMessage",
+        "description": "Atomically withdraws an unchanged, unconsumed user message from the local queued or steering lane. A client retaining the original draft may restore it only when removed is true. Does not interrupt the running turn.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "messageId": {
+              "type": "string",
+              "description": "Message identity returned by send, not the queue item id. Batch messages are not eligible."
+            },
+            "expectedPrompt": {
+              "type": "string",
+              "description": "The prompt originally sent. A message edited since submission is not withdrawn, so an obsolete draft cannot replace the edit."
+            }
+          },
+          "required": [
+            "sessionId",
+            "messageId",
+            "expectedPrompt"
+          ],
+          "additionalProperties": false,
+          "description": "Conditional withdrawal of a single user message, before the runtime claims it for delivery.",
+          "title": "QueueWithdrawMessageRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/QueueRemoveAtResult",
+          "description": "Result of removing a queued item."
+        },
+        "stability": "experimental"
+      },
+      "appendSteering": {
+        "rpcMethod": "session.queue.appendSteering",
+        "description": "Atomically appends text and attachments to an unchanged, unconsumed local steering message. Returns updated=false if delivery or withdrawal already claimed the message.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "messageId": {
+              "type": "string",
+              "description": "Message identity returned by send, not the queue item id. Only unclaimed user steering messages are eligible."
+            },
+            "expectedPrompt": {
+              "type": "string",
+              "description": "Expected current prompt, including any previous appends. The runtime applies plan-mode normalization before comparing and refuses a changed message."
+            },
+            "agentMode": {
+              "$ref": "#/definitions/SendAgentMode",
+              "description": "Mode captured at submission. Only steering messages in the same mode may be combined."
+            },
+            "prompt": {
+              "type": "string",
+              "description": "Text to append after a blank line."
+            },
+            "displayPrompt": {
+              "type": "string",
+              "description": "Display text to append to the existing preview after a blank line."
+            },
+            "attachments": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Attachment",
+                "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload"
+              },
+              "description": "Attachments to add after the message's existing attachments. An empty list preserves the existing attachments."
+            }
+          },
+          "required": [
+            "sessionId",
+            "messageId",
+            "expectedPrompt",
+            "agentMode",
+            "prompt",
+            "displayPrompt",
+            "attachments"
+          ],
+          "additionalProperties": false,
+          "description": "Append to one pending steering message without changing its identity or delivery position.",
+          "title": "QueueAppendSteeringRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/QueueUpdateTextResult",
+          "description": "Result of editing a queued message."
+        },
+        "stability": "experimental"
+      },
       "duplicateAt": {
         "rpcMethod": "session.queue.duplicateAt",
         "description": "Duplicates an addressable queued item immediately after its source.",
@@ -10537,6 +11577,88 @@
         "result": {
           "$ref": "#/definitions/FactoryAckResult",
           "description": "Acknowledgement that a factory request was accepted."
+        },
+        "stability": "experimental"
+      }
+    },
+    "workflow": {
+      "execute": {
+        "rpcMethod": "workflow.execute",
+        "description": "Asks the owning extension connection to execute a registered dynamic workflow.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "name": {
+              "type": "string",
+              "description": "Registered workflow name."
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "executionToken": {
+              "type": "string",
+              "description": "Opaque token identifying this workflow execution attempt."
+            },
+            "args": {
+              "description": "Workflow input value.",
+              "x-opaque-json": true
+            }
+          },
+          "required": [
+            "sessionId",
+            "name",
+            "runId",
+            "executionToken",
+            "args"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters sent to the owning extension to execute a workflow closure.",
+          "title": "WorkflowExecuteRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowExecuteResult",
+          "description": "Result returned by an extension workflow closure."
+        },
+        "stability": "experimental"
+      },
+      "abort": {
+        "rpcMethod": "workflow.abort",
+        "description": "Asks the owning extension connection to abort a running dynamic workflow cooperatively.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "executionToken": {
+              "type": "string",
+              "description": "Opaque token identifying the execution attempt to abort."
+            }
+          },
+          "required": [
+            "sessionId",
+            "runId",
+            "executionToken"
+          ],
+          "additionalProperties": false,
+          "description": "Parameters for cooperatively aborting a workflow body.",
+          "title": "WorkflowAbortRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/WorkflowAckResult",
+          "description": "Acknowledgement that a workflow request was accepted."
         },
         "stability": "experimental"
       }
@@ -14108,6 +15230,164 @@
       "description": "SHA-256 digest encoded as exactly 64 lowercase hexadecimal characters.",
       "title": "CardDigestValue"
     },
+    "CatalogAgentPluginCandidate": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/CatalogAgentPluginCandidateKind",
+          "const": "plugin",
+          "description": "Discriminator: this candidate describes an Agent Plugin."
+        },
+        "mediaType": {
+          "$ref": "#/definitions/CatalogAgentPluginMediaType",
+          "description": "Canonical Agent Plugin media type."
+        },
+        "identity": {
+          "$ref": "#/definitions/CatalogResourceIdentity",
+          "description": "Validated, normalised catalogue resource URN. This identity comes only from the catalog identifier and is never inferred from display text or installed-plugin state."
+        },
+        "version": {
+          "$ref": "#/definitions/CatalogResourceVersion",
+          "description": "Optional version declared by the catalog source. Omitted rather than guessed when the source supplies no version."
+        },
+        "displayName": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Display name taken verbatim from the card. Inert untrusted text."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Description taken verbatim from the card. Inert untrusted text."
+        },
+        "publisher": {
+          "type": "string",
+          "maxLength": 200,
+          "description": "Publisher taken verbatim from the card. Inert untrusted text."
+        },
+        "source": {
+          "$ref": "#/definitions/CatalogPluginRepositorySource",
+          "description": "Bounded repository provenance declared through the catalog's sourceSet and repoPath metadata. It contains no descriptor URL."
+        },
+        "compatibilityTags": {
+          "allOf": [
+            {
+              "if": {
+                "contains": {
+                  "const": "canvas-only"
+                }
+              },
+              "then": {
+                "allOf": [
+                  {
+                    "contains": {
+                      "const": "canvas"
+                    }
+                  },
+                  {
+                    "contains": {
+                      "const": "github-copilot"
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/CatalogAgentPluginCompatibilityTag",
+            "description": "Explicit Agent Plugin compatibility declared by exact catalog tags. Clients must not infer these values from display text or other metadata."
+          },
+          "maxItems": 3,
+          "uniqueItems": true,
+          "description": "Explicit validated compatibility tags, in canonical order. An empty list means the source declared no recognised compatibility; clients must not infer compatibility from other fields. `canvas-only` requires both `canvas` and `github-copilot`.",
+          "x-typescript-type": "CatalogAgentPluginCompatibilityTag[]"
+        },
+        "provenance": {
+          "$ref": "#/definitions/CatalogAgentPluginCandidateProvenance",
+          "description": "Where the Agent Plugin catalog reference was observed, without its descriptor, URL, raw data, or content digest."
+        },
+        "trust": {
+          "$ref": "#/definitions/CatalogTrustSnapshot",
+          "description": "Versioned trust metadata observed from the catalog authority. Optional for protocol-3 compatibility and emitted only when the caller also requires the trust-snapshot capability."
+        }
+      },
+      "required": [
+        "kind",
+        "mediaType",
+        "identity",
+        "displayName",
+        "source",
+        "compatibilityTags",
+        "provenance"
+      ],
+      "additionalProperties": false,
+      "description": "An inert Agent Plugin catalog result. Its canonical catalog identity, declared version, repository source claim, and explicit compatibility tags are safe to correlate, while its descriptor, URL, raw data, and installed-plugin state remain runtime-private. This contract-only variant does not mint or expose a candidate handle.",
+      "title": "CatalogAgentPluginCandidate"
+    },
+    "CatalogAgentPluginCandidateKind": {
+      "type": "string",
+      "enum": [
+        "plugin"
+      ],
+      "description": "Discriminator for an Agent Plugin candidate",
+      "title": "CatalogAgentPluginCandidateKind",
+      "x-enumDescriptions": {
+        "plugin": "An Agent Plugin."
+      }
+    },
+    "CatalogAgentPluginCandidateProvenance": {
+      "type": "object",
+      "properties": {
+        "authority": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Host of the catalog authority that advertised the reference, without path, query, or credentials. Inert untrusted data."
+        },
+        "observedAt": {
+          "type": "string",
+          "description": "ISO 8601 timestamp at which the runtime observed the catalog reference. This is not a retrieval or validation timestamp."
+        },
+        "mediaType": {
+          "$ref": "#/definitions/CatalogAgentPluginMediaType",
+          "description": "Canonical Agent Plugin media type."
+        }
+      },
+      "required": [
+        "authority",
+        "observedAt",
+        "mediaType"
+      ],
+      "additionalProperties": false,
+      "description": "Where and when an Agent Plugin catalog reference was observed. Discovery provenance deliberately carries no descriptor URL, raw data, candidate handle, or content digest.",
+      "title": "CatalogAgentPluginCandidateProvenance"
+    },
+    "CatalogAgentPluginCompatibilityTag": {
+      "type": "string",
+      "enum": [
+        "canvas",
+        "canvas-only",
+        "github-copilot"
+      ],
+      "description": "Explicit Agent Plugin compatibility declared by exact catalog tags. Clients must not infer these values from display text or other metadata.",
+      "title": "CatalogAgentPluginCompatibilityTag",
+      "x-enumDescriptions": {
+        "canvas": "The plugin contributes at least one GitHub Copilot Canvas.",
+        "canvas-only": "The plugin depends on Canvas for its intended functionality.",
+        "github-copilot": "The plugin targets GitHub Copilot."
+      }
+    },
+    "CatalogAgentPluginMediaType": {
+      "type": "string",
+      "enum": [
+        "application/vnd.github.copilot-plugin"
+      ],
+      "description": "Canonical Agent Plugin media type",
+      "title": "CatalogAgentPluginMediaType",
+      "x-enumDescriptions": {
+        "application/vnd.github.copilot-plugin": "A GitHub Copilot Agent Plugin descriptor."
+      }
+    },
     "CatalogAiSkillCandidate": {
       "type": "object",
       "properties": {
@@ -14121,17 +15401,17 @@
           "description": "ISO 8601 timestamp after which the handle is stale and will be rejected."
         },
         "kind": {
-          "type": "string",
+          "$ref": "#/definitions/CatalogAiSkillCandidateKind",
           "const": "ai-skill",
           "description": "Discriminator: this candidate describes an AI skill"
         },
         "mediaType": {
-          "type": "string",
+          "$ref": "#/definitions/CatalogAiSkillMediaType",
           "const": "application/ai-skill",
           "description": "Media type of the underlying AI skill card"
         },
         "installability": {
-          "type": "string",
+          "$ref": "#/definitions/CatalogAiSkillInstallability",
           "const": "not-installable-kind",
           "description": "AI skills are discovery-only and cannot be installed through this surface"
         },
@@ -14177,6 +15457,17 @@
       "description": "An inert AI skill catalog result. AI skills are discovery-only and cannot be represented as installable through this surface.",
       "title": "CatalogAiSkillCandidate"
     },
+    "CatalogAiSkillCandidateKind": {
+      "type": "string",
+      "enum": [
+        "ai-skill"
+      ],
+      "description": "Discriminator for an AI skill candidate",
+      "title": "CatalogAiSkillCandidateKind",
+      "x-enumDescriptions": {
+        "ai-skill": "An AI skill."
+      }
+    },
     "CatalogAiSkillCandidateProvenance": {
       "type": "object",
       "properties": {
@@ -14190,7 +15481,7 @@
           "description": "ISO 8601 timestamp at which the runtime observed the catalog reference. This is not a retrieval or validation timestamp."
         },
         "mediaType": {
-          "type": "string",
+          "$ref": "#/definitions/CatalogAiSkillMediaType",
           "const": "application/ai-skill",
           "description": "Media type advertised for the referenced AI skill card"
         }
@@ -14203,6 +15494,28 @@
       "additionalProperties": false,
       "description": "Where and when an AI skill catalog reference was observed. Discovery provenance deliberately carries no content digest because search does not establish the exact validated content a later plan will bind.",
       "title": "CatalogAiSkillCandidateProvenance"
+    },
+    "CatalogAiSkillInstallability": {
+      "type": "string",
+      "enum": [
+        "not-installable-kind"
+      ],
+      "description": "Typed non-installable state for an AI skill candidate",
+      "title": "CatalogAiSkillInstallability",
+      "x-enumDescriptions": {
+        "not-installable-kind": "AI skills are discovery-only on this surface."
+      }
+    },
+    "CatalogAiSkillMediaType": {
+      "type": "string",
+      "enum": [
+        "application/ai-skill"
+      ],
+      "description": "Canonical AI skill media type",
+      "title": "CatalogAiSkillMediaType",
+      "x-enumDescriptions": {
+        "application/ai-skill": "An AI skill card."
+      }
     },
     "CatalogAuthenticationRequiredError": {
       "type": "object",
@@ -14255,22 +15568,28 @@
         {
           "$ref": "#/definitions/CatalogAiSkillCandidate",
           "description": "An inert AI skill catalog result. AI skills are discovery-only and cannot be represented as installable through this surface."
+        },
+        {
+          "$ref": "#/definitions/CatalogAgentPluginCandidate",
+          "description": "An inert Agent Plugin catalog result. Its canonical catalog identity, declared version, repository source claim, and explicit compatibility tags are safe to correlate, while its descriptor, URL, raw data, and installed-plugin state remain runtime-private. This contract-only variant does not mint or expose a candidate handle."
         }
       ],
-      "description": "One inert catalog result, represented as an MCP server or discovery-only AI skill variant so kind, media type, provenance, and installability cannot contradict each other.",
+      "description": "One inert catalog result, represented as an MCP server, discovery-only AI skill, or opt-in Agent Plugin variant so kind, media type, provenance, and available operations cannot contradict each other.",
       "title": "CatalogCandidate"
     },
     "CatalogCandidateKind": {
       "type": "string",
       "enum": [
         "mcp-server",
-        "ai-skill"
+        "ai-skill",
+        "plugin"
       ],
       "description": "What kind of resource a catalog candidate describes",
       "title": "CatalogCandidateKind",
       "x-enumDescriptions": {
         "mcp-server": "An MCP server, which can be planned for installation.",
-        "ai-skill": "An AI skill, which is discoverable but not installable through this surface."
+        "ai-skill": "An AI skill, which is discoverable but not installable through this surface.",
+        "plugin": "An inert Agent Plugin candidate, available only when explicitly requested."
       }
     },
     "CatalogCandidateSource": {
@@ -14331,9 +15650,12 @@
         "mcp-server-card",
         "legacy-mcp-server-card",
         "ai-skill-discovery",
+        "agent-plugin-discovery",
         "mcp-install-planning",
         "multiple-transport-choice",
-        "trust-snapshot"
+        "catalog-search-pagination",
+        "trust-snapshot",
+        "catalog-selection"
       ],
       "description": "A wire feature a caller can require of the catalog surface, negotiated per request. A grant means the runtime understands the feature's contract, not that the deployment has enabled the operation; typed unavailable results report availability separately.",
       "title": "CatalogCapability",
@@ -14341,9 +15663,12 @@
         "mcp-server-card": "Understands the current `application/mcp-server-card+json` media type.",
         "legacy-mcp-server-card": "Understands the legacy `application/mcp-server+json` media type.",
         "ai-skill-discovery": "Understands `application/ai-skill` candidates as discovery-only and typed non-installable.",
+        "agent-plugin-discovery": "Understands opt-in `application/vnd.github.copilot-plugin` candidates and their typed identity, version, source, and compatibility fields.",
         "mcp-install-planning": "Understands side-effect-free MCP install-plan requests, results, and plan handles; `planning-unavailable` separately reports that planning is not enabled.",
         "multiple-transport-choice": "Understands plans that enumerate every eligible transport rather than a single preferred one.",
-        "trust-snapshot": "Understands versioned candidate trust snapshots. Protocol-3 callers must require this capability before the runtime adds the optional snapshot field."
+        "catalog-search-pagination": "Understands explicit numbered navigation and authority-reported pagination metadata with opaque tokens. Advertised and granted only when requested.",
+        "trust-snapshot": "Understands versioned candidate trust snapshots. Protocol-3 callers must require this capability before the runtime adds the optional snapshot field.",
+        "catalog-selection": "Understands exact candidate selection through model-safe opaque references and host-only candidate-handle hand-off."
       }
     },
     "CatalogCapabilityId": {
@@ -14422,7 +15747,7 @@
       "x-enumDescriptions": {
         "both-url-and-data": "A result carried both a URL and embedded data, when exactly one is permitted.",
         "neither-url-nor-data": "A result carried neither a URL nor embedded data, when exactly one is required.",
-        "duplicate-identity": "Two results claimed the same normalised identity.",
+        "duplicate-identity": "Two results claimed the same collision key: normalised identity for existing kinds, or normalised identity and declared version for Agent Plugins.",
         "unknown-media-type": "A result declared no media type, or one this contract does not model."
       }
     },
@@ -14464,28 +15789,34 @@
         "invalid",
         "stale",
         "replayed",
-        "foreign"
+        "foreign",
+        "wrong-kind",
+        "search-mismatch"
       ],
       "description": "Why a presented handle was rejected",
       "title": "CatalogHandleRejectionReason",
       "x-enumDescriptions": {
-        "invalid": "The handle is unparseable, unknown, or was issued for a different operation.",
+        "invalid": "The handle is unparseable or unknown.",
         "stale": "The handle's time to live has elapsed.",
         "replayed": "The handle has already been used, and handles are single-use.",
-        "foreign": "The handle was issued by a different runtime instance."
+        "foreign": "The handle was issued by a different runtime instance or session.",
+        "wrong-kind": "The handle was issued for another catalog operation.",
+        "search-mismatch": "The supplied search identifier does not match the retained candidate."
       }
     },
     "CatalogHandleType": {
       "type": "string",
       "enum": [
         "candidate",
-        "plan"
+        "plan",
+        "selection"
       ],
       "description": "Which kind of opaque handle was presented",
       "title": "CatalogHandleType",
       "x-enumDescriptions": {
         "candidate": "A search candidate handle.",
-        "plan": "An install plan handle."
+        "plan": "An install plan handle.",
+        "selection": "A model-safe reference to one retained search candidate."
       }
     },
     "CatalogInvalidRequestError": {
@@ -14512,7 +15843,7 @@
         "message"
       ],
       "additionalProperties": false,
-      "description": "The request was rejected before any work was done, because a bounded field fell outside its permitted range or a required field was unusable.",
+      "description": "The request was rejected because a bounded field fell outside its permitted range or a required field was unusable. Pagination may also be rejected by the authority after a continuation request; repeat the search without page.",
       "title": "CatalogInvalidRequestError"
     },
     "CatalogInvalidRequestField": {
@@ -14524,9 +15855,13 @@
         "contract",
         "source",
         "card",
-        "scope"
+        "scope",
+        "page",
+        "sessionId",
+        "selectionRef",
+        "outcome"
       ],
-      "description": "Which request field was rejected before any work was done",
+      "description": "Which request field was rejected locally or by the catalog authority",
       "title": "CatalogInvalidRequestField",
       "x-enumDescriptions": {
         "query": "The search query was empty or longer than permitted.",
@@ -14535,7 +15870,11 @@
         "contract": "The negotiation block was missing or malformed.",
         "source": "The plan source was missing or malformed.",
         "card": "The supplied card was missing its media type, URL, or data.",
-        "scope": "The requested configuration scope is not one this runtime writes."
+        "scope": "The requested configuration scope is not one this runtime writes.",
+        "page": "The pagination token or target was invalid, or the authority rejected the continuation. Repeat the search without page.",
+        "sessionId": "The locally owned session identifier was missing or malformed.",
+        "selectionRef": "The opaque selection reference was missing or malformed.",
+        "outcome": "The terminal selection outcome was missing or unsupported."
       }
     },
     "CatalogMalformedCardError": {
@@ -14601,7 +15940,7 @@
           "description": "ISO 8601 timestamp after which the handle is stale and will be rejected."
         },
         "kind": {
-          "type": "string",
+          "$ref": "#/definitions/CatalogMcpServerCandidateKind",
           "const": "mcp-server",
           "description": "Discriminator: this candidate describes an MCP server"
         },
@@ -14655,6 +15994,17 @@
       "description": "An inert MCP server catalog result. Every free-text field is untrusted external data and must never be treated as an instruction, and the handle is the only way to refer to the candidate in a later operation.",
       "title": "CatalogMcpServerCandidate"
     },
+    "CatalogMcpServerCandidateKind": {
+      "type": "string",
+      "enum": [
+        "mcp-server"
+      ],
+      "description": "Discriminator for an MCP server candidate",
+      "title": "CatalogMcpServerCandidateKind",
+      "x-enumDescriptions": {
+        "mcp-server": "An MCP server."
+      }
+    },
     "CatalogMcpServerCandidateProvenance": {
       "type": "object",
       "properties": {
@@ -14699,14 +16049,16 @@
       "enum": [
         "application/mcp-server-card+json",
         "application/mcp-server+json",
-        "application/ai-skill"
+        "application/ai-skill",
+        "application/vnd.github.copilot-plugin"
       ],
       "description": "Media type a catalog card is interpreted as",
       "title": "CatalogMediaType",
       "x-enumDescriptions": {
         "application/mcp-server-card+json": "The current MCP server card media type.",
         "application/mcp-server+json": "The legacy MCP server card media type, accepted for compatibility.",
-        "application/ai-skill": "An AI skill card. Representable and searchable, but typed non-installable."
+        "application/ai-skill": "An AI skill card. Representable and searchable, but typed non-installable.",
+        "application/vnd.github.copilot-plugin": "An inert Agent Plugin descriptor."
       }
     },
     "CatalogNegotiatedContract": {
@@ -14723,7 +16075,7 @@
             "$ref": "#/definitions/CatalogCapability",
             "description": "A wire feature a caller can require of the catalog surface, negotiated per request. A grant means the runtime understands the feature's contract, not that the deployment has enabled the operation; typed unavailable results report availability separately."
           },
-          "description": "Wire features the runtime understood for this operation. Always a superset of the caller's required features, because any shortfall is a refusal instead. Operation availability remains a separate typed result."
+          "description": "Wire features the runtime understood for this operation. Includes the five original catalog capabilities and only explicitly requested supported additions, in supported order without duplicates. Capabilities that introduce new success-union variants or operations are therefore included only when explicitly required, preserving older protocol-v3 clients. Always a superset of the caller's required features, because any shortfall is a refusal instead. Operation availability remains a separate typed result."
         }
       },
       "required": [
@@ -14921,6 +16273,31 @@
         "policy-forbids": "Policy forbids installing this candidate."
       }
     },
+    "CatalogPluginRepositorySource": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 256,
+          "pattern": "^[a-z0-9_.-]+/[a-z0-9_.-]+$",
+          "description": "Canonical lowercase owner/repository name derived from metadata.sourceSet."
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Case-preserving safe relative POSIX path derived from metadata.repoPath."
+        }
+      },
+      "required": [
+        "repository",
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "Syntactically validated GitHub repository provenance declared by catalog metadata. This is a source claim rather than proof that the descriptor URL resolves to the repository.",
+      "title": "CatalogPluginRepositorySource"
+    },
     "CatalogPolicyRejectedError": {
       "type": "object",
       "properties": {
@@ -14947,6 +16324,107 @@
       "additionalProperties": false,
       "description": "Registry or enterprise policy refused the operation.",
       "title": "CatalogPolicyRejectedError"
+    },
+    "CatalogResourceIdentity": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000,
+      "pattern": "^urn:air:[a-z0-9.-]+:[A-Za-z0-9._-]+:[A-Za-z0-9._-]+(?::[A-Za-z0-9._-]+)*$",
+      "description": "Canonical catalogue resource identity. The runtime rewrites accepted urn:ai and urn:air identifiers to urn:air, lowercases the authority, and preserves the remaining resource components.",
+      "title": "CatalogResourceIdentity"
+    },
+    "CatalogResourceVersion": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Bounded source-declared resource version, preserved exactly after validation and never inferred.",
+      "title": "CatalogResourceVersion"
+    },
+    "CatalogSearchPage": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Opaque authority-issued pagination token from an earlier response. Never decode, modify or log it in an SDK consumer."
+        },
+        "number": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Requested one-based page. Must not exceed either the token's signed pageCount or the navigation window ceil(1000 / pageSize). Repeat the search without page to discover newly available pages beyond that signed pageCount."
+        }
+      },
+      "required": [
+        "token",
+        "number"
+      ],
+      "additionalProperties": false,
+      "description": "An explicit numbered-page request. The SDK treats the token as opaque; only the runtime decodes it and changes its targetPage. Authority validation binds navigation to the original search. No snapshot stability or token TTL is promised.",
+      "title": "CatalogSearchPage"
+    },
+    "CatalogSearchPagination": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "description": "Opaque authority-issued pagination token. Only the runtime decodes it or changes targetPage; SDK consumers must not decode, modify or log it. It has no runtime-created expiry or cache."
+        },
+        "currentPage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "One-based page returned by the authority."
+        },
+        "pageSize": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "description": "Page size bound to the search, equal to the effective request limit."
+        },
+        "totalCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Backend-reported count for this response, not the number of returned candidates. Its relationship to the full query result set is unknown."
+        },
+        "totalCountRelation": {
+          "$ref": "#/definitions/CatalogSearchTotalCountRelation",
+          "description": "The relationship of totalCount to the complete query result set is unknown; neither exactness nor a lower-bound guarantee is implied."
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": 2,
+          "maximum": 9007199254740991,
+          "description": "Backend-reported page count, which may exceed maxPage. Present pagination metadata always describes a multi-page result; zero- and single-page responses omit pagination. Navigation targets must also be within the signed pageCount carried by the supplied token."
+        },
+        "maxPage": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "description": "Navigation window ceiling ceil(1000 / pageSize), not the number of existing pages. Legal targets must not exceed this ceiling or the token's signed pageCount."
+        },
+        "hasNextPage": {
+          "type": "boolean",
+          "description": "Whether the authority token advertises a valid next target within the navigation window. Not inferred from token presence, truncated, or currentPage being less than pageCount."
+        }
+      },
+      "required": [
+        "token",
+        "currentPage",
+        "pageSize",
+        "totalCount",
+        "totalCountRelation",
+        "pageCount",
+        "maxPage",
+        "hasNextPage"
+      ],
+      "additionalProperties": false,
+      "description": "Authority-reported navigation metadata, returned only to callers requiring catalog-search-pagination and only when a supported token is present. Tokenless first-page and continuation responses omit this object; no counts are inferred from candidates. The opaque token may be retained for previous or numbered navigation even when hasNextPage is false.",
+      "title": "CatalogSearchPagination"
     },
     "CatalogSearchRequest": {
       "type": "object",
@@ -14976,9 +16454,13 @@
             "description": "What kind of resource a catalog candidate describes"
           },
           "minItems": 1,
-          "maxItems": 2,
+          "maxItems": 3,
           "uniqueItems": true,
-          "description": "Restrict results to these candidate kinds. When omitted, every kind the runtime supports is searched."
+          "description": "Restrict results to these candidate kinds. Agent Plugins are opt-in and require the `agent-plugin-discovery` capability so protocol-v3 clients generated before that variant cannot receive an unknown result; when omitted, the backwards-compatible MCP server and AI skill kinds are searched."
+        },
+        "page": {
+          "$ref": "#/definitions/CatalogSearchPage",
+          "description": "Numbered navigation using metadata from an earlier response. Requires catalog-search-pagination and the same query, kinds and effective limit. Omit for a fresh first-page search."
         }
       },
       "required": [
@@ -14993,7 +16475,7 @@
       "anyOf": [
         {
           "$ref": "#/definitions/CatalogSearchSucceeded",
-          "description": "A completed catalog search: inert candidate summaries, each carrying a single-use handle."
+          "description": "A completed catalog search containing inert candidate summaries. MCP server and AI skill variants carry a single-use handle; the Agent Plugin variant is handleless."
         },
         {
           "$ref": "#/definitions/CatalogNegotiationRefusedError",
@@ -15005,7 +16487,7 @@
         },
         {
           "$ref": "#/definitions/CatalogInvalidRequestError",
-          "description": "The request was rejected before any work was done, because a bounded field fell outside its permitted range or a required field was unusable."
+          "description": "The request was rejected because a bounded field fell outside its permitted range or a required field was unusable. Pagination may also be rejected by the authority after a continuation request; repeat the search without page."
         },
         {
           "$ref": "#/definitions/CatalogAuthenticationRequiredError",
@@ -15057,18 +16539,22 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/CatalogCandidate",
-            "description": "One inert catalog result, represented as an MCP server or discovery-only AI skill variant so kind, media type, provenance, and installability cannot contradict each other."
+            "description": "One inert catalog result, represented as an MCP server, discovery-only AI skill, or opt-in Agent Plugin variant so kind, media type, provenance, and available operations cannot contradict each other."
           },
           "maxItems": 50,
           "description": "Matching candidates, never more than the requested limit. All text is inert untrusted data."
         },
         "truncated": {
           "type": "boolean",
-          "description": "Whether further matches existed beyond the requested limit."
+          "description": "Legacy indication that the authority returned a page token. Preserved for compatibility; this is not a has-next-page indicator. Use pagination.hasNextPage when pagination metadata is present."
         },
         "negotiated": {
           "$ref": "#/definitions/CatalogNegotiatedContract",
           "description": "Protocol version and capabilities the runtime honoured."
+        },
+        "pagination": {
+          "$ref": "#/definitions/CatalogSearchPagination",
+          "description": "Navigation metadata for callers explicitly requiring catalog-search-pagination. Omitted when the authority returns no token, including tokenless first-page and continuation responses. Counts are never substituted from candidates.length."
         }
       },
       "required": [
@@ -15079,8 +16565,333 @@
         "negotiated"
       ],
       "additionalProperties": false,
-      "description": "A completed catalog search: inert candidate summaries, each carrying a single-use handle.",
+      "description": "A completed catalog search containing inert candidate summaries. MCP server and AI skill variants carry a single-use handle; the Agent Plugin variant is handleless.",
       "title": "CatalogSearchSucceeded"
+    },
+    "CatalogSearchTotalCountRelation": {
+      "type": "string",
+      "enum": [
+        "unknown"
+      ],
+      "description": "Relationship of the backend-reported count to the complete query result set.",
+      "title": "CatalogSearchTotalCountRelation",
+      "x-enumDescriptions": {
+        "unknown": "No exact/full-query or lower-bound guarantee is available."
+      }
+    },
+    "CatalogSelectionCancelled": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "cancelled",
+          "description": "Discriminator: selection was cancelled"
+        },
+        "searchId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The search identifier privately bound to the released selection group."
+        }
+      },
+      "required": [
+        "kind",
+        "searchId"
+      ],
+      "additionalProperties": false,
+      "description": "The caller cancelled the selection interaction and the retained search state was released.",
+      "title": "CatalogSelectionCancelled"
+    },
+    "CatalogSelectionDecision": {
+      "type": "string",
+      "enum": [
+        "selected",
+        "declined",
+        "cancelled",
+        "timed-out"
+      ],
+      "description": "Terminal outcome declared for a retained catalog selection group",
+      "title": "CatalogSelectionDecision",
+      "x-enumDescriptions": {
+        "selected": "Choose the candidate named by selectionRef.",
+        "declined": "Explicitly decline every candidate in the search.",
+        "cancelled": "Cancel the selection interaction without choosing a candidate.",
+        "timed-out": "Declare that the host's live interaction deadline elapsed while the reference remained valid."
+      }
+    },
+    "CatalogSelectionDeclined": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "declined",
+          "description": "Discriminator: the candidates were declined"
+        },
+        "searchId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The search identifier privately bound to the released selection group."
+        }
+      },
+      "required": [
+        "kind",
+        "searchId"
+      ],
+      "additionalProperties": false,
+      "description": "The caller explicitly declined every candidate and the retained search state was released.",
+      "title": "CatalogSelectionDeclined"
+    },
+    "CatalogSelectionForeign": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "foreign",
+          "description": "Discriminator for this typed selection rejection"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Human-readable explanation safe to surface. Never contains the presented reference or private candidate state."
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "The selection reference belongs to another runtime instance or session.",
+      "title": "CatalogSelectionForeign"
+    },
+    "CatalogSelectionInvalid": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "invalid",
+          "description": "Discriminator for this typed selection rejection"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Human-readable explanation safe to surface. Never contains the presented reference or private candidate state."
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "The selection reference was malformed or unknown.",
+      "title": "CatalogSelectionInvalid"
+    },
+    "CatalogSelectionReplayed": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "replayed",
+          "description": "Discriminator for this typed selection rejection"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Human-readable explanation safe to surface. Never contains the presented reference or private candidate state."
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "The selection group was already terminated or its pending host hand-off was already claimed.",
+      "title": "CatalogSelectionReplayed"
+    },
+    "CatalogSelectionRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Protocol version and capabilities the caller requires."
+        },
+        "sessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Locally owned root session whose retained search state is being resolved."
+        },
+        "selectionRef": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Opaque runtime-instance scoped reference to one visible candidate. For a non-selected outcome, any candidate reference from the same search closes that search's retained group."
+        },
+        "outcome": {
+          "$ref": "#/definitions/CatalogSelectionDecision",
+          "description": "The terminal outcome declared by the caller. Timed-out means the host's live interaction deadline elapsed; a reference whose runtime TTL elapsed is rejected separately as stale."
+        }
+      },
+      "required": [
+        "contract",
+        "sessionId",
+        "selectionRef",
+        "outcome"
+      ],
+      "additionalProperties": false,
+      "description": "Terminates one retained catalog selection group through an opaque reference previously returned by the model-safe search projection.",
+      "title": "CatalogSelectionRequest"
+    },
+    "CatalogSelectionResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/CatalogSelectionSelected",
+          "description": "The chosen candidate was transferred into a fresh bounded single-use handle for a later explicit planning request."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionDeclined",
+          "description": "The caller explicitly declined every candidate and the retained search state was released."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionCancelled",
+          "description": "The caller cancelled the selection interaction and the retained search state was released."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionTimedOut",
+          "description": "The host declared that its live selection interaction timed out, and the retained search state was released."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionInvalid",
+          "description": "The selection reference was malformed or unknown."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionStale",
+          "description": "The runtime-enforced selection reference lifetime elapsed before the request arrived."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionReplayed",
+          "description": "The selection group was already terminated or its pending host hand-off was already claimed."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionForeign",
+          "description": "The selection reference belongs to another runtime instance or session."
+        },
+        {
+          "$ref": "#/definitions/CatalogSelectionWrongKind",
+          "description": "The presented opaque handle was issued for another catalog operation."
+        },
+        {
+          "$ref": "#/definitions/CatalogNegotiationRefusedError",
+          "description": "The caller's protocol version or required capabilities cannot be honoured. Returned instead of a partial or ambiguous success."
+        },
+        {
+          "$ref": "#/definitions/CatalogInvalidRequestError",
+          "description": "The request was rejected because a bounded field fell outside its permitted range or a required field was unusable. Pagination may also be rejected by the authority after a continuation request; repeat the search without page."
+        },
+        {
+          "$ref": "#/definitions/CatalogUnavailableError",
+          "description": "The operation is not available on this runtime. Distinct from a network failure: nothing was attempted."
+        }
+      ],
+      "description": "Typed outcome of catalog.select. Only the selected host result carries a fresh candidate handle; the model-facing projection removes both that handle and searchId.",
+      "title": "CatalogSelectionResult"
+    },
+    "CatalogSelectionSelected": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "selected",
+          "description": "Discriminator: one candidate was selected"
+        },
+        "candidateHandle": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Fresh single-use candidate handle accepted by mcp.planInstall. Returned only to the native host and never included in model-tool output."
+        },
+        "searchId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The exact search identifier privately bound to the selected candidate."
+        }
+      },
+      "required": [
+        "kind",
+        "candidateHandle",
+        "searchId"
+      ],
+      "additionalProperties": false,
+      "description": "The chosen candidate was transferred into a fresh bounded single-use handle for a later explicit planning request.",
+      "title": "CatalogSelectionSelected"
+    },
+    "CatalogSelectionStale": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "stale",
+          "description": "Discriminator for this typed selection rejection"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Human-readable explanation safe to surface. Never contains the presented reference or private candidate state."
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "The runtime-enforced selection reference lifetime elapsed before the request arrived.",
+      "title": "CatalogSelectionStale"
+    },
+    "CatalogSelectionTimedOut": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "timed-out",
+          "description": "Discriminator: the host's live interaction timed out"
+        },
+        "searchId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "description": "The search identifier privately bound to the released selection group."
+        }
+      },
+      "required": [
+        "kind",
+        "searchId"
+      ],
+      "additionalProperties": false,
+      "description": "The host declared that its live selection interaction timed out, and the retained search state was released.",
+      "title": "CatalogSelectionTimedOut"
+    },
+    "CatalogSelectionWrongKind": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "wrong-kind",
+          "description": "Discriminator for this typed selection rejection"
+        },
+        "message": {
+          "type": "string",
+          "maxLength": 1000,
+          "description": "Human-readable explanation safe to surface. Never contains the presented reference or private candidate state."
+        }
+      },
+      "required": [
+        "kind",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "The presented opaque handle was issued for another catalog operation.",
+      "title": "CatalogSelectionWrongKind"
     },
     "CatalogTrustEligibility": {
       "type": "string",
@@ -15522,6 +17333,7 @@
       "enum": [
         "search-unavailable",
         "planning-unavailable",
+        "selection-unavailable",
         "authority-not-configured",
         "disabled-by-policy"
       ],
@@ -15530,6 +17342,7 @@
       "x-enumDescriptions": {
         "search-unavailable": "Bounded search is not wired up on this runtime build.",
         "planning-unavailable": "Install planning is not wired up on this runtime build.",
+        "selection-unavailable": "Exact candidate selection is not available in this session or runtime.",
         "authority-not-configured": "No catalog authority is configured for this runtime.",
         "disabled-by-policy": "The surface is disabled by policy on this runtime."
       }
@@ -16587,6 +18400,24 @@
         "cli_remote_control_enabled": {
           "type": "boolean",
           "description": "Whether CLI remote control is enabled for the user."
+        },
+        "enterprise_list": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Numeric database ID of the enterprise."
+              }
+            },
+            "required": [
+              "id"
+            ],
+            "additionalProperties": false
+          },
+          "description": "Enterprises that provide the user's Copilot license, each with a stable numeric ID."
         }
       },
       "additionalProperties": false,
@@ -21419,6 +23250,25 @@
         "notification": "Runs when the agent emits a notification."
       }
     },
+    "IndexedSearchState": {
+      "type": "string",
+      "enum": [
+        "disabled",
+        "starting",
+        "enabled",
+        "ready",
+        "failed"
+      ],
+      "description": "Live indexed-search state for this session activation, never inferred from persisted history.",
+      "title": "IndexedSearchState",
+      "x-enumDescriptions": {
+        "disabled": "Indexed search is not active for this session.",
+        "starting": "Indexed-search startup is in progress.",
+        "enabled": "The indexed-search server started successfully; its index may still be warming.",
+        "ready": "The indexed-search server and its index are ready.",
+        "failed": "Indexed-search startup or the active server failed."
+      }
+    },
     "InstalledPlugin": {
       "type": "object",
       "properties": {
@@ -21499,6 +23349,18 @@
         "source": {
           "type": "string",
           "description": "Runtime-reported plugin provenance. Currently set to \"builtin\" only for plugins registered through the trusted host built-in boundary; absent for installed, marketplace, direct, and live plugins."
+        },
+        "managed": {
+          "type": "boolean",
+          "description": "Whether enterprise managed settings control this plugin's enabled state."
+        },
+        "managedDesiredEnabled": {
+          "type": "boolean",
+          "description": "The enabled state required by enterprise managed settings, when this plugin spec is managed."
+        },
+        "installed": {
+          "type": "boolean",
+          "description": "Whether the managed desired plugin currently has an installed or live record. Set to false for a managed desired entry retained in the listing after installation or reconciliation failed."
         }
       },
       "required": [
@@ -22361,6 +24223,91 @@
       "description": "Validated device-managed settings discovered before a session exists.",
       "title": "ManagedSettingsReadResult"
     },
+    "ManagedSettingsResolvedData": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/ManagedSettingsResolvedSource",
+          "description": "Channel summary: `server`, `device`, `client`, or `policyHelper` when exactly one channel contributed; `mixed` when multiple channels contributed; otherwise `none`. Consult the per-channel booleans for exact provenance."
+        },
+        "serverManaged": {
+          "type": "boolean",
+          "description": "Whether the server (account/org) managed-settings layer was present"
+        },
+        "deviceManaged": {
+          "type": "boolean",
+          "description": "Whether an actual device MDM/plist/registry/file managed-settings layer was present"
+        },
+        "clientManaged": {
+          "type": "boolean",
+          "description": "Whether a session-local permissions layer injected by the SDK host was present"
+        },
+        "policyHelperManaged": {
+          "type": "boolean",
+          "description": "Whether the policy-helper managed-settings layer was present. The policy helper is the weakest channel: it fills keys no enterprise source set and can never replace one."
+        },
+        "failClosed": {
+          "type": "boolean",
+          "description": "Whether managed policy could not be determined (e.g. a failed server fetch) and the session fell back to the fail-closed restriction. When true, restrictions such as disabling bypass-permissions are enforced even though `settings` may be absent."
+        },
+        "sandboxEnabledByUndeterminedPolicy": {
+          "type": "boolean",
+          "description": "Whether the effective sandbox policy forces the sandbox on *only* because managed policy could not be determined, rather than because the policy requires it. Lets clients tell a user whose `--no-sandbox` was overridden that the sandbox stayed on as a fail-closed fallback, instead of attributing it to an administrator who set no such policy."
+        },
+        "bypassPermissionsDisabled": {
+          "type": "boolean",
+          "description": "Whether enterprise policy disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers, and forced on when `failClosed` is true."
+        },
+        "permissionsAllowIntersected": {
+          "type": "boolean",
+          "description": "Whether at least two managed sources supplied permission allowlists, so enforcement intersects them and the flattened settings payload omits `permissions.allow`."
+        },
+        "managedKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The setting keys under enterprise management in the effective managed settings (e.g. `model`, `enabledPlugins`, `permissions`). Empty when no managed settings are in force."
+        },
+        "settings": {
+          "description": "The effective (resolved) managed settings values, so clients can render exactly what is enforced. Absent when no managed policy is in force.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "source",
+        "serverManaged",
+        "deviceManaged",
+        "failClosed",
+        "bypassPermissionsDisabled",
+        "managedKeys"
+      ],
+      "additionalProperties": false,
+      "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes.",
+      "title": "ManagedSettingsResolvedData",
+      "stability": "experimental"
+    },
+    "ManagedSettingsResolvedSource": {
+      "type": "string",
+      "enum": [
+        "server",
+        "device",
+        "client",
+        "policyHelper",
+        "mixed",
+        "none"
+      ],
+      "description": "Summary of which managed-settings channels contributed to the effective session policy. Use the per-channel booleans for exact provenance.",
+      "title": "ManagedSettingsResolvedSource",
+      "x-enumDescriptions": {
+        "server": "Only the server/account channel contributed.",
+        "device": "Only the device MDM/plist/registry/file channel contributed.",
+        "client": "Only session-local SDK-host injection contributed.",
+        "policyHelper": "A policy helper registered by device or server policy contributed. Device registration takes priority when present.",
+        "mixed": "More than one channel contributed. Ordinary keys resolve device over server over policy helper per key, while permissions compose restrictively across all present layers.",
+        "none": "No managed policy is in force (no channel contributed)."
+      }
+    },
     "MarketplaceAddResult": {
       "type": "object",
       "properties": {
@@ -22409,6 +24356,14 @@
         "isDefault": {
           "type": "boolean",
           "description": "True when this is a default marketplace shipped with the runtime. Defaults are not removable."
+        },
+        "managed": {
+          "type": "boolean",
+          "description": "Whether enterprise managed settings provide and control this marketplace entry."
+        },
+        "available": {
+          "type": "boolean",
+          "description": "Whether the managed marketplace currently resolved into the runtime marketplace registry. Set to false when the desired managed entry is retained for governance visibility after loading or reconciliation failed."
         }
       },
       "required": [
@@ -23599,9 +25554,9 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/McpPlanConfigurationChange",
-            "description": "One change applying the plan would make, described rather than serialised so the configuration payload stays behind the runtime boundary."
+            "description": "The configuration-change alternative for the transportChoices entry at the same index. Only the selected alternative is applied; entries are not cumulative. The payload stays behind the runtime boundary."
           },
-          "description": "The configuration changes installing would make, described rather than serialised, so the mutable configuration payload stays behind the runtime boundary."
+          "description": "Alternative configuration changes, with exactly one entry for each transportChoices entry in the same order. Only the entry for the subsequently selected transport applies; these are not cumulative writes. Payloads remain behind the runtime boundary."
         },
         "reloadRequired": {
           "type": "boolean",
@@ -23609,7 +25564,7 @@
         },
         "requiresInteractiveConfiguration": {
           "type": "boolean",
-          "description": "Whether the plan cannot be applied without further input, because a required value has no default or a secret must be supplied."
+          "description": "True only when every eligible transport choice needs additional values or secrets. False means at least one choice needs no additional configuration, not that every choice is ready. A later apply operation must validate the selected choice's own inputs, secrets and policy after explicit confirmation."
         }
       },
       "required": [
@@ -24063,7 +26018,7 @@
         "secretReferences"
       ],
       "additionalProperties": false,
-      "description": "One change applying the plan would make, described rather than serialised so the configuration payload stays behind the runtime boundary.",
+      "description": "The configuration-change alternative for the transportChoices entry at the same index. Only the selected alternative is applied; entries are not cumulative. The payload stays behind the runtime boundary.",
       "title": "McpPlanConfigurationChange"
     },
     "McpPlanConfigurationOperation": {
@@ -24156,7 +26111,7 @@
         },
         {
           "$ref": "#/definitions/CatalogInvalidRequestError",
-          "description": "The request was rejected before any work was done, because a bounded field fell outside its permitted range or a required field was unusable."
+          "description": "The request was rejected because a bounded field fell outside its permitted range or a required field was unusable. Pagination may also be rejected by the authority after a continuation request; repeat the search without page."
         },
         {
           "$ref": "#/definitions/CatalogAuthenticationRequiredError",
@@ -24230,7 +26185,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 64,
-          "description": "The runtime- or authority-minted `searchId` returned with the search that produced this candidate. A search implementation binds it to private candidate-handle context; a planning implementation must verify that context before returning a plan. The unavailable planning implementation in this contract layer validates presence but does not claim the verification has occurred. It identifies a search rather than a person and must never be joined with user identity to re-identify anyone."
+          "description": "The runtime- or authority-minted `searchId` returned with the search that produced this candidate. Planning verifies the private correlation and atomically consumes a matching candidate before downstream work, including attempts that subsequently fail or report unavailable. A mismatched search does not consume the candidate. It identifies a search rather than a person and must never be joined with user identity to re-identify anyone."
         }
       },
       "required": [
@@ -25684,6 +27639,13 @@
           "format": "duration",
           "description": "Timeout in milliseconds for tool discovery and tool calls."
         },
+        "slowConnectionThresholdMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647,
+          "format": "duration",
+          "description": "Milliseconds this server may spend connecting before the CLI warns that it is taking longer than expected. Presentation only: it does not change how long the connection is allowed to take."
+        },
         "oidc": {
           "$ref": "#/definitions/McpServerAuthConfig",
           "description": "Set to `true` to use defaults, or provide an object with additional auth or OIDC settings."
@@ -25854,6 +27816,13 @@
           "type": "integer",
           "description": "Timeout in milliseconds for tool discovery and tool calls."
         },
+        "slowConnectionThresholdMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647,
+          "format": "duration",
+          "description": "Milliseconds this server may spend connecting before the CLI warns that it is taking longer than expected. Presentation only: it does not change how long the connection is allowed to take."
+        },
         "oidc": {
           "$ref": "#/definitions/McpServerAuthConfig",
           "description": "Set to `true` to use default OIDC settings."
@@ -25968,6 +27937,13 @@
           "exclusiveMinimum": 0,
           "format": "duration",
           "description": "Timeout in milliseconds for tool discovery and tool calls."
+        },
+        "slowConnectionThresholdMs": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 2147483647,
+          "format": "duration",
+          "description": "Milliseconds this server may spend connecting before the CLI warns that it is taking longer than expected. Presentation only: it does not change how long the connection is allowed to take."
         },
         "oidc": {
           "$ref": "#/definitions/McpServerAuthConfig",
@@ -26920,6 +28896,10 @@
           "type": "string",
           "description": "Startup default model from the enterprise policy helper, when configured. Weakest of the managed sources: it applies only when neither device nor server policy names a model, and an explicit user selection still wins."
         },
+        "autoTier": {
+          "$ref": "#/definitions/AutoTier",
+          "description": "Effective default Auto routing preference from user and managed settings. Applies only to fresh sessions and never replaces a per-session selection."
+        },
         "repoModel": {
           "type": "string",
           "description": "Model selected by repository settings, when configured."
@@ -27305,6 +29285,7 @@
         "agent",
         "plan_mode",
         "automatic",
+        "changeboarding_shortcut",
         "sdk"
       ],
       "description": "Origin of an effective session model change.",
@@ -27320,6 +29301,7 @@
         "agent": "Selecting an agent selected its configured model.",
         "plan_mode": "Entering, leaving, or reconfiguring plan mode selected the model.",
         "automatic": "The runtime selected the model automatically, such as rate-limit recovery or refusal fallback.",
+        "changeboarding_shortcut": "The user selected the promoted model from the changeboarding card or its keyboard shortcut.",
         "sdk": "An SDK or RPC caller selected the model."
       }
     },
@@ -27806,6 +29788,10 @@
     "ModelSwitchToResult": {
       "type": "object",
       "properties": {
+        "queueId": {
+          "type": "string",
+          "description": "Stable queue item identifier when this request was enqueued. Remains present if the item drains before the response is returned."
+        },
         "modelId": {
           "type": "string",
           "description": "Currently active model identifier after the switch"
@@ -28335,6 +30321,10 @@
         "request": {
           "$ref": "session-events.schema.json#/definitions/PermissionPromptRequest",
           "description": "The user-facing permission prompt details (commands, write, read, mcp, url, memory, custom-tool, path, hook)"
+        },
+        "recoveryEpisodeId": {
+          "type": "string",
+          "description": "Permission-recovery episode that authorized this request to surface for interactive attention"
         }
       },
       "required": [
@@ -29760,6 +31750,210 @@
       "title": "PermissionPromptShownNotification",
       "stability": "experimental"
     },
+    "PermissionRecoveryAttempt": {
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "description": "Unique identifier for this attempt record"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool-call identifier associated with this attempt, when available"
+        },
+        "permissionKind": {
+          "type": "string",
+          "description": "Controlled permission request kind, such as shell, path, URL, or tool"
+        },
+        "requestFingerprint": {
+          "type": "string",
+          "description": "SHA-256 fingerprint of normalized request data; raw permission arguments are not included"
+        },
+        "relation": {
+          "$ref": "#/definitions/PermissionRecoveryAttemptRelation",
+          "description": "Relationship between this attempt and earlier attempts in the episode"
+        },
+        "disposition": {
+          "$ref": "#/definitions/PermissionRecoveryAttemptDisposition",
+          "description": "How the runtime handled this attempt"
+        },
+        "reason": {
+          "$ref": "#/definitions/PermissionRecoveryAttemptReason",
+          "description": "Controlled reason for the attempt disposition"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "One-based position of this attempt in the episode"
+        }
+      },
+      "required": [
+        "attemptId",
+        "permissionKind",
+        "requestFingerprint",
+        "relation",
+        "disposition",
+        "reason",
+        "ordinal"
+      ],
+      "additionalProperties": false
+    },
+    "PermissionRecoveryAttemptDisposition": {
+      "type": "string",
+      "enum": [
+        "deferred",
+        "prompted",
+        "approved",
+        "denied",
+        "blocked",
+        "succeeded"
+      ],
+      "description": "Runtime handling applied to a recovery attempt",
+      "title": "PermissionRecoveryAttemptDisposition",
+      "x-enumDescriptions": {
+        "deferred": "The request was denied without prompting so the agent could try an alternative.",
+        "prompted": "The request was surfaced to an interactive responder.",
+        "approved": "The interactive responder approved the request.",
+        "denied": "The interactive responder denied the request or became unavailable.",
+        "blocked": "The request exhausted unattended recovery and produced a blocked outcome.",
+        "succeeded": "A tool call succeeded as an equivalent alternative."
+      }
+    },
+    "PermissionRecoveryAttemptReason": {
+      "type": "string",
+      "enum": [
+        "permission_required",
+        "repeated_attempt",
+        "attempts_exhausted",
+        "permission_approved",
+        "permission_denied",
+        "responder_unavailable",
+        "equivalent_alternative_succeeded"
+      ],
+      "description": "Controlled reason for an individual attempt disposition",
+      "title": "PermissionRecoveryAttemptReason",
+      "x-enumDescriptions": {
+        "permission_required": "The attempt required permission that Assisted Permissions could not grant.",
+        "repeated_attempt": "The request repeated an earlier attempt.",
+        "attempts_exhausted": "The request exceeded the bounded number of distinct attempts.",
+        "permission_approved": "The interactive responder approved the request.",
+        "permission_denied": "The interactive responder denied the request.",
+        "responder_unavailable": "The interactive responder became unavailable.",
+        "equivalent_alternative_succeeded": "The tool call succeeded without the blocked permission."
+      }
+    },
+    "PermissionRecoveryAttemptRelation": {
+      "type": "string",
+      "enum": [
+        "initial",
+        "retry",
+        "alternative"
+      ],
+      "description": "Relationship of an attempt to earlier permission requests",
+      "title": "PermissionRecoveryAttemptRelation",
+      "x-enumDescriptions": {
+        "initial": "The first denied permission request in the episode.",
+        "retry": "A request equivalent to an earlier attempt.",
+        "alternative": "A distinct request or a successful alternative tool call."
+      }
+    },
+    "PermissionRecoveryData": {
+      "type": "object",
+      "properties": {
+        "episodeId": {
+          "type": "string",
+          "description": "Stable identifier shared by every transition in this recovery episode"
+        },
+        "status": {
+          "$ref": "#/definitions/PermissionRecoveryStatus",
+          "description": "Current lifecycle state of the recovery episode"
+        },
+        "onBlocked": {
+          "$ref": "#/definitions/PermissionRecoveryOnBlocked",
+          "description": "Policy selected from the current client's response capability; mode or client changes may update it during recovery"
+        },
+        "reason": {
+          "$ref": "#/definitions/PermissionRecoveryReason",
+          "description": "Controlled reason for the latest episode transition"
+        },
+        "maxAttempts": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of distinct autonomous permission attempts allowed before escalation"
+        },
+        "attempts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PermissionRecoveryAttempt"
+          },
+          "description": "Ordered privacy-safe record of permission attempts and the successful alternative, when any"
+        }
+      },
+      "required": [
+        "episodeId",
+        "status",
+        "onBlocked",
+        "reason",
+        "maxAttempts",
+        "attempts"
+      ],
+      "additionalProperties": false,
+      "description": "Authoritative snapshot of an Autopilot permission-recovery episode",
+      "title": "PermissionRecoveryData"
+    },
+    "PermissionRecoveryOnBlocked": {
+      "type": "string",
+      "enum": [
+        "ask",
+        "fail"
+      ],
+      "description": "Action selected when autonomous recovery cannot continue",
+      "title": "PermissionRecoveryOnBlocked",
+      "x-enumDescriptions": {
+        "ask": "Surface the existing permission prompt to a response-capable client.",
+        "fail": "Return a structured unsuccessful blocked outcome because no responder is available."
+      }
+    },
+    "PermissionRecoveryReason": {
+      "type": "string",
+      "enum": [
+        "permission_required",
+        "repeated_attempt",
+        "attempts_exhausted",
+        "permission_approved",
+        "permission_denied",
+        "responder_unavailable",
+        "equivalent_alternative_succeeded"
+      ],
+      "description": "Controlled reason for a permission-recovery episode transition",
+      "title": "PermissionRecoveryReason",
+      "x-enumDescriptions": {
+        "permission_required": "An action required permission that Assisted Permissions could not grant.",
+        "repeated_attempt": "The agent repeated an equivalent permission request instead of making progress.",
+        "attempts_exhausted": "The bounded number of distinct permission attempts was exhausted.",
+        "permission_approved": "A responder approved the escalated permission request.",
+        "permission_denied": "A responder denied the escalated permission request.",
+        "responder_unavailable": "The response-capable client became unavailable while escalation was pending.",
+        "equivalent_alternative_succeeded": "A later tool call succeeded without requiring the blocked permission."
+      }
+    },
+    "PermissionRecoveryStatus": {
+      "type": "string",
+      "enum": [
+        "recovering",
+        "awaiting_approval",
+        "resolved",
+        "blocked"
+      ],
+      "description": "Lifecycle state of a permission-recovery episode",
+      "title": "PermissionRecoveryStatus",
+      "x-enumDescriptions": {
+        "recovering": "Autopilot may try a bounded equivalent alternative.",
+        "awaiting_approval": "An interactive permission response is required.",
+        "resolved": "The episode ended through approval or a successful equivalent alternative.",
+        "blocked": "No autonomous path remains and the task requires intervention."
+      }
+    },
     "PermissionRequestResult": {
       "type": "object",
       "properties": {
@@ -30860,6 +33054,30 @@
         "enabled": {
           "type": "boolean",
           "description": "Whether the plugin is currently enabled"
+        },
+        "directSourceId": {
+          "type": "string",
+          "description": "Opaque stable identity for a direct plugin source."
+        },
+        "installedFrom": {
+          "type": "string",
+          "description": "Absolute marketplace directory for a live plugin."
+        },
+        "source": {
+          "type": "string",
+          "description": "Runtime plugin provenance, such as \"builtin\"."
+        },
+        "managed": {
+          "type": "boolean",
+          "description": "Whether enterprise managed settings control this plugin."
+        },
+        "managedDesiredEnabled": {
+          "type": "boolean",
+          "description": "Enabled state required by enterprise managed settings."
+        },
+        "installed": {
+          "type": "boolean",
+          "description": "Whether this managed desired plugin has an installed or live record."
         }
       },
       "required": [
@@ -32607,6 +34825,51 @@
       "description": "Pointer to a GitHub repository.",
       "title": "PushGitHubRepoRef"
     },
+    "QueueAppendSteeringRequest": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Message identity returned by send, not the queue item id. Only unclaimed user steering messages are eligible."
+        },
+        "expectedPrompt": {
+          "type": "string",
+          "description": "Expected current prompt, including any previous appends. The runtime applies plan-mode normalization before comparing and refuses a changed message."
+        },
+        "agentMode": {
+          "$ref": "#/definitions/SendAgentMode",
+          "description": "Mode captured at submission. Only steering messages in the same mode may be combined."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Text to append after a blank line."
+        },
+        "displayPrompt": {
+          "type": "string",
+          "description": "Display text to append to the existing preview after a blank line."
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Attachment",
+            "description": "A user message attachment — a file, directory, code selection, blob, GitHub-anchored pointer, or extension-supplied context payload"
+          },
+          "description": "Attachments to add after the message's existing attachments. An empty list preserves the existing attachments."
+        }
+      },
+      "required": [
+        "messageId",
+        "expectedPrompt",
+        "agentMode",
+        "prompt",
+        "displayPrompt",
+        "attachments"
+      ],
+      "additionalProperties": false,
+      "description": "Append to one pending steering message without changing its identity or delivery position.",
+      "title": "QueueAppendSteeringRequest",
+      "stability": "experimental"
+    },
     "QueueBeginDeferredIdleDrainRequest": {
       "type": "object",
       "properties": {
@@ -33137,6 +35400,10 @@
     "QueueSnapshotResult": {
       "type": "object",
       "properties": {
+        "inFlightModelChangeId": {
+          "type": "string",
+          "description": "Queue item identifier of a model switch that has been dequeued but not yet applied."
+        },
         "items": {
           "type": "array",
           "items": {
@@ -33214,6 +35481,27 @@
       "additionalProperties": false,
       "description": "Result of editing a queued message.",
       "title": "QueueUpdateTextResult"
+    },
+    "QueueWithdrawMessageRequest": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "description": "Message identity returned by send, not the queue item id. Batch messages are not eligible."
+        },
+        "expectedPrompt": {
+          "type": "string",
+          "description": "The prompt originally sent. A message edited since submission is not withdrawn, so an obsolete draft cannot replace the edit."
+        }
+      },
+      "required": [
+        "messageId",
+        "expectedPrompt"
+      ],
+      "additionalProperties": false,
+      "description": "Conditional withdrawal of a single user message, before the runtime claims it for delivery.",
+      "title": "QueueWithdrawMessageRequest",
+      "stability": "experimental"
     },
     "ReasoningSummary": {
       "type": "string",
@@ -34040,7 +36328,7 @@
         },
         "proxy": {
           "$ref": "#/definitions/SandboxConfigUserPolicyNetworkProxy",
-          "description": "HTTP(S) proxy for sandboxed traffic. With host rules, this is the built-in local proxy's upstream; credentials stay in the runtime, and Linux and macOS restrict the child to the local listener. Without host rules, Linux restricts egress to this endpoint but rejects credentials, and macOS proxying is cooperative. Windows enforcement depends on the application's networking stack. Configure credentials in the separate username/password fields. The transient local listener URL is never persisted."
+          "description": "HTTP(S) proxy for sandboxed traffic. This is the built-in local proxy's upstream: every sandboxed command reaches it through a loopback listener, so credentials stay in the runtime and never reach the child. On Windows the sandbox also needs local network access, because it reaches that listener over host loopback. Configure credentials in the separate username/password fields. The transient local listener URL is never persisted."
         }
       },
       "additionalProperties": false,
@@ -35727,7 +38015,7 @@
       "properties": {
         "initialCwd": {
           "type": "string",
-          "description": "Initial working directory for sessions"
+          "description": "Absolute initial working directory for sessions. Registering the provider establishes this path as the root of its virtual namespace; the runtime does not require the provider to materialize or stat it before creating a session."
         },
         "sessionStatePath": {
           "type": "string",
@@ -35748,7 +38036,7 @@
         "conventions"
       ],
       "additionalProperties": false,
-      "description": "Initial working directory, session-state path layout, and path conventions used to register the calling SDK client as the session filesystem provider.",
+      "description": "Initial working directory, session-state path layout, and path conventions used to register the calling SDK client as the session filesystem provider. A registered provider is authoritative for path interpretation and filesystem facts used by workspace permission validation. Paths are interpreted lexically; home-relative paths (`~` and `~/...`) and Windows drive-relative paths such as `C:foo` are unsupported. Until provider-side canonicalization is supported, providers must not expose symlinks inside allowed roots that escape those roots.",
       "title": "SessionFsSetProviderRequest"
     },
     "SessionFsSetProviderResult": {
@@ -36562,7 +38850,7 @@
       "properties": {
         "disableBypassPermissionsMode": {
           "type": "string",
-          "description": "When set to `disable`, prevents bypass/allow-all permission modes. `allow-auto-only` blocks full allow-all but permits advisory auto-approval. Any other value is accepted rather than failing the session, but is enforced as `disable`: the key is only present to restrict something, so a mode this runtime cannot interpret fails closed to the most restrictive one it knows. Omit the key entirely to impose no restriction."
+          "description": "When set to `disable`, prevents bypass/allow-all permission modes. Advisory auto-approval remains available because normal prompt paths stay active. Any other value is accepted rather than failing the session, but is enforced as `disable`: the key is only present to restrict something, so a mode this runtime cannot interpret fails closed to the most restrictive one it knows. Omit the key entirely to impose no restriction."
         },
         "deny": {
           "type": "array",
@@ -36673,6 +38961,10 @@
             }
           ],
           "description": "Current session limits, or null when no limits are active"
+        },
+        "indexedSearch": {
+          "$ref": "#/definitions/IndexedSearchState",
+          "description": "Live indexed-search state for this session activation. Omitted by runtimes that do not expose indexed-search status; absence does not indicate enablement."
         },
         "workspace": {
           "$ref": "#/definitions/WorkspaceSummary",
@@ -37343,6 +39635,60 @@
       "additionalProperties": false,
       "description": "Result of opening a session.",
       "title": "SessionOpenResult"
+    },
+    "SessionPluginsDisableRequest": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plugin names or \"plugin@marketplace\" specs to disable. Unknown names are ignored. Non-marketplace direct installs cannot be disabled via this API; uninstall them instead. Plugin-owned MCP servers are stopped in active sessions immediately; other plugin contributions remain available until each session reloads plugins."
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin names (or specs) to disable in the session's authoritative working directory.",
+      "title": "SessionPluginsDisableRequest",
+      "stability": "experimental"
+    },
+    "SessionPluginsEnableRequest": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Plugin names or \"plugin@marketplace\" specs to enable. Unknown names are ignored. Non-marketplace direct installs are always enabled and cannot be toggled via this API."
+        }
+      },
+      "required": [
+        "names"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin names (or specs) to enable in the session's authoritative working directory.",
+      "title": "SessionPluginsEnableRequest",
+      "stability": "experimental"
+    },
+    "SessionPluginsInstallRequest": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Plugin install spec. Accepts the same forms as the CLI: \"plugin@marketplace\" (marketplace install), \"owner/repo\" or \"owner/repo:subpath\" (GitHub direct), an http/https/ssh URL, or a local path. Direct (non-marketplace) installs are deprecated and will produce a deprecationWarning in the result."
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Plugin source resolved relative to the session's authoritative working directory.",
+      "title": "SessionPluginsInstallRequest",
+      "stability": "experimental"
     },
     "SessionPruneResult": {
       "type": "object",
@@ -40802,6 +43148,48 @@
       "description": "Progress snapshot for an agent task, with recent activity lines and optional latest intent.",
       "title": "TaskAgentProgress"
     },
+    "TaskBlocker": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/TaskBlockerKind",
+          "description": "Category of intervention that blocked the task"
+        },
+        "reason": {
+          "$ref": "#/definitions/PermissionRecoveryReason",
+          "description": "Controlled reason for the current blocked state"
+        },
+        "resumable": {
+          "type": "boolean",
+          "description": "Whether a later user response or steering message can resume the task"
+        },
+        "permissionRecovery": {
+          "$ref": "#/definitions/PermissionRecoveryData",
+          "description": "Permission-recovery episode that produced this blocker"
+        }
+      },
+      "required": [
+        "kind",
+        "reason",
+        "resumable",
+        "permissionRecovery"
+      ],
+      "additionalProperties": false,
+      "description": "Structured reason that the task cannot continue without intervention",
+      "title": "TaskBlocker",
+      "stability": "experimental"
+    },
+    "TaskBlockerKind": {
+      "type": "string",
+      "enum": [
+        "permission_recovery"
+      ],
+      "description": "Category of structured task blocker",
+      "title": "TaskBlockerKind",
+      "x-enumDescriptions": {
+        "permission_recovery": "Autopilot permission recovery requires intervention or has no safe autonomous path."
+      }
+    },
     "TaskClientActiveStatus": {
       "type": "string",
       "enum": [
@@ -41245,6 +43633,10 @@
         "objectiveId": {
           "type": "integer",
           "description": "Active autopilot objective ID evaluated by the completion reviewer"
+        },
+        "blocker": {
+          "$ref": "#/definitions/TaskBlocker",
+          "description": "Structured blocker details when outcome is blocked"
         }
       },
       "additionalProperties": false,
@@ -44165,6 +46557,1727 @@
       "additionalProperties": false,
       "description": "Effective sharing status and shareable GitHub URL after updating session visibility.",
       "title": "VisibilitySetResult"
+    },
+    "WorkflowAbortRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying the execution attempt to abort."
+        }
+      },
+      "required": [
+        "runId",
+        "executionToken"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for cooperatively aborting a workflow body.",
+      "title": "WorkflowAbortRequest",
+      "stability": "experimental"
+    },
+    "WorkflowAckResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Acknowledgement that a workflow request was accepted.",
+      "title": "WorkflowAckResult"
+    },
+    "WorkflowAgentOptions": {
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Optional label distinguishing otherwise identical memoized agent calls."
+        },
+        "schema": {
+          "description": "Optional JSON Schema for structured agent output.",
+          "x-opaque-json": true
+        },
+        "model": {
+          "type": "string",
+          "description": "Optional model identifier for the subagent."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Optional reasoning effort override for the subagent."
+        },
+        "contextTier": {
+          "$ref": "#/definitions/ContextTier",
+          "description": "Optional context tier override for the subagent."
+        },
+        "agent": {
+          "type": "string",
+          "description": "Optional built-in or custom agent name whose definition configures the subagent."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options for one workflow-scoped subagent call.",
+      "title": "WorkflowAgentOptions",
+      "stability": "experimental"
+    },
+    "WorkflowAgentRequest": {
+      "type": "object",
+      "properties": {
+        "workflowRunId": {
+          "type": "string",
+          "description": "Workflow run identifier that owns the subagent."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying the current workflow execution attempt."
+        },
+        "prompt": {
+          "type": "string",
+          "description": "Prompt to send to the subagent."
+        },
+        "opts": {
+          "$ref": "#/definitions/WorkflowAgentOptions",
+          "description": "Subagent execution options."
+        }
+      },
+      "required": [
+        "workflowRunId",
+        "executionToken",
+        "prompt",
+        "opts"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for one workflow-scoped subagent call.",
+      "title": "WorkflowAgentRequest",
+      "stability": "experimental"
+    },
+    "WorkflowAgentResult": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Agent result, omitted when the agent produced no result.",
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Result of one workflow-scoped subagent call.",
+      "title": "WorkflowAgentResult"
+    },
+    "WorkflowAgentSummary": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "description": "Stable direct-agent identifier."
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool-call identifier that launched the agent."
+        },
+        "runId": {
+          "type": "string",
+          "description": "Owning workflow run identifier."
+        },
+        "phaseId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Phase identifier active when the agent was launched, or null."
+        },
+        "label": {
+          "type": "string",
+          "description": "Friendly, non-unique name intended for display"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Friendly, non-unique name intended for display"
+        },
+        "agentType": {
+          "type": "string",
+          "description": "Registered agent type."
+        },
+        "status": {
+          "type": "string",
+          "description": "Current durable or live agent status."
+        },
+        "requestedModel": {
+          "type": "string",
+          "description": "Model requested when the agent was launched."
+        },
+        "resolvedModel": {
+          "type": "string",
+          "description": "Concrete model resolved for the agent."
+        },
+        "startedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the agent started."
+        },
+        "completedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the agent completed."
+        },
+        "activeMs": {
+          "type": "integer",
+          "description": "Accumulated active agent time in milliseconds."
+        },
+        "activity": {
+          "type": "string",
+          "description": "Prompt-safe live activity text."
+        }
+      },
+      "required": [
+        "agentId",
+        "toolCallId",
+        "runId",
+        "phaseId",
+        "label",
+        "agentType",
+        "status",
+        "activeMs"
+      ],
+      "additionalProperties": false,
+      "description": "Prompt-safe durable identity and live status for a direct workflow agent.",
+      "title": "WorkflowAgentSummary",
+      "stability": "experimental"
+    },
+    "WorkflowCancelRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for cancelling a workflow run.",
+      "title": "WorkflowCancelRequest",
+      "stability": "experimental"
+    },
+    "WorkflowCurrentPhase": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Current phase identifier."
+        },
+        "ordinal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Zero-based declared phase ordinal, or null for an undeclared phase."
+        }
+      },
+      "required": [
+        "id",
+        "ordinal"
+      ],
+      "additionalProperties": false,
+      "description": "Current workflow phase identity.",
+      "title": "WorkflowCurrentPhase",
+      "stability": "experimental"
+    },
+    "WorkflowDeclaredLimits": {
+      "type": "object",
+      "properties": {
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum concurrently active subagents."
+        },
+        "maxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum total subagents spawned by the run."
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "description": "Maximum accumulated active execution time in seconds."
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "description": "Maximum AI credits consumed by subagents and descendants."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Declared or approved workflow resource ceilings.",
+      "title": "WorkflowDeclaredLimits",
+      "stability": "experimental"
+    },
+    "WorkflowDurableOperation": {
+      "type": "string",
+      "enum": [
+        "createRun",
+        "markRunStarted",
+        "finishRun",
+        "reserveAgent",
+        "releaseAgent",
+        "chargeCredit",
+        "addElapsed",
+        "reconcileCreditTotal",
+        "journalGet",
+        "journalPut",
+        "refreshLease"
+      ],
+      "description": "Execution-critical workflow storage operation.",
+      "title": "WorkflowDurableOperation",
+      "x-enumDescriptions": {
+        "createRun": "Creating the durable run and declared phases.",
+        "markRunStarted": "Persisting the transition to running.",
+        "finishRun": "Persisting the terminal run envelope.",
+        "reserveAgent": "Persisting subagent admission accounting.",
+        "releaseAgent": "Rolling back an uncommitted subagent admission.",
+        "chargeCredit": "Persisting an idempotent model-usage charge.",
+        "addElapsed": "Persisting active execution time.",
+        "reconcileCreditTotal": "Reading the authoritative AI-credit total.",
+        "journalGet": "Reading a journal entry without treating storage failure as a cache miss.",
+        "journalPut": "Persisting a journal entry before reporting success.",
+        "refreshLease": "Renewing the durable owner lease that proves this process still owns the run."
+      }
+    },
+    "WorkflowExecuteRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registered workflow name."
+        },
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying this workflow execution attempt."
+        },
+        "args": {
+          "description": "Workflow input value.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "name",
+        "runId",
+        "executionToken",
+        "args"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters sent to the owning extension to execute a workflow closure.",
+      "title": "WorkflowExecuteRequest",
+      "stability": "experimental"
+    },
+    "WorkflowExecuteResult": {
+      "type": "object",
+      "properties": {
+        "result": {
+          "description": "Workflow result value.",
+          "x-opaque-json": true
+        }
+      },
+      "additionalProperties": false,
+      "description": "Result returned by an extension workflow closure.",
+      "title": "WorkflowExecuteResult"
+    },
+    "WorkflowGetRunProgressRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "phaseId": {
+          "type": "string",
+          "description": "Optional phase identifier used to scope records and cursors."
+        },
+        "afterSeq": {
+          "type": "integer",
+          "description": "Exclusive forward cursor."
+        },
+        "beforeSeq": {
+          "type": "integer",
+          "description": "Exclusive backward cursor."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Maximum records to return. Defaults to 200 and is capped at 500."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for paging workflow progress.",
+      "title": "WorkflowGetRunProgressRequest",
+      "stability": "experimental"
+    },
+    "WorkflowGetRunRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for retrieving a workflow run.",
+      "title": "WorkflowGetRunRequest",
+      "stability": "experimental"
+    },
+    "WorkflowJournalGetRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying the current workflow execution attempt."
+        },
+        "key": {
+          "type": "string",
+          "description": "Namespaced journal key."
+        }
+      },
+      "required": [
+        "runId",
+        "executionToken",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for reading a workflow journal entry.",
+      "title": "WorkflowJournalGetRequest",
+      "stability": "experimental"
+    },
+    "WorkflowJournalGetResult": {
+      "type": "object",
+      "properties": {
+        "hit": {
+          "type": "boolean",
+          "description": "Whether the journal contained the requested key."
+        },
+        "resultJson": {
+          "description": "Cached JSON result. The hit field distinguishes a cached JSON null from a miss.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "hit"
+      ],
+      "additionalProperties": false,
+      "description": "Result of reading a workflow journal entry.",
+      "title": "WorkflowJournalGetResult"
+    },
+    "WorkflowJournalPutRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying the current workflow execution attempt."
+        },
+        "key": {
+          "type": "string",
+          "description": "Namespaced journal key."
+        },
+        "resultJson": {
+          "description": "JSON result to memoize.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "runId",
+        "executionToken",
+        "key",
+        "resultJson"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for storing a workflow journal entry.",
+      "title": "WorkflowJournalPutRequest",
+      "stability": "experimental"
+    },
+    "WorkflowListRunsRequest": {
+      "type": "object",
+      "properties": {
+        "afterSeq": {
+          "type": "integer",
+          "description": "Exclusive forward cursor."
+        },
+        "beforeSeq": {
+          "type": "integer",
+          "description": "Exclusive backward cursor."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 500,
+          "description": "Maximum terminal runs to return. Defaults to 200 and is capped at 500."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Parameters for paging workflow runs.",
+      "title": "WorkflowListRunsRequest",
+      "stability": "experimental"
+    },
+    "WorkflowListRunsResult": {
+      "type": "object",
+      "properties": {
+        "runs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowRunSummary",
+            "description": "Durable workflow run summary with read-time live overlays."
+          },
+          "description": "Workflow run summaries in durable creation order."
+        },
+        "oldestSeq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Oldest terminal-run cursor in this page, or null when the terminal window is empty."
+        },
+        "newestSeq": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Newest terminal-run cursor in this page, or null when the terminal window is empty."
+        },
+        "hasMoreNewer": {
+          "type": "boolean",
+          "description": "Whether terminal runs newer than this page exist."
+        },
+        "omittedOlder": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of terminal runs older than this page."
+        }
+      },
+      "required": [
+        "runs"
+      ],
+      "additionalProperties": false,
+      "description": "A page of workflow runs in durable creation order.",
+      "title": "WorkflowListRunsResult",
+      "stability": "experimental"
+    },
+    "WorkflowLogLine": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Monotonic sequence number within the workflow run."
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkflowLogLineKind",
+          "description": "Progress line kind."
+        },
+        "text": {
+          "type": "string",
+          "description": "Progress text."
+        }
+      },
+      "required": [
+        "seq",
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false,
+      "description": "One ordered workflow progress line.",
+      "title": "WorkflowLogLine",
+      "stability": "experimental"
+    },
+    "WorkflowLogLineKind": {
+      "type": "string",
+      "enum": [
+        "log",
+        "phase"
+      ],
+      "description": "Kind of workflow progress line.",
+      "title": "WorkflowLogLineKind",
+      "x-enumDescriptions": {
+        "log": "A narrator log line.",
+        "phase": "A named workflow phase marker."
+      }
+    },
+    "WorkflowLogRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying the current workflow execution attempt."
+        },
+        "lines": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowLogLine",
+            "description": "One ordered workflow progress line."
+          },
+          "description": "Ordered progress lines to append."
+        }
+      },
+      "required": [
+        "runId",
+        "executionToken",
+        "lines"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for recording workflow progress.",
+      "title": "WorkflowLogRequest",
+      "stability": "experimental"
+    },
+    "WorkflowPauseCheckpointAction": {
+      "type": "string",
+      "enum": [
+        "continue",
+        "pause"
+      ],
+      "description": "Action the runtime selected for a durable workflow pause checkpoint.",
+      "title": "WorkflowPauseCheckpointAction",
+      "x-enumDescriptions": {
+        "continue": "The checkpoint was committed by a prior paused attempt, so execution may continue.",
+        "pause": "This attempt claimed the checkpoint and must cooperatively stop."
+      }
+    },
+    "WorkflowPauseCheckpointRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "executionToken": {
+          "type": "string",
+          "description": "Opaque token identifying the execution attempt that reached the checkpoint."
+        },
+        "key": {
+          "type": "string",
+          "description": "Stable author-defined checkpoint key."
+        }
+      },
+      "required": [
+        "runId",
+        "executionToken",
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for an owned durable pause checkpoint.",
+      "title": "WorkflowPauseCheckpointRequest",
+      "stability": "experimental"
+    },
+    "WorkflowPauseCheckpointResult": {
+      "type": "object",
+      "properties": {
+        "action": {
+          "$ref": "#/definitions/WorkflowPauseCheckpointAction",
+          "description": "Whether this execution attempt must pause or may continue."
+        }
+      },
+      "required": [
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "WorkflowPauseInfo": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "user",
+              "description": "Workflow pause initiator discriminator."
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Stable author-defined checkpoint key that initiated the pause."
+            },
+            "type": {
+              "type": "string",
+              "const": "checkpoint",
+              "description": "Workflow pause initiator discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "key"
+          ]
+        }
+      ],
+      "description": "Durable metadata describing who initiated a workflow pause.",
+      "title": "WorkflowPauseInfo"
+    },
+    "WorkflowPauseRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for pausing a running workflow.",
+      "title": "WorkflowPauseRequest",
+      "stability": "experimental"
+    },
+    "WorkflowPhaseObservation": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Phase identifier."
+        },
+        "ordinal": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Zero-based declared phase ordinal, or null for an undeclared phase."
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable phase title."
+        },
+        "detail": {
+          "type": "string",
+          "description": "Optional human-readable phase detail."
+        },
+        "status": {
+          "$ref": "#/definitions/WorkflowPhaseStatus",
+          "description": "Derived lifecycle state of the phase."
+        },
+        "lastEnteredRunAttempt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Most recent run attempt that entered this phase, or `0` if the phase has never been entered."
+        },
+        "entryCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of times execution entered this phase."
+        },
+        "startedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when this phase first started; for a skipped phase, the synthetic skip timestamp (equal to `completedAt`)."
+        },
+        "completedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when this phase completed; for a skipped phase, the synthetic skip timestamp (equal to `startedAt`)."
+        },
+        "accumulatedActiveMs": {
+          "type": "integer",
+          "description": "Completed active time accumulated by this phase in milliseconds."
+        },
+        "currentActiveMs": {
+          "type": "integer",
+          "description": "Current live active time for this phase in milliseconds."
+        },
+        "totalAgentCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total direct agents associated with this phase."
+        },
+        "liveAgentCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Direct agents in this phase that are currently live."
+        }
+      },
+      "required": [
+        "id",
+        "ordinal",
+        "title",
+        "status",
+        "lastEnteredRunAttempt",
+        "entryCount",
+        "accumulatedActiveMs",
+        "currentActiveMs",
+        "totalAgentCount",
+        "liveAgentCount"
+      ],
+      "additionalProperties": false,
+      "description": "Durable lifecycle and timing for one workflow phase.",
+      "title": "WorkflowPhaseObservation",
+      "stability": "experimental"
+    },
+    "WorkflowPhaseStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "active",
+        "completed",
+        "skipped"
+      ],
+      "description": "Derived lifecycle state of a workflow phase.",
+      "title": "WorkflowPhaseStatus",
+      "x-enumDescriptions": {
+        "pending": "The phase has not been entered yet.",
+        "active": "The phase is currently entered and accumulating active time.",
+        "completed": "The phase was entered and has since been closed.",
+        "skipped": "The phase was never entered because a later phase was entered or the run reached a terminal state."
+      },
+      "stability": "experimental"
+    },
+    "WorkflowProgressLine": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Global monotonic sequence number within the run."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Resume attempt that emitted this record."
+        },
+        "phaseId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Phase active when the record was emitted, or null before any phase."
+        },
+        "recordedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the record was persisted."
+        },
+        "kind": {
+          "$ref": "#/definitions/WorkflowLogLineKind",
+          "description": "Progress record kind."
+        },
+        "text": {
+          "type": "string",
+          "description": "Prompt-safe progress text."
+        }
+      },
+      "required": [
+        "seq",
+        "attempt",
+        "phaseId",
+        "recordedAt",
+        "kind",
+        "text"
+      ],
+      "additionalProperties": false,
+      "description": "One durable workflow progress record.",
+      "title": "WorkflowProgressLine",
+      "stability": "experimental"
+    },
+    "WorkflowProgressPage": {
+      "type": "object",
+      "properties": {
+        "records": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowProgressLine",
+            "description": "One durable workflow progress record."
+          },
+          "description": "Progress records in sequence order."
+        },
+        "oldestSeq": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Oldest sequence number in this page, or null when empty."
+        },
+        "newestSeq": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Newest sequence number in this page, or null when empty."
+        },
+        "hasMoreOlder": {
+          "type": "boolean",
+          "description": "Whether progress records older than this page exist."
+        },
+        "hasMoreNewer": {
+          "type": "boolean",
+          "description": "Whether progress records newer than this page exist."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Run revision reflected by this page."
+        }
+      },
+      "required": [
+        "records",
+        "oldestSeq",
+        "newestSeq",
+        "hasMoreOlder",
+        "hasMoreNewer",
+        "revision"
+      ],
+      "additionalProperties": false,
+      "description": "A bidirectional page of workflow progress.",
+      "title": "WorkflowProgressPage",
+      "stability": "experimental"
+    },
+    "WorkflowResumeRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "limits": {
+          "$ref": "#/definitions/WorkflowRunLimits",
+          "description": "Optional per-invocation resource ceiling overrides."
+        },
+        "notifyOnComplete": {
+          "type": "boolean",
+          "description": "Whether to notify the originating session when the workflow completes."
+        },
+        "logPhaseNames": {
+          "type": "boolean",
+          "description": "Whether to emit workflow phase names to the session transcript."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for resuming a workflow run from its persisted identity.",
+      "title": "WorkflowResumeRequest",
+      "stability": "experimental"
+    },
+    "WorkflowResumeResult": {
+      "type": "object",
+      "properties": {
+        "workflowName": {
+          "type": "string",
+          "description": "Persisted workflow name resolved for the resumed run."
+        },
+        "run": {
+          "$ref": "#/definitions/WorkflowRunResult",
+          "description": "Terminal resumed run envelope."
+        }
+      },
+      "required": [
+        "workflowName",
+        "run"
+      ],
+      "additionalProperties": false,
+      "description": "Resolved persisted workflow identity and resumed run envelope.",
+      "title": "WorkflowResumeResult"
+    },
+    "WorkflowRunConsumed": {
+      "type": "object",
+      "properties": {
+        "activeMs": {
+          "type": "integer",
+          "description": "Accumulated active execution time in milliseconds."
+        },
+        "subagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total subagents spawned by the run."
+        },
+        "nanoAiu": {
+          "type": "integer",
+          "description": "AI usage consumed by the run in nano-AIU."
+        }
+      },
+      "required": [
+        "activeMs",
+        "subagents",
+        "nanoAiu"
+      ],
+      "additionalProperties": false,
+      "description": "Durable workflow resource consumption.",
+      "title": "WorkflowRunConsumed",
+      "stability": "experimental"
+    },
+    "WorkflowRunDetail": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Registered workflow name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable workflow description."
+        },
+        "status": {
+          "$ref": "#/definitions/WorkflowRunStatus",
+          "description": "Current workflow run status."
+        },
+        "revision": {
+          "type": "integer",
+          "description": "Monotonic durable run revision."
+        },
+        "createdAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the run was created."
+        },
+        "startedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch milliseconds when execution first started, or null before start."
+        },
+        "updatedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the durable run was last updated."
+        },
+        "completedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch milliseconds when the run completed, or null while nonterminal."
+        },
+        "currentPhase": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowCurrentPhase",
+              "description": "Current workflow phase identity."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current phase identity, or null before any phase is entered."
+        },
+        "declaredPhaseCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of phases declared by the workflow."
+        },
+        "liveAgentCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of direct workflow agents currently live."
+        },
+        "totalSpawnedAgentCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total direct workflow agents spawned across all attempts."
+        },
+        "consumed": {
+          "$ref": "#/definitions/WorkflowRunConsumed",
+          "description": "Durable resource consumption."
+        },
+        "declaredLimits": {
+          "$ref": "#/definitions/WorkflowDeclaredLimits",
+          "description": "Resource ceilings declared by the workflow."
+        },
+        "approved": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowDeclaredLimits",
+              "description": "Declared or approved workflow resource ceilings."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Approved effective resource ceilings, or null until approved."
+        },
+        "observedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when this live-overlay snapshot was observed."
+        },
+        "activeSegmentStartedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch milliseconds when the current active segment started, or null while inactive."
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowRunTerminal",
+              "description": "Prompt-safe terminal workflow outcome."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Terminal run outcome, or null while nonterminal."
+        },
+        "canResume": {
+          "type": "boolean",
+          "description": "Whether the durable run state currently passes runtime resume eligibility checks."
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowPhaseObservation",
+            "description": "Durable lifecycle and timing for one workflow phase."
+          },
+          "description": "Lifecycle and timing observations for each workflow phase."
+        },
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowAgentSummary",
+            "description": "Prompt-safe durable identity and live status for a direct workflow agent."
+          },
+          "description": "Durable identities and live statuses for direct workflow agents."
+        },
+        "progress": {
+          "$ref": "#/definitions/WorkflowProgressPage",
+          "description": "Bidirectional page of durable workflow progress."
+        }
+      },
+      "required": [
+        "runId",
+        "workflowName",
+        "description",
+        "status",
+        "revision",
+        "createdAt",
+        "startedAt",
+        "updatedAt",
+        "completedAt",
+        "currentPhase",
+        "declaredPhaseCount",
+        "liveAgentCount",
+        "totalSpawnedAgentCount",
+        "consumed",
+        "declaredLimits",
+        "approved",
+        "observedAt",
+        "activeSegmentStartedAt",
+        "terminal",
+        "canResume",
+        "phases",
+        "agents",
+        "progress"
+      ],
+      "additionalProperties": false,
+      "description": "Full workflow run observability detail.",
+      "title": "WorkflowRunDetail",
+      "stability": "experimental"
+    },
+    "WorkflowRunFailure": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "$ref": "#/definitions/WorkflowRunFailureKind",
+              "description": "Resource ceiling that stopped the run."
+            },
+            "value": {
+              "type": "number",
+              "exclusiveMinimum": 0,
+              "description": "Approved effective ceiling that was reached."
+            },
+            "suggestedValue": {
+              "type": "number",
+              "description": "Suggested larger ceiling when the runtime can derive one safely."
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "type": {
+              "type": "string",
+              "const": "workflow_limit_reached",
+              "description": "Workflow failure variant discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "kind",
+            "value",
+            "runId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier whose changed limits were declined."
+            },
+            "reason": {
+              "type": "string",
+              "description": "Human-readable reason the resume did not proceed."
+            },
+            "type": {
+              "type": "string",
+              "const": "workflow_resume_declined",
+              "description": "Workflow failure variant discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "runId",
+            "reason"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "description": "Stable failure code."
+            },
+            "operation": {
+              "$ref": "#/definitions/WorkflowDurableOperation",
+              "description": "Execution-critical durable operation that failed."
+            },
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "type": {
+              "type": "string",
+              "const": "workflow_durable_failure",
+              "description": "Workflow failure variant discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "code",
+            "operation",
+            "runId"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "drainedNanoAiu": {
+              "type": "integer",
+              "description": "Confirmed usage in nano-AIU, representing the floor of what the run spent."
+            },
+            "type": {
+              "type": "string",
+              "const": "workflow_accounting_incomplete",
+              "description": "Workflow failure variant discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "runId",
+            "drainedNanoAiu"
+          ],
+          "additionalProperties": false,
+          "description": "The run stopped because its usage accounting could not be completed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "runId": {
+              "type": "string",
+              "description": "Workflow run identifier."
+            },
+            "type": {
+              "type": "string",
+              "const": "workflow_provider_disconnected",
+              "description": "Workflow failure variant discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "runId"
+          ],
+          "additionalProperties": false,
+          "description": "The extension that owns the workflow disconnected while the run was executing, so the host halted it. The run's journaled subagent results are preserved so a resume can reuse them."
+        }
+      ],
+      "description": "Machine-readable workflow run failure.",
+      "title": "WorkflowRunFailure"
+    },
+    "WorkflowRunFailureKind": {
+      "type": "string",
+      "enum": [
+        "maxTotalSubagents",
+        "timeoutSeconds",
+        "maxAiCredits"
+      ],
+      "description": "Cumulative resource ceiling that stopped a workflow run.",
+      "title": "WorkflowRunFailureKind",
+      "x-enumDescriptions": {
+        "maxTotalSubagents": "The run admitted the approved maximum total number of subagents.",
+        "timeoutSeconds": "The run reached the approved accumulated active-execution time in seconds.",
+        "maxAiCredits": "The run's settled subagent model usage exceeded the approved AI-credit ceiling, or no headroom remained for another subagent."
+      }
+    },
+    "WorkflowRunLimits": {
+      "type": "object",
+      "properties": {
+        "maxConcurrentSubagents": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "exclusiveMinimum": 0,
+          "description": "Maximum number of workflow subagents that may run concurrently."
+        },
+        "maxTotalSubagents": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "exclusiveMinimum": 0,
+          "description": "Maximum total number of workflow subagents that may be admitted."
+        },
+        "timeoutSeconds": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "maximum": 2147483.647,
+          "description": "Maximum accumulated active-execution time in seconds. Active execution includes the entire extension body, subprocess waits, queued-agent waits, and sleeps; time between resumed attempts is not counted."
+        },
+        "maxAiCredits": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0,
+          "description": "Maximum AI credits consumed by workflow subagents and their descendants. The post-paid ceiling is soft: parallel turns can settle beyond it before the run stops."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Wire-only per-invocation workflow resource ceiling overrides.",
+      "title": "WorkflowRunLimits",
+      "stability": "experimental"
+    },
+    "WorkflowRunOptions": {
+      "type": "object",
+      "properties": {
+        "limits": {
+          "$ref": "#/definitions/WorkflowRunLimits",
+          "description": "Per-invocation resource ceiling overrides."
+        },
+        "notifyOnComplete": {
+          "type": "boolean",
+          "description": "Whether to notify the originating session when the workflow completes."
+        },
+        "logPhaseNames": {
+          "type": "boolean",
+          "description": "Whether to emit workflow phase names to the session transcript."
+        },
+        "resumeFromRunId": {
+          "type": "string",
+          "description": "Run identifier whose journal and progress should seed this resumed run."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options controlling workflow invocation.",
+      "title": "WorkflowRunOptions",
+      "stability": "experimental"
+    },
+    "WorkflowRunRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registered workflow name."
+        },
+        "args": {
+          "description": "Workflow input value.",
+          "x-opaque-json": true
+        },
+        "options": {
+          "$ref": "#/definitions/WorkflowRunOptions",
+          "description": "Workflow invocation options."
+        }
+      },
+      "required": [
+        "name",
+        "args"
+      ],
+      "additionalProperties": false,
+      "description": "Parameters for invoking a registered workflow.",
+      "title": "WorkflowRunRequest",
+      "stability": "experimental"
+    },
+    "WorkflowRunResult": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967295,
+          "description": "One-based execution attempt represented by this envelope. Absent before the first attempt starts or when returned by an older runtime."
+        },
+        "status": {
+          "$ref": "#/definitions/WorkflowRunStatus",
+          "description": "Current or terminal workflow run status."
+        },
+        "result": {
+          "description": "Completed workflow result.",
+          "x-opaque-json": true
+        },
+        "error": {
+          "type": "string",
+          "description": "Error message for an errored run."
+        },
+        "failure": {
+          "$ref": "#/definitions/WorkflowRunFailure",
+          "description": "Machine-readable failure details for a halted or errored run."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Reason for a halted or cancelled run."
+        },
+        "snapshot": {
+          "description": "Partial journal and progress snapshot for a halted, cancelled, or errored run.",
+          "x-opaque-json": true
+        },
+        "pauseInfo": {
+          "$ref": "#/definitions/WorkflowPauseInfo",
+          "description": "Structured pause initiator metadata for a paused attempt."
+        }
+      },
+      "required": [
+        "runId",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Complete current or terminal workflow run envelope.",
+      "title": "WorkflowRunResult"
+    },
+    "WorkflowRunStatus": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "completed",
+        "halted",
+        "paused",
+        "cancelled",
+        "error"
+      ],
+      "description": "Current or terminal state of a workflow run.",
+      "title": "WorkflowRunStatus",
+      "x-enumDescriptions": {
+        "pending": "The run was minted and is awaiting approval.",
+        "running": "The run is executing.",
+        "completed": "The run completed successfully.",
+        "halted": "The run was interrupted while resource budget remained.",
+        "paused": "The current attempt stopped intentionally and the run may be resumed.",
+        "cancelled": "The run was cancelled before completion.",
+        "error": "The workflow body failed or reached a cumulative resource ceiling."
+      }
+    },
+    "WorkflowRunSummary": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Registered workflow name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Human-readable workflow description."
+        },
+        "status": {
+          "$ref": "#/definitions/WorkflowRunStatus",
+          "description": "Current workflow run status."
+        },
+        "revision": {
+          "type": "integer",
+          "description": "Monotonic durable run revision."
+        },
+        "createdAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the run was created."
+        },
+        "startedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch milliseconds when execution first started, or null before start."
+        },
+        "updatedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when the durable run was last updated."
+        },
+        "completedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch milliseconds when the run completed, or null while nonterminal."
+        },
+        "currentPhase": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowCurrentPhase",
+              "description": "Current workflow phase identity."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Current phase identity, or null before any phase is entered."
+        },
+        "declaredPhaseCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of phases declared by the workflow."
+        },
+        "liveAgentCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of direct workflow agents currently live."
+        },
+        "totalSpawnedAgentCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total direct workflow agents spawned across all attempts."
+        },
+        "consumed": {
+          "$ref": "#/definitions/WorkflowRunConsumed",
+          "description": "Durable resource consumption."
+        },
+        "declaredLimits": {
+          "$ref": "#/definitions/WorkflowDeclaredLimits",
+          "description": "Resource ceilings declared by the workflow."
+        },
+        "approved": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowDeclaredLimits",
+              "description": "Declared or approved workflow resource ceilings."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Approved effective resource ceilings, or null until approved."
+        },
+        "observedAt": {
+          "type": "integer",
+          "description": "Epoch milliseconds when this live-overlay snapshot was observed."
+        },
+        "activeSegmentStartedAt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Epoch milliseconds when the current active segment started, or null while inactive."
+        },
+        "terminal": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowRunTerminal",
+              "description": "Prompt-safe terminal workflow outcome."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Terminal run outcome, or null while nonterminal."
+        },
+        "canResume": {
+          "type": "boolean",
+          "description": "Whether the durable run state currently passes runtime resume eligibility checks."
+        }
+      },
+      "required": [
+        "runId",
+        "workflowName",
+        "description",
+        "status",
+        "revision",
+        "createdAt",
+        "startedAt",
+        "updatedAt",
+        "completedAt",
+        "currentPhase",
+        "declaredPhaseCount",
+        "liveAgentCount",
+        "totalSpawnedAgentCount",
+        "consumed",
+        "declaredLimits",
+        "approved",
+        "observedAt",
+        "activeSegmentStartedAt",
+        "terminal",
+        "canResume"
+      ],
+      "additionalProperties": false,
+      "description": "Durable workflow run summary with read-time live overlays.",
+      "title": "WorkflowRunSummary",
+      "stability": "experimental"
+    },
+    "WorkflowRunTerminal": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Human-readable terminal reason."
+        },
+        "failure": {
+          "$ref": "#/definitions/WorkflowRunFailure",
+          "description": "Machine-readable terminal failure."
+        },
+        "error": {
+          "type": "string",
+          "description": "Human-readable terminal error."
+        },
+        "resultPreview": {
+          "type": "string",
+          "description": "Prompt-safe preview of the completed result."
+        },
+        "pauseInfo": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/WorkflowPauseInfo",
+              "description": "Durable metadata describing who initiated a workflow pause."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Pause initiator metadata, or null when the run did not pause."
+        }
+      },
+      "required": [
+        "pauseInfo"
+      ],
+      "additionalProperties": false,
+      "description": "Prompt-safe terminal workflow outcome.",
+      "title": "WorkflowRunTerminal",
+      "stability": "experimental"
+    },
+    "WorkflowToolResumeRequest": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "limits": {
+          "$ref": "#/definitions/WorkflowRunLimits",
+          "description": "Optional per-invocation resource ceiling overrides."
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Opaque identifier of the originating tool call."
+        }
+      },
+      "required": [
+        "runId"
+      ],
+      "additionalProperties": false,
+      "description": "Internal parameters for resuming a workflow run from a tool.",
+      "title": "WorkflowToolResumeRequest",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "WorkflowToolRunOptions": {
+      "type": "object",
+      "properties": {
+        "limits": {
+          "$ref": "#/definitions/WorkflowRunLimits",
+          "description": "Per-invocation resource ceiling overrides."
+        },
+        "resumeFromRunId": {
+          "type": "string",
+          "description": "Run identifier whose journal and progress should seed this resumed run."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Options for an internal tool-originated workflow invocation.",
+      "title": "WorkflowToolRunOptions",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "WorkflowToolRunRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Registered workflow name."
+        },
+        "args": {
+          "description": "Workflow input value.",
+          "x-opaque-json": true
+        },
+        "options": {
+          "$ref": "#/definitions/WorkflowToolRunOptions",
+          "description": "Tool-originated workflow invocation options."
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Opaque identifier of the originating tool call."
+        }
+      },
+      "required": [
+        "name",
+        "args"
+      ],
+      "additionalProperties": false,
+      "description": "Internal parameters for invoking a registered workflow from a tool.",
+      "title": "WorkflowToolRunRequest",
+      "visibility": "internal",
+      "stability": "experimental"
     },
     "WorkspaceDiffFileChange": {
       "type": "object",

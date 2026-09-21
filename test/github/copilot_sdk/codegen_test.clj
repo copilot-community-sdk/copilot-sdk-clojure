@@ -280,14 +280,30 @@
     :model-metrics {}}
 
    "session.model_change"
-   {:new-model "gpt-4o"}
+   {:new-model "gpt-4o"
+    :source "changeboarding_shortcut"}
 
    "session.handoff"
    {:handoff-time "2024-01-01T00:00:00Z"
     :source-type "remote"}
 
+   "session.extensions.attachments_pushed"
+   {:attachments
+    [{:type "file"
+      :path "/tmp/example.txt"
+      :display-name "example.txt"}]}
+
    "user.message"
-   {:content "hello"}
+   {:content "hello"
+    :attachments
+    [{:type "extension_context"
+      :extension-id "example.extension"
+      :title "Selected dashboard"
+      :captured-at "2026-09-20T18:00:00Z"}]
+    :responses-reasoning
+    {:model "gpt-5.4"
+     :initial-effort "high"
+     :effort "medium"}}
 
    "assistant.turn_start"
    {:turn-id "t-1"}
@@ -327,7 +343,9 @@
    "assistant.usage"
    {:model "gpt-4o"
     :cache-expires-at "2026-07-29T12:00:00Z"
-    :service-request-id "svc-req-1"}
+    :service-request-id "svc-req-1"
+    :thinking-dropped-blocks 1
+    :thinking-dropped-reasons ["provider_transform"]}
 
    "tool.execution_start"
    {:tool-call-id "tc-1"
@@ -348,7 +366,8 @@
    "skill.invoked"
    {:name "my-skill"
     :path "/skills/my-skill"
-    :content "skill body"}
+    :content "skill body"
+    :invoked-at-turn 3}
 
    "subagent.started"
    {:tool-call-id "tc-1"
@@ -413,7 +432,35 @@
    {}
 
    "session.compaction_complete"
-   {:success true}
+   {:success true
+    :responses-reasoning
+    {:model "gpt-5.4"
+     :initial-effort "high"
+     :effort "medium"}}
+
+   "session.indexed_search"
+   {:kind "startup"
+    :outcome "started"
+    :startup-duration-ms 12.5
+    :forced-by-env false
+    :warm-start true
+    :file-count 1000}
+
+   "session.permission_recovery"
+   {:episode-id "recovery-1"
+    :status "recovering"
+    :on-blocked "ask"
+    :reason "permission_required"
+    :max-attempts 3
+    :attempts
+    [{:attempt-id "attempt-1"
+      :tool-call-id "tool-1"
+      :permission-kind "shell"
+      :request-fingerprint "sha256:abc"
+      :relation "initial"
+      :disposition "deferred"
+      :reason "permission_required"
+      :ordinal 1}]}
 
    "factory.run_updated"
    {:run-id "run-1"
@@ -464,7 +511,15 @@
    "permission.requested"
    {:request-id "permission-1"
     :permission-request {:kind "memory"
-                         :fact "Remember this"}}
+                         :fact "Remember this"}
+    :permission-mode "assisted"
+    :recovery-episode-id "recovery-1"}
+
+   "permission.completed"
+   {:request-id "permission-1"
+    :tool-call-id "tool-1"
+    :recovery-episode-id "recovery-1"
+    :result {:kind "approved"}}
 
    "session.skills_loaded"
    {:skills []}
@@ -502,7 +557,11 @@
            :agent-id "agent-1"
            :agent-type "task"
            :status "completed"
-           :display-name "Build verifier"}}
+           :display-name "Build verifier"}
+    :responses-reasoning
+    {:model "gpt-5.4"
+     :initial-effort "high"
+     :effort "medium"}}
 
    "external_tool.requested"
    {:request-id "request-1"
@@ -568,6 +627,20 @@
         (is (s/valid? spec-kw payload)
             (str "generated spec rejected wire payload for " event-type
                  ": " (s/explain-str spec-kw payload)))))))
+
+(deftest generated-indexed-search-data-enforces-discriminated-variants
+  (let [spec ::gen/session.indexed_search-data]
+    (doseq [payload [{}
+                     {:kind "status"}
+                     {:kind "startup"
+                      :outcome "started"
+                      :startup-duration-ms -1
+                      :forced-by-env false
+                      :warm-start true}
+                     {:kind "server_error"}
+                     {:kind "incremental" :phase "unknown"}]]
+      (is (not (s/valid? spec payload))
+          (str "must reject " (pr-str payload))))))
 
 (deftest generated-dictionary-specs-enforce-additional-property-values
   (let [shell-request
@@ -913,6 +986,29 @@
         idiom (coerce/event-wire->idiom event)]
     (is (= :fast (get-in idiom [:data :auto-tier])))
     (is (= event (coerce/event-idiom->wire idiom)))))
+
+(deftest attachment-type-coercion-round-trips
+  (let [wire-types ["file"
+                    "directory"
+                    "selection"
+                    "github_reference"
+                    "blob"
+                    "extension_context"]
+        idiom-types [:file
+                     :directory
+                     :selection
+                     :github-reference
+                     :blob
+                     :extension-context]
+        wire-event
+        {:type "user.message"
+         :data {:attachments (mapv (fn [attachment-type]
+                                     {:type attachment-type})
+                                   wire-types)}}
+        idiom-event (coerce/event-wire->idiom wire-event)]
+    (is (= idiom-types
+           (mapv :type (get-in idiom-event [:data :attachments]))))
+    (is (= wire-event (coerce/event-idiom->wire idiom-event)))))
 
 (deftest enum-coercion-rejects-values-outside-the-idiom-domain
   (doseq [[direction value]

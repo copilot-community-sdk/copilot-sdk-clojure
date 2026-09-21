@@ -470,6 +470,40 @@
   (for [[kebab form] leaf-map]
     `(~'s/def ~(ns-kw kebab) ~form)))
 
+(defn- emit-data-type
+  [root event-type node]
+  (if-let [branches (:anyOf node)]
+    (let [nullable? (some #(= "null" (:type %)) branches)
+          non-null (remove #(= "null" (:type %)) branches)
+          forms
+          (map-indexed
+           (fn [index branch]
+             (let [resolved (cc/deref-once root branch)]
+               (if (and (nil? (:$ref branch))
+                        (= "object" (:type resolved))
+                        (:properties resolved))
+                 (register-object-shape!
+                  root
+                  (str "#/definitions/" event-type "-data-branch-" index)
+                  resolved)
+                 (emit-type root branch))))
+           non-null)
+          union
+          (cond
+            (empty? forms) `any?
+            (= 1 (count forms)) (first forms)
+            :else
+            `(~'s/or
+              ~@(mapcat
+                 (fn [index form]
+                   [(keyword (str "branch-" index)) form])
+                 (range)
+                 forms)))]
+      (if nullable?
+        `(~'s/nilable ~union)
+        union))
+    (emit-type root node)))
+
 (defn- emit-data-spec
   "Emit `(s/def ::<event>-data ...)` for one event's data payload.
 
@@ -517,10 +551,13 @@
                                      `(~'fn [~'data]
                                             (~'or (~'not (~'contains? ~'data ~(keyword prop-name)))
                                                   (~'s/valid? ~data-form ~getter))))))))]
-    (if (seq strict-preds)
+    (if props
+      (if (seq strict-preds)
+        `(~'s/def ~(ns-kw (str event-type "-data"))
+                  (~'s/and ~keys-form ~@strict-preds))
+        `(~'s/def ~(ns-kw (str event-type "-data")) ~keys-form))
       `(~'s/def ~(ns-kw (str event-type "-data"))
-                (~'s/and ~keys-form ~@strict-preds))
-      `(~'s/def ~(ns-kw (str event-type "-data")) ~keys-form))))
+                ~(emit-data-type root event-type data-node)))))
 
 (defn- emit-envelope-spec
   "Emit the full envelope spec `(s/def ::<event> ...)`. Uses `s/and` to

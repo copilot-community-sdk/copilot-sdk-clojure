@@ -127,6 +127,8 @@
     :copilot/sampling.requested
     :copilot/sampling.completed
     :copilot/session.remote_steerable_changed
+    :copilot/session.indexed_search
+    :copilot/session.permission_recovery
     :copilot/capabilities.changed
     ;; MCP Apps tool-call complete (upstream schema 1.0.52-4, SEP-1865)
     :copilot/mcp_app.tool_call_complete
@@ -232,6 +234,8 @@
     :copilot/session.custom_agents_updated
     :copilot/session.custom_notification
     :copilot/session.remote_steerable_changed
+    :copilot/session.indexed_search
+    :copilot/session.permission_recovery
     :copilot/capabilities.changed
     ;; Round 6 additions (upstream schema 1.0.56-1).
     :copilot/session.autopilot_objective_changed
@@ -869,8 +873,11 @@
 
    Options:
    - :prompt       - The message text (required)
-   - :attachments  - Vector of {:type :file/:directory :path \"...\" :display-name \"...\"}
+   - :attachments  - Vector of supported file, directory, selection, blob, GitHub
+                     reference, or extension-context attachment maps
    - :mode         - :enqueue (default) or :immediate
+   - :response-schema - Raw JSON Schema or a map with `:to-json-schema` and
+                        `:parse`; requests strict structured output
 
    Example:
    ```clojure
@@ -882,7 +889,9 @@
 (defn send-and-wait!
   "Send a message and wait until the session becomes idle.
    Returns the final assistant message event, or nil if none received.
-   Serialized per session to avoid mixing concurrent sends.
+   Ordinary waits are serialized per session. Structured waits correlate by
+   originating message ID and may run concurrently with one another. Structured
+   and ordinary waits on the same session run serially.
    An idle event whose `:data :mode` is the string \"autopilot\" is a
    nonterminal turn boundary (the agent keeps working), so the wait
    continues past it to the next session.idle/session.error.
@@ -893,6 +902,11 @@
                      argument) disables the deadline and waits indefinitely.
                      Never forwarded on the underlying `session.send`.
 
+   To return parsed structured data, pass
+   `{:to-json-schema (fn [] schema-map) :parse parser-fn}` as the third
+   argument, followed by an optional timeout:
+   `(send-and-wait! session opts response-schema 60000)`.
+
    Example:
    ```clojure
    (let [response (copilot/send-and-wait! session {:prompt \"What is 2+2?\"})]
@@ -900,8 +914,10 @@
    ```"
   ([session opts]
    (session/send-and-wait! session opts))
-  ([session opts timeout-ms]
-   (session/send-and-wait! session opts timeout-ms)))
+  ([session opts timeout-or-response-schema]
+   (session/send-and-wait! session opts timeout-or-response-schema))
+  ([session opts response-schema timeout-ms]
+   (session/send-and-wait! session opts response-schema timeout-ms)))
 
 (defn send-async
   "Send a message and return a core.async channel that receives events.

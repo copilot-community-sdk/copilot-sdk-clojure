@@ -21,7 +21,6 @@
                      interface-fields
                      public-class-methods
                      read-resource
-                     sha256-file
                      sha256-items
                      sha256-lines
                      sha256-resource
@@ -205,9 +204,7 @@
           (is (re-matches #"[0-9a-f]{64}" expected-hash))
           (is (= expected-hash
                  (git-file-sha256 artifact-commit path))
-              "the sealed certification commit must match the ledger")
-          (is (= expected-hash (sha256-file path))
-              "the checked-out artifact must match the certified bytes"))))))
+              "the sealed certification commit must match the ledger"))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [report (report)

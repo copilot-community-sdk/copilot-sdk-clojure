@@ -214,10 +214,30 @@
                 :ret string?)  ; message-id
 
 (register-fdef! github.copilot-sdk.session/send-and-wait!
-                :args (s/cat :session ::specs/session
-                             :opts ::specs/send-options
-                             :timeout-ms (s/? ::specs/timeout-ms))
-                :ret (s/nilable map?))
+                :args
+                (s/alt
+                 :default
+                 (s/cat :session ::specs/session
+                        :opts ::specs/send-options)
+                 :timeout
+                 (s/cat :session ::specs/session
+                        :opts ::specs/send-options
+                        :timeout-ms ::specs/timeout-ms)
+                 :parsed
+                 (s/cat :session ::specs/session
+                        :opts ::specs/send-options
+                        :response-schema ::specs/parsed-response-schema)
+                 :parsed-timeout
+                 (s/cat :session ::specs/session
+                        :opts ::specs/send-options
+                        :response-schema ::specs/parsed-response-schema
+                        :timeout-ms ::specs/timeout-ms))
+                :ret any?
+                :fn
+                (fn [{:keys [args ret]}]
+                  (if (contains? #{:default :timeout} (first args))
+                    (or (nil? ret) (map? ret))
+                    true)))
 
 (register-fdef! github.copilot-sdk.session/send-async
                 :args (s/cat :session ::specs/session

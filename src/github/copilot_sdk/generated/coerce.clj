@@ -13,9 +13,23 @@
 
 (defn auto-tier-keyword->string "Convert an idiomatic auto-tier keyword to its closed wire enum domain." [v] (let [tier (auto-tier-string->keyword v)] (when tier (name tier))))
 
-(def ^{:private true} converters "Map of [wire-tag idiom-tag] → {:wire->idiom fn :idiom->wire fn}." {[:iso-string :instant] {:wire->idiom iso-string->instant, :idiom->wire instant->iso-string}, [:auto-tier-string :auto-tier-keyword] {:wire->idiom auto-tier-string->keyword, :idiom->wire auto-tier-keyword->string}})
+(def ^{:private true} attachment-type-wire->idiom {"file" :file, "directory" :directory, "selection" :selection, "github_reference" :github-reference, "blob" :blob, "extension_context" :extension-context})
 
-(def field-coercions "Per-event-type field coercion table. Generated from\n   script/codegen/coercions.edn." {"assistant.usage" {:cache-expires-at [:iso-string :instant]}, "session.resume" {:auto-tier [:auto-tier-string :auto-tier-keyword]}, "session.start" {:auto-tier [:auto-tier-string :auto-tier-keyword], :start-time [:iso-string :instant]}})
+(def ^{:private true} attachment-type-idiom->wire {:file "file", :directory "directory", :selection "selection", :github-reference "github_reference", :blob "blob", :extension-context "extension_context"})
+
+(defn attachment-type-string->keyword "Convert a wire attachment discriminator to its closed idiomatic keyword domain." [v] (cond (nil? v) nil (keyword? v) (if (contains? attachment-type-idiom->wire v) v (throw (ex-info "Unknown attachment type" {:value v}))) (string? v) (or (get attachment-type-wire->idiom v) (throw (ex-info "Unknown attachment type" {:value v}))) :else (throw (ex-info "Expected attachment type string or keyword" {:value v, :value-class (class v)}))))
+
+(defn attachment-type-keyword->string "Convert an idiomatic attachment discriminator to its closed wire string domain." [v] (let [attachment-type (attachment-type-string->keyword v)] (when attachment-type (get attachment-type-idiom->wire attachment-type))))
+
+(defn ^{:private true} coerce-attachment-types [attachments converter] (cond (nil? attachments) nil (sequential? attachments) (mapv (fn [attachment] (when-not (and (map? attachment) (contains? attachment :type)) (throw (ex-info "Expected attachment map with :type" {:value attachment, :value-class (class attachment)}))) (update attachment :type converter)) attachments) :else (throw (ex-info "Expected attachment collection" {:value attachments, :value-class (class attachments)}))))
+
+(defn attachment-type-strings->keywords "Convert attachment discriminator strings within a collection to keywords." [attachments] (coerce-attachment-types attachments attachment-type-string->keyword))
+
+(defn attachment-type-keywords->strings "Convert attachment discriminator keywords within a collection to wire strings." [attachments] (coerce-attachment-types attachments attachment-type-keyword->string))
+
+(def ^{:private true} converters "Map of [wire-tag idiom-tag] → {:wire->idiom fn :idiom->wire fn}." {[:iso-string :instant] {:wire->idiom iso-string->instant, :idiom->wire instant->iso-string}, [:auto-tier-string :auto-tier-keyword] {:wire->idiom auto-tier-string->keyword, :idiom->wire auto-tier-keyword->string}, [:attachment-type-strings :attachment-type-keywords] {:wire->idiom attachment-type-strings->keywords, :idiom->wire attachment-type-keywords->strings}})
+
+(def field-coercions "Per-event-type field coercion table. Generated from\n   script/codegen/coercions.edn." {"assistant.usage" {:cache-expires-at [:iso-string :instant]}, "session.extensions.attachments_pushed" {:attachments [:attachment-type-strings :attachment-type-keywords]}, "session.resume" {:auto-tier [:auto-tier-string :auto-tier-keyword]}, "session.start" {:auto-tier [:auto-tier-string :auto-tier-keyword], :start-time [:iso-string :instant]}, "user.message" {:attachments [:attachment-type-strings :attachment-type-keywords]}})
 
 (defn coerce-data "Apply coercions to a `data` map for the given event-type and direction\n      (:wire->idiom or :idiom->wire). Unknown event types and unknown fields\n      pass through unchanged. Each converter is nil-safe and idempotent so\n      the same coercion can be applied twice without corruption.\n\n      If a converter throws (e.g. malformed wire payload), the exception is\n      re-thrown as ex-info with `:event-type`, `:field`, and `:direction`\n      added to ex-data so callers can diagnose without inspecting the\n      converter source." [event-type data direction] (if-let [fields (get field-coercions event-type)] (reduce-kv (fn [acc k v] (assoc acc k (if-let [tag-pair (get fields k)] (if-let [f (get-in converters [tag-pair direction])] (try (f v) (catch Exception e (throw (ex-info (str "Coercion failed for " event-type "/" k " (" direction "): " (.getMessage e)) (merge (or (ex-data e) {}) {:event-type event-type, :field k, :direction direction, :tag-pair tag-pair}) e)))) v) v))) {} data) data))
 

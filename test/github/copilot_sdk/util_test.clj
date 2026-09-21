@@ -77,3 +77,50 @@
              (first (keys (util/wire->clj {key true})))))
       (is (= (csk/->camelCaseKeyword key)
              (first (keys (util/clj->wire {key true}))))))))
+
+(deftest opaque-json-conversion-preserves-key-identity
+  (is (= {"tenant/id" 1
+          "account/id" 2
+          "plain" {"nested/key" true}}
+         (util/opaque-json->wire
+          {:tenant/id 1
+           :account/id 2
+           :plain {:nested/key true}}))))
+
+(deftest opaque-json-conversion-rejects-colliding-wire-keys
+  (doseq [[value expected-keys]
+          [[{:foo 1 "foo" 2}
+            #{"foo"}]
+           [{:nested [{:foo-bar 1 "foo-bar" 2}]}
+            #{"foo-bar"}]
+           [{:tenant/id 1 "tenant/id" 2}
+            #{"tenant/id"}]]]
+    (let [error
+          (try
+            (util/opaque-json->wire value)
+            nil
+            (catch clojure.lang.ExceptionInfo e
+              e))]
+      (is (instance? clojure.lang.ExceptionInfo error))
+      (when error
+        (is (re-find #"Duplicate opaque JSON keys after wire conversion"
+                     (ex-message error)))
+        (is (= expected-keys
+               (:duplicate-wire-keys (ex-data error))))))))
+
+(deftest opaque-json-conversion-rejects-non-array-collections
+  (is (thrown-with-msg?
+       clojure.lang.ExceptionInfo
+       #"Unsupported opaque JSON collection"
+       (util/opaque-json->wire {:values #{1 2 3}}))))
+
+(deftest opaque-json-conversion-is-stack-safe
+  (let [depth 10000
+        nested (reduce (fn [value _] [value]) :leaf (range depth))
+        converted (util/opaque-json->wire nested)]
+    (is (= :leaf
+           (loop [value converted
+                  remaining depth]
+             (if (zero? remaining)
+               value
+               (recur (first value) (dec remaining))))))))

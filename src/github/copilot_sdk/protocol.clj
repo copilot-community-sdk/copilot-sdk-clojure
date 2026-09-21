@@ -564,12 +564,17 @@
    verbatim. Assistant `:reasoning-blocks` retain provider-defined key
    spelling. For v3 `mcp_app.tool_call_complete` events (schema 1.0.52-4,
    SEP-1865), the `:arguments` and `:result` payloads are similarly preserved.
+   JSON-RPC response `:error :data` payloads also retain their original keys.
    The same preservation applies to historical events returned in
    `session.getMessages` responses so live and historical event shapes agree."
   [msg]
   (let [method (:method msg)
         params (:params msg)
-        converted (util/wire->clj msg)
+        converted
+        (cond-> (util/wire->clj msg)
+          (and (map? (:error msg))
+               (contains? (:error msg) :data))
+          (assoc-in [:error :data] (get-in msg [:error :data])))
         raw-events (get-in msg [:result :events])]
     (cond
       ;; Upstream PR #1299: SQL bind parameters are opaque keyed values
