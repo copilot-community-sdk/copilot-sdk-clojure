@@ -1,5 +1,6 @@
 {:certification
  {:clojure-base-commit "9e1be3bda6cd642a8a731f1016dd0cc024f792ae"
+  :local-artifact-commit "cf7338a5aaaf2d52b49e4643c96717a66213fd29"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_ca166d3.edn"
    :sha256
@@ -262,4 +263,26 @@
  :version
  {:sdk "1.0.14.0"
   :changed? false
-  :release-required? false}}
+  :release-required? false}
+
+ :local-artifacts
+ {".copilot-schema-version"
+  "5f80bc7b133e10e9dc0c8fd8bafc646b153db15c47f4ab4b24db624e9a38e0a7"
+  "CHANGELOG.md"
+  "d848f27d5a5422d30cc8c3bb85daaba02783e426186640c59fc352db9d28a110"
+  "build.clj"
+  "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
+  "doc/adr/2026-08-10-host-owned-inference-boundary.md"
+  "f833ee3553ccf197b86109267dfead12ebdce81b546338eaecfdd88ce6602ccd"
+  "resources/github/copilot_sdk/api_surface.edn"
+  "733b5b978810a0257ac7d60f5c8481ff6ce691587a8a78ce1d81efb3a398a06f"
+  "schemas/api.schema.json"
+  "cc18ec115e05e10a48022ebbab2550242c37f3ec5211f1c16ca868015f369432"
+  "schemas/session-events.schema.json"
+  "fc602d18d26b35ae4ccb88e79e51b5f8a574f20b85e90c3201eff83659f06aa9"
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71"
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "433aa1557ffdf10d54c950db6c5d28155ed2901718570708e6753eebd5b0bf9e"
+  "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj"
+  "3604ece270dd09b67d19702a8cccc2d7a57352d7cf01891371fe1b04faa4de45"}}

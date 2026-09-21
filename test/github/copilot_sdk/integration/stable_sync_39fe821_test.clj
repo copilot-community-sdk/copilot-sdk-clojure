@@ -9,6 +9,7 @@
             [github.copilot-sdk.integration.stable-sync-support
              :refer [changed-exported-declarations
                      exported-symbols
+                     git-file-sha256
                      git-lines
                      git-output
                      public-class-methods
@@ -65,8 +66,10 @@
         scope))
       nil)))
 
-(deftest report-pins-history-and-local-base
+(deftest report-pins-history-and-local-artifacts
   (let [report (report)
+        artifact-commit
+        (get-in report [:certification :local-artifact-commit])
         historical-resource
         (get-in report [:certification :historical-oracle :resource])]
     (is (some? report) "The 39fe821 parity oracle must be committed")
@@ -87,7 +90,24 @@
                          (str expected-clojure-base "^{commit}")))))
       (is (zero? (:exit
                   (sh/sh "git" "merge-base" "--is-ancestor"
-                         expected-clojure-base "HEAD")))))))
+                         expected-clojure-base "HEAD"))))
+      (is (re-matches #"[0-9a-f]{40}" artifact-commit))
+      (is (zero? (:exit
+                  (sh/sh "git" "cat-file" "-e"
+                         (str artifact-commit "^{commit}")))))
+      (is (zero? (:exit
+                  (sh/sh "git" "merge-base" "--is-ancestor"
+                         artifact-commit "HEAD"))))
+      (is (seq (:local-artifacts report)))
+      (doseq [[path expected-hash] (:local-artifacts report)]
+        (testing path
+          (is (re-matches #"[0-9a-f]{64}" expected-hash))
+          (is (= expected-hash
+                 (git-file-sha256 artifact-commit path))
+              "the sealed implementation commit must match the ledger")
+          (is (= expected-hash
+                 (sha256-file path))
+              "the checked-out artifact must match the certified bytes"))))))
 
 (deftest exact-upstream-range-is-fully-classified
   (let [{:keys [upstream commit-classifications changed-paths]} (report)]
