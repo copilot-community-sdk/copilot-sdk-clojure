@@ -9,7 +9,8 @@
             [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.integration.stable-sync-support
-             :refer [changed-exported-declarations
+             :refer [classify-path
+                     changed-exported-declarations
                      changed-source-lines
                      exported-symbols
                      git-file-sha256
@@ -22,7 +23,7 @@
                      sha256-lines
                      sha256-resource
                      star-export-modules
-                     upstream-repo]]
+                     upstream-repo-or-skip]]
             [github.copilot-sdk.specs :as specs]))
 
 (def ^:private report-resource
@@ -55,14 +56,6 @@
 (defn- report
   []
   (read-resource report-resource))
-
-(defn- classify-path
-  [{:keys [exact-classifications prefix-classifications]} path]
-  (or (get exact-classifications path)
-      (some (fn [{:keys [prefix classification]}]
-              (when (str/starts-with? path prefix)
-                classification))
-            prefix-classifications)))
 
 (defn- classified-items
   [classifications]
@@ -107,17 +100,6 @@
               "\\s*=\\s*(.*?);"))
         body (second (re-find pattern source))]
     (set (map second (re-seq #"\"([^\"]+)\"" (or body ""))))))
-
-(defn- upstream-repo-or-skip
-  [scope]
-  (if-let [upstream @upstream-repo]
-    upstream
-    (do
-      (println
-       (format
-        "SKIP %s: set COPILOT_UPSTREAM_VALIDATION=true for exact upstream checks"
-        scope))
-      nil)))
 
 (deftest report-pins-history-release-and-local-artifacts
   (let [report (report)

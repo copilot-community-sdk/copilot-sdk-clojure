@@ -30,10 +30,11 @@ All notable changes to this project will be documented in this file. This change
   turn provenance, permission-recovery correlation, and the
   `"changeboarding_shortcut"` model-change source; internal thinking-drop
   telemetry and experimental structured task blockers remain wire-only. The
-  additional post-`ca166d3` changes only coalesce response chunks and cancel
-  pending reads inside the experimental host-owned inference boundary, plus a
-  .NET-only JSON-RPC test cleanup; the stable API, runtime, schemas, and Clojure
-  version remain unchanged.
+  additional post-`ca166d3` range contains experimental host-owned inference
+  response coalescing and cancellation, an internal Node test-project
+  configuration update, and language-specific .NET, Go, Java, and Python
+  implementation and test changes. The stable API, runtime, schemas, and
+  Clojure version remain unchanged.
   ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731),
   [upstream PR #2734](https://github.com/github/copilot-sdk/pull/2734),
   [upstream PR #2735](https://github.com/github/copilot-sdk/pull/2735))

@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "9e1be3bda6cd642a8a731f1016dd0cc024f792ae"
-  :local-artifact-commit "cf7338a5aaaf2d52b49e4643c96717a66213fd29"
+  :sealed-local-artifact-commit "cf7338a5aaaf2d52b49e4643c96717a66213fd29"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_ca166d3.edn"
    :sha256
@@ -65,8 +65,7 @@
    {:prefix "python/" :classification :language-specific}]}
 
  :stable-surface-continuity
- {:baseline-target "ca166d3eeec17b8efe0294af4b1ef9ca0f4445de"
-  :unchanged-authority-paths
+ {:unchanged-authority-paths
   #{"nodejs/package.json"
     "nodejs/src/extension.ts"
     "nodejs/src/factory.ts"
@@ -157,29 +156,22 @@
     :class-name "CopilotClient"
     :method-count 20
     :methods-sha256
-    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"}
+    "bcf31a8e931df3230402c11670d9e14dd03b90564fb6e7192356d746edd273e6"
+    :signature-count 22
+    :signatures-sha256
+    "496fb340d7ab60442269af0662d6a80c2cfec110f5d6ed395c987fa6f1df9fd0"}
    :session
    {:path "nodejs/src/session.ts"
     :class-name "CopilotSession"
     :method-count 41
     :methods-sha256
-    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"}}}
+    "e3d8d11b11ae017b7485e25197283d41f64aac2be2a582c73cc96be3685480bb"
+    :signature-count 48
+    :signatures-sha256
+    "4a512d5f6db46868c84276b2a0491e6248702fa0db1e062b2af6ad179b7dc0bd"}}}
 
  :public-surface-audit
- {:changed-node-files
-  ["nodejs/src/client.ts"
-   "nodejs/src/copilotRequestHandler.ts"
-   "nodejs/test/client.test.ts"
-   "nodejs/test/copilot-request-handler.test.ts"
-   "nodejs/tsconfig.test.json"]
-  :stable-public-deltas []
-  :experimental-deltas
-  [{:id :client/host-owned-inference-response-coalescing
-    :upstream-prs [2734]
-    :decision :exclude
-    :authority :accepted-adr
-    :decision-source
-    "doc/adr/2026-08-10-host-owned-inference-boundary.md"}]
+ {:stable-public-deltas []
   :unclassified-deltas []}
 
  :symbol-inventory
@@ -188,7 +180,7 @@
   :interface-fields {}
   :changed-type-values {}
   :changed-declarations {}
-  :changed-public-methods {}}
+  :changed-public-method-signatures {}}
 
  :stable-delta-ids #{}
  :stable-deltas []
@@ -265,7 +257,7 @@
   :changed? false
   :release-required? false}
 
- :local-artifacts
+ :sealed-local-artifacts
  {".copilot-schema-version"
   "5f80bc7b133e10e9dc0c8fd8bafc646b153db15c47f4ab4b24db624e9a38e0a7"
   "CHANGELOG.md"
@@ -284,5 +276,11 @@
   "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71"
   "src/github/copilot_sdk/generated/event_specs.clj"
   "433aa1557ffdf10d54c950db6c5d28155ed2901718570708e6753eebd5b0bf9e"
+  "test/github/copilot_sdk/integration/stable_sync_0dd9d43_test.clj"
+  "29b8d5d3a6df502a0366024b68486435d0cfdf54b1ea11e510b754038ef6216e"
   "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj"
-  "3604ece270dd09b67d19702a8cccc2d7a57352d7cf01891371fe1b04faa4de45"}}
+  "3604ece270dd09b67d19702a8cccc2d7a57352d7cf01891371fe1b04faa4de45"
+  "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+  "4902826cdb148855a106144a2bb20923c75db44bcae912e3412814a522c09701"
+  "test/github/copilot_sdk/integration/stable_sync_support.clj"
+  "4db1d8f056f5d0ceaebdf65b18460968ca5cc2ef2d99c640eb4e8347056513ac"}}
