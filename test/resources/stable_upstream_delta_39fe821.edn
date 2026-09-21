@@ -1,6 +1,6 @@
 {:certification
  {:clojure-base-commit "9e1be3bda6cd642a8a731f1016dd0cc024f792ae"
-  :sealed-local-artifact-commit "eafc7c7b7767d8be15f8a28a306267240376d689"
+  :sealed-local-artifact-commit "f77e17d196ed5de0c31d5b445d9121f1083daf6f"
   :historical-oracle
   {:resource "resources/stable_upstream_delta_ca166d3.edn"
    :sha256
@@ -283,4 +283,4 @@
   "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
   "cb15648fd7845b2f5ec429f6c8edff00fe8165457df236cc52f9a0c95256f41f"
   "test/github/copilot_sdk/integration/stable_sync_support.clj"
-  "82ad4a7c4c0496f6726b1cb01e44b97e4cd685d119e9deb014f2ada18ab44d8e"}}
+  "1c6590b25141a5801f5314e4e043370229385897971db58f38fed8836519aa99"}}

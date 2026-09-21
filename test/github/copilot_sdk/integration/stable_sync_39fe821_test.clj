@@ -35,7 +35,7 @@
   "39fe821dec17fc20bf92250ab3e19935aaf2e6f5")
 
 (def ^:private expected-certification-commit
-  "eafc7c7b7767d8be15f8a28a306267240376d689")
+  "f77e17d196ed5de0c31d5b445d9121f1083daf6f")
 
 (def ^:private expected-commit-classifications
   [["c310b247470e8d04a4cd0b5230d435c9d9243ed3" :language-specific]
