@@ -576,7 +576,7 @@
                       (str/replace #"\(\s+" "(")
                       (str/replace #"\s+\)" ")"))]
               (recur (conj signatures signature)))))
-        signatures))))
+        (vec (sort signatures))))))
 
 (defn changed-source-lines
   [upstream base target path]

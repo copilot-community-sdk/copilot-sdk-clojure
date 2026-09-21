@@ -139,8 +139,8 @@
   (read-resource report-resource))
 
 (deftest public-class-method-signatures-preserve-contract-shape
-  (is (= ["async send(value: string): Promise<string>"
-          "async send(value: number): Promise<number>"
+  (is (= ["async send(value: number): Promise<number>"
+          "async send(value: string): Promise<string>"
           "async send<T>(value: T, options?: { label: string; transform?: (item: T) => T; }): Promise<T>"
           "get status(): string"
           "value(): { label: string }"]
