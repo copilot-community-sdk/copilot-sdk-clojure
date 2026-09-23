@@ -3,7 +3,7 @@
   :historical-oracle
   {:resource "resources/stable_upstream_delta_39fe821.edn"
    :sha256 "b4c6ad6adf7909c25e0fce0436af6ab9b95721bbf6912f98a076845b035c6dce"}
-  :local-artifact-seal {:status :sealed :commit "40d684aeb2443ce5713649218f7e078d2c19c2bb"}}
+  :local-artifact-seal {:status :sealed :commit "e685626552a4d1dabbf3d8b49d03274d76b141be"}}
 
  :upstream
  {:repository "github/copilot-sdk"
@@ -414,7 +414,7 @@
  :sealed-local-artifacts
  {".copilot-schema-version" "33631dcd2cc5e7edd21b626748aff26e935c2345be00993d2e3c0427bfad4e29"
   ".github/workflows/ci.yml" "3b928fe8fab28648873a99fac9d1da61184f956e4743cbbd1bcbf48c4c829e8d"
-  "CHANGELOG.md" "f0d90343b9f73a150c039c5d108f3ce99fc4e3f51a1830b4752fc7d2dbca9f6b"
+  "CHANGELOG.md" "9c4901ddc1a6d581c9110be6e1759b221551cc4a9a6f9496ebdfab41e4b2decf"
   "build.clj" "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
   "doc/api/API.html" "057d0c314d278438452642f4c70fc94fb5606f917f98fa8fc3e1f4ef4f64e6e0"
   "doc/reference/API.md" "8f39dc7e3925a412328e605bd74d8f673d9ed1e685eeb9902605e9c41b39b29b"
@@ -423,20 +423,20 @@
   "schemas/api.schema.json" "a445b552b6ecef536b89f3d08cc73b6fbbe8fe0e503daae8974578529d62bc83"
   "schemas/session-events.schema.json" "d8cb713c05d5278a68dde5c5d4482574f836e922ae13aa06f82474c209a7c6e9"
   "script/codegen/coercions.edn" "737c72c477c31d1a2592b19c56ac9418b09e76f3927c0b0bd0531d72d128c6af"
-  "script/codegen/emit_specs.clj" "a3379423567e0a43fa05286f7818065d108afd4fd03405727d4ed1feb0787a02"
+  "script/codegen/emit_specs.clj" "1dcb3366ad2b4f7798d29e11349f544eaeb16999b6e6796c58f406c7b22ee32c"
   "script/generate_docs.clj" "4b10c8d65db2a39d19ec0ba260f1ddfcaa3e5ba653465dfa688d295e7cdf3467"
   "src/github/copilot_sdk.clj" "3f173c19705ebc49c004a4940e3620ab15e63bfdddedc1d16a8196dae5684639"
   "src/github/copilot_sdk/generated/coerce.clj" "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71"
   "src/github/copilot_sdk/generated/event_metadata.clj" "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e"
-  "src/github/copilot_sdk/generated/event_specs.clj" "2a54b1c2cad932aae9f649e68a190896bc8bfb6ae546c355656fee8e398d6124"
+  "src/github/copilot_sdk/generated/event_specs.clj" "aceeaf902563bb7e04e2cf438ae32b7fa16018f614f526f85bb34a159c05f3cd"
   "src/github/copilot_sdk/instrument.clj" "3c9acbab797eca0e7a12b6f1e808da81303ef908f834ab078f3dfcc54f5b6092"
   "src/github/copilot_sdk/protocol.clj" "f3f4a4ae888ccea90baf97c126f99d4128c151ff71a71632f9882f9ac2b10e90"
   "src/github/copilot_sdk/session.clj" "b9c1e9136730cb128e946456a8a6bed87378d4838e375f6117e3a91a4ff6a97e"
   "src/github/copilot_sdk/specs.clj" "391c403dc6b7eab1634099579991efd8c5adc2b58f62f75f2ace75bcb506b814"
   "src/github/copilot_sdk/util.clj" "f319fad9c6a906e34764cc92aeb4264b2fb8c00e38250de3e30967b87851c5d6"
-  "test/github/copilot_sdk/codegen_test.clj" "a7a1d15bed7d904b3ce1ef57b82103f728bd1749732a86f1ea45f2a03a6e763d"
+  "test/github/copilot_sdk/codegen_test.clj" "67646e0b98b7cbb0ed4329d27ee0b7e6022be478b399ab85267384da05f120b1"
   "test/github/copilot_sdk/docs_links_test.clj" "7f126c3e150868adac1e05de90780d2b45457c4148d9faf007ec89efac29bb2f"
-  "test/github/copilot_sdk/integration/schema_1_0_89_test.clj" "3f01a1decb7a0e732fda245542bb488eb89a84643c8b2ae9f33d35b61be8f2bc"
+  "test/github/copilot_sdk/integration/schema_1_0_89_test.clj" "641aa3636d72ef97c86d4961cc81143de0a82e71986b5e6b9a22b700cc1f10cc"
   "test/github/copilot_sdk/integration/stable_sync_39fe821_test.clj" "450421d41a5435d9db7303d5d0d3858a549b0efd9dbfecfa5165dc859e1dfdc8"
   "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj" "6bd4c9ad6c7f1aa1e0f37a352c1ace3635268d9374c614b7113c94312462da97"
   "test/github/copilot_sdk/integration/stable_sync_support.clj" "2089c473077856051df63ba43d39dd9c6aa28e66f34509e75d8467738f38f042"}

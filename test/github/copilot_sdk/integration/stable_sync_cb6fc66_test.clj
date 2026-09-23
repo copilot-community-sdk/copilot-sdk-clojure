@@ -11,7 +11,7 @@
 (def ^:private base "39fe821dec17fc20bf92250ab3e19935aaf2e6f5")
 (def ^:private target "cb6fc666cc45175adb11fa9e5021b96d7d37d298")
 (def ^:private clojure-base "dcafef62ee16eea7437fae52a439f3ffc6559c6d")
-(def ^:private implementation "40d684aeb2443ce5713649218f7e078d2c19c2bb")
+(def ^:private implementation "e685626552a4d1dabbf3d8b49d03274d76b141be")
 (def ^:private sealed-artifact-paths
   #{".copilot-schema-version" ".github/workflows/ci.yml" "CHANGELOG.md" "build.clj"
     "doc/api/API.html" "doc/reference/API.md" "resources/github/copilot_sdk/api_surface.edn"
