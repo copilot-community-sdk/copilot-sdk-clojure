@@ -157,7 +157,7 @@
               (recur (into remaining value))
 
               (map? value)
-              (and (every? #(or (keyword? %) (string? %)) (keys value))
+              (and (every? (fn [key] (or (keyword? key) (string? key))) (keys value))
                    (recur (into remaining (vals value))))
 
               :else
@@ -402,10 +402,9 @@
                   [kebab
                    (if (= 1 (count forms))
                      (first forms)
-                     (let [v (gensym "v")]
-                       `(~'s/spec
-                         (~'fn [~v]
-                               (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) forms))))))])))
+                     `(~'s/spec
+                       (~'fn [~'value]
+                             (~'or ~@(map (fn [f] `(~'s/valid? ~f ~'value)) forms)))))])))
         env-form-by-kebab  (side-form env-groups)
         ;; Per-kebab distinct envelope/data forms — used to decide whether a
         ;; key's leaf-union is *truly* weakened from the envelope side (i.e.,
@@ -435,10 +434,9 @@
                   [kebab (first uniq)]
 
                   :else
-                  (let [v (gensym "v")
-                        union-form `(~'s/spec
-                                     (~'fn [~v]
-                                           (~'or ~@(map (fn [f] `(~'s/valid? ~f ~v)) uniq))))
+                  (let [union-form `(~'s/spec
+                                     (~'fn [~'value]
+                                           (~'or ~@(map (fn [f] `(~'s/valid? ~f ~'value)) uniq))))
                         env-fs  (env-forms-by-kebab kebab #{})
                         data-fs (data-forms-by-kebab kebab #{})
                         ;; Only flag each side as "weakened" if the *other*

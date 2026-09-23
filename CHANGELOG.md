@@ -67,6 +67,11 @@ All notable changes to this project will be documented in this file. This change
 - Documentation generation now handles worktree paths containing dots,
   dotted topic filenames, and uppercase Markdown extensions.
 
+### Fixed (code generation)
+- Generated event specs use stable lexical parameter names rather than
+  reader-generated symbols, producing identical output across Babashka
+  versions and repeated generation in one process.
+
 ### Added (v1.0.14 sync)
 - Documented Azure AI Foundry project URLs for native `:azure` BYOK
   configuration. Resource hosts and full project URLs are accepted with or

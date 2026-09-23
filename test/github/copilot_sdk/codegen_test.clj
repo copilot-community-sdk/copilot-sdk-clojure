@@ -79,7 +79,11 @@
             "                            {:type \"object\" "
             "                             :properties {:knownValue {:type \"string\"}} "
             "                             :required [\"knownValue\"] "
-            "                             :additionalProperties {:type \"integer\"}}))] "
+            "                             :additionalProperties {:type \"integer\"}})) "
+            "      root (core/load-schema \"schemas/session-events.schema.json\") "
+            "      first-emission (emit/emit-event-specs-ns root) "
+            "      _ (dotimes [_ 50] (gensym)) "
+            "      second-emission (emit/emit-event-specs-ns root)] "
             "  (prn {:keys (mapv core/wire-key->kebab "
             "                    [\"_meta\" \"sessionId\" \"tool_efficiency\" "
             "                     \"URLValue\" \"someURLValue\" \"__foo_bar\"]) "
@@ -94,7 +98,8 @@
             "              [{:known-value \"ok\" :extra 1} "
             "               {:known-value \"ok\" :extra \"bad\"} "
             "               {:known-value 1 :extra 1}]) "
-            "        :closed-object-form closed-object-form}))"))]
+            "        :closed-object-form closed-object-form "
+            "        :repeatable (= first-emission second-emission)}))"))]
       (when-not (zero? exit)
         (throw (ex-info "Codegen probe failed" {:exit exit :stderr err})))
       (edn/read-string out))))
@@ -111,6 +116,9 @@
 
 (deftest codegen-emits-canonical-closed-object-key-order
   (is (str/includes? (:closed-object-form @codegen-probe) "#{:a :m :z}")))
+
+(deftest codegen-output-is-independent-of-reader-gensym-state
+  (is (:repeatable @codegen-probe)))
 
 (deftest codegen-validates-dictionary-values
   (is (= [true false false] (:string-dictionary @codegen-probe)))
