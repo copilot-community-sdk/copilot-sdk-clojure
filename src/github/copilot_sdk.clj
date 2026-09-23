@@ -50,6 +50,7 @@
     :copilot/session.idle
     :copilot/session.info
     :copilot/session.model_change
+    :copilot/session.model_deselected
     :copilot/session.handoff
     :copilot/session.truncation
     :copilot/session.snapshot_rewind
@@ -205,6 +206,7 @@
     :copilot/session.idle
     :copilot/session.info
     :copilot/session.model_change
+    :copilot/session.model_deselected
     :copilot/session.handoff
     :copilot/session.truncation
     :copilot/session.snapshot_rewind

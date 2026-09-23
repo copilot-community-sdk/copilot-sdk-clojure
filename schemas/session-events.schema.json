@@ -12048,6 +12048,91 @@
         "sdk": "An SDK or RPC caller selected the model."
       }
     },
+    "ModelDeselectedData": {
+      "type": "object",
+      "properties": {
+        "previousModel": {
+          "type": "string",
+          "description": "Model that was selected before the host withdrew it."
+        },
+        "reason": {
+          "$ref": "#/definitions/ModelDeselectedReason",
+          "description": "Low-cardinality reason the selection was cleared."
+        }
+      },
+      "required": [
+        "previousModel",
+        "reason"
+      ],
+      "additionalProperties": false,
+      "description": "The model the user had explicitly selected is no longer available, because the host that published it withdrew it, so the session no longer has an explicit selection. The next turn resolves a default as though the user had never chosen a model. Clients should stop presenting the previous model as selected. This event is durable because resume rebuilds the selected model from the event log; without it a resumed session would restore a model its provider no longer serves. Reasoning effort, verbosity, and other session-level preferences are deliberately unchanged, because they belong to the session rather than to the model.",
+      "title": "ModelDeselectedData"
+    },
+    "ModelDeselectedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.model_deselected",
+          "description": "Type discriminator. Always \"session.model_deselected\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ModelDeselectedData",
+          "description": "The model the user had explicitly selected is no longer available, because the host that published it withdrew it, so the session no longer has an explicit selection. The next turn resolves a default as though the user had never chosen a model. Clients should stop presenting the previous model as selected. This event is durable because resume rebuilds the selected model from the event log; without it a resumed session would restore a model its provider no longer serves. Reasoning effort, verbosity, and other session-level preferences are deliberately unchanged, because they belong to the session rather than to the model."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.model_deselected\". The model the user had explicitly selected is no longer available, because the host that published it withdrew it, so the session no longer has an explicit selection. The next turn resolves a default as though the user had never chosen a model. Clients should stop presenting the previous model as selected. This event is durable because resume rebuilds the selected model from the event log; without it a resumed session would restore a model its provider no longer serves. Reasoning effort, verbosity, and other session-level preferences are deliberately unchanged, because they belong to the session rather than to the model.",
+      "title": "ModelDeselectedEvent"
+    },
+    "ModelDeselectedReason": {
+      "type": "string",
+      "enum": [
+        "provider_withdrawn"
+      ],
+      "description": "Why the session no longer has an explicitly selected model.",
+      "title": "ModelDeselectedReason",
+      "x-enumDescriptions": {
+        "provider_withdrawn": "A host-managed provider snapshot no longer publishes the selected model."
+      }
+    },
     "ModeNoticeDeliveredData": {
       "type": "object",
       "properties": {
@@ -17397,6 +17482,10 @@
           "description": "Session event \"session.model_change\". Model change details including previous and new model identifiers"
         },
         {
+          "$ref": "#/definitions/ModelDeselectedEvent",
+          "description": "Session event \"session.model_deselected\". The model the user had explicitly selected is no longer available, because the host that published it withdrew it, so the session no longer has an explicit selection. The next turn resolves a default as though the user had never chosen a model. Clients should stop presenting the previous model as selected. This event is durable because resume rebuilds the selected model from the event log; without it a resumed session would restore a model its provider no longer serves. Reasoning effort, verbosity, and other session-level preferences are deliberately unchanged, because they belong to the session rather than to the model."
+        },
+        {
           "$ref": "#/definitions/AutoTierRecommendationEvent",
           "description": "Session event \"session.auto_tier_recommendation\". Live-only Auto preference recommendation from Copilot API after a successful Auto model call."
         },
@@ -20080,12 +20169,43 @@
         "unset": "Neither the task call, the per-sub-agent settings entry, nor a custom agent definition supplied a model."
       }
     },
+    "SystemMessageContentBlock": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "string",
+          "description": "Text content for this system-message block."
+        },
+        "isStatic": {
+          "type": "boolean",
+          "description": "Diagnostic classification indicating whether the block is stable across equivalent sessions."
+        },
+        "cacheBreakpoint": {
+          "type": "boolean",
+          "description": "Explicit prompt-cache intent. True places a breakpoint after this block, false suppresses one, and absence preserves the provider's legacy default."
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false,
+      "description": "One persisted structured system-message block and its cache intent",
+      "title": "SystemMessageContentBlock"
+    },
     "SystemMessageData": {
       "type": "object",
       "properties": {
         "content": {
           "type": "string",
           "description": "The system or developer prompt text sent as model input"
+        },
+        "contentBlocks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SystemMessageContentBlock",
+            "description": "One persisted structured system-message block and its cache intent"
+          },
+          "description": "Optional ordered structured blocks corresponding to content, retained for prompt-cache layout restoration."
         },
         "interactionId": {
           "type": "string",
@@ -20171,7 +20291,7 @@
       "properties": {
         "promptVersion": {
           "type": "string",
-          "description": "Version identifier of the prompt template used"
+          "description": "Version identifier of the prompt template or structured prompt layout used"
         },
         "variables": {
           "type": "object",
@@ -21880,6 +22000,10 @@
         "toolName": {
           "type": "string",
           "description": "Name of the tool being executed"
+        },
+        "toolTitle": {
+          "type": "string",
+          "description": "Human-readable display title for the tool, when the selected tool descriptor has a non-empty title."
         },
         "arguments": {
           "description": "Arguments passed to the tool",

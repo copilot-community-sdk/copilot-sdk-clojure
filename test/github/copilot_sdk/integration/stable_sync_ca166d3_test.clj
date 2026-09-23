@@ -411,7 +411,10 @@
                 (str "evidence marker did not change in " path))))))))
 
 (deftest local-stable-contracts-and-exclusions
-  (is (= "1.0.87-0" (str/trim (slurp ".copilot-schema-version"))))
+  (is (= "1.0.87-0"
+         (git-output "." "show"
+                     (str (get-in (report) [:certification :local-artifact-commit])
+                          ":.copilot-schema-version"))))
   (doseq [event-type
           [:copilot/session.indexed_search
            :copilot/session.permission_recovery]]

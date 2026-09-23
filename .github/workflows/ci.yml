@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: github/copilot-sdk
-          ref: bba92dda4c4c5a34340817112968bd78485df006
+          ref: cb6fc666cc45175adb11fa9e5021b96d7d37d298
           path: .upstream/copilot-sdk
           persist-credentials: false
           fetch-depth: 0

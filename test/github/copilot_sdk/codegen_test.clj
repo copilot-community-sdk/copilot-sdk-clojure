@@ -349,7 +349,16 @@
 
    "tool.execution_start"
    {:tool-call-id "tc-1"
-    :tool-name "shell"}
+    :tool-name "shell"
+    :tool-title "Run a command"}
+
+   "system.message"
+   {:role "system"
+    :content "Instructions"
+    :content-blocks [{:content "Instructions"
+                      :cache-breakpoint false
+                      :is-static true}
+                     {:content ""}]}
 
    "tool.execution_progress"
    {:tool-call-id "tc-1"
@@ -403,6 +412,10 @@
 
    "session.context_changed"
    {:cwd "/tmp"}
+
+   "session.model_deselected"
+   {:previous-model "host/model"
+    :reason "provider_withdrawn"}
 
    "session.context_cleared"
    {:messages-cleared 3}

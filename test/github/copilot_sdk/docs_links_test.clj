@@ -14,7 +14,7 @@
 (defmacro with-temp-root
   [[root] & body]
   `(let [~root (.toFile (java.nio.file.Files/createTempDirectory
-                         "codox-links"
+                         "codox-links."
                          (make-array java.nio.file.attribute.FileAttribute 0)))]
      (try
        ~@body
@@ -364,6 +364,8 @@
                  "# Authentication\n\n[Home](../index.md)\n")
     (write-file! root "doc/upstream-doc-gap-matrix.md"
                  "# Matrix\n\n[Index](index.md) and [`index.md`](index.md)\n")
+    (write-file! root "doc/sdk.v1.MD"
+                 "# Dotted topic\n\n[Home](index.md)\n")
     (let [output-dir (io/file root "doc/api")]
       (generate-docs/generate-docs
        {:root-path (.getPath root)
@@ -402,4 +404,6 @@
              (.indexOf (slurp (io/file output-dir "index.html"))
                        ">Documentation</span>")))
       (is (.isFile (io/file output-dir "github.copilot-sdk.html")))
+      (is (str/includes? (slurp (io/file output-dir "sdk.v1.html"))
+                         "href=\"doc-index.html\""))
       (is (.isFile (io/file output-dir "css/default.css"))))))
