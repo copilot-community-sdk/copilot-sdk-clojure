@@ -11,12 +11,12 @@
 (def ^:private base "39fe821dec17fc20bf92250ab3e19935aaf2e6f5")
 (def ^:private target "cb6fc666cc45175adb11fa9e5021b96d7d37d298")
 (def ^:private clojure-base "dcafef62ee16eea7437fae52a439f3ffc6559c6d")
-(def ^:private implementation "1379457aac700442eb3549456786c51ad7b81984")
+(def ^:private implementation "40d684aeb2443ce5713649218f7e078d2c19c2bb")
 (def ^:private sealed-artifact-paths
   #{".copilot-schema-version" ".github/workflows/ci.yml" "CHANGELOG.md" "build.clj"
     "doc/api/API.html" "doc/reference/API.md" "resources/github/copilot_sdk/api_surface.edn"
     "schemas/README.md" "schemas/api.schema.json" "schemas/session-events.schema.json"
-    "script/codegen/coercions.edn" "script/generate_docs.clj"
+    "script/codegen/coercions.edn" "script/codegen/emit_specs.clj" "script/generate_docs.clj"
     "src/github/copilot_sdk.clj" "src/github/copilot_sdk/generated/coerce.clj"
     "src/github/copilot_sdk/generated/event_metadata.clj"
     "src/github/copilot_sdk/generated/event_specs.clj"
@@ -133,8 +133,12 @@
            {:status :sealed :commit implementation}))
     (is (= (ss/shell-output "git" "merge-base" "--is-ancestor" implementation "HEAD") ""))
     (is (= (set (keys (:sealed-local-artifacts r))) sealed-artifact-paths))
-    (is (set/subset? (set (ss/git-lines "." "diff" "--name-only" clojure-base implementation))
-                     sealed-artifact-paths))
+    ;; Certificate files cannot participate in their own implementation seal.
+    (is (set/subset?
+         (disj (set (ss/git-lines "." "diff" "--name-only" clojure-base implementation))
+               (str "test/" resource)
+               "test/github/copilot_sdk/integration/stable_sync_cb6fc66_test.clj")
+         sealed-artifact-paths))
     (doseq [[path expected-hash] (:sealed-local-artifacts r)]
       (testing path
         (is (re-matches #"[0-9a-f]{64}" expected-hash))
