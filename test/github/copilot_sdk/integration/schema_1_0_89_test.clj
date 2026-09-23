@@ -52,7 +52,8 @@
           [blocks expected] [[::absent true] [[] true]
                              [[{:content ""}] true]
                              [[{:content "one"} {:content "two"}] true]
-                             [nil false] [false false]
+                             [nil false] [false false] [{} false]
+                             [#{{:content "unordered"}} false]
                              [[{}] false] [[{:content nil}] false]
                              [[{:content "one" :unknown true}] false]]]
     (let [data (cond-> {:content "prompt" :role "system"}

@@ -15,7 +15,7 @@
    - `string` + format=uuid      → `string?`
    - `number` / `integer`→ `number?` / `integer?`
    - `boolean`           → `boolean?`
-   - `array`             → `(s/coll-of <items>)`
+   - `array`             → `(s/coll-of <items> :kind vector?)`
    - top-level `data` / envelope objects with properties
      → `(s/keys :req-un [...] :opt-un [...])`
    - nested `object` nodes with declared `properties`, reached via `$ref`
@@ -166,8 +166,8 @@
 (defn- emit-array [root node]
   (let [items (:items node)]
     (if items
-      `(~'s/coll-of ~(emit-type root items))
-      `(~'s/coll-of any?))))
+      `(~'s/coll-of ~(emit-type root items) :kind vector?)
+      `(~'s/coll-of any? :kind vector?))))
 
 (defn- emit-dictionary
   [root node]

@@ -63,6 +63,9 @@
             "                                            {:type \"number\" :exclusiveMinimum 1 :exclusiveMaximum 2})) "
             "      nullable-spec (eval (emit/emit-type {:type [\"string\" \"null\"]} "
             "                                           {:type [\"string\" \"null\"]})) "
+            "      array-specs (mapv #(eval (emit/emit-type {} %)) "
+            "                        [{:type \"array\" :items {:type \"string\"}} "
+            "                         {:type \"array\"}]) "
             "      closed-object-form "
             "      (pr-str (emit/emit-type {:type \"object\"} "
             "                              {:type \"object\" "
@@ -90,6 +93,9 @@
             "        :bounded (mapv #(s/valid? bounded-spec %) [1 2 2.5 4 5]) "
             "        :exclusive (mapv #(s/valid? exclusive-spec %) [1 1.5 2]) "
             "        :nullable (mapv #(s/valid? nullable-spec %) [\"value\" nil 1]) "
+            "        :arrays (mapv (fn [spec] "
+            "                        (mapv #(s/valid? spec %) [[] [\"ok\"] [1] {} #{} () nil])) "
+            "                      array-specs) "
             "        :string-dictionary "
             "        (mapv #(s/valid? string-dictionary-spec %) "
             "              [{:requested \"resolved\"} {:requested 42} []]) "
@@ -113,6 +119,11 @@
   (is (= [false true false true false] (:bounded @codegen-probe)))
   (is (= [false true false] (:exclusive @codegen-probe)))
   (is (= [true true false] (:nullable @codegen-probe))))
+
+(deftest codegen-requires-json-array-vectors
+  (is (= (:arrays @codegen-probe)
+         [[true true false false false false false]
+          [true true true false false false false]])))
 
 (deftest codegen-emits-canonical-closed-object-key-order
   (is (str/includes? (:closed-object-form @codegen-probe) "#{:a :m :z}")))

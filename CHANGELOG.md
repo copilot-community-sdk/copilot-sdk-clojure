@@ -68,6 +68,9 @@ All notable changes to this project will be documented in this file. This change
   dotted topic filenames, and uppercase Markdown extensions.
 
 ### Fixed (code generation)
+- Generated array specs now require vectors, matching decoded JSON arrays
+  and rejecting maps, sets, and lists, including for structured
+  system-message blocks.
 - Generated event specs use stable lexical parameter names rather than
   reader-generated symbols, producing identical output across Babashka
   versions and repeated generation in one process.
