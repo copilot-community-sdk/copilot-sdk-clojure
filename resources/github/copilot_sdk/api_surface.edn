@@ -530,6 +530,7 @@
     :github.copilot-sdk.specs/buffer
     :github.copilot-sdk.specs/buffer-exhaustion-threshold
     :github.copilot-sdk.specs/builtin-plugin-directories
+    :github.copilot-sdk.specs/cache-breakpoint
     :github.copilot-sdk.specs/cache-expires-at
     :github.copilot-sdk.specs/cache-price
     :github.copilot-sdk.specs/cache-read-tokens
@@ -570,6 +571,7 @@
     :github.copilot-sdk.specs/configured-model-preference
     :github.copilot-sdk.specs/connection-state
     :github.copilot-sdk.specs/content
+    :github.copilot-sdk.specs/content-blocks
     :github.copilot-sdk.specs/content-filter-triggered
     :github.copilot-sdk.specs/context
     :github.copilot-sdk.specs/context-max
@@ -755,6 +757,7 @@
     :github.copilot-sdk.specs/is-autopilot-continuation
     :github.copilot-sdk.specs/is-byok
     :github.copilot-sdk.specs/is-child-process?
+    :github.copilot-sdk.specs/is-static
     :github.copilot-sdk.specs/is-terminal?
     :github.copilot-sdk.specs/join-session-config
     :github.copilot-sdk.specs/join-session-result
@@ -838,6 +841,7 @@
     :github.copilot-sdk.specs/model-call-failure-source
     :github.copilot-sdk.specs/model-capabilities
     :github.copilot-sdk.specs/model-change-source
+    :github.copilot-sdk.specs/model-deselected-reason
     :github.copilot-sdk.specs/model-id
     :github.copilot-sdk.specs/model-info
     :github.copilot-sdk.specs/model-limits
@@ -1054,6 +1058,7 @@
     :github.copilot-sdk.specs/session.mode_changed-data
     :github.copilot-sdk.specs/session.mode_notice_delivered-data
     :github.copilot-sdk.specs/session.model_change-data
+    :github.copilot-sdk.specs/session.model_deselected-data
     :github.copilot-sdk.specs/session.permission_recovery-data
     :github.copilot-sdk.specs/session.permissions_changed-data
     :github.copilot-sdk.specs/session.plan_changed-data
@@ -1112,10 +1117,12 @@
     :github.copilot-sdk.specs/supports-vision
     :github.copilot-sdk.specs/system-message
     :github.copilot-sdk.specs/system-message-content
+    :github.copilot-sdk.specs/system-message-content-block
     :github.copilot-sdk.specs/system-message-mode
     :github.copilot-sdk.specs/system-message-section
     :github.copilot-sdk.specs/system-notification-kind
     :github.copilot-sdk.specs/system-prompt-section
+    :github.copilot-sdk.specs/system.message-data
     :github.copilot-sdk.specs/system.notification-data
     :github.copilot-sdk.specs/task-model-source
     :github.copilot-sdk.specs/tcp-connection-token

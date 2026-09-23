@@ -1855,10 +1855,11 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
-For schema 1.0.87-0, `:copilot/assistant.server_tool_progress` also belongs to
+For schema 1.0.89-0, `:copilot/assistant.server_tool_progress` also belongs to
 `copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
 `:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
-and `:copilot/session.permission_recovery` belong to `copilot/session-events`.
+`:copilot/session.permission_recovery`, and `:copilot/session.model_deselected`
+belong to `copilot/session-events`.
 `:copilot/tool_search.activated` intentionally belongs only to the master
 `copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
 
@@ -1870,13 +1871,16 @@ remain generated wire evidence and are not curated as public idiom events.
 The experimental `reasoningBlocks` field on `assistant.message` and
 `:shell-execution` field on `tool.execution_complete` also remain generated
 wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.87-0` additionally carries experimental factory pause/checkpoint,
+`1.0.89-0` additionally carries experimental factory pause/checkpoint,
 permission, workspace, and managed-catalog protocol declarations that are not
 part of the stable Clojure API. The new experimental permission declarations
 include `permission.assentDetected`, `permission.contextualAuthorization`, and
 the `activatesExtraction` field on `permission.messageAuthorizationRead`.
 Experimental extension launch-provider declarations and structured task-blocker
 payloads also remain generated wire evidence only.
+Experimental Dynamic Workflows, Connector management, and command-enqueue APIs
+are not exposed by the Clojure SDK. Existing experimental Agent Factories
+remain a separate surface; workflow handles cannot be registered or run.
 
 ### `evt` — Event Keyword Helper
 
@@ -1904,6 +1908,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
 | `:copilot/session.info` | Informational session update |
 | `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, and `:source`. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, and `"changeboarding_shortcut"`. |
+| `:copilot/session.model_deselected` | The host withdrew the selected model. Data requires string `:previous-model` and `:reason "provider_withdrawn"`. Clear the displayed model selection; the next turn resolves a default. Reasoning effort, verbosity, and other session preferences remain unchanged. This durable event is also returned by `get-messages`. |
 | `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
 | `:copilot/session.usage_info` | Token usage information |
 | `:copilot/session.context_changed` | Session context (cwd, repo, branch) changed |
@@ -1955,7 +1960,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/model.call_finished` | Completed model dispatch metadata; data requires `:turn-id`, non-negative `:dispatch-duration-ms`, `:outcome` (`"success"`, `"error"`, `"cancelled"`, or `"rejected"`), and positive `:edit-classifier-version`. Optional fields: `:interaction-id` and `:contains-built-in-file-edit-request`. The payload remains open for additive runtime fields. |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started; data includes `:tool-call-id`, `:tool-name`, optional `:arguments` (an opaque JSON object with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. Transport metadata was added in runtime schema `1.0.84-5`; configured-server provenance was introduced in runtime schema `1.0.84-8` by [upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658). |
+| `:copilot/tool.execution_start` | Tool execution started; data requires `:tool-call-id` and `:tool-name`. Optional fields are `:tool-title` (human-readable display title), `:arguments` (opaque JSON with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. An absent title stays absent; the spec accepts any string, including empty, but not `nil`. Transport metadata was added in runtime schema `1.0.84-5`; configured-server provenance was introduced in runtime schema `1.0.84-8` by [upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658). |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. Successful skill invocations may keep concise model-facing `:detailed-content`; the authoritative skill body remains on the corresponding `:copilot/skill.invoked` event. |
@@ -1969,7 +1974,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/hook.start` | Hook invocation started; data requires `:hook-invocation-id`, `:hook-type`, with optional `:parent-tool-call-id` (upstream schema 1.0.83-1). Durable or resumed `postToolUse` copies may elide duplicated tool and successful skill payloads; canonical output remains on the adjacent tool and skill events. |
 | `:copilot/hook.progress` | Ephemeral progress update from a long-running hook; data: `{:message "..."}` (upstream schema 1.0.56). |
 | `:copilot/hook.end` | Hook invocation finished; data requires `:hook-invocation-id`, `:hook-type`, and `:success`, with optional `:parent-tool-call-id` and closed `:error` map. The error requires string `:message`, permits optional string `:stack` and `:source`, and rejects other keys (upstream schema 1.0.83-1). Durable or resumed `postToolUse` receipts may elide unchanged successful skill output while preserving hook-modified values. |
-| `:copilot/system.message` | System message emitted |
+| `:copilot/system.message` | System or developer prompt emitted; data requires string `:content` and `:role "system"` or `"developer"`. Optional `:content-blocks` is an ordered vector of closed maps with required string `:content` and optional boolean `:cache-breakpoint` and `:is-static`. A true cache breakpoint places one after that block; false suppresses it; omission preserves the provider default. Empty strings and an empty vector are valid; explicit `nil` is not. Live notifications and `get-messages` preserve block order and the distinction between omission and false. |
 | `:copilot/system.notification` | System notification with a structured `:kind` discriminator: `agent_completed`, `agent_idle`, `new_inbox_message`, `shell_completed`, `shell_detached_completed`, `instruction_discovered`, `factory_completed`, or `unclassified`. Each known kind validates its required and optional fields; agent kinds may include `:display-name`. |
 | `:copilot/permission.requested` | Permission request initiated; optional `:agent-mode` identifies the requesting mode (`"interactive"`, `"plan"`, or `"autopilot"`), and `:resolved-by-hook` indicates a hook already handled it. For the MCP tool-permission variant (`:server-name`/`:tool-name`/`:tool-title` present), optional `:can-offer-server-wide-approval` indicates the host may offer a server-wide approval option. Shell requests may include `:request-sandbox-bypass`, `:request-sandbox-bypass-reason`, and `:request-sandbox-permissive`; the permissive form remains sandboxed while recording otherwise-blocked file and process access. |
 | `:copilot/permission.completed` | Permission request resolved. Approved nested `:result` values may include `:managed-approval-handled`, indicating that managed policy handled the request. |

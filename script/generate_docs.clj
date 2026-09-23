@@ -20,12 +20,12 @@
             (->> topic-manifest
                  (sort-by (juxt :basename :source-path))
                  (mapv (fn [{:keys [source-file output-name] :as entry}]
-                         (-> (plaintext/read-file source-file)
-                             (assoc :name output-name)
-                             (update :content #(links/rewrite-markdown-links
-                                                topic-manifest
-                                                entry
-                                                %))))))))))
+                         (let [content (slurp source-file)]
+                           {:name output-name
+                            :title (plaintext/find-title :markdown content)
+                            :format :markdown
+                            :content (links/rewrite-markdown-links
+                                      topic-manifest entry content)}))))))))
 
 (defn generate-docs
   "Generate Codox output with deterministic topic identities and valid links."

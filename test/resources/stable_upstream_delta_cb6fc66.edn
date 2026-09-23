@@ -1,0 +1,444 @@
+{:certification
+ {:clojure-base-commit "dcafef62ee16eea7437fae52a439f3ffc6559c6d"
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_39fe821.edn"
+   :sha256 "b4c6ad6adf7909c25e0fce0436af6ab9b95721bbf6912f98a076845b035c6dce"}
+  :local-artifact-seal {:status :sealed :commit "e685626552a4d1dabbf3d8b49d03274d76b141be"}}
+
+ :upstream
+ {:repository "github/copilot-sdk"
+  :base-commit "39fe821dec17fc20bf92250ab3e19935aaf2e6f5"
+  :target-commit "cb6fc666cc45175adb11fa9e5021b96d7d37d298"
+  :commit-count 4
+  :commits-sha256 "ee008e54d68dd5fc9a1756d7306b1370afb2ace669529726c562e915bcb6916a"
+  :hash-format :newline-joined-without-trailing-newline
+  :target-position :post-v1.0.14-main
+  :target-package-version "0.0.0-dev"
+  :runtime-version "1.0.89-0"
+  :release-tag {:name "v1.0.14" :commit "e60d9037353249ef16b349eb4012e8c1d113fda5"}}
+ :version {:sdk "1.0.14.0" :changed? false :release-required? false}
+
+ :commit-classifications
+ [{:commit "cb2a8cc60ee9f4a561b7f36af6eb2163c2caf78e"
+   :subject "Fix session start subscription tests (#2737)"
+   :source-url "https://github.com/github/copilot-sdk/pull/2737"
+   :classification :language-specific
+   :reason "Corrects .NET/Python session-start subscription tests; no Node implementation change."
+   :changed-path-count 3
+   :changed-paths-sha256 "d6236238fe537cd0d70bc4be518655e7c342fb311a737f8cdde0872660f353c9"}
+  {:commit "51a0394ecca0ea12fe3f32491e81a2001e99e1ad"
+   :subject "Update SDK snapshot for Copilot CLI 1.0.88-2"
+   :source-url "https://github.com/github/copilot-sdk/commit/51a0394ecca0ea12fe3f32491e81a2001e99e1ad"
+   :classification :stable-public
+   :reason "Snapshot introduces three stable event contracts, experimental Dynamic Workflows, generated RPC changes, build infrastructure, and foreign SDK changes; the surface-level classifications below govern each."
+   :changed-path-count 565
+   :changed-paths-sha256 "83ec7f7acbc1b407ba4d8d82ccfafff3d6d8386aa71a533be733116a9298653e"}
+  {:commit "7e478249a28cfb8aa4796298e38747f03c5df8b7"
+   :subject "Update SDK snapshot for Copilot CLI 1.0.88"
+   :source-url "https://github.com/github/copilot-sdk/commit/7e478249a28cfb8aa4796298e38747f03c5df8b7"
+   :classification :internal
+   :reason "Changes only the Node runtime version pin and compiled version metadata."
+   :changed-path-count 2
+   :changed-paths-sha256 "4b04f001dd9fe1efbd1da4423f3f92211aaead6fc85295d225529eb931e1da74"}
+  {:commit "cb6fc666cc45175adb11fa9e5021b96d7d37d298"
+   :subject "Update SDK snapshot for Copilot CLI 1.0.89-0"
+   :source-url "https://github.com/github/copilot-sdk/commit/cb6fc666cc45175adb11fa9e5021b96d7d37d298"
+   :classification :generated-only
+   :reason "Advances the final runtime pin and generated RPC snapshot, plus build/test infrastructure and foreign SDK changes; adds no further stable handwritten Node API or event delta."
+   :changed-path-count 48
+   :changed-paths-sha256 "54c71cdf1d1dc4874ee7b2ac9ac0d9f15f14988ce1ea12c0da55e2033d35a4a9"}]
+
+ :changed-paths
+ {:count 582
+  :sha256 "de6282572cdfff59e87491cad32b3dd962f2691946ae16d4857b48ea8013de98"
+  :hash-format :newline-joined-without-trailing-newline
+  :classification-counts
+  {:stable-public 3 :experimental 13 :generated-only 2 :internal 85 :language-specific 479}
+  :exact-classifications
+  {".editorconfig" :internal ".gitattributes" :internal ".gitignore" :internal
+   "AGENTS.md" :internal "BUILD.bazel" :internal "CONTRIBUTING.md" :internal
+   "justfile" :internal "package.json" :internal "vitest.config.ts" :internal
+   "nodejs/README.md" :internal
+   "nodejs/docs/extensions.md" :experimental
+   "nodejs/docs/workflows.md" :experimental
+   "nodejs/package.json" :internal
+   "nodejs/scripts/package-sdk.ts" :internal
+   "nodejs/scripts/prepare-runtime.ts" :internal
+   "nodejs/scripts/releaseArtifacts.ts" :internal
+   "nodejs/scripts/update-protocol-version.ts" :internal
+   "nodejs/scripts/verify-release-packages.ts" :internal
+   "nodejs/src/cliVersion.ts" :internal
+   "nodejs/src/client.ts" :experimental
+   "nodejs/src/extension.ts" :experimental
+   "nodejs/src/generated/rpc.ts" :generated-only
+   "nodejs/src/generated/session-events.ts" :stable-public
+   "nodejs/src/index.ts" :experimental
+   "nodejs/src/session.ts" :experimental
+   "nodejs/src/workflow.ts" :experimental
+   "nodejs/test/cjs-compat.test.ts" :experimental
+   "nodejs/test/e2e/extension_env_access.e2e.test.ts" :stable-public
+   "nodejs/test/e2e/factory.e2e.test.ts" :experimental
+   "nodejs/test/e2e/fixtures/env-access-extension.mjs" :internal
+   "nodejs/test/e2e/fixtures/workflow-extension.mjs" :experimental
+   "nodejs/test/e2e/harness/sdkTestContext.ts" :internal
+   "nodejs/test/e2e/pending_work_resume.e2e.test.ts" :stable-public
+   "nodejs/test/e2e/rpc_shell_and_fleet.e2e.test.ts" :internal
+   "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts" :generated-only
+   "nodejs/test/extension.test.ts" :experimental
+   "nodejs/test/factory.test.ts" :experimental
+   "nodejs/test/package-sdk.test.ts" :internal
+   "nodejs/test/prepare-runtime.test.ts" :internal
+   "nodejs/test/runtimeArtifacts.test.ts" :internal
+   "nodejs/test/rust-codegen.test.ts" :internal
+   "nodejs/test/shared-codegen.test.ts" :internal
+   "nodejs/test/typescript-codegen.test.ts" :internal
+   "nodejs/test/workflow.test.ts" :experimental}
+  :prefix-classifications
+  [{:prefix ".devcontainer/" :classification :internal :reason "Development environment configuration."}
+   {:prefix ".github/" :classification :internal :reason "Upstream instructions, CI, and release automation, not runtime SDK contracts."}
+   {:prefix ".vscode/" :classification :internal :reason "Editor and debugger configuration."}
+   {:prefix "docs/" :classification :internal :reason "Documentation maintenance instructions and contributor secret-management documentation."}
+   {:prefix "scripts/" :classification :internal :reason "Build/runtime preparation, CI helpers, and foreign-language/TypeScript generators; generated public output is separately inventoried."}
+   {:prefix "dotnet/" :classification :language-specific :reason ".NET implementation and tests."}
+   {:prefix "go/" :classification :language-specific :reason "Go implementation and tests."}
+   {:prefix "java/" :classification :language-specific :reason "Java implementation, generators, packaging, and tests."}
+   {:prefix "python/" :classification :language-specific :reason "Python implementation and tests."}
+   {:prefix "rust/" :classification :language-specific :reason "Rust implementation, generated bindings, and tests."}]}
+
+ :symbol-groups
+ {:events
+  {:classification :stable-public
+   :symbols #{"ModelDeselectedData" "ModelDeselectedEvent" "ModelDeselectedReason" "SystemMessageContentBlock"}}
+  :workflows
+  {:classification :experimental
+   :symbols
+   #{"defineWorkflow" "WorkflowResumeError" "isWorkflowRunTerminal"
+     "SessionWorkflowApi" "WorkflowAgentOptions" "WorkflowAgentSummary"
+     "WorkflowContext" "WorkflowDefinition" "WorkflowHandle" "WorkflowJsonSchema"
+     "WorkflowLimitOverrides" "WorkflowLimits" "WorkflowListRunsOptions"
+     "WorkflowMeta" "WorkflowPhaseObservation" "WorkflowPhaseStatus"
+     "WorkflowPipelineStage" "WorkflowProgressLine" "WorkflowProgressPage"
+     "WorkflowResumeErrorCode" "WorkflowResumeOptions" "WorkflowRunDetail"
+     "WorkflowRunOptions" "WorkflowRunResult" "WorkflowRunStatus"
+     "WorkflowRunSummary" "WorkflowRunsPage" "WorkflowStepOptions"}}
+  :workflow-internals
+  {:classification :internal :symbols #{"WORKFLOW_AGENT_OPTION_KEYS" "getWorkflowDefinition"}}
+  :rpc
+  {:classification :generated-only
+   :symbols
+   #{"AcceptedEnqueueCommandResult" "UnsupportedEnqueueCommandResult"
+     "ConnectorAccountRequest" "ConnectorAuthorizationRequirement"
+     "ConnectorAuthorizationScope" "ConnectorAvailability" "ConnectorCapabilities"
+     "ConnectorCatalogEntry" "ConnectorCatalogResult" "ConnectorCatalogStatus"
+     "ConnectorConnectRequest" "ConnectorConnectResult" "ConnectorContinueRequest"
+     "ConnectorDisconnectResult" "ConnectorMcpStatus" "ConnectorReconcileRequest"
+     "ConnectorRuntimeStatus" "ConnectorStatus" "ProviderSyncRequest" "ProviderSyncResult"}}}
+
+ :changed-declarations
+ {"nodejs/src/extension.ts" {:experimental #{"JoinSessionConfig"}}
+  "nodejs/src/generated/session-events.ts"
+  {:stable-public #{"SessionEvent" "SystemMessageData" "ToolExecutionStartData"}}
+  "nodejs/src/generated/rpc.ts"
+  {:generated-only
+   #{"AgentInfo" "CatalogCapability" "CopilotUserResponse" "EnqueueCommandResult"
+     "ModelCapabilitiesOverrideSupports" "ModelCapabilitiesSupports"
+     "ModelSwitchToRequest" "PermissionPathsList" "ProviderModelConfig"
+     "SessionOpenOptions" "SessionUpdateOptionsParams" "SkillsDiscoverRequest"
+     "SkillsGetDiscoveryPathsRequest" "SystemMessageBlock" "Tool"}}}
+
+ :target-public-surface
+ {:fingerprint-format :count-and-sha256-of-sorted-newline-terminated-items
+  :source-blob-format :base-target
+  :source-blobs
+  {"nodejs/package.json" ["8ea4551eae59d04fee7fcd5060c8249664953b8a" "0e2c23f121bd9f253f37f3f442a894b4819e45b9"]
+   "nodejs/src/canvas.ts" ["aeb1f00ec42926977c010df2471123dc18ddddd3" "aeb1f00ec42926977c010df2471123dc18ddddd3"]
+   "nodejs/src/client.ts" ["39a637a31d24188b8f16456703aadb73c720c44d" "c99af602e0133d006fd7466f5d5f8aabbad60671"]
+   "nodejs/src/extension.ts" ["ac0ccdb7ce3102cabc98e8457f4c7f684b76fa28" "e1b9a7f72a40f43ff0dfdfcc1609ff6c9253752e"]
+   "nodejs/src/factory.ts" ["174318394f98c735e54f9bd80d75901e77ce17fa" "174318394f98c735e54f9bd80d75901e77ce17fa"]
+   "nodejs/src/generated/rpc.ts" ["7d517cb9e683f39eea038c053b2bc8eb37645784" "da14db8f03231f813c222111e07a000626162dda"]
+   "nodejs/src/generated/session-events.ts" ["a5fd0337c6345317c376aaf9bf0f1155e38eff27" "6bc6600d088960b997fb5a156e67edf333b917be"]
+   "nodejs/src/index.ts" ["f1879e8f1b9e83f8ae40f04415909ba9e705f67d" "42adbe30f6b1983fbe7cfde84e95071f1b00be28"]
+   "nodejs/src/session.ts" ["4a909f64c8f0103ac303046bffa8fcb73a6129b5" "97c073f64dd74f80d03a73d970ec2efc9d0eb5ed"]
+   "nodejs/src/toolSet.ts" ["559e9234e5b178036d88a7045a632bd16a97f534" "559e9234e5b178036d88a7045a632bd16a97f534"]
+   "nodejs/src/types.ts" ["6a19116a37f63c1c355508c70d40a98b100c11b8" "6a19116a37f63c1c355508c70d40a98b100c11b8"]
+   "nodejs/src/workflow.ts" [nil "6065c710ecf817cbbcd0b3a4476b5d981aca2a16"]}
+  :trees
+  {"nodejs/src" ["38c3964851fc2aeae2149b52a45dcf1f8558c6e0" "41418bea229c14768ad5738ac87ffc3e0a10d1f3"]
+   "nodejs/src/generated" ["85da1a2b96cce5460da60603692a8b55e42bff04" "55e5538392ae5982915746c18de638121638a001"]
+   "nodejs/test" ["c64e0d454cd195573d9b6611162b0800d2ec645d" "7fd23b1a91c48189c1249cb0f79de193b8bc296d"]}
+  :package-root
+  {:star-exports #{"./generated/session-events.js"}
+   :fingerprint [798 "f46794ef41a0ae71cfa6af822150329979ec529a6b777e9ae2aa1cf9ca75dd49"]
+   :added-export-groups [:events :workflows]}
+  :removed-exports #{}
+  :modules
+  {"nodejs/src/index.ts"
+   {:fingerprint [234 "54f94481c28c39a44e0119ba5e9d2aa27f8cb428b4b28a6c1f651c730ceccb63"] :added-export-groups [:workflows]}
+   "nodejs/src/types.ts"
+   {:fingerprint [213 "d245838d1f269b25737b328f825dbe01cec6d4149424b4a156c8db5c5fb5519b"]}
+   "nodejs/src/client.ts"
+   {:fingerprint [1 "a5431bbd92ac780f6179f17f47c4e9a9227510a9f3682f56a6893c7db8d90dba"]}
+   "nodejs/src/session.ts"
+   {:fingerprint [2 "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"]}
+   "nodejs/src/extension.ts"
+   {:fingerprint [67 "d70807508af13ad16d58ecf5cc4907515c910a0c8a4ce59a31fc7b9e250fa4ba"] :added-export-groups [:workflows]}
+   "nodejs/src/factory.ts"
+   {:fingerprint [29 "ba187595890c21116008b7276801db3a64510815df0c744e32e85c20c961afba"]}
+   "nodejs/src/toolSet.ts"
+   {:fingerprint [2 "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"]}
+   "nodejs/src/canvas.ts"
+   {:fingerprint [9 "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"]}
+   "nodejs/src/workflow.ts"
+   {:fingerprint [30 "84a96ed05a262ff7795d6ee9303fe7036b191ddbca6a0e8fdc3a7a40a9a3a94e"] :added-export-groups [:workflows :workflow-internals]}
+   "nodejs/src/generated/session-events.ts"
+   {:fingerprint [574 "078a340d4bc65881ea7e2d3e276aa18655bd42e3c9f790d8a9a9da68a5438479"] :added-export-groups [:events]}
+   "nodejs/src/generated/rpc.ts"
+   {:fingerprint [1390 "a793c07bb336bdb2722e2fd4e4d65960fa807a2dae213a1f87fae983bbdbab88"] :added-export-groups [:rpc]}}
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts" :class-name "CopilotClient"
+    :signatures [22 "4f7d6de4ffc39d22ae20e45583892ad1c5cded22615809d1fff0fcc22339e66c"]
+    :added-signatures
+    {:internal #{"async resumeSessionForExtension(sessionId: string, config: ResumeSessionConfig, contributions: FactoryHandle[] | ExtensionOrchestrationContributions = {}, extensionOptions?: ExtensionJoinOptions): Promise<CopilotSession>"}}
+    :fields [#{} #{}]
+    :review "The helper sees the unannotated overload implementation. Both exposed overload declarations are @internal; the 21 public signatures from the baseline are unchanged."}
+   :session
+   {:path "nodejs/src/session.ts" :class-name "CopilotSession"
+    :signatures [22 "958a5c536e48e11c7e45c993044f910dc1d15bd67ae9fd59e9a301a5ca288cad"]
+    :added-signatures {}
+    :fields
+    [#{"clientSessionApis: ClientSessionApiHandlers" "readonly factory: SessionFactoryApi" "public readonly sessionId: string"}
+     #{"clientSessionApis: ClientSessionApiHandlers" "readonly factory: SessionFactoryApi" "public readonly sessionId: string" "readonly workflow: SessionWorkflowApi"}]
+    :field-classifications
+    {"sessionId" :stable-public "factory" :experimental "workflow" :experimental "clientSessionApis" :internal}
+    :review "All 22 public method/getter/overload signatures are unchanged. The sole field addition is workflow: SessionWorkflowApi, whose authority type is explicitly experimental."}}
+  :unchanged-interface-fields
+  {"CopilotClientOptions" [20 "52ec38d4844434d098f98d6903c9fcc387dc3a4d4ca846ac30696b2eb0d65599"]
+   "CustomAgentConfig" [10 "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"]
+   "MessageOptions" [8 "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"]
+   "ModelCapabilities" [2 "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"]
+   "ProviderModelConfig" [9 "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"]
+   "ResumeSessionConfig" [3 "8200254cec5cd0bc3aae3b98a8c6814688605b75e4bce65d53c344bde5501a01"]
+   "SessionConfig" [2 "4b264da954c4ebbd3ad035075307cd36560c695f060d6b84c5818a97f84a1b30"]
+   "SessionConfigBase" [80 "2f5080e8b0b791fc7088be321e1f157d9b112e6e08fbe53b0590f50ac64909bf"]}
+  :unchanged-authority-paths
+  #{"nodejs/src/types.ts" "nodejs/src/toolSet.ts" "nodejs/src/factory.ts" "nodejs/src/canvas.ts"}}
+
+ :event-contract
+ {:builders :not-applicable-event-payloads
+  :wire-paths ["session.event.params.event.data" "session.getMessages.result.events[].data"]
+  :facade [github.copilot-sdk/event-types github.copilot-sdk/session-events github.copilot-sdk/evt]
+  :fdef-impact :existing-subscription-and-history-contracts
+  :fdefs [github.copilot-sdk.session/subscribe-events github.copilot-sdk.session/get-messages]
+  :api-snapshot-impact
+  {:added-spec-keys
+   #{:github.copilot-sdk.specs/session.model_deselected-data
+     :github.copilot-sdk.specs/model-deselected-reason
+     :github.copilot-sdk.specs/system.message-data
+     :github.copilot-sdk.specs/system-message-content-block
+     :github.copilot-sdk.specs/content-blocks
+     :github.copilot-sdk.specs/cache-breakpoint
+     :github.copilot-sdk.specs/is-static}
+   :function-changes #{} :fdef-changes #{}}
+  :event-map-policy :open-envelope-and-data-closed-structured-blocks
+  :protocol-test github.copilot-sdk.integration.schema-1-0-89-test/event-fields-survive-live-and-historical-protocol-paths
+  :example-impact :no-new-call-pattern
+  :paths
+  [".copilot-schema-version" "schemas/session-events.schema.json" "script/codegen/emit_specs.clj"
+   "src/github/copilot_sdk/generated/event_specs.clj" "src/github/copilot_sdk.clj"
+   "src/github/copilot_sdk/specs.clj" "src/github/copilot_sdk/instrument.clj"
+   "src/github/copilot_sdk/session.clj" "src/github/copilot_sdk/util.clj"
+   "resources/github/copilot_sdk/api_surface.edn"
+   "test/github/copilot_sdk/integration/schema_1_0_89_test.clj"
+   "doc/reference/API.md" "schemas/README.md" "CHANGELOG.md"]}
+
+ :stable-deltas
+ [{:id :events/model-deselected :classification :stable-public
+   :exports #{"ModelDeselectedData" "ModelDeselectedEvent" "ModelDeselectedReason"}
+   :changed-declarations #{"SessionEvent"}
+   :wire {:type "session.model_deselected" :required {"previousModel" :string "reason" #{"provider_withdrawn"}}}
+   :idiom {:type :copilot/session.model_deselected :required {:previous-model :string :reason #{"provider_withdrawn"}}}
+   :specs [:github.copilot-sdk.specs/session.model_deselected-data
+           :github.copilot-sdk.specs/model-deselected-reason]
+   :proof-states [:required-present :missing :empty-string :wrong-type :nil :unknown-reason :future-event-field]
+   :test github.copilot-sdk.integration.schema-1-0-89-test/model-deselection-is-a-public-session-event
+   :semantics "Durable loss of explicit model selection; the next turn resolves a default. Does not clear session reasoning effort or verbosity. Unlike model-change, previousModel is required and non-null."}
+  {:id :events/tool-title :classification :stable-public
+   :exports #{} :changed-declarations #{"ToolExecutionStartData"}
+   :wire {:type "tool.execution_start" :optional {"toolTitle" :non-null-string}}
+   :idiom {:type :copilot/tool.execution_start :optional {:tool-title :non-null-string}}
+   :specs [:github.copilot-sdk.specs/tool.execution_start-data
+           :github.copilot-sdk.specs/tool-title]
+   :proof-states [:absent :empty-string :nonempty-string :false :wrong-type :nil]
+   :test github.copilot-sdk.integration.schema-1-0-89-test/optional-tool-title-contract
+   :semantics "Optional display title; absence remains absence, not JSON null. Upstream prose describes non-empty emission but the public type permits any string."}
+  {:id :events/system-message-content-blocks :classification :stable-public
+   :exports #{"SystemMessageContentBlock"} :changed-declarations #{"SystemMessageData"}
+   :wire {:type "system.message" :optional {"contentBlocks" :ordered-array}
+          :block {:required {"content" :string} :optional {"cacheBreakpoint" :boolean "isStatic" :boolean}}}
+   :idiom {:type :copilot/system.message :optional {:content-blocks :vector}
+           :block {:required {:content :string} :optional {:cache-breakpoint :boolean :is-static :boolean}}}
+   :specs [:github.copilot-sdk.specs/system.message-data
+           :github.copilot-sdk.specs/system-message-content-block
+           :github.copilot-sdk.specs/content-blocks
+           :github.copilot-sdk.specs/cache-breakpoint
+           :github.copilot-sdk.specs/is-static]
+   :proof-states [:absent :empty-vector :ordered-multiple-blocks :empty-content :false :true :nil
+                  :missing-content :unknown-block-key :unordered-collection]
+   :test github.copilot-sdk.integration.schema-1-0-89-test/ordered-system-message-block-contract
+   :semantics "Retains ordered prompt-cache layout. cacheBreakpoint true inserts a breakpoint, false suppresses it, and omission preserves the provider default. isStatic is diagnostic. Optional fields are non-null; no predicate ? renaming. promptVersion may identify a structured layout."}]
+
+ :workflow-exclusion
+ {:classification :experimental :decision :exclude :authority :stable-only-policy
+  :decision-source "AGENTS.md"
+  :reason "workflow.ts marks Dynamic Workflows @experimental. Existing factory approval is not authorization for this distinct subsystem."
+  :existing-factories :unchanged-supported-experimental
+  :root-and-extension-export-group :workflows
+  :join-change "Private JoinSessionContributionConfig makes factories/workflows mutually exclusive; JoinSessionConfig gains the workflow branch. Default permission handler, suppressResumeEvent, environment requests, and existing factory-only joins retain their behavior."
+  :client-change "Internal resumeSessionForExtension normalizes legacy factory arrays or contribution objects, registers workflows, and serializes optional workflow metadata only for extension contributions."
+  :session-change "readonly workflow adds run/resume/getRun/waitForRun/listRuns/getRunDetail/getRunProgress/pause/cancel. Private helpers, registerWorkflows reverse execute/abort handlers, per-execution cancellation, progress buffering, and cleanup serve only workflow execution."
+  :internal-export-group :workflow-internals}
+
+ :rpc-review
+ [{:id :rpc/connectors :classification :generated-only
+   :added #{"ConnectorAccountRequest" "ConnectorAuthorizationRequirement" "ConnectorAuthorizationScope"
+            "ConnectorAvailability" "ConnectorCapabilities" "ConnectorCatalogEntry" "ConnectorCatalogResult"
+            "ConnectorCatalogStatus" "ConnectorConnectRequest" "ConnectorConnectResult" "ConnectorContinueRequest"
+            "ConnectorDisconnectResult" "ConnectorMcpStatus" "ConnectorReconcileRequest" "ConnectorRuntimeStatus" "ConnectorStatus"}
+   :changed #{}
+   :reason "All Connector types and the session.connectors namespace are @experimental. Nine generated public RPC methods plus two internal startup/projection methods have no stable handwritten wrapper or package-root type export."}
+  {:id :rpc/provider-and-model :classification :generated-only
+   :added #{"ProviderSyncRequest" "ProviderSyncResult"}
+   :changed #{"ProviderModelConfig" "ModelCapabilitiesSupports" "ModelCapabilitiesOverrideSupports" "ModelSwitchToRequest" "SystemMessageBlock"}
+   :reason "Experimental provider.sync, provider metadata, toolCalls capabilities, nullable reasoningEffort, and system-message cacheBreakpoint remain wire-only. Handwritten ProviderModelConfig, ModelCapabilities/Override, SystemMessageConfig, and setModel options are unchanged. The independently root-exported model-deselection event and system-message blocks are ported, not excluded with their producers."}
+  {:id :rpc/command-enqueue :classification :generated-only
+   :added #{"AcceptedEnqueueCommandResult" "UnsupportedEnqueueCommandResult"}
+   :changed #{"EnqueueCommandResult"}
+   :reason "Experimental enqueue result becomes a discriminated accepted queueId versus unsupported/optional-null queueId union; no stable handwritten command-queue API exposes it."}
+  {:id :rpc/skills :classification :generated-only
+   :added #{}
+   :changed #{"SessionOpenOptions" "SessionUpdateOptionsParams" "SkillsDiscoverRequest" "SkillsGetDiscoveryPathsRequest"}
+   :reason "ignoredSkillsLocations remains absent from SessionConfigBase, create/resume/join, and handwritten mutable APIs."}
+  {:id :rpc/agent-metadata :classification :generated-only
+   :added #{} :changed #{"AgentInfo"}
+   :transitive-result-types
+   #{"AgentInfo" "AgentGetCurrentResult" "AgentList" "AgentReloadResult" "AgentSelectResult" "ServerAgentList"}
+   :result-paths
+   {"agents.discover" "ServerAgentList"
+    "session.agent.list" "AgentList"
+    "session.agent.getCurrent" "AgentGetCurrentResult"
+    "session.agent.select" "AgentSelectResult"
+    "session.agent.reload" "AgentReloadResult"}
+   :stable-handwritten-exposure :none
+   :experimental-rpc-exposure :reachable
+   :reason "AgentInfo.reasoningEffort is reachable through client.rpc.agents.discover and session.rpc.agent list/getCurrent/select/reload. AgentInfo, all five transitive result wrappers, and both RPC namespaces are explicitly @experimental. None of these six types is referenced or re-exported by types.ts, the root/extension entry points, other root-exported handwritten modules, or session-events.ts. Thus no unchanged handwritten alias or stable method result acquires this metadata. CustomAgentConfig independently retains its existing reasoningEffort input; DefaultAgentConfig contains only excludedTools."}
+  {:id :rpc/catalog-account-permissions-tools :classification :generated-only
+   :added #{} :changed #{"CatalogCapability" "CopilotUserResponse" "PermissionPathsList" "Tool"}
+   :reason "Catalog credential-required negotiation, tolerant enterprise_list passthrough, exact session-approved permission paths, and experimental tool-name/input-name telemetry metadata are generated contracts, not stable handwritten config or result additions."}
+  {:id :rpc/documented-runtime-semantics :classification :generated-only
+   :added #{} :changed #{}
+   :comment-only-symbols #{"AgentRegistryLogCaptureOpenErrorReason" "AgentRegistryLogCapture" "ConnectRequest"
+                          "GitHubTelemetryHandler" "PermissionsPathsListRequest" "PermissionsResetSessionApprovalsRequest"}
+   :reason "Comments describe canonical process logs, host-scoped telemetry forwarding, and exact-path permission resets. No declaration changed; these describe existing generated experimental/internal runtime surfaces."}]
+
+ :test-inventory
+ {"nodejs/test/client.test.ts"
+  {:blobs ["8175b4b5ab956259101a26cbaa24c589d3115862" "8175b4b5ab956259101a26cbaa24c589d3115862"]
+   :review "Unchanged create/resume option forwarding, omission/false, early registration, model options, permissions, and extension environment requests."}
+  "nodejs/test/session-send-and-wait.test.ts"
+  {:blobs ["d88b80c896bea30d5232c563f422fb09001f31e5" "d88b80c896bea30d5232c563f422fb09001f31e5"]
+   :review "Unchanged early event, completion subscription, failure precedence, and cleanup contracts."}
+  "nodejs/test/structured-output.test.ts"
+  {:blobs ["8f029d0ac9b2de32044b775192d636db162d7cd7" "8f029d0ac9b2de32044b775192d636db162d7cd7"]
+   :review "Unchanged structured message send/wait contracts inherited from the historical baseline."}
+  "nodejs/test/session-event-types.test.ts"
+  {:blobs ["cc5cb12bf1cd716c5a08b8b44b0aba3b0316d250" "cc5cb12bf1cd716c5a08b8b44b0aba3b0316d250"]
+   :review "Unchanged package-root Data/Event exports and SessionEvent narrowing; star exports still include the new stable event shapes."}
+  "nodejs/test/session-event-codegen.test.ts"
+  {:blobs ["60906720deae79311bc2349d1daac5956d0bb698" "60906720deae79311bc2349d1daac5956d0bb698"]
+   :review "Unchanged schema/type-generation evidence; generated location alone does not exclude public event contracts."}
+  "nodejs/test/toolSet.test.ts"
+  {:blobs ["b77b797072f5de8abd87556cc3ae46c5bfd5aa26" "b77b797072f5de8abd87556cc3ae46c5bfd5aa26"]
+   :review "Unchanged source-qualified tool filtering and validation."}
+  "nodejs/test/e2e/client.e2e.test.ts"
+  {:blobs ["a529ea8e4ce82d9495efc185dea707e49bce285c" "a529ea8e4ce82d9495efc185dea707e49bce285c"]
+   :review "Unchanged client construction and lifecycle behavior."}
+  "nodejs/test/e2e/session.e2e.test.ts"
+  {:blobs ["1337410386715d5cef4ad656de20acefeb244a8c" "1337410386715d5cef4ad656de20acefeb244a8c"]
+   :review "Unchanged session send, history, resume, and disconnect behavior."}
+  "nodejs/test/e2e/session_config.e2e.test.ts"
+  {:blobs ["8d041f1ec81e4b5977b58fdfd27ab919ca41a609" "8d041f1ec81e4b5977b58fdfd27ab919ca41a609"]
+   :review "Unchanged create/resume and setModel configuration boundaries."}
+  "nodejs/test/e2e/event_fidelity.e2e.test.ts"
+  {:blobs ["8ae2091b3369e007664dc4ed89c9f91425581a95" "8ae2091b3369e007664dc4ed89c9f91425581a95"]
+   :review "Unchanged event ordering/shape and history fidelity; dedicated Clojure live/history proofs cover the three additions."}
+  "nodejs/test/e2e/extension_env_access.e2e.test.ts"
+  {:blobs ["f0f84a35edf2fea651846cb4102d5be681fee2a6" "15da3a9327d13514c1341a98440aba5ef4d518cc"]
+   :review "Waits for nonempty fixture contents instead of file existence; no new public behavior. The env-access fixture changes only CRLF to LF."}
+  "nodejs/test/e2e/pending_work_resume.e2e.test.ts"
+  {:blobs ["7c2906c7b97f33e36d66e7d036069d5365d2ae9c" "f2bb16ca6db289f2e4c0945747ab2b318e5fad82"]
+   :review "Waits for an observable original-client session lock before resume; no new resume API or semantics."}
+  "nodejs/test/extension.test.ts"
+  {:blobs ["bebe8db7f03581391a6cc82f47ce0f0e21a79122" "91d9de156718ce2202f004dca871b6ff82f99bd1"]
+   :review "Adds workflow contribution forwarding and mixed-generation rejection; unchanged stable join permission/environment defaults."}
+  "nodejs/test/factory.test.ts"
+  {:blobs ["182e2b8d3a217b7e3edb61c8c86fd121efcc8200" "679cbf9131cc36796646759c7c162f0bea784a5c"]
+   :review "Adapts test plumbing to the contribution object; existing supported experimental factory behavior is retained."}
+  "nodejs/test/workflow.test.ts"
+  {:blobs [nil "0efb221fc9cd849581bd4a6a05addd431b8106a1"]
+   :review "Experimental handles, workflow RPC/metadata, legacy factory-array acceptance, errors, duplicate rejection, nesting restrictions, and terminal settlement."}}
+
+ :source-evidence
+ {"nodejs/src/generated/session-events.ts"
+  #{"previousModel: string;" "reason: ModelDeselectedReason;" "\"provider_withdrawn\";"
+    "toolTitle?: string;" "contentBlocks?: SystemMessageContentBlock[];"
+    "cacheBreakpoint?: boolean;" "isStatic?: boolean;" "type: \"session.model_deselected\";"}
+  "nodejs/src/workflow.ts"
+  #{"@experimental Part of the experimental Dynamic Workflows surface" "export interface SessionWorkflowApi"
+    "export function defineWorkflow" "export function getWorkflowDefinition"}
+  "nodejs/src/extension.ts"
+  #{"type JoinSessionContributionConfig =" "} & JoinSessionContributionConfig;"
+    "factories?: never;" "workflows?: never;" "joinSession cannot register both factories and workflows"
+    "suppressResumeEvent: config.suppressResumeEvent ?? true"}
+  "nodejs/src/client.ts"
+  #{"/** @internal */\n    async resumeSessionForExtension("
+    "session.registerWorkflows(workflows);" "workflows: workflows?.map((workflow) => workflow.meta)"}
+  "nodejs/src/session.ts"
+  #{"readonly workflow: SessionWorkflowApi =" "registerWorkflows(workflows?: WorkflowHandle[]): void"
+    "this.clientSessionApis.workflow =" "this.workflowAbortControllers.clear();"
+    "async getEvents(): Promise<SessionEvent[]>" "\"session.getMessages\""}
+  "nodejs/src/types.ts"
+  #{"export type ModelCapabilitiesOverride = DeepPartial<ModelCapabilities>;"
+    "export interface SessionConfig extends SessionConfigBase" "export interface ResumeSessionConfig extends SessionConfigBase"}}
+
+ :sealed-local-artifacts
+ {".copilot-schema-version" "33631dcd2cc5e7edd21b626748aff26e935c2345be00993d2e3c0427bfad4e29"
+  ".github/workflows/ci.yml" "3b928fe8fab28648873a99fac9d1da61184f956e4743cbbd1bcbf48c4c829e8d"
+  "CHANGELOG.md" "9c4901ddc1a6d581c9110be6e1759b221551cc4a9a6f9496ebdfab41e4b2decf"
+  "build.clj" "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993"
+  "doc/api/API.html" "057d0c314d278438452642f4c70fc94fb5606f917f98fa8fc3e1f4ef4f64e6e0"
+  "doc/reference/API.md" "8f39dc7e3925a412328e605bd74d8f673d9ed1e685eeb9902605e9c41b39b29b"
+  "resources/github/copilot_sdk/api_surface.edn" "0f568964387353855c670ba9c81660713aa567779afc3eb02aa4fc19eca634b2"
+  "schemas/README.md" "67bf6ffae630a8acb280778f2e18a92bbfc6838db7d08d7788e46e21ee6ae373"
+  "schemas/api.schema.json" "a445b552b6ecef536b89f3d08cc73b6fbbe8fe0e503daae8974578529d62bc83"
+  "schemas/session-events.schema.json" "d8cb713c05d5278a68dde5c5d4482574f836e922ae13aa06f82474c209a7c6e9"
+  "script/codegen/coercions.edn" "737c72c477c31d1a2592b19c56ac9418b09e76f3927c0b0bd0531d72d128c6af"
+  "script/codegen/emit_specs.clj" "1dcb3366ad2b4f7798d29e11349f544eaeb16999b6e6796c58f406c7b22ee32c"
+  "script/generate_docs.clj" "4b10c8d65db2a39d19ec0ba260f1ddfcaa3e5ba653465dfa688d295e7cdf3467"
+  "src/github/copilot_sdk.clj" "3f173c19705ebc49c004a4940e3620ab15e63bfdddedc1d16a8196dae5684639"
+  "src/github/copilot_sdk/generated/coerce.clj" "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71"
+  "src/github/copilot_sdk/generated/event_metadata.clj" "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e"
+  "src/github/copilot_sdk/generated/event_specs.clj" "aceeaf902563bb7e04e2cf438ae32b7fa16018f614f526f85bb34a159c05f3cd"
+  "src/github/copilot_sdk/instrument.clj" "3c9acbab797eca0e7a12b6f1e808da81303ef908f834ab078f3dfcc54f5b6092"
+  "src/github/copilot_sdk/protocol.clj" "f3f4a4ae888ccea90baf97c126f99d4128c151ff71a71632f9882f9ac2b10e90"
+  "src/github/copilot_sdk/session.clj" "b9c1e9136730cb128e946456a8a6bed87378d4838e375f6117e3a91a4ff6a97e"
+  "src/github/copilot_sdk/specs.clj" "391c403dc6b7eab1634099579991efd8c5adc2b58f62f75f2ace75bcb506b814"
+  "src/github/copilot_sdk/util.clj" "f319fad9c6a906e34764cc92aeb4264b2fb8c00e38250de3e30967b87851c5d6"
+  "test/github/copilot_sdk/codegen_test.clj" "67646e0b98b7cbb0ed4329d27ee0b7e6022be478b399ab85267384da05f120b1"
+  "test/github/copilot_sdk/docs_links_test.clj" "7f126c3e150868adac1e05de90780d2b45457c4148d9faf007ec89efac29bb2f"
+  "test/github/copilot_sdk/integration/schema_1_0_89_test.clj" "641aa3636d72ef97c86d4961cc81143de0a82e71986b5e6b9a22b700cc1f10cc"
+  "test/github/copilot_sdk/integration/stable_sync_39fe821_test.clj" "450421d41a5435d9db7303d5d0d3858a549b0efd9dbfecfa5165dc859e1dfdc8"
+  "test/github/copilot_sdk/integration/stable_sync_ca166d3_test.clj" "6bd4c9ad6c7f1aa1e0f37a352c1ace3635268d9374c614b7113c94312462da97"
+  "test/github/copilot_sdk/integration/stable_sync_support.clj" "2089c473077856051df63ba43d39dd9c6aa28e66f34509e75d8467738f38f042"}
+
+ :unclassified-deltas []}

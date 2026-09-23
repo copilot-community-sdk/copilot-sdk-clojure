@@ -1800,7 +1800,8 @@
 ;; Event type enum (namespaced under :copilot/)
 (s/def ::event-type
   #{:copilot/session.start :copilot/session.resume :copilot/session.error :copilot/session.idle
-    :copilot/session.info :copilot/session.model_change :copilot/session.handoff
+    :copilot/session.info :copilot/session.model_change :copilot/session.model_deselected
+    :copilot/session.handoff
     :copilot/session.truncation :copilot/session.snapshot_rewind :copilot/session.usage_info
     :copilot/session.compaction_start :copilot/session.compaction_complete
     :copilot/session.shutdown :copilot/session.task_complete :copilot/session.context_cleared
@@ -2041,6 +2042,21 @@
          #(or (not (contains? % :attachments))
               (s/valid? ::inbound-attachments (:attachments %)))))
 
+(s/def ::cache-breakpoint boolean?)
+(s/def ::is-static boolean?)
+(s/def ::system-message-content-block
+  (closed-keys
+   (s/keys :req-un [::content]
+           :opt-un [::cache-breakpoint ::is-static])
+   #{:content :cache-breakpoint :is-static}))
+(s/def ::content-blocks
+  (s/coll-of ::system-message-content-block :kind vector?))
+(s/def ::system.message-data
+  (s/and
+   (s/keys :req-un [::content]
+           :opt-un [::content-blocks ::interaction-id])
+   #(contains? #{"system" "developer"} (:role %))))
+
 ;; Queued command response (CLI 1.0.45, session.commands.respondToQueuedCommand)
 (s/def ::handled? boolean?)
 (s/def ::stop-processing-queue? boolean?)
@@ -2201,7 +2217,7 @@
 (s/def ::tool.execution_start-data
   (s/and
    (s/keys :req-un [::tool-call-id ::tool-name]
-           :opt-un [::parent-tool-call-id ::mcp-server-name ::mcp-tool-name
+           :opt-un [::tool-title ::parent-tool-call-id ::mcp-server-name ::mcp-tool-name
                     ::mcp-config-server-name ::mcp-config-source
                     ::mcp-transport ::model])
    #(optional-field? % :arguments opaque-json-value?)))
@@ -2328,6 +2344,13 @@
                     ::reasoning-effort ::source])
    #(or (not (contains? % :source))
         (s/valid? ::model-change-source (:source %)))))
+
+(s/def ::model-deselected-reason #{"provider_withdrawn"})
+(s/def ::session.model_deselected-data
+  (s/and
+   map?
+   #(required-value? % :previous-model string?)
+   #(required-value? % :reason (partial s/valid? ::model-deselected-reason))))
 
 ;; Session mode changed event
 (s/def ::previous-mode string?)

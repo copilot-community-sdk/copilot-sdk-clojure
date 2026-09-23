@@ -63,6 +63,9 @@
             "                                            {:type \"number\" :exclusiveMinimum 1 :exclusiveMaximum 2})) "
             "      nullable-spec (eval (emit/emit-type {:type [\"string\" \"null\"]} "
             "                                           {:type [\"string\" \"null\"]})) "
+            "      array-specs (mapv #(eval (emit/emit-type {} %)) "
+            "                        [{:type \"array\" :items {:type \"string\"}} "
+            "                         {:type \"array\"}]) "
             "      closed-object-form "
             "      (pr-str (emit/emit-type {:type \"object\"} "
             "                              {:type \"object\" "
@@ -79,13 +82,20 @@
             "                            {:type \"object\" "
             "                             :properties {:knownValue {:type \"string\"}} "
             "                             :required [\"knownValue\"] "
-            "                             :additionalProperties {:type \"integer\"}}))] "
+            "                             :additionalProperties {:type \"integer\"}})) "
+            "      root (core/load-schema \"schemas/session-events.schema.json\") "
+            "      first-emission (emit/emit-event-specs-ns root) "
+            "      _ (dotimes [_ 50] (gensym)) "
+            "      second-emission (emit/emit-event-specs-ns root)] "
             "  (prn {:keys (mapv core/wire-key->kebab "
             "                    [\"_meta\" \"sessionId\" \"tool_efficiency\" "
             "                     \"URLValue\" \"someURLValue\" \"__foo_bar\"]) "
             "        :bounded (mapv #(s/valid? bounded-spec %) [1 2 2.5 4 5]) "
             "        :exclusive (mapv #(s/valid? exclusive-spec %) [1 1.5 2]) "
             "        :nullable (mapv #(s/valid? nullable-spec %) [\"value\" nil 1]) "
+            "        :arrays (mapv (fn [spec] "
+            "                        (mapv #(s/valid? spec %) [[] [\"ok\"] [1] {} #{} () nil])) "
+            "                      array-specs) "
             "        :string-dictionary "
             "        (mapv #(s/valid? string-dictionary-spec %) "
             "              [{:requested \"resolved\"} {:requested 42} []]) "
@@ -94,7 +104,8 @@
             "              [{:known-value \"ok\" :extra 1} "
             "               {:known-value \"ok\" :extra \"bad\"} "
             "               {:known-value 1 :extra 1}]) "
-            "        :closed-object-form closed-object-form}))"))]
+            "        :closed-object-form closed-object-form "
+            "        :repeatable (= first-emission second-emission)}))"))]
       (when-not (zero? exit)
         (throw (ex-info "Codegen probe failed" {:exit exit :stderr err})))
       (edn/read-string out))))
@@ -109,8 +120,16 @@
   (is (= [false true false] (:exclusive @codegen-probe)))
   (is (= [true true false] (:nullable @codegen-probe))))
 
+(deftest codegen-requires-json-array-vectors
+  (is (= (:arrays @codegen-probe)
+         [[true true false false false false false]
+          [true true true false false false false]])))
+
 (deftest codegen-emits-canonical-closed-object-key-order
   (is (str/includes? (:closed-object-form @codegen-probe) "#{:a :m :z}")))
+
+(deftest codegen-output-is-independent-of-reader-gensym-state
+  (is (:repeatable @codegen-probe)))
 
 (deftest codegen-validates-dictionary-values
   (is (= [true false false] (:string-dictionary @codegen-probe)))
@@ -349,7 +368,16 @@
 
    "tool.execution_start"
    {:tool-call-id "tc-1"
-    :tool-name "shell"}
+    :tool-name "shell"
+    :tool-title "Run a command"}
+
+   "system.message"
+   {:role "system"
+    :content "Instructions"
+    :content-blocks [{:content "Instructions"
+                      :cache-breakpoint false
+                      :is-static true}
+                     {:content ""}]}
 
    "tool.execution_progress"
    {:tool-call-id "tc-1"
@@ -403,6 +431,10 @@
 
    "session.context_changed"
    {:cwd "/tmp"}
+
+   "session.model_deselected"
+   {:previous-model "host/model"
+    :reason "provider_withdrawn"}
 
    "session.context_cleared"
    {:messages-cleared 3}

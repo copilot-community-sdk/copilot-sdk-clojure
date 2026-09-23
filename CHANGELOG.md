@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.14 sync)
+- Added stable `:copilot/session.model_deselected` events, optional
+  `:tool-title` on tool-execution start events, and ordered `:content-blocks`
+  on system-message events. Structured blocks preserve explicit false versus
+  omitted cache-breakpoint and static-content flags in live and historical
+  events.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/cb6fc666cc45175adb11fa9e5021b96d7d37d298))
 - Added stable structured output support. `:response-schema` requests strict
   JSON Schema output while retaining the assistant event, and the new
   `send-and-wait!` parsed-schema overload returns an application value through
@@ -20,6 +26,12 @@ All notable changes to this project will be documented in this file. This change
   ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731))
 
 ### Changed (post-v1.0.14 sync)
+- Advanced the CLI compatibility and schema-provenance pin to `1.0.89-0`
+  and recertified the stable Node SDK public surface through
+  [`cb6fc666cc45175adb11fa9e5021b96d7d37d298`](https://github.com/github/copilot-sdk/commit/cb6fc666cc45175adb11fa9e5021b96d7d37d298).
+  Experimental Dynamic Workflows, Connector management, command enqueue,
+  and generated-only catalog and agent metadata additions remain excluded.
+  The library version remains `1.0.14.0`; no release is cut by this sync.
 - Advanced the Copilot CLI compatibility and schema-provenance pin to
   `1.0.87-0` and recertified the stable Node SDK public surface through
   upstream commit
@@ -50,6 +62,18 @@ All notable changes to this project will be documented in this file. This change
 - JSON-RPC exceptions now preserve structured server `error.data` with its
   original nested key spelling instead of applying Clojure key normalization.
   ([upstream PR #2664](https://github.com/github/copilot-sdk/pull/2664))
+
+### Fixed (documentation)
+- Documentation generation now handles worktree paths containing dots,
+  dotted topic filenames, and uppercase Markdown extensions.
+
+### Fixed (code generation)
+- Generated array specs now require vectors, matching decoded JSON arrays
+  and rejecting maps, sets, and lists, including for structured
+  system-message blocks.
+- Generated event specs use stable lexical parameter names rather than
+  reader-generated symbols, producing identical output across Babashka
+  versions and repeated generation in one process.
 
 ### Added (v1.0.14 sync)
 - Documented Azure AI Foundry project URLs for native `:azure` BYOK
