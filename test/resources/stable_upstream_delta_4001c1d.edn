@@ -607,7 +607,9 @@
   {:resource "resources/stable_upstream_delta_cb6fc66.edn",
    :sha256
    "42ba15c806fa0d6b4575eed6cf961ea4dcca448796268d895b75c26c1cab66c6"},
-  :local-artifact-seal {:status :pending}},
+  :local-artifact-seal
+  {:status :sealed,
+   :commit "d3303994a0aa5e3f249da36cb83d8d2f16ba17e9"}},
  :changed-paths
  {:exact-classifications
   {"nodejs/test/session-send-and-wait.test.ts" :stable-public,
