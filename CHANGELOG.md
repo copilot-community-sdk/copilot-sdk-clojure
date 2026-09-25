@@ -66,6 +66,9 @@ All notable changes to this project will be documented in this file. This change
   [upstream PR #2735](https://github.com/github/copilot-sdk/pull/2735))
 
 ### Fixed (async delivery)
+- Blocking ordinary and structured waits filter child events before their
+  bounded subscription buffers, preventing child noise from exhausting those
+  buffers while the send acknowledgement is pending.
 - Async sends reserve the final root reply and terminal outcome at session
   intake, so bounded output or observer buffers cannot silently remove the
   result. Intermediate frames remain best-effort with overflow diagnostics.

@@ -1044,7 +1044,9 @@ they do not make session-wide errors request-specific.
 Only root-agent messages supply the result. Messages, errors, and idle events
 with a non-empty envelope `:agent-id` do not complete the wait or replace its
 reply. An absent or empty `:agent-id` identifies the root. Child events remain
-visible to event subscriptions.
+visible to ordinary event subscriptions; blocking wait subscriptions filter them
+before their bounded buffers rather than letting child traffic consume that
+capacity.
 
 #### Structured Output
 
@@ -1129,6 +1131,10 @@ therefore cannot silently remove the final result. Once completion is selected,
 the SDK releases its send lock before waiting to deliver final events; an expired
 deadline cannot replace that outcome. Earlier protocol-level notification overflow
 still follows the client's notification-queue policy.
+An early session terminal does not substitute for RPC acknowledgement. The async
+deadline still covers admission and an unclaimed pending send RPC; immunity from
+an expired deadline applies only to final publication after successful ACK and
+completion selection.
 
 Close the returned channel to abandon local waiting and pending delivery. This
 does not abort remote work. Session teardown also cancels delivery, including

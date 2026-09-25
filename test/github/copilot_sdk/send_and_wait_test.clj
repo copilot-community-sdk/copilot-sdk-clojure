@@ -925,6 +925,110 @@
             (release)
             (close)))))))
 
+(deftest child-events-do-not-occupy-blocking-wait-tap-capacity
+  (doseq [structured? [false true]]
+    (testing (str "structured=" structured?)
+      (let [{:keys [session client session-id release close] :as ctx} (gated-send-context)
+            event-mult (get-in @(:state client) [:session-io session-id :event-mult])
+            monitor (async/chan (async/sliding-buffer 256))
+            progress (atom -1)
+            acknowledgement (promise)
+            release-wait-loop (promise)
+            pending (atom nil)
+            real-send session/send-with-timeout!]
+        (async/tap event-mult monitor)
+        (async/go-loop []
+          (when-let [event (async/<! monitor)]
+            (when (= (:agent-id event) "child-1")
+              (reset! progress (Long/parseLong (get-in event [:data :content]))))
+            (recur)))
+        (release)
+        (try
+          (with-redefs [session/send-with-timeout!
+                        (fn [copilot-session opts timeout-ms]
+                          (let [id (real-send copilot-session opts timeout-ms)]
+                            (deliver acknowledgement id)
+                            (await-value! release-wait-loop "blocking wait-loop release" 30000)
+                            id))]
+            (reset! pending
+                    (future
+                      (session/send-and-wait!
+                       session
+                       (cond-> {:prompt "hi"}
+                         structured? (assoc :response-schema {"type" "object"}))
+                       30000)))
+            (let [message-id (await-value! acknowledgement "real send acknowledgement" 5000)]
+              (doseq [batch (partition-all 256 (range 3072))]
+                (inject-events! ctx
+                                (mapv (fn [index]
+                                        {:type "assistant.message" :agentId "child-1"
+                                         :data {:messageId (str "child-" index)
+                                                :content (str index)}})
+                                      batch))
+                (await-atom! progress #(>= % (last batch))
+                             "observer progress while the wait loop is paused" 5000))
+              (when structured?
+                (inject-events! ctx
+                                [{:type "assistant.message"
+                                  :data {:messageId "structured-root"
+                                         :originatingMessageId message-id
+                                         :content "{\"answer\":42}"}}])
+                (inject-idle! ctx))
+              (deliver release-wait-loop true)
+              (is (= (get-in (await-value! @pending "blocking root result" 5000) [:data :content])
+                     (if structured? "{\"answer\":42}" "Mock response to: hi")))))
+          (finally
+            (deliver release-wait-loop true)
+            (when-let [call @pending]
+              (future-cancel call))
+            (async/untap event-mult monitor)
+            (async/close! monitor)
+            (loop []
+              (when (some? (async/poll! monitor))
+                (recur)))
+            (close)))))))
+
+(deftest captured-terminal-does-not-bypass-a-pending-unclaimed-send-ack
+  (doseq [[label start] [[:events session/send-async]
+                         [:with-id session/send-async-with-id]]]
+    (testing (name label)
+      (let [{:keys [session client session-id release send-started close] :as ctx}
+            (gated-send-context)
+            io (get-in @(:state client) [:session-io session-id])
+            real-timeout async/timeout
+            deadline (async/chan)]
+        (try
+          (with-redefs [async/timeout (fn [^long ms]
+                                        (if (= ms 15000) deadline (real-timeout ms)))]
+            (let [pending (future
+                            (try
+                              {:value (start session {:prompt "hi" :timeout-ms 15000})}
+                              (catch Throwable failure {:error failure})))]
+              (await-value! send-started "pending unclaimed RPC" 5000)
+              (inject-events! ctx [{:type "assistant.message"
+                                    :data {:messageId "early-root" :content "not an ACK"}}])
+              (inject-idle! ctx)
+              (let [done-chan (:done-chan @(:async-send-state io))
+                    [_ port] (async/alts!! [done-chan (real-timeout 5000)])]
+                (is (= port done-chan)))
+              (async/close! deadline)
+              (let [{:keys [value error]} (await-value! pending "ACK timeout outcome" 5000)]
+                (if (= label :with-id)
+                  (do
+                    (is (instance? clojure.lang.ExceptionInfo error))
+                    (is (= (select-keys (ex-data error) [:method :timeout-ms])
+                           {:method "session.send" :timeout-ms 15000})))
+                  (let [events (read-channel! (async/into [] value))]
+                    (is (nil? error))
+                    (is (= (:type (last events)) :copilot/session.error))
+                    (is (= (get-in (last events) [:data :timeout-ms]) 15000)))))
+              (await-atom! (:async-send-state io) nil? "ACK timeout cleanup" 5000)
+              (is (empty? (get-in @(:state client) [:connection :pending-requests])))))
+          (finally
+            (release)
+            (async/close! deadline)
+            (close)))))))
+
 ;; -----------------------------------------------------------------------------
 ;; Upstream scenario 3: a send rejection wins over an earlier session.error.
 ;; -----------------------------------------------------------------------------

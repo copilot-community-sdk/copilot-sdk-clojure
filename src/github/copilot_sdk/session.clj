@@ -2339,7 +2339,7 @@
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
     (let [send-opts (dissoc opts :timeout-ms)
-          event-ch (chan 1024)
+          event-ch (chan 1024 (filter root-agent-event?))
           last-assistant-msg (atom nil)
           {:keys [event-mult send-lock]} (session-io client session-id)]
       (<!! send-lock)
@@ -2368,9 +2368,6 @@
                 (do
                   (log/debug "send-and-wait! event channel closed for session " session-id)
                   (throw (ex-info "Event channel closed unexpectedly" {})))
-
-                (not (root-agent-event? event))
-                (recur)
 
                 (= :copilot/assistant.message (:type event))
                 (do
@@ -2546,7 +2543,7 @@
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
 
     (let [send-opts (dissoc opts :timeout-ms)
-          event-ch (chan 1024)
+          event-ch (chan 1024 (filter root-agent-event?))
           {:keys [event-mult send-lock structured-wait-state]}
           (session-io client session-id)
           deadline-nanos
@@ -2603,9 +2600,6 @@
 
                 (nil? event)
                 (throw (ex-info "Event channel closed unexpectedly" {}))
-
-                (not (root-agent-event? event))
-                (recur consumed? last-message)
 
                 (and (= :copilot/user.message (:type event))
                      (= message-id (get-in event [:data :message-id])))
@@ -2932,6 +2926,8 @@
    intake are retained independently of that buffer and the observer mult.
    Completion releases send ownership before waiting for the consumer to drain
    final events. The expired deadline cannot replace a selected completion.
+   Early session completion does not substitute for RPC acknowledgement: the
+   async deadline still covers admission and an unclaimed pending RPC.
    Earlier protocol notification overflow retains the client's existing policy.
    Active local waits are serialized per session. The stream is session-wide,
    not filtered by the returned message ID; after local cancellation or timeout,
