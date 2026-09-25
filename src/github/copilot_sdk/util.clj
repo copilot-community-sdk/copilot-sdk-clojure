@@ -1,13 +1,34 @@
 (ns github.copilot-sdk.util
   "Utility functions for the Copilot SDK."
   (:require [camel-snake-kebab.core :as csk]
-            [camel-snake-kebab.extras :as cske]))
+            [camel-snake-kebab.extras :as cske]
+            [clojure.core.async.impl.protocols :as async-protocols]))
 
 (defn ^:no-doc github-token-auth-conflict?
   [config]
   (and (map? config)
        (contains? config :github-token)
        (contains? config :github-token-provider)))
+
+(defn ^:no-doc cancellable-channel
+  "Wrap a channel with an exactly-once, nonblocking cancellation action."
+  [out-ch cancel!]
+  (let [cancelled? (atom false)]
+    (reify
+      async-protocols/ReadPort
+      (take! [_ handler]
+        (async-protocols/take! out-ch handler))
+      async-protocols/WritePort
+      (put! [_ value handler]
+        (async-protocols/put! out-ch value handler))
+      async-protocols/Channel
+      (close! [_]
+        (when (compare-and-set! cancelled? false true)
+          (async-protocols/close! out-ch)
+          (cancel!))
+        nil)
+      (closed? [_]
+        (async-protocols/closed? out-ch)))))
 
 ;; -----------------------------------------------------------------------------
 ;; Key conversion utilities

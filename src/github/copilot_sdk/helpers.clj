@@ -40,11 +40,11 @@
      `with-query-seq` (default: 60000); `query-chan` has no deadline
    "
   (:require [clojure.core.async :as async :refer [go-loop <! chan close! alts!]]
-            [clojure.core.async.impl.protocols :as async-protocols]
             [github.copilot-sdk :as copilot]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.session :as session]
-            [github.copilot-sdk.teardown :as teardown]))
+            [github.copilot-sdk.teardown :as teardown]
+            [github.copilot-sdk.util :as util]))
 
 ;; =============================================================================
 ;; Internal State
@@ -181,23 +181,11 @@
 
 (defn- cancellable-channel
   [out-ch cancel-ch disconnect-ch]
-  (reify
-    async-protocols/ReadPort
-    (take! [_ handler]
-      (async-protocols/take! out-ch handler))
-
-    async-protocols/WritePort
-    (put! [_ value handler]
-      (async-protocols/put! out-ch value handler))
-
-    async-protocols/Channel
-    (close! [_]
+  (util/cancellable-channel
+   out-ch
+   #(do
       (close! cancel-ch)
-      (close! out-ch)
-      (force disconnect-ch)
-      nil)
-    (closed? [_]
-      (async-protocols/closed? out-ch))))
+      (force disconnect-ch))))
 
 ;; =============================================================================
 ;; Public API

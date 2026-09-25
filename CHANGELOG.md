@@ -65,6 +65,14 @@ All notable changes to this project will be documented in this file. This change
   [upstream PR #2734](https://github.com/github/copilot-sdk/pull/2734),
   [upstream PR #2735](https://github.com/github/copilot-sdk/pull/2735))
 
+### Fixed (async delivery)
+- Async sends reserve the final root reply and terminal outcome at session
+  intake, so bounded output or observer buffers cannot silently remove the
+  result. Intermediate frames remain best-effort with overflow diagnostics.
+  Closing result channels cancels local admission, pending RPC waits, and
+  delivery without aborting remote work; teardown also releases blocked final
+  publication when timeouts are disabled.
+
 ### Fixed (post-v1.0.14 sync)
 - Completion waits now ignore child-agent replies, errors, and idle events when
   selecting the root result. Child events remain visible to subscriptions and

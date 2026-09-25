@@ -81,8 +81,11 @@
     (is (re-matches #"[0-9a-f]{40}" implementation))
     (is (= (ss/shell-output "git" "merge-base" "--is-ancestor" implementation "HEAD") ""))
     (let [changed (set (ss/git-lines "." "diff" "--name-only" clojure-base implementation))]
-      ;; The report cannot hash the commit containing its own final seal.
-      (is (set/subset? (disj changed (str "test/" resource)) (set (keys artifacts)))))
+      ;; Certificate files cannot participate in their own implementation seal.
+      (is (set/subset? (disj changed
+                             (str "test/" resource)
+                             "test/github/copilot_sdk/integration/stable_sync_4001c1d_test.clj")
+                       (set (keys artifacts)))))
     (is (contains? artifacts "test/github/copilot_sdk/optional_wire_contract_test.clj"))
     (doseq [[path expected] artifacts]
       (testing path

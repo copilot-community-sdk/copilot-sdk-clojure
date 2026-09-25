@@ -894,6 +894,8 @@
    Ordinary waits are serialized per session. Structured waits correlate by
    originating message ID and may run concurrently with one another. Structured
    and ordinary waits on the same session run serially.
+   Child-agent messages, errors, and idle events with a non-empty `:agent-id`
+   cannot replace the root reply or complete the wait.
    An idle event whose `:data :mode` is the string \"autopilot\" is a
    nonterminal turn boundary (the agent keeps working), so the wait
    continues past it to the next session.idle/session.error.
@@ -923,13 +925,21 @@
 
 (defn send-async
   "Send a message and return a core.async channel that receives events.
-   The channel closes after an ordinary session.idle or session.error. An
+   The channel closes after a root-agent session.idle or session.error. Child
+   events with a non-empty `:agent-id` do not close it. An
    idle event whose `:data :mode` is the string \"autopilot\" is a
    nonterminal turn boundary (the agent keeps working) and is delivered on
    the channel without closing it.
    A timeout is delivered as a final `:copilot/session.error` event whose data
    includes `:timeout-ms`, then the channel closes.
    Serialized per session to avoid mixing concurrent sends.
+   Intermediate events use a bounded best-effort buffer with overflow warnings.
+   Root completion reaching session intake is retained independently of output
+   and observer buffering. Final delivery releases send ownership first and
+   waits for output space without reusing the expired deadline.
+   Closing the channel or tearing down the session cancels pending local
+   delivery, not the remote run. Preparation and schema/trace callbacks run on
+   the caller's thread; prepare outside go blocks when those callbacks block.
 
    Options: same as send!, plus:
    - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)
@@ -947,7 +957,7 @@
 
 (defn <send!
   "Send a message and return a channel that delivers the final content string.
-   This is the async equivalent of send-and-wait! - use inside go blocks.
+   This is the async equivalent of send-and-wait! - consume it inside go blocks.
    As with send-and-wait!, a nonterminal autopilot session.idle (`:data
    :mode` = \"autopilot\") does not end the wait.
 
@@ -955,7 +965,9 @@
    - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)
 
    Session errors and timeouts close the channel after delivering the latest
-   assistant content, if any; otherwise the channel closes without a value.
+   root assistant content, if any; otherwise the channel closes without a value.
+   Closing the returned channel cancels its hidden stream without aborting the
+   remote run. Buffering and preparation follow `send-async`.
 
    Example:
    ```clojure
@@ -968,13 +980,15 @@
 
 (defn <send-and-wait!
   "Send a message and return a channel that delivers the final assistant message
-   event - the channel-based equivalent of `send-and-wait!`. Use it inside go
+   event - the channel-based equivalent of `send-and-wait!`. Consume it inside go
    blocks instead of blocking a dispatch thread. Unlike `<send!` (which delivers
    the final content string), this delivers the full assistant message event.
    As with send-and-wait!, an idle event whose `:data :mode` is the string
    \"autopilot\" is a nonterminal turn boundary, so the wait continues past it.
    Session errors and timeouts close the channel after delivering the latest
-   assistant message event, if any; otherwise the channel closes without a value.
+   root assistant message event, if any; otherwise the channel closes without a value.
+   Closing the returned channel cancels its hidden stream without aborting the
+   remote run. Buffering and preparation follow `send-async`.
 
    Options: same as send!, plus:
    - :timeout-ms   - Timeout in milliseconds (default: 60000, set to nil to disable)
@@ -999,7 +1013,8 @@
 
    `:events-ch` follows `send-async`: a timeout is delivered as a final
    `:copilot/session.error` event whose data includes `:timeout-ms`, then the
-   channel closes."
+   channel closes. Root completion retention, buffering, and cancellation
+   follow the same contract."
   [session opts]
   (session/send-async-with-id session opts))
 

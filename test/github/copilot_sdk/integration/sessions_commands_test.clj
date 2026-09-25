@@ -132,31 +132,31 @@
         (is (= {:handled true :stopProcessingQueue false} (:result (:params req)))
             "explicit false should be forwarded on the wire (not silently dropped)")))))
 
-(deftest test-send-async-untaps-on-send-failure
-  (testing "send-async cleans up tap when RPC fails"
+(deftest test-send-async-releases-ownership-on-send-failure
+  (testing "send-async releases its receiver and semaphore when the real RPC fails"
     (log/info "Warnings expected in this test: async send RPC error is deliberate.")
     (let [session (sdk/create-session *test-client* {:on-permission-request sdk/approve-all})
-          taps (atom 0)
-          untaps (atom 0)
-          fake-mult (reify
-                      async/Mux
-                      (muxch* [_] (chan))
-                      async/Mult
-                      (tap* [_ _ _] (swap! taps inc) nil)
-                      (untap* [_ _] (swap! untaps inc) nil)
-                      (untap-all* [_] nil))]
-      (swap! (:state *test-client*) assoc-in [:session-io (sdk/session-id session) :event-mult] fake-mult)
-      ;; <send-async* uses proto/send-request — return an error response
-      (with-redefs [protocol/send-request (fn [_ _ _]
-                                            (let [ch (async/chan 1)]
-                                              (async/put! ch {:error {:code -1 :message "forced failure"}})
-                                              (async/close! ch)
-                                              ch))]
-        (let [events-ch (sdk/send-async session {:prompt "should-fail"})]
-          ;; Channel should close without events (error path)
-          (is (nil? (<!! events-ch)))))
-      (is (= 1 @taps))
-      (is (pos? @untaps)))))
+          io (get-in @(:state *test-client*) [:session-io (sdk/session-id session)])
+          calls (atom 0)]
+      (mock/set-request-hook!
+       *mock-server*
+       (fn [method _]
+         (when (and (= method "session.send") (= 1 (swap! calls inc)))
+           (throw (ex-info "forced failure" {:code -1})))))
+      (let [events-ch (sdk/send-async session {:prompt "should-fail"})
+            collected (async/into [] events-ch)
+            [events port] (alts!! [collected (timeout 5000)])]
+        (is (= port collected))
+        (is (not-any? session/terminal-event? events))
+        (is (nil? @(:async-send-state io)))
+        (is (empty? (get-in @(:state *test-client*) [:connection :pending-requests]))))
+      (let [following (future (sdk/send-and-wait! session {:prompt "after failure"} 5000))]
+        (try
+          (is (= (get-in (deref following 5000 ::timeout) [:data :content])
+                 "Mock response to: after failure"))
+          (finally
+            (future-cancel following))))
+      (is (= @calls 2)))))
 
 (deftest test-get-last-session-id
   (testing "Get last session ID"

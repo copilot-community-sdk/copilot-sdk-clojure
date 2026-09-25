@@ -1123,8 +1123,7 @@
                 ;; Protocol v3: handle broadcast events for tools, permissions, elicitation
                   (when (>= (negotiated-protocol-version client) 3)
                     (handle-v3-broadcast-event! client session-id normalized-event))
-                  (when-let [{:keys [event-chan]} (get-in @(:state client) [:session-io session-id])]
-                    (>! event-chan normalized-event))))
+                  (session/dispatch-event! client session-id normalized-event)))
 
               "session.lifecycle"
               (let [params (util/wire->clj (:params notif))

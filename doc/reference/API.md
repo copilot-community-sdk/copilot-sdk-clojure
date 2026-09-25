@@ -1107,16 +1107,31 @@ request, so send admission and event collection share one deadline.
 (copilot/send-async session options)
 ```
 
-Send a message and return a core.async channel that receives all events for this
+Send a message and return a core.async channel that receives events for this
 message, closing on a root-agent terminal idle or error event. Autopilot idle
 and child-agent events are emitted without closing the channel. The same rule
 applies to `send-async-with-id`, `query-seq!`, and `query-chan`; `<send!` and
 `<send-and-wait!` select only root-agent replies.
-Safe for use inside `go` blocks — no blocking operations.
+Protocol waits use parking operations. Input validation, schema conversion, and
+trace-context capture happen on the calling thread before the channel is returned.
+Prepare the call outside `go` when those callbacks can block.
 Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
 On timeout, the channel emits a final `:copilot/session.error` event whose data
-includes `:timeout-ms`, releases the event subscription and send lock, then
+includes `:timeout-ms`, releases the local event receiver and send lock, then
 closes.
+
+Intermediate frames use a bounded 1024-event best-effort buffer; overflow is
+logged. The latest root reply and first terminal outcome reaching session intake
+are retained separately, before the shared observer fan-out. A full output buffer
+therefore cannot silently remove the final result. Once completion is selected,
+the SDK releases its send lock before waiting to deliver final events; an expired
+deadline cannot replace that outcome. Earlier protocol-level notification overflow
+still follows the client's notification-queue policy.
+
+Close the returned channel to abandon local waiting and pending delivery. This
+does not abort remote work. Session teardown also cancels delivery, including
+when `:timeout-ms` is `nil`. These cancellation and completion guarantees apply
+to `send-async-with-id`, `<send!`, and `<send-and-wait!` as well.
 
 #### `send-async-with-id`
 
