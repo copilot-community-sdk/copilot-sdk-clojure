@@ -37,25 +37,25 @@
   ".github/workflows/ci.yml"
   "0e658daf0296253fcc901f436960bfe850c6ed3f354d06cf9125367ec3eca546",
   "CHANGELOG.md"
-  "a972de0539b195798b3bc95fea1d6d6c3c3e111ca245b815c809adf49646c347",
+  "92b4ade6ae04bbc9e3eb3f6ac4e99f009309033ae4f3a854bb4f1d4dd29c1a5a",
   "build.clj"
   "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993",
   "doc/api/API.html"
-  "2791663b6d4ee317b83cd46838793c2650bac0c438e3bee97eba49fff319f979",
+  "995239296915da9f6e1fd39009d57149a3ee10ac23ee2fb01432b6e3fc75ee87",
   "doc/api/github.copilot-sdk.client.html"
   "4279af4524b2efafd808aac3f73e71ec212314c2713ae64ea437521d30df068d",
   "doc/api/github.copilot-sdk.helpers.html"
   "869772eb5663cd068905019dc81385986d3f7869f4a38cdae433a4dec6d21669",
   "doc/api/github.copilot-sdk.html"
-  "fb9ad2a3a7fa1421609ee08fc942c050c5b89a8370e6fa651fc40a682bd7bfb5",
+  "299664d4a8f91d19fece2c26e5f1597830e6fcc406ff7ce13c3851e0e7253bff",
   "doc/api/github.copilot-sdk.session.html"
-  "6e8db9cbb3907bfe8af028a22904a384f8f8f46c8f2756dc4064cde365cf59f9",
+  "7866bce70bfea3ab2a1457ab4dbfa4c7dc1db6c60d2556505891c2790669ec1a",
   "doc/api/overview.html"
   "d4af9ac235900aa17a43d1e14580c2e5cd5b8897c6a2f8fcfa7a42d28a0454d3",
   "doc/mcp/overview.md"
   "f355a4acf11e11b750a27e70c9d05419cbf64b04055f59cfbec65cbc1dd9d9ef",
   "doc/reference/API.md"
-  "0dbc205b6e67611f8f82b85ebde0edd6f0abaf81408e0907caf33bc5e06c5638",
+  "b8f50f112dda8473fb27635eb1d2356e2d36688651629fb5628c1d32b2c0c820",
   "resources/github/copilot_sdk/api_surface.edn"
   "941e18c3108dcab93987b2bbbf58827008d04ebc6701a51a295083ee586940f8",
   "schemas/README.md"
@@ -65,7 +65,7 @@
   "schemas/session-events.schema.json"
   "b5126a05d74461256075424d21aa24408d8dde4f967c814615b4e11e7ead7f36",
   "src/github/copilot_sdk.clj"
-  "fb0ccea3da4b7f391cda0ad07f52bb5985371417ad4b88523fd899a1bd27f6f7",
+  "4c80eed6cfbc0af81f0913fd165e5c2641b1b0fe46b6341be527f4888e1582f5",
   "src/github/copilot_sdk/client.clj"
   "c2ae7b1df6af45c92881ed025baaa1ca5feb8290a084b3e720397ed13599e29b",
   "src/github/copilot_sdk/generated/coerce.clj"
@@ -81,7 +81,7 @@
   "src/github/copilot_sdk/protocol.clj"
   "fe7d5713576c246364d9f91e10bd951cb16b43816ef685784fc77216a2c8de10",
   "src/github/copilot_sdk/session.clj"
-  "b78f65ec8b40b68f884849d0fca4a29faf63d9686ebbf3f6f8beefb91b1eeb7c",
+  "3746ccb9a9d585230e7ce8ed51b13db68cea6ba74549013beed2b06eb3b1c16c",
   "src/github/copilot_sdk/specs.clj"
   "50ff0840cee4c66e6653fcae86d44493a0d2e1978f35520b626bbb1ce9255b59",
   "src/github/copilot_sdk/util.clj"
@@ -617,7 +617,7 @@
    "42ba15c806fa0d6b4575eed6cf961ea4dcca448796268d895b75c26c1cab66c6"},
   :local-artifact-seal
   {:status :sealed,
-   :commit "648cb6c6624f61648ea8634d459aa19eb7c90421"}},
+   :commit "ffe9de2eeb548676a5641e343f2625086ed41cf5"}},
  :changed-paths
  {:exact-classifications
   {"nodejs/test/session-send-and-wait.test.ts" :stable-public,
@@ -759,7 +759,7 @@
     :child :nonempty-string,
     :root [:absent :empty-string]},
    :semantics
-   "Child output cannot replace or complete the root response. Async intermediate output remains bounded and best-effort, with overflow diagnostics. Root completion reaching session intake is reserved before lossy observer fan-out. Final publication releases ownership first, is cancellable, and cannot be defeated by an expired deadline. Admission, pending ACKs and publication respect caller cancellation and registration shutdown. Earlier protocol notification overflow retains its existing policy.",
+   "Child output cannot replace or complete the root response. Ordinary streams remain session-wide; local cancellation does not abort or drain remote work, and a later ordinary wait can observe that work. Only structured waits correlate assistant output by originating message ID. Async intermediate output remains bounded and best-effort, with overflow diagnostics. Root completion reaching session intake is reserved before lossy observer fan-out. Final publication releases ownership first, is cancellable, and cannot be defeated by an expired deadline. Admission, pending ACKs and publication respect caller cancellation and registration shutdown. Earlier protocol notification overflow retains its existing policy.",
    :tests
    [github.copilot-sdk.send-and-wait-test/send-waits-select-only-root-agent-outcomes
     github.copilot-sdk.send-and-wait-test/async-event-streams-retain-child-events-until-root-completion
