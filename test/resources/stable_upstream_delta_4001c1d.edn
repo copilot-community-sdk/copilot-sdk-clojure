@@ -37,23 +37,25 @@
   ".github/workflows/ci.yml"
   "0e658daf0296253fcc901f436960bfe850c6ed3f354d06cf9125367ec3eca546",
   "CHANGELOG.md"
-  "69b7b2e8a0b7e7718da9ab4c3d13a074c3ab1c6e41016fd8714bda070d172a7b",
+  "a972de0539b195798b3bc95fea1d6d6c3c3e111ca245b815c809adf49646c347",
   "build.clj"
   "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993",
   "doc/api/API.html"
-  "c3ebc93c9035a1d4bea43ed88e0ae4443f94e46bd4555919292d7bae0c2700bb",
+  "2791663b6d4ee317b83cd46838793c2650bac0c438e3bee97eba49fff319f979",
   "doc/api/github.copilot-sdk.client.html"
   "4279af4524b2efafd808aac3f73e71ec212314c2713ae64ea437521d30df068d",
   "doc/api/github.copilot-sdk.helpers.html"
   "869772eb5663cd068905019dc81385986d3f7869f4a38cdae433a4dec6d21669",
+  "doc/api/github.copilot-sdk.html"
+  "fb9ad2a3a7fa1421609ee08fc942c050c5b89a8370e6fa651fc40a682bd7bfb5",
   "doc/api/github.copilot-sdk.session.html"
-  "0ba54a26fee969fb9076da5e1051b7cba3cacd1ace13ea4d5345065d63db917b",
+  "6e8db9cbb3907bfe8af028a22904a384f8f8f46c8f2756dc4064cde365cf59f9",
   "doc/api/overview.html"
   "d4af9ac235900aa17a43d1e14580c2e5cd5b8897c6a2f8fcfa7a42d28a0454d3",
   "doc/mcp/overview.md"
   "f355a4acf11e11b750a27e70c9d05419cbf64b04055f59cfbec65cbc1dd9d9ef",
   "doc/reference/API.md"
-  "6e0f0818ba14cbfa74d20dc17df678a735b267575d96bcce7898dadf01839f6a",
+  "0dbc205b6e67611f8f82b85ebde0edd6f0abaf81408e0907caf33bc5e06c5638",
   "resources/github/copilot_sdk/api_surface.edn"
   "941e18c3108dcab93987b2bbbf58827008d04ebc6701a51a295083ee586940f8",
   "schemas/README.md"
@@ -63,9 +65,9 @@
   "schemas/session-events.schema.json"
   "b5126a05d74461256075424d21aa24408d8dde4f967c814615b4e11e7ead7f36",
   "src/github/copilot_sdk.clj"
-  "3f173c19705ebc49c004a4940e3620ab15e63bfdddedc1d16a8196dae5684639",
+  "fb0ccea3da4b7f391cda0ad07f52bb5985371417ad4b88523fd899a1bd27f6f7",
   "src/github/copilot_sdk/client.clj"
-  "d1b24d2a2b43fe5ec286cd6fa26cbdf0e0b382c5a7763f774cccf397077b84c5",
+  "c2ae7b1df6af45c92881ed025baaa1ca5feb8290a084b3e720397ed13599e29b",
   "src/github/copilot_sdk/generated/coerce.clj"
   "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
   "src/github/copilot_sdk/generated/event_metadata.clj"
@@ -73,19 +75,25 @@
   "src/github/copilot_sdk/generated/event_specs.clj"
   "31abe9552e88afb77275a214e4caa5deee17ed9246f15d669a8e95c7249417e9",
   "src/github/copilot_sdk/helpers.clj"
-  "185467313f5bddcfc1d9170781343bc4afe850591092c3d4cf5cf78019026249",
+  "c212bc4f79ac4fd15f30d1e7d45e220b9ab8f44f542d046def1986b14cb94620",
   "src/github/copilot_sdk/instrument.clj"
   "3c9acbab797eca0e7a12b6f1e808da81303ef908f834ab078f3dfcc54f5b6092",
+  "src/github/copilot_sdk/protocol.clj"
+  "fe7d5713576c246364d9f91e10bd951cb16b43816ef685784fc77216a2c8de10",
   "src/github/copilot_sdk/session.clj"
-  "561dbea19274407c3d076119d9b905e91d170c29660c2866202f4ef49ef002c6",
+  "b78f65ec8b40b68f884849d0fca4a29faf63d9686ebbf3f6f8beefb91b1eeb7c",
   "src/github/copilot_sdk/specs.clj"
   "50ff0840cee4c66e6653fcae86d44493a0d2e1978f35520b626bbb1ce9255b59",
+  "src/github/copilot_sdk/util.clj"
+  "995e9d9a9ec1b49d52d88bd4e07742fc9f0c71fd05f07b7a7607be3303672773",
   "test/github/copilot_sdk/codegen_test.clj"
   "5869048cb207e75b25ef2820f5ece632337bf95b462eb65b14153911cba8c8ad",
   "test/github/copilot_sdk/e2e_test.clj"
   "fbde39e2038decd417524cd28f52cb950d245a667bebf8c3603e305c31fde3a5",
   "test/github/copilot_sdk/helper_lifecycle_test.clj"
   "d47ba84167523ce8399b353f3f2fe35a1f89a6acd63d9e9497b1904802c197d3",
+  "test/github/copilot_sdk/integration/sessions_commands_test.clj"
+  "c4e38a644b978eba9ccfb2b4b0c18808d72fd41b01c5b8b88278dab65c8c7cec",
   "test/github/copilot_sdk/integration/structured_output_test.clj"
   "b0fc544f7beeba559c9f042167ec5554486153a2deadc6d5142d7003b7331db5",
   "test/github/copilot_sdk/integration/upstream_1_0_89_3_test.clj"
@@ -93,7 +101,7 @@
   "test/github/copilot_sdk/optional_wire_contract_test.clj"
   "ab5a2c9988b84cdfe4b3953daa0ffd31d941631db3c84f202e9a4978b8050ce4",
   "test/github/copilot_sdk/send_and_wait_test.clj"
-  "3153a7332656243ed4051f66c9058d274781d46476c6f5efa43fe707eb9cff59"},
+  "a46bcba6e92dfd59df40d0d8daba2fd06ac7bb9e4f0357aa2cf43cb16b6a292f"},
  :symbol-groups
  {:connectors
   {:classification :experimental,
@@ -609,7 +617,7 @@
    "42ba15c806fa0d6b4575eed6cf961ea4dcca448796268d895b75c26c1cab66c6"},
   :local-artifact-seal
   {:status :sealed,
-   :commit "d3303994a0aa5e3f249da36cb83d8d2f16ba17e9"}},
+   :commit "648cb6c6624f61648ea8634d459aa19eb7c90421"}},
  :changed-paths
  {:exact-classifications
   {"nodejs/test/session-send-and-wait.test.ts" :stable-public,
@@ -751,11 +759,20 @@
     :child :nonempty-string,
     :root [:absent :empty-string]},
    :semantics
-   "Child output cannot replace the root response; child idle/error cannot end root waits. Subscribers still see children. Existing deadlines, admission, cleanup and error precedence remain unchanged.",
+   "Child output cannot replace or complete the root response. Async intermediate output remains bounded and best-effort, with overflow diagnostics. Root completion reaching session intake is reserved before lossy observer fan-out. Final publication releases ownership first, is cancellable, and cannot be defeated by an expired deadline. Admission, pending ACKs and publication respect caller cancellation and registration shutdown. Earlier protocol notification overflow retains its existing policy.",
    :tests
    [github.copilot-sdk.send-and-wait-test/send-waits-select-only-root-agent-outcomes
     github.copilot-sdk.send-and-wait-test/async-event-streams-retain-child-events-until-root-completion
     github.copilot-sdk.send-and-wait-test/only-nonempty-agent-ids-mark-child-terminal-events
+    github.copilot-sdk.send-and-wait-test/async-sends-preserve-results-beyond-the-output-buffer-capacity
+    github.copilot-sdk.send-and-wait-test/async-root-completion-is-independent-of-lossy-observer-fanout
+    github.copilot-sdk.send-and-wait-test/cancelling-unadmitted-async-sends-does-not-send-or-return-an-unowned-token
+    github.copilot-sdk.send-and-wait-test/cancelling-async-sends-removes-pending-rpc-acknowledgements
+    github.copilot-sdk.send-and-wait-test/timeout-survives-a-full-output-buffer-and-cancels-the-pending-ack
+    github.copilot-sdk.send-and-wait-test/cancellation-and-disconnect-release-full-final-publication
+    github.copilot-sdk.send-and-wait-test/async-timeout-cannot-replace-an-already-claimed-rpc-response
+    github.copilot-sdk.send-and-wait-test/shutdown-during-request-preparation-cancels-the-captured-registration
+    github.copilot-sdk.integration.sessions-commands-test/test-send-async-releases-ownership-on-send-failure
     github.copilot-sdk.integration.structured-output-test/raw-response-schema-returns-correlated-assistant-event-without-user-event
     github.copilot-sdk.helper-lifecycle-test/query-stream-helpers-remain-open-across-nonterminal-events],
    :authority ["CopilotSession.sendAndWait"],
@@ -786,7 +803,17 @@
     :ordinary
     :structured
     :channel
-    :event-stream],
+    :event-stream
+    :output-overflow
+    :observer-overflow
+    :cancel-before-admission
+    :cancel-during-ack
+    :cancel-final-publication
+    :session-shutdown
+    :timeout-full-output
+    :claimed-ack
+    :shutdown-during-preparation
+    :rpc-failure],
    :id :session/root-completion,
    :specs [:github.copilot-sdk.specs/send-options],
    :builders
