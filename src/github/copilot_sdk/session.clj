@@ -2704,6 +2704,8 @@
    parser's result instead.
    Ordinary waits are serialized per session. Structured waits correlate by
    originating message ID and may run concurrently.
+   Ordinary waits remain session-wide: serialization covers active local waits,
+   not remote work surviving cancellation or timeout.
    Events with a non-empty `:agent-id` cannot supply the reply or complete the
    wait; they remain available to ordinary event subscriptions.
    An idle event whose wire `:mode` is the string `\"autopilot\"` is a
@@ -2931,7 +2933,9 @@
    Completion releases send ownership before waiting for the consumer to drain
    final events. The expired deadline cannot replace a selected completion.
    Earlier protocol notification overflow retains the client's existing policy.
-   Serialized per session to avoid mixing concurrent sends.
+   Active local waits are serialized per session. The stream is session-wide,
+   not filtered by the returned message ID; after local cancellation or timeout,
+   later ordinary waits can observe outstanding remote work.
    Protocol waits park rather than block. Validation, schema conversion, and
    trace-context capture run on the calling thread before the channel is returned.
    Invoke preparation outside go blocks when those callbacks can block.
@@ -3037,7 +3041,8 @@
    `:events-ch` follows `send-async`: a timeout is emitted as a final
    `:copilot/session.error` event whose data includes `:timeout-ms`, then the
    channel closes. Cancellation, bounded intermediate buffering, and reliable
-   completion delivery follow the same contract."
+   completion delivery follow the same contract. The returned message ID does
+   not automatically filter the session-wide event stream."
   [session opts]
   (let [timeout-ms (if (contains? opts :timeout-ms) (:timeout-ms opts) default-send-and-wait-timeout-ms)
         opts (dissoc opts :timeout-ms)]

@@ -1035,9 +1035,11 @@ An idle event whose wire `:mode` is the string `"autopilot"` is a turn boundary,
 not a terminal event, so the wait continues. Keyword `:autopilot` is not a
 supported event payload value. Ordinary waits are serialized per session;
 structured waits correlate by originating message ID and may run concurrently
-with one another. A structured wait and an ordinary wait on the same session
-run serially so their session-wide idle/error events cannot cross-contaminate
-results.
+with one another. Serialization covers active local waits, not remote work
+surviving cancellation or timeout. Ordinary waits observe the session-wide root
+stream and can see late replies or terminal events from earlier work.
+Structured waits provide originating-message correlation for assistant output;
+they do not make session-wide errors request-specific.
 
 Only root-agent messages supply the result. Messages, errors, and idle events
 with a non-empty envelope `:agent-id` do not complete the wait or replace its
@@ -1107,8 +1109,8 @@ request, so send admission and event collection share one deadline.
 (copilot/send-async session options)
 ```
 
-Send a message and return a core.async channel that receives events for this
-message, closing on a root-agent terminal idle or error event. Autopilot idle
+Send a message and return a core.async channel observing the session's event
+stream, closing on a root-agent terminal idle or error event. Autopilot idle
 and child-agent events are emitted without closing the channel. The same rule
 applies to `send-async-with-id`, `query-seq!`, and `query-chan`; `<send!` and
 `<send-and-wait!` select only root-agent replies.
@@ -1132,6 +1134,9 @@ Close the returned channel to abandon local waiting and pending delivery. This
 does not abort remote work. Session teardown also cancels delivery, including
 when `:timeout-ms` is `nil`. These cancellation and completion guarantees apply
 to `send-async-with-id`, `<send!`, and `<send-and-wait!` as well.
+Local cancellation does not drain outstanding remote work. A following ordinary
+wait can observe that work's late events. `send-async-with-id` returns the request
+ID but does not automatically filter the stream by it.
 
 #### `send-async-with-id`
 

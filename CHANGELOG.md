@@ -71,7 +71,9 @@ All notable changes to this project will be documented in this file. This change
   result. Intermediate frames remain best-effort with overflow diagnostics.
   Closing result channels cancels local admission, pending RPC waits, and
   delivery without aborting remote work; teardown also releases blocked final
-  publication when timeouts are disabled.
+  publication when timeouts are disabled. Ordinary waits remain session-wide;
+  local cancellation does not drain remote work or provide per-message
+  isolation.
 
 ### Fixed (post-v1.0.14 sync)
 - Completion waits now ignore child-agent replies, errors, and idle events when

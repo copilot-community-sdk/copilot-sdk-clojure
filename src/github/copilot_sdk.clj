@@ -894,6 +894,8 @@
    Ordinary waits are serialized per session. Structured waits correlate by
    originating message ID and may run concurrently with one another. Structured
    and ordinary waits on the same session run serially.
+   This serializes active local waits, not remote work surviving cancellation
+   or timeout. Ordinary results remain session-wide.
    Child-agent messages, errors, and idle events with a non-empty `:agent-id`
    cannot replace the root reply or complete the wait.
    An idle event whose `:data :mode` is the string \"autopilot\" is a
@@ -932,7 +934,9 @@
    the channel without closing it.
    A timeout is delivered as a final `:copilot/session.error` event whose data
    includes `:timeout-ms`, then the channel closes.
-   Serialized per session to avoid mixing concurrent sends.
+   Active local waits are serialized per session, but this is a session-wide
+   stream: later waits can observe remote work surviving local cancellation
+   or timeout.
    Intermediate events use a bounded best-effort buffer with overflow warnings.
    Root completion reaching session intake is retained independently of output
    and observer buffering. Final delivery releases send ownership first and
@@ -1014,7 +1018,8 @@
    `:events-ch` follows `send-async`: a timeout is delivered as a final
    `:copilot/session.error` event whose data includes `:timeout-ms`, then the
    channel closes. Root completion retention, buffering, and cancellation
-   follow the same contract."
+   follow the same contract. The returned message ID does not automatically
+   filter the session-wide stream."
   [session opts]
   (session/send-async-with-id session opts))
 
