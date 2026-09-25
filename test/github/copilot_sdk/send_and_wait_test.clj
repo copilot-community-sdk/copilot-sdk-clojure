@@ -18,9 +18,14 @@
    - the zero-timeout default is 60000ms, matching upstream `session.ts`."
   (:require [clojure.test :refer [deftest testing is]]
             [clojure.core.async :as async]
+            [clojure.core.async.impl.protocols :as async-protocols]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
+            [github.copilot-sdk.protocol :as protocol]
+            [github.copilot-sdk.integration.support
+             :refer [await-event-type! await-value! await-atom! observe-take-attempts]]
             [github.copilot-sdk.session :as session]
+            [github.copilot-sdk.util :as util]
             [github.copilot-sdk.mock-server :as mock]))
 
 ;; -----------------------------------------------------------------------------
@@ -382,6 +387,647 @@
                {:type :copilot/session.idle :data {:mode "autopilot"}})))
   (is (true? (@#'session/terminal-idle-event?
               {:type :copilot/session.idle :data {}}))))
+
+(defn- read-channel! [ch]
+  (let [[value port] (async/alts!! [ch (async/timeout 5000)])]
+    (when-not (= port ch)
+      (throw (ex-info "Timed out reading send result" {})))
+    value))
+
+(defn- inject-events!
+  [{:keys [server session-id]} events]
+  (doseq [event events]
+    (mock/send-notification! server "session.event"
+                             {:sessionId session-id :event event})))
+
+(def ^:private child-events
+  [{:type "assistant.message" :agentId "child-1"
+    :data {:messageId "child-message" :content "child reply"}}
+   {:type "session.error" :agentId "child-1"
+    :data {:errorType "notification" :message "child failed"}}
+   {:type "session.idle" :agentId "child-1" :data {}}])
+
+(deftest send-waits-select-only-root-agent-outcomes
+  (doseq [[label start collect]
+          [[:blocking #(future (session/send-and-wait! % {:prompt "hi"} 5000))
+            #(deref % 5000 ::timeout)]
+           [:content #(session/<send! % {:prompt "hi" :timeout-ms 5000}) read-channel!]
+           [:message #(session/<send-and-wait! % {:prompt "hi" :timeout-ms 5000})
+            read-channel!]]
+          root-id [nil ""]
+          root-message? [false true]]
+    (testing (str label " root-id=" (pr-str root-id) " message=" root-message?)
+      (let [{:keys [session release send-started close] :as ctx} (gated-send-context)
+            events (cond-> []
+                     root-message?
+                     (conj (cond-> {:type "assistant.message"
+                                    :data {:messageId "root-message" :content "root reply"}}
+                             (some? root-id) (assoc :agentId root-id))))
+            events (into events child-events)
+            events (conj events (cond-> {:type "session.idle" :data {}}
+                                  (some? root-id) (assoc :agentId root-id)))
+            subscription (sdk/subscribe-events session)]
+        (try
+          (let [pending (start session)]
+            (is (true? (deref send-started 2000 false)))
+            (inject-events! ctx events)
+            (release)
+            (let [result (collect pending)]
+              (if root-message?
+                (is (= (if (= label :content) result (get-in result [:data :content]))
+                       "root reply"))
+                (is (nil? result))))
+            (let [observed (mapv #(await-event-type! subscription
+                                                     (keyword "copilot" (:type %))
+                                                     5000)
+                                 events)]
+              (is (= (mapv (juxt :type :agent-id) observed)
+                     (mapv #(vector (keyword "copilot" (:type %)) (:agentId %)) events)))
+              (is (= (count (filter #(= (:agent-id %) "child-1") observed)) 3)
+                  "Ordinary event subscriptions still receive every child event")))
+          (finally
+            (release)
+            (sdk/unsubscribe-events! session subscription)
+            (close)))))))
+
+(deftest async-event-streams-retain-child-events-until-root-completion
+  (doseq [[label start]
+          [[:events #(session/send-async % {:prompt "hi" :timeout-ms 5000})]
+           [:with-id #(-> (session/send-async-with-id %
+                                                      {:prompt "hi" :timeout-ms 5000})
+                          :events-ch)]]]
+    (testing (name label)
+      (let [{:keys [session release send-started close] :as ctx} (gated-send-context)]
+        (try
+          (let [pending (future (start session))]
+            (is (true? (deref send-started 2000 false)))
+            (inject-events! ctx child-events)
+            (release)
+            (let [events (read-channel! (async/into [] (deref pending 5000 nil)))]
+              (is (= (mapv :type (filter #(= (:agent-id %) "child-1") events))
+                     [:copilot/assistant.message :copilot/session.error :copilot/session.idle]))
+              (is (= (get-in (last (filter #(= (:type %) :copilot/assistant.message)
+                                           events))
+                             [:data :content])
+                     "Mock response to: hi"))
+              (is (= (:type (last events)) :copilot/session.idle))
+              (is (nil? (:agent-id (last events))))))
+          (finally
+            (release)
+            (close)))))))
+
+(deftest only-nonempty-agent-ids-mark-child-terminal-events
+  (doseq [event-type [:copilot/session.idle :copilot/session.error]
+          [agent-id expected] [[nil true] ["" true] ["child" false] [" " false]]]
+    (let [event (cond-> {:type event-type :data {}}
+                  (some? agent-id) (assoc :agent-id agent-id))]
+      (is (= (session/terminal-event? event) expected))
+      (is (= (session/terminal-idle-event? event)
+             (and expected (= event-type :copilot/session.idle)))))))
+
+(defn- paused-output
+  [make-channel saturated]
+  (let [output (make-channel 1024)
+        read-gate (make-channel)
+        reads (make-channel)
+        last-write (atom nil)
+        closed (promise)
+        finished (promise)
+        close-count (atom 0)]
+    (async/go
+      (async/<! read-gate)
+      (loop []
+        (when-let [value (async/<! output)]
+          (when (async/>! reads value)
+            (recur))))
+      (async/close! reads))
+    {:channel
+     (reify
+       async-protocols/ReadPort
+       (take! [_ handler]
+         (async-protocols/take! reads handler))
+       async-protocols/WritePort
+       (put! [_ value handler]
+         (let [result (async-protocols/put! output value handler)]
+           (reset! last-write value)
+           (when (or (and (nil? result) (async-protocols/blockable? handler))
+                     (session/terminal-event? value))
+             (deliver saturated true))
+           result))
+       async-protocols/Channel
+       (close! [_]
+         (async/close! output)
+         (deliver closed true)
+         (when (= 2 (swap! close-count inc))
+           (deliver finished true)))
+       (closed? [_] (async-protocols/closed? output)))
+     :last-write last-write
+     :closed closed
+     :finished finished
+     :resume! #(async/close! read-gate)
+     :close! #(do (async/close! output)
+                  (async/close! read-gate)
+                  (async/close! reads))}))
+
+(deftest async-sends-preserve-results-beyond-the-output-buffer-capacity
+  (doseq [[label start]
+          [[:events #(session/send-async % {:prompt "hi" :timeout-ms 15000})]
+           [:with-id #(-> (session/send-async-with-id %
+                                                      {:prompt "hi" :timeout-ms 15000})
+                          :events-ch)]
+           [:content #(session/<send! % {:prompt "hi" :timeout-ms 15000})]
+           [:message #(session/<send-and-wait! % {:prompt "hi" :timeout-ms 15000})]]]
+    (testing (name label)
+      (let [{:keys [session release send-started close] :as ctx} (gated-send-context)
+            real-chan async/chan
+            real-timeout async/timeout
+            deadline (real-chan)
+            saturated (promise)
+            output-control (atom nil)
+            children (mapv (fn [index]
+                             {:type "assistant.message" :agentId "child-1"
+                              :data {:messageId (str "child-" index)
+                                     :content (str index)}})
+                           (range 1536))]
+        (try
+          (with-redefs [async/chan
+                        (fn [& args]
+                          (if (and (= args [1024]) (nil? @output-control))
+                            (let [control (paused-output real-chan saturated)]
+                              (reset! output-control control)
+                              (:channel control))
+                            (apply real-chan args)))
+                        async/timeout (fn [^long ms]
+                                        (if (= ms 15000) deadline (real-timeout ms)))]
+            (let [pending (future (start session))]
+              (await-value! send-started "send admission" 5000)
+              (inject-events! ctx children)
+              (release)
+              (let [result-ch (await-value! pending "async send result channel" 5000)]
+                (await-value! saturated "full output buffer or completed producer" 5000)
+                (async/close! deadline)
+                ((:resume! @output-control))
+                (if (#{:events :with-id} label)
+                  (let [events (read-channel! (async/into [] result-ch))
+                        delivered (mapv #(get-in % [:data :content])
+                                        (filter #(= (:agent-id %) "child-1") events))]
+                    (is (pos? (count delivered)))
+                    (is (<= (count delivered) 1024))
+                    (is (= delivered (mapv str (range (count delivered)))))
+                    (is (= (get-in (last (filter #(and (= (:type %) :copilot/assistant.message)
+                                                       (nil? (:agent-id %)))
+                                                 events))
+                                   [:data :content])
+                           "Mock response to: hi"))
+                    (is (= (:type (last events)) :copilot/session.idle)))
+                  (let [result (read-channel! result-ch)]
+                    (is (= (if (= label :content) result (get-in result [:data :content]))
+                           "Mock response to: hi")))))))
+          (finally
+            (release)
+            (async/close! deadline)
+            (when-let [control @output-control]
+              ((:close! control)))
+            (close)))))))
+
+(deftest async-root-completion-is-independent-of-lossy-observer-fanout
+  (doseq [[label start] [[:events #(session/send-async % {:prompt "hi" :timeout-ms 30000})]
+                         [:message #(session/<send-and-wait! % {:prompt "hi" :timeout-ms 30000})]]]
+    (testing (name label)
+      (let [{:keys [session client session-id release send-started close] :as ctx}
+            (gated-send-context)
+            event-mult (get-in @(:state client) [:session-io session-id :event-mult])
+            stalled-observer (async/chan 1)
+            real-chan async/chan
+            saturated (promise)
+            output-control (atom nil)]
+        (async/tap event-mult stalled-observer)
+        (try
+          (with-redefs [async/chan
+                        (fn [& args]
+                          (if (and (= args [1024]) (nil? @output-control))
+                            (let [control (paused-output real-chan saturated)]
+                              (reset! output-control control)
+                              (:channel control))
+                            (apply real-chan args)))]
+            (let [result-ch (start session)]
+              (await-value! send-started "send admission" 5000)
+              (inject-events! ctx [{:type "assistant.message"
+                                    :data {:messageId "early-root" :content "early root"}}])
+              (doseq [batch (partition-all 256 (range 8192))]
+                (inject-events! ctx
+                                (mapv (fn [index]
+                                        {:type "assistant.message" :agentId "child-1"
+                                         :data {:messageId (str "child-" index) :content (str index)}})
+                                      batch))
+                (await-atom! (:last-write @output-control)
+                             #(= (get-in % [:data :content]) (str (last batch)))
+                             "session intake batch" 5000))
+              (inject-idle! ctx)
+              (release)
+              (await-value! saturated "reserved completion publication" 5000)
+              ((:resume! @output-control))
+              (if (= label :events)
+                (let [events (read-channel! (async/into [] result-ch))]
+                  (is (= (mapv #(get-in % [:data :content])
+                               (filter #(and (= (:type %) :copilot/assistant.message)
+                                             (nil? (:agent-id %)))
+                                       events))
+                         ["early root"]))
+                  (is (= (:type (last events)) :copilot/session.idle)))
+                (is (= (get-in (read-channel! result-ch) [:data :content]) "early root")))))
+          (finally
+            (release)
+            (async/untap event-mult stalled-observer)
+            (async/close! stalled-observer)
+            (loop []
+              (when (some? (async/poll! stalled-observer))
+                (recur)))
+            (when-let [control @output-control]
+              ((:close! control)))
+            (close)))))))
+
+(deftest cancelling-unadmitted-async-sends-does-not-send-or-return-an-unowned-token
+  (doseq [[label start]
+          [[:events #(session/send-async % {:prompt "abandoned" :timeout-ms nil})]
+           [:with-id #(session/send-async-with-id % {:prompt "abandoned" :timeout-ms nil})]
+           [:content #(session/<send! % {:prompt "abandoned" :timeout-ms nil})]
+           [:message #(session/<send-and-wait! % {:prompt "abandoned" :timeout-ms nil})]]]
+    (testing (name label)
+      (let [{:keys [session client session-id server close]} (gated-send-context)
+            lock (get-in @(:state client) [:session-io session-id :send-lock])
+            attempts (java.util.concurrent.CountDownLatch. 1)
+            parked (java.util.concurrent.CountDownLatch. 1)
+            cancelled (promise)
+            cancel-count (atom 0)
+            requests (atom [])
+            real-wrapper util/cancellable-channel]
+        (async/<!! lock)
+        (swap! (:state client) assoc-in [:session-io session-id :send-lock]
+               (observe-take-attempts lock attempts parked))
+        (mock/set-request-hook! server
+                                (fn [method params]
+                                  (when (= method "session.send")
+                                    (swap! requests conj (:prompt params)))))
+        (try
+          (with-redefs [util/cancellable-channel
+                        (fn [output cancel!]
+                          (real-wrapper output
+                                        #(do (cancel!)
+                                             (swap! cancel-count inc)
+                                             (deliver cancelled true))))]
+            (let [pending (future (start session))]
+              (is (.await parked 5 java.util.concurrent.TimeUnit/SECONDS))
+              (if (= label :with-id)
+                (future-cancel pending)
+                (let [result (await-value! pending "unadmitted channel" 5000)]
+                  (async/close! result)
+                  (async/close! result)))
+              (await-value! cancelled "cancellation propagation" 5000)
+              (async/>!! lock :token)
+              (let [following (future
+                                (session/send-and-wait! session {:prompt "after cancellation"} 5000))]
+                (try
+                  (is (= (get-in (await-value! following "send after cancellation" 5000)
+                                 [:data :content])
+                         "Mock response to: after cancellation"))
+                  (finally
+                    (future-cancel following))))
+              (is (= @requests ["after cancellation"]))
+              (is (= @cancel-count (if (#{:content :message} label) 2 1)))))
+          (finally
+            (close)))))))
+
+(deftest timeout-survives-a-full-output-buffer-and-cancels-the-pending-ack
+  (let [{:keys [session client session-id release send-started close] :as ctx}
+        (gated-send-context)
+        io (get-in @(:state client) [:session-io session-id])
+        real-chan async/chan
+        real-timeout async/timeout
+        deadline (real-chan)
+        saturated (promise)
+        output-control (atom nil)]
+    (try
+      (with-redefs [async/chan
+                    (fn [& args]
+                      (if (and (= args [1024]) (nil? @output-control))
+                        (let [control (paused-output real-chan saturated)]
+                          (reset! output-control control)
+                          (:channel control))
+                        (apply real-chan args)))
+                    async/timeout (fn [^long ms]
+                                    (if (= ms 15000) deadline (real-timeout ms)))]
+        (let [result-ch (session/send-async session {:prompt "hi" :timeout-ms 15000})]
+          (await-value! send-started "pending send RPC" 5000)
+          (inject-events! ctx
+                          (mapv (fn [index]
+                                  {:type "assistant.message" :agentId "child-1"
+                                   :data {:messageId (str "child-" index) :content (str index)}})
+                                (range 1536)))
+          (await-atom! (:last-write @output-control)
+                       #(= (get-in % [:data :content]) "1535")
+                       "full output at session intake" 5000)
+          (async/close! deadline)
+          (await-value! saturated "timeout publication after cleanup" 5000)
+          (is (empty? (get-in @(:state client) [:connection :pending-requests])))
+          (is (nil? @(:async-send-state io)))
+          ((:resume! @output-control))
+          (let [events (read-channel! (async/into [] result-ch))]
+            (is (= (:type (last events)) :copilot/session.error))
+            (is (= (get-in (last events) [:data :timeout-ms]) 15000)))))
+      (finally
+        (release)
+        (async/close! deadline)
+        (when-let [control @output-control]
+          ((:close! control)))
+        (close)))))
+
+(deftest cancelling-async-sends-removes-pending-rpc-acknowledgements
+  (doseq [[label start]
+          [[:events #(session/send-async % {:prompt "hi" :timeout-ms nil})]
+           [:with-id #(session/send-async-with-id % {:prompt "hi" :timeout-ms nil})]
+           [:content #(session/<send! % {:prompt "hi" :timeout-ms nil})]
+           [:message #(session/<send-and-wait! % {:prompt "hi" :timeout-ms nil})]]]
+    (testing (name label)
+      (let [{:keys [session client session-id release send-started close]} (gated-send-context)
+            io (get-in @(:state client) [:session-io session-id])]
+        (try
+          (let [pending (future (start session))]
+            (await-value! send-started "pending send RPC" 5000)
+            (is (= (count (get-in @(:state client) [:connection :pending-requests])) 1))
+            (if (= label :with-id)
+              (future-cancel pending)
+              (async/close! (await-value! pending "async channel" 5000)))
+            (await-atom! (:state client)
+                         #(empty? (get-in % [:connection :pending-requests]))
+                         "pending RPC cancellation" 5000)
+            (let [[token port] (async/alts!! [(:send-lock io) (async/timeout 5000)])]
+              (is (= port (:send-lock io)))
+              (is (= token :token))
+              (is (nil? @(:async-send-state io)))
+              (when (= port (:send-lock io))
+                (async/>!! (:send-lock io) token))))
+          (finally
+            (release)
+            (close)))))))
+
+(deftest cancellation-and-disconnect-release-full-final-publication
+  (doseq [action [:cancel :disconnect]
+          [label start]
+          [[:events #(session/send-async % {:prompt "hi" :timeout-ms nil})]
+           [:with-id #(-> (session/send-async-with-id % {:prompt "hi" :timeout-ms nil}) :events-ch)]
+           [:content #(session/<send! % {:prompt "hi" :timeout-ms nil})]
+           [:message #(session/<send-and-wait! % {:prompt "hi" :timeout-ms nil})]]]
+    (testing (str action " " label)
+      (let [{:keys [session client session-id release send-started close] :as ctx}
+            (gated-send-context)
+            io (get-in @(:state client) [:session-io session-id])
+            real-chan async/chan
+            saturated (promise)
+            output-control (atom nil)]
+        (try
+          (with-redefs [async/chan
+                        (fn [& args]
+                          (if (and (= args [1024]) (nil? @output-control))
+                            (let [control (paused-output real-chan saturated)]
+                              (reset! output-control control)
+                              (:channel control))
+                            (apply real-chan args)))]
+            (let [pending (future (start session))]
+              (await-value! send-started "send admission" 5000)
+              (inject-events! ctx
+                              (mapv (fn [index]
+                                      {:type "assistant.message" :agentId "child-1"
+                                       :data {:messageId (str "child-" index) :content (str index)}})
+                                    (range 1536)))
+              (release)
+              (let [result-ch (await-value! pending "async channel" 5000)]
+                (await-value! saturated "full final publication" 5000)
+                (is (nil? @(:async-send-state io)))
+                (if (= action :cancel)
+                  (do
+                    (async/close! result-ch)
+                    (await-value! (:finished @output-control) "canceled final publisher" 5000)
+                    (let [following (future (session/send-and-wait! session {:prompt "next"} 5000))]
+                      (try
+                        (is (= (get-in (await-value! following "next send" 5000) [:data :content])
+                               "Mock response to: next"))
+                        (finally
+                          (future-cancel following)))))
+                  (do
+                    (sdk/disconnect! session)
+                    (await-value! (:closed @output-control) "disconnected final publisher" 5000)
+                    (is (async-protocols/closed? (:shutdown-chan io))))))))
+          (finally
+            (release)
+            (when-let [control @output-control]
+              ((:close! control)))
+            (close)))))))
+
+(deftest async-timeout-cannot-replace-an-already-claimed-rpc-response
+  (let [{:keys [session client session-id release send-started close]} (gated-send-context)
+        real-request protocol/send-request
+        real-cancel protocol/cancel-request!
+        real-timeout async/timeout
+        deadline (async/chan)
+        claimed (promise)
+        release-claim (promise)
+        cancel-attempt (promise)]
+    (try
+      (with-redefs
+       [protocol/send-request
+        (fn send-request
+          ([conn method params] (send-request conn method params {}))
+          ([conn method params opts]
+           (real-request
+            conn method params
+            (cond-> opts
+              (= method "session.send")
+              (assoc :on-response-inline
+                     (fn [_]
+                       (deliver claimed true)
+                       (await-value! release-claim "claimed response release" 5000)))))))
+        protocol/cancel-request!
+        (fn [conn response]
+          (let [removed? (real-cancel conn response)]
+            (deliver cancel-attempt (boolean removed?))
+            removed?))
+        async/timeout (fn [^long ms]
+                        (if (= ms 15000) deadline (real-timeout ms)))]
+        (let [pending (future (session/send-async-with-id session {:prompt "hi" :timeout-ms 15000}))]
+          (await-value! send-started "send admission" 5000)
+          (release)
+          (await-value! claimed "reader claim" 5000)
+          (let [done-chan (:done-chan @(get-in @(:state client)
+                                               [:session-io session-id :async-send-state]))
+                [_ port] (async/alts!! [done-chan (real-timeout 5000)])]
+            (is (= port done-chan) "Root terminal intake must precede deadline expiry"))
+          (async/close! deadline)
+          (is (false? (await-value! cancel-attempt "timeout ownership check" 5000)))
+          (deliver release-claim true)
+          (let [{:keys [message-id events-ch]} (await-value! pending "claimed acknowledgement" 5000)
+                events (read-channel! (async/into [] events-ch))]
+            (is (string? message-id))
+            (is (= (:type (last events)) :copilot/session.idle))
+            (is (= (get-in (last (filter #(= (:type %) :copilot/assistant.message) events))
+                           [:data :content])
+                   "Mock response to: hi")))))
+      (finally
+        (deliver release-claim true)
+        (release)
+        (async/close! deadline)
+        (close)))))
+
+(deftest shutdown-during-request-preparation-cancels-the-captured-registration
+  (doseq [[label start]
+          [[:events session/send-async]
+           [:with-id session/send-async-with-id]
+           [:content session/<send!]
+           [:message session/<send-and-wait!]]]
+    (testing (name label)
+      (let [{:keys [session client server release close]} (gated-send-context)
+            preparing (promise)
+            release-preparation (promise)
+            caller-thread (promise)
+            request-count (atom 0)
+            opts {:prompt "hi" :timeout-ms nil
+                  :response-schema
+                  {:to-json-schema
+                   (fn []
+                     (deliver preparing (Thread/currentThread))
+                     (await-value! release-preparation "schema preparation release" 5000)
+                     {"type" "object"})
+                   :parse identity}}]
+        (mock/set-request-hook! server
+                                (fn [method _]
+                                  (when (= method "session.send")
+                                    (swap! request-count inc))))
+        (try
+          (let [pending (future
+                          (deliver caller-thread (Thread/currentThread))
+                          (try
+                            {:value (start session opts)}
+                            (catch Throwable failure {:error failure})))]
+            (is (= (await-value! preparing "schema preparation" 5000)
+                   (await-value! caller-thread "caller thread" 5000)))
+            (sdk/stop! client)
+            (is (empty? (:session-io @(:state client))))
+            (deliver release-preparation true)
+            (let [{:keys [value error]} (await-value! pending "shutdown during preparation" 5000)]
+              (if (= label :with-id)
+                (is (instance? clojure.lang.ExceptionInfo error))
+                (do
+                  (is (nil? error))
+                  (is (nil? (read-channel! value))))))
+            (is (zero? @request-count)))
+          (finally
+            (deliver release-preparation true)
+            (release)
+            (close)))))))
+
+(deftest child-events-do-not-occupy-blocking-wait-tap-capacity
+  (doseq [structured? [false true]]
+    (testing (str "structured=" structured?)
+      (let [{:keys [session client session-id release close] :as ctx} (gated-send-context)
+            event-mult (get-in @(:state client) [:session-io session-id :event-mult])
+            monitor (async/chan (async/sliding-buffer 256))
+            progress (atom -1)
+            acknowledgement (promise)
+            release-wait-loop (promise)
+            pending (atom nil)
+            real-send session/send-with-timeout!]
+        (async/tap event-mult monitor)
+        (async/go-loop []
+          (when-let [event (async/<! monitor)]
+            (when (= (:agent-id event) "child-1")
+              (reset! progress (Long/parseLong (get-in event [:data :content]))))
+            (recur)))
+        (release)
+        (try
+          (with-redefs [session/send-with-timeout!
+                        (fn [copilot-session opts timeout-ms]
+                          (let [id (real-send copilot-session opts timeout-ms)]
+                            (deliver acknowledgement id)
+                            (await-value! release-wait-loop "blocking wait-loop release" 30000)
+                            id))]
+            (reset! pending
+                    (future
+                      (session/send-and-wait!
+                       session
+                       (cond-> {:prompt "hi"}
+                         structured? (assoc :response-schema {"type" "object"}))
+                       30000)))
+            (let [message-id (await-value! acknowledgement "real send acknowledgement" 5000)]
+              (doseq [batch (partition-all 256 (range 3072))]
+                (inject-events! ctx
+                                (mapv (fn [index]
+                                        {:type "assistant.message" :agentId "child-1"
+                                         :data {:messageId (str "child-" index)
+                                                :content (str index)}})
+                                      batch))
+                (await-atom! progress #(>= % (last batch))
+                             "observer progress while the wait loop is paused" 5000))
+              (when structured?
+                (inject-events! ctx
+                                [{:type "assistant.message"
+                                  :data {:messageId "structured-root"
+                                         :originatingMessageId message-id
+                                         :content "{\"answer\":42}"}}])
+                (inject-idle! ctx))
+              (deliver release-wait-loop true)
+              (is (= (get-in (await-value! @pending "blocking root result" 5000) [:data :content])
+                     (if structured? "{\"answer\":42}" "Mock response to: hi")))))
+          (finally
+            (deliver release-wait-loop true)
+            (when-let [call @pending]
+              (future-cancel call))
+            (async/untap event-mult monitor)
+            (async/close! monitor)
+            (loop []
+              (when (some? (async/poll! monitor))
+                (recur)))
+            (close)))))))
+
+(deftest captured-terminal-does-not-bypass-a-pending-unclaimed-send-ack
+  (doseq [[label start] [[:events session/send-async]
+                         [:with-id session/send-async-with-id]]]
+    (testing (name label)
+      (let [{:keys [session client session-id release send-started close] :as ctx}
+            (gated-send-context)
+            io (get-in @(:state client) [:session-io session-id])
+            real-timeout async/timeout
+            deadline (async/chan)]
+        (try
+          (with-redefs [async/timeout (fn [^long ms]
+                                        (if (= ms 15000) deadline (real-timeout ms)))]
+            (let [pending (future
+                            (try
+                              {:value (start session {:prompt "hi" :timeout-ms 15000})}
+                              (catch Throwable failure {:error failure})))]
+              (await-value! send-started "pending unclaimed RPC" 5000)
+              (inject-events! ctx [{:type "assistant.message"
+                                    :data {:messageId "early-root" :content "not an ACK"}}])
+              (inject-idle! ctx)
+              (let [done-chan (:done-chan @(:async-send-state io))
+                    [_ port] (async/alts!! [done-chan (real-timeout 5000)])]
+                (is (= port done-chan)))
+              (async/close! deadline)
+              (let [{:keys [value error]} (await-value! pending "ACK timeout outcome" 5000)]
+                (if (= label :with-id)
+                  (do
+                    (is (instance? clojure.lang.ExceptionInfo error))
+                    (is (= (select-keys (ex-data error) [:method :timeout-ms])
+                           {:method "session.send" :timeout-ms 15000})))
+                  (let [events (read-channel! (async/into [] value))]
+                    (is (nil? error))
+                    (is (= (:type (last events)) :copilot/session.error))
+                    (is (= (get-in (last events) [:data :timeout-ms]) 15000)))))
+              (await-atom! (:async-send-state io) nil? "ACK timeout cleanup" 5000)
+              (is (empty? (get-in @(:state client) [:connection :pending-requests])))))
+          (finally
+            (release)
+            (async/close! deadline)
+            (close)))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Upstream scenario 3: a send rejection wins over an earlier session.error.

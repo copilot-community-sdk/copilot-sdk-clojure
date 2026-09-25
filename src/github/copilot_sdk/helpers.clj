@@ -40,11 +40,11 @@
      `with-query-seq` (default: 60000); `query-chan` has no deadline
    "
   (:require [clojure.core.async :as async :refer [go-loop <! chan close! alts!]]
-            [clojure.core.async.impl.protocols :as async-protocols]
             [github.copilot-sdk :as copilot]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.session :as session]
-            [github.copilot-sdk.teardown :as teardown]))
+            [github.copilot-sdk.teardown :as teardown]
+            [github.copilot-sdk.util :as util]))
 
 ;; =============================================================================
 ;; Internal State
@@ -181,23 +181,11 @@
 
 (defn- cancellable-channel
   [out-ch cancel-ch disconnect-ch]
-  (reify
-    async-protocols/ReadPort
-    (take! [_ handler]
-      (async-protocols/take! out-ch handler))
-
-    async-protocols/WritePort
-    (put! [_ value handler]
-      (async-protocols/put! out-ch value handler))
-
-    async-protocols/Channel
-    (close! [_]
+  (util/cancellable-channel
+   out-ch
+   #(do
       (close! cancel-ch)
-      (close! out-ch)
-      (force disconnect-ch)
-      nil)
-    (closed? [_]
-      (async-protocols/closed? out-ch))))
+      (force disconnect-ch))))
 
 ;; =============================================================================
 ;; Public API
@@ -385,6 +373,7 @@
    disconnects whether the body returns normally, stops after a partial realization,
    or throws. If both the body and disconnect fail, the body failure remains
    primary and the disconnect failure is attached as suppressed.
+   Child-agent events remain in the sequence but do not end the root query.
 
    Binding form:
      [events prompt & {:keys [client session max-events timeout-ms]}]
@@ -491,7 +480,8 @@
    session fails after a terminal event or source closure, the channel yields
    a tagged `:copilot/session.error` map and closes. The original failure is
    available at `[:data :cause]`. An idle event whose wire `:mode` is the
-   string `\"autopilot\"` is emitted without closing the channel. Consumer
+   string `\"autopilot\"` is emitted without closing the channel. Events with a
+   non-empty `:agent-id` are also emitted without closing it. Consumer
    cancellation still releases the hidden session locally; a runtime cleanup
    failure is logged because the output channel is already closed.
 

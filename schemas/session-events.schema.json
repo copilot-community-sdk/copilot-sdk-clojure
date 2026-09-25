@@ -7473,6 +7473,10 @@
     "FusionAttribution": {
       "type": "object",
       "properties": {
+        "hasUserSteering": {
+          "type": "boolean",
+          "description": "Whether this model request consumed a user steering message rather than only internal Fusion work."
+        },
         "fusionId": {
           "type": "string",
           "description": "Stable identifier for the HydraFusion turn that produced the event."
@@ -7528,6 +7532,76 @@
       "description": "Experimental attribution linking an ordinary event to the HydraFusion turn, phase, and concrete source that produced it.",
       "title": "FusionAttribution",
       "stability": "experimental"
+    },
+    "FusionChangeCheckpointData": {
+      "type": "object",
+      "properties": {
+        "codeChanges": {
+          "$ref": "#/definitions/ShutdownCodeChanges"
+        }
+      },
+      "required": [
+        "codeChanges"
+      ],
+      "additionalProperties": false,
+      "description": "Internal durable editing-tool totals after a Fusion turn, including edits from discarded phases.",
+      "title": "FusionChangeCheckpointData",
+      "visibility": "internal"
+    },
+    "FusionChangeCheckpointEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.fusion_change_checkpoint",
+          "description": "Type discriminator. Always \"session.fusion_change_checkpoint\"."
+        },
+        "data": {
+          "$ref": "#/definitions/FusionChangeCheckpointData",
+          "description": "Internal durable editing-tool totals after a Fusion turn, including edits from discarded phases."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.fusion_change_checkpoint\". Internal durable editing-tool totals after a Fusion turn, including edits from discarded phases.",
+      "title": "FusionChangeCheckpointEvent",
+      "visibility": "internal"
     },
     "FusionCommitKind": {
       "type": "string",
@@ -8431,6 +8505,11 @@
         "pattern": {
           "$ref": "#/definitions/FusionPattern",
           "description": "Validated orchestration pattern selected for the turn."
+        },
+        "hint": {
+          "type": "string",
+          "description": "Short human-readable summary of the selected workflow, suitable for immediate client display after routing. May be absent in older durable events; omit the explanation or derive one from pattern and phasePlan. Display text, not a stable machine-readable value.",
+          "stability": "experimental"
         },
         "phasePlan": {
           "type": "array",
@@ -10638,6 +10717,10 @@
           "type": "string",
           "const": "client_credentials",
           "description": "Optional non-default OAuth grant type. When set to 'client_credentials', the OAuth flow runs headlessly using the client_id + keychain-stored secret (no browser, no callback server)."
+        },
+        "scope": {
+          "type": "string",
+          "description": "Configured OAuth scope string used when the server challenge omits scope or provides an empty scope"
         }
       },
       "required": [
@@ -15913,7 +15996,7 @@
         "effort"
       ],
       "additionalProperties": false,
-      "description": "Original request-level and effective conversation reasoning effort for a Responses history boundary",
+      "description": "Original request-level and effective conversation reasoning effort for a provider history boundary; the historical type name is retained for compatibility",
       "title": "ResponsesReasoning"
     },
     "ResumeData": {
@@ -17545,6 +17628,11 @@
         {
           "$ref": "#/definitions/UsageCheckpointEvent",
           "description": "Session event \"session.usage_checkpoint\". Durable session usage checkpoint for reconstructing aggregate accounting on resume"
+        },
+        {
+          "$ref": "#/definitions/FusionChangeCheckpointEvent",
+          "description": "Session event \"session.fusion_change_checkpoint\". Internal durable editing-tool totals after a Fusion turn, including edits from discarded phases.",
+          "visibility": "internal"
         },
         {
           "$ref": "#/definitions/ContextChangedEvent",
@@ -19300,12 +19388,19 @@
       "properties": {
         "upToEventId": {
           "type": "string",
-          "description": "Event ID that was rewound to; this event and all after it were removed"
+          "description": "First removed event. Without `eventIds`, it and every event after it were removed"
         },
         "eventsRemoved": {
           "type": "integer",
           "minimum": 0,
           "description": "Number of events that were removed by the rewind"
+        },
+        "eventIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The removed events, starting with `upToEventId`. Later events not listed were kept, such as a background agent's events that interleaved with a withdrawn turn"
         }
       },
       "required": [
@@ -20459,7 +20554,7 @@
         },
         "responsesReasoning": {
           "$ref": "#/definitions/ResponsesReasoning",
-          "description": "Responses reasoning settings anchored before this model-facing message, for cache-stable history replay"
+          "description": "Provider reasoning settings anchored before this model-facing message for cache-stable replay; the historical responsesReasoning name is retained for compatibility"
         }
       },
       "required": [
@@ -23090,7 +23185,7 @@
         },
         "responsesReasoning": {
           "$ref": "#/definitions/ResponsesReasoning",
-          "description": "Responses reasoning settings anchored before this model-facing message, for cache-stable history replay"
+          "description": "Provider reasoning settings anchored before this model-facing message for cache-stable replay; the historical responsesReasoning name is retained for compatibility"
         },
         "messageId": {
           "type": "string",

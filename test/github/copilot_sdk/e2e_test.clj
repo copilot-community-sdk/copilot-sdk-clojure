@@ -7,11 +7,15 @@
    
    Run with: COPILOT_E2E_TESTS=true COPILOT_CLI_PATH=/path/to/copilot clojure -M:test"
   (:require [clojure.core.async :refer [alts!! timeout]]
+            [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [clojure.test :refer [deftest testing is use-fixtures]]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.teardown :as teardown])
-  (:import [java.nio.file Files]))
+  (:import [com.sun.net.httpserver HttpHandler HttpServer]
+           [java.net InetSocketAddress]
+           [java.nio.file Files]))
 
 ;; Check if E2E tests are enabled
 (def e2e-enabled?
@@ -99,6 +103,37 @@
         (.addSuppressed aggregate failure))
       (throw aggregate))))
 
+(defn- call-with-capturing-provider
+  [f]
+  (let [server (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+        requests (atom [])
+        response (.getBytes
+                  (json/write-str
+                   {:id "fixture-completion" :object "chat.completion"
+                    :created 1 :model "instruction-cache-fixture"
+                    :choices [{:index 0 :message {:role "assistant" :content "OK"}
+                               :finish_reason "stop"}]
+                    :usage {:prompt_tokens 1 :completion_tokens 1 :total_tokens 2}})
+                  "UTF-8")]
+    (teardown/call-with-cleanup
+     #(do
+        (.createContext
+         server "/v1/chat/completions"
+         (reify HttpHandler
+           (handle [_ exchange]
+             (teardown/call-with-cleanup
+              (fn []
+                (swap! requests conj
+                       (json/read-str (slurp (.getRequestBody exchange) :encoding "UTF-8")
+                                      :key-fn keyword))
+                (.set (.getResponseHeaders exchange) "Content-Type" "application/json")
+                (.sendResponseHeaders exchange 200 (alength response))
+                (.write (.getResponseBody exchange) response))
+              (fn [] (.close exchange))))))
+        (.start server)
+        (f (str "http://127.0.0.1:" (.getPort (.getAddress server)) "/v1") requests))
+     #(.stop server 0))))
+
 (defn with-e2e-client
   "Fixture that creates a real client for E2E tests."
   [test-fn]
@@ -151,11 +186,70 @@
 (deftest ^:e2e test-e2e-create-session
   (when-e2e
    (testing "Create session with real CLI"
-     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})]
-       (is (some? session))
-       (is (string? (sdk/session-id session)))
-        ;; Clean up
-       (sdk/destroy! session)))))
+     (doseq [config [{} {:refresh-custom-instructions? false}
+                     {:refresh-custom-instructions? true}]]
+       (let [session (sdk/create-session *e2e-client*
+                                         (assoc config :on-permission-request sdk/approve-all))]
+         (try
+           (is (some? session))
+           (is (string? (sdk/session-id session)))
+           (finally
+             (sdk/destroy! session))))))))
+
+(deftest ^:e2e test-e2e-refresh-custom-instructions
+  (when-e2e
+   (let [root (.toFile
+               (Files/createTempDirectory
+                "copilot-sdk-instructions-"
+                (make-array java.nio.file.attribute.FileAttribute 0)))
+         project (io/file root "project")
+         instruction-root (io/file root "instructions")
+         instruction-file (io/file instruction-root ".github" "instructions"
+                                   "refresh.instructions.md")
+         original "Always include CLOJURE_ORIGINAL_INSTRUCTIONS."
+         updated "Always include CLOJURE_UPDATED_INSTRUCTIONS."]
+     (teardown/call-with-cleanup
+      (fn []
+        (.mkdirs project)
+        (io/make-parents instruction-file)
+        (call-with-capturing-provider
+         (fn [base-url requests]
+           (let [read-instructions
+                 (fn [refresh]
+                   (let [config (cond-> {:working-directory (.getCanonicalPath project)
+                                         :instruction-directories [(.getCanonicalPath instruction-root)]
+                                         :available-tools []
+                                         :streaming? false
+                                         :model "instruction-cache-fixture"
+                                         :provider {:provider-type :openai :base-url base-url
+                                                    :wire-api :completions}}
+                                  (some? refresh) (assoc :refresh-custom-instructions? refresh))
+                         session (sdk/create-session *e2e-client* config)
+                         before (count @requests)]
+                     (teardown/call-with-cleanup
+                      (fn []
+                        (is (= (get-in (sdk/send-and-wait! session {:prompt "Say OK."} 30000)
+                                       [:data :content])
+                               "OK"))
+                        (is (= (count @requests) (inc before)))
+                        (json/write-str (nth @requests before)))
+                      #(throw-cleanup-failures!
+                        "Failed to disconnect instruction-cache session"
+                        (disconnect-session-failures :instruction-cache-session session)))))]
+             (spit instruction-file original)
+             (is (str/includes? (read-instructions nil) original))
+             (spit instruction-file updated)
+             (doseq [refresh [nil false]]
+               (let [contents (read-instructions refresh)]
+                 (is (str/includes? contents original))
+                 (is (not (str/includes? contents updated)))))
+             (doseq [refresh [true nil]]
+               (let [contents (read-instructions refresh)]
+                 (is (str/includes? contents updated))
+                 (is (not (str/includes? contents original)))))))))
+      #(throw-cleanup-failures!
+        "Failed to remove instruction-cache fixture"
+        (delete-tree-failures :instruction-cache-files root))))))
 
 (deftest ^:e2e test-e2e-simple-conversation
   (when-e2e

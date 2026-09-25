@@ -436,6 +436,20 @@
    {:previous-model "host/model"
     :reason "provider_withdrawn"}
 
+   "session.snapshot_rewind"
+   {:up-to-event-id "first"
+    :events-removed 2
+    :event-ids ["first" "last"]}
+
+   "mcp.oauth_required"
+   {:request-id "oauth"
+    :server-name "server"
+    :server-url "https://mcp.example"
+    :reason "initial"
+    :static-client-config {:client-id "client"
+                           :public-client false
+                           :scope "configured.read"}}
+
    "session.context_cleared"
    {:messages-cleared 3}
 

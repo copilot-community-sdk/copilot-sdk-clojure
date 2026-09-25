@@ -443,6 +443,7 @@ failures.
 | `:enable-session-telemetry?` | boolean | Enable/disable the CLI's **internal** session telemetry (distinct from the client `:telemetry` OpenTelemetry export). Defaults to enabled for GitHub-authenticated sessions; always disabled when a BYOK `:provider` is set; defaulted to `false` in `:mode :empty` (caller can override). Wire-encoded as `enableSessionTelemetry`. See [Observability](#observability). (upstream PR #1224) |
 | `:create-session-fs-handler` | fn | Factory for session filesystem providers. Required when `:session-fs` is set on the client. Called as `(factory session)`, returns a provider-style map or a low-level handler map. See [Session Filesystem](#session-filesystem) |
 | `:enable-config-discovery` | boolean | Auto-discover `.mcp.json`, `.vscode/mcp.json`, skills, etc. Instruction files always load regardless. (upstream PR #1044) |
+| `:refresh-custom-instructions?` | boolean | Create-only opt-in to invalidate the runtime's process-wide custom-instruction discovery cache before session creation. Other sessions using that runtime may observe updated instructions on later turns or discovery. Explicit `false` preserves the cache; omission sends no wire key; `nil` is invalid. This does not watch files or enable disabled instruction loading. Not accepted on resume or join, and never forwarded in mutable option updates. |
 | `:enable-experimental-mode?` | boolean | Opt into CLI-side experimental features. Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `isExperimentalMode`. Defaulted to `false` in `:empty` mode. ([upstream PR #1600](https://github.com/github/copilot-sdk/pull/1600)) |
 | `:model-capabilities` | map | Deep-partial model capability override forwarded verbatim (upstream `SessionConfig.modelCapabilities`, a stable public SDK field). Canonical shape: `{:supports {:vision boolean :reasoning-effort boolean :adaptive-thinking :unsupported\|:optional\|:required} :limits {:max-prompt-tokens int :max-output-tokens int :max-context-window-tokens int :vision {:supported-media-types [...] :max-prompt-images int :max-prompt-image-size int}}}`. The stable public-SDK fields are `:supports {:vision :reasoning-effort}` and `:limits {:max-prompt-tokens :max-output-tokens :max-context-window-tokens :vision {...}}`; only `:adaptive-thinking` remains an **experimental** CLI-protocol extension. The wire keeps `reasoningEffort` camelCase but uses `adaptive_thinking`, `max_prompt_tokens`, `max_output_tokens`, `max_context_window_tokens`, and the nested vision leaves in snake_case. The published `:model-supports` / `:model-limits` aliases remain accepted for outbound compatibility and normalize to the canonical wire shape; do not combine an alias with its canonical branch. ([upstream PR #1029](https://github.com/github/copilot-sdk/pull/1029), [upstream PR #2569](https://github.com/github/copilot-sdk/pull/2569)) |
 | `:include-sub-agent-streaming-events?` | boolean | Forward streaming events from sub-agents to the parent session's event stream. Defaults to `true` on the wire. (upstream PR #1108) |
@@ -474,7 +475,9 @@ failures.
 (copilot/resume-session client session-id config)
 ```
 
-Resume an existing session by ID. The `config` map accepts the same options as `create-session` (except `:session-id`), including per-session `:github-token`, plus:
+Resume an existing session by ID. The `config` map accepts the same options as
+`create-session` except `:session-id`, `:cloud`, and `:refresh-custom-instructions?`,
+including per-session `:github-token`, plus:
 
 | Option | Type | Description |
 |---|---|---|
@@ -1032,9 +1035,18 @@ An idle event whose wire `:mode` is the string `"autopilot"` is a turn boundary,
 not a terminal event, so the wait continues. Keyword `:autopilot` is not a
 supported event payload value. Ordinary waits are serialized per session;
 structured waits correlate by originating message ID and may run concurrently
-with one another. A structured wait and an ordinary wait on the same session
-run serially so their session-wide idle/error events cannot cross-contaminate
-results.
+with one another. Serialization covers active local waits, not remote work
+surviving cancellation or timeout. Ordinary waits observe the session-wide root
+stream and can see late replies or terminal events from earlier work.
+Structured waits provide originating-message correlation for assistant output;
+they do not make session-wide errors request-specific.
+
+Only root-agent messages supply the result. Messages, errors, and idle events
+with a non-empty envelope `:agent-id` do not complete the wait or replace its
+reply. An absent or empty `:agent-id` identifies the root. Child events remain
+visible to ordinary event subscriptions; blocking wait subscriptions filter them
+before their bounded buffers rather than letting child traffic consume that
+capacity.
 
 #### Structured Output
 
@@ -1099,14 +1111,38 @@ request, so send admission and event collection share one deadline.
 (copilot/send-async session options)
 ```
 
-Send a message and return a core.async channel that receives all events for this
-message, closing on an ordinary idle event. Autopilot idle events are emitted
-without closing the channel.
-Safe for use inside `go` blocks — no blocking operations.
+Send a message and return a core.async channel observing the session's event
+stream, closing on a root-agent terminal idle or error event. Autopilot idle
+and child-agent events are emitted without closing the channel. The same rule
+applies to `send-async-with-id`, `query-seq!`, and `query-chan`; `<send!` and
+`<send-and-wait!` select only root-agent replies.
+Protocol waits use parking operations. Input validation, schema conversion, and
+trace-context capture happen on the calling thread before the channel is returned.
+Prepare the call outside `go` when those callbacks can block.
 Supports `:timeout-ms` in options (default: `60000`, set to `nil` to disable).
 On timeout, the channel emits a final `:copilot/session.error` event whose data
-includes `:timeout-ms`, releases the event subscription and send lock, then
+includes `:timeout-ms`, releases the local event receiver and send lock, then
 closes.
+
+Intermediate frames use a bounded 1024-event best-effort buffer; overflow is
+logged. The latest root reply and first terminal outcome reaching session intake
+are retained separately, before the shared observer fan-out. A full output buffer
+therefore cannot silently remove the final result. Once completion is selected,
+the SDK releases its send lock before waiting to deliver final events; an expired
+deadline cannot replace that outcome. Earlier protocol-level notification overflow
+still follows the client's notification-queue policy.
+An early session terminal does not substitute for RPC acknowledgement. The async
+deadline still covers admission and an unclaimed pending send RPC; immunity from
+an expired deadline applies only to final publication after successful ACK and
+completion selection.
+
+Close the returned channel to abandon local waiting and pending delivery. This
+does not abort remote work. Session teardown also cancels delivery, including
+when `:timeout-ms` is `nil`. These cancellation and completion guarantees apply
+to `send-async-with-id`, `<send!`, and `<send-and-wait!` as well.
+Local cancellation does not drain outstanding remote work. A following ordinary
+wait can observe that work's late events. `send-async-with-id` returns the request
+ID but does not automatically filter the stream by it.
 
 #### `send-async-with-id`
 
@@ -1812,6 +1848,14 @@ The handler may return the result directly or a `core.async` channel yielding it
 | `:resource-metadata` | string | (optional) Raw OAuth protected-resource metadata document. |
 | `:static-client-config` | map | (optional) Pre-registered OAuth client config. |
 
+`:static-client-config` requires string `:client-id` and permits string
+`:client-secret`, boolean `:public-client`, `:grant-type "client_credentials"`,
+and string `:scope`. The configured scope is used when the server challenge
+omits scope or supplies an empty scope. It is forwarded to the handler unchanged;
+absence and `""` remain distinct, and explicit `nil` is invalid. The same shape
+appears in live `:copilot/mcp.oauth_required` events and `get-messages` history.
+This does not add CLI-only `oauthScopes` to SDK MCP server configuration.
+
 **Result mapping:** Return a map with `:access-token` (plus optional
 `:token-type` and `:expires-in`) to answer with a token. Return `nil`,
 `{:kind :cancelled}`, or throw to cancel the request — a thrown handler never
@@ -1855,7 +1899,7 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
-For schema 1.0.89-0, `:copilot/assistant.server_tool_progress` also belongs to
+For schema 1.0.89-3, `:copilot/assistant.server_tool_progress` also belongs to
 `copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
 `:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
 `:copilot/session.permission_recovery`, and `:copilot/session.model_deselected`
@@ -1871,7 +1915,7 @@ remain generated wire evidence and are not curated as public idiom events.
 The experimental `reasoningBlocks` field on `assistant.message` and
 `:shell-execution` field on `tool.execution_complete` also remain generated
 wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.89-0` additionally carries experimental factory pause/checkpoint,
+`1.0.89-3` additionally carries experimental factory pause/checkpoint,
 permission, workspace, and managed-catalog protocol declarations that are not
 part of the stable Clojure API. The new experimental permission declarations
 include `permission.assentDetected`, `permission.contextualAuthorization`, and
@@ -1881,6 +1925,12 @@ payloads also remain generated wire evidence only.
 Experimental Dynamic Workflows, Connector management, and command-enqueue APIs
 are not exposed by the Clojure SDK. Existing experimental Agent Factories
 remain a separate surface; workflow handles cannot be registered or run.
+Diagnostics configuration and diagnostic read/configure RPCs also remain
+experimental, even though the Node session config references the experimental
+`DiagnosticsConfiguration` type. Connector type re-exports do not make that
+subsystem stable. Fusion hints and steering attribution remain experimental;
+the runtime-only `session.fusion_change_checkpoint` event is internal and
+absent from the curated public event sets.
 
 ### `evt` — Event Keyword Helper
 
@@ -1916,7 +1966,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.warning` | Session warning; data requires `:warning-type` and `:message`, with optional `:url` and the same `:remediation` values as `session.error`. |
 | `:copilot/session.shutdown` | Session is shutting down. Optional `:agent-metrics` maps agent keywords to `{:model-metrics {...} :total-api-duration-ms N :total-nano-aiu N}` plus optional `:agent-name` and `:agent-display-name`, enabling per-agent accounting alongside the session totals. |
 | `:copilot/session.truncation` | Context window truncated |
-| `:copilot/session.snapshot_rewind` | Session state rolled back |
+| `:copilot/session.snapshot_rewind` | Session state rolled back. Data requires string `:up-to-event-id` and non-negative integer `:events-removed`. Optional `:event-ids` is an ordered vector of the removed event IDs; later events not listed remain, including interleaved background-agent events. Without `:event-ids`, `:up-to-event-id` and every later event were removed. Empty vectors are preserved; explicit `nil` is invalid. |
 | `:copilot/session.context_cleared` | Conversation context cleared and restarted with a new prompt (via `history-clear-context!`); data: `{:messages-cleared N}` (required) with optional `:initial-message` (the prompt used to start the new context) (upstream PR #2129) |
 | `:copilot/session.compaction_start` | Context compaction started (infinite sessions); data: `{:model "..." :current-tokens N :token-limit N :trigger "..."}` (all optional). `:trigger` is one of `"threshold"`, `"context_limit_retry"`, `"manual"`, `"memory_pressure"`, `"model_switch"` (upstream schema 1.0.79-5/6) |
 | `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions); data: `{:success bool}` (required) with optional `:error "..."`, `:status-code N`, `:token-limit N`, `:trigger "..."` (same `:trigger` enum as `compaction_start`), `:behavior-model-id`, and `:responses-reasoning {:model "..." :initial-effort "..." :effort "..."}`. |

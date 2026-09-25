@@ -72,6 +72,18 @@
         "stability": "experimental"
       }
     },
+    "sandbox": {
+      "getHostSupport": {
+        "rpcMethod": "sandbox.getHostSupport",
+        "description": "Reports whether the host running this runtime can run the command sandbox, without starting a session or spawning a sandboxed command.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/SandboxHostSupport",
+          "description": "Whether the host running this runtime can run the command sandbox. The runtime checks `supported` once per process. A capability answer can change while the process runs, for example after the user installs a missing package."
+        },
+        "stability": "experimental"
+      }
+    },
     "tools": {
       "list": {
         "rpcMethod": "tools.list",
@@ -4682,6 +4694,53 @@
           "description": "Instruction sources loaded for the session, in merge order."
         },
         "stability": "experimental"
+      },
+      "reload": {
+        "rpcMethod": "session.instructions.reload",
+        "description": "Invalidates cached custom-instruction discovery so subsequent turns and source reads observe instruction files currently on disk.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental"
+      }
+    },
+    "customizations": {
+      "reload": {
+        "rpcMethod": "session.customizations.reload",
+        "description": "Reloads all repository and user customizations for the active session: instructions, plugins and their MCP servers and hooks, custom agents, extensions, and skills. Returns diagnostics from the final skill reload.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/SkillsLoadDiagnostics",
+          "description": "Diagnostics from reloading skill definitions, with warnings and errors as separate lists."
+        },
+        "stability": "experimental"
       }
     },
     "fleet": {
@@ -6598,6 +6657,88 @@
           },
           "stability": "experimental"
         }
+      }
+    },
+    "diagnostics": {
+      "configure": {
+        "rpcMethod": "session.diagnostics.configure",
+        "description": "Patches configured session diagnostic sources without restarting their producers. Setting a source level to off clears its retained diagnostics and invalidates cursors selecting that source.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "sources": {
+              "$ref": "#/definitions/DiagnosticSourcesConfiguration",
+              "description": "Sources to configure. At least one supported source must be supplied."
+            }
+          },
+          "required": [
+            "sessionId",
+            "sources"
+          ],
+          "additionalProperties": false,
+          "description": "Patch session diagnostic thresholds for explicitly supplied sources.",
+          "title": "DiagnosticsConfigureRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/DiagnosticsConfiguration",
+          "description": "Per-source session diagnostics configuration."
+        },
+        "stability": "experimental"
+      },
+      "read": {
+        "rpcMethod": "session.diagnostics.read",
+        "description": "Reads a bounded batch of retained session diagnostics for the selected sources. Records are never consumed and each reader advances independently through its opaque cursor.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "sources": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/DiagnosticSource",
+                "description": "A supported diagnostic source."
+              },
+              "description": "Nonempty selection of sources to read. Each source may be listed once."
+            },
+            "cursor": {
+              "type": "string",
+              "description": "Opaque cursor returned by an earlier read. Omit to start at the oldest retained record."
+            },
+            "max": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "maximum": 500,
+              "description": "Maximum number of records to return, from 1 through 500. Omit for 100."
+            },
+            "waitMs": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 30000,
+              "description": "Maximum time in milliseconds to wait for a new record, from 0 through 30000."
+            }
+          },
+          "required": [
+            "sessionId",
+            "sources"
+          ],
+          "additionalProperties": false,
+          "description": "Cursor-based request for session diagnostics. The default limit is 100 (maximum 500); the default waitMs is zero (maximum 30000).",
+          "title": "DiagnosticsReadRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/DiagnosticsReadResult",
+          "description": "One cursor-addressed page of retained session diagnostics."
+        },
+        "stability": "experimental"
       }
     },
     "connectors": {
@@ -10720,7 +10861,7 @@
       },
       "withdrawMessage": {
         "rpcMethod": "session.queue.withdrawMessage",
-        "description": "Atomically withdraws an unchanged, unconsumed user message from the local queued or steering lane. A client retaining the original draft may restore it only when removed is true. Does not interrupt the running turn.",
+        "description": "Atomically withdraws an unchanged user message of a local session: from the queued or steering lane while unconsumed, or from the running turn it started while the model has not answered it and nothing the user sent after it is pending. Withdrawing from the running turn interrupts that turn and removes its events from history. A client retaining the original draft may restore it only when removed is true.",
         "params": {
           "type": "object",
           "properties": {
@@ -10743,13 +10884,13 @@
             "expectedPrompt"
           ],
           "additionalProperties": false,
-          "description": "Conditional withdrawal of a single user message, before the runtime claims it for delivery.",
+          "description": "Conditional withdrawal of a single user message, from its queue or from the running turn it started.",
           "title": "QueueWithdrawMessageRequest",
           "stability": "experimental"
         },
         "result": {
-          "$ref": "#/definitions/QueueRemoveAtResult",
-          "description": "Result of removing a queued item."
+          "$ref": "#/definitions/QueueWithdrawMessageResult",
+          "description": "Result of withdrawing a user message."
         },
         "stability": "experimental"
       },
@@ -19994,6 +20135,239 @@
         "additional": "Caller-provided diagnostic entry."
       }
     },
+    "DiagnosticCursorStatus": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "expired"
+      ],
+      "description": "Whether the supplied diagnostic cursor remained within the retained buffer window.",
+      "title": "DiagnosticCursorStatus",
+      "x-enumDescriptions": {
+        "ok": "The cursor is valid for the current retained window.",
+        "expired": "The cursor no longer addresses retained records; reading resumes at the oldest retained record."
+      }
+    },
+    "DiagnosticEntry": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "timestamp": {
+              "type": "string",
+              "description": "UTC RFC 3339 timestamp captured at the diagnostic source."
+            },
+            "level": {
+              "$ref": "#/definitions/DiagnosticSeverity",
+              "description": "Severity of this emitted diagnostic record."
+            },
+            "agentId": {
+              "type": "string",
+              "description": "Agent identifier for a subagent host. Omitted for the root agent."
+            },
+            "message": {
+              "type": "string",
+              "description": "Human-readable diagnostic summary."
+            },
+            "truncated": {
+              "type": "boolean",
+              "description": "Whether message or data was truncated to the record-size bound."
+            },
+            "originalBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Original byte count when a known-size message or data value was truncated."
+            },
+            "details": {
+              "$ref": "#/definitions/McpDiagnosticDetails",
+              "description": "Typed MCP diagnostic detail."
+            },
+            "source": {
+              "type": "string",
+              "const": "mcp",
+              "description": "Diagnostic source identifying the typed details payload."
+            }
+          },
+          "required": [
+            "source",
+            "timestamp",
+            "level",
+            "message",
+            "details"
+          ],
+          "additionalProperties": false
+        }
+      ],
+      "description": "One retained session-scoped diagnostic record. Potentially content-bearing diagnostic data is opt-in and must not be exported automatically as telemetry.",
+      "title": "DiagnosticEntry"
+    },
+    "DiagnosticLogLevel": {
+      "type": "string",
+      "enum": [
+        "off",
+        "error",
+        "warning",
+        "info",
+        "debug",
+        "trace"
+      ],
+      "description": "Session-scoped diagnostic threshold. Capture is disabled by default and is never persisted with the session.",
+      "title": "DiagnosticLogLevel",
+      "x-enumDescriptions": {
+        "off": "Disable capture and clear retained diagnostics.",
+        "error": "Capture failures only.",
+        "warning": "Capture failures, warnings, and stderr.",
+        "info": "Capture lifecycle diagnostics.",
+        "debug": "Capture protocol frames and launch diagnostics.",
+        "trace": "Capture HTTP metadata in addition to debug diagnostics."
+      }
+    },
+    "DiagnosticsConfiguration": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "$ref": "#/definitions/DiagnosticSourcesConfiguration",
+          "description": "Diagnostic thresholds keyed by supported source."
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "additionalProperties": false,
+      "description": "Per-source session diagnostics configuration.",
+      "title": "DiagnosticsConfiguration",
+      "stability": "experimental"
+    },
+    "DiagnosticsConfigureRequest": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "$ref": "#/definitions/DiagnosticSourcesConfiguration",
+          "description": "Sources to configure. At least one supported source must be supplied."
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "additionalProperties": false,
+      "description": "Patch session diagnostic thresholds for explicitly supplied sources.",
+      "title": "DiagnosticsConfigureRequest",
+      "stability": "experimental"
+    },
+    "DiagnosticSeverity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning",
+        "info",
+        "debug",
+        "trace"
+      ],
+      "description": "Severity of an emitted diagnostic record.",
+      "title": "DiagnosticSeverity",
+      "x-enumDescriptions": {
+        "error": "Failure that prevented or interrupted communication.",
+        "warning": "A recoverable warning or server standard-error output.",
+        "info": "Lifecycle transition.",
+        "debug": "Protocol-frame or launch diagnostic.",
+        "trace": "HTTP metadata diagnostic."
+      }
+    },
+    "DiagnosticSource": {
+      "type": "string",
+      "enum": [
+        "mcp"
+      ],
+      "description": "A supported diagnostic source.",
+      "title": "DiagnosticSource"
+    },
+    "DiagnosticSourcesConfiguration": {
+      "type": "object",
+      "properties": {
+        "mcp": {
+          "$ref": "#/definitions/McpDiagnosticSourceConfiguration",
+          "description": "MCP diagnostic capture threshold. Omit to leave the current threshold unchanged."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Typed diagnostic source configuration. At least one source is required by diagnostics configuration methods.",
+      "title": "DiagnosticSourcesConfiguration"
+    },
+    "DiagnosticsReadRequest": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DiagnosticSource",
+            "description": "A supported diagnostic source."
+          },
+          "description": "Nonempty selection of sources to read. Each source may be listed once."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor returned by an earlier read. Omit to start at the oldest retained record."
+        },
+        "max": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 500,
+          "description": "Maximum number of records to return, from 1 through 500. Omit for 100."
+        },
+        "waitMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000,
+          "description": "Maximum time in milliseconds to wait for a new record, from 0 through 30000."
+        }
+      },
+      "required": [
+        "sources"
+      ],
+      "additionalProperties": false,
+      "description": "Cursor-based request for session diagnostics. The default limit is 100 (maximum 500); the default waitMs is zero (maximum 30000).",
+      "title": "DiagnosticsReadRequest",
+      "stability": "experimental"
+    },
+    "DiagnosticsReadResult": {
+      "type": "object",
+      "properties": {
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DiagnosticEntry",
+            "description": "One retained session-scoped diagnostic record. Potentially content-bearing diagnostic data is opt-in and must not be exported automatically as telemetry."
+          },
+          "description": "Retained records beginning at the requested cursor."
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor for the next independent read."
+        },
+        "cursorStatus": {
+          "$ref": "#/definitions/DiagnosticCursorStatus",
+          "description": "Whether the requested cursor remained within the retained buffer window."
+        },
+        "droppedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of records lost before this page when known. Omitted when a buffer generation change makes the count unknowable."
+        },
+        "hasMore": {
+          "type": "boolean",
+          "description": "Whether additional retained records follow this page."
+        }
+      },
+      "required": [
+        "entries",
+        "cursor",
+        "cursorStatus",
+        "hasMore"
+      ],
+      "additionalProperties": false,
+      "description": "One cursor-addressed page of retained session diagnostics.",
+      "title": "DiagnosticsReadResult"
+    },
     "DiscoveredCanvas": {
       "type": "object",
       "properties": {
@@ -26089,6 +26463,84 @@
       "description": "Result of configuring GitHub MCP.",
       "title": "McpConfigureGitHubResult"
     },
+    "McpDiagnosticDetails": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/McpDiagnosticKind",
+          "description": "Diagnostic record category."
+        },
+        "serverName": {
+          "type": "string",
+          "description": "Configured MCP server name."
+        },
+        "connectionId": {
+          "type": "string",
+          "description": "Fresh identifier for the MCP connection attempt, including failed starts."
+        },
+        "direction": {
+          "$ref": "#/definitions/McpDiagnosticDirection",
+          "description": "Protocol-frame direction when kind is protocol."
+        },
+        "data": {
+          "type": "string",
+          "description": "Serialized diagnostic detail. Protocol and HTTP records use JSON when detail is present."
+        }
+      },
+      "required": [
+        "kind",
+        "serverName",
+        "connectionId"
+      ],
+      "additionalProperties": false,
+      "description": "MCP-specific detail for a source-discriminated diagnostic entry.",
+      "title": "McpDiagnosticDetails"
+    },
+    "McpDiagnosticDirection": {
+      "type": "string",
+      "enum": [
+        "client-to-server",
+        "server-to-client"
+      ],
+      "description": "Direction of an observed MCP protocol frame.",
+      "title": "McpDiagnosticDirection",
+      "x-enumDescriptions": {
+        "client-to-server": "Frame emitted by the Copilot MCP client.",
+        "server-to-client": "Frame received from the MCP server."
+      }
+    },
+    "McpDiagnosticKind": {
+      "type": "string",
+      "enum": [
+        "lifecycle",
+        "protocol",
+        "http",
+        "stderr"
+      ],
+      "description": "Category for an MCP diagnostic record.",
+      "title": "McpDiagnosticKind",
+      "x-enumDescriptions": {
+        "lifecycle": "Connection lifecycle transition or failure.",
+        "protocol": "JSON-RPC protocol frame.",
+        "http": "HTTP request or response metadata.",
+        "stderr": "Local MCP server standard-error output."
+      }
+    },
+    "McpDiagnosticSourceConfiguration": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "$ref": "#/definitions/DiagnosticLogLevel",
+          "description": "Threshold to apply to MCP diagnostic producers in this session."
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false,
+      "description": "MCP diagnostic source configuration.",
+      "title": "McpDiagnosticSourceConfiguration"
+    },
     "McpDisableRequest": {
       "type": "object",
       "properties": {
@@ -28653,6 +29105,13 @@
         "oauthClientId": {
           "type": "string",
           "description": "OAuth client ID for a pre-registered remote MCP OAuth client."
+        },
+        "oauthScopes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Non-empty array of valid RFC 6749 scope-token strings to request for the statically configured OAuth client when the server challenge omits scope or provides an empty scope. Requires a non-empty oauthClientId. These scopes take precedence over protected-resource metadata."
         },
         "oauthPublicClient": {
           "type": "boolean",
@@ -36253,6 +36712,10 @@
         "agentMode": {
           "$ref": "#/definitions/SendAgentMode",
           "description": "Agent mode stored on this queued entry, as stamped when it was enqueued. Items without an explicit mode report interactive. This is not necessarily the mode that will constrain the turn: a plan or autopilot session applies its own write gate, continuation loop and permission posture to every drained item regardless of the mode stored here."
+        },
+        "source": {
+          "type": "string",
+          "description": "Optional source tag associated with this pending queue entry. This is an open string, not authenticated authorship. In particular, `user` does not prove that a person typed the message. If the source is absent or unrecognized, consumers must not infer human or agent authorship and should handle the entry neutrally. Consumers should tolerate future source values."
         }
       },
       "required": [
@@ -36300,6 +36763,10 @@
           "type": "integer",
           "minimum": 0,
           "description": "How many leading entries of `steeringMessages` have already been folded into the running turn (and so have an emitted `user.message`), as opposed to still waiting for one. Absent for hosts that do not distinguish the two."
+        },
+        "withdrawableTurnMessageId": {
+          "type": "string",
+          "description": "ID of the running turn's user message while the model has not answered it, so `withdrawMessage` can still take it back once nothing sent after it is pending. A message leaves `items` when its turn starts, before its `user.message` is recorded; this tells that message apart from one that was removed. Absent when no turn prompt can be taken back."
         }
       },
       "required": [
@@ -36505,8 +36972,29 @@
         "expectedPrompt"
       ],
       "additionalProperties": false,
-      "description": "Conditional withdrawal of a single user message, before the runtime claims it for delivery.",
+      "description": "Conditional withdrawal of a single user message, from its queue or from the running turn it started.",
       "title": "QueueWithdrawMessageRequest",
+      "stability": "experimental"
+    },
+    "QueueWithdrawMessageResult": {
+      "type": "object",
+      "properties": {
+        "removed": {
+          "type": "boolean",
+          "description": "True when the message left the queue or, for a running turn, history."
+        },
+        "interrupted": {
+          "type": "boolean",
+          "description": "True when the running turn was interrupted to withdraw the message. With removed false, the turn was interrupted but its events could not be removed, for example because the model answered first, so the message stays in the interrupted turn."
+        }
+      },
+      "required": [
+        "removed",
+        "interrupted"
+      ],
+      "additionalProperties": false,
+      "description": "Result of withdrawing a user message.",
+      "title": "QueueWithdrawMessageResult",
       "stability": "experimental"
     },
     "ReasoningSummary": {
@@ -37439,6 +37927,66 @@
       "additionalProperties": false,
       "description": "Managed sandbox enforcement state for a session.",
       "title": "SandboxEnforcementStatus"
+    },
+    "SandboxHostCapability": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "$ref": "#/definitions/SandboxHostCapabilityName",
+          "description": "The policy feature, as an extensible string: ignore names you do not recognize. Known values: `network` (sandboxed commands can reach the network; on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns), `network_filtering` (host rules and the sandbox proxy; on Linux this needs the same tooling as `network`; on Windows it needs Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`), `denied_paths` (native enforcement of `filesystem.deniedPaths`), and `shell` (shell commands inside the sandbox; on Windows this needs Process Security Environment 1.1 filesystem enumeration support)."
+        },
+        "supported": {
+          "type": "boolean",
+          "description": "Whether this host can run the feature."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable reason and remedy when the feature is unsupported, such as a package to install or an OS update. Present only when `supported` is false."
+        }
+      },
+      "required": [
+        "name",
+        "supported"
+      ],
+      "additionalProperties": false,
+      "description": "Whether this host can run one sandbox policy feature. A session whose effective policy uses an unsupported feature fails each sandboxed command with `reason`.",
+      "title": "SandboxHostCapability"
+    },
+    "SandboxHostCapabilityName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
+      "description": "Extensible identifier of a sandbox policy feature whose availability varies between hosts. A plain string, so an older client decodes a name added by a newer runtime; ignore names you do not recognize. Known values: `network` — sandboxed commands can reach the network (`network.allowOutbound`, on by default); on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns. `network_filtering` — host rules and the sandbox proxy (`network.allowedHosts`, `network.blockedHosts`, `network.proxy`); on Linux this needs the same tooling as `network`; on Windows it needs a version with Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`, because Windows reaches the local proxy only together with private-network access. `denied_paths` — native enforcement of `filesystem.deniedPaths`; on Windows this needs a version whose sandbox contract reports denied-path support. `shell` — shell commands inside the sandbox: bash on macOS and Linux, PowerShell on Windows; on Windows this needs a version with Process Security Environment 1.1 filesystem enumeration support.",
+      "title": "SandboxHostCapabilityName"
+    },
+    "SandboxHostSupport": {
+      "type": "object",
+      "properties": {
+        "supported": {
+          "type": "boolean",
+          "description": "Whether a process-containment backend is usable on this host: Seatbelt on macOS, Bubblewrap on Linux, or ProcessContainer on Windows."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Human-readable reason the sandbox cannot run on this host. Present only when `supported` is false."
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SandboxHostCapability",
+            "description": "Whether this host can run one sandbox policy feature. A session whose effective policy uses an unsupported feature fails each sandboxed command with `reason`."
+          },
+          "description": "Sandbox policy features whose availability varies between hosts that can run the backend. Empty when `supported` is false, because no feature can run without a backend. Later runtimes can add entries; ignore an entry whose `name` you do not recognize."
+        }
+      },
+      "required": [
+        "supported",
+        "capabilities"
+      ],
+      "additionalProperties": false,
+      "description": "Whether the host running this runtime can run the command sandbox. The runtime checks `supported` once per process. A capability answer can change while the process runs, for example after the user installs a missing package.",
+      "title": "SandboxHostSupport"
     },
     "SandboxSessionChange": {
       "type": "string",

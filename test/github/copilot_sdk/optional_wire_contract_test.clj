@@ -42,6 +42,12 @@
       slurp
       edn/read-string))
 
+(def stable-delta-4001c1d-report
+  (-> "resources/stable_upstream_delta_4001c1d.edn"
+      io/resource
+      slurp
+      edn/read-string))
+
 (def post-2980-session-config
   {:auth/github-token-provider
    {:key :github-token-provider :scopes #{:create :resume}}
@@ -65,7 +71,12 @@
         (keep (fn [{:keys [id clojure]}]
                 (when (= :auth/client-id-metadata-url id)
                   {:key (:public-key clojure)
-                   :scopes (:scopes clojure)}))))))
+                   :scopes (:scopes clojure)}))))
+   (->> (:stable-deltas stable-delta-4001c1d-report)
+        (keep (fn [{:keys [id idiom]}]
+                (when (= :session/instruction-cache-refresh id)
+                  {:key (:key idiom)
+                   :scopes #{:create}}))))))
 
 (def fixtures
   {:fixture/handler (fn [& _])

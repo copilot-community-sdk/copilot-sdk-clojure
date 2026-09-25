@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.14 sync)
+- Added create-only `:refresh-custom-instructions?` to invalidate the runtime's
+  process-wide instruction-discovery cache. Omission and explicit false remain
+  distinct; resume, join, and mutable option updates do not accept the option.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/4001c1da7d832c51bad1d38619c1a082af390efb))
+- Added optional OAuth `[:static-client-config :scope]` metadata and ordered
+  `:event-ids` for selective snapshot rewinds, with curated specs and live/history
+  preservation.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/4001c1da7d832c51bad1d38619c1a082af390efb))
 - Added stable `:copilot/session.model_deselected` events, optional
   `:tool-title` on tool-execution start events, and ordered `:content-blocks`
   on system-message events. Structured blocks preserve explicit false versus
@@ -26,6 +34,12 @@ All notable changes to this project will be documented in this file. This change
   ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731))
 
 ### Changed (post-v1.0.14 sync)
+- Advanced the CLI compatibility and schema-provenance pin to `1.0.89-3`
+  and recertified the stable Node SDK public surface through
+  [`4001c1da7d832c51bad1d38619c1a082af390efb`](https://github.com/github/copilot-sdk/commit/4001c1da7d832c51bad1d38619c1a082af390efb).
+  Experimental diagnostics, Connector exports, Fusion additions, and
+  generated-only sandbox, queue, and customization RPCs remain excluded.
+  The library version remains `1.0.14.0`; this sync does not cut a release.
 - Advanced the CLI compatibility and schema-provenance pin to `1.0.89-0`
   and recertified the stable Node SDK public surface through
   [`cb6fc666cc45175adb11fa9e5021b96d7d37d298`](https://github.com/github/copilot-sdk/commit/cb6fc666cc45175adb11fa9e5021b96d7d37d298).
@@ -51,7 +65,24 @@ All notable changes to this project will be documented in this file. This change
   [upstream PR #2734](https://github.com/github/copilot-sdk/pull/2734),
   [upstream PR #2735](https://github.com/github/copilot-sdk/pull/2735))
 
+### Fixed (async delivery)
+- Blocking ordinary and structured waits filter child events before their
+  bounded subscription buffers, preventing child noise from exhausting those
+  buffers while the send acknowledgement is pending.
+- Async sends reserve the final root reply and terminal outcome at session
+  intake, so bounded output or observer buffers cannot silently remove the
+  result. Intermediate frames remain best-effort with overflow diagnostics.
+  Closing result channels cancels local admission, pending RPC waits, and
+  delivery without aborting remote work; teardown also releases blocked final
+  publication when timeouts are disabled. Ordinary waits remain session-wide;
+  local cancellation does not drain remote work or provide per-message
+  isolation.
+
 ### Fixed (post-v1.0.14 sync)
+- Completion waits now ignore child-agent replies, errors, and idle events when
+  selecting the root result. Child events remain visible to subscriptions and
+  streaming helpers without prematurely closing their channels.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/4001c1da7d832c51bad1d38619c1a082af390efb))
 - Structured waits now surface session errors even before message correlation,
   serialize safely with ordinary waits while retaining structured-to-structured
   concurrency, and attach the source event to malformed-JSON errors.

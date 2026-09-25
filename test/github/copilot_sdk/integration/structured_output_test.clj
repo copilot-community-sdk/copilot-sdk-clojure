@@ -172,32 +172,34 @@
     (is (= schema (:response-schema @sent-opts)))))
 
 (deftest raw-response-schema-returns-correlated-assistant-event-without-user-event
-  (let [copilot-session
-        (sdk/create-session
-         *test-client*
-         {:on-permission-request sdk/approve-all})
-        session-id (sdk/session-id copilot-session)
-        client (:client copilot-session)
-        result
-        (with-redefs
-         [session/send-with-timeout!
-          (fn [_ _ _]
-            (session/dispatch-event!
-             client session-id
-             {:type :copilot/assistant.message
-              :data {:originating-message-id "request-1"
-                     :content "{\"answer-value\":4}"}})
-            (session/dispatch-event!
-             client session-id
-             {:type :copilot/session.idle :data {}})
-            "request-1")]
-          (sdk/send-and-wait!
-           copilot-session
-           {:prompt "What is 2+2?"
-            :response-schema response-json-schema}
-           5000))]
-    (is (= :copilot/assistant.message (:type result)))
-    (is (= "{\"answer-value\":4}" (get-in result [:data :content])))))
+  (doseq [agent-id [nil ""]]
+    (let [copilot-session
+          (sdk/create-session
+           *test-client*
+           {:on-permission-request sdk/approve-all})
+          session-id (sdk/session-id copilot-session)
+          client (:client copilot-session)
+          result
+          (with-redefs
+           [session/send-with-timeout!
+            (fn [_ _ _]
+              (session/dispatch-event!
+               client session-id
+               (cond-> {:type :copilot/assistant.message
+                        :data {:originating-message-id "request-1"
+                               :content "{\"answer-value\":4}"}}
+                 (some? agent-id) (assoc :agent-id agent-id)))
+              (session/dispatch-event!
+               client session-id
+               {:type :copilot/session.idle :data {}})
+              "request-1")]
+            (sdk/send-and-wait!
+             copilot-session
+             {:prompt "What is 2+2?"
+              :response-schema response-json-schema}
+             5000))]
+      (is (= :copilot/assistant.message (:type result)))
+      (is (= "{\"answer-value\":4}" (get-in result [:data :content]))))))
 
 (deftest typed-send-and-wait-rejects-invalid-combinations
   (let [copilot-session

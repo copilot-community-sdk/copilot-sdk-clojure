@@ -215,12 +215,13 @@
          (is (nil? (async/<!! query-ch)))
          (is (= 1 @disconnects)))))))
 
-(deftest query-stream-helpers-remain-open-across-autopilot-idle
-  (let [autopilot-idle {:type :copilot/session.idle
-                        :data {:mode "autopilot"}}
-        terminal-idle {:type :copilot/session.idle
-                       :data {}}]
-    (testing "query-chan forwards autopilot idle and closes after terminal idle"
+(deftest query-stream-helpers-remain-open-across-nonterminal-events
+  (doseq [nonterminal [{:type :copilot/session.idle :data {:mode "autopilot"}}
+                       {:type :copilot/session.idle :agent-id "child" :data {}}
+                       {:type :copilot/session.error :agent-id "child"
+                        :data {:message "child failed"}}]
+          :let [terminal-idle {:type :copilot/session.idle :data {}}]]
+    (testing (str "query-chan retains " nonterminal " until root completion")
       (let [events-ch (async/chan 2)
             disconnects (atom 0)]
         (call-with-controlled-query
@@ -228,17 +229,17 @@
           :disconnect-fn (fn [_session] (swap! disconnects inc))}
          (fn []
            (let [query-ch (h/query-chan "autopilot channel" :buffer 2)]
-             (is (true? (async/>!! events-ch autopilot-idle)))
+             (is (true? (async/>!! events-ch nonterminal)))
              (is (true? (async/>!! events-ch terminal-idle)))
-             (is (= autopilot-idle (read-within query-ch)))
+             (is (= nonterminal (read-within query-ch)))
              (is (= terminal-idle (read-within query-ch)))
              (is (nil? (read-within query-ch)))
              (is (= 1 @disconnects)))))))
 
-    (testing "query-seq! includes autopilot idle and realizes through terminal idle"
+    (testing (str "query-seq! retains " nonterminal " until root completion")
       (let [events-ch (async/chan 2)
             disconnects (atom 0)]
-        (is (true? (async/>!! events-ch autopilot-idle)))
+        (is (true? (async/>!! events-ch nonterminal)))
         (is (true? (async/>!! events-ch terminal-idle)))
         (call-with-controlled-query
          {:events-ch events-ch
@@ -247,7 +248,7 @@
            (let [realized (deref (future (doall (h/query-seq! "autopilot sequence")))
                                  read-timeout-ms
                                  ::timeout)]
-             (is (= [autopilot-idle terminal-idle] realized))
+             (is (= [nonterminal terminal-idle] realized))
              (is (= 1 @disconnects)))))))))
 
 (deftest query-seq-retains-one-deadline-across-autopilot-idle

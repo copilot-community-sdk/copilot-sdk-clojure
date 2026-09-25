@@ -1086,6 +1086,17 @@
          (close! result-ch)))
      result-ch)))
 
+(defn ^:no-doc response-result!
+  "Return a completed RPC result or throw its original structured error."
+  [method response]
+  (cond
+    (nil? response)
+    (throw (ex-info "Response channel closed" {:method method}))
+    (:error response)
+    (throw (ex-info (get-in response [:error :message] "RPC error")
+                    {:error (:error response) :method method}))
+    :else (:result response)))
+
 (defn send-request!
   "Send a JSON-RPC request and block for the response.
    Returns result or throws on error.
@@ -1112,16 +1123,7 @@
                        {:method method :timeout-ms timeout-ms}))
              (<!! response-ch))
            initial-result)]
-     (cond
-       (nil? result)
-       (throw (ex-info "Response channel closed" {:method method}))
-
-       (:error result)
-       (throw (ex-info (get-in result [:error :message] "RPC error")
-                       {:error (:error result) :method method}))
-
-       :else
-       (:result result)))))
+     (response-result! method result))))
 
 (defn send-notification
   "Send a JSON-RPC notification (no response expected)."
