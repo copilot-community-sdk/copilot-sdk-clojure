@@ -283,6 +283,13 @@ through an OAuth Client ID Metadata Document. The SDK forwards the string on
 create, resume, and join. Omission sends no host identity; explicit `nil` is
 invalid. ([upstream PR #2258](https://github.com/github/copilot-sdk/pull/2258))
 
+When the runtime supplies a static OAuth client, inspect
+`[:static-client-config :scope]` on the request for the configured scope string.
+It applies when the server challenge omits scope or provides an empty scope.
+The SDK preserves this string, including `""`, without splitting or rewriting
+it. This callback metadata does not expose the CLI-only `oauthScopes` server
+configuration option.
+
 ## Troubleshooting
 
 See the [MCP Debugging Guide](./debugging.md) for detailed troubleshooting.

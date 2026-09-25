@@ -3808,6 +3808,8 @@
       true (assoc :hooks (boolean (some identity (vals (:hooks config)))))
       (some? (:enable-config-discovery config))
       (assoc :enable-config-discovery (:enable-config-discovery config))
+      (contains? config :refresh-custom-instructions?)
+      (assoc :refresh-custom-instructions (:refresh-custom-instructions? config))
       (some? (:enable-session-telemetry? config))
       (assoc :enable-session-telemetry (:enable-session-telemetry? config))
       (:remote-session config)
@@ -4480,6 +4482,7 @@
                             of silently using a cached token. The 2-arg handler receives an
                             McpAuthRequest map ({:request-id :server-name :server-url :reason
                             :www-authenticate-params :resource-metadata :static-client-config})
+                            with optional configured `:scope` in `:static-client-config`
                             and a context map {:session-id}; it may return a channel. Return a
                             map with :access-token (plus optional :token-type, :expires-in) to
                             answer with a token; return nil, {:kind :cancelled}, or throw to cancel.
@@ -4507,6 +4510,11 @@
                            Guarantees early events like session.start are not missed.
    - :enable-config-discovery - Boolean. Auto-discover .mcp.json, .vscode/mcp.json, skills, etc.
                                 Instruction files are always loaded regardless. (upstream PR #1044)
+   - :refresh-custom-instructions? - Boolean, create-only. True invalidates the runtime's
+                                    process-wide instruction-discovery cache before creation.
+                                    Other sessions may observe updated instructions later.
+                                    False preserves the cache; omission sends no wire key.
+                                    Does not watch files or enable disabled instruction loading.
    - :enable-mcp-apps    - Boolean (@experimental). Set true only when the host can render
                            `ui://` MCP App bundles. Explicit true sends `requestMcpApps: true`
                            on create; false and omission do not send the wire key.

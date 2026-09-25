@@ -52,6 +52,10 @@ Classify by the affected surface, not the changed file type. Documentation and
 tests for an experimental API are experimental; use internal only for non-public
 implementation surfaces.
 
+Follow referenced types through aliases and re-exports. A field on an otherwise
+stable configuration can still reference an explicitly experimental type;
+package-root re-export alone does not promote that subsystem to stable.
+
 Record intentional exclusions in durable evidence, docs, or an ADR.
 
 ## Stable Delta Proof

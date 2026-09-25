@@ -2272,15 +2272,21 @@
    how long to wait for `session.idle`; it does not abort in-flight agent work."
   60000)
 
+(defn- root-agent-event?
+  [event]
+  (not (seq (:agent-id event))))
+
 (defn ^:no-doc terminal-idle-event?
   [event]
-  (and (= :copilot/session.idle (:type event))
+  (and (root-agent-event? event)
+       (= :copilot/session.idle (:type event))
        (not= specs/autopilot-session-mode (get-in event [:data :mode]))))
 
 (defn ^:no-doc terminal-event?
   [event]
   (or (terminal-idle-event? event)
-      (= :copilot/session.error (:type event))))
+      (and (root-agent-event? event)
+           (= :copilot/session.error (:type event)))))
 
 (defn- send-and-wait-for-last-message!
   [session opts timeout-ms]
@@ -2319,6 +2325,9 @@
                 (do
                   (log/debug "send-and-wait! event channel closed for session " session-id)
                   (throw (ex-info "Event channel closed unexpectedly" {})))
+
+                (not (root-agent-event? event))
+                (recur)
 
                 (= :copilot/assistant.message (:type event))
                 (do
@@ -2552,7 +2561,7 @@
                 (nil? event)
                 (throw (ex-info "Event channel closed unexpectedly" {}))
 
-                (:agent-id event)
+                (not (root-agent-event? event))
                 (recur consumed? last-message)
 
                 (and (= :copilot/user.message (:type event))
@@ -2652,6 +2661,8 @@
    parser's result instead.
    Ordinary waits are serialized per session. Structured waits correlate by
    originating message ID and may run concurrently.
+   Events with a non-empty `:agent-id` cannot supply the reply or complete the
+   wait; they remain available to ordinary event subscriptions.
    An idle event whose wire `:mode` is the string `\"autopilot\"` is a
    nonterminal turn boundary, so the wait continues.
 
@@ -2750,15 +2761,7 @@
                    (close! out-ch)
                    (release-lock!))
 
-                 (terminal-idle-event? event)
-                 (do
-                   (emit! event)
-                   (untap event-mult event-ch)
-                   (close! event-ch)
-                   (close! out-ch)
-                   (release-lock!))
-
-                 (= :copilot/session.error (:type event))
+                 (terminal-event? event)
                  (do
                    (emit! event)
                    (untap event-mult event-ch)
@@ -2854,9 +2857,10 @@
       out-ch)))
 
 (defn send-async
-  "Send a message and return a channel that receives events until an ordinary
-   session.idle or session.error. An idle event whose wire `:mode` is the
-   string `\"autopilot\"` is emitted without closing the channel.
+  "Send a message and return a channel that receives events until a root-agent
+   session.idle or session.error. Events with a non-empty `:agent-id`, and idle
+   events whose wire `:mode` is the string `\"autopilot\"`, are emitted without
+   closing the channel.
    Serialized per session to avoid mixing concurrent sends.
    Safe for use inside go blocks — no blocking operations.
    A timeout is emitted as a final `:copilot/session.error` event whose data
@@ -2893,7 +2897,8 @@
       (loop [last-content nil]
         (when-let [event (<! events-ch)]
           (cond
-            (= :copilot/assistant.message (:type event))
+            (and (root-agent-event? event)
+                 (= :copilot/assistant.message (:type event)))
             (recur (get-in event [:data :content]))
 
             (terminal-event? event)
@@ -2931,7 +2936,8 @@
       (loop [last-msg nil]
         (when-let [event (<! events-ch)]
           (cond
-            (= :copilot/assistant.message (:type event))
+            (and (root-agent-event? event)
+                 (= :copilot/assistant.message (:type event)))
             (recur event)
 
             (terminal-event? event)

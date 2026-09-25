@@ -385,6 +385,7 @@
    disconnects whether the body returns normally, stops after a partial realization,
    or throws. If both the body and disconnect fail, the body failure remains
    primary and the disconnect failure is attached as suppressed.
+   Child-agent events remain in the sequence but do not end the root query.
 
    Binding form:
      [events prompt & {:keys [client session max-events timeout-ms]}]
@@ -491,7 +492,8 @@
    session fails after a terminal event or source closure, the channel yields
    a tagged `:copilot/session.error` map and closes. The original failure is
    available at `[:data :cause]`. An idle event whose wire `:mode` is the
-   string `\"autopilot\"` is emitted without closing the channel. Consumer
+   string `\"autopilot\"` is emitted without closing the channel. Events with a
+   non-empty `:agent-id` are also emitted without closing it. Consumer
    cancellation still releases the hidden session locally; a runtime cleanup
    failure is logged because the output channel is already closed.
 

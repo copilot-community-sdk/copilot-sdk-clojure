@@ -802,6 +802,25 @@
 ;;   {:kind :token :access-token "..." :token-type "Bearer"? :expires-in 3600?}
 ;; or {:kind :cancelled}. Returning nil or throwing also cancels the request.
 (s/def ::on-mcp-auth-request fn?)
+(s/def ::mcp-auth-static-client-config
+  (closed-keys
+   (s/and
+    map?
+    #(required-value? % :client-id string?)
+    #(optional-field? % :client-secret string?)
+    #(optional-field? % :grant-type #{"client_credentials"})
+    #(optional-field? % :public-client boolean?)
+    #(optional-field? % :scope string?))
+   #{:client-id :client-secret :grant-type :public-client :scope}))
+(s/def ::mcp.oauth_required-data
+  (s/and
+   map?
+   #(required-value? % :request-id string?)
+   #(required-value? % :server-name string?)
+   #(required-value? % :server-url string?)
+   #(required-value? % :reason #{"initial" "refresh" "reauth" "upscope"})
+   #(optional-field? % :static-client-config
+                     (partial s/valid? ::mcp-auth-static-client-config))))
 (s/def ::config-dir ::non-blank-string)
 ;; Upstream PR #1482 (post-v1.0.0-beta.4): `configDir` was renamed to
 ;; `configDirectory` in the official TypeScript SDK API. The wire stays
@@ -929,6 +948,7 @@
 
 ;; enableConfigDiscovery: auto-discover MCP configs, skills, instruction files (upstream PR #1044)
 (s/def ::enable-config-discovery boolean?)
+(s/def ::refresh-custom-instructions? boolean?)
 
 ;; enableMcpApps: experimental SEP-1865 host opt-in
 ;; (https://github.com/github/copilot-sdk/pull/1335).
@@ -1309,7 +1329,7 @@
     :on-user-input-request :on-elicitation-request :hooks
     :on-exit-plan-mode :on-auto-mode-switch
     :working-directory :agent :on-event :create-session-fs-handler
-    :enable-config-discovery :enable-mcp-apps :model-capabilities
+    :enable-config-discovery :refresh-custom-instructions? :enable-mcp-apps :model-capabilities
     :github-token :github-token-provider :ask-user-variant
     :enable-session-telemetry?
     :remote-session
@@ -1361,7 +1381,7 @@
                     ::on-user-input-request ::on-elicitation-request ::hooks
                     ::on-exit-plan-mode ::on-auto-mode-switch
                     ::working-directory ::agent ::on-event ::create-session-fs-handler
-                    ::enable-config-discovery ::enable-mcp-apps ::model-capabilities
+                    ::enable-config-discovery ::refresh-custom-instructions? ::enable-mcp-apps ::model-capabilities
                     ::github-token ::github-token-provider ::ask-user-variant
                     ::enable-session-telemetry?
                     ::remote-session
@@ -2056,6 +2076,13 @@
    (s/keys :req-un [::content]
            :opt-un [::content-blocks ::interaction-id])
    #(contains? #{"system" "developer"} (:role %))))
+
+(s/def ::event-ids (s/coll-of string? :kind vector?))
+(s/def ::session.snapshot_rewind-data
+  (s/and
+   (s/keys :opt-un [::event-ids])
+   #(required-value? % :up-to-event-id string?)
+   #(required-value? % :events-removed nat-int?)))
 
 ;; Queued command response (CLI 1.0.45, session.commands.respondToQueuedCommand)
 (s/def ::handled? boolean?)

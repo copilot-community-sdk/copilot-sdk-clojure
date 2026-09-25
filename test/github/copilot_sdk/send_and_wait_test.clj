@@ -20,6 +20,7 @@
             [clojure.core.async :as async]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
+            [github.copilot-sdk.integration.support :refer [await-event-type!]]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.mock-server :as mock]))
 
@@ -382,6 +383,103 @@
                {:type :copilot/session.idle :data {:mode "autopilot"}})))
   (is (true? (@#'session/terminal-idle-event?
               {:type :copilot/session.idle :data {}}))))
+
+(defn- read-channel! [ch]
+  (let [[value port] (async/alts!! [ch (async/timeout 5000)])]
+    (when-not (= port ch)
+      (throw (ex-info "Timed out reading send result" {})))
+    value))
+
+(defn- inject-events!
+  [{:keys [server session-id]} events]
+  (doseq [event events]
+    (mock/send-notification! server "session.event"
+                             {:sessionId session-id :event event})))
+
+(def ^:private child-events
+  [{:type "assistant.message" :agentId "child-1"
+    :data {:messageId "child-message" :content "child reply"}}
+   {:type "session.error" :agentId "child-1"
+    :data {:errorType "notification" :message "child failed"}}
+   {:type "session.idle" :agentId "child-1" :data {}}])
+
+(deftest send-waits-select-only-root-agent-outcomes
+  (doseq [[label start collect]
+          [[:blocking #(future (session/send-and-wait! % {:prompt "hi"} 5000))
+            #(deref % 5000 ::timeout)]
+           [:content #(session/<send! % {:prompt "hi" :timeout-ms 5000}) read-channel!]
+           [:message #(session/<send-and-wait! % {:prompt "hi" :timeout-ms 5000})
+            read-channel!]]
+          root-id [nil ""]
+          root-message? [false true]]
+    (testing (str label " root-id=" (pr-str root-id) " message=" root-message?)
+      (let [{:keys [session release send-started close] :as ctx} (gated-send-context)
+            events (cond-> []
+                     root-message?
+                     (conj (cond-> {:type "assistant.message"
+                                    :data {:messageId "root-message" :content "root reply"}}
+                             (some? root-id) (assoc :agentId root-id))))
+            events (into events child-events)
+            events (conj events (cond-> {:type "session.idle" :data {}}
+                                  (some? root-id) (assoc :agentId root-id)))
+            subscription (sdk/subscribe-events session)]
+        (try
+          (let [pending (start session)]
+            (is (true? (deref send-started 2000 false)))
+            (inject-events! ctx events)
+            (release)
+            (let [result (collect pending)]
+              (if root-message?
+                (is (= (if (= label :content) result (get-in result [:data :content]))
+                       "root reply"))
+                (is (nil? result))))
+            (let [observed (mapv #(await-event-type! subscription
+                                                     (keyword "copilot" (:type %))
+                                                     5000)
+                                 events)]
+              (is (= (mapv (juxt :type :agent-id) observed)
+                     (mapv #(vector (keyword "copilot" (:type %)) (:agentId %)) events)))
+              (is (= (count (filter #(= (:agent-id %) "child-1") observed)) 3)
+                  "Ordinary event subscriptions still receive every child event")))
+          (finally
+            (release)
+            (sdk/unsubscribe-events! session subscription)
+            (close)))))))
+
+(deftest async-event-streams-retain-child-events-until-root-completion
+  (doseq [[label start]
+          [[:events #(session/send-async % {:prompt "hi" :timeout-ms 5000})]
+           [:with-id #(-> (session/send-async-with-id %
+                                                      {:prompt "hi" :timeout-ms 5000})
+                          :events-ch)]]]
+    (testing (name label)
+      (let [{:keys [session release send-started close] :as ctx} (gated-send-context)]
+        (try
+          (let [pending (future (start session))]
+            (is (true? (deref send-started 2000 false)))
+            (inject-events! ctx child-events)
+            (release)
+            (let [events (read-channel! (async/into [] (deref pending 5000 nil)))]
+              (is (= (mapv :type (filter #(= (:agent-id %) "child-1") events))
+                     [:copilot/assistant.message :copilot/session.error :copilot/session.idle]))
+              (is (= (get-in (last (filter #(= (:type %) :copilot/assistant.message)
+                                           events))
+                             [:data :content])
+                     "Mock response to: hi"))
+              (is (= (:type (last events)) :copilot/session.idle))
+              (is (nil? (:agent-id (last events))))))
+          (finally
+            (release)
+            (close)))))))
+
+(deftest only-nonempty-agent-ids-mark-child-terminal-events
+  (doseq [event-type [:copilot/session.idle :copilot/session.error]
+          [agent-id expected] [[nil true] ["" true] ["child" false] [" " false]]]
+    (let [event (cond-> {:type event-type :data {}}
+                  (some? agent-id) (assoc :agent-id agent-id))]
+      (is (= (session/terminal-event? event) expected))
+      (is (= (session/terminal-idle-event? event)
+             (and expected (= event-type :copilot/session.idle)))))))
 
 ;; -----------------------------------------------------------------------------
 ;; Upstream scenario 3: a send rejection wins over an earlier session.error.
