@@ -37,11 +37,11 @@
   ".github/workflows/ci.yml"
   "0e658daf0296253fcc901f436960bfe850c6ed3f354d06cf9125367ec3eca546",
   "CHANGELOG.md"
-  "92b4ade6ae04bbc9e3eb3f6ac4e99f009309033ae4f3a854bb4f1d4dd29c1a5a",
+  "3776e63629a43d901baf951f2ac4941b2d03ee679d37c73303faecca5e841124",
   "build.clj"
   "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993",
   "doc/api/API.html"
-  "995239296915da9f6e1fd39009d57149a3ee10ac23ee2fb01432b6e3fc75ee87",
+  "ea3c2e4dd450c4fc84517b4d12f989b580476775560f26c6eabdf93939fa5202",
   "doc/api/github.copilot-sdk.client.html"
   "4279af4524b2efafd808aac3f73e71ec212314c2713ae64ea437521d30df068d",
   "doc/api/github.copilot-sdk.helpers.html"
@@ -49,13 +49,13 @@
   "doc/api/github.copilot-sdk.html"
   "299664d4a8f91d19fece2c26e5f1597830e6fcc406ff7ce13c3851e0e7253bff",
   "doc/api/github.copilot-sdk.session.html"
-  "7866bce70bfea3ab2a1457ab4dbfa4c7dc1db6c60d2556505891c2790669ec1a",
+  "94144f5635420075a23350aa256403baef40e1860d4b5c722d7b03c2ae25df39",
   "doc/api/overview.html"
   "d4af9ac235900aa17a43d1e14580c2e5cd5b8897c6a2f8fcfa7a42d28a0454d3",
   "doc/mcp/overview.md"
   "f355a4acf11e11b750a27e70c9d05419cbf64b04055f59cfbec65cbc1dd9d9ef",
   "doc/reference/API.md"
-  "b8f50f112dda8473fb27635eb1d2356e2d36688651629fb5628c1d32b2c0c820",
+  "471aa79b60c940ed6b41a1f46e051b68b7be430bdb98eb7fad4fd7e13b2b3640",
   "resources/github/copilot_sdk/api_surface.edn"
   "941e18c3108dcab93987b2bbbf58827008d04ebc6701a51a295083ee586940f8",
   "schemas/README.md"
@@ -81,7 +81,7 @@
   "src/github/copilot_sdk/protocol.clj"
   "fe7d5713576c246364d9f91e10bd951cb16b43816ef685784fc77216a2c8de10",
   "src/github/copilot_sdk/session.clj"
-  "3746ccb9a9d585230e7ce8ed51b13db68cea6ba74549013beed2b06eb3b1c16c",
+  "0a43fb27cce9a9b297140d881d155b3be4ed096365ac2098615309f37a4d123a",
   "src/github/copilot_sdk/specs.clj"
   "50ff0840cee4c66e6653fcae86d44493a0d2e1978f35520b626bbb1ce9255b59",
   "src/github/copilot_sdk/util.clj"
@@ -101,7 +101,7 @@
   "test/github/copilot_sdk/optional_wire_contract_test.clj"
   "ab5a2c9988b84cdfe4b3953daa0ffd31d941631db3c84f202e9a4978b8050ce4",
   "test/github/copilot_sdk/send_and_wait_test.clj"
-  "a46bcba6e92dfd59df40d0d8daba2fd06ac7bb9e4f0357aa2cf43cb16b6a292f"},
+  "502332f743e90320ea2144f3eabbfa9b71408b9f09e316e861a72d9d1cb33aed"},
  :symbol-groups
  {:connectors
   {:classification :experimental,
@@ -617,7 +617,7 @@
    "42ba15c806fa0d6b4575eed6cf961ea4dcca448796268d895b75c26c1cab66c6"},
   :local-artifact-seal
   {:status :sealed,
-   :commit "ffe9de2eeb548676a5641e343f2625086ed41cf5"}},
+   :commit "b3d5c45883e6eb6cbe03098819571b03968bc9fc"}},
  :changed-paths
  {:exact-classifications
   {"nodejs/test/session-send-and-wait.test.ts" :stable-public,
@@ -759,7 +759,7 @@
     :child :nonempty-string,
     :root [:absent :empty-string]},
    :semantics
-   "Child output cannot replace or complete the root response. Ordinary streams remain session-wide; local cancellation does not abort or drain remote work, and a later ordinary wait can observe that work. Only structured waits correlate assistant output by originating message ID. Async intermediate output remains bounded and best-effort, with overflow diagnostics. Root completion reaching session intake is reserved before lossy observer fan-out. Final publication releases ownership first, is cancellable, and cannot be defeated by an expired deadline. Admission, pending ACKs and publication respect caller cancellation and registration shutdown. Earlier protocol notification overflow retains its existing policy.",
+   "Child output cannot replace or complete the root response; blocking wait taps filter children before bounded buffering. Ordinary streams remain session-wide; local cancellation does not abort or drain remote work, and a later ordinary wait can observe that work. Only structured waits correlate assistant output by originating message ID. Async intermediate output remains bounded and best-effort, with overflow diagnostics. Root completion reaching session intake is reserved before lossy observer fan-out, but cannot substitute for mandatory RPC acknowledgement. The async deadline still bounds admission and an unclaimed pending ACK. After successful ACK and outcome selection, final publication releases ownership first, is cancellable, and cannot be defeated by an expired deadline. Admission, pending ACKs and publication respect caller cancellation and registration shutdown. Earlier protocol notification overflow retains its existing policy.",
    :tests
    [github.copilot-sdk.send-and-wait-test/send-waits-select-only-root-agent-outcomes
     github.copilot-sdk.send-and-wait-test/async-event-streams-retain-child-events-until-root-completion
@@ -772,6 +772,8 @@
     github.copilot-sdk.send-and-wait-test/cancellation-and-disconnect-release-full-final-publication
     github.copilot-sdk.send-and-wait-test/async-timeout-cannot-replace-an-already-claimed-rpc-response
     github.copilot-sdk.send-and-wait-test/shutdown-during-request-preparation-cancels-the-captured-registration
+    github.copilot-sdk.send-and-wait-test/child-events-do-not-occupy-blocking-wait-tap-capacity
+    github.copilot-sdk.send-and-wait-test/captured-terminal-does-not-bypass-a-pending-unclaimed-send-ack
     github.copilot-sdk.integration.sessions-commands-test/test-send-async-releases-ownership-on-send-failure
     github.copilot-sdk.integration.structured-output-test/raw-response-schema-returns-correlated-assistant-event-without-user-event
     github.copilot-sdk.helper-lifecycle-test/query-stream-helpers-remain-open-across-nonterminal-events],
@@ -813,7 +815,9 @@
     :timeout-full-output
     :claimed-ack
     :shutdown-during-preparation
-    :rpc-failure],
+    :rpc-failure
+    :blocking-child-filter
+    :unclaimed-ack-precedence],
    :id :session/root-completion,
    :specs [:github.copilot-sdk.specs/send-options],
    :builders
