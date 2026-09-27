@@ -2971,6 +2971,8 @@ Most of this API is namespace-qualified only — require the namespace directly:
 
 `:meta` is validated eagerly by `define-workflow`:
 
+Metadata and phase maps reject unknown keys before a handle can be registered.
+
 | Field | Type | Required? | Notes |
 |-------|------|-----------|-------|
 | `:name` | string | yes | Non-blank. Must be unique within a `join-session` call's `:workflows` vector. |
@@ -3002,6 +3004,8 @@ For invocation `:limits`, an omitted field preserves its ceiling and `nil`
 explicitly makes that dimension unlimited. Numeric overrides follow the same
 constraints as declared limits. `:meta` limits cannot contain `nil`, and the
 invocation `:limits` value must be a map, not `nil`.
+Time and credit limits accept finite Clojure ratios, which serialize as JSON
+decimals. Subagent-count limits require integers.
 
 `:run` must be a function of one argument, the [context map](#the-run-context-map)
 described below, and returns (directly or via a core.async channel, `Future`, promise,
@@ -3046,14 +3050,18 @@ and an async `<`-prefixed twin returning a core.async channel:
 | `resume!` | `resume-workflow!` | `session.workflow.resume` | Resume a durable, previously-started run by `run-id`. 2-arity `[session run-id]` or 3-arity with `{:limits ...}`. See [error classification](#resume-error-classification) below. |
 | `get-run` | `get-workflow-run` | `session.workflow.getRun` | Read the latest durable envelope for a run. `[session run-id]`. |
 | `wait-for-run!` | `wait-for-workflow-run!` | (polls `get-run` + listens for `:copilot/workflow.run_updated`) | Block until a run reaches a terminal status. 2-arity or 3-arity with `{:cancel-chan :poll-interval-ms}` (`:poll-interval-ms` default `5000`; `:cancel-chan` aborts the *wait*, not the run, throwing `ex-info` `{:type :workflow-wait-cancelled :run-id ...}`). Requires the session to be connected (has an active event stream). |
-| `list-runs` | `list-workflow-runs` | `session.workflow.listRuns` | List all durable runs for the session, in creation order. `[session]`. |
+| `list-runs` | `list-workflow-runs` | `session.workflow.listRuns` | Return the runtime's newest default page of this session's runs. `[session]`. |
 | `get-run-detail` | `get-workflow-run-detail` | `session.workflow.getRunDetail` | Read durable phases, agent turns, and recent progress for a run. `[session run-id]`. |
-| `get-run-progress` | `get-workflow-run-progress` | `session.workflow.getRunProgress` | Page durable progress lines. 2-arity or 3-arity with an options map merged into the wire params (e.g. pagination cursors). |
+| `get-run-progress` | `get-workflow-run-progress` | `session.workflow.getRunProgress` | Page durable progress records. Optional keys: `:phase-id` (string), `:after-seq` and `:before-seq` (exclusive integer cursors), and `:limit` (integer, 1-500; runtime default 200). Unknown keys, obsolete `:cursor`, and session/run identifier overrides are rejected before the RPC. |
 | `cancel!` | `cancel-workflow-run!` | `session.workflow.cancel` | Request cancellation from the CLI. The runtime's reverse `workflow.abort` request targets the active execution token, marks only that attempt cancelled, and closes its `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
 
-All of the above return a run envelope map with at least `:run-id` and a keywordized
+Run, resume, get-run, wait, and cancel return a run envelope map with at least `:run-id` and a keywordized
 `:status` (one of `:running`, `:completed`, `:halted`, `:paused`, `:cancelled`, `:error`, or other
 non-terminal statuses reported by the CLI).
+
+`get-run-progress` returns `:records`, nullable `:oldest-seq` and `:newest-seq`,
+boolean `:has-more-older` and `:has-more-newer`, and non-negative `:revision`.
+The `list-runs` paging overload remains intentionally excluded.
 
 **Async twins**: every function above has a `<`-prefixed twin (e.g. `workflow/<run!`,
 `copilot/<run-workflow!`) with the same arities, running the call on a thread pool and

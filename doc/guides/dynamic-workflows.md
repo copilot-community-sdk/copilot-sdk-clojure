@@ -104,6 +104,9 @@ mutation APIs, or additional agent options.
 | `:phases` | vector of `{:title string, :detail string}` | yes | each `:title` non-blank and unique within the vector; `:detail` optional |
 | `:limits` | map | no | see [Limits](#limits) |
 
+Metadata and phase maps reject unknown keys before registration, including
+unsupported authoring options such as `:args-schema`.
+
 Duplicate phase titles throw `"Workflow phase title is declared more than once"`. Registering two workflows with the same `:name` in one `join-session` call throws `"Duplicate workflow name ..."`.
 
 ## Registering workflows
@@ -262,6 +265,8 @@ Invocation overrides distinguish omission from clearing: omitting a field keeps
 the existing/default ceiling, a number replaces it, and `nil` sends JSON `null`
 to make that dimension unlimited. Declared `:meta` limits do not accept `nil`,
 and the invocation's `:limits` value itself must still be a map.
+Time and credit ceilings accept finite Clojure ratios and serialize them as
+JSON decimals; subagent-count ceilings require integers.
 
 ```clojure
 (copilot/resume-workflow! session run-id {:limits {:timeout-seconds nil}})
@@ -277,10 +282,29 @@ All functions below live on the public `github.copilot-sdk` facade (aliased `cop
 | `resume-workflow!` / `<resume-workflow!` | `[session run-id]` or `[session run-id {:keys [limits]}]` — resume a durable run and block until terminal |
 | `get-workflow-run` / `<get-workflow-run` | `[session run-id]` — read the latest durable envelope (status, result, snapshot) without waiting |
 | `wait-for-workflow-run!` / `<wait-for-workflow-run!` | `[session run-id]` or with `{:keys [cancel-chan poll-interval-ms]}` — block until a run reaches a terminal status |
-| `list-workflow-runs` / `<list-workflow-runs` | `[session]` — list this session's runs in creation order |
+| `list-workflow-runs` / `<list-workflow-runs` | `[session]` — return the runtime's newest default page of this session's runs |
 | `get-workflow-run-detail` / `<get-workflow-run-detail` | `[session run-id]` — durable phases, agents, and recent progress |
-| `get-workflow-run-progress` / `<get-workflow-run-progress` | `[session run-id]` or with paging options — page durable progress lines |
+| `get-workflow-run-progress` / `<get-workflow-run-progress` | `[session run-id]` or with `{:phase-id string :after-seq integer :before-seq integer :limit integer}` — page durable progress records |
 | `cancel-workflow-run!` / `<cancel-workflow-run!` | `[session run-id]` — request cancellation and return the terminal envelope |
+
+## Progress paging
+
+```clojure
+(def page
+  (copilot/get-workflow-run-progress session run-id {:after-seq -1 :limit 200}))
+(:records page)
+```
+
+All paging fields are optional. `:after-seq` and `:before-seq` are exclusive
+cursors; `:phase-id` scopes records and cursors to a phase. `:limit` accepts
+integers from 1 through 500; omission uses the runtime default of 200.
+Explicit `nil`, obsolete `:cursor`, unknown fields, and session/run identifiers
+are rejected as paging options. The function's session and run arguments own
+the request identity.
+
+The result contains `:records`, nullable `:oldest-seq` and `:newest-seq`,
+boolean `:has-more-older` and `:has-more-newer`, and non-negative `:revision`.
+The separate `list-runs` paging overload remains intentionally excluded.
 
 ## Statuses and errors
 

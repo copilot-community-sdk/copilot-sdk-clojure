@@ -559,13 +559,13 @@
 (register-fdef! github.copilot-sdk.workflow/get-run-progress
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
-                             :options (s/? map?))
+                             :options (s/? ::specs/workflow-progress-options))
                 :ret map?)
 
 (register-fdef! github.copilot-sdk.workflow/<get-run-progress
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
-                             :options (s/? map?))
+                             :options (s/? ::specs/workflow-progress-options))
                 :ret ::specs/events-ch)
 
 (register-fdef! github.copilot-sdk.session/sessions-fork!

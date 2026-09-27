@@ -91,6 +91,7 @@
 <tr><td> <code>:limits</code> </td><td> map </td><td> no </td><td> see <a href="#limits">Limits</a> </td></tr>
 </tbody>
 </table>
+<p>Metadata and phase maps reject unknown keys before registration, including unsupported authoring options such as <code>:args-schema</code>.</p>
 <p>Duplicate phase titles throw <code>"Workflow phase title is declared more than once"</code>. Registering two workflows with the same <code>:name</code> in one <code>join-session</code> call throws <code>"Duplicate workflow name ..."</code>.</p>
 <h2><a href="#registering-workflows" id="registering-workflows"></a>Registering workflows</h2>
 <p>Pass one or more handles under <code>:workflows</code> to <code>join-session</code>:</p>
@@ -195,7 +196,7 @@
 </tbody>
 </table>
 <p>Limits set in <code>:meta</code> apply to every run; limits passed to <code>run-workflow!</code>/<code>resume-workflow!</code> apply to that run only.</p>
-<p>Invocation overrides distinguish omission from clearing: omitting a field keeps the existing/default ceiling, a number replaces it, and <code>nil</code> sends JSON <code>null</code> to make that dimension unlimited. Declared <code>:meta</code> limits do not accept <code>nil</code>, and the invocation’s <code>:limits</code> value itself must still be a map.</p>
+<p>Invocation overrides distinguish omission from clearing: omitting a field keeps the existing/default ceiling, a number replaces it, and <code>nil</code> sends JSON <code>null</code> to make that dimension unlimited. Declared <code>:meta</code> limits do not accept <code>nil</code>, and the invocation’s <code>:limits</code> value itself must still be a map. Time and credit ceilings accept finite Clojure ratios and serialize them as JSON decimals; subagent-count ceilings require integers.</p>
 <pre><code class="language-clojure">(copilot/resume-workflow! session run-id {:limits {:timeout-seconds nil}})
 </code></pre>
 <h2><a href="#run-resume-observe-and-cancel" id="run-resume-observe-and-cancel"></a>Run, resume, observe, and cancel</h2>
@@ -209,12 +210,19 @@
 <tr><td> <code>resume-workflow!</code> / <code>&lt;resume-workflow!</code> </td><td> <code>[session run-id]</code> or <code>[session run-id {:keys [limits]}]</code> — resume a durable run and block until terminal </td></tr>
 <tr><td> <code>get-workflow-run</code> / <code>&lt;get-workflow-run</code> </td><td> <code>[session run-id]</code> — read the latest durable envelope (status, result, snapshot) without waiting </td></tr>
 <tr><td> <code>wait-for-workflow-run!</code> / <code>&lt;wait-for-workflow-run!</code> </td><td> <code>[session run-id]</code> or with <code>{:keys [cancel-chan poll-interval-ms]}</code> — block until a run reaches a terminal status </td></tr>
-<tr><td> <code>list-workflow-runs</code> / <code>&lt;list-workflow-runs</code> </td><td> <code>[session]</code> — list this session’s runs in creation order </td></tr>
+<tr><td> <code>list-workflow-runs</code> / <code>&lt;list-workflow-runs</code> </td><td> <code>[session]</code> — return the runtime’s newest default page of this session’s runs </td></tr>
 <tr><td> <code>get-workflow-run-detail</code> / <code>&lt;get-workflow-run-detail</code> </td><td> <code>[session run-id]</code> — durable phases, agents, and recent progress </td></tr>
-<tr><td> <code>get-workflow-run-progress</code> / <code>&lt;get-workflow-run-progress</code> </td><td> <code>[session run-id]</code> or with paging options — page durable progress lines </td></tr>
+<tr><td> <code>get-workflow-run-progress</code> / <code>&lt;get-workflow-run-progress</code> </td><td> <code>[session run-id]</code> or with <code>{:phase-id string :after-seq integer :before-seq integer :limit integer}</code> — page durable progress records </td></tr>
 <tr><td> <code>cancel-workflow-run!</code> / <code>&lt;cancel-workflow-run!</code> </td><td> <code>[session run-id]</code> — request cancellation and return the terminal envelope </td></tr>
 </tbody>
 </table>
+<h2><a href="#progress-paging" id="progress-paging"></a>Progress paging</h2>
+<pre><code class="language-clojure">(def page
+  (copilot/get-workflow-run-progress session run-id {:after-seq -1 :limit 200}))
+(:records page)
+</code></pre>
+<p>All paging fields are optional. <code>:after-seq</code> and <code>:before-seq</code> are exclusive cursors; <code>:phase-id</code> scopes records and cursors to a phase. <code>:limit</code> accepts integers from 1 through 500; omission uses the runtime default of 200. Explicit <code>nil</code>, obsolete <code>:cursor</code>, unknown fields, and session/run identifiers are rejected as paging options. The function’s session and run arguments own the request identity.</p>
+<p>The result contains <code>:records</code>, nullable <code>:oldest-seq</code> and <code>:newest-seq</code>, boolean <code>:has-more-older</code> and <code>:has-more-newer</code>, and non-negative <code>:revision</code>. The separate <code>list-runs</code> paging overload remains intentionally excluded.</p>
 <h2><a href="#statuses-and-errors" id="statuses-and-errors"></a>Statuses and errors</h2>
 <p>A run’s <code>:status</code> is one of <code>:pending</code>, <code>:running</code>, <code>:completed</code>, <code>:halted</code>, <code>:paused</code>, <code>:cancelled</code>, or <code>:error</code>. <code>workflow-terminal-status?</code> returns true for every status except <code>:pending</code> and <code>:running</code>. A paused attempt has settled, so waits return; resuming can begin another attempt under the same run ID.</p>
 <pre><code class="language-clojure">(copilot/workflow-terminal-status? :completed) ;; =&gt; true

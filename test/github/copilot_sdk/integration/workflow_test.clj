@@ -80,7 +80,7 @@
                  {:meta {:name "review"
                          :description "Review files"
                          :phases [{:title "Review" :detail "Inspect changes"}]
-                         :limits {:max-concurrent-subagents 2}}
+                         :limits {:max-concurrent-subagents 2 :max-ai-credits 1/2}}
                   :run (fn [_] {"ok" true})})
         join-config {:workflows [handle]}
         wire (util/clj->wire
@@ -90,7 +90,7 @@
     (is (= [{:name "review"
              :description "Review files"
              :phases [{:title "Review" :detail "Inspect changes"}]
-             :limits {:maxConcurrentSubagents 2}}]
+             :limits {:maxConcurrentSubagents 2 :maxAiCredits 1/2}}]
            (:workflows wire)))
     (is (thrown-with-msg?
          clojure.lang.ExceptionInfo
@@ -114,6 +114,7 @@
              {:on-permission-request sdk/default-join-session-permission-handler
               :workflows [handle]})]
       (is (= "review" (get-in @seen [:workflows 0 :name])))
+      (is (= 0.5 (get-in @seen [:workflows 0 :limits :maxAiCredits])))
       (is (workflow/workflow-handle?
            (get-in @(:state *test-client*)
                    [:sessions session-id :workflows "review"]))))))
@@ -152,7 +153,7 @@
       (is (= :cancelled (:status cancelled)))
       (is (= {:cancel_snapshot_key true} (:snapshot cancelled))))
     (is (= [] (:phases (workflow/get-run-detail copilot-session "run-1"))))
-    (is (= [] (:lines (workflow/get-run-progress copilot-session "run-1"))))
+    (is (= [] (:records (workflow/get-run-progress copilot-session "run-1"))))
     (doseq [operation [(fn []
                          (workflow/run! copilot-session "review"
                                         {:limits {:max-ai-credits ##NaN}}))

@@ -1279,32 +1279,41 @@
 (s/def ::max-concurrent-subagents pos-int?)
 (s/def ::max-total-subagents pos-int?)
 (s/def ::timeout-seconds (s/and number? pos? #(<= % 2147483.647)))
+(def ^:private workflow-limit-keys
+  #{:max-concurrent-subagents :max-total-subagents :max-ai-credits :timeout-seconds})
 (s/def ::workflow-limits
   (closed-keys
-   (s/keys :opt-un [::max-concurrent-subagents ::max-total-subagents
-                    ::max-ai-credits ::timeout-seconds])
-   #{:max-concurrent-subagents :max-total-subagents
-     :max-ai-credits :timeout-seconds}))
+   (s/and
+    (s/keys :opt-un [::max-concurrent-subagents ::max-total-subagents
+                     ::max-ai-credits ::timeout-seconds])
+    ;; Scalar numeric limits use the JSON writer's number conversion, including ratios.
+    #(optional-field? % :timeout-seconds
+                      (fn [value] (Double/isFinite (double value))))
+    #(optional-field? % :max-ai-credits
+                      (fn [value]
+                        (and (Double/isFinite (double value))
+                             (pos? (Math/round (* (double value) 1000000000)))))))
+   workflow-limit-keys))
 (s/def ::workflow-limit-overrides
+  (s/and
+   map?
+   (fn [limits]
+     (s/valid? ::workflow-limits
+               (reduce (fn [values key]
+                         (if (nil? (get values key))
+                           (dissoc values key)
+                           values))
+                       limits
+                       workflow-limit-keys)))))
+(s/def ::workflow-progress-options
   (closed-keys
    (s/and
     map?
-    (fn [limits]
-      (every?
-       (fn [[field spec]]
-         (optional-field? limits field
-                          #(or (nil? %)
-                               (and (json-number? %) (s/valid? spec %)))))
-       {:max-concurrent-subagents ::max-concurrent-subagents
-        :max-total-subagents ::max-total-subagents
-        :max-ai-credits ::max-ai-credits
-        :timeout-seconds ::timeout-seconds}))
-    (fn [limits]
-      (let [credits (:max-ai-credits limits)]
-        (or (nil? credits)
-            (pos? (Math/round (* (double credits) 1000000000)))))))
-   #{:max-concurrent-subagents :max-total-subagents
-     :max-ai-credits :timeout-seconds}))
+    #(optional-field? % :phase-id string?)
+    #(optional-field? % :after-seq integer?)
+    #(optional-field? % :before-seq integer?)
+    #(optional-field? % :limit (fn [value] (and (integer? value) (<= 1 value 500)))))
+   #{:phase-id :after-seq :before-seq :limit}))
 (s/def ::detail string?)
 (s/def ::workflow-phase
   (closed-keys

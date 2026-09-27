@@ -415,7 +415,9 @@
                                                   :phases []
                                                   :agents []
                                                   :progress {:lines []}}
-                 "session.workflow.getRunProgress" {:lines [] :hasMore false}
+                 "session.workflow.getRunProgress" {:records [] :oldestSeq nil :newestSeq nil
+                                                    :hasMoreOlder false :hasMoreNewer false
+                                                    :revision 0}
                  "session.workflow.cancel" {:runId (:runId params)
                                             :name "workflow"
                                             :status "cancelled"

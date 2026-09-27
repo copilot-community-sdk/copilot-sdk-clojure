@@ -100,6 +100,13 @@ All notable changes to this project will be documented in this file. This change
   isolation.
 
 ### Fixed (post-v1.0.14 sync)
+- Workflow declarations and invocation overrides now share finite numeric
+  validation while retaining valid Ratio-to-JSON decimal conversion. Authoring
+  enforces closed metadata and phase maps. Progress paging uses canonical
+  `:phase-id`, `:after-seq`, `:before-seq`, and bounded `:limit` options and
+  documents the `:records` response shape.
+  **BREAKING**: Obsolete `:cursor`, unknown fields, and paging options that
+  attempt to override the session or run identifier are rejected before RPC.
 - Workflow run/resume overrides now distinguish omitted limits from explicit
   `nil` (unlimited), while declarations remain non-null. Resume failures use the
   current Workflow error-code domain, and both current and historical subagent

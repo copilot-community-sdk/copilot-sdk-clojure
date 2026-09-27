@@ -1147,6 +1147,7 @@
     :github.copilot-sdk.specs/workflow-operation
     :github.copilot-sdk.specs/workflow-permission-phases
     :github.copilot-sdk.specs/workflow-phase
+    :github.copilot-sdk.specs/workflow-progress-options
     :github.copilot-sdk.specs/workflow-resume-error-code
     :github.copilot-sdk.specs/workflow-run-id
     :github.copilot-sdk.specs/workflow-run-status
@@ -1215,7 +1216,7 @@
    {github.copilot-sdk.workflow/<cancel! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.workflow/<get-run (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.workflow/<get-run-detail (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.workflow/<get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? :github.copilot-sdk.specs/workflow-progress-options)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.workflow/<list-runs (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.workflow/<resume! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.workflow/<run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :identifier clojure.core/any? :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
@@ -1224,7 +1225,7 @@
     github.copilot-sdk.workflow/define-workflow (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :definition clojure.core/map?) :ret github.copilot-sdk.workflow/workflow-handle? :fn nil)
     github.copilot-sdk.workflow/get-run (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.workflow/get-run-detail (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.workflow/get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? :github.copilot-sdk.specs/workflow-progress-options)) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.workflow/list-runs (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/vector? :fn nil)
     github.copilot-sdk.workflow/resume! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.workflow/run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :identifier clojure.core/any? :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)

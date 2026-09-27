@@ -3,8 +3,10 @@
   (:refer-clojure :exclude [run!])
   (:require [clojure.core.async :as async]
             [clojure.set :as set]
+            [clojure.spec.alpha :as s]
             [clojure.string :as str]
-            [github.copilot-sdk.protocol :as proto]))
+            [github.copilot-sdk.protocol :as proto]
+            [github.copilot-sdk.specs :as specs]))
 
 (def ^:private terminal-statuses
   #{:completed :halted :paused :cancelled :error})
@@ -105,6 +107,9 @@
                       {:titles titles}))))
   (when (contains? meta :limits)
     (validate-limits! limits))
+  (when-not (s/valid? ::specs/workflow-meta meta)
+    (throw (ex-info "Invalid workflow metadata"
+                    (s/explain-data ::specs/workflow-meta meta))))
   meta)
 
 (defn define-workflow
@@ -271,7 +276,7 @@
          (async/close! event-chan))))))
 
 (defn list-runs
-  "List this session's durable workflow runs in creation order."
+  "Return the runtime's newest default page of this session's workflow runs."
   [session]
   (mapv normalize-run
         (:runs (proto/send-request! (connection session)
@@ -287,10 +292,17 @@
                         :run-id run-id}))
 
 (defn get-run-progress
-  "Page durable progress for a workflow run."
+  "Page durable progress for a workflow run.
+
+   Options: :phase-id, :after-seq, :before-seq, and :limit (1-500).
+   Cursors are exclusive. Returns :records, :oldest-seq, :newest-seq,
+   :has-more-older, :has-more-newer, and :revision."
   ([session run-id]
    (get-run-progress session run-id {}))
   ([session run-id options]
+   (when-not (s/valid? ::specs/workflow-progress-options options)
+     (throw (ex-info "Invalid workflow progress options"
+                     (s/explain-data ::specs/workflow-progress-options options))))
    (proto/send-request! (connection session)
                         "session.workflow.getRunProgress"
                         (merge {:session-id (:session-id session)
