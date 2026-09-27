@@ -177,14 +177,14 @@
            (deliver prepared {:method method
                               :thread (.getName (Thread/currentThread))})
            {:params (assoc params :prepared true)}))
-        (write-framed! ->client (request "r1" "factory.execute" {:value 1}))
+        (write-framed! ->client (request "r1" "workflow.execute" {:value 1}))
         (let [{prepared-thread :thread
                prepared-method :method}
               (deref prepared 2000 ::timeout)
               {handled-thread :thread
                handled-params :params}
               (deref handled 2000 ::timeout)]
-          (is (= "factory.execute" prepared-method))
+          (is (= "workflow.execute" prepared-method))
           (is (not (str/starts-with? prepared-thread worker-thread-name-prefix)))
           (is (str/starts-with? handled-thread worker-thread-name-prefix))
           (is (= {:value 1 :prepared true} handled-params)))

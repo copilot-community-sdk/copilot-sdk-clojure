@@ -12,7 +12,7 @@ Key features:
 - **Custom tools** — Let the LLM call back into your application
 - **Streaming** — Incremental response deltas via `:assistant.message_delta` events
 - **Multi-session support** — Run multiple independent conversations concurrently
-- **[Agent Factories](./doc/guides/agent-factories.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-factory` / `run-factory!`
+- **[Dynamic Workflows](./doc/guides/dynamic-workflows.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-workflow` / `run-workflow!`
 - **Session hooks** — Lifecycle callbacks for pre/post tool use, prompts, errors
 - **User input handling** — Handle `ask_user` requests from the agent
 - **Event callbacks** — Register `:on-event` handlers to receive all session events
@@ -247,7 +247,7 @@ For fine-grained control, provide a custom handler:
 ```
 
 Available permission kinds: `:shell`, `:write`, `:read`, `:url`, `:mcp`,
-`:custom-tool`, `:memory`, `:hook`, `:factory` (arrive as strings from the wire; use `keyword`
+`:custom-tool`, `:memory`, `:hook`, `:workflow` (arrive as strings from the wire; use `keyword`
 to match).
 
 See [Permission Handling](./doc/reference/API.md#permission-handling) in the

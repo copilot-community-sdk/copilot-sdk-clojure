@@ -259,7 +259,12 @@
             (concat (:stable-deltas report)
                     (:compatibility-deltas report))
             path clojure-paths]
-      (is (.isFile (io/file path)) (str "missing Clojure evidence: " path)))
+      (is (zero?
+           (:exit
+            (sh/sh "git" "cat-file" "-e"
+                   (str (get-in report [:certification :local-artifact-commit])
+                        ":" path))))
+          (str "missing sealed Clojure evidence: " path)))
     (when-let [upstream-repo @upstream-repo]
       (let [base (get-in report [:upstream :base-commit])
             target (get-in report [:upstream :target-commit])
@@ -381,7 +386,9 @@
                 (:source-evidence report)
                 :let [source
                       (if local
-                        (slurp path)
+                        (git-output "." "show"
+                                    (str (get-in report [:certification :local-artifact-commit])
+                                         ":" path))
                         (read-source target path))
                       changed-lines
                       (when-not local
@@ -395,10 +402,14 @@
                   (str "evidence marker did not change in " path)))))))))
 
 (deftest stable-event-contracts-and-exclusions-are-executable
-  (let [event-schema
-        (json/read-str (slurp "schemas/session-events.schema.json"))
+  (let [artifact-commit (get-in (report) [:certification :local-artifact-commit])
+        event-schema
+        (json/read-str
+         (git-output "." "show" (str artifact-commit ":schemas/session-events.schema.json")))
         event-definitions (get event-schema "definitions")
-        api-schema (json/read-str (slurp "schemas/api.schema.json"))
+        api-schema
+        (json/read-str
+         (git-output "." "show" (str artifact-commit ":schemas/api.schema.json")))
         api-definitions (get api-schema "definitions")
         assistant-message
         {:message-id "assistant-1"
@@ -460,7 +471,7 @@
     (is (= "experimental"
            (get-in api-definitions ["FactoryPauseRequest" "stability"])))
     (is (nil? (ns-resolve 'github.copilot-sdk 'pause-factory-run!)))
-    (is (nil? (ns-resolve 'github.copilot-sdk.factory 'pause!)))
+    (is (nil? (find-ns 'github.copilot-sdk.factory)))
     (doseq [[generated-spec idiom-spec value]
             [[::generated-events/assistant.message-data
               ::specs/assistant.message-data

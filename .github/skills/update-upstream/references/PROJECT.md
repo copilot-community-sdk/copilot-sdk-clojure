@@ -15,6 +15,7 @@ pin.
 | `nodejs/src/session.ts` | `CopilotSession` methods, lifecycle, event handling, and method builders |
 | `nodejs/src/extension.ts` | Extension-facing public construction and session paths |
 | `nodejs/src/toolSet.ts` | Public tool-filter helpers |
+| `nodejs/src/workflow.ts` | Experimental orchestration contracts and the shared `JsonValue` export |
 | `nodejs/test/` | Stable unit and end-to-end behavior, especially omission and lifecycle semantics |
 | `nodejs/src/generated/` | Wire signatures and event schemas; informative, not independently a stable parity requirement |
 
@@ -30,6 +31,7 @@ wire evidence, not public API authority.
 | Session functions and lifecycle | `src/github/copilot_sdk/session.clj` |
 | Public convenience helpers | `src/github/copilot_sdk/helpers.clj` |
 | Tool helpers and filters | `src/github/copilot_sdk/tools.clj`, `src/github/copilot_sdk/tool_set.clj` |
+| Supported experimental orchestration | `src/github/copilot_sdk/workflow.clj` |
 | Caller-facing shapes | `src/github/copilot_sdk/specs.clj` |
 | Public function contracts | `src/github/copilot_sdk/instrument.clj` |
 | Protocol and normalization | `src/github/copilot_sdk/protocol.clj`, `src/github/copilot_sdk/util.clj` |
@@ -55,6 +57,10 @@ implementation surfaces.
 Follow referenced types through aliases and re-exports. A field on an otherwise
 stable configuration can still reference an explicitly experimental type;
 package-root re-export alone does not promote that subsystem to stable.
+
+When upstream retires an already-supported experimental wire surface, record a
+migration or removal decision. Do not advance the runtime pin while leaving
+unreachable wrappers, stale permissions, or incompatible execution callbacks.
 
 Record intentional exclusions in durable evidence, docs, or an ADR.
 

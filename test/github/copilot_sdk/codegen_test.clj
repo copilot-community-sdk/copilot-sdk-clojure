@@ -233,8 +233,8 @@
     "assistant.fusion_phase_completed"
     "assistant.fusion_phase_failed"
     "assistant.fusion_phase_started"
-    "factory.run_settled"
-    "factory.run_started"
+    "workflow.run_settled"
+    "workflow.run_started"
     "permission.assentDetected"
     "permission.carriedForward"
     "permission.contextualAuthorization"
@@ -325,6 +325,9 @@
      :effort "medium"}}
 
    "assistant.turn_start"
+   {:turn-id "t-1"}
+
+   "assistant.turn_end"
    {:turn-id "t-1"}
 
    "assistant.turn_retry"
@@ -508,7 +511,7 @@
       :reason "permission_required"
       :ordinal 1}]}
 
-   "factory.run_updated"
+   "workflow.run_updated"
    {:run-id "run-1"
     :revision 1}
 

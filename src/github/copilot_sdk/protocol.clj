@@ -225,12 +225,12 @@
 (declare normalize-incoming)
 
 (defn- normalize-response
-  "Normalize a response using its originating method so opaque factory JSON
+  "Normalize a response using its originating method so opaque workflow JSON
    survives the protocol boundary unchanged."
   [method msg]
   (let [converted (normalize-incoming msg)]
     (case method
-      ("session.factory.run" "session.factory.getRun" "session.factory.cancel")
+      ("session.workflow.run" "session.workflow.getRun" "session.workflow.cancel")
       (cond-> converted
         (contains? (:result msg) :result)
         (assoc-in [:result :result] (get-in msg [:result :result]))
@@ -238,7 +238,7 @@
         (contains? (:result msg) :snapshot)
         (assoc-in [:result :snapshot] (get-in msg [:result :snapshot])))
 
-      "session.factory.resume"
+      "session.workflow.resume"
       (cond-> converted
         (contains? (get-in msg [:result :run]) :result)
         (assoc-in [:result :run :result]
@@ -254,7 +254,7 @@
         (assoc-in [:result :granted-environment-variables]
                   (get-in msg [:result :grantedEnvironmentVariables])))
 
-      ("session.factory.agent" "session.factory.journal.get")
+      ("session.workflow.agent" "session.workflow.journal.get")
       (cond
         (contains? (:result msg) :result)
         (assoc-in converted [:result :result] (get-in msg [:result :result]))
@@ -343,7 +343,7 @@
                     (range)
                     wire-results)))
 
-    (and (= "factory.execute" method)
+    (and (= "workflow.execute" method)
          (map? raw-result)
          (contains? raw-result :result))
     (assoc wire-result :result (:result raw-result))
@@ -595,7 +595,7 @@
                          (range)
                          converted-statements)))
 
-      (and (= "factory.execute" method)
+      (and (= "workflow.execute" method)
            (map? params)
            (contains? params :args))
       (assoc-in converted [:params :args] (:args params))
@@ -678,7 +678,7 @@
   "Route incoming message to appropriate handler."
   [conn msg]
   (let [{:keys [state-atom]} conn]
-    ;; Responses need the originating request method to restore opaque factory
+    ;; Responses need the originating request method to restore opaque workflow
     ;; result values, so defer normalization until handle-response! claims the
     ;; pending entry.
     (if (and (:id msg) (not (:method msg)))
@@ -989,17 +989,17 @@
 (defn- preserve-outgoing-request-opaque-fields
   [method raw-params wire-params]
   (case method
-    "session.factory.run"
+    "session.workflow.run"
     (if (contains? raw-params :args)
       (assoc wire-params :args (:args raw-params))
       wire-params)
 
-    "session.factory.agent"
+    "session.workflow.agent"
     (if (contains? (:opts raw-params) :schema)
       (assoc-in wire-params [:opts :schema] (get-in raw-params [:opts :schema]))
       wire-params)
 
-    "session.factory.journal.put"
+    "session.workflow.journal.put"
     (if (contains? raw-params :result-json)
       (assoc wire-params :resultJson (:result-json raw-params))
       wire-params)

@@ -6,7 +6,7 @@
             [clojure.java.io :as io]
             [clojure.string :as str]
             [clojure.data.json :as json]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.github-token-provider :as token-provider]
             [github.copilot-sdk.protocol :as proto]
             [github.copilot-sdk.process :as proc]
@@ -369,7 +369,7 @@
     - :auto-restart? - **DEPRECATED**: This option has no effect and will be removed in a future release.
     - :notification-queue-size - Max queued protocol notifications (default: 4096)
     - :router-queue-size - Max queued non-session notifications (default: 4096)
-    - :request-handler-threads - Max reverse-RPC handlers (hooks, sessionFs, factories,
+    - :request-handler-threads - Max reverse-RPC handlers (hooks, sessionFs, workflows,
                        user input, etc.) executing concurrently (default: 16). Handlers run on
                        a bounded worker pool owned by the connection, never on core.async
                        dispatch, so a handler that blocks cannot grow threads without limit.
@@ -1827,7 +1827,7 @@
                            {:error {:code -32001 :message (str "Unknown session: " session-id)}}))
         prepare-request
         (fn [method params]
-          (session/prepare-factory-request! client method params))]
+          (session/prepare-workflow-request! client method params))]
     (proto/set-request-dispatch!
      connection-io
      (fn [method params]
@@ -1879,19 +1879,19 @@
              (unknown-session session-id)
              (session/handle-hooks-invoke! client session-id hook-type input)))
 
-         "factory.execute"
+         "workflow.execute"
          (let [{:keys [session-id]} params]
            (if-not (session? session-id)
              (unknown-session session-id)
-             (session/handle-factory-execute! client session-id params)))
+             (session/handle-workflow-execute! client session-id params)))
 
-         "factory.abort"
+         "workflow.abort"
          (let [{:keys [session-id run-id execution-token]} params]
            (if-not (session? session-id)
              (unknown-session session-id)
-             (if (::session/factory-abort-prepared? params)
-               (session/prepared-factory-abort-response)
-               (session/handle-factory-abort!
+             (if (::session/workflow-abort-prepared? params)
+               (session/prepared-workflow-abort-response)
+               (session/handle-workflow-abort!
                 client session-id run-id execution-token))))
 
          ;; System message transform (PR #816). Runs inline on the reverse-request
@@ -3946,8 +3946,8 @@
                          (mapv named-provider->wire ps))
         wire-models (when-let [ms (:models config)]
                       (mapv provider-model->wire ms))
-        wire-factories (when (contains? config :factories)
-                         (mapv factory/factory-meta (:factories config)))]
+        wire-workflows (when (contains? config :workflows)
+                         (mapv workflow/workflow-meta (:workflows config)))]
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
@@ -3967,7 +3967,7 @@
       wire-provider (assoc :provider wire-provider)
       wire-providers (assoc :providers wire-providers)
       wire-models (assoc :models wire-models)
-      wire-factories (assoc :factories wire-factories)
+      wire-workflows (assoc :workflows wire-workflows)
       (:exp-assignments config) (assoc :exp-assignments (:exp-assignments config))
       (some? (:enable-experimental-mode? config))
       (assoc :isExperimentalMode (:enable-experimental-mode? config))

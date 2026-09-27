@@ -67,6 +67,8 @@
      ;; re-enable it under multitenancy hardening.
      (= mode :empty)
      (assoc "COPILOT_DISABLE_KEYTAR" "1")
+     (not= mode :empty)
+     (assoc "COPILOT_RUNTIME_PROCESS_FILE_LOGGING" "1")
      ;; OpenTelemetry (upstream PR #785)
      telemetry
      (as-> m
@@ -104,7 +106,9 @@
                 over a GitHub-hosted remote endpoint (upstream PR #1192)
    - :mode - Client mode `:empty` or `:copilot-cli` (default). When `:empty`,
              `COPILOT_DISABLE_KEYTAR=1` is forced into the spawned env so the
-             child CLI cannot reach the host keychain (upstream PR #1428).
+             child CLI cannot reach the host keychain. Other modes force
+             `COPILOT_RUNTIME_PROCESS_FILE_LOGGING=1`; `:empty` leaves an
+             inherited or explicit process-file logging setting unchanged.
 
    Returns a ManagedProcess record."
   [{:keys [cli-path cwd env use-stdio?]

@@ -291,7 +291,7 @@ Each model map includes `:id`, `:name`, `:vendor`, `:family`, `:max-input-tokens
 Now that you have the basics, explore these topics:
 
 - **[API Reference](./reference/API.md)** — Complete API documentation, plus new v1.0.9 options like `:enable-managed-settings?` for enterprise-managed permissions
-- **[Agent Factories](./guides/agent-factories.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-factory` / `run-factory!`
+- **[Dynamic Workflows](./guides/dynamic-workflows.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-workflow` / `run-workflow!`
 - **[Authentication](./auth/index.md)** — All auth methods including BYOK
 - **[MCP Servers](./mcp/overview.md)** — Connect to external tools via MCP
 - **[Examples](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md)** — More working examples

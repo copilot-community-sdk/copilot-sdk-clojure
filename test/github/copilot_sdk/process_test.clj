@@ -309,7 +309,7 @@
       (is (nil? (get defaults "NODE_DEBUG"))
           "NODE_DEBUG must be a default removal (nil value)")
       (is (= 1 (count defaults)))
-      (is (= {} overrides) "no overrides without options"))))
+      (is (= {"COPILOT_RUNTIME_PROCESS_FILE_LOGGING" "1"} overrides)))))
 
 (deftest cli-env-overrides-github-token
   (testing ":github-token sets COPILOT_SDK_AUTH_TOKEN as a strict override (PR #237)"
@@ -447,3 +447,19 @@
       (is (= "1" (get overrides "COPILOT_DISABLE_KEYTAR")))
       (is (not (contains? defaults "COPILOT_DISABLE_KEYTAR"))
           "KEYTAR must NOT be a default — defaults can be overridden by :env"))))
+
+(deftest process-file-logging-follows-client-mode
+  (doseq [mode [::absent :copilot-cli :empty]
+          value [::absent nil "" "0" "1"]]
+    (testing (str mode " " value)
+      (let [options (cond-> {} (not= mode ::absent) (assoc :mode mode))
+            user-env (if (= value ::absent)
+                       {}
+                       {"COPILOT_RUNTIME_PROCESS_FILE_LOGGING" value})
+            {:keys [defaults overrides]} (proc/cli-env-overrides options)
+            effective (merge defaults user-env overrides)]
+        (is (= (select-keys effective ["COPILOT_RUNTIME_PROCESS_FILE_LOGGING"])
+               (if (= mode :empty)
+                 user-env
+                 {"COPILOT_RUNTIME_PROCESS_FILE_LOGGING" "1"})))
+        (is (not (contains? defaults "COPILOT_RUNTIME_PROCESS_FILE_LOGGING")))))))

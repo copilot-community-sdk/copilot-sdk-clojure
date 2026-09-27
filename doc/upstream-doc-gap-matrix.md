@@ -47,10 +47,11 @@ observe stable workspace-file and snapshot events through existing event APIs.
 The low-level rewind RPCs added in the same upstream change remain experimental
 and are intentionally absent.
 
-The experimental Agent Factory `argsSchema` authoring addition remains
-intentionally absent. The existing Factory surface is already marked
-experimental and does not expand solely in response to another experimental
-upstream field.
+The experimental [Dynamic Workflow surface](guides/dynamic-workflows.md)
+supports the existing orchestration operations under canonical Workflow names.
+`argsSchema` authoring, pause/checkpoint mutation APIs, and additional agent
+options remain intentionally absent. Observing a paused attempt does not
+require exposing the pause APIs.
 
 ## auth/
 

@@ -6,26 +6,26 @@
  {
   github.copilot-sdk
   {:vars
-   {<cancel-factory-run! {:kind :fn, :arglists ([session run-id]), :experimental true}
+   {<cancel-workflow-run! {:kind :fn, :arglists ([session run-id]), :experimental true}
     <create-session {:kind :fn, :arglists ([client config])}
-    <get-factory-run {:kind :fn, :arglists ([session run-id]), :experimental true}
-    <get-factory-run-detail {:kind :fn, :arglists ([session run-id]), :experimental true}
-    <get-factory-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
+    <get-workflow-run {:kind :fn, :arglists ([session run-id]), :experimental true}
+    <get-workflow-run-detail {:kind :fn, :arglists ([session run-id]), :experimental true}
+    <get-workflow-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
     <handle-pending-permission-request! {:kind :fn, :arglists ([session opts]), :experimental true}
     <handle-pending-tool-call! {:kind :fn, :arglists ([session opts])}
-    <list-factory-runs {:kind :fn, :arglists ([session]), :experimental true}
-    <resume-factory! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
+    <list-workflow-runs {:kind :fn, :arglists ([session]), :experimental true}
     <resume-session {:kind :fn, :arglists ([client session-id config])}
-    <run-factory! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options]), :experimental true}
+    <resume-workflow! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
+    <run-workflow! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options]), :experimental true}
     <send! {:kind :fn, :arglists ([session opts])}
     <send-and-wait! {:kind :fn, :arglists ([session opts])}
-    <wait-for-factory-run! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
+    <wait-for-workflow-run! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
     abort! {:kind :fn, :arglists ([session])}
     approve-all {:kind :fn, :arglists ([request ctx])}
     assistant-events {:kind :value}
     attributed-permission-result {:kind :fn, :arglists ([result decision-context]), :experimental true}
     attributed-permission-result? {:kind :fn, :arglists ([result]), :experimental true}
-    cancel-factory-run! {:kind :fn, :arglists ([session run-id]), :experimental true}
+    cancel-workflow-run! {:kind :fn, :arglists ([session run-id]), :experimental true}
     capabilities {:kind :fn, :arglists ([session])}
     client {:kind :fn, :arglists ([] [opts])}
     client-options {:kind :fn, :arglists ([client])}
@@ -34,8 +34,8 @@
     create-session {:kind :fn, :arglists ([client config])}
     create-session-fs-adapter {:kind :fn, :arglists ([provider])}
     default-join-session-permission-handler {:kind :fn, :arglists ([request ctx])}
-    define-factory {:kind :fn, :arglists ([definition]), :experimental true}
     define-tool {:kind :fn, :arglists ([name opts])}
+    define-workflow {:kind :fn, :arglists ([definition]), :experimental true}
     delete-session! {:kind :fn, :arglists ([client session-id])}
     destroy! {:kind :fn, :arglists ([session])}
     disconnect! {:kind :fn, :arglists ([session])}
@@ -44,29 +44,28 @@
     events {:kind :fn, :arglists ([session])}
     events->chan {:kind :fn, :arglists ([session] [session opts])}
     evt {:kind :fn, :arglists ([k])}
-    factory-terminal-status? {:kind :fn, :arglists ([status]), :experimental true}
     force-stop! {:kind :fn, :arglists ([client])}
     get-auth-status {:kind :fn, :arglists ([client])}
     get-current-model {:kind :fn, :arglists ([session]), :experimental true}
-    get-factory-run {:kind :fn, :arglists ([session run-id]), :experimental true}
-    get-factory-run-detail {:kind :fn, :arglists ([session run-id]), :experimental true}
-    get-factory-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
     get-foreground-session-id {:kind :fn, :arglists ([client])}
     get-last-session-id {:kind :fn, :arglists ([client])}
     get-messages {:kind :fn, :arglists ([session])}
     get-quota {:kind :fn, :arglists ([client]), :experimental true}
     get-session-metadata {:kind :fn, :arglists ([client session-id])}
     get-status {:kind :fn, :arglists ([client])}
+    get-workflow-run {:kind :fn, :arglists ([session run-id]), :experimental true}
+    get-workflow-run-detail {:kind :fn, :arglists ([session run-id]), :experimental true}
+    get-workflow-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
     handle-pending-permission-request! {:kind :fn, :arglists ([session opts]), :experimental true}
     handle-pending-tool-call! {:kind :fn, :arglists ([session opts])}
     history-clear-context! {:kind :fn, :arglists ([session prompt]), :experimental true}
     input! {:kind :fn, :arglists ([session message] [session message opts])}
     interaction-events {:kind :value}
     join-session {:kind :fn, :arglists ([config])}
-    list-factory-runs {:kind :fn, :arglists ([session]), :experimental true}
     list-models {:kind :fn, :arglists ([client])}
     list-sessions {:kind :fn, :arglists ([client] [client filter-opts])}
     list-tools {:kind :fn, :arglists ([client] [client model]), :experimental true}
+    list-workflow-runs {:kind :fn, :arglists ([session]), :experimental true}
     log! {:kind :fn, :arglists ([session message] [session message opts])}
     notifications {:kind :fn, :arglists ([client])}
     on-lifecycle-event {:kind :fn, :arglists ([client handler] [client event-type handler])}
@@ -76,9 +75,9 @@
     result-failure {:kind :fn, :arglists ([text] [text error] [text error telemetry])}
     result-rejected {:kind :fn, :arglists ([text] [text telemetry])}
     result-success {:kind :fn, :arglists ([text] [text telemetry])}
-    resume-factory! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
     resume-session {:kind :fn, :arglists ([client session-id config])}
-    run-factory! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options]), :experimental true}
+    resume-workflow! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
+    run-workflow! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options]), :experimental true}
     select! {:kind :fn, :arglists ([session message options])}
     send! {:kind :fn, :arglists ([session opts])}
     send-and-wait! {:kind :fn, :arglists ([session opts] [session opts timeout-or-response-schema] [session opts response-schema timeout-ms])}
@@ -100,10 +99,11 @@
     tool-events {:kind :value}
     ui-elicitation! {:kind :fn, :arglists ([session params])}
     unsubscribe-events! {:kind :fn, :arglists ([session ch])}
-    wait-for-factory-run! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
+    wait-for-workflow-run! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
     with-client {:kind :macro, :arglists ([[client-sym & [opts]] & body])}
     with-client-session {:kind :macro, :arglists ([[a b & more] & body])}
     with-session {:kind :macro, :arglists ([[session-sym client config] & body])}
+    workflow-terminal-status? {:kind :fn, :arglists ([status]), :experimental true}
     workspace-path {:kind :fn, :arglists ([session])}}
    :fdefs
    {github.copilot-sdk/attributed-permission-result (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :result :github.copilot-sdk.specs/permission-handler-result :decision-context :github.copilot-sdk.specs/permission-decision-context) :ret :github.copilot-sdk.specs/attributed-permission-result :fn nil)
@@ -180,50 +180,6 @@
     github.copilot-sdk.client/start! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client) :ret clojure.core/nil? :fn nil)
     github.copilot-sdk.client/state (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client) :ret :github.copilot-sdk.specs/connection-state :fn nil)
     github.copilot-sdk.client/stop! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client) :ret (clojure.spec.alpha/coll-of clojure.core/any?) :fn nil)}}
-  github.copilot-sdk.factory
-  {:vars
-   {<cancel! {:kind :fn, :arglists ([session run-id])}
-    <get-run {:kind :fn, :arglists ([session run-id])}
-    <get-run-detail {:kind :fn, :arglists ([session run-id])}
-    <get-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options])}
-    <list-runs {:kind :fn, :arglists ([session])}
-    <resume! {:kind :fn, :arglists ([session run-id] [session run-id options])}
-    <run! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options])}
-    <wait-for-run! {:kind :fn, :arglists ([session run-id] [session run-id options])}
-    cancel! {:kind :fn, :arglists ([session run-id])}
-    define-factory {:kind :fn, :arglists ([{:as definition, :keys [meta run]}])}
-    factory-handle? {:kind :fn, :arglists ([value])}
-    factory-meta {:kind :fn, :arglists ([handle])}
-    get-run {:kind :fn, :arglists ([session run-id])}
-    get-run-detail {:kind :fn, :arglists ([session run-id])}
-    get-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options])}
-    json-null {:kind :value}
-    list-runs {:kind :fn, :arglists ([session])}
-    resume! {:kind :fn, :arglists ([session run-id] [session run-id {:as options, :keys [limits]}])}
-    run! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle {:as options, :keys [args limits resume-from-run-id]}])}
-    terminal-status? {:kind :fn, :arglists ([status])}
-    wait-for-run! {:kind :fn, :arglists ([session run-id] [session run-id {:keys [cancel-chan poll-interval-ms], :or {poll-interval-ms 5000}}])}}
-   :fdefs
-   {github.copilot-sdk.factory/<cancel! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<get-run (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<get-run-detail (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<list-runs (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<resume! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :identifier clojure.core/any? :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/<wait-for-run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
-    github.copilot-sdk.factory/cancel! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/define-factory (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :definition clojure.core/map?) :ret github.copilot-sdk.factory/factory-handle? :fn nil)
-    github.copilot-sdk.factory/factory-handle? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :value clojure.core/any?) :ret clojure.core/boolean? :fn nil)
-    github.copilot-sdk.factory/factory-meta (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :handle github.copilot-sdk.factory/factory-handle?) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/get-run (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/get-run-detail (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/list-runs (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/vector? :fn nil)
-    github.copilot-sdk.factory/resume! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :identifier clojure.core/any? :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
-    github.copilot-sdk.factory/terminal-status? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :status (clojure.spec.alpha/or :keyword clojure.core/keyword? :string clojure.core/string?)) :ret clojure.core/boolean? :fn nil)
-    github.copilot-sdk.factory/wait-for-run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)}}
   github.copilot-sdk.helpers
   {:vars
    {client-info {:kind :fn, :arglists ([])}
@@ -290,8 +246,6 @@
     handle-command-execute! {:kind :fn, :arglists ([client session-id {:keys [command-name command args]}])}
     handle-elicitation-request! {:kind :fn, :arglists ([client session-id context])}
     handle-exit-plan-mode-request! {:kind :fn, :arglists ([client session-id request])}
-    handle-factory-abort! {:kind :fn, :arglists ([client session-id run-id] [client session-id run-id execution-token])}
-    handle-factory-execute! {:kind :fn, :arglists ([client session-id {:as params, :keys [name run-id execution-token]}])}
     handle-hooks-invoke! {:kind :fn, :arglists ([client session-id hook-type input])}
     handle-mcp-auth-request! {:kind :fn, :arglists ([client session-id request])}
     handle-pending-permission-request! {:kind :fn, :arglists ([session {:as opts, :keys [request-id result]}]), :experimental true}
@@ -302,6 +256,8 @@
     handle-system-message-transform {:kind :fn, :arglists ([client session-id sections])}
     handle-tool-call! {:kind :fn, :arglists ([client session-id tool-call-id tool-name arguments & {:keys [traceparent tracestate]}])}
     handle-user-input-request! {:kind :fn, :arglists ([client session-id request])}
+    handle-workflow-abort! {:kind :fn, :arglists ([client session-id run-id] [client session-id run-id execution-token])}
+    handle-workflow-execute! {:kind :fn, :arglists ([client session-id {:as params, :keys [name run-id execution-token]}])}
     history-clear-context! {:kind :fn, :arglists ([session prompt]), :experimental true}
     history-truncate! {:kind :fn, :arglists ([session]), :experimental true}
     input! {:kind :fn, :arglists ([session message] [session message opts])}
@@ -496,6 +452,7 @@
     :github.copilot-sdk.specs/assistant.reasoning-data
     :github.copilot-sdk.specs/assistant.reasoning_delta-data
     :github.copilot-sdk.specs/assistant.streaming_delta-data
+    :github.copilot-sdk.specs/assistant.turn_end-data
     :github.copilot-sdk.specs/assistant.turn_start-data
     :github.copilot-sdk.specs/assistant.usage-data
     :github.copilot-sdk.specs/assisted-approval-model
@@ -685,16 +642,7 @@
     :github.copilot-sdk.specs/extensions
     :github.copilot-sdk.specs/external-server?
     :github.copilot-sdk.specs/external_tool.requested-data
-    :github.copilot-sdk.specs/factories
-    :github.copilot-sdk.specs/factory-limits
-    :github.copilot-sdk.specs/factory-meta
-    :github.copilot-sdk.specs/factory-operation
-    :github.copilot-sdk.specs/factory-permission-phases
-    :github.copilot-sdk.specs/factory-phase
-    :github.copilot-sdk.specs/factory-resume-error-code
     :github.copilot-sdk.specs/factory-run-id
-    :github.copilot-sdk.specs/factory-run-status
-    :github.copilot-sdk.specs/factory.run_updated-data
     :github.copilot-sdk.specs/family
     :github.copilot-sdk.specs/feature-flags
     :github.copilot-sdk.specs/features
@@ -1193,6 +1141,17 @@
     :github.copilot-sdk.specs/warnings
     :github.copilot-sdk.specs/wire-api
     :github.copilot-sdk.specs/wire-model
+    :github.copilot-sdk.specs/workflow-limit-overrides
+    :github.copilot-sdk.specs/workflow-limits
+    :github.copilot-sdk.specs/workflow-meta
+    :github.copilot-sdk.specs/workflow-operation
+    :github.copilot-sdk.specs/workflow-permission-phases
+    :github.copilot-sdk.specs/workflow-phase
+    :github.copilot-sdk.specs/workflow-resume-error-code
+    :github.copilot-sdk.specs/workflow-run-id
+    :github.copilot-sdk.specs/workflow-run-status
+    :github.copilot-sdk.specs/workflow.run_updated-data
+    :github.copilot-sdk.specs/workflows
     :github.copilot-sdk.specs/working-directory
     :github.copilot-sdk.specs/workspace-path
     :github.copilot-sdk.specs/write-file
@@ -1229,4 +1188,48 @@
     github.copilot-sdk.tools/result-failure (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-failure-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk.tools/result-rejected (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk.tools/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)}}
+  github.copilot-sdk.workflow
+  {:vars
+   {<cancel! {:kind :fn, :arglists ([session run-id])}
+    <get-run {:kind :fn, :arglists ([session run-id])}
+    <get-run-detail {:kind :fn, :arglists ([session run-id])}
+    <get-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options])}
+    <list-runs {:kind :fn, :arglists ([session])}
+    <resume! {:kind :fn, :arglists ([session run-id] [session run-id options])}
+    <run! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle options])}
+    <wait-for-run! {:kind :fn, :arglists ([session run-id] [session run-id options])}
+    cancel! {:kind :fn, :arglists ([session run-id])}
+    define-workflow {:kind :fn, :arglists ([{:as definition, :keys [meta run]}])}
+    get-run {:kind :fn, :arglists ([session run-id])}
+    get-run-detail {:kind :fn, :arglists ([session run-id])}
+    get-run-progress {:kind :fn, :arglists ([session run-id] [session run-id options])}
+    json-null {:kind :value}
+    list-runs {:kind :fn, :arglists ([session])}
+    resume! {:kind :fn, :arglists ([session run-id] [session run-id {:as options, :keys [limits]}])}
+    run! {:kind :fn, :arglists ([session name-or-handle] [session name-or-handle {:as options, :keys [args limits resume-from-run-id]}])}
+    terminal-status? {:kind :fn, :arglists ([status])}
+    wait-for-run! {:kind :fn, :arglists ([session run-id] [session run-id {:keys [cancel-chan poll-interval-ms], :or {poll-interval-ms 5000}}])}
+    workflow-handle? {:kind :fn, :arglists ([value])}
+    workflow-meta {:kind :fn, :arglists ([handle])}}
+   :fdefs
+   {github.copilot-sdk.workflow/<cancel! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<get-run (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<get-run-detail (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<list-runs (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<resume! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :identifier clojure.core/any? :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/<wait-for-run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret :github.copilot-sdk.specs/events-ch :fn nil)
+    github.copilot-sdk.workflow/cancel! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/define-workflow (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :definition clojure.core/map?) :ret github.copilot-sdk.workflow/workflow-handle? :fn nil)
+    github.copilot-sdk.workflow/get-run (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/get-run-detail (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/get-run-progress (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/list-runs (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/vector? :fn nil)
+    github.copilot-sdk.workflow/resume! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :identifier clojure.core/any? :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/terminal-status? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :status (clojure.spec.alpha/or :keyword clojure.core/keyword? :string clojure.core/string?)) :ret clojure.core/boolean? :fn nil)
+    github.copilot-sdk.workflow/wait-for-run! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :run-id :github.copilot-sdk.specs/run-id :options (clojure.spec.alpha/? clojure.core/map?)) :ret clojure.core/map? :fn nil)
+    github.copilot-sdk.workflow/workflow-handle? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :value clojure.core/any?) :ret clojure.core/boolean? :fn nil)
+    github.copilot-sdk.workflow/workflow-meta (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :handle github.copilot-sdk.workflow/workflow-handle?) :ret clojure.core/map? :fn nil)}}
  }}

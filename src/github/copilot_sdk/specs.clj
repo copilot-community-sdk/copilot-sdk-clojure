@@ -1274,34 +1274,63 @@
    (s/keys :opt-un [::permissions])
    #{:permissions}))
 
-(s/def ::factories (s/coll-of any? :kind vector?))
+(s/def ::workflows (s/coll-of any? :kind vector?))
 
 (s/def ::max-concurrent-subagents pos-int?)
 (s/def ::max-total-subagents pos-int?)
 (s/def ::timeout-seconds (s/and number? pos? #(<= % 2147483.647)))
-(s/def ::factory-limits
+(s/def ::workflow-limits
   (closed-keys
    (s/keys :opt-un [::max-concurrent-subagents ::max-total-subagents
                     ::max-ai-credits ::timeout-seconds])
    #{:max-concurrent-subagents :max-total-subagents
      :max-ai-credits :timeout-seconds}))
+(s/def ::workflow-limit-overrides
+  (closed-keys
+   (s/and
+    map?
+    (fn [limits]
+      (every?
+       (fn [[field spec]]
+         (optional-field? limits field
+                          #(or (nil? %)
+                               (and (json-number? %) (s/valid? spec %)))))
+       {:max-concurrent-subagents ::max-concurrent-subagents
+        :max-total-subagents ::max-total-subagents
+        :max-ai-credits ::max-ai-credits
+        :timeout-seconds ::timeout-seconds}))
+    (fn [limits]
+      (let [credits (:max-ai-credits limits)]
+        (or (nil? credits)
+            (pos? (Math/round (* (double credits) 1000000000)))))))
+   #{:max-concurrent-subagents :max-total-subagents
+     :max-ai-credits :timeout-seconds}))
 (s/def ::detail string?)
-(s/def ::factory-phase
+(s/def ::workflow-phase
   (closed-keys
    (s/keys :req-un [::title] :opt-un [::detail])
    #{:title :detail}))
-(s/def ::phases (s/coll-of ::factory-phase :kind vector?))
-(s/def ::limits ::factory-limits)
-(s/def ::factory-meta
+(s/def ::phases (s/coll-of ::workflow-phase :kind vector?))
+(s/def ::limits ::workflow-limits)
+(s/def ::workflow-meta
   (closed-keys
    (s/keys :req-un [::name ::description ::phases]
            :opt-un [::limits])
    #{:name :description :phases :limits}))
-(s/def ::factory-run-status
-  #{:pending :running :completed :halted :cancelled :error})
-(s/def ::factory-resume-error-code
-  #{:not-found :non-resumable :already-active
-    :reapproval-declined :no-approval-provider})
+(s/def ::workflow-run-status
+  #{:pending :running :completed :halted :paused :cancelled :error})
+(s/def ::workflow-resume-error-code
+  #{:not-found :non-resumable :workflow-run-not-resumable
+    :already-active :workflow-already-running :workflow-limits-invalid
+    :workflow-session-disposed :workflow-storage-unavailable
+    :workflow-storage-corrupt})
+
+(defn- workflow-pause-info? [value]
+  (and (map? value)
+       (case (:type value)
+         "user" true
+         "checkpoint" (string? (:key value))
+         false)))
 
 ;; canvasProvider (upstream PR #1847) — stable identity for a host/SDK connection
 ;; that supplies built-in canvases, so canvases declared on a control connection
@@ -1512,7 +1541,7 @@
                     ::canvas-provider])
    resume-session-config-keys))
 
-;; join-session config extends resume with extension-authored Agent Factories
+;; join-session config extends resume with extension-authored Dynamic Workflows
 ;; and the extension-only environment grant request.
 ;; When omitted, join-session defaults to a handler that returns {:kind :no-result}.
 (s/def ::requested-environment-variables
@@ -1520,7 +1549,7 @@
 (def ^:private join-session-config-keys
   (-> resume-session-config-keys
       (disj :extension-sdk-path)
-      (conj :factories :requested-environment-variables)))
+      (conj :workflows :requested-environment-variables)))
 (s/def ::join-session-config
   (closed-session-config
    (s/keys :opt-un [::on-permission-request
@@ -1571,7 +1600,7 @@
                     ::request-extensions?
                     ::requested-environment-variables
                     ::canvas-provider
-                    ::factories])
+                    ::workflows])
    join-session-config-keys))
 
 ;; -----------------------------------------------------------------------------
@@ -1910,7 +1939,7 @@
     :copilot/session.managed_settings_resolved
     :copilot/tool_search.activated
     ;; v1.0.9 + post-v1.0.9 sync (pinned schema 1.0.79-6).
-    :copilot/factory.run_updated
+    :copilot/workflow.run_updated
     ;; Stable 2980c78 sync (pinned schema 1.0.83-1). Stable HydraFusion events
     ;; remain internal; routing and phase events remain experimental.
     :copilot/session.mode_notice_delivered
@@ -2139,7 +2168,11 @@
 
 (s/def ::assistant.turn_start-data
   (s/keys :req-un [::turn-id]
-          :opt-un [::interaction-id]))
+          :opt-un [::interaction-id ::model ::parent-tool-call-id]))
+
+(s/def ::assistant.turn_end-data
+  (s/keys :req-un [::turn-id]
+          :opt-un [::model ::parent-tool-call-id]))
 
 (s/def ::assistant.reasoning-data
   (s/keys :req-un [::reasoning-id ::content]
@@ -2363,7 +2396,7 @@
 (s/def ::model-change-source
   #{"model_command" "config_command" "settings_command" "model_picker"
     "plan_mode" "automatic" "startup" "repo_settings" "managed_settings"
-    "agent" "sdk" "changeboarding_shortcut"})
+    "agent" "sdk" "changeboarding_shortcut" "auto_tier_recommendation"})
 (s/def ::session.model_change-data
   (s/and
    (s/keys :req-un [::new-model]
@@ -2573,10 +2606,10 @@
   (s/keys :req-un [::messages-cleared]
           :opt-un [::initial-message]))
 
-;; Agent Factory run invalidation event (upstream PR #2114).
+;; Dynamic Workflow run invalidation event (upstream PR #2114).
 (s/def ::run-id ::non-blank-string)
 (s/def ::revision nat-int?)
-(s/def ::factory.run_updated-data
+(s/def ::workflow.run_updated-data
   (s/keys :req-un [::run-id ::revision]))
 
 ;; Schedule events (upstream schema 1.0.42; v1.0.1 added cron/at variants —
@@ -2655,7 +2688,8 @@
 (s/def ::total-tokens nat-int?)
 (s/def ::duration-ms nat-int?)
 (s/def ::cancelled boolean?)
-(s/def ::factory-run-id ::non-blank-string)
+(s/def ::factory-run-id string?)
+(s/def ::workflow-run-id string?)
 
 ;; Additive subagent fields (upstream schema 1.0.83-1, stable 2980c78 sync).
 ;; `::subagent-parent-id` is deliberately distinct from the pre-existing
@@ -2694,7 +2728,7 @@
   (s/and
    (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name
                     ::agent-description]
-           :opt-un [::factory-run-id ::model ::resumable
+           :opt-un [::factory-run-id ::workflow-run-id ::model ::resumable
                     ::agent-type ::execution-mode ::task-model-source
                     ::model-selection-source])
    #(or (not (contains? % :parent-id))
@@ -2820,7 +2854,7 @@
 (s/def ::model-call-failure-source #{"top_level" "subagent" "mcp_sampling"})
 (s/def ::model.call_failure-data
   (s/and (s/keys :req-un [::source]
-                 :opt-un [::interaction-type])
+                 :opt-un [::interaction-type ::parent-tool-call-id])
          #(s/valid? ::model-call-failure-source (:source %))))
 
 (s/def ::model.call_finished-data
@@ -2909,17 +2943,17 @@
                  ((juxt :source-path :trigger-file :trigger-tool) kind))
          (optional-field? kind :description string?))
 
-    "factory_completed"
+    "workflow_completed"
     (and (notification-map?
           kind
-          #{:type :run-id :factory-name :status :consumed-subagents
+          #{:type :run-id :workflow-name :status :consumed-subagents
             :elapsed-ms :consumed-nano-aiu :attempt}
-          #{:type :run-id :factory-name :status :consumed-subagents
+          #{:type :run-id :workflow-name :status :consumed-subagents
             :elapsed-ms :consumed-nano-aiu :attempt :result-preview
-            :failure :retry-guidance})
+            :failure :retry-guidance :pause-info})
          (string? (:run-id kind))
-         (string? (:factory-name kind))
-         (contains? #{"completed" "halted" "cancelled" "error"} (:status kind))
+         (string? (:workflow-name kind))
+         (contains? #{"completed" "halted" "paused" "cancelled" "error"} (:status kind))
          (nat-int? (:consumed-subagents kind))
          (nat-int? (:elapsed-ms kind))
          (nat-int? (:consumed-nano-aiu kind))
@@ -2927,6 +2961,7 @@
          (optional-field? kind :result-preview
                           #(and (string? %) (<= (count %) 256)))
          (optional-field? kind :failure opaque-json-value?)
+         (optional-field? kind :pause-info workflow-pause-info?)
          (optional-field? kind :retry-guidance string?))
 
     "unclassified"
@@ -3051,7 +3086,7 @@
 (s/def ::permission-kind
   #{:shell :write :mcp :read :url :custom-tool :memory :hook
     :extension-management :extension-permission-access
-    :extension-env-access :factory})
+    :extension-env-access :workflow})
 
 ;; Memory permission event data fields (CLI 1.0.22, upstream PR #1055)
 (s/def ::memory-action #{:store :vote})
@@ -3060,8 +3095,8 @@
 (s/def ::managed-approval-required boolean?)
 (s/def ::command-segments (s/coll-of map? :kind vector?))
 (s/def ::redirected-from string?)
-(s/def ::factory-operation #{"run" "author"})
-(s/def ::factory-permission-phases (s/coll-of ::factory-phase :kind vector?))
+(s/def ::workflow-operation #{"run" "author"})
+(s/def ::workflow-permission-phases (s/coll-of ::workflow-phase :kind vector?))
 (s/def ::approval-key ::non-blank-string)
 (s/def ::can-persist-approval boolean?)
 (s/def ::declared-max-concurrent-subagents nat-int?)
@@ -3098,11 +3133,11 @@
                     ::can-offer-server-wide-approval
                     ::request-sandbox-bypass ::request-sandbox-bypass-reason
                     ::request-sandbox-permissive])
-   #(or (not= :factory (:permission-kind %))
-        (and (s/valid? ::factory-operation (:operation %))
+   #(or (not= :workflow (:permission-kind %))
+        (and (s/valid? ::workflow-operation (:operation %))
              (s/valid? ::non-blank-string (:name %))
              (s/valid? ::non-blank-string (:description %))
-             (s/valid? ::factory-permission-phases (:phases %))
+             (s/valid? ::workflow-permission-phases (:phases %))
              (s/valid? ::non-blank-string (:approval-key %))
              (boolean? (:can-persist-approval %))
              (or (not (contains? % :max-concurrent-subagents))

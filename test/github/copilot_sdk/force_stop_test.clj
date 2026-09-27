@@ -23,8 +23,8 @@
         original-send-lock
         (get-in @(:state client) [:session-io session-id :send-lock])
         pending-cancel (async/chan)
-        factory-cancelled? (atom false)
-        factory-cancel (async/chan)
+        workflow-cancelled? (atom false)
+        workflow-cancel (async/chan)
         setup-token (Object.)]
     (swap! (:state client)
            (fn [state]
@@ -33,15 +33,15 @@
                   [:sessions session-id :pending-external-tools "request-1"]
                   {:cancel-chan pending-cancel})
                  (assoc-in
-                  [:sessions session-id :factory-executions "run-1" "execution-1"]
-                  {:cancelled? factory-cancelled?
-                   :cancel-chan factory-cancel})
+                  [:sessions session-id :workflow-executions "run-1" "execution-1"]
+                  {:cancelled? workflow-cancelled?
+                   :cancel-chan workflow-cancel})
                  (assoc-in [:session-setups session-id] setup-token))))
     (session/create-session
      client session-id
      {:config {::session/setup-token setup-token}})
-    {:factory-cancel factory-cancel
-     :factory-cancelled? factory-cancelled?
+    {:workflow-cancel workflow-cancel
+     :workflow-cancelled? workflow-cancelled?
      :original-event-root original-event-root
      :original-send-lock original-send-lock
      :pending-cancel pending-cancel
@@ -51,11 +51,11 @@
      (get-in @(:state client) [:session-io session-id :send-lock])}))
 
 (defn- assert-displaced-session-released!
-  [client {:keys [factory-cancel factory-cancelled?
+  [client {:keys [workflow-cancel workflow-cancelled?
                   original-event-root original-send-lock pending-cancel
                   replacement-event-root replacement-send-lock]}]
-  (is @factory-cancelled?)
-  (doseq [ch [factory-cancel
+  (is @workflow-cancelled?)
+  (doseq [ch [workflow-cancel
               original-event-root
               original-send-lock
               pending-cancel
@@ -134,7 +134,7 @@
         rpc-methods (atom [])]
     (swap! (:state client)
            assoc-in
-           [:sessions "first-session" :factory-executions "run-1" "execution-1"]
+           [:sessions "first-session" :workflow-executions "run-1" "execution-1"]
            {:cancelled? cancelled?
             :cancel-chan cancel-ch})
     (async/<!! send-lock)
@@ -161,7 +161,7 @@
               (is (and (vector? result)
                        (re-find #"Event channel closed" (second result)))))
             (is (= [:released nil] (deref lock-waiter 500 ::pending))))
-          (testing "local session teardown cancels factory execution and rejects handles"
+          (testing "local session teardown cancels workflow execution and rejects handles"
             (is @cancelled?)
             (is (:closed? (await-port cancel-ch)))
             (is (thrown-with-msg?
@@ -178,11 +178,11 @@
             (async/close! send-lock)
             (deref in-flight-send 1000 nil)))))))
 
-(deftest force-stop-prevents-factory-registration-after-session-teardown
+(deftest force-stop-prevents-workflow-registration-after-session-teardown
   (let [client (sdk/client {:auto-start? false})
-        copilot-session (session/create-session client "factory-session" {})]
+        copilot-session (session/create-session client "workflow-session" {})]
     (sdk/force-stop! client)
-    (is (nil? (#'session/register-factory-execution!
+    (is (nil? (#'session/register-workflow-execution!
                client
                (sdk/session-id copilot-session)
                "run-1"
@@ -690,7 +690,7 @@
         provider-failure (ex-info "provider cancellation failed" {})]
     (swap! (:state client)
            assoc-in
-           [:sessions session-id :factory-executions "run" "execution"]
+           [:sessions session-id :workflow-executions "run" "execution"]
            {:cancelled? cancelled?
             :cancel-chan cancel-ch})
     (try
@@ -726,7 +726,7 @@
         cancel-ch (async/chan)]
     (swap! (:state client)
            assoc-in
-           [:sessions session-id :factory-executions "run" "execution"]
+           [:sessions session-id :workflow-executions "run" "execution"]
            {:cancelled? nil
             :cancel-chan cancel-ch})
     (try
@@ -735,7 +735,7 @@
                      nil
                      (catch Throwable failure
                        failure))]
-        (is (= :factory-executions (-> caught ex-data :resource)))
+        (is (= :workflow-executions (-> caught ex-data :resource)))
         (is (:closed? (await-port events-ch)))
         (is (async-protocols/closed? send-lock))
         (is (not (contains? (:sessions @(:state client)) session-id)))

@@ -14,7 +14,7 @@
      (stest/unstrument)"
   (:require [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as stest]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.helpers]
             [github.copilot-sdk.specs :as specs]
             ;; Ensure namespaces hosting public fns referenced by `register-fdef!`
@@ -461,108 +461,108 @@
                 :ret (s/keys :req-un [::specs/messages-cleared]))
 
 ;; -----------------------------------------------------------------------------
-;; Function specs for Agent Factories
+;; Function specs for Dynamic Workflows
 ;; -----------------------------------------------------------------------------
 
-(register-fdef! github.copilot-sdk.factory/define-factory
+(register-fdef! github.copilot-sdk.workflow/define-workflow
                 :args (s/cat :definition map?)
-                :ret factory/factory-handle?)
+                :ret workflow/workflow-handle?)
 
-(register-fdef! github.copilot-sdk.factory/factory-handle?
+(register-fdef! github.copilot-sdk.workflow/workflow-handle?
                 :args (s/cat :value any?)
                 :ret boolean?)
 
-(register-fdef! github.copilot-sdk.factory/factory-meta
-                :args (s/cat :handle factory/factory-handle?)
+(register-fdef! github.copilot-sdk.workflow/workflow-meta
+                :args (s/cat :handle workflow/workflow-handle?)
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/factory-run-function
-                :args (s/cat :handle factory/factory-handle?)
+(register-fdef! github.copilot-sdk.workflow/workflow-run-function
+                :args (s/cat :handle workflow/workflow-handle?)
                 :ret fn?)
 
-(register-fdef! github.copilot-sdk.factory/definitions-by-name
+(register-fdef! github.copilot-sdk.workflow/definitions-by-name
                 :args (s/cat :handles (s/nilable sequential?))
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/terminal-status?
+(register-fdef! github.copilot-sdk.workflow/terminal-status?
                 :args (s/cat :status (s/or :keyword keyword? :string string?))
                 :ret boolean?)
 
-(register-fdef! github.copilot-sdk.factory/run!
+(register-fdef! github.copilot-sdk.workflow/run!
                 :args (s/cat :session ::specs/session
                              :identifier any?
                              :options (s/? map?))
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/resume!
+(register-fdef! github.copilot-sdk.workflow/resume!
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
                              :options (s/? map?))
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/wait-for-run!
+(register-fdef! github.copilot-sdk.workflow/wait-for-run!
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
                              :options (s/? map?))
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/<run!
+(register-fdef! github.copilot-sdk.workflow/<run!
                 :args (s/cat :session ::specs/session
                              :identifier any?
                              :options (s/? map?))
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/<resume!
+(register-fdef! github.copilot-sdk.workflow/<resume!
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
                              :options (s/? map?))
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/<wait-for-run!
+(register-fdef! github.copilot-sdk.workflow/<wait-for-run!
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
                              :options (s/? map?))
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/get-run
+(register-fdef! github.copilot-sdk.workflow/get-run
                 :args (s/cat :session ::specs/session :run-id ::specs/run-id)
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/get-run-detail
+(register-fdef! github.copilot-sdk.workflow/get-run-detail
                 :args (s/cat :session ::specs/session :run-id ::specs/run-id)
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/cancel!
+(register-fdef! github.copilot-sdk.workflow/cancel!
                 :args (s/cat :session ::specs/session :run-id ::specs/run-id)
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/<get-run
+(register-fdef! github.copilot-sdk.workflow/<get-run
                 :args (s/cat :session ::specs/session :run-id ::specs/run-id)
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/<get-run-detail
+(register-fdef! github.copilot-sdk.workflow/<get-run-detail
                 :args (s/cat :session ::specs/session :run-id ::specs/run-id)
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/<cancel!
+(register-fdef! github.copilot-sdk.workflow/<cancel!
                 :args (s/cat :session ::specs/session :run-id ::specs/run-id)
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/list-runs
+(register-fdef! github.copilot-sdk.workflow/list-runs
                 :args (s/cat :session ::specs/session)
                 :ret vector?)
 
-(register-fdef! github.copilot-sdk.factory/<list-runs
+(register-fdef! github.copilot-sdk.workflow/<list-runs
                 :args (s/cat :session ::specs/session)
                 :ret ::specs/events-ch)
 
-(register-fdef! github.copilot-sdk.factory/get-run-progress
+(register-fdef! github.copilot-sdk.workflow/get-run-progress
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
                              :options (s/? map?))
                 :ret map?)
 
-(register-fdef! github.copilot-sdk.factory/<get-run-progress
+(register-fdef! github.copilot-sdk.workflow/<get-run-progress
                 :args (s/cat :session ::specs/session
                              :run-id ::specs/run-id
                              :options (s/? map?))

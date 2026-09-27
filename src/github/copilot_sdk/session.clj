@@ -12,7 +12,7 @@
             [clojure.string :as str]
             [clojure.data.json :as json]
             [github.copilot-sdk.protocol :as proto]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.github-token-provider :as token-provider]
             [github.copilot-sdk.logging :as log]
             [github.copilot-sdk.specs :as specs]
@@ -285,7 +285,7 @@
                        ::registration-guard
                        ::registration-result
                        ::setup-token)
-        factory-definitions (factory/definitions-by-name (:factories config))
+        workflow-definitions (workflow/definitions-by-name (:workflows config))
         registration-token (Object.)
         event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
@@ -329,8 +329,8 @@
                                       :exit-plan-mode-handler on-exit-plan-mode
                                       :auto-mode-switch-handler on-auto-mode-switch
                                       :hooks hooks
-                                      :factories factory-definitions
-                                      :factory-executions {}
+                                      :workflows workflow-definitions
+                                      :workflow-executions {}
                                       :pending-external-tools {}
                                       :managed-settings-enabled?
                                       (or
@@ -670,7 +670,7 @@
    The returned handler map has the low-level RPC contract: each function
    receives a params map and returns RPC-shaped result maps or structured
    SessionFsError maps. create-session/resume-session automatically adapt
-   provider-style factory returns, so call this directly only when you need the
+   provider-style workflow returns, so call this directly only when you need the
    low-level handler map yourself.
 
    Existing low-level handler maps returned from :create-session-fs-handler are
@@ -790,7 +790,7 @@
       base-handler)))
 
 (defn adapt-session-fs-handler
-  "Return an RPC-shaped sessionFs handler for either supported factory contract.
+  "Return an RPC-shaped sessionFs handler for either supported workflow contract.
 
    Upstream SDKs expect :create-session-fs-handler to return a provider-style
    implementation, which this function wraps with create-session-fs-adapter.
@@ -865,10 +865,10 @@
       (vals (:pending-external-tools session))))
     (teardown/attempt
      {:operation :cancel
-      :resource :factory-executions
+      :resource :workflow-executions
       :session-id session-id}
      (cancel-executions!
-      (mapcat vals (vals (:factory-executions session)))))
+      (mapcat vals (vals (:workflow-executions session)))))
     (teardown/attempt
      {:operation :close
       :resource :event-channel
@@ -1010,41 +1010,41 @@
 
     params))
 
-(def ^:private max-factory-fanout 4096)
+(def ^:private max-workflow-fanout 4096)
 
-(defn- factory-aborted-error [run-id]
-  (ex-info "Factory run was aborted"
-           {:type :factory-aborted
+(defn- workflow-aborted-error [run-id]
+  (ex-info "Workflow run was aborted"
+           {:type :workflow-aborted
             :run-id run-id}))
 
-(defn- throw-if-factory-aborted! [{:keys [cancelled? run-id]}]
+(defn- throw-if-workflow-aborted! [{:keys [cancelled? run-id]}]
   (when @cancelled?
-    (throw (factory-aborted-error run-id))))
+    (throw (workflow-aborted-error run-id))))
 
-(defn- factory-rpc!
+(defn- workflow-rpc!
   [client execution method params]
-  (throw-if-factory-aborted! execution)
+  (throw-if-workflow-aborted! execution)
   (let [response-chan (proto/send-request (connection-io client) method params)
         [response port] (alts!! [(:cancel-chan execution) response-chan] :priority true)]
     (if (= port (:cancel-chan execution))
-      (throw (factory-aborted-error (:run-id execution)))
+      (throw (workflow-aborted-error (:run-id execution)))
       (cond
         (nil? response)
-        (throw (ex-info "Factory RPC response channel closed" {:method method}))
+        (throw (ex-info "Workflow RPC response channel closed" {:method method}))
 
         (:error response)
-        (throw (ex-info (get-in response [:error :message] "Factory RPC error")
+        (throw (ex-info (get-in response [:error :message] "Workflow RPC error")
                         {:method method :error (:error response)}))
 
         :else
         (:result response)))))
 
-(defn- factory-fatal-error? [error]
+(defn- workflow-fatal-error? [error]
   (let [{:keys [type method]} (ex-data error)]
-    (or (= :factory-aborted type)
-        (and (string? method) (str/starts-with? method "session.factory.")))))
+    (or (= :workflow-aborted type)
+        (and (string? method) (str/starts-with? method "session.workflow.")))))
 
-(defn- await-factory-value [value]
+(defn- await-workflow-value [value]
   (cond
     (channel? value) (<!! value)
     (or (instance? java.util.concurrent.Future value)
@@ -1063,7 +1063,7 @@
                       (every? json-value? (vals value)))
     :else false))
 
-(defn- assert-factory-json! [value label]
+(defn- assert-workflow-json! [value label]
   (when-not (json-value? value)
     (throw (ex-info (str label " must be a JSON value")
                     {:value-type (some-> value class .getName)})))
@@ -1075,35 +1075,35 @@
                   (and (keyword? key) (json-value? value))))
         (ex-data error)))
 
-(defn- factory-parallel [thunks]
+(defn- workflow-parallel [thunks]
   (when-not (and (vector? thunks) (every? fn? thunks))
     (throw (ex-info "parallel expects a vector of functions" {:value thunks})))
-  (when (> (count thunks) max-factory-fanout)
-    (throw (ex-info (str "parallel accepts at most " max-factory-fanout " items")
+  (when (> (count thunks) max-workflow-fanout)
+    (throw (ex-info (str "parallel accepts at most " max-workflow-fanout " items")
                     {:count (count thunks)})))
   (let [results (mapv (fn [thunk]
                         (future
                           (try
-                            {:value (await-factory-value (thunk))}
+                            {:value (await-workflow-value (thunk))}
                             (catch Throwable error
                               {:error error}))))
                       thunks)]
     (mapv (fn [result]
             (let [{:keys [value error]} @result]
               (if error
-                (if (factory-fatal-error? error)
+                (if (workflow-fatal-error? error)
                   (throw error)
                   nil)
                 value)))
           results)))
 
-(defn- factory-pipeline [items & stages]
+(defn- workflow-pipeline [items & stages]
   (when-not (vector? items)
     (throw (ex-info "pipeline items must be a vector" {:value items})))
   (when-not (every? fn? stages)
     (throw (ex-info "pipeline stages must be functions" {:value stages})))
-  (when (> (count items) max-factory-fanout)
-    (throw (ex-info (str "pipeline accepts at most " max-factory-fanout " items")
+  (when (> (count items) max-workflow-fanout)
+    (throw (ex-info (str "pipeline accepts at most " max-workflow-fanout " items")
                     {:count (count items)})))
   (let [futures
         (mapv
@@ -1113,12 +1113,12 @@
                     remaining stages]
                (if-let [stage (first remaining)]
                  (let [outcome (try
-                                 {:value (await-factory-value
+                                 {:value (await-workflow-value
                                           (stage previous item index))}
                                  (catch Throwable error
                                    {:error error}))]
                    (if-let [error (:error outcome)]
-                     (if (factory-fatal-error? error)
+                     (if (workflow-fatal-error? error)
                        {:error error}
                        {:value nil})
                      (recur (:value outcome) (next remaining))))
@@ -1132,16 +1132,16 @@
                 value)))
           futures)))
 
-(defn- new-factory-execution
+(defn- new-workflow-execution
   [run-id execution-token]
   {:run-id run-id
    :execution-token execution-token
    :cancelled? (atom false)
    :cancel-chan (chan)})
 
-(defn- register-factory-execution! [client session-id run-id execution-token]
-  (let [path [:sessions session-id :factory-executions run-id execution-token]
-        execution (new-factory-execution run-id execution-token)]
+(defn- register-workflow-execution! [client session-id run-id execution-token]
+  (let [path [:sessions session-id :workflow-executions run-id execution-token]
+        execution (new-workflow-execution run-id execution-token)]
     (when (identical?
            execution
            (get-in
@@ -1154,11 +1154,11 @@
             path))
       execution)))
 
-(defn- remove-factory-execution!
+(defn- remove-workflow-execution!
   [client session-id run-id execution-token execution]
   (swap! (:state client)
          (fn [state]
-           (let [path [:sessions session-id :factory-executions run-id]
+           (let [path [:sessions session-id :workflow-executions run-id]
                  current (get-in state (conj path execution-token))]
              (if-not (identical? current execution)
                state
@@ -1166,7 +1166,7 @@
                  (if (seq remaining)
                    (assoc-in state path remaining)
                    (update-in state
-                              [:sessions session-id :factory-executions]
+                              [:sessions session-id :workflow-executions]
                               dissoc
                               run-id))))))))
 
@@ -1176,46 +1176,46 @@
     (reset! cancelled? true)
     (close! cancel-chan)))
 
-(defn- cancel-factory-executions! [client session-id run-id]
+(defn- cancel-workflow-executions! [client session-id run-id]
   (cancel-executions!
    (vals (get-in @(:state client)
-                 [:sessions session-id :factory-executions run-id]))))
+                 [:sessions session-id :workflow-executions run-id]))))
 
-(defn- cancel-factory-execution!
+(defn- cancel-workflow-execution!
   [client session-id run-id execution-token]
   (when-let [execution
              (get-in @(:state client)
-                     [:sessions session-id :factory-executions
+                     [:sessions session-id :workflow-executions
                       run-id execution-token])]
     (cancel-executions! [execution])))
 
-(defn ^:no-doc prepare-factory-request!
-  "Apply order-sensitive factory bookkeeping before reverse-request dispatch."
+(defn ^:no-doc prepare-workflow-request!
+  "Apply order-sensitive workflow bookkeeping before reverse-request dispatch."
   [client method params]
   (case method
-    "factory.execute"
+    "workflow.execute"
     (let [{:keys [session-id name run-id execution-token]} params
           handle (get-in @(:state client)
-                         [:sessions session-id :factories name])
+                         [:sessions session-id :workflows name])
           execution
           (when handle
-            (register-factory-execution!
+            (register-workflow-execution!
              client session-id run-id execution-token))]
       (cond-> {:params
                (cond-> params
                  execution
-                 (assoc ::prepared-factory-handle handle
-                        ::prepared-factory-execution execution))}
+                 (assoc ::prepared-workflow-handle handle
+                        ::prepared-workflow-execution execution))}
         execution
         (assoc :on-reject
-               #(remove-factory-execution!
+               #(remove-workflow-execution!
                  client session-id run-id execution-token execution))))
 
-    "factory.abort"
+    "workflow.abort"
     (let [{:keys [session-id run-id execution-token]} params]
-      (cancel-factory-execution!
+      (cancel-workflow-execution!
        client session-id run-id execution-token)
-      {:params (assoc params ::factory-abort-prepared? true)})
+      {:params (assoc params ::workflow-abort-prepared? true)})
 
     {:params params}))
 
@@ -1263,8 +1263,8 @@
                         :tool-handlers {}
                         :permission-handler nil
                         :user-input-handler nil
-                        :factories {}
-                        :factory-executions {}
+                        :workflows {}
+                        :workflow-executions {}
                         :pending-external-tools {}
                         :hooks {}
                         :config nil))))))]
@@ -1302,11 +1302,11 @@
        (throw-cleanup-failures! failures)
        status))))
 
-(defn- factory-context
+(defn- workflow-context
   [client session-id {:keys [run-id execution-token args] :as _params} execution]
   (let [progress (atom {:next-seq 0 :pending []})
         enqueue! (fn [kind text]
-                   (throw-if-factory-aborted! execution)
+                   (throw-if-workflow-aborted! execution)
                    (swap! progress
                           (fn [{:keys [next-seq pending]}]
                             {:next-seq (inc next-seq)
@@ -1316,54 +1316,54 @@
                  (let [[old _] (swap-vals! progress assoc :pending [])
                        lines (:pending old)]
                    (when (seq lines)
-                     (factory-rpc! client execution "session.factory.log"
-                                   {:session-id session-id
-                                    :run-id run-id
-                                    :execution-token execution-token
-                                    :lines lines}))))
+                     (workflow-rpc! client execution "session.workflow.log"
+                                    {:session-id session-id
+                                     :run-id run-id
+                                     :execution-token execution-token
+                                     :lines lines}))))
         agent! (fn agent!
                  ([prompt] (agent! prompt {}))
                  ([prompt options]
                   (flush!)
                   (:result
-                   (factory-rpc! client execution "session.factory.agent"
-                                 {:session-id session-id
-                                  :factory-run-id run-id
-                                  :execution-token execution-token
-                                  :prompt prompt
-                                  :opts (select-keys options [:label :schema :model])}))))
+                   (workflow-rpc! client execution "session.workflow.agent"
+                                  {:session-id session-id
+                                   :workflow-run-id run-id
+                                   :execution-token execution-token
+                                   :prompt prompt
+                                   :opts (select-keys options [:label :schema :model])}))))
         step! (fn step!
                 ([key producer] (step! key producer {}))
                 ([key producer {:keys [volatile?]}]
                  (flush!)
                  (if volatile?
                    (do
-                     (throw-if-factory-aborted! execution)
-                     (assert-factory-json!
-                      (await-factory-value (producer))
+                     (throw-if-workflow-aborted! execution)
+                     (assert-workflow-json!
+                      (await-workflow-value (producer))
                       (str "step " (pr-str key) " result")))
-                   (let [cached (factory-rpc! client execution
-                                              "session.factory.journal.get"
-                                              {:session-id session-id
-                                               :run-id run-id
-                                               :execution-token execution-token
-                                               :key key})]
+                   (let [cached (workflow-rpc! client execution
+                                               "session.workflow.journal.get"
+                                               {:session-id session-id
+                                                :run-id run-id
+                                                :execution-token execution-token
+                                                :key key})]
                      (if (:hit cached)
                        (if (contains? cached :result-json)
-                         (assert-factory-json! (:result-json cached)
-                                               (str "step " (pr-str key) " result"))
-                         (throw (ex-info "Factory journal hit omitted its result"
+                         (assert-workflow-json! (:result-json cached)
+                                                (str "step " (pr-str key) " result"))
+                         (throw (ex-info "Workflow journal hit omitted its result"
                                          {:key key})))
-                       (let [result (assert-factory-json!
-                                     (await-factory-value (producer))
+                       (let [result (assert-workflow-json!
+                                     (await-workflow-value (producer))
                                      (str "step " (pr-str key) " result"))]
-                         (factory-rpc! client execution
-                                       "session.factory.journal.put"
-                                       {:session-id session-id
-                                        :run-id run-id
-                                        :execution-token execution-token
-                                        :key key
-                                        :result-json result})
+                         (workflow-rpc! client execution
+                                        "session.workflow.journal.put"
+                                        {:session-id session-id
+                                         :run-id run-id
+                                         :execution-token execution-token
+                                         :key key
+                                         :result-json result})
                          result))))))]
     {:run-id run-id
      :args args
@@ -1376,32 +1376,32 @@
      :cancelled? #(deref (:cancelled? execution))
      :agent agent!
      :step step!
-     :parallel factory-parallel
-     :pipeline factory-pipeline
+     :parallel workflow-parallel
+     :pipeline workflow-pipeline
      :phase #(enqueue! "phase" %)
      :log #(enqueue! "log" %)
-     :factory (fn [& _]
-                (throw (ex-info "nested factories are not supported" {})))
+     :workflow (fn [& _]
+                 (throw (ex-info "nested workflows are not supported" {})))
      ::flush-progress! flush!}))
 
-(defn handle-factory-execute!
-  "Execute an extension-authored factory for a runtime reverse RPC."
+(defn handle-workflow-execute!
+  "Execute an extension-authored workflow for a runtime reverse RPC."
   [client session-id {:keys [name run-id execution-token] :as params}]
   (let [handle
-        (or (::prepared-factory-handle params)
-            (get-in @(:state client) [:sessions session-id :factories name]))
+        (or (::prepared-workflow-handle params)
+            (get-in @(:state client) [:sessions session-id :workflows name]))
         execution
         (when handle
-          (or (::prepared-factory-execution params)
-              (register-factory-execution!
+          (or (::prepared-workflow-execution params)
+              (register-workflow-execution!
                client session-id run-id execution-token)))]
     (async/thread-call
      (fn []
        (cond
          (nil? handle)
          {:error {:code -32602
-                  :message (str "No factory registered with name " (pr-str name))
-                  :data {:code "factory_not_found" :name name}}}
+                  :message (str "No workflow registered with name " (pr-str name))
+                  :data {:code "workflow_not_found" :name name}}}
 
          (nil? execution)
          {:error {:code -32001
@@ -1410,18 +1410,18 @@
          :else
          (let [flush!* (volatile! nil)]
            (try
-             (let [context (factory-context client session-id params execution)
+             (let [context (workflow-context client session-id params execution)
                    flush! (::flush-progress! context)
                    _ (vreset! flush!* flush!)
-                   result (await-factory-value
-                           ((factory/factory-run-function handle)
+                   result (await-workflow-value
+                           ((workflow/workflow-run-function handle)
                             (dissoc context ::flush-progress!)))]
                (flush!)
                (cond
                  (nil? result) {:result {}}
-                 (identical? factory/json-null result) {:result {:result nil}}
+                 (identical? workflow/json-null result) {:result {:result nil}}
                  :else (do
-                         (assert-factory-json! result "Factory result")
+                         (assert-workflow-json! result "Workflow result")
                          {:result {:result result}})))
              (catch Throwable error
                {:error {:code -32603
@@ -1432,34 +1432,34 @@
                  (try
                    (flush!)
                    (catch Throwable error
-                     (log/warn "Failed to flush final factory progress"
+                     (log/warn "Failed to flush final workflow progress"
                                {:session-id session-id
                                 :run-id run-id
                                 :error (ex-message error)}))))
-               (remove-factory-execution!
+               (remove-workflow-execution!
                 client session-id run-id execution-token execution))))))
      :io)))
 
-(defn handle-factory-abort!
-  "Cooperatively cancel factory executions.
+(defn handle-workflow-abort!
+  "Cooperatively cancel workflow executions.
 
    The four-arity form targets one execution attempt. The three-arity form
    retains run-wide cancellation for direct callers of this low-level handler."
   ([client session-id run-id]
-   (cancel-factory-executions! client session-id run-id)
+   (cancel-workflow-executions! client session-id run-id)
    (let [result (chan 1)]
      (put! result {:result {}})
      (close! result)
      result))
   ([client session-id run-id execution-token]
-   (cancel-factory-execution! client session-id run-id execution-token)
+   (cancel-workflow-execution! client session-id run-id execution-token)
    (let [result (chan 1)]
      (put! result {:result {}})
      (close! result)
      result)))
 
-(defn ^:no-doc prepared-factory-abort-response
-  "Acknowledge an abort already applied by [[prepare-factory-request!]]."
+(defn ^:no-doc prepared-workflow-abort-response
+  "Acknowledge an abort already applied by [[prepare-workflow-request!]]."
   []
   (let [result (chan 1)]
     (put! result {:result {}})
@@ -3588,7 +3588,11 @@
                          {:sessionId session-id :name skill-name})))
 
 (defn ^:experimental skills-reload!
-  "Reload all skills."
+  "Refresh the skill catalog after adding, editing, or removing skill files.
+
+   Custom skill directories are scanned when skills first load, even when
+   absent or empty. Filesystem changes alone do not refresh later turns.
+   Returns the runtime's reload result, including any reported :errors."
   [session]
   (let [{:keys [session-id client]} session
         conn (connection-io client)]

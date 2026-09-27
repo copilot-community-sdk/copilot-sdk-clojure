@@ -1,5 +1,5 @@
-(ns github.copilot-sdk.factory
-  "Experimental Agent Factories API."
+(ns github.copilot-sdk.workflow
+  "Experimental Dynamic Workflows API."
   (:refer-clojure :exclude [run!])
   (:require [clojure.core.async :as async]
             [clojure.set :as set]
@@ -7,27 +7,27 @@
             [github.copilot-sdk.protocol :as proto]))
 
 (def ^:private terminal-statuses
-  #{:completed :halted :cancelled :error})
+  #{:completed :halted :paused :cancelled :error})
 
 (def ^:private max-timeout-seconds 2147483.647)
 (def ^:private nano-aiu-per-aiu 1000000000)
-(def ^:private factory-limit-keys
+(def ^:private workflow-limit-keys
   #{:max-concurrent-subagents :max-total-subagents
     :max-ai-credits :timeout-seconds})
 
-(defrecord ^:private FactoryHandle [meta run])
+(defrecord ^:private WorkflowHandle [meta run])
 
 (def json-null
-  "Sentinel for an explicit JSON null factory result. A nil run result means no result."
+  "Sentinel for an explicit JSON null workflow result. A nil run result means no result."
   (Object.))
 
-(defn factory-handle?
-  "Return true when value is a factory handle created by [[define-factory]]."
+(defn workflow-handle?
+  "Return true when value is a workflow handle created by [[define-workflow]]."
   [value]
-  (instance? FactoryHandle value))
+  (instance? WorkflowHandle value))
 
 (defn terminal-status?
-  "Return true when a factory run status is terminal."
+  "Return true when a workflow attempt has settled, including a paused attempt."
   [status]
   (contains? terminal-statuses
              (if (string? status) (keyword status) status)))
@@ -36,15 +36,15 @@
   (when (contains? limits key)
     (let [value (get limits key)]
       (when-not (and (integer? value) (pos? value))
-        (throw (ex-info (str "Factory limit " (pr-str key) " must be a positive integer")
+        (throw (ex-info (str "Workflow limit " (pr-str key) " must be a positive integer")
                         {:field key :value value}))))))
 
 (defn- validate-limits! [limits]
   (when-not (map? limits)
-    (throw (ex-info "Factory limits must be a map" {:limits limits})))
-  (let [unknown-keys (set/difference (set (keys limits)) factory-limit-keys)]
+    (throw (ex-info "Workflow limits must be a map" {:limits limits})))
+  (let [unknown-keys (set/difference (set (keys limits)) workflow-limit-keys)]
     (when (seq unknown-keys)
-      (throw (ex-info "Factory limits contain unknown keys"
+      (throw (ex-info "Workflow limits contain unknown keys"
                       {:unknown-keys unknown-keys}))))
   (positive-integer! limits :max-concurrent-subagents)
   (positive-integer! limits :max-total-subagents)
@@ -55,7 +55,7 @@
                      (pos? timeout)
                      (<= timeout max-timeout-seconds))
         (throw (ex-info
-                (str "Factory limit :timeout-seconds must be positive, finite, and at most "
+                (str "Workflow limit :timeout-seconds must be positive, finite, and at most "
                      max-timeout-seconds)
                 {:field :timeout-seconds :value timeout})))))
   (when (contains? limits :max-ai-credits)
@@ -67,17 +67,30 @@
                        (pos? credits)
                        (pos? nano-aiu))
           (throw (ex-info
-                  "Factory limit :max-ai-credits must round to a positive nano-AIU value"
+                  "Workflow limit :max-ai-credits must round to a positive nano-AIU value"
                   {:field :max-ai-credits :value credits}))))))
+  limits)
+
+(defn- validate-limit-overrides! [limits]
+  ;; Null clears an invocation ceiling, but cannot appear in declared limits.
+  (validate-limits!
+   (if (map? limits)
+     (reduce (fn [values key]
+               (if (nil? (get values key))
+                 (dissoc values key)
+                 values))
+             limits
+             workflow-limit-keys)
+     limits))
   limits)
 
 (defn- validate-meta! [{:keys [name description phases limits] :as meta}]
   (when-not (and (string? name) (not (str/blank? name)))
-    (throw (ex-info "Factory :name must be a non-blank string" {:meta meta})))
+    (throw (ex-info "Workflow :name must be a non-blank string" {:meta meta})))
   (when-not (and (string? description) (not (str/blank? description)))
-    (throw (ex-info "Factory :description must be a non-blank string" {:meta meta})))
+    (throw (ex-info "Workflow :description must be a non-blank string" {:meta meta})))
   (when-not (vector? phases)
-    (throw (ex-info "Factory :phases must be a vector" {:meta meta})))
+    (throw (ex-info "Workflow :phases must be a vector" {:meta meta})))
   (let [titles (mapv :title phases)]
     (doseq [[index phase] (map-indexed vector phases)]
       (when-not (and (map? phase)
@@ -85,45 +98,45 @@
                      (not (str/blank? (:title phase)))
                      (or (not (contains? phase :detail))
                          (string? (:detail phase))))
-        (throw (ex-info "Factory phases require a non-blank :title and optional string :detail"
+        (throw (ex-info "Workflow phases require a non-blank :title and optional string :detail"
                         {:index index :phase phase}))))
     (when-not (= (count titles) (count (distinct titles)))
-      (throw (ex-info "Factory phase title is declared more than once"
+      (throw (ex-info "Workflow phase title is declared more than once"
                       {:titles titles}))))
   (when (contains? meta :limits)
     (validate-limits! limits))
   meta)
 
-(defn define-factory
-  "Define an experimental Agent Factory and return an immutable handle."
+(defn define-workflow
+  "Define an experimental Dynamic Workflow and return an immutable handle."
   [{:keys [meta run] :as definition}]
   (when-not (map? definition)
-    (throw (ex-info "Factory definition must be a map" {:definition definition})))
+    (throw (ex-info "Workflow definition must be a map" {:definition definition})))
   (validate-meta! meta)
   (when-not (fn? run)
-    (throw (ex-info "Factory :run must be a function" {:definition definition})))
-  (->FactoryHandle meta run))
+    (throw (ex-info "Workflow :run must be a function" {:definition definition})))
+  (->WorkflowHandle meta run))
 
-(defn factory-meta
-  "Return a factory handle's immutable metadata."
+(defn workflow-meta
+  "Return a workflow handle's immutable metadata."
   [handle]
-  (when-not (factory-handle? handle)
-    (throw (ex-info "Invalid factory handle" {:handle handle})))
+  (when-not (workflow-handle? handle)
+    (throw (ex-info "Invalid workflow handle" {:handle handle})))
   (:meta handle))
 
-(defn ^:no-doc factory-run-function [handle]
-  (when-not (factory-handle? handle)
-    (throw (ex-info "Invalid factory handle" {:handle handle})))
+(defn ^:no-doc workflow-run-function [handle]
+  (when-not (workflow-handle? handle)
+    (throw (ex-info "Invalid workflow handle" {:handle handle})))
   (:run handle))
 
 (defn ^:no-doc definitions-by-name [handles]
   (reduce
    (fn [definitions handle]
-     (let [name (:name (factory-meta handle))]
+     (let [name (:name (workflow-meta handle))]
        (when (contains? definitions name)
          (throw (ex-info
-                 (str "Duplicate factory name " (pr-str name)
-                      ". Factory names must be unique within a join-session call.")
+                 (str "Duplicate workflow name " (pr-str name)
+                      ". Workflow names must be unique within a join-session call.")
                  {:name name})))
        (assoc definitions name handle)))
    {}
@@ -139,20 +152,22 @@
 (declare wait-for-run! resume!)
 
 (defn run!
-  "Run a registered factory by name or handle and return its terminal envelope."
+  "Run a registered workflow by name or handle and return its terminal envelope.
+
+   In :limits, omission preserves a ceiling and nil explicitly removes it."
   ([session name-or-handle]
    (run! session name-or-handle {}))
   ([session name-or-handle {:keys [args limits resume-from-run-id] :as options}]
    (when (contains? options :limits)
-     (validate-limits! limits))
+     (validate-limit-overrides! limits))
    (if resume-from-run-id
      (resume! session resume-from-run-id (cond-> {} limits (assoc :limits limits)))
      (let [name (if (string? name-or-handle)
                   name-or-handle
-                  (:name (factory-meta name-or-handle)))
+                  (:name (workflow-meta name-or-handle)))
            run (-> (proto/send-request!
                     (connection session)
-                    "session.factory.run"
+                    "session.workflow.run"
                     {:session-id (:session-id session)
                      :name name
                      :args (if (contains? options :args) args {})
@@ -163,16 +178,18 @@
          (wait-for-run! session (:run-id run)))))))
 
 (defn resume!
-  "Resume a durable factory run and return its terminal envelope."
+  "Resume a durable workflow run and return its terminal envelope.
+
+   In :limits, omission preserves a ceiling and nil explicitly removes it."
   ([session run-id]
    (resume! session run-id {}))
   ([session run-id {:keys [limits] :as options}]
    (when (contains? options :limits)
-     (validate-limits! limits))
+     (validate-limit-overrides! limits))
    (try
      (let [response (proto/send-request!
                      (connection session)
-                     "session.factory.resume"
+                     "session.workflow.resume"
                      (cond-> {:session-id (:session-id session)
                               :run-id run-id}
                        limits (assoc :limits limits)))
@@ -183,26 +200,28 @@
      (catch clojure.lang.ExceptionInfo error
        (let [wire-code (get-in (ex-data error) [:error :data :code])
              code (some-> wire-code keyword)]
-         (if (contains? #{:not_found :non_resumable :already_active
-                          :reapproval_declined :no_approval_provider}
+         (if (contains? #{:not_found :non_resumable :workflow_run_not_resumable
+                          :already_active :workflow_already_running :workflow_limits_invalid
+                          :workflow_session_disposed :workflow_storage_unavailable
+                          :workflow_storage_corrupt}
                         code)
            (throw (ex-info (ex-message error)
-                           {:type :factory-resume-error
+                           {:type :workflow-resume-error
                             :code (keyword (str/replace (name code) "_" "-"))}
                            error))
            (throw error)))))))
 
 (defn get-run
-  "Read the latest durable envelope for a factory run."
+  "Read the latest durable envelope for a workflow run."
   [session run-id]
   (normalize-run
    (proto/send-request! (connection session)
-                        "session.factory.getRun"
+                        "session.workflow.getRun"
                         {:session-id (:session-id session)
                          :run-id run-id})))
 
 (defn wait-for-run!
-  "Wait until a factory run reaches a terminal status.
+  "Wait until a workflow run reaches a terminal status.
 
    Options:
    - :cancel-chan      channel whose close/value aborts the wait, not the run
@@ -228,8 +247,8 @@
                  [event port] (async/alts!! ports)]
              (cond
                (and cancel-chan (= port cancel-chan))
-               (throw (ex-info "Factory run wait was cancelled"
-                               {:type :factory-wait-cancelled
+               (throw (ex-info "Workflow run wait was cancelled"
+                               {:type :workflow-wait-cancelled
                                 :run-id run-id}))
 
                (nil? event)
@@ -238,7 +257,7 @@
                  (throw (ex-info "Session event stream closed"
                                  {:session-id session-id :run-id run-id})))
 
-               (and (= :copilot/factory.run_updated (:type event))
+               (and (= :copilot/workflow.run_updated (:type event))
                     (= run-id (get-in event [:data :run-id])))
                (recur (get-run session run-id))
 
@@ -252,38 +271,38 @@
          (async/close! event-chan))))))
 
 (defn list-runs
-  "List this session's durable factory runs in creation order."
+  "List this session's durable workflow runs in creation order."
   [session]
   (mapv normalize-run
         (:runs (proto/send-request! (connection session)
-                                    "session.factory.listRuns"
+                                    "session.workflow.listRuns"
                                     {:session-id (:session-id session)}))))
 
 (defn get-run-detail
   "Read durable phases, agents, and recent progress for a run."
   [session run-id]
   (proto/send-request! (connection session)
-                       "session.factory.getRunDetail"
+                       "session.workflow.getRunDetail"
                        {:session-id (:session-id session)
                         :run-id run-id}))
 
 (defn get-run-progress
-  "Page durable progress for a factory run."
+  "Page durable progress for a workflow run."
   ([session run-id]
    (get-run-progress session run-id {}))
   ([session run-id options]
    (proto/send-request! (connection session)
-                        "session.factory.getRunProgress"
+                        "session.workflow.getRunProgress"
                         (merge {:session-id (:session-id session)
                                 :run-id run-id}
                                options))))
 
 (defn cancel!
-  "Cancel a factory run and return its terminal envelope."
+  "Cancel a workflow run and return its terminal envelope."
   [session run-id]
   (normalize-run
    (proto/send-request! (connection session)
-                        "session.factory.cancel"
+                        "session.workflow.cancel"
                         {:session-id (:session-id session)
                          :run-id run-id})))
 
