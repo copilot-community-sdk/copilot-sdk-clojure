@@ -1,0 +1,1967 @@
+{:schema
+ {:runtime-pin "1.0.89-5",
+  :artifacts
+  {"schemas/api.schema.json"
+   "69dbc40139bff019130a8c81cae662523aacb2c530222e0d050b193d5e6eaa12",
+   "schemas/session-events.schema.json"
+   "428a4447fb1c2c5a752bcaf1f6fa017a6846a42d5d29bff8240f73f5c2cf1897",
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
+   "src/github/copilot_sdk/generated/event_metadata.clj"
+   "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e",
+   "src/github/copilot_sdk/generated/event_specs.clj"
+   "219846e2e6e8589c43f005e8e6117a0f3c2fdd31c1753fba22e96d59832f81dc"},
+  :internal-additions
+  ["ModelCallStartData.parentToolCallId"
+   "CompactionCompleteData.activeWorkflowSummary"]},
+ :commit-classifications
+ [{:commit "d106d29dc6c5112da2abdae59008571b6692f12b",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.89-5",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/d106d29dc6c5112da2abdae59008571b6692f12b",
+   :classification :stable-public,
+   :reason
+   "Stable logging and event metadata, retirement of the supported experimental Factory surface, and generated/internal/foreign-language changes classified below.",
+   :changed-path-count 306,
+   :changed-paths-sha256
+   "c6f2ca929f78a0c413a1b93d54e7e82d81ff7d5765c4807547e73a7e5b966765"}],
+ :sealed-local-artifacts
+ {".copilot-schema-version"
+  "92264e9557a816acb315979fd77618c890b4281f05d38459b1dd0169afc84ee4",
+  ".github/copilot-instructions.md"
+  "f8a2518fe65488424f159b4dc4732e64f680d55d7205a63561f8c3809ac9e18e",
+  ".github/skills/update-upstream/references/PROJECT.md"
+  "2a07990f52da83280420e0a444e64ca9d4a49b04e1c9bc2288146a0ee54e4105",
+  ".github/workflows/ci.yml"
+  "c4810ecfc89e7e4fcf3ea2b45091e9998fc82b7f340d406c02c378e7ec0f3319",
+  "CHANGELOG.md"
+  "e7ebafaad29e491e7d4fae5c06b7f02620d18e87c81f30de7a9350dac1101af9",
+  "README.md"
+  "4f94c70a2da260f715a163f8ba66968bee8fd5d9cc63e3b80117a352c25a0cdd",
+  "deps.edn"
+  "ec07cf3d799dcb354766ff7af7b0565cff218e1ecc7811a3a342b8689b06b33b",
+  "doc/adr/2026-09-27-dynamic-workflow-migration.md"
+  "6046fcbae318ef958f9e4e4b386fc5b719c6605a854433bc3d123ce1079bc797",
+  "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
+  "79955abc182b2d65a79103dcf9d37673b8bc7af785f896b8471f898e37d473e7",
+  "doc/api/2026-08-10-host-owned-inference-boundary.html"
+  "12c3c1e30d3b94d60232ed2bbc13e37e88069869f03d0cfcaa420696993e52d6",
+  "doc/api/2026-09-27-dynamic-workflow-migration.html"
+  "8bbe8c3d8dc853a27284a5831a52b576240b0f8019538157bd94ef05abd87110",
+  "doc/api/API.html"
+  "5c4d5973da3b1f50d582f772fe7c53aeed4e40c1ebfefb1c269f95b2d0efc958",
+  "doc/api/azure-managed-identity.html"
+  "2bf600d3940839254e0a536a2f1d6abf8ca6b2db02dca5d1b4edf651679ef984",
+  "doc/api/byok.html"
+  "0696f47828590f9d2553580dc97f9d1fc5e826f1afb675e28eafdb437dba7b20",
+  "doc/api/codegen.html"
+  "f79c824bbf4bdf0c8720e9dd12880b30bc2e8af9572c735b47b8e8908882cb18",
+  "doc/api/custom-agents.html"
+  "6631d59af89dd0f71adf0e000dd4017ce614c0e220acb084988438098c957ba5",
+  "doc/api/debugging.html"
+  "947311889453938250b73547110d0c175237cf4511423424bed27e0326a04d34",
+  "doc/api/doc-auth-index.html"
+  "7a77f753bcd83f57fe2e40442f2405973651d8536105016f71c09e75ab6c0dbc",
+  "doc/api/doc-index.html"
+  "51d6fd164a8b63231620c81eef6ba41e0ecd4b9d7203a59732252235004abcab",
+  "doc/api/dynamic-workflows.html"
+  "f589da1d54e3860fd279269e66120a3c7600f7be8d70aab339c65bb8935a4754",
+  "doc/api/getting-started.html"
+  "bbd7c80dd31422d907042373e60959b9aafb35dc8cc4b3a90652b2f1d62f09da",
+  "doc/api/github.copilot-sdk.client.html"
+  "1285e871f944b3892698060d2d7a24d77ad06c2493d90d57f32678fae19605b5",
+  "doc/api/github.copilot-sdk.generated.coerce.html"
+  "f8da5616b8d75ee40484176cfdf15d2e158338065411384897becfe5f1fc4add",
+  "doc/api/github.copilot-sdk.generated.event-metadata.html"
+  "3c57b1ad995dd34d4838d94093666aaf972d7f07297b08b60afb4f0faafa85ff",
+  "doc/api/github.copilot-sdk.generated.event-specs.html"
+  "f0224876aa0833f1c59902eae330f23528271c43a3136f3725b58d809d524901",
+  "doc/api/github.copilot-sdk.helpers.html"
+  "a1a11eff88f5a6bd54f5c08f9550e38b4fbe7dc20d85e326137568580957fc21",
+  "doc/api/github.copilot-sdk.html"
+  "d55f4fcd7d149083ecba43fb24f42fcc9f417692ed5c4d5b0de124e53129a017",
+  "doc/api/github.copilot-sdk.instrument.html"
+  "4a67eb12a262ffd141e9baa9e13ba951453c824ab4844d6a24e2456ef069f8d6",
+  "doc/api/github.copilot-sdk.logging.html"
+  "3dcd3622a11ade4a39d61fb96f0048b0281443b09bd8e0eea6f00f15867d0f0c",
+  "doc/api/github.copilot-sdk.process.html"
+  "514bf0eab6ee43b2eda65785be2b16109da944cad850d1ffffb12bf95fe2c902",
+  "doc/api/github.copilot-sdk.protocol.html"
+  "c141973301dd2525a244bc8c0613e551a47d542a655600ade16636d0697671f4",
+  "doc/api/github.copilot-sdk.session.html"
+  "ffb2165b25aa73206fe78a551f8e78cadafc516b8b3922ed6e262f3efff837cc",
+  "doc/api/github.copilot-sdk.specs.html"
+  "849ca55d4dfd99c3c0c4282154f0a92779e3b1fe99eee241f09a9102f72990b6",
+  "doc/api/github.copilot-sdk.teardown.html"
+  "f313244aed67690ba0cdeb7d25fcc9bf16e86fc002bdf0a3f845815215030510",
+  "doc/api/github.copilot-sdk.tool-set.html"
+  "68979e24a68b35050ed16c8806b8ceb5f04242709c7b468050758ff7ceac37bf",
+  "doc/api/github.copilot-sdk.tools.html"
+  "afe29fd1636d98d6271a674947fe526f74d952c1a2127e0dac5449d47b85f37c",
+  "doc/api/github.copilot-sdk.util.html"
+  "4c09da592834253be6684a5259d5c1fa8a16ad872015953f7f93e4b3f32c1f4a",
+  "doc/api/github.copilot-sdk.workflow.html"
+  "4c2c855ad0092316ae883594b133bb32739e6761f47bf22923fc31a6205bb90a",
+  "doc/api/index.html"
+  "3da6bf75f43356b435a091dc792212d95fe451dd6df3daab2101054aa5fb1ded",
+  "doc/api/overview.html"
+  "fbb2f04c7d32e2950151e4bc3a2eff20cf1a00cf012ecd4bad01961d74cf949a",
+  "doc/api/style.html"
+  "582e0577ce7151ae08b46817b93baf422c2128df3f65612c9364468d44e5b053",
+  "doc/api/topic-manifest.edn"
+  "39c89fee4209607a872bd4651d8102fe0a10b23f2c4aa562d94e9fe9162fda2a",
+  "doc/api/upstream-doc-gap-matrix.html"
+  "bc4ed885e0b76d676fe9e1d59d62021ba38c35a7a39d61b00fb6fd5524375b17",
+  "doc/getting-started.md"
+  "133aecb8e9ba5666e8b379f23db1b41e7297459086303d5b2a3a211ff91bc265",
+  "doc/guides/dynamic-workflows.md"
+  "e11705950ddf9c276e9d2690e9bd69242c63960e901e94102460b75c75266c71",
+  "doc/index.md"
+  "7db94bf1aeb19c1305e8737881b9b86e21644576c80cf8ac1c45cd797ab5ac2c",
+  "doc/reference/API.md"
+  "5c4e796d27bad2b324990dd864ed05981e6e952b05f0d515a5d6268ad1874ecf",
+  "doc/upstream-doc-gap-matrix.md"
+  "028952d651f1724fb83e6f5d4d58586b01a66a5df59b420f83d69ec96d954333",
+  "examples/README.md"
+  "aacdb3eabfe667914184ea806379efba34b77da15b085630e952c9ba12407b02",
+  "examples/dynamic_workflows.clj"
+  "e30bb3dc6771a5efbfa449d62b35aead1372c2a142fc489787143b935edd2c74",
+  "resources/github/copilot_sdk/api_surface.edn"
+  "148e31b1caf55215a7d250375cf2f4b3fef83ce9d6da1642ed3cd96759c07d75",
+  "run-all-examples.sh"
+  "edbce867bab6af92f78edb19d079b2e5a025e5547dbb521f7cc5c12eb3f52985",
+  "schemas/README.md"
+  "316e7bf475ba6f1485adbbd5df0d7d465ae41ac0fb5e67d45573107838a5b4c1",
+  "schemas/api.schema.json"
+  "69dbc40139bff019130a8c81cae662523aacb2c530222e0d050b193d5e6eaa12",
+  "schemas/session-events.schema.json"
+  "428a4447fb1c2c5a752bcaf1f6fa017a6846a42d5d29bff8240f73f5c2cf1897",
+  "script/validate_docs.clj"
+  "09c34abc22f45beb64b82371d54495de6e17c8e3ee5cec797d9ea4213958ba24",
+  "src/github/copilot_sdk.clj"
+  "440a51b986b950c4c206f5ba8bbfd8d72e3245feb9042331dec89d3a532fd5f0",
+  "src/github/copilot_sdk/client.clj"
+  "b5a231fb32ad815bdd8f4d2bc2c0df2e389d3a2c5940b625c1373378a7308d29",
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "219846e2e6e8589c43f005e8e6117a0f3c2fdd31c1753fba22e96d59832f81dc",
+  "src/github/copilot_sdk/instrument.clj"
+  "c97609f2e65943ee8bdb174863a581c6b7de64ec9f237079aa2856d9b29863c5",
+  "src/github/copilot_sdk/process.clj"
+  "907778d216d15f3509a73b90a7420961774b3975475395a4fd8331f61c5cd054",
+  "src/github/copilot_sdk/protocol.clj"
+  "eb0ade7bc02e5cba8754aeb92d34708b512ddd3cbdf23b78eaf77f554c6813e2",
+  "src/github/copilot_sdk/session.clj"
+  "d162f16dc30ea57550eb9e4cd1f28773cbdbe2e45b10aa0eebfa7d4e8797fa42",
+  "src/github/copilot_sdk/specs.clj"
+  "110cd20a0521885a684077a733ef1836c67514e0da7bb93a2b7bb090ce91fe7b",
+  "src/github/copilot_sdk/workflow.clj"
+  "7c6a81f46cdc8793883aab481c9575beeac873d2ec7c9d9d85ef799979e02c4d",
+  "test/github/copilot_sdk/api_surface.clj"
+  "7f133796788206a5871af2c4ef8d8965e5296cbcb388f1dcbb5656f5e39d0ccc",
+  "test/github/copilot_sdk/api_surface_test.clj"
+  "167afce2b58130b6f67f278b1817fe45c793b68721143fceec8276b87c8ac0d7",
+  "test/github/copilot_sdk/codegen_test.clj"
+  "dcb3369284ee89964209ce0b58f7e032c0cdb2bd020671be6fe8944791a8eb7e",
+  "test/github/copilot_sdk/e2e_test.clj"
+  "23620b162da8032482a369ae44cd878061012ba92e9d3b113f987ae68b17eeab",
+  "test/github/copilot_sdk/force_stop_test.clj"
+  "d9791a3dad1b9638defae3ff3728039aedcbebbe47a150f79f90a9ac3ca7d94a",
+  "test/github/copilot_sdk/integration/canvas_events_test.clj"
+  "12cca62bd35a47cec4bec24af028aca7ee070c7ce0bcd3e4760f8e05b40ecfb4",
+  "test/github/copilot_sdk/integration/client_mode_test.clj"
+  "f86bcb08e1d0d99453122fba156f08afb8f5ef3dfcc0764e48055cc1534ac6f2",
+  "test/github/copilot_sdk/integration/client_test.clj"
+  "06cc09d3be6b3e0c4f11bb86d4a578fcd0ee5cff3c2859f3c2af5d6a08b78187",
+  "test/github/copilot_sdk/integration/hooks_handlers_test.clj"
+  "56ba162058807db88c08882298e1e9a6aa4b300fa7d3adbafeabe2309ada591f",
+  "test/github/copilot_sdk/integration/messaging_events_test.clj"
+  "30a41c8ee9be01fd50e10b012787e712458b373c3917702508c29e7e62bc7a73",
+  "test/github/copilot_sdk/integration/optional_callbacks_test.clj"
+  "0ebe70e595adbbbbe5c172f4c4992309337d0b84b540d7f87183a4e672755ecf",
+  "test/github/copilot_sdk/integration/permissions_oauth_test.clj"
+  "6c254ffdbcac39e1a91f89afbe29ec21e3bff0305ce0a2a120cbfd60d4c375f2",
+  "test/github/copilot_sdk/integration/post_sync_contracts_test.clj"
+  "20be4e2e9bcaae56bc0238e55f98530c8ea4ac3da7ceec94a0bf5338dc40b605",
+  "test/github/copilot_sdk/integration/schema_provider_test.clj"
+  "dff9596a0b76d45bba3a0547a20ecc08d9a17db29cbab12e8e5d1f76a944dcd7",
+  "test/github/copilot_sdk/integration/session_fs_test.clj"
+  "dbed4c3909f339ccfebc67671d9c1d4eac901a9f608e657b891c9d0f496bf065",
+  "test/github/copilot_sdk/integration/session_lifecycle_test.clj"
+  "c71a1272338bc8dac0be7df392068629b317c40e7f5570f238cdc5714ffc779c",
+  "test/github/copilot_sdk/integration/session_rpc_test.clj"
+  "0effbf195f34b325d4723900cb9e3df862d1dcb5ff5315ef9847c2e73a93edcc",
+  "test/github/copilot_sdk/integration/sessions_commands_test.clj"
+  "3819604b6a94a861d66bfa7b98294abecb9b309d0b317e882d00cc2eea731e1f",
+  "test/github/copilot_sdk/integration/shutdown_test.clj"
+  "b64486036941046e8c505b9719cc8d00b6940c710b8c2070f6a7a37c80ffe567",
+  "test/github/copilot_sdk/integration/stable_sync_bba92dd_test.clj"
+  "c649d508dbb04bd0ec35ea62f25a18890edeef6eed168d971e5ead56aa2c52f9",
+  "test/github/copilot_sdk/integration/stable_sync_e9df3938_test.clj"
+  "a4eff68727f6577becc193974210900749082e53b7b70ebb9b720784b3b54d4c",
+  "test/github/copilot_sdk/integration/stable_sync_ea41d_test.clj"
+  "3795384536712fdfc2d55f2a43d03ff39185508a7cdd531687b914f78dab7be7",
+  "test/github/copilot_sdk/integration/stable_sync_eb7ba_test.clj"
+  "bc7ee242ef4adf5adc6e44548bed69a029a1b74a000af61648db49b9c42308db",
+  "test/github/copilot_sdk/integration/telemetry_callbacks_test.clj"
+  "710ed9899101f188be2b09d3a010bbeefc60d113e3e3daca1fecdc18dd8e2153",
+  "test/github/copilot_sdk/integration/tools_config_test.clj"
+  "644d19001ebdd99c402b3588ad2e1d4c25a63277bcea5e5b2eaedc3b54675482",
+  "test/github/copilot_sdk/integration/upstream_1_0_89_5_test.clj"
+  "6b989d1c260de5f85472ea30ee8894685fb2a7467d54905f3ebb481410239a6c",
+  "test/github/copilot_sdk/integration/workflow_test.clj"
+  "3913b90859fb66c13791aaaa55ac10c94faceb885bf861e7c48b50f8fe4cc4d9",
+  "test/github/copilot_sdk/mock_server.clj"
+  "9fdeea5afa5213c1788abc42e25492fb0b392f7670beaca40c3b8bcedbed40f6",
+  "test/github/copilot_sdk/process_test.clj"
+  "b4a9afc39672861fcd30fcd7ba62135813c8eea099b47dc7f5976e6819691733",
+  "test/github/copilot_sdk/reverse_rpc_test.clj"
+  "f4ccca7a3d04c35487c90133a06ec7916c2e4d1e350d13b76bb8364540886b44",
+  "test/github/copilot_sdk/workflow_async_behavior_test.clj"
+  "1235ca77c16b24deb270998e5f506a1cafdd5d5cafe30ccec80856467d7e3237"},
+ :test-inventory
+ {"nodejs/test/client.test.ts"
+  {:blobs
+   ["3cb97160c9e0458fd860056f6534a40df836e46d"
+    "3cb97160c9e0458fd860056f6534a40df836e46d"],
+   :classification :stable-public,
+   :review
+   "Unchanged create/resume configuration and omission tests."},
+  "nodejs/test/e2e/auth_host.e2e.test.ts"
+  {:blobs [nil "4d1cf182d0ca861bc54e5be863fe6066825d84d2"],
+   :classification :stable-public,
+   :review
+   "Runtime selects COPILOT_GH_HOST, then GH_HOST, then github.com. Existing SDK environment forwarding and getAuthStatus surfaces suffice."},
+  "nodejs/test/e2e/client.e2e.test.ts"
+  {:blobs
+   ["a529ea8e4ce82d9495efc185dea707e49bce285c"
+    "a529ea8e4ce82d9495efc185dea707e49bce285c"],
+   :classification :stable-public,
+   :review "Unchanged client construction and lifecycle."},
+  "nodejs/test/e2e/client_options.e2e.test.ts"
+  {:blobs
+   ["bbcd35e174ae87ce270f250f875fc5ede94143d9"
+    "b32965ec0f3274d2f8e34dbf95d983593f35a9e9"],
+   :classification :stable-public,
+   :review
+   "Non-empty spawned mode forces process-file logging; empty mode retains explicit opt-in."},
+  "nodejs/test/e2e/event_fidelity.e2e.test.ts"
+  {:blobs
+   ["8ae2091b3369e007664dc4ed89c9f91425581a95"
+    "8ae2091b3369e007664dc4ed89c9f91425581a95"],
+   :classification :stable-public,
+   :review
+   "Unchanged event/history delivery; new Clojure metadata tests cover both paths."},
+  "nodejs/test/e2e/factory.e2e.test.ts"
+  {:blobs ["5b5796e4e32db5147aac2cda9a0c66d91499b2dd" nil],
+   :classification :experimental,
+   :review
+   "Retired Factory process-boundary fixture is replaced with the Workflow fixture."},
+  "nodejs/test/e2e/fixtures/workflow-extension.mjs"
+  {:blobs
+   ["e8e0820a4bf7f37c847523dceb3f637a7e545853"
+    "e6b35228bb75533dbcc9ce9089a803ee4f057549"],
+   :classification :experimental,
+   :review
+   "Workflow reverse execution fixture; additional authoring, agent-option and checkpoint APIs remain outside this Clojure migration."},
+  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
+  {:blobs
+   ["3f017f07cc97ac51492a63470e07b876328281d4"
+    "f3b2e57342b078f113e4620322964ebfd7dea802"],
+   :classification :generated-only,
+   :review
+   "Generated RPC method inventory changes are wire evidence, not an independent wrapper requirement."},
+  "nodejs/test/e2e/session.e2e.test.ts"
+  {:blobs
+   ["d9f112429168040313072be527c20dd2aee9e9bd"
+    "d9f112429168040313072be527c20dd2aee9e9bd"],
+   :classification :stable-public,
+   :review "Unchanged stable session and root-completion behavior."},
+  "nodejs/test/e2e/session_config.e2e.test.ts"
+  {:blobs
+   ["de81e8be1da71adf0d29511b8eae7bb6212ab303"
+    "de81e8be1da71adf0d29511b8eae7bb6212ab303"],
+   :classification :stable-public,
+   :review
+   "Unchanged stable configuration and explicit instruction-cache refresh."},
+  "nodejs/test/e2e/skills.e2e.test.ts"
+  {:blobs
+   ["850a8444dfd8fde9f7d15c8def406968351e9cfe"
+    "422e681368bc195170c5e67a55007f410b933399"],
+   :classification :stable-public,
+   :review
+   "Filesystem mutations require explicit skills.reload; the existing experimental Clojure reload wrapper is documented, not expanded."},
+  "nodejs/test/e2e/telemetry.e2e.test.ts"
+  {:blobs
+   ["9fb89fc0d7cb7ea6fd7059ed4aa5c1d4d0546c77"
+    "ddcae643e3fe0b4f497087c5b529e89241c05570"],
+   :classification :stable-public,
+   :review
+   "Runtime exports parent/task/subagent/chat span ancestry using the added parent-call metadata. No SDK-local span implementation is introduced."},
+  "nodejs/test/e2e/workflow.e2e.test.ts"
+  {:blobs [nil "bb1240fd36eeaf8678578c180d68c7eeec27bb9d"],
+   :classification :experimental,
+   :review
+   "Real extension-only registration, run results, resumes, cancellation and paused-attempt observation. Upstream uses an extension launch provider; Clojure keeps that unrelated experimental provider excluded."},
+  "nodejs/test/extension.test.ts"
+  {:blobs
+   ["91d9de156718ce2202f004dca871b6ff82f99bd1"
+    "676f6dff2bca4de9dffa061fc91c426f48cbfdb7"],
+   :classification :experimental,
+   :review
+   "Factory registration and mixed-generation handling are removed; Workflow registration remains."},
+  "nodejs/test/factory.test.ts"
+  {:blobs ["679cbf9131cc36796646759c7c162f0bea784a5c" nil],
+   :classification :experimental,
+   :review
+   "Retired authoring/execution suite. Its supported Clojure counterpart is migrated, not discarded."},
+  "nodejs/test/legacy-parameters.test.ts"
+  {:blobs [nil "3618279eecd2eb90777eafa2cdb8e83695c265eb"],
+   :classification :internal,
+   :review
+   "Generator validation for optional additive request fields."},
+  "nodejs/test/legacy-request-compatibility.test.ts"
+  {:blobs [nil "167536fe52cb1e16a4bf7dc625361291ab93ad62"],
+   :classification :generated-only,
+   :review
+   "Object-shaped generated MCP/catalog requests preserve optional additions without new stable handwritten API."},
+  "nodejs/test/session-config-types.test.ts"
+  {:blobs
+   ["af1e3c4719381c01c19d7eb4aa274381e2d9b543"
+    "af1e3c4719381c01c19d7eb4aa274381e2d9b543"],
+   :classification :stable-public,
+   :review
+   "Unchanged create-only refresh versus resume type separation."},
+  "nodejs/test/session-event-types.test.ts"
+  {:blobs
+   ["cc5cb12bf1cd716c5a08b8b44b0aba3b0316d250"
+    "330b3810902624c72e3a5df7beb1aba8098535c8"],
+   :classification :experimental,
+   :review
+   "Factory authoring aliases are replaced with Workflow aliases; root JsonValue compatibility is retained."},
+  "nodejs/test/session-send-and-wait.test.ts"
+  {:blobs
+   ["0ea065d098d8cd8e5095170368ca5023d1cf3842"
+    "0ea065d098d8cd8e5095170368ca5023d1cf3842"],
+   :classification :stable-public,
+   :review "Unchanged root/child completion and callback visibility."},
+  "nodejs/test/structured-output.test.ts"
+  {:blobs
+   ["8f029d0ac9b2de32044b775192d636db162d7cd7"
+    "8f029d0ac9b2de32044b775192d636db162d7cd7"],
+   :classification :stable-public,
+   :review
+   "Unchanged JSON schema serialization, correlation, parse errors and structured results."},
+  "nodejs/test/toolSet.test.ts"
+  {:blobs
+   ["b77b797072f5de8abd87556cc3ae46c5bfd5aa26"
+    "b77b797072f5de8abd87556cc3ae46c5bfd5aa26"],
+   :classification :stable-public,
+   :review "Unchanged source-qualified tool filters."},
+  "nodejs/test/workflow.test.ts"
+  {:blobs
+   ["0efb221fc9cd849581bd4a6a05addd431b8106a1"
+    "2464cf6668493d2cb407e5e38e435015e8abce6e"],
+   :classification :experimental,
+   :review
+   "Workflow helper tests remain; mixed-generation extension tests are removed."}},
+ :target-public-surface
+ {:source-blob-format :base-target,
+  :source-blobs
+  {"nodejs/package.json"
+   ["f6187b73d8a20de9844e07a057c647b66b062e1f"
+    "68a2e79b08dcd859325582ebbc5ccdbfba75afdd"],
+   "nodejs/src/canvas.ts"
+   ["aeb1f00ec42926977c010df2471123dc18ddddd3"
+    "aeb1f00ec42926977c010df2471123dc18ddddd3"],
+   "nodejs/src/client.ts"
+   ["f4f911c27390d6665e9b20ef60c5be23cf7c8ccc"
+    "f9bf6a2645fedf4b5f3c5da93086f7b0236a3e62"],
+   "nodejs/src/extension.ts"
+   ["e1b9a7f72a40f43ff0dfdfcc1609ff6c9253752e"
+    "e7bb21e3b2fc8a84d16bde7885cd50308d61116f"],
+   "nodejs/src/factory.ts"
+   ["174318394f98c735e54f9bd80d75901e77ce17fa" nil],
+   "nodejs/src/generated/rpc.ts"
+   ["16f5b1695a6eaa7396e1892e3ef19ffca3618725"
+    "664448fd5d043f7437132373922d4cf79355cef1"],
+   "nodejs/src/generated/session-events.ts"
+   ["3b484f9e8c800d25fe886bda1b5950e9c4d38efc"
+    "3b0995c189bb0e1009902459491dba594c235477"],
+   "nodejs/src/index.ts"
+   ["c46742d853bc59bcad760c1c40f689d9f9f05243"
+    "c5d2b4e852238677de2effa1efba3c38a7157d48"],
+   "nodejs/src/session.ts"
+   ["43b212862560252f280aa5af1243b5458f4da514"
+    "39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534"
+    "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/types.ts"
+   ["98e594356cfedae34448ea50c4893bc1cc48b561"
+    "3fc64960bd1aac411c321190ece2c80c09ccc7eb"],
+   "nodejs/src/workflow.ts"
+   ["6065c710ecf817cbbcd0b3a4476b5d981aca2a16"
+    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"]},
+  :trees
+  {"nodejs/src"
+   ["85de56a95aeb252c6b4b05a2948a2077524890e5"
+    "8599e3281bf0a6177915fbcef1d193cc93db12a7"],
+   "nodejs/src/generated"
+   ["d6f47fce13dfbf90fdd35ca8413d639e776d3de5"
+    "9e1d52f0caccda7953e519d8221cf229fc0c17bb"],
+   "nodejs/test"
+   ["0a894645cadd67a6ba6ec1f747aa285b4cca9ba8"
+    "e25bc5fdfe5468ba8b1273c66d30ca47191a7aad"]},
+  :package-root
+  {:fingerprint
+   [784
+    "e90c95eae8b715f5732f2daf47b6b66cdba4a9d217bb2758dcd3d89f7695bc05"],
+   :star-exports #{"./generated/session-events.js"},
+   :added
+   #{"SystemNotificationWorkflowPauseInfo"
+     "WorkflowRunSettledStatus"
+     "WorkflowPermissionPhase"
+     "WorkflowRunSettledData"
+     "UserToolSessionApprovalWorkflow"
+     "WorkflowPermissionOperation"
+     "SystemNotificationWorkflowCompleted"
+     "SystemNotificationWorkflowCompletedStatus"
+     "WorkflowRunStartedEvent"
+     "WorkflowRunUpdatedData"
+     "WorkflowRunSettledEvent"
+     "WorkflowRunUpdatedEvent"
+     "PermissionRequestWorkflow"
+     "PermissionPromptRequestWorkflow"
+     "WorkflowRunStartedData"},
+   :removed
+   #{"UserToolSessionApprovalFactory"
+     "FactoryJsonSchema"
+     "FactoryRunUpdatedData"
+     "FactoryResumeErrorCode"
+     "RunOptions"
+     "FactoryResumeError"
+     "FactoryProgressLine"
+     "FactoryRunUpdatedEvent"
+     "SystemNotificationFactoryCompletedStatus"
+     "FactoryListRunsOptions"
+     "FactoryRunSettledData"
+     "FactoryRunSettledEvent"
+     "FactoryRunsPage"
+     "FactoryRunDetail"
+     "FactoryRunStartedData"
+     "FactoryLimits"
+     "isFactoryRunTerminal"
+     "FactoryPhaseStatus"
+     "FactoryRunSettledStatus"
+     "SystemNotificationFactoryPauseInfo"
+     "FactoryLimitOverrides"
+     "FactoryPermissionOperation"
+     "FactoryMeta"
+     "FactoryAgentOptions"
+     "FactoryAgentSummary"
+     "defineFactory"
+     "FactoryHandle"
+     "FactoryPipelineStage"
+     "FactoryRunSummary"
+     "SessionFactoryApi"
+     "FactoryDefinition"
+     "PermissionPromptRequestFactory"
+     "FactoryContext"
+     "FactoryStepOptions"
+     "FactoryProgressPage"
+     "FactoryRunResult"
+     "ResumeOptions"
+     "FactoryPermissionPhase"
+     "PermissionRequestFactory"
+     "FactoryRunStatus"
+     "SystemNotificationFactoryCompleted"
+     "FactoryRunStartedEvent"
+     "FactoryPhaseObservation"}},
+  :modules
+  {"nodejs/src/canvas.ts"
+   {:fingerprint
+    [9
+     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/client.ts"
+   {:fingerprint
+    [1
+     "a5431bbd92ac780f6179f17f47c4e9a9227510a9f3682f56a6893c7db8d90dba"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/extension.ts"
+   {:fingerprint
+    [40
+     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :added {},
+    :removed
+    {:experimental
+     #{"FactoryAgentOptions"
+       "FactoryAgentSummary"
+       "FactoryContext"
+       "FactoryDefinition"
+       "FactoryHandle"
+       "FactoryJsonSchema"
+       "FactoryLimits"
+       "FactoryListRunsOptions"
+       "FactoryMeta"
+       "FactoryPhaseObservation"
+       "FactoryPhaseStatus"
+       "FactoryPipelineStage"
+       "FactoryProgressLine"
+       "FactoryProgressPage"
+       "FactoryResumeError"
+       "FactoryResumeErrorCode"
+       "FactoryRunDetail"
+       "FactoryRunResult"
+       "FactoryRunStatus"
+       "FactoryRunSummary"
+       "FactoryRunsPage"
+       "FactoryStepOptions"
+       "ResumeOptions"
+       "RunOptions"
+       "SessionFactoryApi"
+       "defineFactory"
+       "isFactoryRunTerminal"}},
+    :changed {:experimental #{"JoinSessionConfig"}}},
+   "nodejs/src/factory.ts"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added {},
+    :removed
+    {:experimental
+     #{"FactoryAgentOptions"
+       "FactoryAgentSummary"
+       "FactoryContext"
+       "FactoryDefinition"
+       "FactoryHandle"
+       "FactoryJsonSchema"
+       "FactoryLimitOverrides"
+       "FactoryListRunsOptions"
+       "FactoryPhaseObservation"
+       "FactoryPhaseStatus"
+       "FactoryPipelineStage"
+       "FactoryProgressLine"
+       "FactoryProgressPage"
+       "FactoryResumeError"
+       "FactoryResumeErrorCode"
+       "FactoryRunDetail"
+       "FactoryRunResult"
+       "FactoryRunStatus"
+       "FactoryRunSummary"
+       "FactoryRunsPage"
+       "FactoryStepOptions"
+       "ResumeOptions"
+       "RunOptions"
+       "SessionFactoryApi"
+       "defineFactory"
+       "isFactoryRunTerminal"},
+     :internal #{"FACTORY_AGENT_OPTION_KEYS" "getFactoryDefinition"},
+     :language-specific #{"JsonValue"}},
+    :changed {}},
+   "nodejs/src/generated/rpc.ts"
+   {:fingerprint
+    [1424
+     "11ec35bb70f4720da3a49791cff93fa819700b0f45e1a8849033ef7cea9270f4"],
+    :added
+    {:generated-only
+     #{"AccountKind"
+       "AccountStatus"
+       "AccountsEnumerateRequest"
+       "AccountsGetRequest"
+       "AccountsSetRequest"
+       "AuthEnumerateQuery"
+       "AuthEnumerateValue"
+       "AuthLoginAdvanceRequest"
+       "AuthLoginBeginRequest"
+       "AuthLoginBegun"
+       "AuthLoginCancelRequest"
+       "AuthLoginResultDto"
+       "AuthLoginResultStatus"
+       "AuthLoginStep"
+       "AuthReadQuery"
+       "AuthReadValue"
+       "AuthStatusDto"
+       "AuthWrite"
+       "AuthWriteResult"
+       "EntraTokenAcquireRequest"
+       "EntraTokenAcquireResult"
+       "EntraTokenInteraction"
+       "InstallationConfirmationRequest"
+       "InstallationConfirmationResponse"
+       "InstallationDecision"
+       "InstallationReview"
+       "InstallationsConfirmRequest"
+       "InstallationsConfirmResult"
+       "InstallationsHandler"
+       "LoginProviderKind"
+       "McpApplyInstallRequest"
+       "McpApplyUninstallRequest"
+       "McpInstallationFailureReason"
+       "McpInstallationInput"
+       "McpInstallationManagementOutcome"
+       "McpInstallationManagementResult"
+       "McpInstallationOperationRequest"
+       "McpInstallationOperationStatus"
+       "McpInstallationOutcome"
+       "McpInstallationRemoteConfiguration"
+       "McpInstallationResult"
+       "McpInstallationReview"
+       "McpInstallationSecret"
+       "McpInstallationSecretStorage"
+       "McpInstallationState"
+       "McpInstallationSummary"
+       "McpInstallationsRequest"
+       "McpOauthCancelLoginRequest"
+       "McpOauthCancelLoginResult"
+       "McpOauthPrepareLoginRequest"
+       "McpOauthPrepareLoginResult"
+       "McpOwnedOauthLoginStatus"
+       "McpPlanUninstallRequest"
+       "McpPrepareInstallRequest"
+       "McpPreparedInstall"
+       "McpServerOwnership"
+       "McpUninstallPlan"
+       "ModelProviderDescriptor"
+       "ModelProviderKind"
+       "ModelProviderRef"
+       "PermissionDecisionApproveForLocationApprovalWorkflow"
+       "PermissionDecisionApproveForSessionApprovalWorkflow"
+       "PermissionsLocationsAddToolApprovalDetailsWorkflow"
+       "ProviderDescriptor"
+       "SessionMcpOauthCancelLoginRequest"
+       "SessionMcpOauthCancelLoginResult"
+       "SessionMcpOauthPrepareLoginRequest"
+       "SessionMcpOauthPrepareLoginResult"}},
+    :removed
+    {:generated-only
+     #{"FactoryAbortRequest"
+       "FactoryAckResult"
+       "FactoryAgentOptions"
+       "FactoryAgentRequest"
+       "FactoryAgentResult"
+       "FactoryAgentSummary"
+       "FactoryCancelRequest"
+       "FactoryCurrentPhase"
+       "FactoryDeclaredLimits"
+       "FactoryDurableOperation"
+       "FactoryExecuteRequest"
+       "FactoryExecuteResult"
+       "FactoryGetRunProgressRequest"
+       "FactoryGetRunRequest"
+       "FactoryHandler"
+       "FactoryJournalGetRequest"
+       "FactoryJournalGetResult"
+       "FactoryJournalPutRequest"
+       "FactoryListRunsRequest"
+       "FactoryListRunsResult"
+       "FactoryLogLine"
+       "FactoryLogLineKind"
+       "FactoryLogRequest"
+       "FactoryPauseCheckpointAction"
+       "FactoryPauseCheckpointRequest"
+       "FactoryPauseCheckpointResult"
+       "FactoryPauseInfo"
+       "FactoryPauseRequest"
+       "FactoryPhaseObservation"
+       "FactoryPhaseStatus"
+       "FactoryProgressLine"
+       "FactoryProgressPage"
+       "FactoryResumeRequest"
+       "FactoryResumeResult"
+       "FactoryRunConsumed"
+       "FactoryRunDetail"
+       "FactoryRunFailure"
+       "FactoryRunFailureKind"
+       "FactoryRunLimits"
+       "FactoryRunRequest"
+       "FactoryRunResult"
+       "FactoryRunStatus"
+       "FactoryRunSummary"
+       "FactoryRunTerminal"
+       "FactoryToolResumeRequest"
+       "FactoryToolRunOptions"
+       "FactoryToolRunRequest"
+       "PermissionDecisionApproveForLocationApprovalFactory"
+       "PermissionDecisionApproveForSessionApprovalFactory"
+       "PermissionsLocationsAddToolApprovalDetailsFactory"
+       "RunOptions"
+       "SessionFactoryPauseAtCheckpointResult"}},
+    :changed
+    {:generated-only
+     #{"ModelApplyStartupOverlayRequest"
+       "McpEnableRequest"
+       "ClientSessionApiHandlers"
+       "SessionModelList"
+       "McpOauthLoginResult"
+       "PermissionDecisionApproveForSessionApproval"
+       "CatalogCapability"
+       "McpServer"
+       "CatalogInvalidRequestField"
+       "McpOauthLoginRequest"
+       "Model"
+       "PermissionsLocationsAddToolApprovalDetails"
+       "ClientGlobalApiHandlers"
+       "McpRestartServerRequest"
+       "SlashCommandSetModelResult"
+       "McpDisableRequest"
+       "CatalogSearchRequest"
+       "McpStartServerRequest"
+       "PermissionDecisionApproveForLocationApproval"
+       "McpStopServerRequest"
+       "McpOauthProbeRequest"
+       "McpPlanInstallRequest"}}},
+   "nodejs/src/generated/session-events.ts"
+   {:fingerprint
+    [574
+     "91854f92543fa9cd1776dc7678afd0f62d411aaf7f3b3315c90b85d15ce84840"],
+    :added
+    {:experimental
+     #{"PermissionPromptRequestWorkflow"
+       "PermissionRequestWorkflow"
+       "SystemNotificationWorkflowCompleted"
+       "SystemNotificationWorkflowCompletedStatus"
+       "SystemNotificationWorkflowPauseInfo"
+       "UserToolSessionApprovalWorkflow"
+       "WorkflowPermissionOperation"
+       "WorkflowPermissionPhase"
+       "WorkflowRunSettledData"
+       "WorkflowRunSettledEvent"
+       "WorkflowRunSettledStatus"
+       "WorkflowRunStartedData"
+       "WorkflowRunStartedEvent"
+       "WorkflowRunUpdatedData"
+       "WorkflowRunUpdatedEvent"}},
+    :removed
+    {:experimental
+     #{"FactoryPermissionOperation"
+       "FactoryPermissionPhase"
+       "FactoryRunSettledData"
+       "FactoryRunSettledEvent"
+       "FactoryRunSettledStatus"
+       "FactoryRunStartedData"
+       "FactoryRunStartedEvent"
+       "FactoryRunUpdatedData"
+       "FactoryRunUpdatedEvent"
+       "PermissionPromptRequestFactory"
+       "PermissionRequestFactory"
+       "SystemNotificationFactoryCompleted"
+       "SystemNotificationFactoryCompletedStatus"
+       "SystemNotificationFactoryPauseInfo"
+       "UserToolSessionApprovalFactory"}},
+    :changed
+    {:stable-public
+     #{"ModelCallFailureData"
+       "AssistantTurnEndData"
+       "AssistantTurnStartData"
+       "SubagentStartedData"
+       "ModelChangeSource"},
+     :experimental
+     #{"PermissionRequest"
+       "SystemNotification"
+       "SessionEvent"
+       "UserToolSessionApproval"
+       "PermissionPromptRequest"},
+     :internal #{"CompactionCompleteData"}}},
+   "nodejs/src/index.ts"
+   {:fingerprint
+    [220
+     "5e83d178df435d00b34563d60934049d8c7e4e94dca35216bd6c5e7a2938c8db"],
+    :added {},
+    :removed
+    {:experimental
+     #{"FactoryAgentOptions"
+       "FactoryAgentSummary"
+       "FactoryContext"
+       "FactoryDefinition"
+       "FactoryHandle"
+       "FactoryJsonSchema"
+       "FactoryLimitOverrides"
+       "FactoryLimits"
+       "FactoryListRunsOptions"
+       "FactoryMeta"
+       "FactoryPhaseObservation"
+       "FactoryPhaseStatus"
+       "FactoryPipelineStage"
+       "FactoryProgressLine"
+       "FactoryProgressPage"
+       "FactoryResumeError"
+       "FactoryResumeErrorCode"
+       "FactoryRunDetail"
+       "FactoryRunResult"
+       "FactoryRunStatus"
+       "FactoryRunSummary"
+       "FactoryRunsPage"
+       "FactoryStepOptions"
+       "ResumeOptions"
+       "RunOptions"
+       "SessionFactoryApi"
+       "defineFactory"
+       "isFactoryRunTerminal"}},
+    :changed {}},
+   "nodejs/src/session.ts"
+   {:fingerprint
+    [2
+     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/toolSet.ts"
+   {:fingerprint
+    [2
+     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/types.ts"
+   {:fingerprint
+    [225
+     "103941ab6138f9283ff28888834cb52655ef67311664087c463f88f9407731ea"],
+    :added {},
+    :removed {:experimental #{"FactoryLimits" "FactoryMeta"}},
+    :changed {}},
+   "nodejs/src/workflow.ts"
+   {:fingerprint
+    [31
+     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :added {:language-specific #{"JsonValue"}},
+    :removed {},
+    :changed {}}},
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts",
+    :added-signatures [],
+    :fields #{},
+    :removed-fields #{},
+    :review
+    "Stable constructors/builders/method signatures are unchanged. The removed scanner-visible resumeSessionForExtension implementation overload is internal; the remaining method is explicitly @internal.",
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async createSession(config: SessionConfig): Promise<CopilotSession>"
+     "async deleteSession(sessionId: string): Promise<void>"
+     "async forceStop(): Promise<void>"
+     "async getAuthStatus(): Promise<GetAuthStatusResponse>"
+     "async getForegroundSessionId(): Promise<string | undefined>"
+     "async getLastSessionId(): Promise<string | undefined>"
+     "async getSessionMetadata(sessionId: string): Promise<SessionMetadata | undefined>"
+     "async getStatus(): Promise<GetStatusResponse>"
+     "async listModels(): Promise<ModelInfo[]>"
+     "async listSessions(filter?: SessionListFilter): Promise<SessionMetadata[]>"
+     "async ping(message?: string): Promise<{ message: string; timestamp: string; protocolVersion?: number }>"
+     "async resumeSession(sessionId: string, config: ResumeSessionConfig): Promise<CopilotSession>"
+     "async setForegroundSessionId(sessionId: string): Promise<void>"
+     "async start(): Promise<void>"
+     "async stop(): Promise<Error[]>"
+     "constructor(options: CopilotClientOptions = {})"
+     "get rpc(): ReturnType<typeof createServerRpc>"
+     "onLifecycle(handler: SessionLifecycleHandler): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventType: K, handler: TypedSessionLifecycleHandler<K>): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventTypeOrHandler: K | SessionLifecycleHandler, handler?: TypedSessionLifecycleHandler<K>): () => void"],
+    :class-name "CopilotClient",
+    :fingerprint
+    [21
+     "067bb17cb9fcc13ebbda9bc97743c7386d4505ba517054eaf0cc2a6e4d52cc8d"],
+    :removed-signatures
+    ["async resumeSessionForExtension(sessionId: string, config: ResumeSessionConfig, contributions: FactoryHandle[] | ExtensionOrchestrationContributions = {}, extensionOptions?: ExtensionJoinOptions): Promise<CopilotSession>"]},
+   :session
+   {:path "nodejs/src/session.ts",
+    :added-signatures [],
+    :fields
+    #{"clientSessionApis: ClientSessionApiHandlers"
+      "public readonly sessionId: string"
+      "readonly workflow: SessionWorkflowApi"},
+    :removed-fields #{"readonly factory: SessionFactoryApi"},
+    :review
+    "Stable methods/getters and sessionId are unchanged. The experimental factory field is removed; workflow remains. clientSessionApis is internal.",
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async abort(): Promise<void>"
+     "async disconnect(): Promise<void>"
+     "async getEvents(): Promise<SessionEvent[]>"
+     "async log(message: string, options?: { level?: \"info\" | \"warning\" | \"error\"; ephemeral?: boolean }): Promise<void>"
+     "async send(options: MessageOptions): Promise<string>"
+     "async send(optionsOrPrompt: MessageOptions | string): Promise<string>"
+     "async send(prompt: string): Promise<string>"
+     "async sendAndWait(options: MessageOptions, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait(optionsOrPrompt: MessageOptions | string, schemaOrTimeout?: ResponseSchema | number, timeout?: number): Promise<unknown>"
+     "async sendAndWait(prompt: string, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait<TResult>(options: MessageOptions | string, responseSchema: ResponseSchema<TResult>, timeout?: number): Promise<TResult>"
+     "async setAutoTier(autoTier: AutoTier | null): Promise<ModelSwitchAutoTierResult>"
+     "async setModel(model: string, options?: { reasoningEffort?: ReasoningEffort; reasoningSummary?: ReasoningSummary; contextTier?: ContextTier; modelCapabilities?: ModelCapabilitiesOverride; autoTier?: AutoTier | null; }): Promise<void>"
+     "get capabilities(): SessionCapabilities"
+     "get openCanvases(): OpenCanvasInstance[]"
+     "get rpc(): ReturnType<typeof createSessionRpc>"
+     "get ui(): SessionUiApi"
+     "get workspacePath(): string | undefined"
+     "on(handler: SessionEventHandler): () => void"
+     "on<K extends SessionEventType>(eventType: K, handler: TypedSessionEventHandler<K>): () => void"
+     "on<K extends SessionEventType>(eventTypeOrHandler: K | SessionEventHandler, handler?: TypedSessionEventHandler<K>): () => void"],
+    :class-name "CopilotSession",
+    :fingerprint
+    [22
+     "958a5c536e48e11c7e45c993044f910dc1d15bd67ae9fd59e9a301a5ca288cad"],
+    :removed-signatures []}},
+  :interfaces
+  {"AgentStopHookInput"
+   {:fingerprint
+    [3
+     "d7aae98f0cc52eeb3d873d3a93e9d6e86cbf481b18ed057cc5c088401a197c56"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AgentStopHookOutput"
+   {:fingerprint
+    [2
+     "a8d6282ad71216f6b53ec97f4bff536e7d95553b0a202f94a088c8997b480a2a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AttributedPermissionResult"
+   {:fingerprint
+    [3
+     "3e666388906f2c4d7f66c719a39fc4cc4b4fbbe6b9e4eacebc4fe8afa5ca1f42"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AutoModeSwitchRequest"
+   {:fingerprint
+    [2
+     "e4782af4f0ac6515d1ee6ee94cd5d92a1bff4cb0ecfe068ec26da58de0e87e0c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "BaseHookInput"
+   {:fingerprint
+    [3
+     "4dd1b38a04fcb164a3cfabb076c1d20be6478cae2b5121395c64c6cd3ed71e4f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CanvasProviderIdentity"
+   {:fingerprint
+    [2
+     "d34f65e4568f8b250fa90e3b729aceda0e28427ed71e97daf572fd6087b41651"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CapiSessionOptions"
+   {:fingerprint
+    [2
+     "04fdf770b98a6685b88426bfccbba71d6590f0f4d3df50d71bb0107a45a64d18"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ChildProcessRuntimeConnection"
+   {:fingerprint
+    [3
+     "10f4b910eff296cd95d9b508dfb32b1adfe3f19d0ddc1fcfa0766840eba99fb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CloudSessionOptions"
+   {:fingerprint
+    [1
+     "c522c0aef8fd4d1b056c3c00743aba37ab783d78fd2aaf762628ec4f6e888883"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CloudSessionRepository"
+   {:fingerprint
+    [3
+     "25f76277fcd3cb18cefb89f99375ece5ea669d36be3c3633fa73e37bb8086a04"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandContext"
+   {:fingerprint
+    [4
+     "2abc8272a50c6157bd2817bc82efb303ee6df3457bdce0566386522186473438"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandDefinition"
+   {:fingerprint
+    [3
+     "178ed0dd5814eb48429287bc7c7ad0a94792f6e16876e299ac60d9fb8ef1739b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientInfo"
+   {:fingerprint
+    [4
+     "ce40539ce9776e3de53751819314cf2bf5e987316f3fc83af517cf3c243c5ae8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientOptions"
+   {:fingerprint
+    [20
+     "52ec38d4844434d098f98d6903c9fcc387dc3a4d4ca846ac30696b2eb0d65599"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotExpAssignmentResponse"
+   {:fingerprint
+    [7
+     "32a158aa6403a21ef986a92b74eebb36bcc10fb3f29623c86f94a096c1acae84"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CustomAgentConfig"
+   {:fingerprint
+    [10
+     "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "DefaultAgentConfig"
+   {:fingerprint
+    [1
+     "1efea93dfd1b1564e5c9b8740f213fed3a1cb7de0887b5ca35d1f938b4f735e4"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationContext"
+   {:fingerprint
+    [6
+     "ce438df7d53625351163bfb8776dc9fa4391717793e32832c3dbc36cca196e1c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationParams"
+   {:fingerprint
+    [2
+     "3bcc3ed4d42dcee9ab2a63453df6a446d5aea15f1bb74a3edf0d86e4919daddd"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationResult"
+   {:fingerprint
+    [2
+     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationSchema"
+   {:fingerprint
+    [3
+     "0f09ec622fa8c08dc47ee6e5e82db350dbecc15e1608a643fae4411e25e6e569"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookInput"
+   {:fingerprint
+    [3
+     "45d8d02d4ceec04589622b0418c51ed0729163f16bf5ef05398b5a9669afa855"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookOutput"
+   {:fingerprint
+    [4
+     "a8f1f611cd03328ae20beea1197c85cc017c6d162f78928cc8424fe50f41ff76"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeRequest"
+   {:fingerprint
+    [4
+     "b52745cfef581e6e4ee19b6e1a2f59ab6616e24465a04f91fe4ae0a58b134805"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeResult"
+   {:fingerprint
+    [3
+     "1cea17098a8983cdce8919c7780c8df08eeabf4e9bb8f26bbdc9a5b52133e688"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExpConfigEntry"
+   {:fingerprint
+    [2
+     "8f8f41330d03718d5f3af2ba662653777d0a642dc53d0d0e7c33169d19a3a33d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionInfo"
+   {:fingerprint
+    [2
+     "51a3ec2d9f339d61149bc42f891effe4b27a4f7de36f00071b521594602314ba"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionJoinOptions"
+   {:fingerprint
+    [1
+     "8c90f960b5234d0a6e65e7b595a4b804c7518b0cd65714b65ee6c1afe41ecf1d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "FactoryLimits"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields
+    #{"timeoutSeconds"
+      "maxConcurrentSubagents"
+      "maxAiCredits"
+      "maxTotalSubagents"}},
+   "FactoryMeta"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields
+    #{"name" "argsSchema" "limits" "description" "phases"}},
+   "ForegroundSessionInfo"
+   {:fingerprint
+    [2
+     "8e82715cf957cc02d02fc29ed3465ba9aacb8cfaa3fb2ad4baf099afa08777df"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetAuthStatusResponse"
+   {:fingerprint
+    [5
+     "e5e4cbc20448aa346b9bf7faacdf42378e33fb63d9968cb2c18f3824c784ede7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetStatusResponse"
+   {:fingerprint
+    [2
+     "99fab2e37f12088ba36bfd9d2a23df8f4fd397adf3da8aeec1075d75b19f29a9"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GitHubMcpToolConfig"
+   {:fingerprint
+    [5
+     "2fc2df200a2394b7816eeb819d45910017aa11c07da3ee4525b9dc5f72450ceb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "InProcessRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "InfiniteSessionConfig"
+   {:fingerprint
+    [3
+     "cc4378413170ee5902e492badbb9de427c40d8b8451ee669f79a436a01cdc5cb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "LargeToolOutputConfig"
+   {:fingerprint
+    [3
+     "bffd26715602f2fafc9e9e5209b876d48666cb8341935886a0e560c5a2d3b0ae"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPHTTPServerConfig"
+   {:fingerprint
+    [3
+     "e9ecfecab2c125bdeff68f35ea0d02d9cd1fdafde542d4b2b7aea5355c26e21b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPStdioServerConfig"
+   {:fingerprint
+    [5
+     "8919766ccef8181491cdaccac2dc6f8201c177579ebb3b70cb35686549374b6e"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettings"
+   {:fingerprint
+    [1
+     "be8765b8a6a278b6f98d4e6a6a75aa71ac31661c434fe47eac56a9a2ff13decb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettingsPermissions"
+   {:fingerprint
+    [4
+     "48d1b198a804157c8d11c51fa5a6fdb0b009f07ee8edd2e43cdffb4798975d51"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthRequest"
+   {:fingerprint
+    [7
+     "1ee39eb587296975dbb1e50bdaf57e6aa2dd416ffccf808fd83a17f01ed70139"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthStaticClientConfig"
+   {:fingerprint
+    [5
+     "a19ab9137f33746e02c86b686afb0a10ddfbcaec81b9a3fa193bbf3a04f2fcb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthToken"
+   {:fingerprint
+    [3
+     "16c82cc163d91adb3371838d68fb9c79d04379c92e69968663351dba662a554c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthWwwAuthenticateParams"
+   {:fingerprint
+    [3
+     "8c3f66ef8c9bea4e571bbe4b4f829da3befc35d446f9df55adabd1857e07fa55"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MemoryConfiguration"
+   {:fingerprint
+    [1
+     "e056a35db086947e2f5969d747f0a7517bff00c7ffff1f9e7b47b72bfac9d948"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MessageOptions"
+   {:fingerprint
+    [8
+     "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelBilling"
+   {:fingerprint
+    [2
+     "fddd7875cc476172b4e39ddddd035de33f231298ea757ed6c50ab261aaa87ad2"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelCapabilities"
+   {:fingerprint
+    [2
+     "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelInfo"
+   {:fingerprint
+    [7
+     "0253b7f00acd12a6a4fa8db2811a4db772c782428b493a5a549d7a86202b9b28"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelPolicy"
+   {:fingerprint
+    [2
+     "49da08af7225842b41693c988a0ca8d14361528ef625c81d9781f0b926f3bab6"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "NamedProviderConfig"
+   {:fingerprint
+    [9
+     "10dd63ca62e4c945d1d6f1fe4d71c79ebd58fcb6bd71cc1958408876dd23e279"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ParentProcessRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseFailureHookInput"
+   {:fingerprint
+    [3
+     "8b74ccaa661e5b3c9ac645b070f15911379b8ce43282b30a536e88ecbe4eb833"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseFailureHookOutput"
+   {:fingerprint
+    [1
+     "d86d56aaf18b868563d279485728ef9e6ffbc4a1596c7c321068e0b1be0a9033"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookInput"
+   {:fingerprint
+    [3
+     "1a2381673cedc79fe58f9868a4b2b5ae605b3cffe1609cac26e7d94f20d848e0"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookOutput"
+   {:fingerprint
+    [3
+     "77c75bf1cbef77d53d374a50c9d082c438685b8534bfefe588bbc229af19e442"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreMcpToolCallHookInput"
+   {:fingerprint
+    [5
+     "59aa2e6b4e03ca71072576e0d68e89f5d15d22e4a4cf922e562f272fbb8b8055"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreMcpToolCallHookOutput"
+   {:fingerprint
+    [1
+     "4b747b30e9eab2e4a7a64075f9c521d754890818949b1dbb91b5003f37bf6bec"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreToolUseHookInput"
+   {:fingerprint
+    [2
+     "8c2ffdf872c77d227d45b274f89408e29f8d582825aa7a0051771c9a7246577c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreToolUseHookOutput"
+   {:fingerprint
+    [5
+     "b08e7b19e21adaeaf58ec4405ae939f6e8813734f03a69253ecde8bc8e39f703"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderConfig"
+   {:fingerprint
+    [13
+     "bdbdc09988a227b2eb4acb9fa4d9c755c401ead06ef4a6635cba4278b6d8cfda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderModelConfig"
+   {:fingerprint
+    [9
+     "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderTokenArgs"
+   {:fingerprint
+    [2
+     "09133ff6dd8edbaf925da4f4f993b3f73a62d9743c18bf34b96cbdcb22c9bcef"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ResponseSchema"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ResumeSessionConfig"
+   {:fingerprint
+    [3
+     "8200254cec5cd0bc3aae3b98a8c6814688605b75e4bce65d53c344bde5501a01"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SectionOverride"
+   {:fingerprint
+    [2
+     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionBackgroundEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionCapabilities"
+   {:fingerprint
+    [1
+     "09cc1d0a4273c286401cd38c9bf6735ef0ab29f085dfb71ca7c408db4a5ed728"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfig"
+   {:fingerprint
+    [3
+     "54e55949b3d0df86b5afaa2f70e255c33aec4eb46bed509a8569f99b2d8dbd83"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfigBase"
+   {:fingerprint
+    [81
+     "9991ffc0be7ad26c80624e5e78509ff17b1acb4c26f4864c4d9395ec8566f77d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionContext"
+   {:fingerprint
+    [4
+     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionCreatedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionDeletedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionEndHookInput"
+   {:fingerprint
+    [3
+     "db9e60c11949d099daddfb1e1fdf317c629e4bbeb28bdc0dc50c26cb1c989a9a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionEndHookOutput"
+   {:fingerprint
+    [3
+     "3c4f59c4d00ac8d06b46bec2738a4e0a8683c73f22fa4ae6e522cb8e266d3cda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionForegroundEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionFsConfig"
+   {:fingerprint
+    [4
+     "a0138a4a7b603c87d6370093fdc31ca7eabd02857bb4c5ca99e07f391bb93886"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionHooks"
+   {:fingerprint
+    [10
+     "23ebb885ecf68b57128ddf76c3c610c874405481b9ace33e16291e84d4e70e37"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionLifecycleEventMetadata"
+   {:fingerprint
+    [3
+     "7a583d77773d2303de442ac85894ca460c6f708aef0f55ce4547fd053c4a2031"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionListFilter"
+   {:fingerprint
+    [4
+     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionMetadata"
+   {:fingerprint
+    [6
+     "7327dd694a90533017bb1701a6aab035e1bcd0fb0f84e2015010c474a85dce42"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionStartHookInput"
+   {:fingerprint
+    [2
+     "ff899a5646f4978b73153825aac0ad750ae6f2fc79ca6afb45dbbaf7b3efbcbe"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionStartHookOutput"
+   {:fingerprint
+    [2
+     "b4d308d2be27710567c3faae7e832c88212079ec8b3585b0f07f5c0a5e23e751"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionUiApi"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionUpdatedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "StdioRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageAppendConfig"
+   {:fingerprint
+    [2
+     "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageCustomizeConfig"
+   {:fingerprint
+    [3
+     "9e4b567ba896951e054fc5d0cb57219b2b58248f8a208c78ae3a2bf677182bcb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageReplaceConfig"
+   {:fingerprint
+    [2
+     "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TcpRuntimeConnection"
+   {:fingerprint
+    [3
+     "4965411ad2991bcdf6b942994f6b640f811f29e2b4a689e027a5098d3ef9515b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TelemetryConfig"
+   {:fingerprint
+    [6
+     "114b96645c30a8ad8fab2d8ffd20dba794ec9d87b56798c027cf03085251e25e"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "Tool"
+   {:fingerprint
+    [9
+     "0e2ef32e0f5098f470ca44961f56f61445b0fbceabb679e7aaf0e86e66e07bb7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolCallRequestPayload"
+   {:fingerprint
+    [4
+     "63dd509594d1480e379ff124a653f2b12f0230873c9023a2461f52da67f52022"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolCallResponsePayload"
+   {:fingerprint
+    [1
+     "5656fafa00d4f294bcb606cf4f7d4fa877390e46f583e8b3c8744ace104a31d1"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolInvocation"
+   {:fingerprint
+    [8
+     "8cb44108bb64c804e982c98dc593c89a5d3182cad1284be4c0484c91ea5e5a2c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolSearchConfig"
+   {:fingerprint
+    [2
+     "1f7f717c833ebbdf7e8b7cff148e82bba8c7a79a6717fd51ae20c73d6b1281a1"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TraceContext"
+   {:fingerprint
+    [2
+     "1a894915a2a0e05212477c41b5f14bda5827be9297a17f04a65b32c8c98e0e7c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UiInputOptions"
+   {:fingerprint
+    [6
+     "98b9a309478887ef203ea2c72314757ccf59078508cc3d927817b44f088bcc0f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UriRuntimeConnection"
+   {:fingerprint
+    [3
+     "48a57da794210d9851b003d4f109ab0b4b022cefd2a67be7d9b3ba8e85b17d21"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserInputRequest"
+   {:fingerprint
+    [3
+     "e7a56785d1ebde5b8fb87469ab88eb812503c4bd105e6c7b69340da5fe910ca7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserInputResponse"
+   {:fingerprint
+    [2
+     "7877f9385baa344cd428667c490aa4d85a28094d1b37458ff108704288368cb3"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookInput"
+   {:fingerprint
+    [1
+     "2934d46a57407eb0d71f0ffd9dc3773905a1150aa2fd2ecf8947cb29b4218028"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookOutput"
+   {:fingerprint
+    [3
+     "9ff8f9ed4aad6be83387e14813c9d02c9b2dd8c151d9f470418bfc6d16a61954"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptTransformedHookInput"
+   {:fingerprint
+    [2
+     "94061bbe65b6fe2d7b95af74cc9684f33a0db1cc95f2f132fcdd2f7958a36d6c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptTransformedHookOutput"
+   {:fingerprint
+    [1
+     "8edd29a2e5f4508b58ba78df597ced68c989974cb74e315bccdf55774b121c68"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ZodSchema"
+   {:fingerprint
+    [1
+     "bccaec1f339f99936b4be317527ab8a2b033f1d913b1a0e75c6640f34af8091c"],
+    :added-fields #{},
+    :removed-fields #{}}},
+  :unchanged-authority-paths
+  #{"nodejs/src/toolSet.ts" "nodejs/src/canvas.ts"}},
+ :intentional-exclusions
+ [{:id :additional-workflow-features,
+   :classification :experimental,
+   :decision :exclude-new-features,
+   :reason
+   "Migration covers the previously supported orchestration footprint, not argsSchema, pause/checkpoint mutations, the list-runs paging overload, notification controls, or additional agent options."}
+  {:id :accounts-and-installations,
+   :classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Accounts/login/Entra and installation-management types and handlers are generated-only additions, not new handwritten Node options or package-root exports."}
+  {:id :mcp-and-model-metadata,
+   :classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Owned MCP OAuth/install lifecycle, policySessionId, model-provider descriptors and raw model-list shape changes do not enlarge the stable handwritten SDK API."}
+  {:id :permission-extractor,
+   :classification :experimental,
+   :decision :retain-wire-only,
+   :reason
+   "Retired Assisted Permissions extractor events remain historical decode-only schema evidence; no permission authority is inferred from them."}
+  {:id :internal-correlation,
+   :classification :internal,
+   :decision :wire-only,
+   :reason
+   "ModelCallStartData.parentToolCallId and CompactionCompleteData.activeWorkflowSummary are internal runtime data, not curated public additions."}
+  {:id :unchanged-experimental-subsystems,
+   :classification :experimental,
+   :decision :retain-exclusions,
+   :reason
+   "Diagnostics, Connectors, Fusion, canvas authoring, extension launch providers and host-owned inference remain excluded."}
+  {:id :json-value-relocation,
+   :classification :language-specific,
+   :decision :no-behavior-change,
+   :reason
+   "JsonValue moves from the deleted Factory module to Workflow; the package-root alias and JSON value contract are unchanged."}
+  {:id :runtime-owned-behavior,
+   :classification :stable-public,
+   :decision :document-existing-contract,
+   :reason
+   "Skill catalog caching/reload, authentication-host precedence and subagent telemetry span trees are runtime-owned. Existing Clojure wrappers/options remain sufficient; skill reload guidance is updated."}],
+ :experimental-migrations
+ [{:wire
+   {:registration "workflows",
+    :agent-run-id "workflowRunId",
+    :permission-kind "workflow",
+    :invalidation "workflow.run_updated",
+    :notification "workflow_completed",
+    :notification-name "workflowName",
+    :limits
+    {:absent :preserve, :null :unlimited, :declared-null :reject}},
+   :semantics
+   "Preserve the existing Clojure execution and ownership design under the current wire names. Paused attempts are settled observations; unrelated experimental features remain excluded.",
+   :tests
+   [github.copilot-sdk.integration.workflow-test/test-agent-workflow-join-wire
+    github.copilot-sdk.integration.workflow-test/test-agent-workflow-reverse-execution
+    github.copilot-sdk.integration.workflow-test/test-agent-workflow-abort-targets-one-execution-attempt
+    github.copilot-sdk.workflow-async-behavior-test/async-workflow-facade-routes-all-wrappers-and-arities
+    github.copilot-sdk.workflow-async-behavior-test/workflow-overrides-preserve-unlimited-versus-omitted-ceilings
+    github.copilot-sdk.workflow-async-behavior-test/declared-limits-and-invocation-overrides-have-distinct-null-contracts
+    github.copilot-sdk.workflow-async-behavior-test/workflow-resume-maps-known-errors-and-passes-through-unknown-errors
+    github.copilot-sdk.workflow-async-behavior-test/declared-numeric-specs-match-workflow-construction
+    github.copilot-sdk.workflow-async-behavior-test/workflow-authoring-rejects-unsupported-metadata
+    github.copilot-sdk.workflow-async-behavior-test/progress-options-cannot-override-owned-identifiers
+    github.copilot-sdk.workflow-async-behavior-test/progress-paging-uses-canonical-keys-and-result-shape
+    github.copilot-sdk.integration.upstream-1-0-89-5-test/workflow-registration-replaces-the-retired-factory-spelling
+    github.copilot-sdk.integration.upstream-1-0-89-5-test/paused-workflow-attempts-are-terminal
+    github.copilot-sdk.integration.upstream-1-0-89-5-test/workflow-notifications-validate-pause-metadata
+    github.copilot-sdk.integration.permissions-oauth-test/test-workflow-permission-request-spec],
+   :authority
+   ["nodejs/src/workflow.ts:SessionWorkflowApi"
+    "nodejs/src/workflow.ts:WorkflowLimitOverrides"
+    "nodejs/src/workflow.ts:WorkflowResumeErrorCode"
+    "nodejs/src/extension.ts:JoinSessionConfig"],
+   :idiom
+   {:namespace github.copilot-sdk.workflow,
+    :registration :workflows,
+    :limit-overrides :nil-clears-individual-ceiling},
+   :docs
+   ["doc/guides/dynamic-workflows.md"
+    "doc/reference/API.md"
+    "examples/dynamic_workflows.clj"
+    "examples/README.md"
+    "CHANGELOG.md"],
+   :adr "doc/adr/2026-09-27-dynamic-workflow-migration.md",
+   :fdefs
+   [github.copilot-sdk.workflow/define-workflow
+    github.copilot-sdk.workflow/run!
+    github.copilot-sdk.workflow/resume!
+    github.copilot-sdk.workflow/<run!
+    github.copilot-sdk.workflow/<resume!
+    github.copilot-sdk.workflow/wait-for-run!
+    github.copilot-sdk.workflow/get-run-progress
+    github.copilot-sdk.workflow/<get-run-progress],
+   :classification :experimental,
+   :proof-states
+   [:registration-absent
+    :registration-empty
+    :registration-nil-rejected
+    :create-rejected
+    :resume-rejected
+    :opaque-json
+    :reverse-execution
+    :journal
+    :progress
+    :cancel
+    :exact-execution-token
+    :session-teardown
+    :paused-attempt
+    :managed-approval-false
+    :managed-approval-true
+    :limit-null
+    :limit-omitted
+    :limit-empty
+    :declared-limit-null-rejected
+    :current-resume-errors
+    :unknown-resume-errors
+    :finite-declarations
+    :ratio-number-serialization
+    :closed-metadata
+    :closed-phases
+    :paging-forward
+    :paging-backward
+    :paging-limit-boundaries
+    :paging-identifier-ownership],
+   :id :orchestration/factory-to-workflow,
+   :specs
+   [:github.copilot-sdk.specs/workflows
+    :github.copilot-sdk.specs/join-session-config
+    :github.copilot-sdk.specs/workflow-limits
+    :github.copilot-sdk.specs/workflow-limit-overrides
+    :github.copilot-sdk.specs/workflow-progress-options
+    :github.copilot-sdk.specs/workflow-resume-error-code
+    :github.copilot-sdk.specs/workflow-run-status
+    :github.copilot-sdk.specs/permission-request
+    :github.copilot-sdk.specs/system.notification-data
+    :github.copilot-sdk.specs/workflow.run_updated-data],
+   :builders
+   [:join-session
+    :session.workflow.*
+    :workflow.execute
+    :workflow.abort],
+   :aliases :none,
+   :decision :migrate-existing-surface}],
+ :certification
+ {:clojure-base-commit "ce48c20ad87782198a0db762d920b5f3bc5f69b6",
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_4001c1d.edn",
+   :sha256
+   "f55a68396c54cf88905db6a53d90d9bee69d9bad69a98dcf61a432f684de3821"},
+  :local-artifact-seal
+  {:status :sealed,
+   :commit "c8dc16971ef5c831528d1c4f3687d66af344286f"}},
+ :changed-paths
+ {:exact-classifications
+  {"nodejs/src/extension.ts" :experimental,
+   "nodejs/docs/factory-patterns.md" :experimental,
+   "nodejs/test/e2e/client_options.e2e.test.ts" :stable-public,
+   "nodejs/test/legacy-request-compatibility.test.ts" :generated-only,
+   "nodejs/docs/factories.md" :experimental,
+   "nodejs/src/types.ts" :experimental,
+   "nodejs/src/workflow.ts" :experimental,
+   "test/snapshots/telemetry/should_export_per_request_subagent_chat_spans.yaml"
+   :stable-public,
+   "nodejs/src/session.ts" :experimental,
+   "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts" :generated-only,
+   "nodejs/src/client.ts" :stable-public,
+   "docs/features/skills.md" :stable-public,
+   "nodejs/docs/workflows.md" :experimental,
+   "nodejs/src/index.ts" :experimental,
+   "nodejs/test/e2e/fixtures/factory-extension.mjs" :experimental,
+   "nodejs/test/workflow.test.ts" :experimental,
+   "nodejs/test/extension.test.ts" :experimental,
+   "nodejs/test/e2e/auth_host.e2e.test.ts" :stable-public,
+   "nodejs/src/factory.ts" :experimental,
+   "nodejs/test/factory.test.ts" :experimental,
+   "docs/troubleshooting/debugging.md" :stable-public,
+   "nodejs/src/generated/rpc.ts" :generated-only,
+   "nodejs/test/e2e/factory.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/telemetry.e2e.test.ts" :stable-public,
+   "nodejs/src/generated/session-events.ts" :stable-public,
+   "nodejs/test/e2e/fixtures/workflow-extension.mjs" :experimental,
+   "docs/developer-docs/secrets.md" :internal,
+   "nodejs/test/e2e/skills.e2e.test.ts" :stable-public,
+   "nodejs/test/session-event-types.test.ts" :experimental,
+   "nodejs/docs/extensions.md" :experimental,
+   "test/snapshots/skills/loads_a_new_skill_after_explicit_reload_and_makes_it_available_to_a_subagent.yaml"
+   :stable-public,
+   "nodejs/test/e2e/workflow.e2e.test.ts" :experimental},
+  :prefix-classifications
+  [{:prefix ".github/",
+    :classification :internal,
+    :reason "Upstream CI and consistency-review infrastructure."}
+   {:prefix "nodejs/",
+    :classification :internal,
+    :reason
+    "Remaining runtime pins, test harness and generator implementation/compatibility tests. Public changes are classified explicitly."}
+   {:prefix "scripts/",
+    :classification :internal,
+    :reason
+    "Generator support for additive optional request parameters in other language projections."}
+   {:prefix "test/snapshots/",
+    :classification :internal,
+    :reason
+    "Unrelated recorded response data; stable behavioral snapshots are classified explicitly."}
+   {:prefix "dotnet/",
+    :classification :language-specific,
+    :reason
+    ".NET implementation, generated bindings, and tests; Node defines the corresponding SDK requirements."}
+   {:prefix "go/",
+    :classification :language-specific,
+    :reason "Go implementation, generated bindings, and tests."}
+   {:prefix "java/",
+    :classification :language-specific,
+    :reason
+    "Java implementation, generator changes, generated bindings, documentation, and tests."}
+   {:prefix "python/",
+    :classification :language-specific,
+    :reason "Python implementation, generated bindings, and tests."}
+   {:prefix "rust/",
+    :classification :language-specific,
+    :reason "Rust implementation, generated bindings, and tests."}],
+  :rename-policy :no-renames,
+  :count 306,
+  :sha256
+  "c6f2ca929f78a0c413a1b93d54e7e82d81ff7d5765c4807547e73a7e5b966765",
+  :hash-format :newline-joined-without-trailing-newline,
+  :classification-counts
+  {:internal 29,
+   :stable-public 10,
+   :language-specific 246,
+   :experimental 18,
+   :generated-only 3}},
+ :removed-local-artifacts
+ #{"doc/api/agent-factories.html"
+   "examples/agent_factories.clj"
+   "doc/api/github.copilot-sdk.factory.html"
+   "test/github/copilot_sdk/integration/factory_test.clj"
+   "test/github/copilot_sdk/factory_async_behavior_test.clj"
+   "doc/guides/agent-factories.md"
+   "src/github/copilot_sdk/factory.clj"},
+ :stable-deltas
+ [{:wire
+   {:transport :child-environment,
+    :key "COPILOT_RUNTIME_PROCESS_FILE_LOGGING"},
+   :semantics
+   "Apply after user env only for non-empty modes. Empty mode neither adds nor removes the logging setting. External and child-process clients do not spawn.",
+   :tests
+   [github.copilot-sdk.process-test/process-file-logging-follows-client-mode],
+   :authority
+   ["nodejs/src/client.ts:CopilotClient"
+    "nodejs/test/e2e/client_options.e2e.test.ts"],
+   :idiom
+   {:options [:mode :env],
+    :non-empty-value "1",
+    :empty-mode :preserve-inherited-and-explicit},
+   :docs
+   ["doc/reference/API.md"
+    "src/github/copilot_sdk/process.clj"
+    "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.client/client github.copilot-sdk.client/start!],
+   :classification :stable-public,
+   :proof-states
+   [:mode-absent
+    :copilot-cli
+    :empty
+    :env-absent
+    :env-nil
+    :env-empty
+    :env-zero
+    :env-one],
+   :id :client/process-file-logging,
+   :specs [:github.copilot-sdk.specs/client-options],
+   :builders [:spawned-stdio :spawned-tcp]}
+  {:wire {:key "parentToolCallId", :type :optional-non-null-string},
+   :semantics
+   "Root and subagent notifications/history preserve optional correlation without changing completion or event ownership.",
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-89-5-test/parent-call-metadata-is-optional-and-non-null
+    github.copilot-sdk.integration.upstream-1-0-89-5-test/metadata-survives-live-and-history-delivery],
+   :authority
+   ["nodejs/src/generated/session-events.ts:AssistantTurnStartData"
+    "nodejs/src/generated/session-events.ts:AssistantTurnEndData"
+    "nodejs/src/generated/session-events.ts:ModelCallFailureData"],
+   :idiom
+   {:key :parent-tool-call-id,
+    :empty-string :preserved,
+    :nil :rejected},
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.session/subscribe-events
+    github.copilot-sdk.session/get-messages],
+   :classification :stable-public,
+   :proof-states
+   [:absent :empty-string :string :nil :false :number :vector :map],
+   :id :events/parent-call-metadata,
+   :specs
+   [:github.copilot-sdk.specs/assistant.turn_start-data
+    :github.copilot-sdk.specs/assistant.turn_end-data
+    :github.copilot-sdk.specs/model.call_failure-data
+    :github.copilot-sdk.specs/parent-tool-call-id],
+   :builders [:session.event :session.getMessages]}
+  {:wire {:key "source", :added-value "auto_tier_recommendation"},
+   :semantics
+   "The added source is a wire string; it does not expose the experimental Auto-tier recommendation event.",
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-89-5-test/auto-tier-recommendation-is-a-model-change-source
+    github.copilot-sdk.integration.upstream-1-0-89-5-test/metadata-survives-live-and-history-delivery],
+   :authority
+   ["nodejs/src/generated/session-events.ts:ModelChangeSource"],
+   :idiom {:key :source, :value "auto_tier_recommendation"},
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.session/subscribe-events
+    github.copilot-sdk.session/get-messages],
+   :classification :stable-public,
+   :proof-states [:new-enum :nil :unknown-enum :live :history],
+   :id :events/auto-tier-model-change-source,
+   :specs
+   [:github.copilot-sdk.specs/model-change-source
+    :github.copilot-sdk.specs/session.model_change-data],
+   :builders [:session.event :session.getMessages]}
+  {:wire
+   {:key "workflowRunId",
+    :retained-history-key "factoryRunId",
+    :type :optional-non-null-string},
+   :semantics
+   "Expose current read-only workflow correlation and retain the historical field still declared by upstream.",
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-89-5-test/workflow-run-correlation-preserves-the-legacy-history-field
+    github.copilot-sdk.integration.upstream-1-0-89-5-test/metadata-survives-live-and-history-delivery],
+   :authority
+   ["nodejs/src/generated/session-events.ts:SubagentStartedData"],
+   :idiom
+   {:key :workflow-run-id, :retained-history-key :factory-run-id},
+   :docs
+   ["doc/reference/API.md"
+    "doc/guides/dynamic-workflows.md"
+    "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.session/subscribe-events
+    github.copilot-sdk.session/get-messages],
+   :classification :stable-public,
+   :proof-states
+   [:absent
+    :empty-string
+    :string
+    :nil
+    :false
+    :vector
+    :map
+    :legacy-history
+    :live
+    :history],
+   :id :events/workflow-run-correlation,
+   :specs
+   [:github.copilot-sdk.specs/subagent.started-data
+    :github.copilot-sdk.specs/workflow-run-id],
+   :builders [:session.event :session.getMessages]}],
+ :version {:sdk "1.0.14.0", :changed? false, :release-required? false},
+ :unclassified-deltas [],
+ :upstream
+ {:base-commit "4001c1da7d832c51bad1d38619c1a082af390efb",
+  :target-commit "d106d29dc6c5112da2abdae59008571b6692f12b",
+  :target-package-version "0.0.0-dev",
+  :runtime-version "1.0.89-5",
+  :commit-count 1,
+  :commits-sha256
+  "ec849e0f5e9e435aeb144380df2ba561cf733fc8fa90feec111daf4d0e8be795",
+  :hash-format :newline-joined-without-trailing-newline,
+  :release-tag
+  {:name "v1.0.14",
+   :commit "e60d9037353249ef16b349eb4012e8c1d113fda5"}},
+ :api-snapshot-impact
+ {:namespace-rename
+  [github.copilot-sdk.factory github.copilot-sdk.workflow],
+  :added-spec-keys
+  #{:github.copilot-sdk.specs/workflow-progress-options
+    :github.copilot-sdk.specs/workflow-run-id
+    :github.copilot-sdk.specs/assistant.turn_end-data
+    :github.copilot-sdk.specs/workflow-meta
+    :github.copilot-sdk.specs/workflow-phase
+    :github.copilot-sdk.specs/workflow.run_updated-data
+    :github.copilot-sdk.specs/workflow-run-status
+    :github.copilot-sdk.specs/workflows
+    :github.copilot-sdk.specs/workflow-operation
+    :github.copilot-sdk.specs/workflow-resume-error-code
+    :github.copilot-sdk.specs/workflow-limits
+    :github.copilot-sdk.specs/workflow-limit-overrides
+    :github.copilot-sdk.specs/workflow-permission-phases},
+  :removed-spec-keys
+  #{:github.copilot-sdk.specs/factory-phase
+    :github.copilot-sdk.specs/factory-operation
+    :github.copilot-sdk.specs/factories
+    :github.copilot-sdk.specs/factory-resume-error-code
+    :github.copilot-sdk.specs/factory-run-status
+    :github.copilot-sdk.specs/factory.run_updated-data
+    :github.copilot-sdk.specs/factory-permission-phases
+    :github.copilot-sdk.specs/factory-meta
+    :github.copilot-sdk.specs/factory-limits},
+  :additional-spec-keys
+  #{:github.copilot-sdk.specs/workflow-progress-options
+    :github.copilot-sdk.specs/workflow-run-id
+    :github.copilot-sdk.specs/assistant.turn_end-data
+    :github.copilot-sdk.specs/workflow-limit-overrides},
+  :non-migration-function-changes #{},
+  :non-migration-fdef-changes
+  #{github.copilot-sdk.workflow/get-run-progress
+    github.copilot-sdk.workflow/<get-run-progress}}}

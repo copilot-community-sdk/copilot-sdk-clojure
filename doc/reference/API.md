@@ -235,7 +235,7 @@ kebab-case ↔ camelCase wire convention (e.g. `:working-directory` ↔
 | `:auto-restart?` | boolean | `true` | Auto-restart on crash |
 | `:notification-queue-size` | number | `4096` | Max queued protocol notifications |
 | `:router-queue-size` | number | `4096` | Max queued non-session notifications |
-| `:request-handler-threads` | number | `16` | Max reverse-RPC handlers (hooks, sessionFs, factories, user input, etc.) executing concurrently. Handlers run on a bounded worker pool owned by the connection, never on core.async dispatch |
+| `:request-handler-threads` | number | `16` | Max reverse-RPC handlers (hooks, sessionFs, workflows, user input, etc.) executing concurrently. Handlers run on a bounded worker pool owned by the connection, never on core.async dispatch |
 | `:request-handler-queue-size` | number | `256` | Max reverse RPCs queued once every worker is busy. Beyond `threads + queue-size` outstanding requests the runtime receives an explicit `-32000` `request_handler_saturated` error |
 | `:tool-timeout-ms` | number | `120000` | Timeout for tool handlers returning channels |
 | `:cwd` | string | nil | Working directory for CLI process |
@@ -253,6 +253,15 @@ kebab-case ↔ camelCase wire convention (e.g. `:working-directory` ↔
 | `:is-child-process?` | boolean | `false` | When `true`, connect via own stdio to a parent Copilot CLI process (no process spawning). Requires `:use-stdio?` `true`; mutually exclusive with `:cli-url` |
 | `:session-fs` | map | nil | Session filesystem provider config. Keys: `:initial-cwd` (string, required), `:session-state-path` (string, required), `:conventions` (`"windows"` or `"posix"`, required). When set, the client calls `sessionFs.setProvider` on connect and routes filesystem operations through per-session handlers. See [Session Filesystem](#session-filesystem) |
 | `:mode` | keyword | `:copilot-cli` | Client multitenancy mode: `:copilot-cli` (default — preserve historical CLI behavior) or `:empty` (multi-tenant SaaS hosts that must isolate sessions from local machine state). In `:empty` mode the SDK requires at least one tenant-scoped storage root (`:copilot-home`, `:session-fs`, `:cli-url`, or `:is-child-process?`), sets `COPILOT_DISABLE_KEYTAR=1` on the spawned CLI, spreads 10 safe defaults under caller session config, forces `installedPlugins []`, and normalizes `:system-message` to strip `environment_context`. See [Client Mode](#client-mode-empty). (upstream PR #1428) |
+
+SDK-spawned runtimes in `:copilot-cli` mode receive
+`COPILOT_RUNTIME_PROCESS_FILE_LOGGING=1`, overriding inherited or `:env` values.
+The runtime writes redacted `process-<timestamp>-<pid>.log` files under
+`COPILOT_HOME/logs`, or the directory selected with `:cli-args ["--log-dir" path]`.
+`:empty` mode leaves this setting unchanged: an inherited or explicit value can
+still enable logging. Existing-server and child-process connections do not
+spawn or reconfigure a runtime. An older explicitly selected CLI may ignore
+the setting.
 
 ### Methods
 
@@ -584,7 +593,7 @@ In addition to the `resume-session` config options, `join-session` accepts:
 
 | Option | Type | Description |
 |---|---|---|
-| `:factories` | vector | `define-factory` handles to register as [Agent Factories (Experimental)](#agent-factories-experimental) for this session. Join-only — not accepted by `create-session` or `resume-session`. |
+| `:workflows` | vector | `define-workflow` handles to register as [Dynamic Workflows (Experimental)](#dynamic-workflows-experimental) for this session. Join-only — not accepted by `create-session` or `resume-session`. |
 | `:requested-environment-variables` | vector of non-blank strings | Names the extension asks the parent CLI to grant. Omission and `[]` send no wire field; explicit `nil` is invalid. Approved values are returned under `:granted-environment-variables`, filtered to these exact names. ([upstream PR #2348](https://github.com/github/copilot-sdk/pull/2348)) |
 
 ```clojure
@@ -1484,7 +1493,7 @@ Get the client that owns this session.
 | `session/skills-list` | List available skills. Returns map with `:skills`. |
 | `session/skills-enable!` | Enable a skill by name. |
 | `session/skills-disable!` | Disable a skill by name. |
-| `session/skills-reload!` | Reload all skills. |
+| `session/skills-reload!` | Refresh the catalog after adding, editing, or removing skill files. Returns the runtime's reload result, including `:errors`. |
 
 **Queued commands**
 
@@ -1899,7 +1908,7 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
-For schema 1.0.89-3, `:copilot/assistant.server_tool_progress` also belongs to
+For schema 1.0.89-5, `:copilot/assistant.server_tool_progress` also belongs to
 `copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
 `:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
 `:copilot/session.permission_recovery`, and `:copilot/session.model_deselected`
@@ -1915,16 +1924,17 @@ remain generated wire evidence and are not curated as public idiom events.
 The experimental `reasoningBlocks` field on `assistant.message` and
 `:shell-execution` field on `tool.execution_complete` also remain generated
 wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.89-3` additionally carries experimental factory pause/checkpoint,
+`1.0.89-5` additionally carries experimental workflow pause/checkpoint,
 permission, workspace, and managed-catalog protocol declarations that are not
 part of the stable Clojure API. The new experimental permission declarations
 include `permission.assentDetected`, `permission.contextualAuthorization`, and
 the `activatesExtraction` field on `permission.messageAuthorizationRead`.
 Experimental extension launch-provider declarations and structured task-blocker
 payloads also remain generated wire evidence only.
-Experimental Dynamic Workflows, Connector management, and command-enqueue APIs
-are not exposed by the Clojure SDK. Existing experimental Agent Factories
-remain a separate surface; workflow handles cannot be registered or run.
+Connector management and command-enqueue APIs are not exposed by the Clojure
+SDK. [Dynamic Workflows](#dynamic-workflows-experimental) remain a supported
+experimental surface; pause/checkpoint mutation and `argsSchema` authoring
+remain excluded.
 Diagnostics configuration and diagnostic read/configure RPCs also remain
 experimental, even though the Node session config references the experimental
 `DiagnosticsConfiguration` type. Connector type re-exports do not make that
@@ -1957,7 +1967,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:url`, and `:remediation`. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, and `"allow_sandbox_outbound"`. |
 | `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
 | `:copilot/session.info` | Informational session update |
-| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, and `:source`. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, and `"changeboarding_shortcut"`. |
+| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, and `:source`. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, `"changeboarding_shortcut"`, and `"auto_tier_recommendation"`. |
 | `:copilot/session.model_deselected` | The host withdrew the selected model. Data requires string `:previous-model` and `:reason "provider_withdrawn"`. Clear the displayed model selection; the next turn resolves a default. Reasoning effort, verbosity, and other session preferences remain unchanged. This durable event is also returned by `get-messages`. |
 | `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
 | `:copilot/session.usage_info` | Token usage information |
@@ -1993,7 +2003,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/skill.invoked` | Skill invocation triggered; data requires `:name`, `:path`, and `:content`, with optional `:invoked-at-turn`, `:description`, `:allowed-tools`, `:plugin-name`, `:plugin-version`, `:disable-model-invocation`, and string `:source`. Known source values include `"project"`, `"inherited"`, `"personal-copilot"`, `"personal-agents"`, `"plugin"`, `"custom"`, `"builtin"`, `"remote"`, and `"sdk"`; the field remains open for additional runtime-provided identifiers. SDK-provided skills may use an empty path. |
 | `:copilot/user.message` | User message added; data requires `:content` and may include correlation fields `:message-id`, `:turn-id`, and `:interaction-id`, plus `:source`, `:transformed-content`, `:is-autopilot-continuation`, and `:responses-reasoning {:model "..." :initial-effort "..." :effort "..."}`. |
 | `:copilot/pending_messages.modified` | Pending message queue updated |
-| `:copilot/assistant.turn_start` | Assistant turn started |
+| `:copilot/assistant.turn_start` | Assistant turn started; data requires `:turn-id` and may include `:model`, `:interaction-id`, and string `:parent-tool-call-id` for a subagent's parent task invocation. Omission and empty strings are preserved; `nil` is invalid. |
 | `:copilot/assistant.intent` | Assistant intent update |
 | `:copilot/assistant.reasoning` | Model reasoning (if supported); optional data: `:rte` (opaque round-trip encrypted reasoning token, for providers that require it to be replayed back) (upstream schema 1.0.79-5/6) |
 | `:copilot/assistant.reasoning_delta` | Streaming reasoning chunk |
@@ -2001,12 +2011,12 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/assistant.message` | Complete assistant response; optional data includes `:originating-message-id`, the logical primary user message that initiated the run, plus `:chunk-index`, `:chunk-count` (position/count when the response was split across multiple messages), `:citations` (see [Citations](#citations-experimental)), and `:rte` (upstream schema 1.0.79-5/6). Each `:tool-requests` entry may include `:type` (`"function"` or `"custom"`) and hosted-program attribution as `:caller {:caller-id "..." :type "program"}`. Its `:arguments` is validated only as recursive JSON (`nil`, strings, booleans, finite non-ratio numbers, vectors, and maps with string or keyword keys); source-defined keys are preserved verbatim rather than kebab-cased. |
 | `:copilot/assistant.message_delta` | Streaming response chunk |
 | `:copilot/assistant.streaming_delta` | Response size update during streaming; data: `{:total-response-size-bytes N}` |
-| `:copilot/assistant.turn_end` | Assistant turn completed |
+| `:copilot/assistant.turn_end` | Assistant turn completed; data requires `:turn-id` and may include `:model` and string `:parent-tool-call-id`, with the same omission and non-null contract as turn start. |
 | `:copilot/assistant.usage` | Token usage and cost for an individual API call. Required: `:model` (string). Optional: `:input-tokens`, `:output-tokens`, `:reasoning-tokens`, `:accepted-prediction-tokens`, `:rejected-prediction-tokens`, `:cache-read-tokens`, `:cache-write-tokens`, `:cache-expires-at` (`java.time.Instant` — when the prompt cache expires), `:service-request-id` (string — `x-copilot-service-request-id` for CAPI log correlation), `:api-endpoint`, `:api-call-id`, `:provider-call-id`, `:content-filter-triggered` (boolean), `:finish-reason` (string), `:cost`, `:duration`, `:time-to-first-token-ms`, `:ttft-ms`, `:output-ttft-ms` (finite non-negative number, time to first *output* token, distinct from `:ttft-ms`; upstream schema 1.0.83-1), `:inter-token-latency-ms`, `:reasoning-effort`, `:reasoning-summary` (`"none"`, `"concise"`, or `"detailed"`), `:initiator`, `:parent-tool-call-id` (deprecated), `:copilot-usage`, `:quota-snapshots`, `:interaction-type`, `:is-auto`, `:is-byok`, `:max-output-tokens`, `:max-prompt-tokens`, `:transport` (`"http"` or `"websocket"`), `:rte`. `:copilot-usage` requires non-negative `:total-nano-aiu`, may identify its default billing `:model`, and may include internal itemized `:token-details`; each detail may identify its own billing `:model`. ([upstream PR #2074](https://github.com/github/copilot-sdk/pull/2074); runtime schema `1.0.84-4`) |
 | `:copilot/assistant.idle` | Main agent's processing loop went idle, including while related background work (running sub-agents or in-flight attached shell commands) is still pending (upstream schema 1.0.66) |
 | `:copilot/assistant.tool_call_delta` | Streaming tool-call argument input chunk; data includes `:tool-call-id`, `:input-delta`, optional `:tool-name`, `:tool-type` (upstream schema 1.0.69-3) |
 | `:copilot/assistant.server_tool_progress` | Ephemeral live progress for a provider-hosted server tool before the finalized `serverTools` envelope arrives on the terminal `assistant.message`. Data: `{:output-index <integer> :kind <string> :status <string>}`; only `"web_search"` is currently emitted for `:kind`, and `:status` is `"in_progress"`, `"searching"`, or `"completed"`. |
-| `:copilot/model.call_failure` | Failed LLM API call metadata for telemetry; data requires `:source` (`"top_level"`, `"subagent"`, or `"mcp_sampling"`) and may include string `:interaction-type`. |
+| `:copilot/model.call_failure` | Failed LLM API call metadata for telemetry; data requires `:source` (`"top_level"`, `"subagent"`, or `"mcp_sampling"`) and may include string `:interaction-type` and `:parent-tool-call-id`. The parent ID links a subagent call to its parent task; omitted and empty values remain distinct, and `nil` is invalid. |
 | `:copilot/model.call_finished` | Completed model dispatch metadata; data requires `:turn-id`, non-negative `:dispatch-duration-ms`, `:outcome` (`"success"`, `"error"`, `"cancelled"`, or `"rejected"`), and positive `:edit-classifier-version`. Optional fields: `:interaction-id` and `:contains-built-in-file-edit-request`. The payload remains open for additive runtime fields. |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
@@ -2015,7 +2025,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/tool.execution_partial_result` | Tool execution partial result |
 | `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. Successful skill invocations may keep concise model-facing `:detailed-content`; the authoritative skill body remains on the corresponding `:copilot/skill.invoked` event. |
 | `:copilot/tool_search.activated` | Persisted generic client-side tool activations restored when a session resumes. Data: `{:strategy <string> :tool-names [<string> ...]}`. |
-| `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and `:agent-description`, with optional `:factory-run-id`, `:model`, `:resumable` (boolean), `:agent-type` (string), `:execution-mode` (string), `:parent-id` (string — task-registry id of the spawning subagent; unrelated to the envelope-level `:parent-id`), `:task-model-source` (`"task_argument"`, `"subagent_configuration"`, `"custom_agent_definition"`, or `"unset"`), and `:model-selection-source` using the same values as `subagent.completed`. ([upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658); runtime schema `1.0.84-8`) |
+| `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and `:agent-description`, with optional `:workflow-run-id` (string; legacy `:factory-run-id` is retained for history), `:model`, `:resumable` (boolean), `:agent-type` (string), `:execution-mode` (string), `:parent-id` (string — task-registry id of the spawning subagent; unrelated to the envelope-level `:parent-id`), `:task-model-source` (`"task_argument"`, `"subagent_configuration"`, `"custom_agent_definition"`, or `"unset"`), and `:model-selection-source` using the same values as `subagent.completed`. |
 | `:copilot/subagent.configured` | Effective subagent execution configuration; data requires string `:model` and boolean `:multi-turn`, with optional string `:reasoning-effort` and `:context-tier`. The payload remains open for additive runtime fields. |
 | `:copilot/subagent.completed` | Subagent completed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and optional `:cancelled`, `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`, `:first-dispatched-model`, `:configured-model-preference`, `:explicit-model-override`, `:model-override-reason` (strings), `:explicit-model-matches-preference`, `:configured-model-matches-actual` (booleans), and `:model-selection-source` (`"explicit_override"`, `"configured_required"`, `"configured_preference"`, `"complementary_default"`, `"session_inheritance"`, `"agent_definition_default"`, or `"runtime_policy"`). `:cancelled true` means cancellation tore down the subagent; cancellation still reports completion rather than failure. |
 | `:copilot/subagent.failed` | Subagent failed; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, `:error`, optional `:model`, `:total-tool-calls`, `:total-tokens`, `:duration-ms`, `:first-dispatched-model`, `:configured-model-preference`, `:explicit-model-override`, `:model-override-reason` (strings), `:explicit-model-matches-preference`, `:configured-model-matches-actual` (booleans), and the same `:model-selection-source` values as `subagent.completed`. |
@@ -2025,7 +2035,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/hook.progress` | Ephemeral progress update from a long-running hook; data: `{:message "..."}` (upstream schema 1.0.56). |
 | `:copilot/hook.end` | Hook invocation finished; data requires `:hook-invocation-id`, `:hook-type`, and `:success`, with optional `:parent-tool-call-id` and closed `:error` map. The error requires string `:message`, permits optional string `:stack` and `:source`, and rejects other keys (upstream schema 1.0.83-1). Durable or resumed `postToolUse` receipts may elide unchanged successful skill output while preserving hook-modified values. |
 | `:copilot/system.message` | System or developer prompt emitted; data requires string `:content` and `:role "system"` or `"developer"`. Optional `:content-blocks` is an ordered vector of closed maps with required string `:content` and optional boolean `:cache-breakpoint` and `:is-static`. A true cache breakpoint places one after that block; false suppresses it; omission preserves the provider default. Empty strings and an empty vector are valid; explicit `nil` is not. Live notifications and `get-messages` preserve block order and the distinction between omission and false. |
-| `:copilot/system.notification` | System notification with a structured `:kind` discriminator: `agent_completed`, `agent_idle`, `new_inbox_message`, `shell_completed`, `shell_detached_completed`, `instruction_discovered`, `factory_completed`, or `unclassified`. Each known kind validates its required and optional fields; agent kinds may include `:display-name`. |
+| `:copilot/system.notification` | System notification with a structured `:kind` discriminator: `agent_completed`, `agent_idle`, `new_inbox_message`, `shell_completed`, `shell_detached_completed`, `instruction_discovered`, `workflow_completed`, or `unclassified`. Each known kind validates its required and optional fields; agent kinds may include `:display-name`. Workflow notifications identify `:workflow-name`, allow `"paused"` status, and may carry `:pause-info` as `{:type "user"}` or `{:type "checkpoint" :key string}`. |
 | `:copilot/permission.requested` | Permission request initiated; optional `:agent-mode` identifies the requesting mode (`"interactive"`, `"plan"`, or `"autopilot"`), and `:resolved-by-hook` indicates a hook already handled it. For the MCP tool-permission variant (`:server-name`/`:tool-name`/`:tool-title` present), optional `:can-offer-server-wide-approval` indicates the host may offer a server-wide approval option. Shell requests may include `:request-sandbox-bypass`, `:request-sandbox-bypass-reason`, and `:request-sandbox-permissive`; the permissive form remains sandboxed while recording otherwise-blocked file and process access. |
 | `:copilot/permission.completed` | Permission request resolved. Approved nested `:result` values may include `:managed-approval-handled`, indicating that managed policy handled the request. |
 | `:copilot/user_input.requested` | User input requested from agent |
@@ -2071,7 +2081,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.canvas.registry_changed` | The set of canvases the host can offer changed; ephemeral. |
 | `:copilot/session.canvas.unavailable` | An open canvas instance's provider dropped (e.g. the extension is reloading mid-session); ephemeral. The host should keep the panel mounted and surface a reconnecting state. (upstream schema 1.0.66) |
 | `:copilot/session.canvas.recorded` | Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient `:url` and `:availability`. |
-| `:copilot/factory.run_updated` | An [Agent Factory](#agent-factories-experimental) run's status changed; data: `{:run-id "..." :revision N}` (both required). Consumed internally by `wait-for-run!`/`<wait-for-run!` to detect terminal status. (upstream PR #2114) |
+| `:copilot/workflow.run_updated` | An [Dynamic Workflow](#dynamic-workflows-experimental) run's status changed; data: `{:run-id "..." :revision N}` (both required). Consumed internally by `wait-for-run!`/`<wait-for-run!` to detect terminal status. (upstream PR #2114) |
 | `:copilot/session.canvas.removed` | Durable record that a canvas instance was closed, superseding a prior `canvas.recorded` during resume replay. |
 
 ### Citations (Experimental)
@@ -2800,6 +2810,20 @@ It does not define custom agents. Custom agents are provided via `:custom-agents
                 :disabled-skills ["legacy-skill" "experimental-skill"]}))
 ```
 
+Custom skill directories are scanned when skills first load, including missing
+or empty directories. Adding, editing, or removing files does not refresh the
+catalog on later turns. Call the existing experimental reload API after changing
+skill files; changing the configured directories also refreshes the catalog.
+
+```clojure
+(require '[github.copilot-sdk.session :as session])
+
+(let [result (session/skills-reload! session)]
+  (when (seq (:errors result))
+    (throw (ex-info "Skill reload failed" result)))
+  result)
+```
+
 ### Large Tool Output Handling (Experimental)
 
 > **Note:** This is a CLI protocol feature not exposed in the official `@github/copilot-sdk`.
@@ -2897,34 +2921,34 @@ Sessions emit `:session.compaction_start` and `:session.compaction_complete` eve
       (recur))))
 ```
 
-### Agent Factories (Experimental)
+### Dynamic Workflows (Experimental)
 
-> **Note:** Agent Factories are `@experimental` upstream
-> ([upstream PR #2114](https://github.com/github/copilot-sdk/pull/2114)).
-> The API may change in future releases. The upstream `v1.0.11` experimental
-> `argsSchema` authoring addition is intentionally not exposed while this
-> surface remains experimental.
+> **Note:** Dynamic Workflows are `@experimental` upstream and may change in
+> future releases. `argsSchema` authoring, pause/checkpoint mutation APIs, and
+> additional agent options remain intentionally excluded. See the
+> [Factory migration guide](../guides/dynamic-workflows.md#migrating-from-agent-factories)
+> for the breaking name changes.
 
-An Agent Factory is an extension-authored, named workflow that a session can run: it
+A Dynamic Workflow is an extension-authored, named workflow that a session can run: it
 declares its own phases and optional limits, executes with reverse-RPC access to the
 parent session (spawn nested agent turns, run journaled/idempotent steps, fan out
 work in parallel or as a pipeline), and reports durable, resumable progress back to
 the CLI.
-Factories are registered per-session via [`join-session`](#join-session)'s
-`:factories` option and approved via the [`:factory` permission kind](#permission-handling).
+Workflows are registered per-session via [`join-session`](#join-session)'s
+`:workflows` option and approved via the [`:workflow` permission kind](#permission-handling).
 
 Most of this API is namespace-qualified only — require the namespace directly:
 
 ```clojure
-(require '[github.copilot-sdk.factory :as factory]
+(require '[github.copilot-sdk.workflow :as workflow]
          '[github.copilot-sdk.session :as session])
 ```
 
-**Defining a factory**
+**Defining a workflow**
 
 ```clojure
 (def summarize-repo
-  (factory/define-factory
+  (workflow/define-workflow
     {:meta {:name "summarize-repo"
             :description "Summarize a repository's structure and recent activity"
             :phases [{:title "Scan" :detail "List top-level files and directories"}
@@ -2942,14 +2966,16 @@ Most of this API is namespace-qualified only — require the namespace directly:
                  :summaries summaries})))}))
 ```
 
-`define-factory` is also exposed as a top-level facade, `copilot/define-factory`
-(synchronous only — no `<define-factory` twin, since validation does no I/O).
+`define-workflow` is also exposed as a top-level facade, `copilot/define-workflow`
+(synchronous only — no `<define-workflow` twin, since validation does no I/O).
 
-`:meta` is validated eagerly by `define-factory`:
+`:meta` is validated eagerly by `define-workflow`:
+
+Metadata and phase maps reject unknown keys before a handle can be registered.
 
 | Field | Type | Required? | Notes |
 |-------|------|-----------|-------|
-| `:name` | string | yes | Non-blank. Must be unique within a `join-session` call's `:factories` vector. |
+| `:name` | string | yes | Non-blank. Must be unique within a `join-session` call's `:workflows` vector. |
 | `:description` | string | yes | Non-blank. |
 | `:phases` | vector of maps | yes | Each phase is `{:title string :detail string (optional)}`. `:title` must be non-blank and unique across phases. |
 | `:limits` | map (optional) | no | Validated only when present; see below. |
@@ -2963,35 +2989,42 @@ Most of this API is namespace-qualified only — require the namespace directly:
 
 Resource limits are optional. An omitted limit leaves that dimension unbounded,
 except that an omitted `:max-concurrent-subagents` falls back to
-`:max-total-subagents` when the latter is set. Set a ceiling only when the factory's
+`:max-total-subagents` when the latter is set. Set a ceiling only when the workflow's
 cost profile is known or the user explicitly requested one. Do not guess limits on a
 user's behalf: an invented ceiling does not make a run safer and can stop healthy
-work with `factory_limit_reached` after the run has already spent credits. Bound
-broad fan-out with the factory's own workload counters instead.
+work with `workflow_limit_reached` after the run has already spent credits. Bound
+broad fan-out with the workflow's own workload counters instead.
 
-Model-initiated `run_factory` requests still require permission and show the
-effective limits. Direct SDK calls to `run-factory!` and `resume-factory!` do not
+Model-initiated `run_dynamic_workflow` requests still require permission and show the
+effective limits. Direct SDK calls to `run-workflow!` and `resume-workflow!` do not
 request permission, so callers are responsible for choosing any ceilings
 deliberately.
+
+For invocation `:limits`, an omitted field preserves its ceiling and `nil`
+explicitly makes that dimension unlimited. Numeric overrides follow the same
+constraints as declared limits. `:meta` limits cannot contain `nil`, and the
+invocation `:limits` value must be a map, not `nil`.
+Time and credit limits accept finite Clojure ratios, which serialize as JSON
+decimals. Subagent-count limits require integers.
 
 `:run` must be a function of one argument, the [context map](#the-run-context-map)
 described below, and returns (directly or via a core.async channel, `Future`, promise,
 or delay) a JSON-safe value — `nil`, a string, boolean, finite number, or a nested
-vector/map thereof. Return `factory/json-null` to report an explicit JSON `null`
+vector/map thereof. Return `workflow/json-null` to report an explicit JSON `null`
 result (as opposed to `nil`, which means "no result").
 
 Other namespace-qualified-only helpers:
 
 | Function | Description |
 |----------|-------------|
-| `factory/factory-handle?` | Return true when `value` is a handle created by `define-factory`. |
-| `factory/factory-meta` | Return a handle's `:meta` map. |
-| `factory/terminal-status?` | Return true when a run `:status` (keyword or string) is terminal (`:completed`, `:halted`, `:cancelled`, `:error`). Also exposed as `copilot/factory-terminal-status?`. |
-| `factory/json-null` | Sentinel value for an explicit JSON `null` factory result. |
+| `workflow/workflow-handle?` | Return true when `value` is a handle created by `define-workflow`. |
+| `workflow/workflow-meta` | Return a handle's `:meta` map. |
+| `workflow/terminal-status?` | Return true when an attempt's `:status` (keyword or string) has settled (`:completed`, `:halted`, `:paused`, `:cancelled`, `:error`). A paused run can later resume under the same run ID. Also exposed as `copilot/workflow-terminal-status?`. |
+| `workflow/json-null` | Sentinel value for an explicit JSON `null` workflow result. |
 
-**Driving factory execution**
+**Driving workflow execution**
 
-Register handles via `join-session`'s `:factories` option, then drive execution from any
+Register handles via `join-session`'s `:workflows` option, then drive execution from any
 client connected to that session (typically the parent CLI, but any joined client can
 call these). Each function has a top-level `copilot` facade wrapper (all `^:experimental`)
 and an async `<`-prefixed twin returning a core.async channel:
@@ -2999,73 +3032,81 @@ and an async `<`-prefixed twin returning a core.async channel:
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 
-;; By name (the factory must be registered on the joined session) or by handle:
-(copilot/run-factory! session "summarize-repo" {:args {:path "."}})
+;; By name (the workflow must be registered on the joined session) or by handle:
+(copilot/run-workflow! session "summarize-repo" {:args {:path "."}})
 ;; => {:run-id "..." :status :completed :result {...} ...}
 
 ;; Async twin — channel yields the result, or the caught Throwable directly:
-(let [ch (copilot/<run-factory! session "summarize-repo" {:args {:path "."}})]
+(let [ch (copilot/<run-workflow! session "summarize-repo" {:args {:path "."}})]
   (let [result (<!! ch)]
     (if (instance? Throwable result)
       (throw result)
       result)))
 ```
 
-| Sync function (`factory/...`) | Top-level facade | Wire method | Description |
+| Sync function (`workflow/...`) | Top-level facade | Wire method | Description |
 |--------------------------------|-------------------|-------------|-------------|
-| `run!` | `run-factory!` | `session.factory.run` | Start a factory by name or handle. 2-arity `[session name-or-handle]` or 3-arity with an options map: `:args` (passed to `:run` as `:args`), `:limits` (overrides declared limits, re-validated), `:resume-from-run-id` (delegates to `resume!`). Waits for terminal status via `wait-for-run!` if the initial response is non-terminal. |
-| `resume!` | `resume-factory!` | `session.factory.resume` | Resume a durable, previously-started run by `run-id`. 2-arity `[session run-id]` or 3-arity with `{:limits ...}`. See [error classification](#resume-error-classification) below. |
-| `get-run` | `get-factory-run` | `session.factory.getRun` | Read the latest durable envelope for a run. `[session run-id]`. |
-| `wait-for-run!` | `wait-for-factory-run!` | (polls `get-run` + listens for `:copilot/factory.run_updated`) | Block until a run reaches a terminal status. 2-arity or 3-arity with `{:cancel-chan :poll-interval-ms}` (`:poll-interval-ms` default `5000`; `:cancel-chan` aborts the *wait*, not the run, throwing `ex-info` `{:type :factory-wait-cancelled :run-id ...}`). Requires the session to be connected (has an active event stream). |
-| `list-runs` | `list-factory-runs` | `session.factory.listRuns` | List all durable runs for the session, in creation order. `[session]`. |
-| `get-run-detail` | `get-factory-run-detail` | `session.factory.getRunDetail` | Read durable phases, agent turns, and recent progress for a run. `[session run-id]`. |
-| `get-run-progress` | `get-factory-run-progress` | `session.factory.getRunProgress` | Page durable progress lines. 2-arity or 3-arity with an options map merged into the wire params (e.g. pagination cursors). |
-| `cancel!` | `cancel-factory-run!` | `session.factory.cancel` | Request cancellation from the CLI. The runtime's reverse `factory.abort` request targets the active execution token, marks only that attempt cancelled, and closes its `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
+| `run!` | `run-workflow!` | `session.workflow.run` | Start a workflow by name or handle. 2-arity `[session name-or-handle]` or 3-arity with an options map: `:args` (passed to `:run` as `:args`), `:limits` (overrides declared limits, re-validated), `:resume-from-run-id` (delegates to `resume!`). Waits for terminal status via `wait-for-run!` if the initial response is non-terminal. |
+| `resume!` | `resume-workflow!` | `session.workflow.resume` | Resume a durable, previously-started run by `run-id`. 2-arity `[session run-id]` or 3-arity with `{:limits ...}`. See [error classification](#resume-error-classification) below. |
+| `get-run` | `get-workflow-run` | `session.workflow.getRun` | Read the latest durable envelope for a run. `[session run-id]`. |
+| `wait-for-run!` | `wait-for-workflow-run!` | (polls `get-run` + listens for `:copilot/workflow.run_updated`) | Block until a run reaches a terminal status. 2-arity or 3-arity with `{:cancel-chan :poll-interval-ms}` (`:poll-interval-ms` default `5000`; `:cancel-chan` aborts the *wait*, not the run, throwing `ex-info` `{:type :workflow-wait-cancelled :run-id ...}`). Requires the session to be connected (has an active event stream). |
+| `list-runs` | `list-workflow-runs` | `session.workflow.listRuns` | Return the runtime's newest default page of this session's runs. `[session]`. |
+| `get-run-detail` | `get-workflow-run-detail` | `session.workflow.getRunDetail` | Read durable phases, agent turns, and recent progress for a run. `[session run-id]`. |
+| `get-run-progress` | `get-workflow-run-progress` | `session.workflow.getRunProgress` | Page durable progress records. Optional keys: `:phase-id` (string), `:after-seq` and `:before-seq` (exclusive integer cursors), and `:limit` (integer, 1-500; runtime default 200). Unknown keys, obsolete `:cursor`, and session/run identifier overrides are rejected before the RPC. |
+| `cancel!` | `cancel-workflow-run!` | `session.workflow.cancel` | Request cancellation from the CLI. The runtime's reverse `workflow.abort` request targets the active execution token, marks only that attempt cancelled, and closes its `:cancel-chan`. Returns the resulting terminal envelope. `[session run-id]`. |
 
-All of the above return a run envelope map with at least `:run-id` and a keywordized
-`:status` (one of `:running`, `:completed`, `:halted`, `:cancelled`, `:error`, or other
+Run, resume, get-run, wait, and cancel return a run envelope map with at least `:run-id` and a keywordized
+`:status` (one of `:running`, `:completed`, `:halted`, `:paused`, `:cancelled`, `:error`, or other
 non-terminal statuses reported by the CLI).
 
-**Async twins**: every function above has a `<`-prefixed twin (e.g. `factory/<run!`,
-`copilot/<run-factory!`) with the same arities, running the call on a thread pool and
+`get-run-progress` returns `:records`, nullable `:oldest-seq` and `:newest-seq`,
+boolean `:has-more-older` and `:has-more-newer`, and non-negative `:revision`.
+The `list-runs` paging overload remains intentionally excluded.
+
+**Async twins**: every function above has a `<`-prefixed twin (e.g. `workflow/<run!`,
+`copilot/<run-workflow!`) with the same arities, running the call on a thread pool and
 returning a core.async channel. The channel yields the successful result **or the
 caught `Throwable` directly** (not wrapped) — always check `(instance? Throwable result)`
 before using the value.
 
 #### Resume error classification
 
-`resume!`/`<resume!`/`resume-factory!`/`<resume-factory!` reclassify specific wire
-error codes into a stable `ex-info` shape: `{:type :factory-resume-error :code <kebab-keyword>}`
+`resume!`/`<resume!`/`resume-workflow!`/`<resume-workflow!` reclassify specific wire
+error codes into a stable `ex-info` shape: `{:type :workflow-resume-error :code <kebab-keyword>}`
 (original exception preserved as the cause). Other errors are rethrown unchanged.
 
 | Wire code | `:code` |
 |-----------|---------|
 | `"not_found"` | `:not-found` |
 | `"non_resumable"` | `:non-resumable` |
+| `"workflow_run_not_resumable"` | `:workflow-run-not-resumable` |
 | `"already_active"` | `:already-active` |
-| `"reapproval_declined"` | `:reapproval-declined` |
-| `"no_approval_provider"` | `:no-approval-provider` |
+| `"workflow_already_running"` | `:workflow-already-running` |
+| `"workflow_limits_invalid"` | `:workflow-limits-invalid` |
+| `"workflow_session_disposed"` | `:workflow-session-disposed` |
+| `"workflow_storage_unavailable"` | `:workflow-storage-unavailable` |
+| `"workflow_storage_corrupt"` | `:workflow-storage-corrupt` |
 
 ```clojure
 (try
-  (factory/resume! session run-id)
+  (workflow/resume! session run-id)
   (catch clojure.lang.ExceptionInfo e
     (case (:code (ex-data e))
-      :reapproval-declined (println "Approver declined re-approval")
+      :workflow-limits-invalid (println "Invalid resource limits")
       :non-resumable (println "This run cannot be resumed")
       (throw e))))
 ```
 
 #### The `:run` context map
 
-Every factory's `:run` function receives a single context map, built fresh per
+Every workflow's `:run` function receives a single context map, built fresh per
 execution:
 
 | Key | Type | Description |
 |-----|------|-------------|
 | `:run-id` | string | The durable run's ID. |
 | `:args` | JSON value | The original `run!` arguments (default `{}`), persisted across `resume!`. |
-| `:session` | `CopilotSession` | The session the factory is running within. |
+| `:session` | `CopilotSession` | The session the workflow is running within. |
 | `:cancel-chan` | channel | Closes when the run is cancelled/aborted. |
 | `:cancelled?` | `(fn [])` | Returns true once the run has been cancelled/aborted. |
 | `:agent` | `(fn [prompt] ...)` / `(fn [prompt options] ...)` | Runs a nested agent turn and returns its result. `options` may include `:label`, `:schema`, `:model`. |
@@ -3076,7 +3117,7 @@ execution:
 | `:log` | `(fn [text] ...)` | Buffers a log progress line; the SDK flushes before `:agent`/`:step` calls and when the run finishes. |
 
 `:agent`, `:step`, `:parallel`, and `:pipeline` all throw `ex-info` with
-`{:type :factory-aborted :run-id ...}` if the run is cancelled while they're executing.
+`{:type :workflow-aborted :run-id ...}` if the run is cancelled while they're executing.
 Values returned from `:step` producers and from `:run` itself are validated as JSON-safe
 before being journaled or returned; a non-JSON-safe value throws `ex-info` with
 `{:value-type "..."}`.
@@ -3114,7 +3155,7 @@ The `:permission-kind` field in permission requests identifies the type of actio
 | `:extension-management` | Install, enable, disable, or manage an extension |
 | `:extension-permission-access` | Extension access to another permission surface |
 | `:extension-env-access` | Extension request for named environment variables |
-| `:factory` | Agent Factory run or authoring approval (see [Agent Factories (Experimental)](#agent-factories-experimental)) |
+| `:workflow` | Dynamic Workflow run or authoring approval (see [Dynamic Workflows (Experimental)](#dynamic-workflows-experimental)) |
 
 Custom-tool permission requests may include boolean `:skip-permission`, recording
 that the tool declaration asked the runtime to bypass its normal prompt.
@@ -3137,18 +3178,20 @@ at least one requested name:
 | `:extension-name` | non-blank string | Extension asking for access |
 | `:environment-variables` | non-empty vector of non-blank strings | Environment variable names presented for approval |
 
-Factory permission requests (`:permission-kind :factory`) include additional data fields describing the run or authoring request awaiting approval ([upstream PR #2114](https://github.com/github/copilot-sdk/pull/2114)):
+Workflow permission requests (`:permission-kind :workflow`) include additional
+data fields describing the run or authoring request awaiting approval:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `:operation` | `"run"` or `"author"` | Whether the factory is being run or authored |
-| `:name` | string | Factory name |
-| `:description` | string | Factory description |
-| `:phases` | vector of maps | `{:title string, :detail string (optional)}` — the phases the factory declares |
+| `:operation` | `"run"` or `"author"` | Whether the workflow is being run or authored |
+| `:name` | string | Workflow name |
+| `:description` | string | Workflow description |
+| `:phases` | vector of maps | `{:title string, :detail string (optional)}` — the phases the workflow declares |
 | `:approval-key` | string | Stable key for persisting an approval decision across runs |
 | `:can-persist-approval` | boolean | Whether `:approve-for-session`/`:approve-for-location` are meaningful for this request |
 | `:max-concurrent-subagents`, `:max-total-subagents`, `:timeout-seconds`, `:max-ai-credits` | number (optional) | Effective runtime limits for this run |
-| `:declared-max-concurrent-subagents`, `:declared-max-total-subagents`, `:declared-timeout-seconds`, `:declared-max-ai-credits` | number (optional) | The limits as declared by the factory definition, shown to approvers alongside the effective limits above |
+| `:declared-max-concurrent-subagents`, `:declared-max-total-subagents`, `:declared-timeout-seconds`, `:declared-max-ai-credits` | number (optional) | The limits as declared by the workflow definition, shown to approvers alongside the effective limits above |
+| `:managed-approval-required` | boolean (optional) | Managed policy requires a human response and forbids automatic host approval. Explicit false remains distinct from omission. |
 
 For fine-grained control, provide your own handler. When the CLI needs
 approval, it sends a JSON-RPC `permission.request` to the SDK. Your

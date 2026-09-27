@@ -136,7 +136,7 @@ snapshot for these supported namespaces:
 
 - `github.copilot-sdk`
 - `github.copilot-sdk.client`
-- `github.copilot-sdk.factory`
+- `github.copilot-sdk.workflow`
 - `github.copilot-sdk.helpers`
 - `github.copilot-sdk.instrument`
 - `github.copilot-sdk.logging`
@@ -154,7 +154,7 @@ generated wire namespaces.
 
 Compiler-generated vars are not API merely because `ns-publics` returns them.
 The guard has named, reasoned, stale-checked exclusions for the generated
-`FactoryHandle` and `CopilotSession` record constructors, plus a narrow validated
+`WorkflowHandle` and `CopilotSession` record constructors, plus a narrow validated
 predicate for the two private non-closing stdio proxy class interns. Any other
 record factory or proxy intern in a supported namespace fails generation until
 it is reviewed. Fdefs are loaded without retaining the instrumentation side
@@ -280,6 +280,7 @@ src/github/copilot_sdk.clj   # Top-level public API namespace (github.copilot-sd
 src/github/copilot_sdk/
 ├── client.clj       # Main client API (create-client, create-session, etc.)
 ├── session.clj      # Session operations (send!, send-and-wait!, etc.)
+├── workflow.clj     # Experimental Dynamic Workflows and durable run operations
 ├── helpers.clj      # Convenience functions (query, query-seq!, query-chan, etc.)
 ├── tools.clj        # Helper functions for defining tools (define-tool, result-success, etc.)
 ├── tool_set.clj     # Source-qualified tool filter patterns (:available-tools/:excluded-tools)

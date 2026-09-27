@@ -98,5 +98,5 @@ clojure -A:examples -X manual-tool-resume/run
 #   byok_provider     needs a provider API key (OPENAI_API_KEY / ANTHROPIC_API_KEY / ...)
 #   empty_mode        :empty mode disables the local keychain, so it also needs a provider key
 #   mcp_local_server  needs npx plus npm registry access for @modelcontextprotocol/server-filesystem
-#   agent_factories   needs SESSION_ID from a live parent Copilot CLI session
+#   dynamic_workflows   needs SESSION_ID from a live parent Copilot CLI session
 # Run the exact manual commands after satisfying each precondition. See examples/README.md.

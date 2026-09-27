@@ -4,6 +4,11 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.14 sync)
+- Added optional `:parent-tool-call-id` metadata to assistant turn-start,
+  turn-end, and model-call-failure events, plus the
+  `"auto_tier_recommendation"` model-change source. Live notifications and
+  history retain omitted versus empty parent IDs.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/d106d29dc6c5112da2abdae59008571b6692f12b))
 - Added create-only `:refresh-custom-instructions?` to invalidate the runtime's
   process-wide instruction-discovery cache. Omission and explicit false remain
   distinct; resume, join, and mutable option updates do not accept the option.
@@ -34,6 +39,22 @@ All notable changes to this project will be documented in this file. This change
   ([upstream PR #2731](https://github.com/github/copilot-sdk/pull/2731))
 
 ### Changed (post-v1.0.14 sync)
+- **BREAKING**: Migrated the existing experimental Agent Factory API to
+  canonical Dynamic Workflow names: `github.copilot-sdk.workflow`,
+  Workflow facade functions, join-only `:workflows`, permission kind
+  `:workflow`, and Workflow wire/event names. Factory aliases are not retained.
+  Paused attempts are observable terminal outcomes; additional experimental
+  authoring and pause APIs remain excluded. See the
+  [migration guide](doc/guides/dynamic-workflows.md#migrating-from-agent-factories).
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/d106d29dc6c5112da2abdae59008571b6692f12b))
+- Enabled runtime process-file logging for SDK-spawned `:copilot-cli` clients.
+  `:empty` mode preserves inherited or explicit logging settings. Documented
+  explicit skill-catalog reloads after filesystem changes.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/d106d29dc6c5112da2abdae59008571b6692f12b))
+- Advanced the CLI compatibility and schema-provenance pin to `1.0.89-5`
+  and recertified the Node SDK surface through
+  [`d106d29dc6c5112da2abdae59008571b6692f12b`](https://github.com/github/copilot-sdk/commit/d106d29dc6c5112da2abdae59008571b6692f12b).
+  The library version remains `1.0.14.0`; no release, tag, or deployment is cut.
 - Advanced the CLI compatibility and schema-provenance pin to `1.0.89-3`
   and recertified the stable Node SDK public surface through
   [`4001c1da7d832c51bad1d38619c1a082af390efb`](https://github.com/github/copilot-sdk/commit/4001c1da7d832c51bad1d38619c1a082af390efb).
@@ -79,6 +100,20 @@ All notable changes to this project will be documented in this file. This change
   isolation.
 
 ### Fixed (post-v1.0.14 sync)
+- Workflow declarations and invocation overrides now share finite numeric
+  validation while retaining valid Ratio-to-JSON decimal conversion. Authoring
+  enforces closed metadata and phase maps. Progress paging uses canonical
+  `:phase-id`, `:after-seq`, `:before-seq`, and bounded `:limit` options and
+  documents the `:records` response shape.
+  **BREAKING**: Obsolete `:cursor`, unknown fields, and paging options that
+  attempt to override the session or run identifier are rejected before RPC.
+- Workflow run/resume overrides now distinguish omitted limits from explicit
+  `nil` (unlimited), while declarations remain non-null. Resume failures use the
+  current Workflow error-code domain, and both current and historical subagent
+  run IDs accept empty wire strings.
+  **BREAKING**: `reapproval_declined` and `no_approval_provider` errors pass
+  through unchanged rather than being reclassified as Workflow resume errors.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/d106d29dc6c5112da2abdae59008571b6692f12b))
 - Completion waits now ignore child-agent replies, errors, and idle events when
   selecting the root result. Child events remain visible to subscriptions and
   streaming helpers without prematurely closing their channels.

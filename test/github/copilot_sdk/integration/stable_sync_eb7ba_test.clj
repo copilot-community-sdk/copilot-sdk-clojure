@@ -70,17 +70,17 @@
                                 (:classification %))
                     classifications))))))
 
-(deftest factory-guidance-does-not-invite-invented-limits
-  (let [guide (slurp "doc/guides/agent-factories.md")
+(deftest workflow-guidance-does-not-invite-invented-limits
+  (let [guide (slurp "doc/guides/dynamic-workflows.md")
         api-reference (slurp "doc/reference/API.md")
-        example-source (slurp "examples/agent_factories.clj")
+        example-source (slurp "examples/dynamic_workflows.clj")
         example-readme (slurp "examples/README.md")
         guide-opening (section guide "## A working example" "## Overview")
-        api-opening (section api-reference "**Defining a factory**"
-                             "`define-factory` is also exposed")
-        example-definition (section example-source "(def review-factory"
+        api-opening (section api-reference "**Defining a workflow**"
+                             "`define-workflow` is also exposed")
+        example-definition (section example-source "(def review-workflow"
                                     ";; Extension entry point")
-        readme-section (section example-readme "## Example 22: Agent Factories"
+        readme-section (section example-readme "## Example 22: Dynamic Workflows"
                                 "## Clojure vs JavaScript Comparison")]
     (doseq [[label content] [[:guide guide-opening]
                              [:api-reference api-opening]

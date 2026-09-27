@@ -456,7 +456,7 @@
   (is (nil? (s/get-spec ::specs/recommended-auto-tier)))
   (is (nil? (s/get-spec ::specs/active-factory-summary)))
   (is (nil? (s/get-spec ::specs/pause-info)))
-  (is (not (s/valid? ::specs/factory-run-status :paused)))
+  (is (nil? (s/get-spec ::specs/factory-run-status)))
   (is (not (s/valid? ::specs/session.permissions_changed-data {})))
   (is (nil? (ns-resolve 'github.copilot-sdk.client
                         'managed-settings-clear-cache!)))
@@ -471,7 +471,7 @@
        ::generated-events/session.compaction_complete-data
        {:success true :active-factory-summary "factory still active"}))
   (is (s/valid?
-       ::generated-events/factory.run_settled-data
+       ::generated-events/workflow.run_settled-data
        {:consumed-nano-aiu 0
         :consumed-subagents 0
         :elapsed-ms 0

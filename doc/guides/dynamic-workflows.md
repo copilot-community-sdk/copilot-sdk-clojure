@@ -1,0 +1,340 @@
+# Dynamic Workflows
+
+> **Experimental.** This API is not covered by GA semver guarantees. The wire protocol and API surface may change without a major version bump.
+
+Register a long-running, resumable workflow with a session, then let the Copilot CLI invoke it from an extension or child process via reverse execution.
+
+## A working example
+
+A Dynamic Workflow is defined once with `define-workflow` and registered when an extension joins its parent session with `join-session`. The workflow's `:run` function receives a context map with `agent`, `step`, `parallel`, `pipeline`, `phase`, and `log` functions for driving the workflow:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def review-workflow
+  (copilot/define-workflow
+   {:meta {:name "code-review"
+           :description "Reviews changed files and summarizes findings"
+           :phases [{:title "Analyze" :detail "Inspect changed files"}
+                    {:title "Summarize"}]}
+    :run (fn [{:keys [args agent step phase log]}]
+           (phase "Analyze")
+           (log (str "Reviewing " (:path args)))
+           (let [findings (agent (str "Review " (:path args) " for bugs")
+                                  {:label "reviewer" :schema {"type" "object"}})]
+             (phase "Summarize")
+             (step "summary" (fn [] {:findings findings :path (:path args)}))))}))
+
+(let [{:keys [client session]} (copilot/join-session
+                                 {:workflows [review-workflow]
+                                  :on-permission-request copilot/approve-all})]
+  ;; The Copilot CLI invokes "code-review" via reverse execution when
+  ;; requested; you can also drive it directly from this same client:
+  (copilot/run-workflow! session "code-review" {:args {:path "src/app.clj"}})
+  ;; => {:status :completed, :result {...}, :snapshot {...}}
+
+  (copilot/stop! client))
+```
+
+`join-session` reads the `SESSION_ID` environment variable set by the CLI when it launches an extension as a child process, connects back to the parent session, and returns both the `:client` and the `:session` - see [`join-session`](../reference/API.md#join-session). `:workflows` is accepted only by `join-session`; it is not part of `create-session` or `resume-session`.
+
+## Overview
+
+| Concept | Description |
+|---------|-------------|
+| **Workflow** | A named, versionless workflow definition: `:meta` (name, description, phases, and optional limits) plus a `:run` function |
+| **Run** | One durable execution of a workflow, identified by a `run-id`, tracked server-side through `:pending` -> `:running` -> a terminal status |
+| **Phase** | A named milestone declared in `:meta` and reported during execution via the context's `phase` function |
+| **Step** | A unit of work inside `:run` whose result is journaled so a resumed run can skip re-computing it |
+| **Context** | The map passed to `:run`, exposing `agent`, `step`, `parallel`, `pipeline`, `phase`, `log`, cancellation, and the hosting `:session` |
+
+Workflows differ from [custom agents](custom-agents.md) in direction and durability: a custom agent is inference-selected by the runtime *within* a conversation turn, while a workflow is an extension-registered workflow the CLI calls back into (reverse execution) and that can be paused, resumed, or cancelled independently of any single turn.
+
+## Migrating from Agent Factories
+
+The Factory namespace and facade names are removed. Update callers to the
+canonical Workflow API; there are no compatibility aliases.
+
+| Factory API | Workflow API |
+|-------------|--------------|
+| `github.copilot-sdk.factory` | `github.copilot-sdk.workflow` |
+| `define-factory`, `run-factory!`, `resume-factory!` | `define-workflow`, `run-workflow!`, `resume-workflow!` |
+| `get-factory-run`, `wait-for-factory-run!`, `list-factory-runs` | `get-workflow-run`, `wait-for-workflow-run!`, `list-workflow-runs` |
+| `get-factory-run-detail`, `get-factory-run-progress`, `cancel-factory-run!` | `get-workflow-run-detail`, `get-workflow-run-progress`, `cancel-workflow-run!` |
+| `factory-terminal-status?` | `workflow-terminal-status?` |
+| `join-session` option `:factories` | `:workflows` |
+| Permission kind `:factory` | `:workflow` |
+| `:copilot/factory.run_updated` | `:copilot/workflow.run_updated` |
+| Notification `:type "factory_completed"` and `:factory-name` | `:type "workflow_completed"` and `:workflow-name` |
+
+The async `<`-prefixed names change in the same way. Namespace-qualified
+operations such as `run!`, `resume!`, and `json-null` keep their local names.
+Errors use `:workflow-resume-error`, `:workflow-wait-cancelled`, and
+`:workflow-aborted`. Execution uses `session.workflow.*`, `workflow.execute`,
+and `workflow.abort`; clients must use a runtime supporting those methods.
+
+`:workflow-run-id` is the current subagent correlation field. The
+`:factory-run-id` field remains readable in historical events because the
+upstream event contract retains it; it is not a callable API alias.
+
+This migration preserves the existing execution, cancellation, journal, JSON,
+and progress contracts. It does not add `argsSchema` authoring, pause/checkpoint
+mutation APIs, or additional agent options.
+
+## Defining a workflow
+
+`define-workflow` validates `:meta` eagerly and returns an immutable handle; `:run` is stored as-is:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(copilot/define-workflow
+ {:meta {:name "backfill"
+         :description "Backfills historical data"
+         :phases [{:title "Fetch"} {:title "Write" :detail "Persist rows"}]}
+  :run (fn [ctx] {:status "ok"})})
+```
+
+`:meta` requirements:
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `:name` | string | yes | non-blank; unique among workflows registered together |
+| `:description` | string | yes | non-blank |
+| `:phases` | vector of `{:title string, :detail string}` | yes | each `:title` non-blank and unique within the vector; `:detail` optional |
+| `:limits` | map | no | see [Limits](#limits) |
+
+Metadata and phase maps reject unknown keys before registration, including
+unsupported authoring options such as `:args-schema`.
+
+Duplicate phase titles throw `"Workflow phase title is declared more than once"`. Registering two workflows with the same `:name` in one `join-session` call throws `"Duplicate workflow name ..."`.
+
+## Registering workflows
+
+Pass one or more handles under `:workflows` to `join-session`:
+
+```clojure
+(copilot/join-session {:workflows [review-workflow backfill-workflow]})
+```
+
+Only `:meta` (name, description, phases, limits) is sent to the CLI when joining; those fields go through the SDK's normal camelCase wire conversion (`:max-concurrent-subagents` becomes `maxConcurrentSubagents`, and so on). This is different from everything a run exchanges at execution time - see [JSON semantics](#json-semantics-and-the-nil-json-null-distinction) below.
+
+## The execution context
+
+The CLI invokes a registered workflow's `:run` function with a single context map:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `:run-id` | string | the current run's identifier |
+| `:args` | JSON value | arguments supplied by the original `run-workflow!` call, defaulting to `{}` and persisted across resume |
+| `:session` | session | the hosting `CopilotSession`, for session-level operations such as sending messages |
+| `:cancel-chan` | channel | closes when the run is cancelled from outside; use with `alts!!`/`<!!` to react cooperatively |
+| `:cancelled?` | 0-arity fn | returns true once cancellation has been signaled |
+| `:phase` | fn | `(phase "Title")` — reports progress against a declared phase |
+| `:log` | fn | `(log "message")` — reports a free-form progress line |
+| `:agent` | fn | `(agent prompt)` or `(agent prompt {:keys [label schema model]})` — runs a sub-agent turn and returns its result |
+| `:step` | fn | `(step key producer-fn)` or `(step key producer-fn {:volatile? true})` — see [Steps](#steps-and-durability) |
+| `:parallel` | fn | `(parallel [thunk ...])` — see [Parallel and pipeline](#parallel-and-pipeline) |
+| `:pipeline` | fn | `(pipeline items stage-fn ...)` — see [Parallel and pipeline](#parallel-and-pipeline) |
+| `:workflow` | fn | always throws; nested workflow invocation is not supported |
+
+`phase` and `log` calls are buffered and flushed to the CLI before each `agent`/`step` call and once more after `:run` completes or throws, so progress is visible without an explicit flush call.
+
+## JSON semantics and the nil / json-null distinction
+
+A run's final result — whatever `:run` returns — must be a JSON-compatible value: maps, vectors, strings, booleans, numbers, or `nil`, recursively. Returning a non-JSON value (a keyword, a function, `##NaN`, and so on) throws `"Workflow result must be a JSON value"` when the run completes.
+
+Clojure `nil` and an *explicit JSON null* are different outcomes:
+
+- Returning `nil` from `:run` means "no result" — the response omits the result field entirely.
+- Returning `github.copilot-sdk.workflow/json-null` means "the result is JSON `null`" — the response includes an explicit null result.
+
+```clojure
+(require '[github.copilot-sdk.workflow :as workflow])
+
+(copilot/define-workflow
+ {:meta {:name "maybe-null" :description "Distinguishes nil from null" :phases []}
+  :run (fn [_] workflow/json-null)})
+```
+
+**Workflow payloads bypass the SDK's usual wire conversion.** Everywhere else, the SDK converts camelCase wire keys to kebab-case Clojure keywords and back. Workflow `:args`, `agent`/`step` results, and run/resume/get/cancel `:result` and `:snapshot` envelopes are the exception: they carry arbitrary caller-defined JSON, so their keys are turned into keywords *verbatim*, without kebab-casing. A JSON key `"snake_key"` becomes `:snake_key`, not `:snake-key`. Only the run envelope's own `:status` field is normalized (wire string → keyword). Design workflow payload schemas with this in mind — don't expect the automatic kebab-casing you get from the rest of the SDK's session config and events.
+
+## Steps and durability
+
+`step` gives a unit of work a durable identity within a run:
+
+```clojure
+(step "fetch-users" (fn [] (fetch-all-users)))
+```
+
+By default, `step` checks a per-run journal before calling the producer function. On a cache hit, it returns the journaled value without invoking the producer again; on a miss, it calls the producer, validates the result is JSON, persists it, and returns it. This is what makes [`resume-workflow!`](#run-resume-observe-and-cancel) cheap and safe to call repeatedly: a resumed run replays already-computed steps from the journal instead of re-running expensive or side-effecting work.
+
+Pass `{:volatile? true}` to opt a step out of journaling — the producer runs every time, and only JSON-value validation is applied:
+
+```clojure
+(step "current-time" (fn [] (str (java.time.Instant/now))) {:volatile? true})
+```
+
+## `agent` semantics
+
+`agent` runs one sub-agent turn and returns its result:
+
+```clojure
+(agent "Summarize the diff")
+(agent "Classify severity" {:label "classifier" :schema {"type" "object"} :model "gpt-5.4"})
+```
+
+`:label` names the sub-agent for observability, `:schema` constrains the expected JSON shape of the result, and `:model` overrides the model for that turn. All three are optional.
+
+The runtime memoizes identical `agent` calls by prompt and options. Use a
+distinct `:label` (or prompt) when parallel calls must launch independent
+sub-agents.
+
+## Parallel and pipeline
+
+`parallel` runs a vector of zero-argument thunks concurrently and returns their results in order:
+
+```clojure
+(parallel [(fn [] (agent "Check file A"))
+           (fn [] (agent "Check file B"))])
+```
+
+`pipeline` runs each item through a sequence of stages, threading each stage's output into the next. For the first stage, the "previous" value is the item itself:
+
+```clojure
+(pipeline [1 2]
+          (fn [previous item index] (* item 2))
+          (fn [previous item index] (inc previous)))
+;; => [3 5]
+```
+
+Both accept at most 4096 items/thunks; exceeding that throws.
+
+A thunk or stage that throws is either **fatal** or **ordinary**:
+
+- Fatal errors — a workflow RPC call failing, or a cancellation-related error — abort the whole `parallel`/`pipeline` call: the exception propagates and is re-thrown to the caller.
+- Ordinary errors (any other exception) do not abort sibling work. In `parallel`, that slot's result becomes `nil`:
+
+  ```clojure
+  (parallel [(fn [] "first")
+             (fn [] (throw (Exception. "ordinary failure")))])
+  ;; => ["first" nil]
+  ```
+
+  In `pipeline`, later stages for that item are skipped and its final value becomes `nil`, without affecting other items.
+
+`pipeline` starts every admitted item immediately — there is no batching or chunk barrier between items.
+
+## Cancellation
+
+There are three distinct cancellation mechanisms, and they don't overlap:
+
+1. **Cooperative, inside `:run`** — react to `:cancel-chan` closing or poll `:cancelled?` to stop early. Cancellation does not interrupt `:run` automatically; the workflow must check for it.
+2. **From outside, server-side** - `cancel-workflow-run!` asks the CLI to cancel a run. The runtime then sends a reverse `workflow.abort` request for the active execution token, which closes only that attempt's `:cancel-chan` and eventually delivers a `:cancelled` terminal status. An older attempt cannot cancel a replacement that shares the durable run ID.
+3. **Aborting a local wait, not the run** — `wait-for-workflow-run!` accepts an optional `:cancel-chan`; closing it makes the *wait* throw `ex-info` with `{:type :workflow-wait-cancelled}` without cancelling the run itself. Use this to stop blocking on a run you still want to keep executing.
+
+## Limits
+
+Resource limits are optional. An omitted limit leaves that dimension unbounded,
+except that an omitted `:max-concurrent-subagents` falls back to
+`:max-total-subagents` when the latter is set.
+
+Set a ceiling only when the workflow's cost profile is known or the user explicitly
+requested one. Do not guess limits on a user's behalf: an invented ceiling does not
+make a run safer and can stop healthy work with `workflow_limit_reached` after the run
+has already spent credits. Bound broad fan-out with the workflow's own workload
+counters instead.
+
+Model-initiated `run_dynamic_workflow` requests still require permission and show the
+effective limits. Direct SDK calls to `run-workflow!` and `resume-workflow!` do not
+request permission, so callers are responsible for choosing any ceilings
+deliberately.
+
+Per-workflow or per-run limits are validated eagerly (unknown keys throw):
+
+| Key | Type | Constraint |
+|-----|------|------------|
+| `:max-concurrent-subagents` | integer | positive |
+| `:max-total-subagents` | integer | positive |
+| `:max-ai-credits` | number | positive, finite, and must round to a positive nano-AIU value — very small fractional credits (for example `0.0000000001`) can round to zero and fail validation |
+| `:timeout-seconds` | number | positive, finite, at most `2147483.647` |
+
+Limits set in `:meta` apply to every run; limits passed to `run-workflow!`/`resume-workflow!` apply to that run only.
+
+Invocation overrides distinguish omission from clearing: omitting a field keeps
+the existing/default ceiling, a number replaces it, and `nil` sends JSON `null`
+to make that dimension unlimited. Declared `:meta` limits do not accept `nil`,
+and the invocation's `:limits` value itself must still be a map.
+Time and credit ceilings accept finite Clojure ratios and serialize them as
+JSON decimals; subagent-count ceilings require integers.
+
+```clojure
+(copilot/resume-workflow! session run-id {:limits {:timeout-seconds nil}})
+```
+
+## Run, resume, observe, and cancel
+
+All functions below live on the public `github.copilot-sdk` facade (aliased `copilot` below) and are `^:experimental`. Each has an async `<`-prefixed twin that runs on a thread and delivers the result — or a caught `Throwable` — on a channel; check `(instance? Throwable result)` before using the value.
+
+| Function | Description |
+|----------|-------------|
+| `run-workflow!` / `<run-workflow!` | `[session name-or-handle]` or `[session name-or-handle {:keys [args limits resume-from-run-id]}]` — start a run and block until it reaches a terminal status. `:resume-from-run-id` delegates to `resume-workflow!` instead of starting a new run |
+| `resume-workflow!` / `<resume-workflow!` | `[session run-id]` or `[session run-id {:keys [limits]}]` — resume a durable run and block until terminal |
+| `get-workflow-run` / `<get-workflow-run` | `[session run-id]` — read the latest durable envelope (status, result, snapshot) without waiting |
+| `wait-for-workflow-run!` / `<wait-for-workflow-run!` | `[session run-id]` or with `{:keys [cancel-chan poll-interval-ms]}` — block until a run reaches a terminal status |
+| `list-workflow-runs` / `<list-workflow-runs` | `[session]` — return the runtime's newest default page of this session's runs |
+| `get-workflow-run-detail` / `<get-workflow-run-detail` | `[session run-id]` — durable phases, agents, and recent progress |
+| `get-workflow-run-progress` / `<get-workflow-run-progress` | `[session run-id]` or with `{:phase-id string :after-seq integer :before-seq integer :limit integer}` — page durable progress records |
+| `cancel-workflow-run!` / `<cancel-workflow-run!` | `[session run-id]` — request cancellation and return the terminal envelope |
+
+## Progress paging
+
+```clojure
+(def page
+  (copilot/get-workflow-run-progress session run-id {:after-seq -1 :limit 200}))
+(:records page)
+```
+
+All paging fields are optional. `:after-seq` and `:before-seq` are exclusive
+cursors; `:phase-id` scopes records and cursors to a phase. `:limit` accepts
+integers from 1 through 500; omission uses the runtime default of 200.
+Explicit `nil`, obsolete `:cursor`, unknown fields, and session/run identifiers
+are rejected as paging options. The function's session and run arguments own
+the request identity.
+
+The result contains `:records`, nullable `:oldest-seq` and `:newest-seq`,
+boolean `:has-more-older` and `:has-more-newer`, and non-negative `:revision`.
+The separate `list-runs` paging overload remains intentionally excluded.
+
+## Statuses and errors
+
+A run's `:status` is one of `:pending`, `:running`, `:completed`, `:halted`,
+`:paused`, `:cancelled`, or `:error`. `workflow-terminal-status?` returns true
+for every status except `:pending` and `:running`. A paused attempt has settled,
+so waits return; resuming can begin another attempt under the same run ID.
+
+```clojure
+(copilot/workflow-terminal-status? :completed) ;; => true
+(copilot/workflow-terminal-status? :running)   ;; => false
+```
+
+`resume-workflow!` classifies a subset of resume failures into a stable `ex-info`:
+
+```clojure
+(try
+  (copilot/resume-workflow! session "unknown-run")
+  (catch clojure.lang.ExceptionInfo e
+    (:code (ex-data e)))) ;; => :not-found (when the run doesn't exist)
+```
+
+`(:type (ex-data e))` is `:workflow-resume-error`. Its `:code` is one of
+`:not-found`, `:non-resumable`, `:workflow-run-not-resumable`, `:already-active`,
+`:workflow-already-running`, `:workflow-limits-invalid`,
+`:workflow-session-disposed`, `:workflow-storage-unavailable`, or
+`:workflow-storage-corrupt`. Other failures preserve the original exception
+and raw wire error.
+
+## See Also
+
+- [Custom Agents](custom-agents.md) — inference-selected sub-agents within a single conversation turn
+- [API Reference — `join-session`](../reference/API.md#join-session) — extension/child-process session attachment

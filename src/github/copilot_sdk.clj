@@ -22,7 +22,7 @@
    (copilot/stop! client)
    ```"
   (:require [github.copilot-sdk.client :as client]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.session :as session]
             [github.copilot-sdk.specs :as specs]
             [github.copilot-sdk.teardown :as teardown]
@@ -190,7 +190,7 @@
     :copilot/session.managed_settings_resolved
     :copilot/tool_search.activated
     ;; v1.0.9 + post-v1.0.9 sync (pinned schema 1.0.79-6).
-    :copilot/factory.run_updated
+    :copilot/workflow.run_updated
     ;; Stable events present at upstream pin 2980c78 (schema 1.0.83-1).
     ;; HydraFusion events remain generated-only: upstream marks routing/phase
     ;; signals experimental and handoff/commit checkpoints internal.
@@ -1274,7 +1274,7 @@
   "Adapt a provider-style session filesystem implementation to a sessionFs handler map.
 
    Provider functions receive direct arguments and throw on errors; the adapter
-   returns the structured RPC results expected by the CLI. Session factories may
+   returns the structured RPC results expected by the CLI. Session workflows may
    return provider-style maps directly because create-session/resume-session
    auto-adapt them. Use this helper when you need the low-level handler map
    yourself.
@@ -1307,87 +1307,87 @@
   [session prompt]
   (session/history-clear-context! session prompt))
 
-(defn ^:experimental define-factory
-  "Define an extension-authored Agent Factory."
+(defn ^:experimental define-workflow
+  "Define an extension-authored Dynamic Workflow."
   [definition]
-  (factory/define-factory definition))
+  (workflow/define-workflow definition))
 
-(defn ^:experimental factory-terminal-status?
-  "Return true when a factory run status is terminal."
+(defn ^:experimental workflow-terminal-status?
+  "Return true when a workflow run status is terminal."
   [status]
-  (factory/terminal-status? status))
+  (workflow/terminal-status? status))
 
-(defn ^:experimental run-factory!
+(defn ^:experimental run-workflow!
   ([session name-or-handle]
-   (factory/run! session name-or-handle))
+   (workflow/run! session name-or-handle))
   ([session name-or-handle options]
-   (factory/run! session name-or-handle options)))
+   (workflow/run! session name-or-handle options)))
 
-(defn ^:experimental <run-factory!
+(defn ^:experimental <run-workflow!
   ([session name-or-handle]
-   (factory/<run! session name-or-handle))
+   (workflow/<run! session name-or-handle))
   ([session name-or-handle options]
-   (factory/<run! session name-or-handle options)))
+   (workflow/<run! session name-or-handle options)))
 
-(defn ^:experimental resume-factory!
+(defn ^:experimental resume-workflow!
   ([session run-id]
-   (factory/resume! session run-id))
+   (workflow/resume! session run-id))
   ([session run-id options]
-   (factory/resume! session run-id options)))
+   (workflow/resume! session run-id options)))
 
-(defn ^:experimental <resume-factory!
+(defn ^:experimental <resume-workflow!
   ([session run-id]
-   (factory/<resume! session run-id))
+   (workflow/<resume! session run-id))
   ([session run-id options]
-   (factory/<resume! session run-id options)))
+   (workflow/<resume! session run-id options)))
 
-(defn ^:experimental get-factory-run [session run-id]
-  (factory/get-run session run-id))
+(defn ^:experimental get-workflow-run [session run-id]
+  (workflow/get-run session run-id))
 
-(defn ^:experimental <get-factory-run [session run-id]
-  (factory/<get-run session run-id))
+(defn ^:experimental <get-workflow-run [session run-id]
+  (workflow/<get-run session run-id))
 
-(defn ^:experimental wait-for-factory-run!
+(defn ^:experimental wait-for-workflow-run!
   ([session run-id]
-   (factory/wait-for-run! session run-id))
+   (workflow/wait-for-run! session run-id))
   ([session run-id options]
-   (factory/wait-for-run! session run-id options)))
+   (workflow/wait-for-run! session run-id options)))
 
-(defn ^:experimental <wait-for-factory-run!
+(defn ^:experimental <wait-for-workflow-run!
   ([session run-id]
-   (factory/<wait-for-run! session run-id))
+   (workflow/<wait-for-run! session run-id))
   ([session run-id options]
-   (factory/<wait-for-run! session run-id options)))
+   (workflow/<wait-for-run! session run-id options)))
 
-(defn ^:experimental list-factory-runs [session]
-  (factory/list-runs session))
+(defn ^:experimental list-workflow-runs [session]
+  (workflow/list-runs session))
 
-(defn ^:experimental <list-factory-runs [session]
-  (factory/<list-runs session))
+(defn ^:experimental <list-workflow-runs [session]
+  (workflow/<list-runs session))
 
-(defn ^:experimental get-factory-run-detail [session run-id]
-  (factory/get-run-detail session run-id))
+(defn ^:experimental get-workflow-run-detail [session run-id]
+  (workflow/get-run-detail session run-id))
 
-(defn ^:experimental <get-factory-run-detail [session run-id]
-  (factory/<get-run-detail session run-id))
+(defn ^:experimental <get-workflow-run-detail [session run-id]
+  (workflow/<get-run-detail session run-id))
 
-(defn ^:experimental get-factory-run-progress
+(defn ^:experimental get-workflow-run-progress
   ([session run-id]
-   (factory/get-run-progress session run-id))
+   (workflow/get-run-progress session run-id))
   ([session run-id options]
-   (factory/get-run-progress session run-id options)))
+   (workflow/get-run-progress session run-id options)))
 
-(defn ^:experimental <get-factory-run-progress
+(defn ^:experimental <get-workflow-run-progress
   ([session run-id]
-   (factory/<get-run-progress session run-id))
+   (workflow/<get-run-progress session run-id))
   ([session run-id options]
-   (factory/<get-run-progress session run-id options)))
+   (workflow/<get-run-progress session run-id options)))
 
-(defn ^:experimental cancel-factory-run! [session run-id]
-  (factory/cancel! session run-id))
+(defn ^:experimental cancel-workflow-run! [session run-id]
+  (workflow/cancel! session run-id))
 
-(defn ^:experimental <cancel-factory-run! [session run-id]
-  (factory/<cancel! session run-id))
+(defn ^:experimental <cancel-workflow-run! [session run-id]
+  (workflow/<cancel! session run-id))
 
 (defn ^:experimental get-current-model
   "Get the current model for this session.

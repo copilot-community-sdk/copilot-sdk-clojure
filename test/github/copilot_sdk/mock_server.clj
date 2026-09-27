@@ -393,37 +393,39 @@
                  "session.history.compact" {:success true}
                  "session.history.truncate" {:success true}
                  "session.history.clearContext" {:messagesCleared 3}
-                 "session.factory.run" {:runId "run-1"
-                                        :name (or (:name params) "factory")
-                                        :status "completed"
-                                        :result {:snake_key 1}
-                                        :snapshot {:snapshot_key true}}
-                 "session.factory.resume" {:run {:runId (:runId params)
-                                                 :name "factory"
-                                                 :status "completed"
-                                                 :result {:resumed_key true}
-                                                 :snapshot {:resume_snapshot_key true}}}
-                 "session.factory.getRun" {:runId (:runId params)
-                                           :name "factory"
-                                           :status "completed"
-                                           :result {:durable_key true}
-                                           :snapshot {:get_snapshot_key true}}
-                 "session.factory.listRuns" {:runs [{:runId "run-1"
-                                                     :name "factory"
-                                                     :status "completed"}]}
-                 "session.factory.getRunDetail" {:runId (:runId params)
-                                                 :phases []
-                                                 :agents []
-                                                 :progress {:lines []}}
-                 "session.factory.getRunProgress" {:lines [] :hasMore false}
-                 "session.factory.cancel" {:runId (:runId params)
-                                           :name "factory"
-                                           :status "cancelled"
-                                           :snapshot {:cancel_snapshot_key true}}
-                 "session.factory.log" {}
-                 "session.factory.agent" {:result {:agent_key "ok"}}
-                 "session.factory.journal.get" {:hit false}
-                 "session.factory.journal.put" {}
+                 "session.workflow.run" {:runId "run-1"
+                                         :name (or (:name params) "workflow")
+                                         :status "completed"
+                                         :result {:snake_key 1}
+                                         :snapshot {:snapshot_key true}}
+                 "session.workflow.resume" {:run {:runId (:runId params)
+                                                  :name "workflow"
+                                                  :status "completed"
+                                                  :result {:resumed_key true}
+                                                  :snapshot {:resume_snapshot_key true}}}
+                 "session.workflow.getRun" {:runId (:runId params)
+                                            :name "workflow"
+                                            :status "completed"
+                                            :result {:durable_key true}
+                                            :snapshot {:get_snapshot_key true}}
+                 "session.workflow.listRuns" {:runs [{:runId "run-1"
+                                                      :name "workflow"
+                                                      :status "completed"}]}
+                 "session.workflow.getRunDetail" {:runId (:runId params)
+                                                  :phases []
+                                                  :agents []
+                                                  :progress {:lines []}}
+                 "session.workflow.getRunProgress" {:records [] :oldestSeq nil :newestSeq nil
+                                                    :hasMoreOlder false :hasMoreNewer false
+                                                    :revision 0}
+                 "session.workflow.cancel" {:runId (:runId params)
+                                            :name "workflow"
+                                            :status "cancelled"
+                                            :snapshot {:cancel_snapshot_key true}}
+                 "session.workflow.log" {}
+                 "session.workflow.agent" {:result {:agent_key "ok"}}
+                 "session.workflow.journal.get" {:hit false}
+                 "session.workflow.journal.put" {}
                  "sessions.fork" {:sessionId (str (java.util.UUID/randomUUID))}
                  "session.shell.exec" {:exitCode 0 :stdout "" :stderr ""}
                  "session.shell.kill" {:success true}

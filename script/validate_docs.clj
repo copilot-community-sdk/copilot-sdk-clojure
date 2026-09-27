@@ -41,7 +41,7 @@
   "Known SDK namespaces referenced by documentation."
   #{"github.copilot-sdk.client"
     "github.copilot-sdk.session"
-    "github.copilot-sdk.factory"
+    "github.copilot-sdk.workflow"
     "github.copilot-sdk.helpers"
     "github.copilot-sdk.specs"
     "github.copilot-sdk.instrument"

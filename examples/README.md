@@ -107,8 +107,8 @@ clojure -A:examples -X empty-mode/run
 # Manual tool resume (declaration-only tool, manual pending-call resolution)
 clojure -A:examples -X manual-tool-resume/run
 
-# Agent Factories (experimental; launch as a child extension, see Example 22)
-clojure -A:examples -X agent-factories/run
+# Dynamic Workflows (experimental; launch as a child extension, see Example 22)
+clojure -A:examples -X dynamic-workflows/run
 ```
 
 Or run all examples:
@@ -124,7 +124,7 @@ Or run all examples:
 > - `byok_provider.clj` and `empty_mode.clj` require a provider API key.
 > - `mcp_local_server.clj` requires local `npx` plus npm registry access. It stays
 >   out of the shared runner to keep that runner network-independent.
-> - `agent_factories.clj` requires `SESSION_ID` from a live parent Copilot CLI
+> - `dynamic_workflows.clj` requires `SESSION_ID` from a live parent Copilot CLI
 >   session and cannot run standalone.
 
 With a custom CLI path:
@@ -1030,31 +1030,31 @@ See [`doc/reference/API.md`](../doc/reference/API.md) for
 
 ---
 
-## Example 22: Agent Factories (`agent_factories.clj`)
+## Example 22: Dynamic Workflows (`dynamic_workflows.clj`)
 
 **Difficulty:** Advanced
-**Concepts:** Experimental Agent Factories API, reverse-RPC extensions, joining a parent CLI session
+**Concepts:** Experimental Dynamic Workflows API, reverse-RPC extensions, joining a parent CLI session
 
-An **Agent Factory** is a named, reusable multi-step routine — with declared
+A **Dynamic Workflow** is a named, reusable multi-step routine — with declared
 phases and optional resource limits — that an extension registers when it joins a
 running Copilot CLI session. The parent session (or another script driving
-it) triggers runs of the factory by name; this example only *defines and
+it) triggers runs of the workflow by name; this example only *defines and
 services* runs — it never triggers one itself. This is the experimental
-extension side of the API: `copilot/define-factory` + `copilot/join-session`.
+extension side of the API: `copilot/define-workflow` + `copilot/join-session`.
 
 This example omits resource limits because its cost profile is not known. Add a
 ceiling only when the cost is known or the user explicitly requested one.
 
 ### What It Demonstrates
 
-- Defining a factory with `copilot/define-factory`: `:meta` (`:name`,
+- Defining a workflow with `copilot/define-workflow`: `:meta` (`:name`,
   `:description`, `:phases`) and a `:run` function
-- Validating a factory's own runtime `:args` map (distinct from the
-  metadata validation `define-factory` already performs)
-- Using `phase`, `log`, `agent`, `step`, and `parallel` from the factory
+- Validating a workflow's own runtime `:args` map (distinct from the
+  metadata validation `define-workflow` already performs)
+- Using `phase`, `log`, `agent`, `step`, and `parallel` from the workflow
   execution context to structure and narrate a multi-step run
 - Joining the parent session as a child extension via
-  `copilot/join-session` with `:factories`
+  `copilot/join-session` with `:workflows`
 - Cleaning up exactly once via a JVM shutdown hook (`stop!` with a
   `force-stop!` fallback) and an `on-lifecycle-event :session.deleted`
   handler for graceful exit when the parent session ends
@@ -1068,11 +1068,11 @@ provides `SESSION_ID` and the parent JSON-RPC connection over stdio. Setting
 ### Usage
 
 ```bash
-clojure -A:examples -X agent-factories/run
+clojure -A:examples -X dynamic-workflows/run
 ```
 
-Trigger the registered `"clj-example-review"` factory from the parent
-session (or another script) with `copilot/run-factory!`; this process
+Trigger the registered `"clj-example-review"` workflow from the parent
+session (or another script) with `copilot/run-workflow!`; this process
 stays alive to service the run and exits when the parent session ends.
 
 ---

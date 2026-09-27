@@ -208,9 +208,9 @@
                    :source-path "AGENTS.md"
                    :trigger-file "src/core.clj"
                    :trigger-tool "view"}
-                  {:type "factory_completed"
+                  {:type "workflow_completed"
                    :run-id "run-1"
-                   :factory-name "review"
+                   :workflow-name "review"
                    :status "completed"
                    :consumed-subagents 2
                    :elapsed-ms 100
@@ -223,9 +223,9 @@
     (doseq [kind [{:type "agent_idle" :agent-id "agent-2"}
                   {:type "shell_completed"}
                   {:type "new_inbox_message" :entry-id "entry-1"}
-                  {:type "factory_completed"
+                  {:type "workflow_completed"
                    :run-id "run-1"
-                   :factory-name "review"
+                   :workflow-name "review"
                    :status "completed"
                    :consumed-subagents 2
                    :elapsed-ms 100

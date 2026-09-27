@@ -42,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "9876dc265c2b41e501638e0295dfc559aebc1ca0"}}}
+         :git/sha "27ca3a861a708d78efbb629a9122d08b7da81f6e"}}}
 ```
 
 Features documented under **Unreleased**, including structured outputs, require
@@ -291,7 +291,7 @@ Each model map includes `:id`, `:name`, `:vendor`, `:family`, `:max-input-tokens
 Now that you have the basics, explore these topics:
 
 - **[API Reference](./reference/API.md)** — Complete API documentation, plus new v1.0.9 options like `:enable-managed-settings?` for enterprise-managed permissions
-- **[Agent Factories](./guides/agent-factories.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-factory` / `run-factory!`
+- **[Dynamic Workflows](./guides/dynamic-workflows.md)** *(experimental)* — Durable, resumable multi-agent orchestration via `define-workflow` / `run-workflow!`
 - **[Authentication](./auth/index.md)** — All auth methods including BYOK
 - **[MCP Servers](./mcp/overview.md)** — Connect to external tools via MCP
 - **[Examples](https://github.com/copilot-community-sdk/copilot-sdk-clojure/blob/main/examples/README.md)** — More working examples

@@ -12,7 +12,7 @@
 (def ^:private expected-public-namespaces
   '#{github.copilot-sdk
      github.copilot-sdk.client
-     github.copilot-sdk.factory
+     github.copilot-sdk.workflow
      github.copilot-sdk.helpers
      github.copilot-sdk.instrument
      github.copilot-sdk.logging
@@ -59,18 +59,18 @@
             (str namespace "/" helper " must remain instrumented"))))
     (testing "no-doc vars remain outside the supported contract"
       (is (not (contains? (get-in live [:namespaces
-                                        'github.copilot-sdk.factory
+                                        'github.copilot-sdk.workflow
                                         :vars])
-                          'factory-run-function))))
+                          'workflow-run-function))))
     (testing "generated implementation interns remain outside the contract"
       (is (not (contains? (get-in live [:namespaces
-                                        'github.copilot-sdk.factory
+                                        'github.copilot-sdk.workflow
                                         :vars])
-                          '->FactoryHandle)))
+                          '->WorkflowHandle)))
       (is (not (contains? (get-in live [:namespaces
-                                        'github.copilot-sdk.factory
+                                        'github.copilot-sdk.workflow
                                         :vars])
-                          'map->FactoryHandle)))
+                          'map->WorkflowHandle)))
       (is (not (contains? (get-in live [:namespaces
                                         'github.copilot-sdk.session
                                         :vars])

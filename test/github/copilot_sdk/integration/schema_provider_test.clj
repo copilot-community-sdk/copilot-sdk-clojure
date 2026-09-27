@@ -9,7 +9,7 @@
             [clojure.tools.logging.test :as log-test]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.session :as session]
@@ -143,7 +143,7 @@
   (testing "generated and curated surfaces include new public events"
     (doseq [[wire-type idiom-type]
             [["session.context_cleared" :copilot/session.context_cleared]
-             ["factory.run_updated" :copilot/factory.run_updated]]]
+             ["workflow.run_updated" :copilot/workflow.run_updated]]]
       (is (contains? generated-events/event-types wire-type))
       (is (contains? sdk/event-types idiom-type))
       (is (s/get-spec (keyword "github.copilot-sdk.generated.event-specs" wire-type)))

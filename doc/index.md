@@ -15,7 +15,7 @@ Clojure SDK for programmatic control of the GitHub Copilot CLI via JSON-RPC.
 - [MCP Servers](mcp/overview.md) — Model Context Protocol server integration
 - [MCP Debugging](mcp/debugging.md) — Troubleshooting MCP connections
 - [Custom Agents](guides/custom-agents.md) — Define specialized agents with scoped tools for sub-agent orchestration
-- [Agent Factories](guides/agent-factories.md) — Reverse-executed, resumable extension workflows, **experimental**
+- [Dynamic Workflows](guides/dynamic-workflows.md) — Reverse-executed, resumable extension workflows, **experimental**
 
 ## Features
 
@@ -33,7 +33,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 - [Client Mode `:empty`](reference/API.md#client-mode-empty) — multi-tenant SaaS isolation. **Security note:** hardens sessions against local machine state; intended for hosts serving multiple users.
 - [Session Filesystem](reference/API.md#session-filesystem) — route filesystem operations through host-provided handlers. **Security note:** the host fully controls session file access.
 - Remote / cloud sessions (`:remote-session`, `:cloud`) and [fleet mode](reference/API.md#experimental-rpc-methods) — **experimental**; not covered by GA semver guarantees.
-- [Agent Factories](guides/agent-factories.md) — reverse-executed, resumable workflows for extensions. **experimental**; not covered by GA semver guarantees.
+- [Dynamic Workflows](guides/dynamic-workflows.md) — reverse-executed, resumable workflows for extensions. **experimental**; not covered by GA semver guarantees.
 
 ## Reference
 
@@ -42,6 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
+- [ADR: Migrate the existing orchestration API to Dynamic Workflows](adr/2026-09-27-dynamic-workflow-migration.md) -- Replaces the retired experimental Factory surface without compatibility aliases or unrelated experimental additions.
 - [ADR: Defer a host-owned inference boundary](adr/2026-08-10-host-owned-inference-boundary.md) -- **Accepted.** Keeps the upstream experimental `requestHandler` / `llmInference.*` lifecycle outside the supported SDK until concrete Clojure demand or upstream stabilization/material redesign.
 - [ADR: Add scope-bound query sequences before deprecating query-seq!](adr/2026-08-08-query-seq-scoped-lifecycle.md) -- **Accepted.** Adds `with-query-seq` as the safe default for streaming/seq-style consumption; `query-seq!` deprecation and removal are deferred, separate future steps.
 

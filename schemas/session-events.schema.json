@@ -1519,6 +1519,10 @@
         "model": {
           "type": "string",
           "description": "Model identifier used for this turn, when known"
+        },
+        "parentToolCallId": {
+          "type": "string",
+          "description": "Parent task tool call ID when this turn belongs to a sub-agent"
         }
       },
       "required": [
@@ -1676,6 +1680,10 @@
         "interactionId": {
           "type": "string",
           "description": "CAPI interaction ID for correlating this turn with upstream telemetry"
+        },
+        "parentToolCallId": {
+          "type": "string",
+          "description": "Parent task tool call ID when this turn belongs to a sub-agent"
         }
       },
       "required": [
@@ -5326,9 +5334,14 @@
           "$ref": "#/definitions/ResponsesReasoning",
           "description": "Reasoning baseline on the replacement summary, preserved when replay skips the compacted history"
         },
+        "activeWorkflowSummary": {
+          "type": "string",
+          "description": "Authoritative active-workflow reminder appended to the compacted context",
+          "visibility": "internal"
+        },
         "activeFactorySummary": {
           "type": "string",
-          "description": "Authoritative active-factory reminder appended to the compacted context",
+          "description": "Legacy active-workflow reminder retained for replay compatibility",
           "visibility": "internal"
         },
         "behaviorModelId": {
@@ -7155,320 +7168,6 @@
       "additionalProperties": false,
       "description": "Session event \"external_tool.requested\". External tool invocation request for client-side tool execution",
       "title": "ExternalToolRequestedEvent"
-    },
-    "FactoryPermissionOperation": {
-      "type": "string",
-      "enum": [
-        "run",
-        "author"
-      ],
-      "description": "Operation gated by a factory permission request.",
-      "title": "FactoryPermissionOperation",
-      "x-enumDescriptions": {
-        "run": "Running a registered factory, which spends subagents, active time, and AI credits under the approved limits.",
-        "author": "Authoring a factory, which writes JavaScript into a session-scoped extension and loads it."
-      }
-    },
-    "FactoryPermissionPhase": {
-      "type": "object",
-      "properties": {
-        "title": {
-          "type": "string",
-          "description": "Phase title"
-        },
-        "detail": {
-          "type": "string",
-          "description": "Optional phase detail"
-        }
-      },
-      "required": [
-        "title"
-      ],
-      "additionalProperties": false,
-      "description": "A declared phase shown in a factory permission prompt.",
-      "title": "FactoryPermissionPhase"
-    },
-    "FactoryRunSettledData": {
-      "type": "object",
-      "properties": {
-        "runId": {
-          "type": "string",
-          "description": "Identifier of the factory run that settled."
-        },
-        "status": {
-          "$ref": "#/definitions/FactoryRunSettledStatus",
-          "description": "Terminal status the run committed."
-        },
-        "consumedSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Subagents this run consumed against its limits."
-        },
-        "consumedNanoAiu": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "AI credits this run consumed, in nano-AIU."
-        },
-        "elapsedMs": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Active milliseconds accumulated across every attempt of this run."
-        },
-        "failureType": {
-          "type": "string",
-          "description": "Typed failure class recorded on the run, when it failed with one (e.g. `factory_limit_reached`)."
-        }
-      },
-      "required": [
-        "runId",
-        "status",
-        "consumedSubagents",
-        "consumedNanoAiu",
-        "elapsedMs"
-      ],
-      "additionalProperties": false,
-      "description": "Ephemeral signal that a factory run reached a terminal status.",
-      "title": "FactoryRunSettledData",
-      "stability": "experimental"
-    },
-    "FactoryRunSettledEvent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "ISO 8601 timestamp when the event was created"
-        },
-        "parentId": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "uuid"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
-        },
-        "ephemeral": {
-          "type": "boolean",
-          "const": true,
-          "description": "Always true for events that are transient and not persisted to the session event log on disk."
-        },
-        "agentId": {
-          "type": "string",
-          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
-        },
-        "type": {
-          "type": "string",
-          "const": "factory.run_settled",
-          "description": "Type discriminator. Always \"factory.run_settled\"."
-        },
-        "data": {
-          "$ref": "#/definitions/FactoryRunSettledData",
-          "description": "Ephemeral signal that a factory run reached a terminal status."
-        }
-      },
-      "required": [
-        "id",
-        "timestamp",
-        "parentId",
-        "ephemeral",
-        "type",
-        "data"
-      ],
-      "additionalProperties": false,
-      "description": "Session event \"factory.run_settled\". Ephemeral signal that a factory run reached a terminal status.",
-      "title": "FactoryRunSettledEvent",
-      "stability": "experimental"
-    },
-    "FactoryRunSettledStatus": {
-      "type": "string",
-      "enum": [
-        "completed",
-        "halted",
-        "paused",
-        "cancelled",
-        "error"
-      ],
-      "description": "Terminal status a factory run committed. A settled run is never `pending` or `running`, so those two members of the run-status domain are deliberately absent.",
-      "title": "FactoryRunSettledStatus",
-      "x-enumDescriptions": {
-        "completed": "The factory body resolved and its result was committed.",
-        "halted": "The run was stopped by a limit, an approval refusal or another policy decision.",
-        "paused": "The attempt paused intentionally while preserving resumable run state.",
-        "cancelled": "The run was cancelled by its caller or by session disposal.",
-        "error": "The run failed, with `failureType` carrying the class when it has one."
-      }
-    },
-    "FactoryRunStartedData": {
-      "type": "object",
-      "properties": {
-        "runId": {
-          "type": "string",
-          "description": "Identifier of the factory run that started."
-        },
-        "factoryName": {
-          "type": "string",
-          "description": "Name of the factory this run executes. Low cardinality by construction."
-        },
-        "attempt": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Attempt number this start committed; a resumed run increments it."
-        }
-      },
-      "required": [
-        "runId",
-        "factoryName",
-        "attempt"
-      ],
-      "additionalProperties": false,
-      "description": "Ephemeral signal that a factory run attempt began executing.",
-      "title": "FactoryRunStartedData",
-      "stability": "experimental"
-    },
-    "FactoryRunStartedEvent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "ISO 8601 timestamp when the event was created"
-        },
-        "parentId": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "uuid"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
-        },
-        "ephemeral": {
-          "type": "boolean",
-          "const": true,
-          "description": "Always true for events that are transient and not persisted to the session event log on disk."
-        },
-        "agentId": {
-          "type": "string",
-          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
-        },
-        "type": {
-          "type": "string",
-          "const": "factory.run_started",
-          "description": "Type discriminator. Always \"factory.run_started\"."
-        },
-        "data": {
-          "$ref": "#/definitions/FactoryRunStartedData",
-          "description": "Ephemeral signal that a factory run attempt began executing."
-        }
-      },
-      "required": [
-        "id",
-        "timestamp",
-        "parentId",
-        "ephemeral",
-        "type",
-        "data"
-      ],
-      "additionalProperties": false,
-      "description": "Session event \"factory.run_started\". Ephemeral signal that a factory run attempt began executing.",
-      "title": "FactoryRunStartedEvent",
-      "stability": "experimental"
-    },
-    "FactoryRunUpdatedData": {
-      "type": "object",
-      "properties": {
-        "runId": {
-          "type": "string",
-          "description": "Factory run identifier."
-        },
-        "revision": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Monotonic revision now available for the run."
-        }
-      },
-      "required": [
-        "runId",
-        "revision"
-      ],
-      "additionalProperties": false,
-      "description": "Ephemeral invalidation signal for a changed factory run.",
-      "title": "FactoryRunUpdatedData",
-      "stability": "experimental"
-    },
-    "FactoryRunUpdatedEvent": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string",
-          "format": "uuid",
-          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
-        },
-        "timestamp": {
-          "type": "string",
-          "format": "date-time",
-          "description": "ISO 8601 timestamp when the event was created"
-        },
-        "parentId": {
-          "anyOf": [
-            {
-              "type": "string",
-              "format": "uuid"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
-        },
-        "ephemeral": {
-          "type": "boolean",
-          "const": true,
-          "description": "Always true for events that are transient and not persisted to the session event log on disk."
-        },
-        "agentId": {
-          "type": "string",
-          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
-        },
-        "type": {
-          "type": "string",
-          "const": "factory.run_updated",
-          "description": "Type discriminator. Always \"factory.run_updated\"."
-        },
-        "data": {
-          "$ref": "#/definitions/FactoryRunUpdatedData",
-          "description": "Ephemeral invalidation signal for a changed factory run."
-        }
-      },
-      "required": [
-        "id",
-        "timestamp",
-        "parentId",
-        "ephemeral",
-        "type",
-        "data"
-      ],
-      "additionalProperties": false,
-      "description": "Session event \"factory.run_updated\". Ephemeral invalidation signal for a changed factory run.",
-      "title": "FactoryRunUpdatedEvent",
-      "stability": "experimental"
     },
     "FusionAttribution": {
       "type": "object",
@@ -11499,6 +11198,10 @@
           "type": "string",
           "description": "Model identifier used for the failed API call"
         },
+        "parentToolCallId": {
+          "type": "string",
+          "description": "Parent task tool call ID when this failed model call belongs to a sub-agent"
+        },
         "initiator": {
           "type": "string",
           "description": "What initiated this API call (e.g., \"sub-agent\", \"mcp-sampling\"); absent for user-initiated calls"
@@ -11897,6 +11600,10 @@
           "$ref": "#/definitions/FusionAttribution",
           "description": "Experimental HydraFusion attribution for this concrete model call.",
           "stability": "experimental"
+        },
+        "parentToolCallId": {
+          "type": "string",
+          "description": "Parent task tool call ID when this model call belongs to a sub-agent"
         }
       },
       "required": [
@@ -12112,7 +11819,8 @@
         "plan_mode",
         "automatic",
         "changeboarding_shortcut",
-        "sdk"
+        "sdk",
+        "auto_tier_recommendation"
       ],
       "description": "Origin of an effective session model change.",
       "title": "ModelChangeSource",
@@ -12128,7 +11836,8 @@
         "plan_mode": "Entering, leaving, or reconfiguring plan mode selected the model.",
         "automatic": "The runtime selected the model automatically, such as rate-limit recovery or refusal fallback.",
         "changeboarding_shortcut": "The user selected the promoted model from the changeboarding card or its keyboard shortcut.",
-        "sdk": "An SDK or RPC caller selected the model."
+        "sdk": "An SDK or RPC caller selected the model.",
+        "auto_tier_recommendation": "The user accepted a CAPI-issued Auto tier recommendation."
       }
     },
     "ModelDeselectedData": {
@@ -12631,7 +12340,7 @@
         "turnIndex"
       ],
       "additionalProperties": false,
-      "description": "Records that deterministic text recognition found likely assent in the human turn immediately following a root Autopilot permission request that was blocked because no interactive response was available. This event grants no authority; its model-facing projection only suggests retrying the unchanged operation.",
+      "description": "Historical decode-only contextual-assent marker. Current runtimes do not project it into the conversation or permission flow.",
       "title": "PermissionAssentDetectedData",
       "stability": "experimental"
     },
@@ -12675,7 +12384,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionAssentDetectedData",
-          "description": "Records that deterministic text recognition found likely assent in the human turn immediately following a root Autopilot permission request that was blocked because no interactive response was available. This event grants no authority; its model-facing projection only suggests retrying the unchanged operation."
+          "description": "Historical decode-only contextual-assent marker. Current runtimes do not project it into the conversation or permission flow."
         }
       },
       "required": [
@@ -12686,7 +12395,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"permission.assentDetected\". Records that deterministic text recognition found likely assent in the human turn immediately following a root Autopilot permission request that was blocked because no interactive response was available. This event grants no authority; its model-facing projection only suggests retrying the unchanged operation.",
+      "description": "Session event \"permission.assentDetected\". Historical decode-only contextual-assent marker. Current runtimes do not project it into the conversation or permission flow.",
       "title": "PermissionAssentDetectedEvent",
       "stability": "experimental"
     },
@@ -12773,7 +12482,7 @@
         "decisionSource"
       ],
       "additionalProperties": false,
-      "description": "Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left.",
+      "description": "Historical decode-only receipt from the retired Assisted Permissions authorization extractor. Current runtimes ignore it for permission decisions.",
       "title": "PermissionCarriedForwardData",
       "stability": "experimental"
     },
@@ -12817,7 +12526,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionCarriedForwardData",
-          "description": "Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left."
+          "description": "Historical decode-only receipt from the retired Assisted Permissions authorization extractor. Current runtimes ignore it for permission decisions."
         }
       },
       "required": [
@@ -12828,7 +12537,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"permission.carriedForward\". Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left.",
+      "description": "Session event \"permission.carriedForward\". Historical decode-only receipt from the retired Assisted Permissions authorization extractor. Current runtimes ignore it for permission decisions.",
       "title": "PermissionCarriedForwardEvent",
       "stability": "experimental"
     },
@@ -12969,7 +12678,7 @@
         "spanEnd"
       ],
       "additionalProperties": false,
-      "description": "Freezes a blinded contextual authorization proposal whose verbatim human span was deterministically bound to the immediately preceding blocked permission request. The event carries no action fields; replay re-derives the exact action from the earlier permission request and mints a one-shot message grant only when the binding and span still verify.",
+      "description": "Historical decode-only contextual authorization claim. Current runtimes preserve the payload but do not establish authority from it.",
       "title": "PermissionContextualAuthorizationData",
       "stability": "experimental"
     },
@@ -13013,7 +12722,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionContextualAuthorizationData",
-          "description": "Freezes a blinded contextual authorization proposal whose verbatim human span was deterministically bound to the immediately preceding blocked permission request. The event carries no action fields; replay re-derives the exact action from the earlier permission request and mints a one-shot message grant only when the binding and span still verify."
+          "description": "Historical decode-only contextual authorization claim. Current runtimes preserve the payload but do not establish authority from it."
         }
       },
       "required": [
@@ -13024,7 +12733,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"permission.contextualAuthorization\". Freezes a blinded contextual authorization proposal whose verbatim human span was deterministically bound to the immediately preceding blocked permission request. The event carries no action fields; replay re-derives the exact action from the earlier permission request and mints a one-shot message grant only when the binding and span still verify.",
+      "description": "Session event \"permission.contextualAuthorization\". Historical decode-only contextual authorization claim. Current runtimes preserve the payload but do not establish authority from it.",
       "title": "PermissionContextualAuthorizationEvent",
       "stability": "experimental"
     },
@@ -13044,7 +12753,7 @@
         "human_response": "A human supplied the response through an interactive prompt.",
         "host_policy": "The host applied a standing policy or override rather than a judge recommendation or human decision.",
         "unattended_fallback": "The host denied the request because no interactive user response was available.",
-        "authorization_carry_forward": "A live authorization record from an earlier human decision in this session contained the proposal, so it ran without another prompt. This is not a new human decision and never mints authority of its own."
+        "authorization_carry_forward": "Historical compatibility value for sessions created while authorization carry-forward was executable. Current runtimes do not produce this source."
       }
     },
     "PermissionDeniedByContentExclusionPolicy": {
@@ -13227,7 +12936,7 @@
         "spanEnd"
       ],
       "additionalProperties": false,
-      "description": "Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume.",
+      "description": "Historical decode-only claim from the retired Assisted Permissions authorization extractor. Current runtimes preserve the payload but do not establish authority from it.",
       "title": "PermissionMessageAuthorizationData",
       "stability": "experimental"
     },
@@ -13245,7 +12954,7 @@
         "turnIndex"
       ],
       "additionalProperties": false,
-      "description": "Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt.",
+      "description": "Historical decode-only degradation marker from the retired extractor. Current runtimes ignore it for permission decisions.",
       "title": "PermissionMessageAuthorizationDegradedData",
       "stability": "experimental"
     },
@@ -13289,7 +12998,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionMessageAuthorizationDegradedData",
-          "description": "Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt."
+          "description": "Historical decode-only degradation marker from the retired extractor. Current runtimes ignore it for permission decisions."
         }
       },
       "required": [
@@ -13300,7 +13009,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"permission.messageAuthorizationDegraded\". Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt.",
+      "description": "Session event \"permission.messageAuthorizationDegraded\". Historical decode-only degradation marker from the retired extractor. Current runtimes ignore it for permission decisions.",
       "title": "PermissionMessageAuthorizationDegradedEvent",
       "stability": "experimental"
     },
@@ -13344,7 +13053,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionMessageAuthorizationData",
-          "description": "Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume."
+          "description": "Historical decode-only claim from the retired Assisted Permissions authorization extractor. Current runtimes preserve the payload but do not establish authority from it."
         }
       },
       "required": [
@@ -13355,7 +13064,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"permission.messageAuthorization\". Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume.",
+      "description": "Session event \"permission.messageAuthorization\". Historical decode-only claim from the retired Assisted Permissions authorization extractor. Current runtimes preserve the payload but do not establish authority from it.",
       "title": "PermissionMessageAuthorizationEvent",
       "stability": "experimental"
     },
@@ -13365,11 +13074,11 @@
         "grant",
         "denial"
       ],
-      "description": "Which direction a message-backed authorization claim moves authority in.",
+      "description": "Direction stored in a historical extractor claim. Current runtimes do not apply it.",
       "title": "PermissionMessageAuthorizationPolarity",
       "x-enumDescriptions": {
-        "grant": "The human's words authorized an effect.",
-        "denial": "The human's words refused an effect."
+        "grant": "Historical claim recorded as a grant.",
+        "denial": "Historical claim recorded as a denial."
       },
       "stability": "experimental"
     },
@@ -13392,7 +13101,7 @@
         "turnIndex"
       ],
       "additionalProperties": false,
-      "description": "Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Also records whether that pass activates ongoing extraction; contextual-assent-only passes do not, so unrelated future messages remain outside extraction.",
+      "description": "Historical decode-only extractor progress marker. Current runtimes do not run or resume extraction from it.",
       "title": "PermissionMessageAuthorizationReadData",
       "stability": "experimental"
     },
@@ -13436,7 +13145,7 @@
         },
         "data": {
           "$ref": "#/definitions/PermissionMessageAuthorizationReadData",
-          "description": "Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Also records whether that pass activates ongoing extraction; contextual-assent-only passes do not, so unrelated future messages remain outside extraction."
+          "description": "Historical decode-only extractor progress marker. Current runtimes do not run or resume extraction from it."
         }
       },
       "required": [
@@ -13447,7 +13156,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"permission.messageAuthorizationRead\". Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Also records whether that pass activates ongoing extraction; contextual-assent-only passes do not, so unrelated future messages remain outside extraction.",
+      "description": "Session event \"permission.messageAuthorizationRead\". Historical decode-only extractor progress marker. Current runtimes do not run or resume extraction from it.",
       "title": "PermissionMessageAuthorizationReadEvent",
       "stability": "experimental"
     },
@@ -13510,8 +13219,8 @@
           "description": "Extension management permission prompt"
         },
         {
-          "$ref": "#/definitions/PermissionPromptRequestFactory",
-          "description": "Factory run or authoring permission prompt"
+          "$ref": "#/definitions/PermissionPromptRequestWorkflow",
+          "description": "Workflow run or authoring permission prompt"
         },
         {
           "$ref": "#/definitions/PermissionPromptRequestExtensionPermissionAccess",
@@ -13742,105 +13451,6 @@
       "additionalProperties": false,
       "description": "Extension permission access prompt",
       "title": "PermissionPromptRequestExtensionPermissionAccess"
-    },
-    "PermissionPromptRequestFactory": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "const": "factory",
-          "description": "Prompt kind discriminator"
-        },
-        "toolCallId": {
-          "type": "string",
-          "description": "Tool call ID that triggered this permission request"
-        },
-        "operation": {
-          "$ref": "#/definitions/FactoryPermissionOperation",
-          "description": "Factory operation, either run or author"
-        },
-        "name": {
-          "type": "string",
-          "description": "Factory name"
-        },
-        "description": {
-          "type": "string",
-          "description": "Factory description"
-        },
-        "phases": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/FactoryPermissionPhase",
-            "description": "A declared phase shown in a factory permission prompt."
-          },
-          "description": "Declared factory phases"
-        },
-        "maxConcurrentSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Effective concurrent-subagent limit; omitted means unlimited"
-        },
-        "maxTotalSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Effective total-subagent limit; omitted means unlimited"
-        },
-        "timeoutSeconds": {
-          "type": "number",
-          "description": "Effective active-time limit in seconds; omitted means unlimited"
-        },
-        "maxAiCredits": {
-          "type": "number",
-          "description": "Effective AI-credit limit; omitted means unlimited"
-        },
-        "declaredMaxConcurrentSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Factory-declared concurrent-subagent limit before any run/resume caller override is applied."
-        },
-        "declaredMaxTotalSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Factory-declared total-subagent limit before any run/resume caller override is applied."
-        },
-        "declaredTimeoutSeconds": {
-          "type": "number",
-          "description": "Factory-declared active-time limit in seconds before any run/resume caller override is applied."
-        },
-        "declaredMaxAiCredits": {
-          "type": "number",
-          "description": "Factory-declared AI-credit limit before any run/resume caller override is applied."
-        },
-        "approvalKey": {
-          "type": "string",
-          "description": "Canonical key used for scoped factory approvals"
-        },
-        "canPersistApproval": {
-          "type": "boolean",
-          "description": "Whether this factory is eligible for persistent approval"
-        },
-        "assistedApproval": {
-          "$ref": "#/definitions/PermissionAssistedApproval",
-          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
-          "stability": "experimental"
-        },
-        "managedApprovalRequired": {
-          "type": "boolean",
-          "description": "Whether managed policy requires a human response and forbids host auto-approval"
-        }
-      },
-      "required": [
-        "kind",
-        "operation",
-        "name",
-        "description",
-        "phases",
-        "approvalKey",
-        "canPersistApproval"
-      ],
-      "additionalProperties": false,
-      "description": "Factory run or authoring permission prompt",
-      "title": "PermissionPromptRequestFactory"
     },
     "PermissionPromptRequestHook": {
       "type": "object",
@@ -14130,6 +13740,105 @@
       "additionalProperties": false,
       "description": "URL access permission prompt",
       "title": "PermissionPromptRequestUrl"
+    },
+    "PermissionPromptRequestWorkflow": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "workflow",
+          "description": "Prompt kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "operation": {
+          "$ref": "#/definitions/WorkflowPermissionOperation",
+          "description": "Workflow operation, either run or author"
+        },
+        "name": {
+          "type": "string",
+          "description": "Workflow name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Workflow description"
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowPermissionPhase",
+            "description": "A declared phase shown in a workflow permission prompt."
+          },
+          "description": "Declared workflow phases"
+        },
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective concurrent-subagent limit; omitted means unlimited"
+        },
+        "maxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective total-subagent limit; omitted means unlimited"
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "description": "Effective active-time limit in seconds; omitted means unlimited"
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "description": "Effective AI-credit limit; omitted means unlimited"
+        },
+        "declaredMaxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Workflow-declared concurrent-subagent limit before any run/resume caller override is applied."
+        },
+        "declaredMaxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Workflow-declared total-subagent limit before any run/resume caller override is applied."
+        },
+        "declaredTimeoutSeconds": {
+          "type": "number",
+          "description": "Workflow-declared active-time limit in seconds before any run/resume caller override is applied."
+        },
+        "declaredMaxAiCredits": {
+          "type": "number",
+          "description": "Workflow-declared AI-credit limit before any run/resume caller override is applied."
+        },
+        "approvalKey": {
+          "type": "string",
+          "description": "Canonical key used for scoped workflow approvals"
+        },
+        "canPersistApproval": {
+          "type": "boolean",
+          "description": "Whether this workflow is eligible for persistent approval"
+        },
+        "assistedApproval": {
+          "$ref": "#/definitions/PermissionAssistedApproval",
+          "description": "Assisted-approval judge information for this request; present only in assisted mode.",
+          "stability": "experimental"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        }
+      },
+      "required": [
+        "kind",
+        "operation",
+        "name",
+        "description",
+        "phases",
+        "approvalKey",
+        "canPersistApproval"
+      ],
+      "additionalProperties": false,
+      "description": "Workflow run or authoring permission prompt",
+      "title": "PermissionPromptRequestWorkflow"
     },
     "PermissionPromptRequestWrite": {
       "type": "object",
@@ -14498,8 +14207,8 @@
           "description": "Extension management permission request"
         },
         {
-          "$ref": "#/definitions/PermissionRequestFactory",
-          "description": "Factory run or authoring permission request"
+          "$ref": "#/definitions/PermissionRequestWorkflow",
+          "description": "Workflow run or authoring permission request"
         },
         {
           "$ref": "#/definitions/PermissionRequestExtensionPermissionAccess",
@@ -14744,96 +14453,6 @@
       "additionalProperties": false,
       "description": "Extension permission access request",
       "title": "PermissionRequestExtensionPermissionAccess"
-    },
-    "PermissionRequestFactory": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "const": "factory",
-          "description": "Permission kind discriminator"
-        },
-        "toolCallId": {
-          "type": "string",
-          "description": "Tool call ID that triggered this permission request"
-        },
-        "operation": {
-          "$ref": "#/definitions/FactoryPermissionOperation",
-          "description": "Factory operation, either run or author"
-        },
-        "name": {
-          "type": "string",
-          "description": "Factory name"
-        },
-        "description": {
-          "type": "string",
-          "description": "Factory description"
-        },
-        "phases": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/FactoryPermissionPhase",
-            "description": "A declared phase shown in a factory permission prompt."
-          },
-          "description": "Declared factory phases"
-        },
-        "maxConcurrentSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Effective concurrent-subagent limit; omitted means unlimited"
-        },
-        "maxTotalSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Effective total-subagent limit; omitted means unlimited"
-        },
-        "timeoutSeconds": {
-          "type": "number",
-          "description": "Effective active-time limit in seconds; omitted means unlimited"
-        },
-        "maxAiCredits": {
-          "type": "number",
-          "description": "Effective AI-credit limit; omitted means unlimited"
-        },
-        "declaredMaxConcurrentSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Factory-declared concurrent-subagent limit before any run/resume caller override is applied."
-        },
-        "declaredMaxTotalSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Factory-declared total-subagent limit before any run/resume caller override is applied."
-        },
-        "declaredTimeoutSeconds": {
-          "type": "number",
-          "description": "Factory-declared active-time limit in seconds before any run/resume caller override is applied."
-        },
-        "declaredMaxAiCredits": {
-          "type": "number",
-          "description": "Factory-declared AI-credit limit before any run/resume caller override is applied."
-        },
-        "approvalKey": {
-          "type": "string",
-          "description": "Canonical key used for scoped factory approvals"
-        },
-        "canPersistApproval": {
-          "type": "boolean",
-          "description": "Whether this factory is eligible for persistent approval"
-        }
-      },
-      "required": [
-        "kind",
-        "operation",
-        "name",
-        "description",
-        "phases",
-        "approvalKey",
-        "canPersistApproval"
-      ],
-      "additionalProperties": false,
-      "description": "Factory run or authoring permission request",
-      "title": "PermissionRequestFactory"
     },
     "PermissionRequestHook": {
       "type": "object",
@@ -15269,6 +14888,100 @@
       "additionalProperties": false,
       "description": "URL access permission request",
       "title": "PermissionRequestUrl"
+    },
+    "PermissionRequestWorkflow": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "workflow",
+          "description": "Permission kind discriminator"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that triggered this permission request"
+        },
+        "operation": {
+          "$ref": "#/definitions/WorkflowPermissionOperation",
+          "description": "Workflow operation, either run or author"
+        },
+        "name": {
+          "type": "string",
+          "description": "Workflow name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Workflow description"
+        },
+        "phases": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/WorkflowPermissionPhase",
+            "description": "A declared phase shown in a workflow permission prompt."
+          },
+          "description": "Declared workflow phases"
+        },
+        "maxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective concurrent-subagent limit; omitted means unlimited"
+        },
+        "maxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Effective total-subagent limit; omitted means unlimited"
+        },
+        "timeoutSeconds": {
+          "type": "number",
+          "description": "Effective active-time limit in seconds; omitted means unlimited"
+        },
+        "maxAiCredits": {
+          "type": "number",
+          "description": "Effective AI-credit limit; omitted means unlimited"
+        },
+        "declaredMaxConcurrentSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Workflow-declared concurrent-subagent limit before any run/resume caller override is applied."
+        },
+        "declaredMaxTotalSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Workflow-declared total-subagent limit before any run/resume caller override is applied."
+        },
+        "declaredTimeoutSeconds": {
+          "type": "number",
+          "description": "Workflow-declared active-time limit in seconds before any run/resume caller override is applied."
+        },
+        "declaredMaxAiCredits": {
+          "type": "number",
+          "description": "Workflow-declared AI-credit limit before any run/resume caller override is applied."
+        },
+        "approvalKey": {
+          "type": "string",
+          "description": "Canonical key used for scoped workflow approvals"
+        },
+        "canPersistApproval": {
+          "type": "boolean",
+          "description": "Whether this workflow is eligible for persistent approval"
+        },
+        "managedApprovalRequired": {
+          "type": "boolean",
+          "description": "Whether managed policy requires a human response and forbids host auto-approval"
+        }
+      },
+      "required": [
+        "kind",
+        "operation",
+        "name",
+        "description",
+        "phases",
+        "approvalKey",
+        "canPersistApproval"
+      ],
+      "additionalProperties": false,
+      "description": "Workflow run or authoring permission request",
+      "title": "PermissionRequestWorkflow"
     },
     "PermissionRequestWrite": {
       "type": "object",
@@ -17906,27 +17619,27 @@
         },
         {
           "$ref": "#/definitions/PermissionCarriedForwardEvent",
-          "description": "Session event \"permission.carriedForward\". Records that a live authorization record from an earlier human decision in this session contained a permission proposal, so it ran without another prompt. This mints no authority: it accounts for one more effect against the prior grant, which is what lets a replayed session agree with the live one about how much of that grant is left."
+          "description": "Session event \"permission.carriedForward\". Historical decode-only receipt from the retired Assisted Permissions authorization extractor. Current runtimes ignore it for permission decisions."
         },
         {
           "$ref": "#/definitions/PermissionMessageAuthorizationEvent",
-          "description": "Session event \"permission.messageAuthorization\". Freezes one blinded, verbatim-verified authorization claim the runtime minted from a human user message, so a resumed session re-establishes the same grant deterministically instead of re-running the extraction model. This mints no authority on its own: it records what a blinded proposer pointed at and the trusted discriminator the runtime established, and deterministic establishment runs on replay. Persisted so recorded authority survives compaction and process resume."
+          "description": "Session event \"permission.messageAuthorization\". Historical decode-only claim from the retired Assisted Permissions authorization extractor. Current runtimes preserve the payload but do not establish authority from it."
         },
         {
           "$ref": "#/definitions/PermissionMessageAuthorizationReadEvent",
-          "description": "Session event \"permission.messageAuthorizationRead\". Records that one human turn has been read by the blinded authorization proposer, whether or not it minted anything, so a resumed session does not re-run the extraction model on a turn the live session already read. Also records whether that pass activates ongoing extraction; contextual-assent-only passes do not, so unrelated future messages remain outside extraction."
+          "description": "Session event \"permission.messageAuthorizationRead\". Historical decode-only extractor progress marker. Current runtimes do not run or resume extraction from it."
         },
         {
           "$ref": "#/definitions/PermissionMessageAuthorizationDegradedEvent",
-          "description": "Session event \"permission.messageAuthorizationDegraded\". Records that message-backed authorization could not safely represent one human turn before compaction. The runtime may compact the original message after this marker is durable, but message-derived carry-forward and assisted auto-approval remain disabled for the rest of the session so subsequent commands continue through the ordinary permission prompt."
+          "description": "Session event \"permission.messageAuthorizationDegraded\". Historical decode-only degradation marker from the retired extractor. Current runtimes ignore it for permission decisions."
         },
         {
           "$ref": "#/definitions/PermissionAssentDetectedEvent",
-          "description": "Session event \"permission.assentDetected\". Records that deterministic text recognition found likely assent in the human turn immediately following a root Autopilot permission request that was blocked because no interactive response was available. This event grants no authority; its model-facing projection only suggests retrying the unchanged operation."
+          "description": "Session event \"permission.assentDetected\". Historical decode-only contextual-assent marker. Current runtimes do not project it into the conversation or permission flow."
         },
         {
           "$ref": "#/definitions/PermissionContextualAuthorizationEvent",
-          "description": "Session event \"permission.contextualAuthorization\". Freezes a blinded contextual authorization proposal whose verbatim human span was deterministically bound to the immediately preceding blocked permission request. The event carries no action fields; replay re-derives the exact action from the earlier permission request and mints a one-shot message grant only when the binding and span still verify."
+          "description": "Session event \"permission.contextualAuthorization\". Historical decode-only contextual authorization claim. Current runtimes preserve the payload but do not establish authority from it."
         },
         {
           "$ref": "#/definitions/UserInputRequestedEvent",
@@ -18049,16 +17762,16 @@
           "description": "Session event \"session.background_tasks_changed\". Empty payload for `session.background_tasks_changed`, indicating background task state changed."
         },
         {
-          "$ref": "#/definitions/FactoryRunUpdatedEvent",
-          "description": "Session event \"factory.run_updated\". Ephemeral invalidation signal for a changed factory run."
+          "$ref": "#/definitions/WorkflowRunUpdatedEvent",
+          "description": "Session event \"workflow.run_updated\". Ephemeral invalidation signal for a changed workflow run."
         },
         {
-          "$ref": "#/definitions/FactoryRunStartedEvent",
-          "description": "Session event \"factory.run_started\". Ephemeral signal that a factory run attempt began executing."
+          "$ref": "#/definitions/WorkflowRunStartedEvent",
+          "description": "Session event \"workflow.run_started\". Ephemeral signal that a workflow run attempt began executing."
         },
         {
-          "$ref": "#/definitions/FactoryRunSettledEvent",
-          "description": "Session event \"factory.run_settled\". Ephemeral signal that a factory run reached a terminal status."
+          "$ref": "#/definitions/WorkflowRunSettledEvent",
+          "description": "Session event \"workflow.run_settled\". Ephemeral signal that a workflow run reached a terminal status."
         },
         {
           "$ref": "#/definitions/SkillsLoadedEvent",
@@ -20156,7 +19869,7 @@
         },
         "taskModelSource": {
           "$ref": "#/definitions/SubagentTaskModelSource",
-          "description": "Where the model input for this sub-agent came from. Present when the task planner resolved the launch (the task tool and factory agents); absent for sub-agents created through other runtime paths."
+          "description": "Where the model input for this sub-agent came from. Present when the task planner resolved the launch (the task tool and workflow agents); absent for sub-agents created through other runtime paths."
         },
         "modelSelectionSource": {
           "$ref": "#/definitions/SubagentModelSelectionSource",
@@ -20164,7 +19877,11 @@
         },
         "factoryRunId": {
           "type": "string",
-          "description": "Root id of the factory run that spawned this sub-agent, when it was spawned by one."
+          "description": "Legacy root id of the workflow run that spawned this sub-agent. New consumers should use workflowRunId."
+        },
+        "workflowRunId": {
+          "type": "string",
+          "description": "Root id of the workflow run that spawned this sub-agent, when it was spawned by one."
         },
         "parentId": {
           "type": "string",
@@ -20440,8 +20157,8 @@
           "description": "System notification metadata for an instruction file discovered during tool access, including source, trigger file, and tool."
         },
         {
-          "$ref": "#/definitions/SystemNotificationFactoryCompleted",
-          "description": "System notification metadata for a factory execution attempt that reached a terminal state."
+          "$ref": "#/definitions/SystemNotificationWorkflowCompleted",
+          "description": "System notification metadata for a workflow execution attempt that reached a terminal state."
         },
         {
           "$ref": "#/definitions/SystemNotificationUnclassified",
@@ -20619,134 +20336,6 @@
       "description": "Session event \"system.notification\". System-generated notification for runtime events like background task completion",
       "title": "SystemNotificationEvent"
     },
-    "SystemNotificationFactoryCompleted": {
-      "type": "object",
-      "properties": {
-        "type": {
-          "type": "string",
-          "const": "factory_completed",
-          "description": "Type discriminator. Always \"factory_completed\"."
-        },
-        "runId": {
-          "type": "string",
-          "description": "Factory run identifier."
-        },
-        "factoryName": {
-          "type": "string",
-          "description": "Persisted factory name."
-        },
-        "status": {
-          "$ref": "#/definitions/SystemNotificationFactoryCompletedStatus",
-          "description": "Terminal status reached by this execution attempt."
-        },
-        "consumedSubagents": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Subagents consumed by the run across all attempts."
-        },
-        "elapsedMs": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Accumulated active execution time in milliseconds."
-        },
-        "consumedNanoAiu": {
-          "type": "integer",
-          "minimum": 0,
-          "description": "Consumed AI usage in nano-AIU."
-        },
-        "attempt": {
-          "type": "integer",
-          "minimum": 1,
-          "description": "Execution attempt that reached this terminal state."
-        },
-        "resultPreview": {
-          "type": "string",
-          "maxLength": 256,
-          "description": "Bounded prompt-safe preview of the completed result."
-        },
-        "failure": {
-          "description": "Machine-readable terminal failure details, when present.",
-          "x-opaque-json": true
-        },
-        "retryGuidance": {
-          "type": "string",
-          "description": "Actionable run_factory resume guidance for a resource-limit failure."
-        },
-        "pauseInfo": {
-          "$ref": "#/definitions/SystemNotificationFactoryPauseInfo",
-          "description": "Pause initiator metadata when this attempt settled as paused."
-        }
-      },
-      "required": [
-        "type",
-        "runId",
-        "factoryName",
-        "status",
-        "consumedSubagents",
-        "elapsedMs",
-        "consumedNanoAiu",
-        "attempt"
-      ],
-      "additionalProperties": false,
-      "description": "System notification metadata for a factory execution attempt that reached a terminal state.",
-      "title": "SystemNotificationFactoryCompleted"
-    },
-    "SystemNotificationFactoryCompletedStatus": {
-      "type": "string",
-      "enum": [
-        "completed",
-        "halted",
-        "paused",
-        "cancelled",
-        "error"
-      ],
-      "description": "Terminal status reached by a factory execution attempt.",
-      "title": "SystemNotificationFactoryCompletedStatus",
-      "x-enumDescriptions": {
-        "completed": "The factory completed successfully.",
-        "halted": "The factory was halted.",
-        "paused": "The factory attempt paused intentionally.",
-        "cancelled": "The factory was cancelled.",
-        "error": "The factory failed."
-      }
-    },
-    "SystemNotificationFactoryPauseInfo": {
-      "anyOf": [
-        {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "const": "user",
-              "description": "Factory pause initiator discriminator."
-            }
-          },
-          "required": [
-            "type"
-          ]
-        },
-        {
-          "type": "object",
-          "properties": {
-            "key": {
-              "type": "string",
-              "description": "Stable author-defined checkpoint key that initiated the pause."
-            },
-            "type": {
-              "type": "string",
-              "const": "checkpoint",
-              "description": "Factory pause initiator discriminator."
-            }
-          },
-          "required": [
-            "type",
-            "key"
-          ]
-        }
-      ],
-      "description": "Durable metadata describing who initiated a factory pause.",
-      "title": "SystemNotificationFactoryPauseInfo"
-    },
     "SystemNotificationInstructionDiscovered": {
       "type": "object",
       "properties": {
@@ -20891,6 +20480,134 @@
       "additionalProperties": false,
       "description": "System notification metadata from an external host that does not match a runtime-owned notification kind.",
       "title": "SystemNotificationUnclassified"
+    },
+    "SystemNotificationWorkflowCompleted": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workflow_completed",
+          "description": "Type discriminator. Always \"workflow_completed\"."
+        },
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Persisted workflow name."
+        },
+        "status": {
+          "$ref": "#/definitions/SystemNotificationWorkflowCompletedStatus",
+          "description": "Terminal status reached by this execution attempt."
+        },
+        "consumedSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Subagents consumed by the run across all attempts."
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Accumulated active execution time in milliseconds."
+        },
+        "consumedNanoAiu": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Consumed AI usage in nano-AIU."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Execution attempt that reached this terminal state."
+        },
+        "resultPreview": {
+          "type": "string",
+          "maxLength": 256,
+          "description": "Bounded prompt-safe preview of the completed result."
+        },
+        "failure": {
+          "description": "Machine-readable terminal failure details, when present.",
+          "x-opaque-json": true
+        },
+        "retryGuidance": {
+          "type": "string",
+          "description": "Actionable run_dynamic_workflow resume guidance for a resource-limit failure."
+        },
+        "pauseInfo": {
+          "$ref": "#/definitions/SystemNotificationWorkflowPauseInfo",
+          "description": "Pause initiator metadata when this attempt settled as paused."
+        }
+      },
+      "required": [
+        "type",
+        "runId",
+        "workflowName",
+        "status",
+        "consumedSubagents",
+        "elapsedMs",
+        "consumedNanoAiu",
+        "attempt"
+      ],
+      "additionalProperties": false,
+      "description": "System notification metadata for a workflow execution attempt that reached a terminal state.",
+      "title": "SystemNotificationWorkflowCompleted"
+    },
+    "SystemNotificationWorkflowCompletedStatus": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "halted",
+        "paused",
+        "cancelled",
+        "error"
+      ],
+      "description": "Terminal status reached by a workflow execution attempt.",
+      "title": "SystemNotificationWorkflowCompletedStatus",
+      "x-enumDescriptions": {
+        "completed": "The workflow completed successfully.",
+        "halted": "The workflow was halted.",
+        "paused": "The workflow attempt paused intentionally.",
+        "cancelled": "The workflow was cancelled.",
+        "error": "The workflow failed."
+      }
+    },
+    "SystemNotificationWorkflowPauseInfo": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "const": "user",
+              "description": "Workflow pause initiator discriminator."
+            }
+          },
+          "required": [
+            "type"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "key": {
+              "type": "string",
+              "description": "Stable author-defined checkpoint key that initiated the pause."
+            },
+            "type": {
+              "type": "string",
+              "const": "checkpoint",
+              "description": "Workflow pause initiator discriminator."
+            }
+          },
+          "required": [
+            "type",
+            "key"
+          ]
+        }
+      ],
+      "description": "Durable metadata describing who initiated a workflow pause.",
+      "title": "SystemNotificationWorkflowPauseInfo"
     },
     "TaskBlocker": {
       "type": "object",
@@ -23353,8 +23070,8 @@
           "description": "Session-scoped tool-approval rule for extension-management operations, optionally narrowed by operation."
         },
         {
-          "$ref": "#/definitions/UserToolSessionApprovalFactory",
-          "description": "Session-scoped factory approval, optionally narrowed by approval key."
+          "$ref": "#/definitions/UserToolSessionApprovalWorkflow",
+          "description": "Session-scoped workflow approval, optionally narrowed by approval key."
         },
         {
           "$ref": "#/definitions/UserToolSessionApprovalExtensionPermissionAccess",
@@ -23484,26 +23201,6 @@
       "description": "Session-scoped tool-approval rule for an extension's permission-gated capability access, keyed by extension name.",
       "title": "UserToolSessionApprovalExtensionPermissionAccess"
     },
-    "UserToolSessionApprovalFactory": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "const": "factory",
-          "description": "Factory approval kind"
-        },
-        "approvalKey": {
-          "type": "string",
-          "description": "Optional factory operation name or canonical approval key"
-        }
-      },
-      "required": [
-        "kind"
-      ],
-      "additionalProperties": false,
-      "description": "Session-scoped factory approval, optionally narrowed by approval key.",
-      "title": "UserToolSessionApprovalFactory"
-    },
     "UserToolSessionApprovalMcp": {
       "type": "object",
       "properties": {
@@ -23564,6 +23261,26 @@
       "additionalProperties": false,
       "description": "Session-scoped tool-approval rule for read-only filesystem operations.",
       "title": "UserToolSessionApprovalRead"
+    },
+    "UserToolSessionApprovalWorkflow": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "workflow",
+          "description": "Workflow approval kind"
+        },
+        "approvalKey": {
+          "type": "string",
+          "description": "Optional workflow operation name or canonical approval key"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "Session-scoped workflow approval, optionally narrowed by approval key.",
+      "title": "UserToolSessionApprovalWorkflow"
     },
     "UserToolSessionApprovalWrite": {
       "type": "object",
@@ -23677,6 +23394,320 @@
       "additionalProperties": false,
       "description": "Session event \"session.warning\". Warning message for timeline display with categorization",
       "title": "WarningEvent"
+    },
+    "WorkflowPermissionOperation": {
+      "type": "string",
+      "enum": [
+        "run",
+        "author"
+      ],
+      "description": "Operation gated by a workflow permission request.",
+      "title": "WorkflowPermissionOperation",
+      "x-enumDescriptions": {
+        "run": "Running a registered workflow, which spends subagents, active time, and AI credits under the approved limits.",
+        "author": "Authoring a workflow, which writes JavaScript into a session-scoped extension and loads it."
+      }
+    },
+    "WorkflowPermissionPhase": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Phase title"
+        },
+        "detail": {
+          "type": "string",
+          "description": "Optional phase detail"
+        }
+      },
+      "required": [
+        "title"
+      ],
+      "additionalProperties": false,
+      "description": "A declared phase shown in a workflow permission prompt.",
+      "title": "WorkflowPermissionPhase"
+    },
+    "WorkflowRunSettledData": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Identifier of the workflow run that settled."
+        },
+        "status": {
+          "$ref": "#/definitions/WorkflowRunSettledStatus",
+          "description": "Terminal status the run committed."
+        },
+        "consumedSubagents": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Subagents this run consumed against its limits."
+        },
+        "consumedNanoAiu": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "AI credits this run consumed, in nano-AIU."
+        },
+        "elapsedMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Active milliseconds accumulated across every attempt of this run."
+        },
+        "failureType": {
+          "type": "string",
+          "description": "Typed failure class recorded on the run, when it failed with one (e.g. `workflow_limit_reached`)."
+        }
+      },
+      "required": [
+        "runId",
+        "status",
+        "consumedSubagents",
+        "consumedNanoAiu",
+        "elapsedMs"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral signal that a workflow run reached a terminal status.",
+      "title": "WorkflowRunSettledData",
+      "stability": "experimental"
+    },
+    "WorkflowRunSettledEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "workflow.run_settled",
+          "description": "Type discriminator. Always \"workflow.run_settled\"."
+        },
+        "data": {
+          "$ref": "#/definitions/WorkflowRunSettledData",
+          "description": "Ephemeral signal that a workflow run reached a terminal status."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"workflow.run_settled\". Ephemeral signal that a workflow run reached a terminal status.",
+      "title": "WorkflowRunSettledEvent",
+      "stability": "experimental"
+    },
+    "WorkflowRunSettledStatus": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "halted",
+        "paused",
+        "cancelled",
+        "error"
+      ],
+      "description": "Terminal status a workflow run committed. A settled run is never `pending` or `running`, so those two members of the run-status domain are deliberately absent.",
+      "title": "WorkflowRunSettledStatus",
+      "x-enumDescriptions": {
+        "completed": "The workflow body resolved and its result was committed.",
+        "halted": "The run was stopped by a limit, an approval refusal or another policy decision.",
+        "paused": "The attempt paused intentionally while preserving resumable run state.",
+        "cancelled": "The run was cancelled by its caller or by session disposal.",
+        "error": "The run failed, with `failureType` carrying the class when it has one."
+      }
+    },
+    "WorkflowRunStartedData": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Identifier of the workflow run that started."
+        },
+        "workflowName": {
+          "type": "string",
+          "description": "Name of the workflow this run executes. Low cardinality by construction."
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Attempt number this start committed; a resumed run increments it."
+        }
+      },
+      "required": [
+        "runId",
+        "workflowName",
+        "attempt"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral signal that a workflow run attempt began executing.",
+      "title": "WorkflowRunStartedData",
+      "stability": "experimental"
+    },
+    "WorkflowRunStartedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "workflow.run_started",
+          "description": "Type discriminator. Always \"workflow.run_started\"."
+        },
+        "data": {
+          "$ref": "#/definitions/WorkflowRunStartedData",
+          "description": "Ephemeral signal that a workflow run attempt began executing."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"workflow.run_started\". Ephemeral signal that a workflow run attempt began executing.",
+      "title": "WorkflowRunStartedEvent",
+      "stability": "experimental"
+    },
+    "WorkflowRunUpdatedData": {
+      "type": "object",
+      "properties": {
+        "runId": {
+          "type": "string",
+          "description": "Workflow run identifier."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Monotonic revision now available for the run."
+        }
+      },
+      "required": [
+        "runId",
+        "revision"
+      ],
+      "additionalProperties": false,
+      "description": "Ephemeral invalidation signal for a changed workflow run.",
+      "title": "WorkflowRunUpdatedData",
+      "stability": "experimental"
+    },
+    "WorkflowRunUpdatedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "workflow.run_updated",
+          "description": "Type discriminator. Always \"workflow.run_updated\"."
+        },
+        "data": {
+          "$ref": "#/definitions/WorkflowRunUpdatedData",
+          "description": "Ephemeral invalidation signal for a changed workflow run."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"workflow.run_updated\". Ephemeral invalidation signal for a changed workflow run.",
+      "title": "WorkflowRunUpdatedEvent",
+      "stability": "experimental"
     },
     "WorkingDirectoryContext": {
       "type": "object",

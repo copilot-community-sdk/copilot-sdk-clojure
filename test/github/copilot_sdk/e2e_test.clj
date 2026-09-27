@@ -267,15 +267,18 @@
 (deftest ^:e2e test-e2e-list-sessions
   (when-e2e
    (testing "List sessions with real CLI"
-     (let [session (sdk/create-session *e2e-client* {:on-permission-request sdk/approve-all})
+     (let [session (sdk/create-session *e2e-client*
+                                       {:on-permission-request sdk/approve-all
+                                        :available-tools []})
             ;; Send a message to ensure session is persisted
-           _ (sdk/send-and-wait! session {:prompt "test"})
-           sessions (sdk/list-sessions *e2e-client*)]
-        ;; Should have at least the session we just created
-       (is (vector? sessions))
-       (is (some #(= (sdk/session-id session) (:session-id %)) sessions))
-        ;; Clean up
-       (sdk/destroy! session)))))
+           prompt {:prompt "Reply with exactly PERSISTED. Do not run commands."}]
+       (try
+         (sdk/send-and-wait! session prompt)
+         (let [sessions (sdk/list-sessions *e2e-client*)]
+           (is (vector? sessions))
+           (is (some #(= (sdk/session-id session) (:session-id %)) sessions)))
+         (finally
+           (sdk/destroy! session)))))))
 
 (deftest ^:e2e test-e2e-session-abort
   (when-e2e

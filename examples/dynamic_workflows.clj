@@ -1,9 +1,9 @@
-(ns agent-factories
-  "Experimental Agent Factories API: define a factory, join the parent CLI
-   session as a child extension, and service reverse-RPC factory runs until
+(ns dynamic-workflows
+  "Experimental Dynamic Workflows API: define a workflow, join the parent CLI
+   session as a child extension, and service reverse-RPC workflow runs until
    the parent session ends.
 
-   An Agent Factory is a named, reusable multi-step routine (with declared
+   A Dynamic Workflow is a named, reusable multi-step routine (with declared
    phases and optional resource limits) that an extension registers on join. The
    *parent* Copilot CLI session (or another script driving that session)
    triggers runs by name; this process only defines and services them - it
@@ -16,27 +16,27 @@
 ;; environment), so it is intentionally excluded from run-all-examples.sh.
 
 (def defaults
-  {:factory-name "clj-example-review"
+  {:workflow-name "clj-example-review"
    :shutdown-timeout-ms 5000})
 
 ;; -----------------------------------------------------------------------
-;; Factory definition
+;; Workflow definition
 ;; -----------------------------------------------------------------------
 
 (defn- validate-args!
-  "Validate the map a caller passes as factory run args (`(:args context)`).
-   `define-factory` already validates :meta/:phases/:limits; a factory's
+  "Validate the map a caller passes as workflow run args (`(:args context)`).
+   `define-workflow` already validates :meta/:phases/:limits; a workflow's
    :run function is responsible for validating its own runtime args."
   [args]
   (when-not (map? args)
-    (throw (ex-info "Factory args must be a map" {:args args})))
+    (throw (ex-info "Workflow args must be a map" {:args args})))
   (let [topic (:topic args)]
     (when-not (and (string? topic) (not (str/blank? topic)))
-      (throw (ex-info "Factory args require a non-blank :topic string" {:args args})))
+      (throw (ex-info "Workflow args require a non-blank :topic string" {:args args})))
     topic))
 
-(defn- run-review-factory
-  "The factory's :run function. Receives the factory-execution context map
+(defn- run-review-workflow
+  "The workflow's :run function. Receives the workflow-execution context map
    (:args :agent :step :parallel :phase :log, among others) and returns a
    JSON-safe result. Demonstrates phase, log, agent, step, and parallel."
   [{:keys [args agent step parallel phase log]}]
@@ -61,15 +61,15 @@
          :context context
          :risks risks}))))
 
-(def review-factory
-  "A FactoryHandle registered with the parent session in `run` below."
-  (copilot/define-factory
-    {:meta {:name (:factory-name defaults)
+(def review-workflow
+  "A WorkflowHandle registered with the parent session in `run` below."
+  (copilot/define-workflow
+    {:meta {:name (:workflow-name defaults)
             :description "Reviews a topic across plan, gather, and summarize phases."
             :phases [{:title "Plan" :detail "Outline the review approach"}
                      {:title "Gather" :detail "Collect context and risks in parallel"}
                      {:title "Summarize" :detail "Compose the final result"}]}
-     :run run-review-factory}))
+     :run run-review-workflow}))
 
 ;; -----------------------------------------------------------------------
 ;; Extension entry point
@@ -105,20 +105,20 @@
                           (:shutdown-timeout-ms defaults))))))
 
 (defn run
-  "Join the parent Copilot CLI session, register `review-factory`, and block
+  "Join the parent Copilot CLI session, register `review-workflow`, and block
    until the parent session ends (or the process is interrupted).
 
    Requires the SESSION_ID environment variable - see examples/README.md."
   [_]
   (when-not (System/getenv "SESSION_ID")
-    (throw (ex-info (str "agent-factories requires SESSION_ID: run this example as a child "
+    (throw (ex-info (str "dynamic-workflows requires SESSION_ID: run this example as a child "
                          "process of a live Copilot CLI extension session (see examples/README.md).")
                     {})))
-  (let [{:keys [client session]} (copilot/join-session {:factories [review-factory]})
+  (let [{:keys [client session]} (copilot/join-session {:workflows [review-workflow]})
         parent-session-id (copilot/session-id session)
         cleaned? (atom false)
         done (promise)]
-    (println "Registered factory" (str "\"" (:factory-name defaults) "\"")
+    (println "Registered workflow" (str "\"" (:workflow-name defaults) "\"")
              "on session" parent-session-id)
     (.addShutdownHook (Runtime/getRuntime)
                       (Thread. (fn [] (stop-once! cleaned? client))))
@@ -127,8 +127,8 @@
                                   (when (= (:session-id event) parent-session-id)
                                     (println "Parent session ended.")
                                     (deliver done :session-ended))))
-    (println "Waiting for the parent session to trigger a factory run")
-    (println "   (e.g. via run-factory! from another script or the CLI itself).")
+    (println "Waiting for the parent session to trigger a workflow run")
+    (println "   (e.g. via run-workflow! from another script or the CLI itself).")
     (println "   Ctrl-C, or end the parent session, to exit.")
     (try
       (deref done)

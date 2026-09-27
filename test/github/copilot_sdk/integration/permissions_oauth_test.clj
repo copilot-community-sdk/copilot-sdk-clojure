@@ -9,7 +9,7 @@
             [clojure.tools.logging.test :as log-test]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.session :as session]
@@ -140,19 +140,23 @@
     (doseq [policy [:managed/disable nil 42]]
       (is (not (s/valid? ::specs/disable-bypass-permissions-mode policy))))))
 
-(deftest test-factory-permission-request-spec
-  (let [request {:permission-kind :factory
+(deftest test-workflow-permission-request-spec
+  (let [request {:permission-kind :workflow
                  :operation "run"
                  :name "review"
                  :description "Review changed files"
                  :phases [{:title "Review"}]
-                 :approval-key "factory:review"
+                 :approval-key "workflow:review"
                  :can-persist-approval true
                  :max-concurrent-subagents 0
                  :max-total-subagents 5
                  :timeout-seconds 30.5
                  :max-ai-credits 2}]
     (is (s/valid? ::specs/permission-request request))
+    (doseq [required [false true nil]]
+      (is (= (s/valid? ::specs/permission-request
+                       (assoc request :managed-approval-required required))
+             (boolean? required))))
     (is (not (s/valid? ::specs/permission-request (dissoc request :name))))
     (is (not (s/valid? ::specs/permission-request (dissoc request :description))))
     (is (not (s/valid? ::specs/permission-request

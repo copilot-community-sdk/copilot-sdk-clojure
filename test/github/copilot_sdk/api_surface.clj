@@ -21,7 +21,7 @@
             [clojure.string :as str]
             [github.copilot-sdk]
             [github.copilot-sdk.client]
-            [github.copilot-sdk.factory]
+            [github.copilot-sdk.workflow]
             [github.copilot-sdk.helpers]
             [github.copilot-sdk.logging]
             [github.copilot-sdk.session]
@@ -35,7 +35,7 @@
   (sorted-set
    'github.copilot-sdk
    'github.copilot-sdk.client
-   'github.copilot-sdk.factory
+   'github.copilot-sdk.workflow
    'github.copilot-sdk.helpers
    'github.copilot-sdk.instrument
    'github.copilot-sdk.logging
@@ -47,11 +47,11 @@
 (def ^:private idiom-spec-ns 'github.copilot-sdk.specs)
 
 (def ^:private named-var-exclusions
-  {'github.copilot-sdk.factory
-   {'->FactoryHandle
-    "Compiler-generated positional constructor for the private FactoryHandle record."
-    'map->FactoryHandle
-    "Compiler-generated map constructor for the private FactoryHandle record."}
+  {'github.copilot-sdk.workflow
+   {'->WorkflowHandle
+    "Compiler-generated positional constructor for the private WorkflowHandle record."
+    'map->WorkflowHandle
+    "Compiler-generated map constructor for the private WorkflowHandle record."}
    'github.copilot-sdk.session
    {'->CopilotSession
     "Compiler-generated positional constructor; sessions are created by the client API."

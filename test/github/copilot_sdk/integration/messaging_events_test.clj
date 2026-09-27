@@ -9,7 +9,7 @@
             [clojure.tools.logging.test :as log-test]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.client :as client]
-            [github.copilot-sdk.factory :as factory]
+            [github.copilot-sdk.workflow :as workflow]
             [github.copilot-sdk.protocol :as protocol]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.session :as session]
