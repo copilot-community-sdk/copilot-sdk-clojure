@@ -12,7 +12,7 @@
 (def ^:private base "4001c1da7d832c51bad1d38619c1a082af390efb")
 (def ^:private target "d106d29dc6c5112da2abdae59008571b6692f12b")
 (def ^:private clojure-base "ce48c20ad87782198a0db762d920b5f3bc5f69b6")
-(def ^:private implementation "0482ca133c4616cc42b69b6fbd5a491256f56775")
+(def ^:private implementation "c8dc16971ef5c831528d1c4f3687d66af344286f")
 (def ^:private classifications
   #{:stable-public :experimental :internal :generated-only :language-specific})
 (def ^:private authority-paths
@@ -24,7 +24,11 @@
 (def ^:private additional-spec-keys
   #{:github.copilot-sdk.specs/assistant.turn_end-data
     :github.copilot-sdk.specs/workflow-run-id
-    :github.copilot-sdk.specs/workflow-limit-overrides})
+    :github.copilot-sdk.specs/workflow-limit-overrides
+    :github.copilot-sdk.specs/workflow-progress-options})
+(def ^:private changed-fdefs
+  #{'github.copilot-sdk.workflow/get-run-progress
+    'github.copilot-sdk.workflow/<get-run-progress})
 
 (defn- report []
   (or (ss/read-resource resource)
@@ -231,16 +235,32 @@
         (keyword (rename (subs (str value) 1)))))
     value))
 
-(deftest snapshot-changes-only-the-declared-migration-and-event-spec-keys
+(defn- apply-progress-argument-contracts [snapshot]
+  (reduce
+   (fn [surface fdef]
+     (update-in
+      surface [:namespaces 'github.copilot-sdk.workflow :fdefs fdef]
+      #(walk/postwalk
+        (fn [form]
+          (if (= form '(clojure.spec.alpha/? clojure.core/map?))
+            '(clojure.spec.alpha/? :github.copilot-sdk.specs/workflow-progress-options)
+            form))
+        %)))
+   snapshot
+   changed-fdefs))
+
+(deftest snapshot-changes-only-the-declared-contracts
   (let [r (report)
         path "resources/github/copilot_sdk/api_surface.edn"
         old (edn/read-string (local-source clojure-base path))
         new (edn/read-string (local-source implementation path))
         spec-path [:namespaces 'github.copilot-sdk.specs :spec-keys]
         expected (-> (walk/postwalk migrate-api-name old)
-                     (update-in spec-path #(vec (sort (into (set %) additional-spec-keys)))))]
+                     (update-in spec-path #(vec (sort (into (set %) additional-spec-keys))))
+                     apply-progress-argument-contracts)]
     (is (= new expected))
     (is (= (get-in r [:api-snapshot-impact :additional-spec-keys]) additional-spec-keys))
+    (is (= (get-in r [:api-snapshot-impact :non-migration-fdef-changes]) changed-fdefs))
     (is (= (get-in r [:api-snapshot-impact :added-spec-keys])
            (set/difference (set (get-in new spec-path)) (set (get-in old spec-path)))))
     (is (= (get-in r [:api-snapshot-impact :removed-spec-keys])
@@ -306,5 +326,9 @@
     (is (not (str/includes? source "(s/def ::model.call_start-data")))
     (is (= (get-in api ["clientSession" "workflow" "execute" "rpcMethod"]) "workflow.execute"))
     (is (= (get-in api ["clientSession" "workflow" "abort" "rpcMethod"]) "workflow.abort"))
+    (is (= (set (keys (get-in api ["definitions" "WorkflowGetRunProgressRequest" "properties"])))
+           #{"runId" "phaseId" "afterSeq" "beforeSeq" "limit"}))
+    (is (= (get-in api ["definitions" "WorkflowGetRunProgressRequest" "properties" "limit" "minimum"]) 1))
+    (is (= (get-in api ["definitions" "WorkflowGetRunProgressRequest" "properties" "limit" "maximum"]) 500))
     (is (nil? (get-in api ["clientSession" "factory"])))
     (is (nil? (get-in api ["session" "factory"])))))

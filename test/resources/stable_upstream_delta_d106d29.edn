@@ -35,9 +35,9 @@
   ".github/workflows/ci.yml"
   "c4810ecfc89e7e4fcf3ea2b45091e9998fc82b7f340d406c02c378e7ec0f3319",
   "CHANGELOG.md"
-  "e420d9802ef1d05828a2ebd3835ce48dc4096df6e301fe4c20bd0e4ba090c219",
+  "e7ebafaad29e491e7d4fae5c06b7f02620d18e87c81f30de7a9350dac1101af9",
   "README.md"
-  "d35c8f0bcb395fe88629e4af6e176274e96be837ef07544813a22035d5722170",
+  "4f94c70a2da260f715a163f8ba66968bee8fd5d9cc63e3b80117a352c25a0cdd",
   "deps.edn"
   "ec07cf3d799dcb354766ff7af7b0565cff218e1ecc7811a3a342b8689b06b33b",
   "doc/adr/2026-09-27-dynamic-workflow-migration.md"
@@ -49,7 +49,7 @@
   "doc/api/2026-09-27-dynamic-workflow-migration.html"
   "8bbe8c3d8dc853a27284a5831a52b576240b0f8019538157bd94ef05abd87110",
   "doc/api/API.html"
-  "b174fc0ecd907e324211785da68b9f2ba74419e3aeecf54b222726cfaa501237",
+  "5c4d5973da3b1f50d582f772fe7c53aeed4e40c1ebfefb1c269f95b2d0efc958",
   "doc/api/azure-managed-identity.html"
   "2bf600d3940839254e0a536a2f1d6abf8ca6b2db02dca5d1b4edf651679ef984",
   "doc/api/byok.html"
@@ -65,9 +65,9 @@
   "doc/api/doc-index.html"
   "51d6fd164a8b63231620c81eef6ba41e0ecd4b9d7203a59732252235004abcab",
   "doc/api/dynamic-workflows.html"
-  "e16f3c0fc399c9e969b3554962ce48e357dc74a359e60018a86c1194a5c58511",
+  "f589da1d54e3860fd279269e66120a3c7600f7be8d70aab339c65bb8935a4754",
   "doc/api/getting-started.html"
-  "77a71ff262bc6119e513a3a3d23abbf33b54e57a1372e5567202b4e2c4869775",
+  "bbd7c80dd31422d907042373e60959b9aafb35dc8cc4b3a90652b2f1d62f09da",
   "doc/api/github.copilot-sdk.client.html"
   "1285e871f944b3892698060d2d7a24d77ad06c2493d90d57f32678fae19605b5",
   "doc/api/github.copilot-sdk.generated.coerce.html"
@@ -101,7 +101,7 @@
   "doc/api/github.copilot-sdk.util.html"
   "4c09da592834253be6684a5259d5c1fa8a16ad872015953f7f93e4b3f32c1f4a",
   "doc/api/github.copilot-sdk.workflow.html"
-  "8de6138564e9a6ad08abb471ab55a60dcc10328372229e6de3ce9c6ae20c5b2a",
+  "4c2c855ad0092316ae883594b133bb32739e6761f47bf22923fc31a6205bb90a",
   "doc/api/index.html"
   "3da6bf75f43356b435a091dc792212d95fe451dd6df3daab2101054aa5fb1ded",
   "doc/api/overview.html"
@@ -113,13 +113,13 @@
   "doc/api/upstream-doc-gap-matrix.html"
   "bc4ed885e0b76d676fe9e1d59d62021ba38c35a7a39d61b00fb6fd5524375b17",
   "doc/getting-started.md"
-  "152432917ea59ab548df9895f4201f381e2edbda7732504a77cc8bcb745bb409",
+  "133aecb8e9ba5666e8b379f23db1b41e7297459086303d5b2a3a211ff91bc265",
   "doc/guides/dynamic-workflows.md"
-  "cbc5201e756e3268564395422d2238254b663de491a4ccda602d6a743dae7136",
+  "e11705950ddf9c276e9d2690e9bd69242c63960e901e94102460b75c75266c71",
   "doc/index.md"
   "7db94bf1aeb19c1305e8737881b9b86e21644576c80cf8ac1c45cd797ab5ac2c",
   "doc/reference/API.md"
-  "ce8f45db5a1d5bfd8177217f0a86743abc62f01efd8bf16d7400ef620cb1f33c",
+  "5c4e796d27bad2b324990dd864ed05981e6e952b05f0d515a5d6268ad1874ecf",
   "doc/upstream-doc-gap-matrix.md"
   "028952d651f1724fb83e6f5d4d58586b01a66a5df59b420f83d69ec96d954333",
   "examples/README.md"
@@ -127,7 +127,7 @@
   "examples/dynamic_workflows.clj"
   "e30bb3dc6771a5efbfa449d62b35aead1372c2a142fc489787143b935edd2c74",
   "resources/github/copilot_sdk/api_surface.edn"
-  "d00d71b416a02248a9b978334f1a6fc7b4d6ef158296195e4150f67f2d9e66db",
+  "148e31b1caf55215a7d250375cf2f4b3fef83ce9d6da1642ed3cd96759c07d75",
   "run-all-examples.sh"
   "edbce867bab6af92f78edb19d079b2e5a025e5547dbb521f7cc5c12eb3f52985",
   "schemas/README.md"
@@ -145,7 +145,7 @@
   "src/github/copilot_sdk/generated/event_specs.clj"
   "219846e2e6e8589c43f005e8e6117a0f3c2fdd31c1753fba22e96d59832f81dc",
   "src/github/copilot_sdk/instrument.clj"
-  "23f249ff7436f4aef7094342ef5098c8de174d360b7b37e609e4253b5a5cf883",
+  "c97609f2e65943ee8bdb174863a581c6b7de64ec9f237079aa2856d9b29863c5",
   "src/github/copilot_sdk/process.clj"
   "907778d216d15f3509a73b90a7420961774b3975475395a4fd8331f61c5cd054",
   "src/github/copilot_sdk/protocol.clj"
@@ -153,9 +153,9 @@
   "src/github/copilot_sdk/session.clj"
   "d162f16dc30ea57550eb9e4cd1f28773cbdbe2e45b10aa0eebfa7d4e8797fa42",
   "src/github/copilot_sdk/specs.clj"
-  "6cb651d9ecc5502dd1090a9fab640fd69d3f65a3dcf99090eb4dcce1ba9abe8c",
+  "110cd20a0521885a684077a733ef1836c67514e0da7bb93a2b7bb090ce91fe7b",
   "src/github/copilot_sdk/workflow.clj"
-  "632b16cdfb08e19ddad08d025bb2a2318d15c85899faf5d929db05ac0a53ca62",
+  "7c6a81f46cdc8793883aab481c9575beeac873d2ec7c9d9d85ef799979e02c4d",
   "test/github/copilot_sdk/api_surface.clj"
   "7f133796788206a5871af2c4ef8d8965e5296cbcb388f1dcbb5656f5e39d0ccc",
   "test/github/copilot_sdk/api_surface_test.clj"
@@ -209,15 +209,15 @@
   "test/github/copilot_sdk/integration/upstream_1_0_89_5_test.clj"
   "6b989d1c260de5f85472ea30ee8894685fb2a7467d54905f3ebb481410239a6c",
   "test/github/copilot_sdk/integration/workflow_test.clj"
-  "43923b539f819b4ddb7f20ac4b34fd85dacf3ef9f0e94bd216eeebf256afd54b",
+  "3913b90859fb66c13791aaaa55ac10c94faceb885bf861e7c48b50f8fe4cc4d9",
   "test/github/copilot_sdk/mock_server.clj"
-  "d953fd1e34053f87bf90756ebd17ef78feea6efb4dfc28b7f8567fe391c8f6b0",
+  "9fdeea5afa5213c1788abc42e25492fb0b392f7670beaca40c3b8bcedbed40f6",
   "test/github/copilot_sdk/process_test.clj"
   "b4a9afc39672861fcd30fcd7ba62135813c8eea099b47dc7f5976e6819691733",
   "test/github/copilot_sdk/reverse_rpc_test.clj"
   "f4ccca7a3d04c35487c90133a06ec7916c2e4d1e350d13b76bb8364540886b44",
   "test/github/copilot_sdk/workflow_async_behavior_test.clj"
-  "2a488557b98736f16f7d9ccc7b1fcbfcfacc9e9d09a25de7b299fdb039aee36c"},
+  "1235ca77c16b24deb270998e5f506a1cafdd5d5cafe30ccec80856467d7e3237"},
  :test-inventory
  {"nodejs/test/client.test.ts"
   {:blobs
@@ -1560,7 +1560,7 @@
    :classification :experimental,
    :decision :exclude-new-features,
    :reason
-   "Migration covers the previously supported orchestration footprint, not argsSchema, pause/checkpoint mutations, paging overloads, notification controls, or additional agent options."}
+   "Migration covers the previously supported orchestration footprint, not argsSchema, pause/checkpoint mutations, the list-runs paging overload, notification controls, or additional agent options."}
   {:id :accounts-and-installations,
    :classification :generated-only,
    :decision :no-new-wrapper,
@@ -1616,6 +1616,10 @@
     github.copilot-sdk.workflow-async-behavior-test/workflow-overrides-preserve-unlimited-versus-omitted-ceilings
     github.copilot-sdk.workflow-async-behavior-test/declared-limits-and-invocation-overrides-have-distinct-null-contracts
     github.copilot-sdk.workflow-async-behavior-test/workflow-resume-maps-known-errors-and-passes-through-unknown-errors
+    github.copilot-sdk.workflow-async-behavior-test/declared-numeric-specs-match-workflow-construction
+    github.copilot-sdk.workflow-async-behavior-test/workflow-authoring-rejects-unsupported-metadata
+    github.copilot-sdk.workflow-async-behavior-test/progress-options-cannot-override-owned-identifiers
+    github.copilot-sdk.workflow-async-behavior-test/progress-paging-uses-canonical-keys-and-result-shape
     github.copilot-sdk.integration.upstream-1-0-89-5-test/workflow-registration-replaces-the-retired-factory-spelling
     github.copilot-sdk.integration.upstream-1-0-89-5-test/paused-workflow-attempts-are-terminal
     github.copilot-sdk.integration.upstream-1-0-89-5-test/workflow-notifications-validate-pause-metadata
@@ -1642,7 +1646,9 @@
     github.copilot-sdk.workflow/resume!
     github.copilot-sdk.workflow/<run!
     github.copilot-sdk.workflow/<resume!
-    github.copilot-sdk.workflow/wait-for-run!],
+    github.copilot-sdk.workflow/wait-for-run!
+    github.copilot-sdk.workflow/get-run-progress
+    github.copilot-sdk.workflow/<get-run-progress],
    :classification :experimental,
    :proof-states
    [:registration-absent
@@ -1665,13 +1671,22 @@
     :limit-empty
     :declared-limit-null-rejected
     :current-resume-errors
-    :unknown-resume-errors],
+    :unknown-resume-errors
+    :finite-declarations
+    :ratio-number-serialization
+    :closed-metadata
+    :closed-phases
+    :paging-forward
+    :paging-backward
+    :paging-limit-boundaries
+    :paging-identifier-ownership],
    :id :orchestration/factory-to-workflow,
    :specs
    [:github.copilot-sdk.specs/workflows
     :github.copilot-sdk.specs/join-session-config
     :github.copilot-sdk.specs/workflow-limits
     :github.copilot-sdk.specs/workflow-limit-overrides
+    :github.copilot-sdk.specs/workflow-progress-options
     :github.copilot-sdk.specs/workflow-resume-error-code
     :github.copilot-sdk.specs/workflow-run-status
     :github.copilot-sdk.specs/permission-request
@@ -1692,7 +1707,7 @@
    "f55a68396c54cf88905db6a53d90d9bee69d9bad69a98dcf61a432f684de3821"},
   :local-artifact-seal
   {:status :sealed,
-   :commit "0482ca133c4616cc42b69b6fbd5a491256f56775"}},
+   :commit "c8dc16971ef5c831528d1c4f3687d66af344286f"}},
  :changed-paths
  {:exact-classifications
   {"nodejs/src/extension.ts" :experimental,
@@ -1918,7 +1933,8 @@
  {:namespace-rename
   [github.copilot-sdk.factory github.copilot-sdk.workflow],
   :added-spec-keys
-  #{:github.copilot-sdk.specs/workflow-run-id
+  #{:github.copilot-sdk.specs/workflow-progress-options
+    :github.copilot-sdk.specs/workflow-run-id
     :github.copilot-sdk.specs/assistant.turn_end-data
     :github.copilot-sdk.specs/workflow-meta
     :github.copilot-sdk.specs/workflow-phase
@@ -1941,8 +1957,11 @@
     :github.copilot-sdk.specs/factory-meta
     :github.copilot-sdk.specs/factory-limits},
   :additional-spec-keys
-  #{:github.copilot-sdk.specs/workflow-run-id
+  #{:github.copilot-sdk.specs/workflow-progress-options
+    :github.copilot-sdk.specs/workflow-run-id
     :github.copilot-sdk.specs/assistant.turn_end-data
     :github.copilot-sdk.specs/workflow-limit-overrides},
   :non-migration-function-changes #{},
-  :non-migration-fdef-changes #{}}}
+  :non-migration-fdef-changes
+  #{github.copilot-sdk.workflow/get-run-progress
+    github.copilot-sdk.workflow/<get-run-progress}}}
