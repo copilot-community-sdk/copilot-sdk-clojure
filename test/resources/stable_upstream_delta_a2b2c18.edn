@@ -1,14 +1,18 @@
-{:decision "doc/adr/2026-09-30-model-policy-and-lifecycle-sync.md",
- :method-deltas
- [{:class "CopilotClient" :method "startAhpHost"
-   :classification :experimental :decision :exclude}],
+{:unchanged-local-artifacts
+ #{"build.clj"
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "src/github/copilot_sdk/generated/event_metadata.clj"
+   "test/github/copilot_sdk/integration/client_test.clj"
+   "test/github/copilot_sdk/integration/shutdown_test.clj"
+   "test/github/copilot_sdk/send_and_wait_test.clj"},
  :schema
  {:runtime-pin "1.0.90-5",
   :runtime-only-deltas
-  [{:symbol "SandboxDecisionData"
-    :classification :internal
-    :decision :wire-only
-    :reason "Runtime schema adds allowed outcomes and access_recorded permissive telemetry. The Node export is unchanged; generated private wire specs follow the pinned schema."}],
+  [{:symbol "SandboxDecisionData",
+    :classification :internal,
+    :decision :wire-only,
+    :reason
+    "Runtime schema adds allowed outcomes and access_recorded permissive telemetry. The Node export is unchanged; generated private wire specs follow the pinned schema."}],
   :artifacts
   {"schemas/api.schema.json" "0ad616512512b31dabd04d561a9dd415aad68c8e3aeb74da043ae356d91a3a94",
    "schemas/session-events.schema.json"
@@ -24,7 +28,7 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.89-6",
    :source-url
    "https://github.com/github/copilot-sdk/commit/4b7d31b1adcc480c58245226ca53d7d7ae1ba812",
-   :classifications #{:experimental :generated-only :internal :language-specific :stable-public},
+   :classifications #{:language-specific :generated-only :experimental :internal :stable-public},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 190,
@@ -33,7 +37,7 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.89-7",
    :source-url
    "https://github.com/github/copilot-sdk/commit/0d5cc56c5c10d35e96bb22450fe9017a05f8a1f0",
-   :classifications #{:generated-only :internal :language-specific},
+   :classifications #{:language-specific :generated-only :internal},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 4,
@@ -51,7 +55,7 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.90-0",
    :source-url
    "https://github.com/github/copilot-sdk/commit/824bf9f873ab369492e70fd2e2890a9d47deca99",
-   :classifications #{:experimental :generated-only :internal :language-specific :stable-public},
+   :classifications #{:language-specific :generated-only :experimental :internal :stable-public},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 48,
@@ -60,7 +64,7 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.90-1",
    :source-url
    "https://github.com/github/copilot-sdk/commit/d3e90e04cd2c973dcb490889f8ecd85ce61b7611",
-   :classifications #{:generated-only :internal :language-specific :stable-public},
+   :classifications #{:language-specific :generated-only :internal :stable-public},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 25,
@@ -78,7 +82,7 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.90-3",
    :source-url
    "https://github.com/github/copilot-sdk/commit/2a67e4e651846ec0d7684c63f67ff9b86bdcc198",
-   :classifications #{:generated-only :internal :language-specific :stable-public},
+   :classifications #{:language-specific :generated-only :internal :stable-public},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 24,
@@ -87,7 +91,7 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.90-4",
    :source-url
    "https://github.com/github/copilot-sdk/commit/36ff7a2ffc40adf06498cb5f1c25168e462e7e8a",
-   :classifications #{:experimental :generated-only :internal :language-specific :stable-public},
+   :classifications #{:language-specific :generated-only :experimental :internal :stable-public},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 151,
@@ -96,193 +100,133 @@
    :subject "Update SDK snapshot for Copilot CLI 1.0.90-5",
    :source-url
    "https://github.com/github/copilot-sdk/commit/a2b2c18eb5a20417fc613eaaa93199f55ad22ea4",
-   :classifications #{:internal :language-specific :stable-public},
+   :classifications #{:language-specific :internal :stable-public},
    :reason
    "Snapshot aggregation; constituent contracts and exclusions are classified by symbol and changed path.",
    :changed-path-count 8,
    :changed-paths-sha256 "2268acab89979ed9d39e53f216e0aa59692631d290b93243cd7f7535d8cda22c"}],
+ :sealed-local-artifacts
+ {".copilot-schema-version" "7cb84ca9d124a4d30dca2c2eef0a062105a1e86903bd04ec4d6bb61770da7da2",
+  ".github/skills/update-upstream/references/PROJECT.md"
+  "6a85705a102c916237d698d9555d80808fddda8e1daf1dff46d640d192adcd60",
+  ".github/workflows/ci.yml" "db1c2f44617871efcb549b8ef474e7fdf231bf752f2b982dc25308cea4ed1e63",
+  "CHANGELOG.md" "28b10a5fe5e3b4ad5db895cdb2e28c19ee6f29eb6b08d29f016e804006cd182a",
+  "README.md" "d9ac0339b0b0735e69899b715fe71ac456b2fff7b6b14a48ba43c579e1c8f6fc",
+  "build.clj" "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993",
+  "doc/adr/2026-09-30-model-policy-and-lifecycle-sync.md"
+  "4fe1a1cd8641127bbec9658b0296d1c64489874e860adeb887433fdea12bd4e6",
+  "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
+  "602bb2ca2de0e44705f23ad3df49a332ffb82002eadf1e8444cc98302ea217b5",
+  "doc/api/2026-08-10-host-owned-inference-boundary.html"
+  "3b1ebfb3155368129b666b6d90d08c145cf867b681344ece5d9bb7cae1d365bf",
+  "doc/api/2026-09-27-dynamic-workflow-migration.html"
+  "985cc119f1025f008714b8d48af527a871be04e2cb620419b45b4b196fd0e079",
+  "doc/api/2026-09-30-model-policy-and-lifecycle-sync.html"
+  "6065a162cc42d45e03be216dee7b1e0f37b40636c1ec9b3e86d73ba244463180",
+  "doc/api/API.html" "ea7ee3d779c7727dce9a156e30ccc1d91660d5326011299f3c5b12fea888a25b",
+  "doc/api/azure-managed-identity.html"
+  "65ce20c4d03ccb0a73c593ee3556edab30b87065c1deb80f7e70fbc2c9d02f51",
+  "doc/api/byok.html" "223a6eb00858cc2ce94014edcc778e1a6319cebfea5cd41f42cf44847f85f943",
+  "doc/api/codegen.html" "f9b2a43b6062e5f96ff67dfe477fd44d5ae99bae733e787c25d3b4decee0be63",
+  "doc/api/custom-agents.html" "85a00765233665c926c19d1e9e0d76d98be0bc7b9271bd8411c8557c3b9c79fc",
+  "doc/api/debugging.html" "63f4dd7385424bcbd15d05f1aeef1c8a3098b555f67877b3cf17441c1f5bf2ea",
+  "doc/api/doc-auth-index.html" "3c9ab5e7cbc9957e0914b611e39858719bd075060c1c2012980b31b0b2cd52c9",
+  "doc/api/doc-index.html" "8269e05b14382e280b3bbdf5196a4062c8d4d0c840f89bdf10d01c34f44fd6d9",
+  "doc/api/dynamic-workflows.html"
+  "3c95f2a964bb7c2bc00ce932543acbd624c0fa308a7be045145f7173912ec906",
+  "doc/api/getting-started.html"
+  "bfad4b2571f2a3bd21ee2b387129c0586505554cc8f4c0973bfc39f2603eb299",
+  "doc/api/github.copilot-sdk.client.html"
+  "f446afae04e02ceaaea62a31871459506c3b695ca7a52b49edcd8407f1cab8a5",
+  "doc/api/github.copilot-sdk.generated.coerce.html"
+  "d2d29fe632a37afa654926d6b2e970abe38e01cd0a93a09d5cdd6c55fe79d990",
+  "doc/api/github.copilot-sdk.generated.event-metadata.html"
+  "55f27c34015c32d78d60ab0349801f9f49dcc0f53da30c7252427d0caf83799c",
+  "doc/api/github.copilot-sdk.generated.event-specs.html"
+  "14763286037f1941f2ca6da7b8f2e5848f048d21e8c564f1e911758ca22347ed",
+  "doc/api/github.copilot-sdk.helpers.html"
+  "887cc9f9d3ed7d31372ee9e5242a42f7f57b6d71e4cfb1a7776332bf29f182f8",
+  "doc/api/github.copilot-sdk.html"
+  "73aaefa61dca248423d1b8e694b1c03dd9f50c11794acb9db86445a9a531f6e8",
+  "doc/api/github.copilot-sdk.instrument.html"
+  "bf5a84e56c11f5cae88e44b677e0f15e8cb3a7733e7fdcc23794edfa44eb0960",
+  "doc/api/github.copilot-sdk.logging.html"
+  "01fd73e6b6092b2ffa76d5575911043ca18fa6a8168d898722b2a6098276e1a9",
+  "doc/api/github.copilot-sdk.process.html"
+  "e9736180991bd6d57a3d617c18feeffaaa442c9d741a89caf27432207938088c",
+  "doc/api/github.copilot-sdk.protocol.html"
+  "db0b82fb5c7d7c81b4c6fc73cd31b092c9b92dfc7c6d6474b5117e05e15528ba",
+  "doc/api/github.copilot-sdk.session.html"
+  "951d13120a83bc728e4dab86eaf6f000e5cb1e74223a76c6b20107f336873ba3",
+  "doc/api/github.copilot-sdk.specs.html"
+  "9f93651414f84690cf820eba4af0a8af5d5009df607413d822808f3c43d3593b",
+  "doc/api/github.copilot-sdk.teardown.html"
+  "6fa9e68945c477abf08b907f35e28439ebd0343a2096a7c14eeaadc51730eb02",
+  "doc/api/github.copilot-sdk.tool-set.html"
+  "d87fee14aa0cc5a05f429fe6d0f99b4880881711257d0a5087cbfb58bb064572",
+  "doc/api/github.copilot-sdk.tools.html"
+  "020fdf03afa366789c511e0b970c7d07e4bfed43035033b917295476d908e95f",
+  "doc/api/github.copilot-sdk.util.html"
+  "91705a79257b0872d0867e8cdfc56a13dd41c2abeebca50a6da82015c5b99f80",
+  "doc/api/github.copilot-sdk.workflow.html"
+  "d2112f4574f69b20fa7618a425a8fa1b20d62e3b12ae036e39edf96909ba64a6",
+  "doc/api/index.html" "071cbff309a521970e97d91e0da180027b492bb3b4b7025c04b8d9623c26c165",
+  "doc/api/overview.html" "ce3c6fa9731008877eabdce3f4a33c18dc3faaecc96c9dbc4e0c68e8cfcdfb2e",
+  "doc/api/style.html" "f717462f2d2e450e2ce3a7eb56c64c421f49e4c5f573e1a6c5ad9ac574eb9c0d",
+  "doc/api/topic-manifest.edn" "bd139976ad39f5ff7342bc393998ad10023db360fceaae063e82d65003b10690",
+  "doc/api/upstream-doc-gap-matrix.html"
+  "669fa004f50a7bedc04df1f563009e27fbc31e10906b06b4cfa7358b8dc32833",
+  "doc/getting-started.md" "911a00668226fc1b59cc9c74e577b0833e6123d96e5ce536af7e7184b580697e",
+  "doc/index.md" "f7d338209c7eb10c2fbfba0cff994f2d8b9ad4a7db17d29d7c765a21d81a6f14",
+  "doc/mcp/debugging.md" "920f20c018c1a6ad305a9dfe0b6e7a223b6b8cb971286c45079b8e67befef6f1",
+  "doc/reference/API.md" "8653275ad0eb85dde4b5c26c7099a07be536503891ccf56c854055f5e6dccaac",
+  "doc/upstream-doc-gap-matrix.md"
+  "c2c93fa9b1c85e4b7ffba8f202a98f14ac2bb650ee54cf044e99ad833c6de6ed",
+  "examples/basic_chat.clj" "33ff00c5e6daedb0ca8ffa06d5d8ec2d0271f355c2b076785055885e952450f9",
+  "resources/github/copilot_sdk/api_surface.edn"
+  "72d2aecde9438d7b609a9a9a7bb82033c14d60fde448e44d9d0dcc6417e20b88",
+  "schemas/README.md" "fd72fd32e3f46323c5c55c46da3224e84f7f1ec3ec88f68b9d5bc64f12e534d7",
+  "schemas/api.schema.json" "0ad616512512b31dabd04d561a9dd415aad68c8e3aeb74da043ae356d91a3a94",
+  "schemas/session-events.schema.json"
+  "a95209c5f880da0f0d212f01ee76974d287a0927548a0c5b19384e368945d287",
+  "src/github/copilot_sdk.clj" "dd6f3e75c32a27ab40172a7a23e2e42f59a18a2345267393fda10ef408673c06",
+  "src/github/copilot_sdk/client.clj"
+  "474f90890cea9400011800a2bb71d06e04b178094f73327b928fecd417be721c",
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e",
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "410d8f30cbfeda135c796360c433030aebc59b694490c94a65bc6a376c48c3cc",
+  "src/github/copilot_sdk/process.clj"
+  "762ee1d05618ad1c0ecdde41ffd4d947649ca31e4bd7ebe681704af00456e1a7",
+  "src/github/copilot_sdk/protocol.clj"
+  "d989bde38a4af6d5ebe9ebe3987a6df11a337447b15b2e03e6ce0b3540c77129",
+  "src/github/copilot_sdk/session.clj"
+  "3f30fb75fc54e1da77a5170d771ac9c9c670323b1fc86cc5116b0b8f2df8c8ac",
+  "src/github/copilot_sdk/specs.clj"
+  "49b762d3712f1a86e9a0cbeda4215b97ff1a7b964946eaba5b3de47c9af01de8",
+  "test/github/copilot_sdk/client_transport_lifecycle_test.clj"
+  "4cbf32a649c761ffd9c1580946d24a409e3025ea96d64e62229758c03a63fd66",
+  "test/github/copilot_sdk/integration/client_test.clj"
+  "06cc09d3be6b3e0c4f11bb86d4a578fcd0ee5cff3c2859f3c2af5d6a08b78187",
+  "test/github/copilot_sdk/integration/shutdown_test.clj"
+  "b64486036941046e8c505b9719cc8d00b6940c710b8c2070f6a7a37c80ffe567",
+  "test/github/copilot_sdk/integration/upstream_1_0_90_5_test.clj"
+  "e5c6cd58b96fde189afd5d125e1c857dacdd3b5c72a78c38998308d9d0a053e1",
+  "test/github/copilot_sdk/optional_wire_contract_test.clj"
+  "32250783c1a924fa58fb0e91c8236e0ddffb92f68732aa271baa9c5cb0c3a0d0",
+  "test/github/copilot_sdk/protocol_test.clj"
+  "d7a6b0f473b89d136005c047dd899cb22edfe010bed8358cddb6fe87b330619b",
+  "test/github/copilot_sdk/send_and_wait_test.clj"
+  "502332f743e90320ea2144f3eabbfa9b71408b9f09e316e861a72d9d1cb33aed",
+  "test/github/copilot_sdk/stdio_runtime_fixture.clj"
+  "c2a50e451a25a41fab563c321eea8b42d6264eb11ca2b586060741c91259d354",
+  "test/github/copilot_sdk/teardown_test.clj"
+  "31c98247e39c2667f06a4b2be14d76700d73610c8d22f1bdf2c7c5475443c8ab"},
  :test-inventory
- {"nodejs/test/client-api-codegen.test.ts"
-  {:blobs ["9331ad7689e4bcd0a94453b230fb63b6387cd0f1" "bb0c9c8fe6d6e8c8dfe614718b44b0bc52a702ce"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/client-global-api.test.ts"
-  {:blobs [nil "32d2bdf6b9939026b72196ef7b79d6da6b780000"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/client.test.ts"
-  {:blobs ["3cb97160c9e0458fd860056f6534a40df836e46d" "174f911287c3137f0298b5434b372268ed7869b4"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/csharp-codegen.test.ts"
-  {:blobs ["b603e9e775836635da1dda40be1bacd309c0e179" "32d905c7210599be2333be468e6972c0200a1915"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/auth_host.e2e.test.ts"
-  {:blobs ["4d1cf182d0ca861bc54e5be863fe6066825d84d2" "4d1cf182d0ca861bc54e5be863fe6066825d84d2"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/client.e2e.test.ts"
-  {:blobs ["a529ea8e4ce82d9495efc185dea707e49bce285c" "a529ea8e4ce82d9495efc185dea707e49bce285c"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/client_options.e2e.test.ts"
-  {:blobs ["b32965ec0f3274d2f8e34dbf95d983593f35a9e9" "b32965ec0f3274d2f8e34dbf95d983593f35a9e9"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/event_fidelity.e2e.test.ts"
-  {:blobs ["8ae2091b3369e007664dc4ed89c9f91425581a95" "8ae2091b3369e007664dc4ed89c9f91425581a95"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/extension_startup_permission.e2e.test.ts"
-  {:blobs [nil "abc068a2a28100d3f39b13a50f68c6b39cea44f7"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/fixtures/workflow-extension.mjs"
-  {:blobs ["e6b35228bb75533dbcc9ce9089a803ee4f057549" "e6b35228bb75533dbcc9ce9089a803ee4f057549"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/harness/ahpClient.ts"
-  {:blobs [nil "8ad23d6e1a61a37e4544d6ee2994325dddba7514"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/harness/ahpTestDriver.ts"
-  {:blobs [nil "2fc186dfb818757e43fb8f31187b825d7f910adf"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/harness/runtimeHost.ts"
-  {:blobs [nil "27d39d0221d6d91210f294a4e90bd00acfec8e66"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/harness/runtimeHostCandidate.ts"
-  {:blobs [nil "ae24d68ac2ce0d574b790747e71a68abc4a99991"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/harness/runtimeHostTopology.ts"
-  {:blobs [nil "9a8b9d31883295c8d6ad68b63cab5da2eccbda29"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/harness/sdkTestContext.ts"
-  {:blobs ["466e4b625ebd450fd3eb15121ab30ac145187bbb" "479443e651a300a3f76713065d4d8052de57ad18"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/hooks.e2e.test.ts"
-  {:blobs ["4fce7d2acfa50c16efe2f6472e469611a3cdde09" "05baed6acf63d11806d603fb8444b54774f7d9b3"],
-   :classification :stable-public,
-   :review "Runtime-owned hook restoration on resume; SDK hook builders remain unchanged."},
-  "nodejs/test/e2e/rpc.e2e.test.ts"
-  {:blobs ["4e93fdbe443c926a9983667dec6347e7e1d302bc" "cd9887f002c94bfcbcf976200c98f81578775d05"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
-  {:blobs ["f3b2e57342b078f113e4620322964ebfd7dea802" "e03020e4a8b9af696bbfd28a3fd97b4dc571060e"],
-   :classification :generated-only,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/runtime_host.e2e.test.ts"
-  {:blobs [nil "2a2f72d52e313ccd895f2dd3fddcd0a277eae786"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/runtime_host_artifacts.test.ts"
-  {:blobs [nil "b10260e082eca63ff0497b70ab811db52362370b"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/runtime_host_topology.test.ts"
-  {:blobs [nil "05611ef1c362b1544c5a06922282efffadf1fac5"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/session.e2e.test.ts"
-  {:blobs ["d9f112429168040313072be527c20dd2aee9e9bd" "d9f112429168040313072be527c20dd2aee9e9bd"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/session_config.e2e.test.ts"
-  {:blobs ["de81e8be1da71adf0d29511b8eae7bb6212ab303" "de81e8be1da71adf0d29511b8eae7bb6212ab303"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/skills.e2e.test.ts"
-  {:blobs ["422e681368bc195170c5e67a55007f410b933399" "422e681368bc195170c5e67a55007f410b933399"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/telemetry.e2e.test.ts"
-  {:blobs ["ddcae643e3fe0b4f497087c5b529e89241c05570" "ddcae643e3fe0b4f497087c5b529e89241c05570"],
-   :classification :stable-public,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/e2e/workflow.e2e.test.ts"
-  {:blobs ["bb1240fd36eeaf8678578c180d68c7eeec27bb9d" "d5da188691af7d3202ef0578e1563a115b2dbfba"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/extension.test.ts"
-  {:blobs ["676f6dff2bca4de9dffa061fc91c426f48cbfdb7" "676f6dff2bca4de9dffa061fc91c426f48cbfdb7"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/fixtures/mcp-plan-transport-choice.schema.json"
+ {"nodejs/test/fixtures/mcp-plan-transport-choice.schema.json"
   {:blobs [nil "24be6ad51721495625dc48fc59d21de73c90af50"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/host-client.test.ts"
-  {:blobs [nil "22766bd81cafb4ee9e4cb97a4ce074404ba1b080"],
-   :classification :experimental,
-   :review
-   "AHP contracts excluded; its generic pre-EOF queue-drain and reconnect regressions are ported independently."},
-  "nodejs/test/host.test.ts"
-  {:blobs [nil "3816112f4139cee002be16db790805971cd103d8"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/installation-confirmation.test.ts"
-  {:blobs [nil "bafcb4b2e97352085852de7dab4f471462c0130a"],
-   :classification :experimental,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/legacy-parameters.test.ts"
-  {:blobs ["3618279eecd2eb90777eafa2cdb8e83695c265eb" "0c8d68673c612c13df382bddb06c49aef2fbb7b6"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/legacy-request-compatibility.test.ts"
-  {:blobs ["167536fe52cb1e16a4bf7dc625361291ab93ad62" "167536fe52cb1e16a4bf7dc625361291ab93ad62"],
-   :classification :generated-only,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/python-codegen.test.ts"
-  {:blobs ["c381a406c25f47084df0d9bde0435601b6f83e0b" "bbad9e216d34a36f9e42191dc63f6d2fa7f2bcc9"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/runtimeArtifacts.test.ts"
-  {:blobs ["6887a49633fbe5372de77e7a4c53655d09396a35" "24eef787976d8b635b2cb5b7428b27c67277efbe"],
-   :classification :internal,
-   :review
-   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/rust-codegen.test.ts"
-  {:blobs ["9570dfbbdd29461bd114df8174115461cd6933da" "d38141cab6637f3059bbc35068a3f1c29d547d50"],
    :classification :internal,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
@@ -291,13 +235,13 @@
    :classification :experimental,
    :review
    "New root SandboxConfigSource export traces to an explicitly experimental generated type."},
-  "nodejs/test/session-config-types.test.ts"
-  {:blobs ["af1e3c4719381c01c19d7eb4aa274381e2d9b543" "af1e3c4719381c01c19d7eb4aa274381e2d9b543"],
-   :classification :stable-public,
+  "nodejs/test/e2e/runtime_host_artifacts.test.ts"
+  {:blobs [nil "b10260e082eca63ff0497b70ab811db52362370b"],
+   :classification :experimental,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/session-event-types.test.ts"
-  {:blobs ["330b3810902624c72e3a5df7beb1aba8098535c8" "330b3810902624c72e3a5df7beb1aba8098535c8"],
+  "nodejs/test/e2e/runtime_host.e2e.test.ts"
+  {:blobs [nil "2a2f72d52e313ccd895f2dd3fddcd0a277eae786"],
    :classification :experimental,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
@@ -306,14 +250,48 @@
    :classification :stable-public,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
-  "nodejs/test/stdio-shutdown.test.ts"
-  {:blobs [nil "d17575f7004f0e9d5364dd88ea27c973656eb6fd"],
+  "nodejs/test/e2e/harness/ahpClient.ts"
+  {:blobs [nil "8ad23d6e1a61a37e4544d6ee2994325dddba7514"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/hooks.e2e.test.ts"
+  {:blobs ["4fce7d2acfa50c16efe2f6472e469611a3cdde09" "05baed6acf63d11806d603fb8444b54774f7d9b3"],
+   :classification :stable-public,
+   :review "Runtime-owned hook restoration on resume; SDK hook builders remain unchanged."},
+  "nodejs/test/e2e/client_options.e2e.test.ts"
+  {:blobs ["b32965ec0f3274d2f8e34dbf95d983593f35a9e9" "b32965ec0f3274d2f8e34dbf95d983593f35a9e9"],
    :classification :stable-public,
    :review
-   "Owned stdin EOF, telemetry finalization, bounded fallback, startup failure and concurrent forced stop; ported with a real JVM child."},
-  "nodejs/test/structured-output.test.ts"
-  {:blobs ["8f029d0ac9b2de32044b775192d636db162d7cd7" "8f029d0ac9b2de32044b775192d636db162d7cd7"],
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/legacy-request-compatibility.test.ts"
+  {:blobs ["167536fe52cb1e16a4bf7dc625361291ab93ad62" "167536fe52cb1e16a4bf7dc625361291ab93ad62"],
+   :classification :generated-only,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/legacy-parameters.test.ts"
+  {:blobs ["3618279eecd2eb90777eafa2cdb8e83695c265eb" "0c8d68673c612c13df382bddb06c49aef2fbb7b6"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/python-codegen.test.ts"
+  {:blobs ["c381a406c25f47084df0d9bde0435601b6f83e0b" "bbad9e216d34a36f9e42191dc63f6d2fa7f2bcc9"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/session.e2e.test.ts"
+  {:blobs ["d9f112429168040313072be527c20dd2aee9e9bd" "d9f112429168040313072be527c20dd2aee9e9bd"],
    :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/harness/runtimeHostCandidate.ts"
+  {:blobs [nil "ae24d68ac2ce0d574b790747e71a68abc4a99991"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/installation-confirmation.test.ts"
+  {:blobs [nil "bafcb4b2e97352085852de7dab4f471462c0130a"],
+   :classification :experimental,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
   "nodejs/test/toolSet.test.ts"
@@ -321,37 +299,182 @@
    :classification :stable-public,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
+  {:blobs ["f3b2e57342b078f113e4620322964ebfd7dea802" "e03020e4a8b9af696bbfd28a3fd97b4dc571060e"],
+   :classification :generated-only,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/harness/sdkTestContext.ts"
+  {:blobs ["466e4b625ebd450fd3eb15121ab30ac145187bbb" "479443e651a300a3f76713065d4d8052de57ad18"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/client-global-api.test.ts"
+  {:blobs [nil "32d2bdf6b9939026b72196ef7b79d6da6b780000"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/client-api-codegen.test.ts"
+  {:blobs ["9331ad7689e4bcd0a94453b230fb63b6387cd0f1" "bb0c9c8fe6d6e8c8dfe614718b44b0bc52a702ce"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/session-config-types.test.ts"
+  {:blobs ["af1e3c4719381c01c19d7eb4aa274381e2d9b543" "af1e3c4719381c01c19d7eb4aa274381e2d9b543"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/rust-codegen.test.ts"
+  {:blobs ["9570dfbbdd29461bd114df8174115461cd6933da" "d38141cab6637f3059bbc35068a3f1c29d547d50"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
   "nodejs/test/workflow.test.ts"
   {:blobs ["2464cf6668493d2cb407e5e38e435015e8abce6e" "2464cf6668493d2cb407e5e38e435015e8abce6e"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/csharp-codegen.test.ts"
+  {:blobs ["b603e9e775836635da1dda40be1bacd309c0e179" "32d905c7210599be2333be468e6972c0200a1915"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/rpc.e2e.test.ts"
+  {:blobs ["4e93fdbe443c926a9983667dec6347e7e1d302bc" "cd9887f002c94bfcbcf976200c98f81578775d05"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/harness/ahpTestDriver.ts"
+  {:blobs [nil "2fc186dfb818757e43fb8f31187b825d7f910adf"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/extension.test.ts"
+  {:blobs ["676f6dff2bca4de9dffa061fc91c426f48cbfdb7" "676f6dff2bca4de9dffa061fc91c426f48cbfdb7"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/harness/runtimeHost.ts"
+  {:blobs [nil "27d39d0221d6d91210f294a4e90bd00acfec8e66"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/auth_host.e2e.test.ts"
+  {:blobs ["4d1cf182d0ca861bc54e5be863fe6066825d84d2" "4d1cf182d0ca861bc54e5be863fe6066825d84d2"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/harness/runtimeHostTopology.ts"
+  {:blobs [nil "9a8b9d31883295c8d6ad68b63cab5da2eccbda29"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/runtimeArtifacts.test.ts"
+  {:blobs ["6887a49633fbe5372de77e7a4c53655d09396a35" "24eef787976d8b635b2cb5b7428b27c67277efbe"],
+   :classification :internal,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/extension_startup_permission.e2e.test.ts"
+  {:blobs [nil "abc068a2a28100d3f39b13a50f68c6b39cea44f7"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/structured-output.test.ts"
+  {:blobs ["8f029d0ac9b2de32044b775192d636db162d7cd7" "8f029d0ac9b2de32044b775192d636db162d7cd7"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/host.test.ts"
+  {:blobs [nil "3816112f4139cee002be16db790805971cd103d8"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/event_fidelity.e2e.test.ts"
+  {:blobs ["8ae2091b3369e007664dc4ed89c9f91425581a95" "8ae2091b3369e007664dc4ed89c9f91425581a95"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/stdio-shutdown.test.ts"
+  {:blobs [nil "d17575f7004f0e9d5364dd88ea27c973656eb6fd"],
+   :classification :stable-public,
+   :review
+   "Owned stdin EOF, telemetry finalization, bounded fallback, startup failure and concurrent forced stop; ported with a real JVM child."},
+  "nodejs/test/e2e/telemetry.e2e.test.ts"
+  {:blobs ["ddcae643e3fe0b4f497087c5b529e89241c05570" "ddcae643e3fe0b4f497087c5b529e89241c05570"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/host-client.test.ts"
+  {:blobs [nil "22766bd81cafb4ee9e4cb97a4ce074404ba1b080"],
+   :classification :experimental,
+   :review
+   "AHP contracts excluded; its generic pre-EOF queue-drain and reconnect regressions are ported independently."},
+  "nodejs/test/e2e/runtime_host_topology.test.ts"
+  {:blobs [nil "05611ef1c362b1544c5a06922282efffadf1fac5"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/fixtures/workflow-extension.mjs"
+  {:blobs ["e6b35228bb75533dbcc9ce9089a803ee4f057549" "e6b35228bb75533dbcc9ce9089a803ee4f057549"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/skills.e2e.test.ts"
+  {:blobs ["422e681368bc195170c5e67a55007f410b933399" "422e681368bc195170c5e67a55007f410b933399"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/session-event-types.test.ts"
+  {:blobs ["330b3810902624c72e3a5df7beb1aba8098535c8" "330b3810902624c72e3a5df7beb1aba8098535c8"],
+   :classification :experimental,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/client.test.ts"
+  {:blobs ["3cb97160c9e0458fd860056f6534a40df836e46d" "174f911287c3137f0298b5434b372268ed7869b4"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/session_config.e2e.test.ts"
+  {:blobs ["de81e8be1da71adf0d29511b8eae7bb6212ab303" "de81e8be1da71adf0d29511b8eae7bb6212ab303"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/client.e2e.test.ts"
+  {:blobs ["a529ea8e4ce82d9495efc185dea707e49bce285c" "a529ea8e4ce82d9495efc185dea707e49bce285c"],
+   :classification :stable-public,
+   :review
+   "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."},
+  "nodejs/test/e2e/workflow.e2e.test.ts"
+  {:blobs ["bb1240fd36eeaf8678578c180d68c7eeec27bb9d" "d5da188691af7d3202ef0578e1563a115b2dbfba"],
    :classification :experimental,
    :review
    "Node source or harness evidence; behavior is retained or intentionally excluded according to its classification."}},
  :target-public-surface
  {:source-blobs
-  {"nodejs/package.json"
-   ["68a2e79b08dcd859325582ebbc5ccdbfba75afdd" "7748258c8c41edecbac60636b497195fea9afa31"],
-   "nodejs/src/canvas.ts"
-   ["aeb1f00ec42926977c010df2471123dc18ddddd3" "aeb1f00ec42926977c010df2471123dc18ddddd3"],
-   "nodejs/src/client.ts"
-   ["f9bf6a2645fedf4b5f3c5da93086f7b0236a3e62" "32af18890a4e07f9f7ce0b71b62cc497c3c6fcac"],
+  {"nodejs/src/host.ts" [nil "7ae4036531f38afffbae8a38d5af3020b3f3f942"],
    "nodejs/src/extension.ts"
    ["e7bb21e3b2fc8a84d16bde7885cd50308d61116f" "e7bb21e3b2fc8a84d16bde7885cd50308d61116f"],
-   "nodejs/src/generated/rpc.ts"
-   ["664448fd5d043f7437132373922d4cf79355cef1" "3aa1574748f2c69d5f5d4b790fa225cbdc7240d7"],
-   "nodejs/src/generated/session-events.ts"
-   ["3b0995c189bb0e1009902459491dba594c235477" "96f6f247c595b9056847cbcba304e36d3467a1dc"],
-   "nodejs/src/host.ts" [nil "7ae4036531f38afffbae8a38d5af3020b3f3f942"],
-   "nodejs/src/index.ts"
-   ["c5d2b4e852238677de2effa1efba3c38a7157d48" "5ce938d368a2858c7b8244759f15af056575ecb8"],
-   "nodejs/src/installationConfirmation.ts" [nil "897c81915f4a398a66bfaffe9d93b0da09955767"],
-   "nodejs/src/session.ts"
-   ["39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da" "39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da"],
-   "nodejs/src/toolSet.ts"
-   ["559e9234e5b178036d88a7045a632bd16a97f534" "559e9234e5b178036d88a7045a632bd16a97f534"],
    "nodejs/src/types.ts"
    ["3fc64960bd1aac411c321190ece2c80c09ccc7eb" "cc64c3516d900728cd8bd3ae4d48618cc57ee034"],
+   "nodejs/src/installationConfirmation.ts" [nil "897c81915f4a398a66bfaffe9d93b0da09955767"],
    "nodejs/src/workflow.ts"
-   ["f7c0abe2d1b819154d284132a7b83f98fecb6c78" "f7c0abe2d1b819154d284132a7b83f98fecb6c78"]},
+   ["f7c0abe2d1b819154d284132a7b83f98fecb6c78" "f7c0abe2d1b819154d284132a7b83f98fecb6c78"],
+   "nodejs/src/session.ts"
+   ["39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da" "39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da"],
+   "nodejs/src/client.ts"
+   ["f9bf6a2645fedf4b5f3c5da93086f7b0236a3e62" "32af18890a4e07f9f7ce0b71b62cc497c3c6fcac"],
+   "nodejs/src/index.ts"
+   ["c5d2b4e852238677de2effa1efba3c38a7157d48" "5ce938d368a2858c7b8244759f15af056575ecb8"],
+   "nodejs/package.json"
+   ["68a2e79b08dcd859325582ebbc5ccdbfba75afdd" "7748258c8c41edecbac60636b497195fea9afa31"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534" "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/generated/rpc.ts"
+   ["664448fd5d043f7437132373922d4cf79355cef1" "3aa1574748f2c69d5f5d4b790fa225cbdc7240d7"],
+   "nodejs/src/canvas.ts"
+   ["aeb1f00ec42926977c010df2471123dc18ddddd3" "aeb1f00ec42926977c010df2471123dc18ddddd3"],
+   "nodejs/src/generated/session-events.ts"
+   ["3b0995c189bb0e1009902459491dba594c235477" "96f6f247c595b9056847cbcba304e36d3467a1dc"]},
   :trees
   {"nodejs/src"
    ["8599e3281bf0a6177915fbcef1d193cc93db12a7" "48b7b7610f551b009a0598c9a181d9ce960460db"],
@@ -360,8 +483,49 @@
    "nodejs/test"
    ["e25bc5fdfe5468ba8b1273c66d30ca47191a7aad" "87aaff1cc9855d5fab990a9447b6e351156c374a"]},
   :modules
-  {"nodejs/src/canvas.ts"
-   {:fingerprint [9 "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+  {"nodejs/src/host.ts"
+   {:fingerprint [5 "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
+    :added
+    {:experimental
+     #{"AhpHostExit"
+       "AhpHostOptions"
+       "AhpSessionResumeRequest"
+       "AhpSessionCreateRequest"
+       "AhpHost"}},
+    :removed {},
+    :changed {}},
+   "nodejs/src/extension.ts"
+   {:fingerprint [40 "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/types.ts"
+   {:fingerprint [232 "50d3e84ca9e247c975e178f8339ee3ceda157dab86aefc5981e0e875b47f1a3b"],
+    :added
+    {:experimental
+     #{"McpInstallationReview"
+       "InstallationConfirmationHandler"
+       "InstallationConfirmationRequest"
+       "InstallationConfirmationResponse"
+       "InstallationDecision"
+       "InstallationReview"
+       "SandboxConfigSource"}},
+    :removed {},
+    :changed {:experimental #{"CopilotClientOptions"}, :stable-public #{"SessionConfigBase"}}},
+   "nodejs/src/installationConfirmation.ts"
+   {:fingerprint [3 "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
+    :added
+    {:experimental #{"InstallationConfirmationHandler"},
+     :internal #{"createInstallationConfirmationAdapter" "InstallationConfirmationReceiver"}},
+    :removed {},
+    :changed {}},
+   "nodejs/src/workflow.ts"
+   {:fingerprint [31 "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/session.ts"
+   {:fingerprint [2 "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
     :added {},
     :removed {},
     :changed {}},
@@ -370,8 +534,26 @@
     :added {},
     :removed {},
     :changed {}},
-   "nodejs/src/extension.ts"
-   {:fingerprint [40 "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+   "nodejs/src/index.ts"
+   {:fingerprint [232 "bdf9fbaa46544246473438f161b60366e78c67a39914fafba101faa9e75467f3"],
+    :added
+    {:experimental
+     #{"McpInstallationReview"
+       "InstallationConfirmationHandler"
+       "InstallationConfirmationRequest"
+       "AhpHostExit"
+       "InstallationConfirmationResponse"
+       "AhpHostOptions"
+       "InstallationDecision"
+       "InstallationReview"
+       "SandboxConfigSource"
+       "AhpSessionResumeRequest"
+       "AhpSessionCreateRequest"
+       "AhpHost"}},
+    :removed {},
+    :changed {}},
+   "nodejs/src/toolSet.ts"
+   {:fingerprint [2 "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
     :added {},
     :removed {},
     :changed {}},
@@ -380,304 +562,153 @@
     :added
     {:experimental #{"PermissionDecisionApproveReadOnlyForSession"},
      :generated-only
-     #{"HostConfiguration"
-       "HostCreateSessionRequest"
-       "HostCreateSessionResult"
-       "HostDisposeRequest"
-       "HostDisposeResult"
-       "HostEmptyResult"
-       "HostExitReason"
-       "HostExitedNotification"
+     #{"HostMaterializeSessionRequest"
        "HostExitedRequest"
-       "HostGetConfigurationResult"
-       "HostHandler"
-       "HostMaterializeSessionRequest"
-       "HostMaterializeSessionResult"
-       "HostPublishSessionRequest"
-       "HostPublishSessionResult"
-       "HostReadyRequest"
-       "HostReadyResult"
-       "HostRegisterSessionRequest"
-       "HostRegisterSessionResult"
-       "HostReleaseSessionRequest"
-       "HostReleaseSessionResult"
-       "HostSessionCreateCallback"
        "HostSessionCreateRequest"
-       "HostSessionCreateResult"
-       "HostSessionReleaseRequest"
-       "HostSessionReleasedNotification"
-       "HostSessionReleasedRequest"
-       "HostShutdownResult"
-       "HostStartRequest"
-       "HostStartResult"
-       "InstallationCatalogueIdentity"
-       "SandboxCredentialsConfig"
-       "SandboxGrantPathForRequestRequest"
+       "HostExitedNotification"
        "SandboxGrantPathForRequestResult"
-       "SandboxMaskedEnvVar"
-       "SkillApplyInstallRequest"
-       "SkillApplyUninstallRequest"
-       "SkillInstallPlan"
-       "SkillInstallationFailureReason"
-       "SkillInstallationFileReview"
-       "SkillInstallationLocation"
-       "SkillInstallationManagementOutcome"
-       "SkillInstallationManagementResult"
-       "SkillInstallationOperationRequest"
-       "SkillInstallationOperationStatus"
-       "SkillInstallationOutcome"
-       "SkillInstallationOwnershipState"
-       "SkillInstallationResult"
-       "SkillInstallationReview"
+       "HostSessionCreateResult"
+       "HostSessionReleasedRequest"
        "SkillInstallationScope"
+       "HostDisposeRequest"
+       "HostPublishSessionRequest"
+       "SandboxCredentialsConfig"
+       "SkillPlanUninstallRequest"
+       "SkillInstallationManagementOutcome"
+       "HostConfiguration"
+       "HostReleaseSessionResult"
+       "SkillInstallationOwnershipState"
+       "HostStartRequest"
+       "SkillInstallationFileReview"
+       "SkillApplyInstallRequest"
+       "SkillInstallationLocation"
+       "SkillInstallPlan"
+       "HostRegisterSessionResult"
+       "HostExitReason"
+       "HostRegisterSessionRequest"
+       "HostGetConfigurationResult"
+       "HostStartResult"
+       "SkillInstallationOperationRequest"
+       "InstallationCatalogueIdentity"
+       "HostReleaseSessionRequest"
+       "SkillInstallationOperationStatus"
+       "HostEmptyResult"
        "SkillInstallationSessionState"
-       "SkillInstallationSource"
+       "HostCreateSessionResult"
+       "HostSessionReleasedNotification"
+       "HostPublishSessionResult"
+       "SkillApplyUninstallRequest"
+       "HostMaterializeSessionResult"
+       "SandboxGrantPathForRequestRequest"
+       "HostDisposeResult"
+       "HostCreateSessionRequest"
+       "SkillSetEnabledRequest"
+       "HostReadyResult"
+       "HostHandler"
        "SkillInstallationSummary"
        "SkillInstallationsRequest"
        "SkillPlanInstallRequest"
-       "SkillPlanUninstallRequest"
-       "SkillSetEnabledRequest"
-       "SkillUninstallPlan"}},
+       "SkillInstallationReview"
+       "HostSessionCreateCallback"
+       "SkillInstallationOutcome"
+       "SkillInstallationFailureReason"
+       "SandboxMaskedEnvVar"
+       "HostReadyRequest"
+       "SkillUninstallPlan"
+       "SkillInstallationResult"
+       "HostSessionReleaseRequest"
+       "HostShutdownResult"
+       "SkillInstallationSource"
+       "SkillInstallationManagementResult"}},
     :removed {},
     :changed
-    {:experimental #{"InstallationReview" "McpInstallationReview" "PermissionDecision"},
+    {:experimental #{"McpInstallationReview" "PermissionDecision" "InstallationReview"},
      :generated-only
-     #{"CatalogAiSkillInstallability"
-       "CatalogCapability"
+     #{"CatalogCapability"
+       "SandboxConfig"
+       "CatalogAiSkillInstallability"
        "ClientGlobalApiHandlers"
-       "McpInstallationSummary"
-       "SandboxConfig"}}},
+       "McpInstallationSummary"}}},
+   "nodejs/src/canvas.ts"
+   {:fingerprint [9 "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :added {},
+    :removed {},
+    :changed {}},
    "nodejs/src/generated/session-events.ts"
    {:fingerprint [578 "bb54defac1e811c1ea52ac305517a822120367b0268b343ae1451dee15d8c94c"],
     :added
     {:experimental
-     #{"FusionCritic" "PermissionSandboxPathGrant" "PermissionSandboxPathGrantAccess"},
+     #{"PermissionSandboxPathGrantAccess" "PermissionSandboxPathGrant" "FusionCritic"},
      :stable-public #{"PermissionApprovedReadOnlyForSession"}},
     :removed {},
     :changed
     {:experimental
-     #{"FusionPhaseCompletedData"
-       "FusionPhaseFailedData"
-       "FusionPhaseStartedData"
-       "FusionResolvedData"
-       "PermissionPromptRequestCommands"
-       "PermissionPromptRequestPath"
-       "PermissionRequestRead"
+     #{"PermissionPromptRequestCommands"
        "PermissionRequestShell"
-       "PermissionRequestWrite"},
-     :stable-public #{"McpServerStatusChangedData" "PermissionResult"}}},
-   "nodejs/src/host.ts"
-   {:fingerprint [5 "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
-    :added
-    {:experimental
-     #{"AhpHost"
-       "AhpHostExit"
-       "AhpHostOptions"
-       "AhpSessionCreateRequest"
-       "AhpSessionResumeRequest"}},
-    :removed {},
-    :changed {}},
-   "nodejs/src/index.ts"
-   {:fingerprint [232 "bdf9fbaa46544246473438f161b60366e78c67a39914fafba101faa9e75467f3"],
-    :added
-    {:experimental
-     #{"AhpHost"
-       "AhpHostExit"
-       "AhpHostOptions"
-       "AhpSessionCreateRequest"
-       "AhpSessionResumeRequest"
-       "InstallationConfirmationHandler"
-       "InstallationConfirmationRequest"
-       "InstallationConfirmationResponse"
-       "InstallationDecision"
-       "InstallationReview"
-       "McpInstallationReview"
-       "SandboxConfigSource"}},
-    :removed {},
-    :changed {}},
-   "nodejs/src/installationConfirmation.ts"
-   {:fingerprint [3 "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
-    :added
-    {:experimental #{"InstallationConfirmationHandler"},
-     :internal #{"InstallationConfirmationReceiver" "createInstallationConfirmationAdapter"}},
-    :removed {},
-    :changed {}},
-   "nodejs/src/session.ts"
-   {:fingerprint [2 "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
-    :added {},
-    :removed {},
-    :changed {}},
-   "nodejs/src/toolSet.ts"
-   {:fingerprint [2 "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
-    :added {},
-    :removed {},
-    :changed {}},
-   "nodejs/src/types.ts"
-   {:fingerprint [232 "50d3e84ca9e247c975e178f8339ee3ceda157dab86aefc5981e0e875b47f1a3b"],
-    :added
-    {:experimental
-     #{"InstallationConfirmationHandler"
-       "InstallationConfirmationRequest"
-       "InstallationConfirmationResponse"
-       "InstallationDecision"
-       "InstallationReview"
-       "McpInstallationReview"
-       "SandboxConfigSource"}},
-    :removed {},
-    :changed {:experimental #{"CopilotClientOptions"}, :stable-public #{"SessionConfigBase"}}},
-   "nodejs/src/workflow.ts"
-   {:fingerprint [31 "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
-    :added {},
-    :removed {},
-    :changed {}}},
+       "FusionPhaseStartedData"
+       "PermissionPromptRequestPath"
+       "FusionPhaseFailedData"
+       "FusionPhaseCompletedData"
+       "PermissionRequestRead"
+       "PermissionRequestWrite"
+       "FusionResolvedData"},
+     :stable-public #{"McpServerStatusChangedData" "PermissionResult"}}}},
   :package-root
   {:fingerprint [800 "d81b3dd834a1f095bf2a4baf782db39dec3518e92b7ebf6cbd27434e9dffb400"],
    :star-exports #{"./generated/session-events.js"},
    :added
-   #{"AhpHost"
-     "AhpHostExit"
-     "AhpHostOptions"
-     "AhpSessionCreateRequest"
-     "AhpSessionResumeRequest"
-     "FusionCritic"
+   #{"McpInstallationReview"
      "InstallationConfirmationHandler"
      "InstallationConfirmationRequest"
+     "PermissionSandboxPathGrantAccess"
+     "AhpHostExit"
      "InstallationConfirmationResponse"
+     "AhpHostOptions"
      "InstallationDecision"
      "InstallationReview"
-     "McpInstallationReview"
+     "SandboxConfigSource"
+     "AhpSessionResumeRequest"
      "PermissionApprovedReadOnlyForSession"
+     "AhpSessionCreateRequest"
      "PermissionSandboxPathGrant"
-     "PermissionSandboxPathGrantAccess"
-     "SandboxConfigSource"},
+     "FusionCritic"
+     "AhpHost"},
    :removed #{}},
   :interfaces
-  {"AgentStopHookInput"
-   {:fingerprint [3 "d7aae98f0cc52eeb3d873d3a93e9d6e86cbf481b18ed057cc5c088401a197c56"],
+  {"ResumeSessionConfig"
+   {:fingerprint [3 "8200254cec5cd0bc3aae3b98a8c6814688605b75e4bce65d53c344bde5501a01"],
     :added-fields #{},
     :removed-fields #{}},
-   "AgentStopHookOutput"
-   {:fingerprint [2 "a8d6282ad71216f6b53ec97f4bff536e7d95553b0a202f94a088c8997b480a2a"],
+   "SessionEndHookInput"
+   {:fingerprint [3 "db9e60c11949d099daddfb1e1fdf317c629e4bbeb28bdc0dc50c26cb1c989a9a"],
     :added-fields #{},
     :removed-fields #{}},
-   "AttributedPermissionResult"
-   {:fingerprint [3 "3e666388906f2c4d7f66c719a39fc4cc4b4fbbe6b9e4eacebc4fe8afa5ca1f42"],
+   "SessionCreatedEvent"
+   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
     :added-fields #{},
     :removed-fields #{}},
-   "AutoModeSwitchRequest"
-   {:fingerprint [2 "e4782af4f0ac6515d1ee6ee94cd5d92a1bff4cb0ecfe068ec26da58de0e87e0c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "BaseHookInput"
-   {:fingerprint [3 "4dd1b38a04fcb164a3cfabb076c1d20be6478cae2b5121395c64c6cd3ed71e4f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CanvasProviderIdentity"
-   {:fingerprint [2 "d34f65e4568f8b250fa90e3b729aceda0e28427ed71e97daf572fd6087b41651"],
+   "ProviderTokenArgs"
+   {:fingerprint [2 "09133ff6dd8edbaf925da4f4f993b3f73a62d9743c18bf34b96cbdcb22c9bcef"],
     :added-fields #{},
     :removed-fields #{}},
    "CapiSessionOptions"
    {:fingerprint [2 "04fdf770b98a6685b88426bfccbba71d6590f0f4d3df50d71bb0107a45a64d18"],
     :added-fields #{},
     :removed-fields #{}},
-   "ChildProcessRuntimeConnection"
-   {:fingerprint [3 "10f4b910eff296cd95d9b508dfb32b1adfe3f19d0ddc1fcfa0766840eba99fb8"],
+   "McpAuthWwwAuthenticateParams"
+   {:fingerprint [3 "8c3f66ef8c9bea4e571bbe4b4f829da3befc35d446f9df55adabd1857e07fa55"],
     :added-fields #{},
     :removed-fields #{}},
-   "CloudSessionOptions"
-   {:fingerprint [1 "c522c0aef8fd4d1b056c3c00743aba37ab783d78fd2aaf762628ec4f6e888883"],
+   "TelemetryConfig"
+   {:fingerprint [6 "114b96645c30a8ad8fab2d8ffd20dba794ec9d87b56798c027cf03085251e25e"],
     :added-fields #{},
     :removed-fields #{}},
-   "CloudSessionRepository"
-   {:fingerprint [3 "25f76277fcd3cb18cefb89f99375ece5ea669d36be3c3633fa73e37bb8086a04"],
+   "ToolInvocation"
+   {:fingerprint [8 "8cb44108bb64c804e982c98dc593c89a5d3182cad1284be4c0484c91ea5e5a2c"],
     :added-fields #{},
     :removed-fields #{}},
-   "CommandContext"
-   {:fingerprint [4 "2abc8272a50c6157bd2817bc82efb303ee6df3457bdce0566386522186473438"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CommandDefinition"
-   {:fingerprint [3 "178ed0dd5814eb48429287bc7c7ad0a94792f6e16876e299ac60d9fb8ef1739b"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CopilotClientInfo"
-   {:fingerprint [4 "ce40539ce9776e3de53751819314cf2bf5e987316f3fc83af517cf3c243c5ae8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CopilotClientOptions"
-   {:fingerprint [21 "38ffdda8bb859050724c5f36cc54bd41589fc37c3c82091d68a5c0e5a0b051ff"],
-    :added-fields #{"installationConfirmationHandler"},
-    :removed-fields #{}},
-   "CopilotExpAssignmentResponse"
-   {:fingerprint [7 "32a158aa6403a21ef986a92b74eebb36bcc10fb3f29623c86f94a096c1acae84"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CustomAgentConfig"
-   {:fingerprint [10 "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "DefaultAgentConfig"
-   {:fingerprint [1 "1efea93dfd1b1564e5c9b8740f213fed3a1cb7de0887b5ca35d1f938b4f735e4"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationContext"
-   {:fingerprint [6 "ce438df7d53625351163bfb8776dc9fa4391717793e32832c3dbc36cca196e1c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationParams"
-   {:fingerprint [2 "3bcc3ed4d42dcee9ab2a63453df6a446d5aea15f1bb74a3edf0d86e4919daddd"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationResult"
-   {:fingerprint [2 "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationSchema"
-   {:fingerprint [3 "0f09ec622fa8c08dc47ee6e5e82db350dbecc15e1608a643fae4411e25e6e569"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ErrorOccurredHookInput"
-   {:fingerprint [3 "45d8d02d4ceec04589622b0418c51ed0729163f16bf5ef05398b5a9669afa855"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ErrorOccurredHookOutput"
-   {:fingerprint [4 "a8f1f611cd03328ae20beea1197c85cc017c6d162f78928cc8424fe50f41ff76"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExitPlanModeRequest"
-   {:fingerprint [4 "b52745cfef581e6e4ee19b6e1a2f59ab6616e24465a04f91fe4ae0a58b134805"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExitPlanModeResult"
-   {:fingerprint [3 "1cea17098a8983cdce8919c7780c8df08eeabf4e9bb8f26bbdc9a5b52133e688"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExpConfigEntry"
-   {:fingerprint [2 "8f8f41330d03718d5f3af2ba662653777d0a642dc53d0d0e7c33169d19a3a33d"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExtensionInfo"
-   {:fingerprint [2 "51a3ec2d9f339d61149bc42f891effe4b27a4f7de36f00071b521594602314ba"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExtensionJoinOptions"
-   {:fingerprint [1 "8c90f960b5234d0a6e65e7b595a4b804c7518b0cd65714b65ee6c1afe41ecf1d"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ForegroundSessionInfo"
-   {:fingerprint [2 "8e82715cf957cc02d02fc29ed3465ba9aacb8cfaa3fb2ad4baf099afa08777df"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "GetAuthStatusResponse"
-   {:fingerprint [5 "e5e4cbc20448aa346b9bf7faacdf42378e33fb63d9968cb2c18f3824c784ede7"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "GetStatusResponse"
-   {:fingerprint [2 "99fab2e37f12088ba36bfd9d2a23df8f4fd397adf3da8aeec1075d75b19f29a9"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "GitHubMcpToolConfig"
-   {:fingerprint [5 "2fc2df200a2394b7816eeb819d45910017aa11c07da3ee4525b9dc5f72450ceb"],
+   "UserInputResponse"
+   {:fingerprint [2 "7877f9385baa344cd428667c490aa4d85a28094d1b37458ff108704288368cb3"],
     :added-fields #{},
     :removed-fields #{}},
    "InProcessRuntimeConnection"
@@ -688,92 +719,124 @@
    {:fingerprint [3 "cc4378413170ee5902e492badbb9de427c40d8b8451ee669f79a436a01cdc5cb"],
     :added-fields #{},
     :removed-fields #{}},
-   "LargeToolOutputConfig"
-   {:fingerprint [3 "bffd26715602f2fafc9e9e5209b876d48666cb8341935886a0e560c5a2d3b0ae"],
+   "SessionMetadata"
+   {:fingerprint [6 "7327dd694a90533017bb1701a6aab035e1bcd0fb0f84e2015010c474a85dce42"],
     :added-fields #{},
     :removed-fields #{}},
-   "MCPHTTPServerConfig"
-   {:fingerprint [3 "e9ecfecab2c125bdeff68f35ea0d02d9cd1fdafde542d4b2b7aea5355c26e21b"],
+   "ForegroundSessionInfo"
+   {:fingerprint [2 "8e82715cf957cc02d02fc29ed3465ba9aacb8cfaa3fb2ad4baf099afa08777df"],
     :added-fields #{},
     :removed-fields #{}},
-   "MCPStdioServerConfig"
-   {:fingerprint [5 "8919766ccef8181491cdaccac2dc6f8201c177579ebb3b70cb35686549374b6e"],
+   "PreMcpToolCallHookInput"
+   {:fingerprint [5 "59aa2e6b4e03ca71072576e0d68e89f5d15d22e4a4cf922e562f272fbb8b8055"],
     :added-fields #{},
     :removed-fields #{}},
-   "ManagedSettings"
-   {:fingerprint [1 "be8765b8a6a278b6f98d4e6a6a75aa71ac31661c434fe47eac56a9a2ff13decb"],
+   "ExpConfigEntry"
+   {:fingerprint [2 "8f8f41330d03718d5f3af2ba662653777d0a642dc53d0d0e7c33169d19a3a33d"],
     :added-fields #{},
     :removed-fields #{}},
-   "ManagedSettingsPermissions"
-   {:fingerprint [4 "48d1b198a804157c8d11c51fa5a6fdb0b009f07ee8edd2e43cdffb4798975d51"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthRequest"
-   {:fingerprint [7 "1ee39eb587296975dbb1e50bdaf57e6aa2dd416ffccf808fd83a17f01ed70139"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthStaticClientConfig"
-   {:fingerprint [5 "a19ab9137f33746e02c86b686afb0a10ddfbcaec81b9a3fa193bbf3a04f2fcb8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthToken"
-   {:fingerprint [3 "16c82cc163d91adb3371838d68fb9c79d04379c92e69968663351dba662a554c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthWwwAuthenticateParams"
-   {:fingerprint [3 "8c3f66ef8c9bea4e571bbe4b4f829da3befc35d446f9df55adabd1857e07fa55"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "MemoryConfiguration"
-   {:fingerprint [1 "e056a35db086947e2f5969d747f0a7517bff00c7ffff1f9e7b47b72bfac9d948"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "MessageOptions"
-   {:fingerprint [8 "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelBilling"
-   {:fingerprint [2 "fddd7875cc476172b4e39ddddd035de33f231298ea757ed6c50ab261aaa87ad2"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelCapabilities"
-   {:fingerprint [2 "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelInfo"
-   {:fingerprint [7 "0253b7f00acd12a6a4fa8db2811a4db772c782428b493a5a549d7a86202b9b28"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelPolicy"
-   {:fingerprint [2 "49da08af7225842b41693c988a0ca8d14361528ef625c81d9781f0b926f3bab6"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "NamedProviderConfig"
-   {:fingerprint [9 "10dd63ca62e4c945d1d6f1fe4d71c79ebd58fcb6bd71cc1958408876dd23e279"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ParentProcessRuntimeConnection"
-   {:fingerprint [1 "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+   "ToolCallRequestPayload"
+   {:fingerprint [4 "63dd509594d1480e379ff124a653f2b12f0230873c9023a2461f52da67f52022"],
     :added-fields #{},
     :removed-fields #{}},
    "PostToolUseFailureHookInput"
    {:fingerprint [3 "8b74ccaa661e5b3c9ac645b070f15911379b8ce43282b30a536e88ecbe4eb833"],
     :added-fields #{},
     :removed-fields #{}},
+   "Tool"
+   {:fingerprint [9 "0e2ef32e0f5098f470ca44961f56f61445b0fbceabb679e7aaf0e86e66e07bb7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageReplaceConfig"
+   {:fingerprint [2 "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionForegroundEvent"
+   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfig"
+   {:fingerprint [3 "54e55949b3d0df86b5afaa2f70e255c33aec4eb46bed509a8569f99b2d8dbd83"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionFsConfig"
+   {:fingerprint [4 "a0138a4a7b603c87d6370093fdc31ca7eabd02857bb4c5ca99e07f391bb93886"],
+    :added-fields #{},
+    :removed-fields #{}},
    "PostToolUseFailureHookOutput"
    {:fingerprint [1 "d86d56aaf18b868563d279485728ef9e6ffbc4a1596c7c321068e0b1be0a9033"],
     :added-fields #{},
     :removed-fields #{}},
-   "PostToolUseHookInput"
-   {:fingerprint [3 "1a2381673cedc79fe58f9868a4b2b5ae605b3cffe1609cac26e7d94f20d848e0"],
+   "SessionStartHookInput"
+   {:fingerprint [2 "ff899a5646f4978b73153825aac0ad750ae6f2fc79ca6afb45dbbaf7b3efbcbe"],
     :added-fields #{},
     :removed-fields #{}},
-   "PostToolUseHookOutput"
-   {:fingerprint [3 "77c75bf1cbef77d53d374a50c9d082c438685b8534bfefe588bbc229af19e442"],
+   "ToolCallResponsePayload"
+   {:fingerprint [1 "5656fafa00d4f294bcb606cf4f7d4fa877390e46f583e8b3c8744ace104a31d1"],
     :added-fields #{},
     :removed-fields #{}},
-   "PreMcpToolCallHookInput"
-   {:fingerprint [5 "59aa2e6b4e03ca71072576e0d68e89f5d15d22e4a4cf922e562f272fbb8b8055"],
+   "ZodSchema"
+   {:fingerprint [1 "bccaec1f339f99936b4be317527ab8a2b033f1d913b1a0e75c6640f34af8091c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelCapabilities"
+   {:fingerprint [2 "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelPolicy"
+   {:fingerprint [2 "49da08af7225842b41693c988a0ca8d14361528ef625c81d9781f0b926f3bab6"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageCustomizeConfig"
+   {:fingerprint [3 "9e4b567ba896951e054fc5d0cb57219b2b58248f8a208c78ae3a2bf677182bcb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandDefinition"
+   {:fingerprint [3 "178ed0dd5814eb48429287bc7c7ad0a94792f6e16876e299ac60d9fb8ef1739b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandContext"
+   {:fingerprint [4 "2abc8272a50c6157bd2817bc82efb303ee6df3457bdce0566386522186473438"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPStdioServerConfig"
+   {:fingerprint [5 "8919766ccef8181491cdaccac2dc6f8201c177579ebb3b70cb35686549374b6e"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetStatusResponse"
+   {:fingerprint [2 "99fab2e37f12088ba36bfd9d2a23df8f4fd397adf3da8aeec1075d75b19f29a9"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionStartHookOutput"
+   {:fingerprint [2 "b4d308d2be27710567c3faae7e832c88212079ec8b3585b0f07f5c0a5e23e751"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookOutput"
+   {:fingerprint [4 "a8f1f611cd03328ae20beea1197c85cc017c6d162f78928cc8424fe50f41ff76"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionEndHookOutput"
+   {:fingerprint [3 "3c4f59c4d00ac8d06b46bec2738a4e0a8683c73f22fa4ae6e522cb8e266d3cda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionContext"
+   {:fingerprint [4 "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientOptions"
+   {:fingerprint [21 "38ffdda8bb859050724c5f36cc54bd41589fc37c3c82091d68a5c0e5a0b051ff"],
+    :added-fields #{"installationConfirmationHandler"},
+    :removed-fields #{}},
+   "CloudSessionOptions"
+   {:fingerprint [1 "c522c0aef8fd4d1b056c3c00743aba37ab783d78fd2aaf762628ec4f6e888883"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderModelConfig"
+   {:fingerprint [9 "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationContext"
+   {:fingerprint [6 "ce438df7d53625351163bfb8776dc9fa4391717793e32832c3dbc36cca196e1c"],
     :added-fields #{},
     :removed-fields #{}},
    "PreMcpToolCallHookOutput"
@@ -784,192 +847,252 @@
    {:fingerprint [2 "8c2ffdf872c77d227d45b274f89408e29f8d582825aa7a0051771c9a7246577c"],
     :added-fields #{},
     :removed-fields #{}},
-   "PreToolUseHookOutput"
-   {:fingerprint [5 "b08e7b19e21adaeaf58ec4405ae939f6e8813734f03a69253ecde8bc8e39f703"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ProviderConfig"
-   {:fingerprint [13 "bdbdc09988a227b2eb4acb9fa4d9c755c401ead06ef4a6635cba4278b6d8cfda"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ProviderModelConfig"
-   {:fingerprint [9 "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ProviderTokenArgs"
-   {:fingerprint [2 "09133ff6dd8edbaf925da4f4f993b3f73a62d9743c18bf34b96cbdcb22c9bcef"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ResponseSchema"
-   {:fingerprint [0 "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ResumeSessionConfig"
-   {:fingerprint [3 "8200254cec5cd0bc3aae3b98a8c6814688605b75e4bce65d53c344bde5501a01"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SectionOverride"
-   {:fingerprint [2 "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionBackgroundEvent"
-   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionCapabilities"
-   {:fingerprint [1 "09cc1d0a4273c286401cd38c9bf6735ef0ab29f085dfb71ca7c408db4a5ed728"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionConfig"
-   {:fingerprint [3 "54e55949b3d0df86b5afaa2f70e255c33aec4eb46bed509a8569f99b2d8dbd83"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionConfigBase"
-   {:fingerprint [82 "3b66692049bbc130d73ab41855be4abda7f03de4b1f1290787b8d73e3c021dab"],
-    :added-fields #{"allowedModels"},
-    :removed-fields #{}},
-   "SessionContext"
-   {:fingerprint [4 "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionCreatedEvent"
-   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionDeletedEvent"
-   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionEndHookInput"
-   {:fingerprint [3 "db9e60c11949d099daddfb1e1fdf317c629e4bbeb28bdc0dc50c26cb1c989a9a"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionEndHookOutput"
-   {:fingerprint [3 "3c4f59c4d00ac8d06b46bec2738a4e0a8683c73f22fa4ae6e522cb8e266d3cda"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionForegroundEvent"
-   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionFsConfig"
-   {:fingerprint [4 "a0138a4a7b603c87d6370093fdc31ca7eabd02857bb4c5ca99e07f391bb93886"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionHooks"
-   {:fingerprint [10 "23ebb885ecf68b57128ddf76c3c610c874405481b9ace33e16291e84d4e70e37"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionLifecycleEventMetadata"
-   {:fingerprint [3 "7a583d77773d2303de442ac85894ca460c6f708aef0f55ce4547fd053c4a2031"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionListFilter"
-   {:fingerprint [4 "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionMetadata"
-   {:fingerprint [6 "7327dd694a90533017bb1701a6aab035e1bcd0fb0f84e2015010c474a85dce42"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionStartHookInput"
-   {:fingerprint [2 "ff899a5646f4978b73153825aac0ad750ae6f2fc79ca6afb45dbbaf7b3efbcbe"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionStartHookOutput"
-   {:fingerprint [2 "b4d308d2be27710567c3faae7e832c88212079ec8b3585b0f07f5c0a5e23e751"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionUiApi"
-   {:fingerprint [0 "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
-    :added-fields #{},
-    :removed-fields #{}},
    "SessionUpdatedEvent"
    {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
     :added-fields #{},
     :removed-fields #{}},
-   "StdioRuntimeConnection"
-   {:fingerprint [1 "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+   "AutoModeSwitchRequest"
+   {:fingerprint [2 "e4782af4f0ac6515d1ee6ee94cd5d92a1bff4cb0ecfe068ec26da58de0e87e0c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MessageOptions"
+   {:fingerprint [8 "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"],
     :added-fields #{},
     :removed-fields #{}},
    "SystemMessageAppendConfig"
    {:fingerprint [2 "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
     :added-fields #{},
     :removed-fields #{}},
-   "SystemMessageCustomizeConfig"
-   {:fingerprint [3 "9e4b567ba896951e054fc5d0cb57219b2b58248f8a208c78ae3a2bf677182bcb"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SystemMessageReplaceConfig"
-   {:fingerprint [2 "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "TcpRuntimeConnection"
-   {:fingerprint [3 "4965411ad2991bcdf6b942994f6b640f811f29e2b4a689e027a5098d3ef9515b"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "TelemetryConfig"
-   {:fingerprint [6 "114b96645c30a8ad8fab2d8ffd20dba794ec9d87b56798c027cf03085251e25e"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "Tool"
-   {:fingerprint [9 "0e2ef32e0f5098f470ca44961f56f61445b0fbceabb679e7aaf0e86e66e07bb7"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ToolCallRequestPayload"
-   {:fingerprint [4 "63dd509594d1480e379ff124a653f2b12f0230873c9023a2461f52da67f52022"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ToolCallResponsePayload"
-   {:fingerprint [1 "5656fafa00d4f294bcb606cf4f7d4fa877390e46f583e8b3c8744ace104a31d1"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ToolInvocation"
-   {:fingerprint [8 "8cb44108bb64c804e982c98dc593c89a5d3182cad1284be4c0484c91ea5e5a2c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ToolSearchConfig"
-   {:fingerprint [2 "1f7f717c833ebbdf7e8b7cff148e82bba8c7a79a6717fd51ae20c73d6b1281a1"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "TraceContext"
-   {:fingerprint [2 "1a894915a2a0e05212477c41b5f14bda5827be9297a17f04a65b32c8c98e0e7c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UiInputOptions"
-   {:fingerprint [6 "98b9a309478887ef203ea2c72314757ccf59078508cc3d927817b44f088bcc0f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UriRuntimeConnection"
-   {:fingerprint [3 "48a57da794210d9851b003d4f109ab0b4b022cefd2a67be7d9b3ba8e85b17d21"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UserInputRequest"
-   {:fingerprint [3 "e7a56785d1ebde5b8fb87469ab88eb812503c4bd105e6c7b69340da5fe910ca7"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UserInputResponse"
-   {:fingerprint [2 "7877f9385baa344cd428667c490aa4d85a28094d1b37458ff108704288368cb3"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UserPromptSubmittedHookInput"
-   {:fingerprint [1 "2934d46a57407eb0d71f0ffd9dc3773905a1150aa2fd2ecf8947cb29b4218028"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UserPromptSubmittedHookOutput"
-   {:fingerprint [3 "9ff8f9ed4aad6be83387e14813c9d02c9b2dd8c151d9f470418bfc6d16a61954"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UserPromptTransformedHookInput"
-   {:fingerprint [2 "94061bbe65b6fe2d7b95af74cc9684f33a0db1cc95f2f132fcdd2f7958a36d6c"],
+   "CloudSessionRepository"
+   {:fingerprint [3 "25f76277fcd3cb18cefb89f99375ece5ea669d36be3c3633fa73e37bb8086a04"],
     :added-fields #{},
     :removed-fields #{}},
    "UserPromptTransformedHookOutput"
    {:fingerprint [1 "8edd29a2e5f4508b58ba78df597ced68c989974cb74e315bccdf55774b121c68"],
     :added-fields #{},
     :removed-fields #{}},
-   "ZodSchema"
-   {:fingerprint [1 "bccaec1f339f99936b4be317527ab8a2b033f1d913b1a0e75c6640f34af8091c"],
+   "SessionUiApi"
+   {:fingerprint [0 "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionLifecycleEventMetadata"
+   {:fingerprint [3 "7a583d77773d2303de442ac85894ca460c6f708aef0f55ce4547fd053c4a2031"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionBackgroundEvent"
+   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthToken"
+   {:fingerprint [3 "16c82cc163d91adb3371838d68fb9c79d04379c92e69968663351dba662a554c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeRequest"
+   {:fingerprint [4 "b52745cfef581e6e4ee19b6e1a2f59ab6616e24465a04f91fe4ae0a58b134805"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GitHubMcpToolConfig"
+   {:fingerprint [5 "2fc2df200a2394b7816eeb819d45910017aa11c07da3ee4525b9dc5f72450ceb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ResponseSchema"
+   {:fingerprint [0 "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookInput"
+   {:fingerprint [1 "2934d46a57407eb0d71f0ffd9dc3773905a1150aa2fd2ecf8947cb29b4218028"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TraceContext"
+   {:fingerprint [2 "1a894915a2a0e05212477c41b5f14bda5827be9297a17f04a65b32c8c98e0e7c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationSchema"
+   {:fingerprint [3 "0f09ec622fa8c08dc47ee6e5e82db350dbecc15e1608a643fae4411e25e6e569"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionDeletedEvent"
+   {:fingerprint [2 "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ParentProcessRuntimeConnection"
+   {:fingerprint [1 "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UiInputOptions"
+   {:fingerprint [6 "98b9a309478887ef203ea2c72314757ccf59078508cc3d927817b44f088bcc0f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "NamedProviderConfig"
+   {:fingerprint [9 "10dd63ca62e4c945d1d6f1fe4d71c79ebd58fcb6bd71cc1958408876dd23e279"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookOutput"
+   {:fingerprint [3 "77c75bf1cbef77d53d374a50c9d082c438685b8534bfefe588bbc229af19e442"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationParams"
+   {:fingerprint [2 "3bcc3ed4d42dcee9ab2a63453df6a446d5aea15f1bb74a3edf0d86e4919daddd"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookOutput"
+   {:fingerprint [3 "9ff8f9ed4aad6be83387e14813c9d02c9b2dd8c151d9f470418bfc6d16a61954"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TcpRuntimeConnection"
+   {:fingerprint [3 "4965411ad2991bcdf6b942994f6b640f811f29e2b4a689e027a5098d3ef9515b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MemoryConfiguration"
+   {:fingerprint [1 "e056a35db086947e2f5969d747f0a7517bff00c7ffff1f9e7b47b72bfac9d948"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookInput"
+   {:fingerprint [3 "1a2381673cedc79fe58f9868a4b2b5ae605b3cffe1609cac26e7d94f20d848e0"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserInputRequest"
+   {:fingerprint [3 "e7a56785d1ebde5b8fb87469ab88eb812503c4bd105e6c7b69340da5fe910ca7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotExpAssignmentResponse"
+   {:fingerprint [7 "32a158aa6403a21ef986a92b74eebb36bcc10fb3f29623c86f94a096c1acae84"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettingsPermissions"
+   {:fingerprint [4 "48d1b198a804157c8d11c51fa5a6fdb0b009f07ee8edd2e43cdffb4798975d51"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CanvasProviderIdentity"
+   {:fingerprint [2 "d34f65e4568f8b250fa90e3b729aceda0e28427ed71e97daf572fd6087b41651"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "DefaultAgentConfig"
+   {:fingerprint [1 "1efea93dfd1b1564e5c9b8740f213fed3a1cb7de0887b5ca35d1f938b4f735e4"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreToolUseHookOutput"
+   {:fingerprint [5 "b08e7b19e21adaeaf58ec4405ae939f6e8813734f03a69253ecde8bc8e39f703"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookInput"
+   {:fingerprint [3 "45d8d02d4ceec04589622b0418c51ed0729163f16bf5ef05398b5a9669afa855"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelInfo"
+   {:fingerprint [7 "0253b7f00acd12a6a4fa8db2811a4db772c782428b493a5a549d7a86202b9b28"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SectionOverride"
+   {:fingerprint [2 "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettings"
+   {:fingerprint [1 "be8765b8a6a278b6f98d4e6a6a75aa71ac31661c434fe47eac56a9a2ff13decb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptTransformedHookInput"
+   {:fingerprint [2 "94061bbe65b6fe2d7b95af74cc9684f33a0db1cc95f2f132fcdd2f7958a36d6c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionJoinOptions"
+   {:fingerprint [1 "8c90f960b5234d0a6e65e7b595a4b804c7518b0cd65714b65ee6c1afe41ecf1d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPHTTPServerConfig"
+   {:fingerprint [3 "e9ecfecab2c125bdeff68f35ea0d02d9cd1fdafde542d4b2b7aea5355c26e21b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfigBase"
+   {:fingerprint [82 "3b66692049bbc130d73ab41855be4abda7f03de4b1f1290787b8d73e3c021dab"],
+    :added-fields #{"allowedModels"},
+    :removed-fields #{}},
+   "BaseHookInput"
+   {:fingerprint [3 "4dd1b38a04fcb164a3cfabb076c1d20be6478cae2b5121395c64c6cd3ed71e4f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "StdioRuntimeConnection"
+   {:fingerprint [1 "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UriRuntimeConnection"
+   {:fingerprint [3 "48a57da794210d9851b003d4f109ab0b4b022cefd2a67be7d9b3ba8e85b17d21"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CustomAgentConfig"
+   {:fingerprint [10 "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolSearchConfig"
+   {:fingerprint [2 "1f7f717c833ebbdf7e8b7cff148e82bba8c7a79a6717fd51ae20c73d6b1281a1"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionHooks"
+   {:fingerprint [10 "23ebb885ecf68b57128ddf76c3c610c874405481b9ace33e16291e84d4e70e37"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionInfo"
+   {:fingerprint [2 "51a3ec2d9f339d61149bc42f891effe4b27a4f7de36f00071b521594602314ba"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelBilling"
+   {:fingerprint [2 "fddd7875cc476172b4e39ddddd035de33f231298ea757ed6c50ab261aaa87ad2"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientInfo"
+   {:fingerprint [4 "ce40539ce9776e3de53751819314cf2bf5e987316f3fc83af517cf3c243c5ae8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AgentStopHookInput"
+   {:fingerprint [3 "d7aae98f0cc52eeb3d873d3a93e9d6e86cbf481b18ed057cc5c088401a197c56"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "LargeToolOutputConfig"
+   {:fingerprint [3 "bffd26715602f2fafc9e9e5209b876d48666cb8341935886a0e560c5a2d3b0ae"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetAuthStatusResponse"
+   {:fingerprint [5 "e5e4cbc20448aa346b9bf7faacdf42378e33fb63d9968cb2c18f3824c784ede7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AgentStopHookOutput"
+   {:fingerprint [2 "a8d6282ad71216f6b53ec97f4bff536e7d95553b0a202f94a088c8997b480a2a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionCapabilities"
+   {:fingerprint [1 "09cc1d0a4273c286401cd38c9bf6735ef0ab29f085dfb71ca7c408db4a5ed728"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationResult"
+   {:fingerprint [2 "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthRequest"
+   {:fingerprint [7 "1ee39eb587296975dbb1e50bdaf57e6aa2dd416ffccf808fd83a17f01ed70139"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ChildProcessRuntimeConnection"
+   {:fingerprint [3 "10f4b910eff296cd95d9b508dfb32b1adfe3f19d0ddc1fcfa0766840eba99fb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderConfig"
+   {:fingerprint [13 "bdbdc09988a227b2eb4acb9fa4d9c755c401ead06ef4a6635cba4278b6d8cfda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AttributedPermissionResult"
+   {:fingerprint [3 "3e666388906f2c4d7f66c719a39fc4cc4b4fbbe6b9e4eacebc4fe8afa5ca1f42"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeResult"
+   {:fingerprint [3 "1cea17098a8983cdce8919c7780c8df08eeabf4e9bb8f26bbdc9a5b52133e688"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthStaticClientConfig"
+   {:fingerprint [5 "a19ab9137f33746e02c86b686afb0a10ddfbcaec81b9a3fa193bbf3a04f2fcb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionListFilter"
+   {:fingerprint [4 "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
     :added-fields #{},
     :removed-fields #{}}},
   :classes
@@ -1033,9 +1156,9 @@
     :added-signatures [],
     :removed-signatures [],
     :fields
-    #{"clientSessionApis: ClientSessionApiHandlers"
+    #{"readonly workflow: SessionWorkflowApi"
       "public readonly sessionId: string"
-      "readonly workflow: SessionWorkflowApi"}},
+      "clientSessionApis: ClientSessionApiHandlers"}},
    :host
    {:path "nodejs/src/host.ts",
     :class-name "AhpHost",
@@ -1050,17 +1173,17 @@
      "publishSession(sessionId: string): Promise<HostPublishSessionResult>"],
     :removed-signatures [],
     :fields
-    #{"readonly hostId: string"
-      "readonly pid: number | undefined"
-      "readonly token: string | undefined"
-      "readonly url: string"},
+    #{"readonly token: string | undefined"
+      "readonly url: string"
+      "readonly hostId: string"
+      "readonly pid: number | undefined"},
     :classification :experimental}},
   :unchanged-authority-paths
-  #{"nodejs/src/canvas.ts"
-    "nodejs/src/extension.ts"
+  #{"nodejs/src/extension.ts"
+    "nodejs/src/workflow.ts"
     "nodejs/src/session.ts"
     "nodejs/src/toolSet.ts"
-    "nodejs/src/workflow.ts"}},
+    "nodejs/src/canvas.ts"}},
  :intentional-exclusions
  [{:id :ahp-hosting,
    :classification :experimental,
@@ -1112,7 +1235,7 @@
   :historical-oracle
   {:resource "resources/stable_upstream_delta_d106d29.edn",
    :sha256 "b67ac776da6d993f4ada91fcc23d399e65e9e3455f2d2ffd6366b2fbc80092ce"},
-  :local-artifact-seal {:status :pending}},
+  :local-artifact-seal {:status :sealed, :commit "347a3f16d3af8a3dd9dcb6c97c315ab05ab5e32c"}},
  :changed-paths
  {:exact-classifications
   {"CONTRIBUTING.md" :internal,
@@ -1320,11 +1443,12 @@
     "nodejs/test/host-client.test.ts"],
    :idiom {:completion :notification-channel-closure, :cancellation :disconnect},
    :docs ["doc/reference/API.md" "CHANGELOG.md"],
-   :fdefs [github.copilot-sdk.session/subscribe-events
-           github.copilot-sdk.session/send-async
-           github.copilot-sdk.session/send-async-with-id
-           github.copilot-sdk.session/<send!
-           github.copilot-sdk.session/<send-and-wait!],
+   :fdefs
+   [github.copilot-sdk.session/subscribe-events
+    github.copilot-sdk.session/send-async
+    github.copilot-sdk.session/send-async-with-id
+    github.copilot-sdk.session/<send!
+    github.copilot-sdk.session/<send-and-wait!],
    :classification :stable-public,
    :proof-states
    [:notification-backlog
@@ -1371,6 +1495,12 @@
   :commit-count 9,
   :commits-sha256 "13137dcc5db1ef4311a2a890387c3d79b7f89ee30b44af314f7bef0e2fb9eb8a",
   :hash-format :newline-joined-without-trailing-newline},
+ :decision "doc/adr/2026-09-30-model-policy-and-lifecycle-sync.md",
+ :method-deltas
+ [{:class "CopilotClient",
+   :method "startAhpHost",
+   :classification :experimental,
+   :decision :exclude}],
  :api-snapshot-impact
  {:added-spec-keys
   #{:github.copilot-sdk.specs/error-classification

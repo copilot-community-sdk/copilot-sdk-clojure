@@ -11,6 +11,7 @@
 (def ^:private base "d106d29dc6c5112da2abdae59008571b6692f12b")
 (def ^:private target "a2b2c18eb5a20417fc613eaaa93199f55ad22ea4")
 (def ^:private clojure-base "56019a78f8fe8ec73ad31eebc041e1690b119769")
+(def ^:private implementation "347a3f16d3af8a3dd9dcb6c97c315ab05ab5e32c")
 (def ^:private classifications
   #{:stable-public :experimental :internal :generated-only :language-specific})
 (def ^:private authority-paths
@@ -27,6 +28,9 @@
 (defn- report []
   (or (ss/read-resource resource)
       (throw (ex-info "Missing exact-pin inventory" {:resource resource}))))
+
+(defn- local-source [path]
+  (ss/shell-output "git" "show" (str implementation ":" path)))
 
 (defn- fingerprint [items]
   [(count items) (ss/sha256-lines (sort items))])
@@ -61,6 +65,46 @@
            [{:class "CopilotClient" :method "startAhpHost"
              :classification :experimental :decision :exclude}]))
     (is (= (:unclassified-deltas r) []))))
+
+(deftest implementation-artifacts-and-runtime-boundary-remain-sealed
+  (let [r (report)
+        artifacts (:sealed-local-artifacts r)
+        unchanged (:unchanged-local-artifacts r)
+        actual-changes
+        (set/difference
+         (set (ss/git-lines "." "diff" "--no-renames" "--name-only" clojure-base implementation))
+         #{(str "test/" resource)
+           "test/github/copilot_sdk/integration/stable_sync_a2b2c18_test.clj"})]
+    (is (= (get-in r [:certification :local-artifact-seal])
+           {:status :sealed :commit implementation}))
+    (is (= (ss/shell-output "git" "merge-base" "--is-ancestor" implementation "HEAD") ""))
+    (is (= actual-changes (set/difference (set (keys artifacts)) unchanged)))
+    (is (empty? (set/intersection actual-changes unchanged)))
+    (doseq [[path expected] artifacts]
+      (is (= (ss/git-file-sha256 implementation path) expected) path))
+    (doseq [path unchanged]
+      (is (= (ss/git-file-sha256 clojure-base path)
+             (ss/git-file-sha256 implementation path)) path))
+    (doseq [contract (:stable-deltas r)
+            path (concat
+                  (:docs contract)
+                  (for [test-symbol (:tests contract)]
+                    (str "test/" (-> (namespace test-symbol)
+                                     (str/replace "." "/")
+                                     (str/replace "-" "_")) ".clj")))]
+      (is (contains? artifacts path) path))
+    (is (contains? artifacts (:decision r)))
+    (is (= (local-source ".copilot-schema-version") "1.0.90-5"))
+    (is (str/includes? (local-source ".github/workflows/ci.yml") target))
+    (is (str/includes? (local-source "build.clj") "(def version \"1.0.14.0\")"))
+    (doseq [[path expected] (get-in r [:schema :artifacts])]
+      (is (= (ss/git-file-sha256 implementation path) expected) path))
+    (let [events (json/read-str (local-source "schemas/session-events.schema.json"))]
+      (doseq [field ["configSource" "errorClassification"]]
+        (is (= (get-in events ["definitions" "McpServerStatusChangedData" "properties" field "type"])
+               "string"))
+        (is (not (contains? (set (get-in events ["definitions" "McpServerStatusChangedData" "required"]))
+                            field)))))))
 
 (deftest every-commit-path-and-export-delta-is-classified
   (let [{:keys [upstream commit-classifications changed-paths target-public-surface]} (report)]
@@ -189,7 +233,7 @@
   (let [r (report)
         path "resources/github/copilot_sdk/api_surface.edn"
         old (edn/read-string (ss/shell-output "git" "show" (str clojure-base ":" path)))
-        snapshot (edn/read-string (slurp path))
+        snapshot (edn/read-string (local-source path))
         expected (update-in old [:namespaces 'github.copilot-sdk.specs :spec-keys]
                             #(vec (sort (into (set %) additional-specs))))]
     (is (= snapshot expected))
@@ -210,7 +254,7 @@
       (doseq [test (:tests contract)
               :let [path (str "test/" (-> (namespace test) (str/replace "." "/")
                                           (str/replace "-" "_")) ".clj")
-                    source (slurp path)]]
+                    source (local-source path)]]
         (is (str/includes? source (str "(deftest " (name test))) (str test))))
     (is (= (:unclassified-deltas r) []))
     (doseq [exclusion (:intentional-exclusions r)]
