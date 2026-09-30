@@ -274,7 +274,8 @@ the setting.
 Start the CLI server and establish connection. Blocks until connected.
 Concurrent calls share one startup attempt and all return the same success or
 throw the same failure. Calling `start!` and `stop!` concurrently remains
-unsupported.
+unsupported. A client using `:cli-url` can reconnect to its configured endpoint
+after either `stop!` or `force-stop!`.
 
 #### `with-client`
 
@@ -296,9 +297,12 @@ Stop the server and close all sessions gracefully.
 
 For SDK-spawned processes (not `:external-server?`), `stop!` issues a
 `runtime.shutdown` RPC before closing the connection, giving the CLI a chance to
-flush state and exit cleanly. The call is bounded by a 10-second timeout; on
-timeout or error the SDK falls back to terminating the process (SIGTERM, then
-SIGKILL). Connecting to an external server (`:cli-url`) skips the shutdown RPC and
+flush state and exit cleanly. The RPC has a 10-second timeout. After a successful
+response, owned stdio receives stdin EOF so host finalizers can flush telemetry;
+stdin closure and natural process exit share a 10-second window before
+termination (SIGTERM, then SIGKILL). A blocked writer cannot indefinitely delay
+stdin closure: the exit deadline runs independently and termination releases the
+pipe. A failed shutdown RPC skips the graceful exit wait. Connecting to an external server (`:cli-url`) skips the shutdown RPC and
 the process is left running. (upstream [PR #1667](https://github.com/github/copilot-sdk/pull/1667))
 
 Returns a vector of any errors encountered during cleanup — a failed session
@@ -398,6 +402,7 @@ failures.
 | `:session-id` | string | Custom session ID (optional) |
 | `:client-name` | string | Client name to identify the application (included in User-Agent header) |
 | `:model` | string | Model to use (`"gpt-5.4"`, `"claude-sonnet-4.5"`, etc.) |
+| `:allowed-models` | vector of strings | Exact model IDs permitted by the host on create, resume, and join. Omission preserves runtime policy; an explicit `[]` is forwarded unchanged rather than treated as omission. The runtime validates the allowlist and its intersection with repository policy. Order, duplicates, and string spelling are preserved on the wire as `allowedModels`; `nil` is invalid. This does not expose the experimental live model-policy setter. |
 | `:tools` | vector | Custom tools exposed to the CLI |
 | `:system-message` | map | System message customization (see below) |
 | `:available-tools` | vector | List of allowed tool names |
@@ -1146,9 +1151,13 @@ an expired deadline applies only to final publication after successful ACK and
 completion selection.
 
 Close the returned channel to abandon local waiting and pending delivery. This
-does not abort remote work. Session teardown also cancels delivery, including
+does not abort remote work. Explicit local teardown also cancels delivery, including
 when `:timeout-ms` is `nil`. These cancellation and completion guarantees apply
 to `send-async-with-id`, `<send!`, and `<send-and-wait!` as well.
+Unexpected connection closure preserves a captured completion and final reply
+for the result consumer, even when its output buffer is full. Transport and
+session resources are released independently; close the returned channel if
+you will not consume the remaining result.
 Local cancellation does not drain outstanding remote work. A following ordinary
 wait can observe that work's late events. `send-async-with-id` returns the request
 ID but does not automatically filter the stream by it.
@@ -1908,7 +1917,7 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
-For schema 1.0.89-5, `:copilot/assistant.server_tool_progress` also belongs to
+For schema 1.0.90-5, `:copilot/assistant.server_tool_progress` also belongs to
 `copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
 `:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
 `:copilot/session.permission_recovery`, and `:copilot/session.model_deselected`
@@ -1924,7 +1933,7 @@ remain generated wire evidence and are not curated as public idiom events.
 The experimental `reasoningBlocks` field on `assistant.message` and
 `:shell-execution` field on `tool.execution_complete` also remain generated
 wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.89-5` additionally carries experimental workflow pause/checkpoint,
+`1.0.90-5` additionally carries experimental workflow pause/checkpoint,
 permission, workspace, and managed-catalog protocol declarations that are not
 part of the stable Clojure API. The new experimental permission declarations
 include `permission.assentDetected`, `permission.contextualAuthorization`, and
@@ -1941,6 +1950,12 @@ experimental, even though the Node session config references the experimental
 subsystem stable. Fusion hints and steering attribution remain experimental;
 the runtime-only `session.fusion_change_checkpoint` event is internal and
 absent from the curated public event sets.
+Runtime-supervised AHP hosts, installation-confirmation callbacks and skill
+installation management, sandbox configuration/provenance and path grants,
+and read-only session permission decisions remain excluded. Passive
+`permission.completed` events can still carry the runtime's
+`"approved-read-only-for-session"` result and its directory vector; observing
+that result does not add permission-granting authority to the SDK.
 
 ### `evt` — Event Keyword Helper
 
@@ -2063,7 +2078,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.background_tasks_changed` | Background tasks status changed |
 | `:copilot/session.skills_loaded` | Skills loaded for the session |
 | `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session. Each server may include a managed-catalog `:display-name`, `:source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), plugin identity, `:error`, and `:server-metadata {:instructions <string-or-nil>}`. |
-| `:copilot/session.mcp_server_status_changed` | MCP server status changed |
+| `:copilot/session.mcp_server_status_changed` | MCP server status changed. Optional `:error`, `:config-source`, and `:error-classification` are non-null strings. Provenance and failure classifications are extensible strings, not closed enums; omission, empty strings, and future runtime values remain distinct in live events and history. |
 | `:copilot/session.mcp_server_removed` | MCP server was removed; data: `{:server-name "..."}` |
 | `:copilot/session.mcp_server_needs_reconnect` | MCP server requires reconnection; data: `{:server-name "..."}` |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |

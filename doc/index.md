@@ -42,6 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
+- [ADR: Separate stable model policy from experimental host controls](adr/2026-09-30-model-policy-and-lifecycle-sync.md) -- Stable allowlists and lifecycle contracts without new experimental authority.
 - [ADR: Migrate the existing orchestration API to Dynamic Workflows](adr/2026-09-27-dynamic-workflow-migration.md) -- Replaces the retired experimental Factory surface without compatibility aliases or unrelated experimental additions.
 - [ADR: Defer a host-owned inference boundary](adr/2026-08-10-host-owned-inference-boundary.md) -- **Accepted.** Keeps the upstream experimental `requestHandler` / `llmInference.*` lifecycle outside the supported SDK until concrete Clojure demand or upstream stabilization/material redesign.
 - [ADR: Add scope-bound query sequences before deprecating query-seq!](adr/2026-08-08-query-seq-scoped-lifecycle.md) -- **Accepted.** Adds `with-query-seq` as the safe default for streaming/seq-style consumption; `query-seq!` deprecation and removal are deferred, separate future steps.

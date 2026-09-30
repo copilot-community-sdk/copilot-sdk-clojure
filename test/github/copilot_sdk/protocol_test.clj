@@ -6,6 +6,7 @@
             [github.copilot-sdk.protocol :as protocol])
   (:import [java.io ByteArrayInputStream ByteArrayOutputStream
             InputStream PipedInputStream PipedOutputStream]
+           [java.nio.channels Channels Pipe]
            [java.nio.charset StandardCharsets]))
 
 (defn- wait-for
@@ -76,6 +77,80 @@
           (is (= -32000 (get-in result [:error :code]))))
         (finally
           (protocol/disconnect conn))))))
+
+(deftest eof-drains-parsed-notifications-before-closing-the-channel
+  (let [frames (ByteArrayOutputStream.)
+        count-notifications 1500
+        response-ch (async/chan 1)
+        unanswered-ch (async/chan 1)
+        state (atom {:connection
+                     (assoc (protocol/initial-connection-state)
+                            :pending-requests
+                            {"answered" {:ch response-ch}
+                             "unanswered" {:ch unanswered-ch}})})]
+    (dotimes [index count-notifications]
+      (write-framed-json! frames {:jsonrpc "2.0" :method "progress"
+                                  :params {:index index}}))
+    (write-framed-json! frames {:jsonrpc "2.0" :id "answered"
+                                :result {:messageId "last-response"}})
+    (let [conn (protocol/connect (ByteArrayInputStream. (.toByteArray frames))
+                                 (ByteArrayOutputStream.) state)]
+      (try
+        (.join ^Thread (:read-thread conn) 5000)
+        (is (not (.isAlive ^Thread (:read-thread conn))))
+        (is (= (first (async/alts!! [response-ch (async/timeout 5000)]))
+               {:result {:message-id "last-response"}}))
+        (is (= (get-in (first (async/alts!! [unanswered-ch (async/timeout 5000)]))
+                       [:error :code])
+               -32000))
+        (let [collected (async/into [] (protocol/notifications conn))
+              [notifications port] (async/alts!! [collected (async/timeout 5000)])]
+          (is (= port collected))
+          (is (= (count notifications) count-notifications))
+          (is (every? true? (map-indexed #(= (get-in %2 [:params :index]) %1)
+                                         notifications))))
+        (finally
+          (protocol/disconnect conn))))))
+
+(deftest disconnect-cancels-a-backpressured-eof-drain
+  (let [frames (ByteArrayOutputStream.)
+        state (atom {:connection (protocol/initial-connection-state)})]
+    (dotimes [index 1500]
+      (write-framed-json! frames {:jsonrpc "2.0" :method "progress"
+                                  :params {:index index}}))
+    (let [conn (protocol/connect (ByteArrayInputStream. (.toByteArray frames))
+                                 (ByteArrayOutputStream.) state)
+          ^Thread dispatcher (get-in @state [:connection :notification-thread])]
+      (try
+        (.join ^Thread (:read-thread conn) 5000)
+        (is (not (.isAlive ^Thread (:read-thread conn))))
+        (is (= (protocol/disconnect conn) []))
+        (is (not (.isAlive dispatcher)))
+        (is (async-protocols/closed? (protocol/notifications conn)))
+        (finally
+          (protocol/disconnect conn))))))
+
+(deftest closed-nio-input-completes-pending-requests-and-notification-drain
+  (let [pipe (Pipe/open)
+        state (atom {:connection (protocol/initial-connection-state)})
+        conn (protocol/connect (Channels/newInputStream (.source pipe))
+                               (ByteArrayOutputStream.) state)]
+    (try
+      (let [pending (protocol/send-request conn "ping" {})]
+        (.close (.source pipe))
+        (.join ^Thread (:read-thread conn) 5000)
+        (is (not (.isAlive ^Thread (:read-thread conn))))
+        (is (false? (get-in @state [:connection :running?])))
+        (is (= (get-in (first (async/alts!! [pending (async/timeout 1000)]))
+                       [:error :code])
+               -32000))
+        (let [notifications (protocol/notifications conn)
+              [value port] (async/alts!! [notifications (async/timeout 1000)])]
+          (is (= port notifications))
+          (is (nil? value))))
+      (finally
+        (protocol/disconnect conn)
+        (.close (.sink pipe))))))
 
 (deftest test-send-request-timeout-clears-pending
   (testing "Timeout removes pending request entry"

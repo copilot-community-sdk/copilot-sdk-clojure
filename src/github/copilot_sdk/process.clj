@@ -272,6 +272,34 @@
       (catch Exception _ false))
     true))
 
+(defn ^:no-doc finish-stdio!
+  "Close owned stdin while independently bounding process exit and termination.
+   Returns observable cleanup failures; the per-process closer is joined."
+  [mp timeout-ms]
+  (let [closed (promise)
+        closer (doto
+                (Thread.
+                 #(deliver
+                   closed
+                   (try
+                     (td/attempt {:operation :close :resource :process-stdin}
+                                 (.close ^java.io.OutputStream (:stdin mp)))
+                     (catch Throwable failure
+                       (td/failure {:operation :close :resource :process-stdin} failure))))
+                 "copilot-stdin-closer")
+                 (.setDaemon true)
+                 (.start))
+        process-failures (if (wait-for-exit! mp timeout-ms) [] (destroy! mp))
+        join-failure
+        (td/attempt {:operation :join :resource :stdin-closer}
+                    (.join closer 1000))]
+    (td/collect
+     (concat process-failures
+             [join-failure
+              (if (.isAlive closer)
+                (td/failure {:operation :join :resource :stdin-closer :timeout-ms 1000})
+                @closed)]))))
+
 (def ^:private port-exit-poll-ms
   "Maximum startup delay before noticing that the child process exited."
   10)

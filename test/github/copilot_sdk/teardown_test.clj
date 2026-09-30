@@ -255,6 +255,7 @@
    {:read-channel (recording-read-channel closed on-read-close)
     :write-channel (recording-write-channel closed)
     :state-atom (atom {:connection (protocol/initial-connection-state)})
+    :incoming-ch (async/chan 1)
     :outgoing-ch (async/chan 1)}))
 
 (deftest expected-close-failure-stays-quiet

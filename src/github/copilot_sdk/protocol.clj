@@ -4,7 +4,8 @@
    Architecture:
    - NIO channels for interruptible I/O (clean shutdown)
    - core.async channels for message flow
-   - Single reader thread puts to incoming-ch
+   - Single reader thread resolves responses and queues notifications
+   - Notification dispatcher drains accepted messages before closing incoming-ch on EOF
    - Writer go-loop takes from outgoing-ch
    - Reverse requests run on a bounded worker pool owned by the connection
    - State is managed externally (passed in as atom)
@@ -140,6 +141,7 @@
             ^WritableByteChannel write-channel
             ^OutputStream output-stream   ; Keep reference for flushing
             state-atom                    ; atom owned by client, contains :connection key
+            connection-id
             incoming-ch                   ; channel for incoming messages (responses + notifications)
             outgoing-ch                   ; channel for outgoing messages
             notification-queue            ; queue for notifications to avoid blocking reader
@@ -196,6 +198,24 @@
 ;; State path helpers
 (defn- conn-state [state-atom] (get @state-atom :connection))
 (defn- update-conn! [state-atom f & args] (apply swap! state-atom update :connection f args))
+
+(defn- connection-running? [{:keys [state-atom connection-id]}]
+  (let [state (conn-state state-atom)]
+    (and (:running? state)
+         (identical? connection-id (:connection-id state)))))
+
+(defn- close-input! [{:keys [state-atom connection-id]} error]
+  (let [[old new]
+        (swap-vals! state-atom
+                    (fn [{:keys [connection] :as state}]
+                      (if (and (:running? connection)
+                               (identical? connection-id (:connection-id connection)))
+                        (update state :connection assoc :running? false :pending-requests {})
+                        state)))]
+    (when-not (identical? old new)
+      (doseq [[_ {:keys [ch]}] (get-in old [:connection :pending-requests])]
+        (put! ch {:error error})
+        (close! ch)))))
 
 (defn- drain-pending!
   "Atomically clear all pending requests and deliver `error` to each response
@@ -708,23 +728,23 @@
   "Start background thread that reads messages from NIO channel.
    Exits cleanly when channel is closed (AsynchronousCloseException)."
   [conn]
-  (let [{:keys [read-channel state-atom]} conn
+  (let [{:keys [read-channel]} conn
         single-byte-buf (ByteBuffer/allocate 1)]
     (Thread.
      (fn []
        (log/debug "Read loop started")
        (try
          (loop []
-           (when (:running? (conn-state state-atom))
+           (when (connection-running? conn)
              (if-let [msg (read-message read-channel single-byte-buf)]
                (do
-                 (dispatch-message! conn msg)
+                 (when (connection-running? conn)
+                   (dispatch-message! conn msg))
                  (recur))
                (do
                  (log/debug "Read loop: EOF from remote")
-                 (update-conn! state-atom assoc :running? false)
-                 (drain-pending! state-atom {:code -32000
-                                             :message "Connection closed by remote"})))))
+                 (close-input! conn {:code -32000
+                                     :message "Connection closed by remote"})))))
          (catch AsynchronousCloseException _
            (log/debug "Read loop: channel closed asynchronously"))
          (catch ClosedChannelException _
@@ -737,26 +757,22 @@
            ;; :running? is already false and pending already drained, so the
            ;; drain below is a harmless no-op.)
            (let [pipe-closed? (= "Pipe closed" (ex-message e))]
-             (when (:running? (conn-state state-atom))
+             (when (connection-running? conn)
                (if pipe-closed?
                  (log/debug "Read loop: pipe closed by remote")
                  (log/error "Read loop IO exception: " (ex-message e)))
-               (update-conn! state-atom assoc :running? false)
-               (drain-pending! state-atom {:code -32000
-                                           :message (if pipe-closed?
-                                                      "Connection closed by remote"
-                                                      (str "Connection error: " (ex-message e)))}))))
+               (close-input! conn {:code -32000
+                                   :message (if pipe-closed?
+                                              "Connection closed by remote"
+                                              (str "Connection error: " (ex-message e)))}))))
          (catch Exception e
-           (when (:running? (conn-state state-atom))
+           (when (connection-running? conn)
              (log/error "Read loop exception: " (ex-message e))
-             (update-conn! state-atom assoc :running? false)
-             (drain-pending! state-atom
-                             {:code -32000
-                              :message (str "Connection error: "
-                                            (ex-message e))})))
+             (close-input! conn {:code -32000
+                                 :message (str "Connection error: " (ex-message e))})))
          (finally
-           (log/debug "Read loop ending")
-           (close! (:incoming-ch conn))))))))
+           (close-input! conn {:code -32000 :message "Connection input closed"})
+           (log/debug "Read loop ending")))))))
 
 (defn- start-write-loop!
   "Start go-loop that writes messages from outgoing-ch to NIO channel.
@@ -767,9 +783,9 @@
         writer-thread (Thread.
                        (fn []
                          (try
-                           (while (:running? (conn-state state-atom))
+                           (while (connection-running? conn)
                              (when-let [msg (.poll write-queue 100 java.util.concurrent.TimeUnit/MILLISECONDS)]
-                               (when (and (:running? (conn-state state-atom)) (.isOpen write-channel))
+                               (when (and (connection-running? conn) (.isOpen write-channel))
                                  (try
                                    (log/debug "Writing message: " (if (:id msg) (str "id=" (:id msg)) "notification"))
                                    (write-message! write-channel msg)
@@ -780,7 +796,7 @@
                                    (catch java.io.IOException _
                                      (log/debug "Write stream closed"))
                                    (catch Exception e
-                                     (when (:running? (conn-state state-atom))
+                                     (when (connection-running? conn)
                                        (log/error "Write error: " (ex-message e))))))))
                            (catch InterruptedException _
                              (log/debug "Writer thread interrupted")))))]
@@ -792,7 +808,7 @@
     ;; Go-loop to transfer from core.async channel to blocking queue
     (go-loop []
       (when-let [msg (<! outgoing-ch)]
-        (when (:running? (conn-state state-atom))
+        (when (connection-running? conn)
           (.put write-queue msg))
         (recur)))))
 
@@ -804,6 +820,7 @@
   "Return initial connection state to be stored in client's atom under :connection key."
   []
   {:running? true
+   :connection-id (Object.)
    :pending-requests {}
    :request-handler nil
    :request-preparer nil
@@ -830,6 +847,7 @@
                :write-channel write-ch
                :output-stream out  ; Keep for flushing
                :state-atom state-atom
+               :connection-id (:connection-id (conn-state state-atom))
                :incoming-ch incoming-ch
                :outgoing-ch outgoing-ch
                :notification-queue notification-queue
@@ -852,15 +870,18 @@
                     (log/debug "Notification dispatcher started")
                     (try
                       (loop []
-                        (when (:running? (conn-state state-atom))
-                          (when-let [msg (.poll notification-queue 100 TimeUnit/MILLISECONDS)]
-                            (>!! incoming-ch msg))
-                          (recur)))
+                        (when (or (connection-running? conn)
+                                  (not (.isEmpty notification-queue)))
+                          (if-let [msg (.poll notification-queue 100 TimeUnit/MILLISECONDS)]
+                            (when (>!! incoming-ch msg)
+                              (recur))
+                            (recur))))
                       (catch InterruptedException _
                         (log/debug "Notification dispatcher interrupted"))
                       (catch Exception e
                         (log/error "Notification dispatcher exception: " (ex-message e)))
                       (finally
+                        (close! incoming-ch)
                         (log/debug "Notification dispatcher ending")))))]
       (.setDaemon thread true)
       (.setName thread "jsonrpc-notification-dispatcher")
@@ -908,6 +929,7 @@
   [conn connection-state]
   (shutdown-request-executor! (:request-executor conn))
   (close! (:outgoing-ch conn))
+  (close! (:incoming-ch conn))
   (let [failures
         (td/collect
          [(when-let [^Thread writer (:writer-thread connection-state)]

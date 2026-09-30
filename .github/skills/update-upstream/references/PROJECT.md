@@ -16,6 +16,7 @@ pin.
 | `nodejs/src/extension.ts` | Extension-facing public construction and session paths |
 | `nodejs/src/toolSet.ts` | Public tool-filter helpers |
 | `nodejs/src/workflow.ts` | Experimental orchestration contracts and the shared `JsonValue` export |
+| `nodejs/src/host.ts`, `nodejs/src/installationConfirmation.ts` | Experimental runtime-host and installation-review exports; classify before exposing |
 | `nodejs/test/` | Stable unit and end-to-end behavior, especially omission and lifecycle semantics |
 | `nodejs/src/generated/` | Wire signatures and event schemas; informative, not independently a stable parity requirement |
 

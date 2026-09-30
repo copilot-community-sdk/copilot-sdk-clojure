@@ -45,6 +45,14 @@ You can also add environment variables to enable MCP server-side debugging:
 
 Always test your MCP server outside the SDK first.
 
+For failures reported by a running session, inspect
+`:copilot/session.mcp_server_status_changed`. Its data includes `:server-name`
+and `:status`, plus optional `:error`, `:config-source`, and
+`:error-classification` strings. Preserve unfamiliar provenance and
+classification values: the runtime can add values without an SDK upgrade.
+These fields are also available in [`get-messages`](../reference/API.md#get-messages)
+history; an omitted value is not the same as an empty string.
+
 ### Manual Protocol Test
 
 Send an `initialize` request via stdin:

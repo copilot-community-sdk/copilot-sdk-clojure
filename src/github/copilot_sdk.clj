@@ -571,6 +571,8 @@
                              `:copilot/permission.requested` events and stay pending.
    - :session-id           - Custom session ID
    - :model                - Model to use (e.g., \"gpt-5.4\", \"claude-sonnet-4.5\")
+   - :allowed-models       - Vector of exact model IDs allowed by the host.
+                             Omit to preserve runtime policy; nil is invalid.
    - :tools                - Vector of tool definitions (use define-tool)
    - :system-message       - {:mode :append/:replace :content \"...\"}
    - :available-tools      - List of allowed tool names

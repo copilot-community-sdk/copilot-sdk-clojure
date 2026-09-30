@@ -791,6 +791,7 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::model ::non-blank-string)
+(s/def ::allowed-models (s/coll-of string? :kind vector?))
 (s/def ::available-tools (s/coll-of string?))
 (s/def ::excluded-tools (s/coll-of string?))
 (s/def ::streaming? boolean?)
@@ -1350,7 +1351,7 @@
 (s/def ::canvas-provider (s/keys :req-un [::id] :opt-un [::name]))
 
 (def session-config-keys
-  #{:session-id :client-name :model :tools :commands :system-message
+  #{:session-id :client-name :model :allowed-models :tools :commands :system-message
     :available-tools :excluded-tools :tool-search :provider
     :on-permission-request :streaming? :mcp-servers
     :on-mcp-auth-request
@@ -1405,7 +1406,7 @@
    ;; consumer to resolve via `handle-pending-permission-request!`.
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
-                    ::session-id ::client-name ::model ::tools ::commands ::system-message
+                    ::session-id ::client-name ::model ::allowed-models ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::tool-search ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::default-agent
@@ -1452,7 +1453,7 @@
    session-config-keys))
 
 (def ^:private resume-session-config-keys
-  #{:client-name :model :tools :commands :system-message :available-tools :excluded-tools :tool-search
+  #{:client-name :model :allowed-models :tools :commands :system-message :available-tools :excluded-tools :tool-search
     :provider :streaming? :on-permission-request
     :on-mcp-auth-request
     :mcp-servers :custom-agents :default-agent
@@ -1503,7 +1504,7 @@
    ;; Upstream PR #1308: :on-permission-request is now optional.
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
-                    ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
+                    ::client-name ::model ::allowed-models ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::tool-search
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
@@ -1563,7 +1564,7 @@
   (closed-session-config
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
-                    ::client-name ::model ::tools ::commands ::system-message ::available-tools ::excluded-tools
+                    ::client-name ::model ::allowed-models ::tools ::commands ::system-message ::available-tools ::excluded-tools
                     ::tool-search
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
@@ -2826,8 +2827,12 @@
 (s/def ::session.mcp_servers_loaded-data
   (s/keys :req-un [::servers]))
 (s/def ::server-name string?)
+(s/def ::config-source string?)
+(s/def ::error-classification string?)
 (s/def ::session.mcp_server_status_changed-data
-  (s/and (s/keys :req-un [::server-name ::status])
+  (s/and (s/keys :req-un [::server-name ::status]
+                 :opt-un [::config-source ::error-classification])
+         #(optional-field? % :error string?)
          #(s/valid? ::mcp-server-status (:status %))))
 (s/def ::session.mcp_server_removed-data
   (s/keys :req-un [::server-name]))
