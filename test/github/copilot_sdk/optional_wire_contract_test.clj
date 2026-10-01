@@ -48,6 +48,12 @@
       slurp
       edn/read-string))
 
+(def stable-delta-a2b2c18-report
+  (-> "resources/stable_upstream_delta_a2b2c18.edn"
+      io/resource
+      slurp
+      edn/read-string))
+
 (def post-2980-session-config
   {:auth/github-token-provider
    {:key :github-token-provider :scopes #{:create :resume}}
@@ -76,7 +82,11 @@
         (keep (fn [{:keys [id idiom]}]
                 (when (= :session/instruction-cache-refresh id)
                   {:key (:key idiom)
-                   :scopes #{:create}}))))))
+                   :scopes #{:create}}))))
+   (->> (:stable-deltas stable-delta-a2b2c18-report)
+        (keep (fn [{:keys [id idiom]}]
+                (when (= :session/allowed-models id)
+                  (select-keys idiom [:key :scopes])))))))
 
 (def fixtures
   {:fixture/handler (fn [& _])

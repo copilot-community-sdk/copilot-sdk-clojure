@@ -7599,6 +7599,32 @@
       },
       "stability": "experimental"
     },
+    "FusionCritic": {
+      "type": "object",
+      "properties": {
+        "phaseId": {
+          "type": "string",
+          "description": "Unique execution phase identifier for this critic.",
+          "stability": "experimental"
+        },
+        "model": {
+          "type": "string",
+          "description": "Concrete model selected for this critic.",
+          "stability": "experimental"
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Explicit reasoning effort selected for this critic, if supplied.",
+          "stability": "experimental"
+        }
+      },
+      "required": [
+        "phaseId",
+        "model"
+      ],
+      "additionalProperties": false,
+      "stability": "experimental"
+    },
     "FusionFollowUpAction": {
       "type": "string",
       "enum": [
@@ -7836,6 +7862,11 @@
           "type": "string",
           "description": "Concrete model that executed the phase."
         },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Explicit reasoning effort selected for this phase, if supplied.",
+          "stability": "experimental"
+        },
         "status": {
           "$ref": "#/definitions/FusionPhaseStatus",
           "description": "Durable outcome status of the phase."
@@ -7920,6 +7951,11 @@
         "model": {
           "type": "string",
           "description": "Concrete model that attempted the phase."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Explicit reasoning effort selected for this phase, if supplied.",
+          "stability": "experimental"
         },
         "status": {
           "$ref": "#/definitions/FusionPhaseStatus",
@@ -8049,6 +8085,11 @@
         "model": {
           "type": "string",
           "description": "Concrete model executing the phase."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "Explicit reasoning effort selected for this phase, if supplied.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -8228,7 +8269,25 @@
             "string",
             "null"
           ],
-          "description": "Concrete model selected for the review or judge phase, when required."
+          "description": "Concrete model selected for Critique review, or the legacy Cascade judge/repair model when role-specific fields are absent."
+        },
+        "judgeModel": {
+          "type": "string",
+          "description": "Concrete model selected for Cascade escalation-gate calls, when required.",
+          "stability": "experimental"
+        },
+        "repairModel": {
+          "type": "string",
+          "description": "Concrete model selected for Cascade repair, when required.",
+          "stability": "experimental"
+        },
+        "critics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FusionCritic"
+          },
+          "description": "Planned Critique phase identities, including independent critics with repeated model IDs. May be absent in older events; consumers then use secondaryModel for the legacy critic.",
+          "stability": "experimental"
         },
         "fallbackModel": {
           "type": "string",
@@ -10900,6 +10959,14 @@
         "error": {
           "type": "string",
           "description": "Error message if the server entered a failed state"
+        },
+        "errorClassification": {
+          "type": "string",
+          "description": "Runtime-produced classification for the final failed connection; unclassified means no classification was supplied. Additional string values may be introduced."
+        },
+        "configSource": {
+          "type": "string",
+          "description": "Runtime configuration provenance for a failed connection, or unknown when unavailable. Additional string values may be introduced."
         }
       },
       "required": [
@@ -12320,6 +12387,31 @@
       "description": "Permission response variant that approves a request and remembers the provided approval for the rest of the session.",
       "title": "PermissionApprovedForSession"
     },
+    "PermissionApprovedReadOnlyForSession": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "approved-read-only-for-session",
+          "description": "Approved with read-only directory authority for this session"
+        },
+        "directories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Canonical directories covered by the session read-only grant"
+        }
+      },
+      "required": [
+        "kind",
+        "directories"
+      ],
+      "additionalProperties": false,
+      "description": "Permission response variant that approves a request and records file-tool read authority for specific directories in this logical session.",
+      "title": "PermissionApprovedReadOnlyForSession"
+    },
     "PermissionAssentDetectedData": {
       "type": "object",
       "properties": {
@@ -13289,6 +13381,11 @@
         "requestSandboxBypassReason": {
           "type": "string",
           "description": "Reason for the sandbox escalation request."
+        },
+        "sandboxPathGrant": {
+          "$ref": "#/definitions/PermissionSandboxPathGrant",
+          "description": "Sandbox policy edit that would let the command run inside the sandbox. Only present when requestSandboxBypass is true.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -13615,6 +13712,14 @@
             "type": "string"
           },
           "description": "File paths that require explicit approval"
+        },
+        "readOnlyDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Canonical directory candidates that can be granted for file-tool read access in this logical session. Present only for read path prompts.",
+          "stability": "experimental"
         },
         "assistedApproval": {
           "$ref": "#/definitions/PermissionAssistedApproval",
@@ -14670,6 +14775,11 @@
         "requestSandboxBypassReason": {
           "type": "string",
           "description": "What the tool tells the user about the bypass on offer: which policy rule blocked the call, or why it cannot be sandboxed. Only meaningful when requestSandboxBypass is true."
+        },
+        "sandboxPathGrant": {
+          "$ref": "#/definitions/PermissionSandboxPathGrant",
+          "description": "Sandbox policy edit that would let the read run inside the sandbox. Only present when requestSandboxBypass is true.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -14772,6 +14882,11 @@
         "requestSandboxBypassReason": {
           "type": "string",
           "description": "What the tool tells the user about the bypass on offer: which policy rule blocked the call, or why it cannot be sandboxed. Only meaningful when requestSandboxBypass is true."
+        },
+        "sandboxPathGrant": {
+          "$ref": "#/definitions/PermissionSandboxPathGrant",
+          "description": "Sandbox policy edit that would let the command run inside the sandbox. Only present when requestSandboxBypass is true.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -15031,6 +15146,11 @@
         "requestSandboxBypassReason": {
           "type": "string",
           "description": "Justification for the sandbox-bypass request. Only meaningful when requestSandboxBypass is true."
+        },
+        "sandboxPathGrant": {
+          "$ref": "#/definitions/PermissionSandboxPathGrant",
+          "description": "Sandbox policy edit that would let the write run inside the sandbox. Only present when requestSandboxBypass is true.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -15049,6 +15169,10 @@
         {
           "$ref": "#/definitions/PermissionApproved",
           "description": "Permission response variant indicating the request was approved without persisting an approval rule."
+        },
+        {
+          "$ref": "#/definitions/PermissionApprovedReadOnlyForSession",
+          "description": "Permission response variant that approves a request and records file-tool read authority for specific directories in this logical session."
         },
         {
           "$ref": "#/definitions/PermissionApprovedForSession",
@@ -15108,6 +15232,51 @@
       "additionalProperties": false,
       "description": "A permission approval or denial rule matched against a tool request, identified by a rule kind with an optional argument value.",
       "title": "PermissionRule"
+    },
+    "PermissionSandboxPathGrant": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path to add to the sandbox filesystem policy"
+        },
+        "deniedPath": {
+          "type": "string",
+          "description": "The path the sandbox refused, present only when it differs from path. That happens when a write under a read-only folder moves the folder to the read-write paths, when a path that does not exist yet is granted through its nearest existing folder, because the OS sandbox cannot grant a path before it exists, and when either is spelled through a symlink, because a grant covers its path as written, so path is then the resolved location. Hosts should then name path in the offer, since the denial names this one."
+        },
+        "access": {
+          "$ref": "#/definitions/PermissionSandboxPathGrantAccess",
+          "description": "Which access the grant confers, and so which policy list the path is added to"
+        },
+        "removedReadonlyPaths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "readonlyPaths entries the grant removes, exactly as written in the policy, because a read-only entry for the same location would otherwise keep the path read-only. A host that persists the path must remove these entries from its stored readonlyPaths too."
+        }
+      },
+      "required": [
+        "path",
+        "access"
+      ],
+      "additionalProperties": false,
+      "description": "A sandbox filesystem policy edit that would let a blocked operation run inside the sandbox instead of outside it. Offered only on a sandbox escalation request whose denial adding this path lifts, and only when managed policy permits the grant. A host accepts it with session.sandbox.grantPathForRequest, which adds the path to the session's sandbox policy and re-runs the operation sandboxed; a host that persists sandbox settings may also save the path there.",
+      "title": "PermissionSandboxPathGrant",
+      "stability": "experimental"
+    },
+    "PermissionSandboxPathGrantAccess": {
+      "type": "string",
+      "enum": [
+        "read",
+        "readWrite"
+      ],
+      "description": "Access a sandbox path grant confers",
+      "title": "PermissionSandboxPathGrantAccess",
+      "x-enumDescriptions": {
+        "read": "Read access: the path is added to readonlyPaths.",
+        "readWrite": "Read and write access: the path is added to readwritePaths."
+      }
     },
     "PermissionsChangedData": {
       "type": "object",
@@ -16431,6 +16600,72 @@
           "properties": {
             "control": {
               "$ref": "#/definitions/SandboxControl",
+              "description": "Sandbox control the access belongs to. Follows from `denialClass`."
+            },
+            "outcome": {
+              "$ref": "#/definitions/SandboxOutcome",
+              "description": "Always `allowed`."
+            },
+            "toolCallId": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Tool call the access belongs to, for span correlation only. Never exported as a telemetry attribute or metric dimension."
+            },
+            "platform": {
+              "$ref": "#/definitions/SandboxPlatform",
+              "description": "Host operating-system family"
+            },
+            "enforcementPoint": {
+              "$ref": "#/definitions/SandboxEnforcementPoint",
+              "description": "Runtime subsystem that ran the command"
+            },
+            "denialClass": {
+              "$ref": "#/definitions/SandboxDenialClass",
+              "description": "Bounded class of the access the enforced policy would have refused."
+            },
+            "permissiveSource": {
+              "$ref": "#/definitions/SandboxPermissiveSource",
+              "description": "Why the run recorded and allowed instead of enforcing."
+            },
+            "deniedResource": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Resource the enforced policy would have refused. Populated only when content capture is enabled."
+            },
+            "command": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Command that made the access. Populated only when content capture is enabled."
+            },
+            "kind": {
+              "type": "string",
+              "const": "access_recorded",
+              "description": "Sandbox decision variant discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "control",
+            "outcome",
+            "platform",
+            "enforcementPoint",
+            "denialClass",
+            "permissiveSource"
+          ],
+          "additionalProperties": false,
+          "description": "Permissive learning mode (record and allow) recorded an access that the enforced policy would have refused, and allowed it. Emitted once per distinct recorded access of a record-and-allow run, bounded per command. The only per-access record of such a run: nothing was refused, so no `access_denied` is raised for it."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "control": {
+              "$ref": "#/definitions/SandboxControl",
               "description": "Always `bypass`."
             },
             "outcome": {
@@ -16889,9 +17124,10 @@
         "degraded",
         "denied",
         "approved",
-        "declined"
+        "declined",
+        "allowed"
       ],
-      "description": "Finite result of a sandbox decision. Each `SandboxDecisionData` variant uses a disjoint subset: `policy_resolved` is `resolved | degraded`, `spawn_completed` and `permissive_retry_completed` are `succeeded | failed`, `enforcement_state` is `engaged | inactive | failed`, `access_denied` is `denied`, and escalation decisions are `approved | declined`.",
+      "description": "Finite result of a sandbox decision. Each `SandboxDecisionData` variant uses a disjoint subset: `policy_resolved` is `resolved | degraded`, `spawn_completed` and `permissive_retry_completed` are `succeeded | failed`, `enforcement_state` is `engaged | inactive | failed`, `access_denied` is `denied`, `access_recorded` is `allowed`, and escalation decisions are `approved | declined`.",
       "title": "SandboxOutcome",
       "x-enumDescriptions": {
         "resolved": "The sandbox policy resolved successfully. Describes configuration only and makes no claim that a backend engaged.",
@@ -16902,7 +17138,21 @@
         "degraded": "The sandbox is active with one or more controls weakened by platform limitations or an explicitly selected relaxed mode.",
         "denied": "An enforcement check refused the requested access.",
         "approved": "A request to run outside the process sandbox was granted.",
-        "declined": "A request to run outside the process sandbox was not granted."
+        "declined": "A request to run outside the process sandbox was not granted.",
+        "allowed": "Permissive learning mode recorded an access the enforced policy would have refused, and allowed it."
+      }
+    },
+    "SandboxPermissiveSource": {
+      "type": "string",
+      "enum": [
+        "approved_retry",
+        "policy"
+      ],
+      "description": "Why a sandboxed run recorded and allowed its process-container access checks instead of enforcing them.",
+      "title": "SandboxPermissiveSource",
+      "x-enumDescriptions": {
+        "approved_retry": "A person approved the permissive retry for this command after a sandboxed attempt was blocked.",
+        "policy": "Device-managed policy (`sandbox.learningMode: \"allow\"`) starts sandboxed shell commands in permissive learning mode."
       }
     },
     "SandboxPlatform": {

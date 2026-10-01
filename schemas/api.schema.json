@@ -3,6 +3,103 @@
   "title": "CopilotApi",
   "description": "Describes all JSON-RPC methods exposed by the Copilot CLI server. SDK codegen tools consume this to produce typed client wrappers.",
   "server": {
+    "host": {
+      "publishSession": {
+        "rpcMethod": "host.publishSession",
+        "description": "Publishes an attached resident session for this listener's lifetime without copying it.",
+        "params": {
+          "$ref": "#/definitions/HostPublishSessionRequest",
+          "description": "Publishes a resident session attached to the listener's owning connection."
+        },
+        "result": {
+          "$ref": "#/definitions/HostPublishSessionResult",
+          "description": "The existing runtime identity and its resource on the listener."
+        },
+        "stability": "experimental"
+      },
+      "createSession": {
+        "rpcMethod": "host.createSession",
+        "description": "Requests app-owned materialization over the owning SDK participant.",
+        "params": {
+          "$ref": "#/definitions/HostSessionCreateRequest",
+          "description": "One application-owned session handoff, requested by the supervised hosting participant."
+        },
+        "result": {
+          "$ref": "#/definitions/HostSessionCreateResult",
+          "description": "The resident session the application has materialized on its own connection."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "releaseSession": {
+        "rpcMethod": "host.releaseSession",
+        "description": "Releases app ownership retention after AHP detaches.",
+        "params": {
+          "$ref": "#/definitions/HostSessionReleaseRequest",
+          "description": "Ends one participation, not the application's session lifetime."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "start": {
+        "rpcMethod": "host.start",
+        "description": "Starts a connection-owned local AHP listener as a supervised SDK participant.",
+        "params": {
+          "$ref": "#/definitions/HostStartRequest",
+          "description": "Starts a supervised AHP listener in the runtime's configured working directory."
+        },
+        "result": {
+          "$ref": "#/definitions/HostStartResult",
+          "description": "Listener readiness, returned only after binding and the supervised participant's SDK handshake."
+        },
+        "stability": "experimental"
+      },
+      "dispose": {
+        "rpcMethod": "host.dispose",
+        "description": "Stops a listener owned by this SDK connection and joins its cleanup without deleting sessions.",
+        "params": {
+          "$ref": "#/definitions/HostDisposeRequest",
+          "description": "Stops a connection-owned listener and joins its teardown."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "stability": "experimental"
+      },
+      "getConfiguration": {
+        "rpcMethod": "host.getConfiguration",
+        "description": "Returns listener settings only to the supervised hosting participant over its SDK connection.",
+        "params": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "result": {
+          "$ref": "#/definitions/HostConfiguration",
+          "description": "Normalized listener settings delivered only to the supervised hosting participant."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "ready": {
+        "rpcMethod": "host.ready",
+        "description": "Reports a supervised hosting participant's bound AHP endpoint after its SDK handshake.",
+        "params": {
+          "$ref": "#/definitions/HostReadyRequest",
+          "description": "Readiness reported by the supervised hosting participant on its own SDK connection."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      }
+    },
     "ping": {
       "rpcMethod": "ping",
       "description": "Checks server responsiveness and returns protocol information.",
@@ -292,7 +389,7 @@
         "description": "Consumes a bound catalogue plan and retains one exact fully resolved personal remote MCP operation requiring no supplied values or configured secrets. Returns its runtime operation ID and original expiry before any confirmation, activation, writer initialisation or installation effect. Register the original connection, operation and selected-session binding before calling applyInstall. Missing lower owned admission is unavailable, never a raw-config fallback.",
         "params": {
           "$ref": "#/definitions/McpPrepareInstallRequest",
-          "description": "Side-effect-free preparation of one original bound, input-free remote MCP choice."
+          "description": "Side-effect-free preparation of one original bound remote MCP choice."
         },
         "result": {
           "$ref": "#/definitions/McpInstallationManagementResult",
@@ -426,6 +523,179 @@
         },
         "result": {
           "type": "null"
+        },
+        "stability": "experimental"
+      }
+    },
+    "skills": {
+      "planInstall": {
+        "rpcMethod": "skills.planInstall",
+        "description": "Plans installation of a verified Agent Finder Skill candidate without writing files. The returned review is safe to present to a user and installing always leaves the Skill disabled until separately enabled.",
+        "params": {
+          "$ref": "#/definitions/SkillPlanInstallRequest",
+          "description": "Side-effect-free planning of one verified Agent Finder Skill candidate."
+        },
+        "result": {
+          "$ref": "#/definitions/SkillInstallationManagementResult",
+          "description": "Skill installation management result with the honoured contract, or a typed refusal."
+        },
+        "stability": "experimental"
+      },
+      "applyInstall": {
+        "rpcMethod": "skills.applyInstall",
+        "description": "Consumes one verified Skill installation plan, requests explicit human consent through installations.confirm on the original connection, then revalidates and installs the Skill disabled.",
+        "params": {
+          "$ref": "#/definitions/SkillApplyInstallRequest",
+          "description": "Applies exactly one retained verified Skill installation plan."
+        },
+        "result": {
+          "$ref": "#/definitions/SkillInstallationResult",
+          "description": "Skill installation result with the honoured contract, or a typed request/negotiation refusal."
+        },
+        "stability": "experimental"
+      },
+      "installations": {
+        "list": {
+          "rpcMethod": "skills.installations.list",
+          "description": "Lists owned verified Agent Finder Skill installations for the selected existing session. Listing is never gated by the Skill-install feature flag.",
+          "params": {
+            "$ref": "#/definitions/SkillInstallationsRequest",
+            "description": "Inventory request under an explicitly selected existing session."
+          },
+          "result": {
+            "$ref": "#/definitions/SkillInstallationManagementResult",
+            "description": "Skill installation management result with the honoured contract, or a typed refusal."
+          },
+          "stability": "experimental"
+        },
+        "recover": {
+          "rpcMethod": "skills.installations.recover",
+          "description": "Reconciles interrupted owned Skill installation work for the selected existing session, then inspects owned inventory. Recovery is never gated by the Skill-install feature flag.",
+          "params": {
+            "$ref": "#/definitions/SkillInstallationsRequest",
+            "description": "Inventory request under an explicitly selected existing session."
+          },
+          "result": {
+            "$ref": "#/definitions/SkillInstallationManagementResult",
+            "description": "Skill installation management result with the honoured contract, or a typed refusal."
+          },
+          "stability": "experimental"
+        },
+        "status": {
+          "rpcMethod": "skills.installations.status",
+          "description": "Inspects a known Skill installation operation on its original runtime connection. Status is never gated by the Skill-install feature flag.",
+          "params": {
+            "$ref": "#/definitions/SkillInstallationOperationRequest",
+            "description": "Existing-operation control. A new session selector is deliberately not accepted."
+          },
+          "result": {
+            "$ref": "#/definitions/SkillInstallationManagementResult",
+            "description": "Skill installation management result with the honoured contract, or a typed refusal."
+          },
+          "stability": "experimental"
+        },
+        "cancel": {
+          "rpcMethod": "skills.installations.cancel",
+          "description": "Requests cancellation of a known Skill installation operation before commit. Already-started durable work requires recovery instead of silent replay.",
+          "params": {
+            "$ref": "#/definitions/SkillInstallationOperationRequest",
+            "description": "Existing-operation control. A new session selector is deliberately not accepted."
+          },
+          "result": {
+            "$ref": "#/definitions/SkillInstallationManagementResult",
+            "description": "Skill installation management result with the honoured contract, or a typed refusal."
+          },
+          "stability": "experimental"
+        },
+        "setEnabled": {
+          "rpcMethod": "skills.installations.setEnabled",
+          "description": "Atomically persists enablement for one owned Agent Finder Skill and reconciles the selected bound session. Enablement is installation-scoped by receipt identity and is never gated by the Skill-install feature flag.",
+          "params": {
+            "$ref": "#/definitions/SkillSetEnabledRequest",
+            "description": "Persisted enablement update for one owned Skill installation."
+          },
+          "result": {
+            "$ref": "#/definitions/SkillInstallationManagementResult",
+            "description": "Skill installation management result with the honoured contract, or a typed refusal."
+          },
+          "stability": "experimental"
+        }
+      },
+      "planUninstall": {
+        "rpcMethod": "skills.planUninstall",
+        "description": "Prepares a read-only removal plan for an owned verified Agent Finder Skill installation. Uninstall planning is never gated by the Skill-install feature flag.",
+        "params": {
+          "$ref": "#/definitions/SkillPlanUninstallRequest",
+          "description": "Read-only preparation of one owned Skill removal under fresh selected-session authority."
+        },
+        "result": {
+          "$ref": "#/definitions/SkillInstallationManagementResult",
+          "description": "Skill installation management result with the honoured contract, or a typed refusal."
+        },
+        "stability": "experimental"
+      },
+      "applyUninstall": {
+        "rpcMethod": "skills.applyUninstall",
+        "description": "Consumes an owned Skill removal plan, requests explicit human consent through installations.confirm, refuses drift, and removes the exact owned files through quarantine.",
+        "params": {
+          "$ref": "#/definitions/SkillApplyUninstallRequest",
+          "description": "One-use application of the exact retained Skill removal plan."
+        },
+        "result": {
+          "$ref": "#/definitions/SkillInstallationResult",
+          "description": "Skill installation result with the honoured contract, or a typed request/negotiation refusal."
+        },
+        "stability": "experimental"
+      },
+      "config": {
+        "setDisabledSkills": {
+          "rpcMethod": "skills.config.setDisabledSkills",
+          "description": "Replaces the global list of disabled skills.",
+          "params": {
+            "$ref": "#/definitions/SkillsConfigSetDisabledSkillsRequest",
+            "description": "Skill names to mark as disabled in global configuration, replacing any previous list."
+          },
+          "result": {
+            "type": "null"
+          },
+          "stability": "experimental"
+        },
+        "setSkillDisabled": {
+          "rpcMethod": "skills.config.setSkillDisabled",
+          "description": "Atomically adds or removes one skill from the disabled list.",
+          "params": {
+            "$ref": "#/definitions/SkillsConfigSetSkillDisabledRequest",
+            "description": "Adds or removes a single skill from the global disabled list, leaving every other entry untouched."
+          },
+          "result": {
+            "type": "null"
+          },
+          "stability": "experimental"
+        }
+      },
+      "discover": {
+        "rpcMethod": "skills.discover",
+        "description": "Discovers skills across global and project sources.",
+        "params": {
+          "$ref": "#/definitions/SkillsDiscoverRequest",
+          "description": "Optional project paths and additional skill directories to include in discovery."
+        },
+        "result": {
+          "$ref": "#/definitions/ServerSkillList",
+          "description": "Skills discovered across global and project sources."
+        },
+        "stability": "experimental"
+      },
+      "getDiscoveryPaths": {
+        "rpcMethod": "skills.getDiscoveryPaths",
+        "description": "Returns the canonical directories where a client may create skills that the runtime will recognize, including ones that do not exist yet. Project directories become active once created.",
+        "params": {
+          "$ref": "#/definitions/SkillsGetDiscoveryPathsRequest",
+          "description": "Optional project paths to enumerate."
+        },
+        "result": {
+          "$ref": "#/definitions/SkillDiscoveryPathList",
+          "description": "Canonical locations where skills can be created so the runtime will recognize them."
         },
         "stability": "experimental"
       }
@@ -627,60 +897,6 @@
           },
           "stability": "experimental"
         }
-      }
-    },
-    "skills": {
-      "config": {
-        "setDisabledSkills": {
-          "rpcMethod": "skills.config.setDisabledSkills",
-          "description": "Replaces the global list of disabled skills.",
-          "params": {
-            "$ref": "#/definitions/SkillsConfigSetDisabledSkillsRequest",
-            "description": "Skill names to mark as disabled in global configuration, replacing any previous list."
-          },
-          "result": {
-            "type": "null"
-          },
-          "stability": "experimental"
-        },
-        "setSkillDisabled": {
-          "rpcMethod": "skills.config.setSkillDisabled",
-          "description": "Atomically adds or removes one skill from the disabled list.",
-          "params": {
-            "$ref": "#/definitions/SkillsConfigSetSkillDisabledRequest",
-            "description": "Adds or removes a single skill from the global disabled list, leaving every other entry untouched."
-          },
-          "result": {
-            "type": "null"
-          },
-          "stability": "experimental"
-        }
-      },
-      "discover": {
-        "rpcMethod": "skills.discover",
-        "description": "Discovers skills across global and project sources.",
-        "params": {
-          "$ref": "#/definitions/SkillsDiscoverRequest",
-          "description": "Optional project paths and additional skill directories to include in discovery."
-        },
-        "result": {
-          "$ref": "#/definitions/ServerSkillList",
-          "description": "Skills discovered across global and project sources."
-        },
-        "stability": "experimental"
-      },
-      "getDiscoveryPaths": {
-        "rpcMethod": "skills.getDiscoveryPaths",
-        "description": "Returns the canonical directories where a client may create skills that the runtime will recognize, including ones that do not exist yet. Project directories become active once created.",
-        "params": {
-          "$ref": "#/definitions/SkillsGetDiscoveryPathsRequest",
-          "description": "Optional project paths to enumerate."
-        },
-        "result": {
-          "$ref": "#/definitions/SkillDiscoveryPathList",
-          "description": "Canonical locations where skills can be created so the runtime will recognize them."
-        },
-        "stability": "experimental"
       }
     },
     "agents": {
@@ -1560,6 +1776,40 @@
         "result": {
           "$ref": "#/definitions/SandboxDisableForSessionResult",
           "description": "Result of attempting to disable sandboxing for the current session."
+        },
+        "stability": "experimental"
+      },
+      "grantPathForRequest": {
+        "rpcMethod": "session.sandbox.grantPathForRequest",
+        "description": "Adds the path offered by a pending sandbox escalation permission request's sandboxPathGrant to the session's sandbox policy and approves the request, so the blocked operation re-runs inside the sandbox rather than outside it. The request is rejected unless the exact request is still pending, carries a sandboxPathGrant, and the grant still takes effect under the current managed policy. Does not persist the path; hosts that store sandbox settings save it themselves.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "requestId": {
+              "type": "string",
+              "description": "Identifier of the exact pending sandbox escalation permission request whose sandboxPathGrant to accept."
+            },
+            "decisionContext": {
+              "$ref": "#/definitions/PermissionDecisionContext",
+              "description": "Optional attribution for the permission decision."
+            }
+          },
+          "required": [
+            "sessionId",
+            "requestId"
+          ],
+          "additionalProperties": false,
+          "description": "Request to accept the sandbox path grant offered on an active sandbox escalation permission prompt.",
+          "title": "SandboxGrantPathForRequestRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/SandboxGrantPathForRequestResult",
+          "description": "Result of accepting a sandbox path grant."
         },
         "stability": "experimental"
       }
@@ -7629,7 +7879,8 @@
             },
             "sandboxConfigSource": {
               "$ref": "#/definitions/SandboxConfigSource",
-              "description": "Origin of the sandbox choice. Settings-derived origins (never_configured, user_enabled, user_disabled, repository_policy) let managed policy floor a host preference; explicit below-floor changes remain policy conflicts unless a session opt-out is authorized. Also used for telemetry provenance."
+              "description": "Origin of the sandbox choice. Settings-derived origins (never_configured, user_enabled, user_disabled, repository_policy) let managed policy floor a host preference; explicit below-floor changes remain policy conflicts unless a session opt-out is authorized. Also used for telemetry provenance.",
+              "stability": "experimental"
             },
             "logInteractiveShells": {
               "type": "boolean",
@@ -12691,6 +12942,77 @@
     }
   },
   "clientGlobal": {
+    "host": {
+      "registerSession": {
+        "rpcMethod": "host.registerSession",
+        "description": "Registers an existing resident session on the supervised listener without durable adoption.",
+        "params": {
+          "$ref": "#/definitions/HostRegisterSessionRequest",
+          "description": "Listener-scoped registration, not a copy or durable adoption of a session."
+        },
+        "result": {
+          "$ref": "#/definitions/HostPublishSessionResult",
+          "description": "The existing runtime identity and its resource on the listener."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "materializeSession": {
+        "rpcMethod": "host.materializeSession",
+        "description": "Materializes an AHP session in the owning application.",
+        "params": {
+          "$ref": "#/definitions/HostSessionCreateCallback",
+          "description": "Application callback routed over its existing SDK connection."
+        },
+        "result": {
+          "$ref": "#/definitions/HostSessionCreateResult",
+          "description": "The resident session the application has materialized on its own connection."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "sessionReleased": {
+        "rpcMethod": "host.sessionReleased",
+        "description": "Ends application object retention for an AHP participation.",
+        "params": {
+          "$ref": "#/definitions/HostSessionReleasedNotification",
+          "description": "Releases the original application session object retained for one handoff."
+        },
+        "result": {
+          "type": "null"
+        },
+        "notification": true,
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "shutdown": {
+        "rpcMethod": "host.shutdown",
+        "description": "Requests graceful shutdown of a supervised AHP listener and its clients.",
+        "params": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "exited": {
+        "rpcMethod": "host.exited",
+        "description": "Reports termination of a connection-owned host listener.",
+        "params": {
+          "$ref": "#/definitions/HostExitedNotification",
+          "description": "Reports a supervised listener's hosting-task termination and cleanup outcome."
+        },
+        "result": {
+          "type": "null"
+        },
+        "notification": true,
+        "stability": "experimental"
+      }
+    },
     "hooks": {
       "invoke": {
         "rpcMethod": "hooks.invoke",
@@ -16447,8 +16769,7 @@
         },
         "installability": {
           "$ref": "#/definitions/CatalogAiSkillInstallability",
-          "const": "not-installable-kind",
-          "description": "AI skills are discovery-only and cannot be installed through this surface"
+          "description": "Whether this AI skill candidate can be planned for verified installation in the selected session."
         },
         "displayName": {
           "type": "string",
@@ -16489,7 +16810,7 @@
         "provenance"
       ],
       "additionalProperties": false,
-      "description": "An inert AI skill catalog result. AI skills are discovery-only and cannot be represented as installable through this surface.",
+      "description": "An inert AI skill catalog result. Verified Skill candidates may be installable only when the runtime reports installability and the selected session is permitted to plan installation.",
       "title": "CatalogAiSkillCandidate"
     },
     "CatalogAiSkillCandidateKind": {
@@ -16533,12 +16854,20 @@
     "CatalogAiSkillInstallability": {
       "type": "string",
       "enum": [
+        "installable",
+        "feature-disabled",
+        "materialisation-unavailable",
+        "policy-forbids",
         "not-installable-kind"
       ],
-      "description": "Typed non-installable state for an AI skill candidate",
+      "description": "Typed installability state for an AI skill candidate",
       "title": "CatalogAiSkillInstallability",
       "x-enumDescriptions": {
-        "not-installable-kind": "AI skills are discovery-only on this surface."
+        "installable": "This AI skill candidate carries verified materialisation metadata and the selected session may plan installation.",
+        "feature-disabled": "Skill installation is understood but disabled for the selected session.",
+        "materialisation-unavailable": "The candidate lacks verified materialisation metadata required for installation.",
+        "policy-forbids": "Policy refuses Skill installation for the selected session or authority.",
+        "not-installable-kind": "Compatibility value for discovery-only callers that did not negotiate Skill installation."
       }
     },
     "CatalogAiSkillMediaType": {
@@ -16602,7 +16931,7 @@
         },
         {
           "$ref": "#/definitions/CatalogAiSkillCandidate",
-          "description": "An inert AI skill catalog result. AI skills are discovery-only and cannot be represented as installable through this surface."
+          "description": "An inert AI skill catalog result. Verified Skill candidates may be installable only when the runtime reports installability and the selected session is permitted to plan installation."
         },
         {
           "$ref": "#/definitions/CatalogAgentPluginCandidate",
@@ -16693,7 +17022,9 @@
         "catalog-selection",
         "catalog-search-credential-required",
         "catalog-search-session-bound",
-        "mcp-confirmed-remote-installation"
+        "mcp-confirmed-remote-installation",
+        "mcp-configured-remote-installation",
+        "skill-confirmed-installation"
       ],
       "description": "A wire feature a caller can require of the catalog surface, negotiated per request. A grant means the runtime understands the feature's contract, not that the deployment has enabled the operation; typed unavailable results report availability separately.",
       "title": "CatalogCapability",
@@ -16709,7 +17040,9 @@
         "catalog-selection": "Understands exact candidate selection through model-safe opaque references and host-only candidate-handle hand-off.",
         "catalog-search-credential-required": "Requires an eligible credential for the selected GitHub.com account before search egress and prohibits client-side anonymous retry, including after HTTP 401 or 403. The credential is scoped to the fixed catalog authority without redirect forwarding. Neither a grant nor successful response proves that the authority accepted the identity or selected a particular backend. Preserve this requirement on every page and retry; callers omitting it retain optional authentication.",
         "catalog-search-session-bound": "Captures the exact existing native session, account, host and connection for authenticated catalogue search, selection and planning. Requires catalog-search-credential-required; does not grant installation or create a session.",
-        "mcp-confirmed-remote-installation": "Understands effect-free preparation, exact human-confirmed apply and owned removal for fully resolved personal remote MCP choices without supplied inputs or configured secrets. Advertised only when the real producer and lower owned admission are linked; requires original connection and bound session authority for new work."
+        "mcp-confirmed-remote-installation": "Understands effect-free preparation, exact human-confirmed apply and owned removal for fully resolved personal remote MCP choices without supplied inputs or configured secrets. Advertised only when the real producer and lower owned admission are linked; requires original connection and bound session authority for new work.",
+        "mcp-configured-remote-installation": "Extends mcp-confirmed-remote-installation to declared non-secret header and URL values and receipt-owned header secrets for personal remote MCP choices. Requires mcp-confirmed-remote-installation and bound session authority. Secret values are written only to the reviewed backend after confirmation and are never returned; package and stdio choices remain unsupported. Advertised only when owned secret effects and owned secret activation are linked.",
+        "skill-confirmed-installation": "Understands verified Agent Finder Skill install, uninstall, recovery and installation-scoped enablement APIs. Advertised only by runtimes with the Skill installation engine linked; acquisition may still be refused as feature-disabled per selected session."
       }
     },
     "CatalogCapabilityId": {
@@ -23436,6 +23769,375 @@
         "notification": "Runs when the agent emits a notification."
       }
     },
+    "HostConfiguration": {
+      "type": "object",
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "description": "Hostname or IP address to bind."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Port to bind, with zero requesting OS allocation."
+        },
+        "token": {
+          "type": "string",
+          "description": "Secret connection token, absent when authentication is disabled."
+        },
+        "requireConnectionToken": {
+          "type": "boolean",
+          "description": "Whether the listener requires token authentication."
+        },
+        "sessionFactory": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether session materialization is delegated to the owning application."
+        },
+        "resumeFactory": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether app-owned durable sessions are resumed by the owning application."
+        }
+      },
+      "required": [
+        "hostname",
+        "port",
+        "requireConnectionToken"
+      ],
+      "description": "Normalized listener settings delivered only to the supervised hosting participant."
+    },
+    "HostDisposeRequest": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Listener UUID. Unknown or successfully stopped IDs are harmless."
+        }
+      },
+      "required": [
+        "hostId"
+      ],
+      "description": "Stops a connection-owned listener and joins its teardown."
+    },
+    "HostEmptyResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Empty acknowledgement for a completed host lifecycle operation."
+    },
+    "HostExitedNotification": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Listener UUID."
+        },
+        "reason": {
+          "$ref": "#/definitions/HostExitReason",
+          "description": "Cause of termination."
+        },
+        "exitCode": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Process exit status when available; absent for in-process listener tasks."
+        },
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Explicit startup or teardown failure, when present."
+        }
+      },
+      "required": [
+        "hostId",
+        "reason"
+      ],
+      "description": "Reports a supervised listener's hosting-task termination and cleanup outcome."
+    },
+    "HostExitReason": {
+      "type": "string",
+      "enum": [
+        "disposed",
+        "exited",
+        "ownerDisconnected",
+        "runtimeShutdown"
+      ],
+      "x-enumDescriptions": {
+        "disposed": "The owner requested disposal.",
+        "exited": "The hosting task or its SDK transport exited; this does not mean the runtime process exited.",
+        "ownerDisconnected": "The owning SDK connection disconnected.",
+        "runtimeShutdown": "The runtime is shutting down."
+      }
+    },
+    "HostPublishSessionRequest": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Listener UUID returned by host.start."
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Canonical runtime session ID attached to the listener's owning connection."
+        }
+      },
+      "required": [
+        "hostId",
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Publishes a resident session attached to the listener's owning connection."
+    },
+    "HostPublishSessionResult": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Canonical runtime ID of the published session."
+        },
+        "sessionUri": {
+          "type": "string",
+          "description": "AHP resource URI for the session on this listener."
+        }
+      },
+      "required": [
+        "sessionId",
+        "sessionUri"
+      ],
+      "additionalProperties": false,
+      "description": "The existing runtime identity and its resource on the listener."
+    },
+    "HostReadyRequest": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Actual bound WebSocket URL."
+        },
+        "token": {
+          "type": "string",
+          "description": "Configured secret token, absent when authentication is disabled."
+        }
+      },
+      "required": [
+        "address"
+      ],
+      "description": "Readiness reported by the supervised hosting participant on its own SDK connection."
+    },
+    "HostRegisterSessionRequest": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Canonical ID of the existing resident runtime session."
+        },
+        "workingDirectory": {
+          "type": "string",
+          "description": "Absolute working directory of the resident session."
+        },
+        "additionalDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional directories already granted to the resident session."
+        },
+        "title": {
+          "type": "string",
+          "description": "Current display title of the resident session, when available."
+        },
+        "createdAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Session creation time in milliseconds since the Unix epoch, when available."
+        },
+        "modifiedAtUnixMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Last session modification time in milliseconds since the Unix epoch, when available."
+        }
+      },
+      "required": [
+        "sessionId",
+        "workingDirectory"
+      ],
+      "additionalProperties": false,
+      "description": "Listener-scoped registration, not a copy or durable adoption of a session."
+    },
+    "HostSessionCreateCallback": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Listener UUID identifying the owning application's host."
+        },
+        "handoffId": {
+          "type": "string",
+          "description": "Unique identity of the session participation being requested."
+        },
+        "resume": {
+          "type": "boolean",
+          "default": false,
+          "description": "Resume an app-owned durable session instead of creating a new session."
+        },
+        "config": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true,
+          "description": "Host-selected SDK creation or resume settings, without executable callbacks or tools."
+        }
+      },
+      "required": [
+        "hostId",
+        "handoffId",
+        "config"
+      ],
+      "description": "Application callback routed over its existing SDK connection."
+    },
+    "HostSessionCreateRequest": {
+      "type": "object",
+      "properties": {
+        "handoffId": {
+          "type": "string",
+          "description": "Unique identity for this participation, independent of the session lifetime."
+        },
+        "resume": {
+          "type": "boolean",
+          "default": false,
+          "description": "Resume an app-owned durable session instead of creating a new session."
+        },
+        "config": {
+          "type": "object",
+          "properties": {},
+          "additionalProperties": true,
+          "description": "Host-selected SDK creation or resume settings, without executable callbacks or tools."
+        }
+      },
+      "required": [
+        "handoffId",
+        "config"
+      ],
+      "additionalProperties": false,
+      "description": "One application-owned session handoff, requested by the supervised hosting participant."
+    },
+    "HostSessionCreateResult": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Runtime session UUID materialized on the application's SDK connection."
+        }
+      },
+      "required": [
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "The resident session the application has materialized on its own connection."
+    },
+    "HostSessionReleasedNotification": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Listener UUID whose application session participation ended."
+        },
+        "handoffId": {
+          "type": "string",
+          "description": "Identity of the handoff retaining the original application session object."
+        }
+      },
+      "required": [
+        "hostId",
+        "handoffId"
+      ],
+      "description": "Releases the original application session object retained for one handoff."
+    },
+    "HostSessionReleaseRequest": {
+      "type": "object",
+      "properties": {
+        "handoffId": {
+          "type": "string",
+          "description": "Identity of the participation to release without destroying the session."
+        }
+      },
+      "required": [
+        "handoffId"
+      ],
+      "additionalProperties": false,
+      "description": "Ends one participation, not the application's session lifetime."
+    },
+    "HostStartRequest": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Caller-generated UUID identifying this connection-owned listener."
+        },
+        "hostname": {
+          "type": "string",
+          "description": "Listener hostname. Defaults to 127.0.0.1; explicit non-loopback binds are allowed."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Listener port. Omitted or zero requests an OS-allocated port."
+        },
+        "token": {
+          "type": "string",
+          "description": "Nonempty connection token. Generated randomly when required and omitted."
+        },
+        "requireConnectionToken": {
+          "type": "boolean",
+          "description": "Require token authentication (default true). Cannot be false with a token."
+        },
+        "sessionFactory": {
+          "type": "boolean",
+          "description": "Ask the owning SDK application to materialize AHP sessions."
+        },
+        "resumeFactory": {
+          "type": "boolean",
+          "description": "Ask the owning application to resume its durable AHP sessions."
+        }
+      },
+      "required": [
+        "hostId"
+      ],
+      "additionalProperties": false,
+      "description": "Starts a supervised AHP listener in the runtime's configured working directory."
+    },
+    "HostStartResult": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Caller-generated listener UUID."
+        },
+        "url": {
+          "type": "string",
+          "description": "Actual bound WebSocket URL, including the allocated port."
+        },
+        "token": {
+          "type": "string",
+          "description": "Secret connection token, absent when authentication is disabled."
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Separate host process ID, when provided by a legacy runtime. Absent for in-process listeners."
+        }
+      },
+      "required": [
+        "hostId",
+        "url"
+      ],
+      "description": "Listener readiness, returned only after binding and the supervised participant's SDK handshake."
+    },
     "IndexedSearchState": {
       "type": "string",
       "enum": [
@@ -23454,6 +24156,50 @@
         "ready": "The indexed-search server and its index are ready.",
         "failed": "Indexed-search startup or the active server failed."
       }
+    },
+    "InstallationCatalogueIdentity": {
+      "type": "object",
+      "properties": {
+        "resourceId": {
+          "type": "string",
+          "description": "Authority resource identifier when supplied by the catalogue."
+        },
+        "itemUrl": {
+          "type": "string",
+          "description": "Catalogue item URL when supplied by the authority."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human display name retained from the catalogue candidate."
+        },
+        "description": {
+          "type": "string",
+          "description": "Catalogue description retained at install planning time."
+        },
+        "publisher": {
+          "type": "string",
+          "description": "Catalogue publisher retained at install planning time."
+        },
+        "version": {
+          "type": "string",
+          "description": "Catalogue version retained at install planning time."
+        },
+        "source": {
+          "type": "string",
+          "description": "Catalogue authority/source string that supplied the candidate."
+        },
+        "trustAtInstall": {
+          "$ref": "#/definitions/CatalogTrustSnapshot",
+          "description": "Catalogue trust observation retained at install planning time."
+        }
+      },
+      "required": [
+        "displayName",
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Catalogue identity retained from a bound candidate or plan at installation time.",
+      "title": "InstallationCatalogueIdentity"
     },
     "InstallationConfirmationRequest": {
       "type": "object",
@@ -23551,9 +24297,29 @@
             "review"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "review": {
+              "$ref": "#/definitions/SkillInstallationReview",
+              "description": "The exact verified Skill action and its reviewed files."
+            },
+            "resource": {
+              "type": "string",
+              "const": "skill",
+              "description": "Reviewed resource discriminator."
+            }
+          },
+          "required": [
+            "resource",
+            "review"
+          ],
+          "additionalProperties": false
         }
       ],
-      "description": "Only resource kinds with an implemented installation engine have a review variant."
+      "description": "Only resource kinds with an implemented installation engine have a review variant.",
+      "title": "InstallationReview"
     },
     "InstalledPlugin": {
       "type": "object",
@@ -26583,7 +27349,7 @@
           "additionalProperties": {
             "type": "string"
           },
-          "description": "Literal configured headers, excluding separately authorised OAuth tokens."
+          "description": "Configured headers, excluding separately authorised OAuth tokens. Values may\ncontain owned secret references, never secret values."
         },
         "tools": {
           "type": "array",
@@ -26600,7 +27366,7 @@
         "tools"
       ],
       "additionalProperties": false,
-      "description": "Final remote configuration, not a template. The producer refuses configured\nsecrets and external-value expansion before presenting this review."
+      "description": "Final remote configuration, not a template. The producer refuses external-value\nexpansion before presenting this review. Receipt-owned secrets appear only as\n`${installation-secret:<id>}` references whose `<id>` matches a reviewed\n`${secret:<id>}` placeholder; values are never included."
     },
     "McpInstallationResult": {
       "anyOf": [
@@ -26656,6 +27422,10 @@
               "$ref": "#/definitions/CatalogTrustSnapshot",
               "description": "Original catalogue trust metadata, not a verification claim."
             },
+            "catalogue": {
+              "$ref": "#/definitions/InstallationCatalogueIdentity",
+              "description": "Catalogue identity retained from the bound candidate when available."
+            },
             "target": {
               "$ref": "#/definitions/McpPlanTarget",
               "description": "Exact reviewed user-scope destination."
@@ -26694,7 +27464,7 @@
             },
             "effectiveConfiguration": {
               "$ref": "#/definitions/McpInstallationRemoteConfiguration",
-              "description": "Complete effective remote configuration for final input-free installation review.\nEarlier private selection reviews and package choices omit this field.\nThe owned remote resource requires it before issuing confirmation."
+              "description": "Complete effective remote configuration for final installation review.\nEarlier private selection reviews and package choices omit this field.\nThe owned remote resource requires it before issuing confirmation."
             },
             "action": {
               "type": "string",
@@ -26774,7 +27544,8 @@
           "additionalProperties": false
         }
       ],
-      "description": "Safe MCP review fields. No raw card, retrieval URL, plan handle or secret value."
+      "description": "Safe MCP review fields. No raw card, retrieval URL, plan handle or secret value.",
+      "title": "McpInstallationReview"
     },
     "McpInstallationSecret": {
       "type": "object",
@@ -26870,6 +27641,14 @@
         "state": {
           "$ref": "#/definitions/McpInstallationState",
           "description": "Ownership or setup state, never inferred proof of tool usability."
+        },
+        "catalogue": {
+          "$ref": "#/definitions/InstallationCatalogueIdentity",
+          "description": "Catalogue identity retained from the installed plan when available."
+        },
+        "installedAt": {
+          "type": "string",
+          "description": "ISO 8601 wall-clock installation time when available."
         }
       },
       "required": [
@@ -28385,7 +29164,7 @@
             "$ref": "#/definitions/McpInstallationInput",
             "description": "One Registry string-valued configuration entry for the selected transport."
           },
-          "description": "Must be empty for the initial input-free remote installation capability."
+          "description": "Declared non-secret values. Non-empty only when the caller requires\n`mcp-configured-remote-installation`; omitted values use the card default."
         },
         "secrets": {
           "type": "array",
@@ -28393,7 +29172,7 @@
             "$ref": "#/definitions/McpInstallationSecret",
             "description": "A request-local value for one exact reviewed placeholder. Never logged or persisted in a plan."
           },
-          "description": "Must be empty; this capability does not allocate configured-input secrets."
+          "description": "One entry per declared secret placeholder of the selected choice. Non-empty\nonly when the caller requires `mcp-configured-remote-installation`."
         },
         "source": {
           "$ref": "#/definitions/McpServerCardReference",
@@ -28415,7 +29194,7 @@
         "secretStorage"
       ],
       "additionalProperties": false,
-      "description": "Side-effect-free preparation of one original bound, input-free remote MCP choice.",
+      "description": "Side-effect-free preparation of one original bound remote MCP choice.",
       "title": "McpPrepareInstallRequest"
     },
     "McpRegisterExternalClientRequest": {
@@ -32196,6 +32975,10 @@
           "description": "Permission-decision request variant to approve for the rest of the session, with optional tool approval or URL domain."
         },
         {
+          "$ref": "#/definitions/PermissionDecisionApproveReadOnlyForSession",
+          "description": "Approve file-tool read access to specific directories for this logical session, including continuation or resume."
+        },
+        {
           "$ref": "#/definitions/PermissionDecisionApproveForLocation",
           "description": "Permission-decision request variant to approve and persist a permission for a project location, with approval details and location key."
         },
@@ -32972,6 +33755,31 @@
       "additionalProperties": false,
       "description": "Permission-decision request variant to permanently approve a URL domain across sessions.",
       "title": "PermissionDecisionApprovePermanently"
+    },
+    "PermissionDecisionApproveReadOnlyForSession": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "const": "approve-read-only-for-session",
+          "description": "Approve read-only file-tool directory access for this session"
+        },
+        "directories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "description": "Canonical directories covered by the read-only grant"
+        }
+      },
+      "required": [
+        "kind",
+        "directories"
+      ],
+      "additionalProperties": false,
+      "description": "Approve file-tool read access to specific directories for this logical session, including continuation or resume.",
+      "title": "PermissionDecisionApproveReadOnlyForSession"
     },
     "PermissionDecisionCancelled": {
       "type": "object",
@@ -38099,6 +38907,10 @@
           "$ref": "#/definitions/SandboxConfigAuth",
           "description": "Credential-injection capability flags."
         },
+        "credentials": {
+          "$ref": "#/definitions/SandboxCredentialsConfig",
+          "description": "Opt-in whole-value environment masking for sandboxed shell, MCP, and LSP children. Configured names get random sentinels; the local proxy substitutes them only in HTTPS request headers at their injection hosts. Approved bypasses skip masking and the sandbox proxy, so bypassed shells may receive the real environment values. Disabled or explicitly opted-out routes are not protected. No credential values are stored in this configuration."
+        },
         "allowDevToolAccess": {
           "type": "boolean",
           "description": "Whether to auto-grant read access to tool directories discovered on PATH and in toolchain environment variables (GOROOT, JAVA_HOME, VIRTUAL_ENV, and similar), and to common developer-tool caches, config, and toolchains. Writable grants cover scratch caches, the Unix GitHub CLI cache, and Cargo's registry, git store, and lock/tracker files. A relocated CARGO_HOME gets the same narrow split: registry and git are read-write; bin is read-only; the home root, config.toml, and credentials.toml stay ungranted. Set to false to disable every grant listed above; user-installed toolchains and caches then need explicit userPolicy.filesystem readonlyPaths and readwritePaths entries. The working directory (see addCurrentWorkingDirectory), temporary storage, session log paths, and system locations follow their own rules and stay granted. Default: true (enabled by default; set to false to opt out)."
@@ -38117,11 +38929,11 @@
       "properties": {
         "git": {
           "type": "boolean",
-          "description": "Whether to inject git credentials as an `http.<url>.extraheader` so authenticated HTTPS git works inside the sandbox without the shell-based credential helper the sandbox blocks. github.com is served by the Copilot token; every other forge (Azure DevOps, GitHub Enterprise Server, GitLab, ...) by a credential the host resolves from the user's own helper before the sandbox is applied. Default: false (opt-in)."
+          "description": "Whether to authenticate sandboxed HTTPS git through the local masking proxy. The child receives a fake `http.<url>.extraheader`; the real Authorization header is substituted only at its original HTTPS host, port, and repository path scope. github.com uses the Copilot token; other forges use credentials resolved from the user's own helper on the host. Default: false (opt-in)."
         },
         "gh": {
           "type": "boolean",
-          "description": "Whether to export `GH_TOKEN` so the `gh` CLI authenticates inside the sandbox without the OS keyring the sandbox blocks. Default: false (opt-in)."
+          "description": "Whether to authenticate sandboxed gh through the local masking proxy. The child receives a fake GH_TOKEN; its real value is substituted only at github.com, api.github.com and uploads.github.com (github.com because gh repo clone authenticates git through gh auth git-credential). The repository's GitHub account takes precedence over the Copilot login. Default: false (opt-in)."
         }
       },
       "additionalProperties": false,
@@ -38139,17 +38951,18 @@
         "unsupported_host",
         "repository_policy"
       ],
-      "description": "Origin of the sandbox choice supplied by the host. Settings-derived origins let managed policy floor the host preference; do not tag explicit session overrides as settings-derived.",
+      "description": "Origin of the sandbox choice supplied by the host. This value describes preference or session intent; it does not authorize bypassing managed policy.",
       "title": "SandboxConfigSource",
       "x-enumDescriptions": {
         "never_configured": "The client applied the default because no sandbox preference was configured.",
         "user_enabled": "The user's persisted settings enabled the sandbox.",
         "user_disabled": "The user's persisted settings disabled the sandbox.",
-        "session_flag": "A command-line flag selected the sandbox state for this session.",
+        "session_flag": "An explicit session-scoped choice selected the sandbox state, such as a command-line flag.",
         "session_disabled": "The user disabled the sandbox for the current session.",
         "unsupported_host": "The client disabled the sandbox because the host cannot enforce it.",
         "repository_policy": "A repository policy selected the sandbox state."
-      }
+      },
+      "stability": "experimental"
     },
     "SandboxConfigUserPolicy": {
       "type": "object",
@@ -38301,6 +39114,25 @@
       "description": "macOS seatbelt-specific options.",
       "title": "SandboxConfigUserPolicySeatbelt"
     },
+    "SandboxCredentialsConfig": {
+      "type": "object",
+      "properties": {
+        "envVars": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/SandboxMaskedEnvVar",
+            "description": "Destinations authorized to receive one masked environment credential."
+          },
+          "description": "Environment variable names and their HTTPS injection destinations. Absent variables stay absent. No real values or sentinels are stored in this map."
+        }
+      },
+      "required": [
+        "envVars"
+      ],
+      "additionalProperties": false,
+      "description": "Whole-value environment credential masking for sandboxed children.",
+      "title": "SandboxCredentialsConfig"
+    },
     "SandboxDisableForSessionRequest": {
       "type": "object",
       "properties": {
@@ -38365,6 +39197,42 @@
       "description": "Managed sandbox enforcement state for a session.",
       "title": "SandboxEnforcementStatus"
     },
+    "SandboxGrantPathForRequestRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Identifier of the exact pending sandbox escalation permission request whose sandboxPathGrant to accept."
+        },
+        "decisionContext": {
+          "$ref": "#/definitions/PermissionDecisionContext",
+          "description": "Optional attribution for the permission decision."
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "Request to accept the sandbox path grant offered on an active sandbox escalation permission prompt.",
+      "title": "SandboxGrantPathForRequestRequest",
+      "stability": "experimental"
+    },
+    "SandboxGrantPathForRequestResult": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "Whether this call resolved the pending request and added the path to the session's sandbox policy."
+        }
+      },
+      "required": [
+        "success"
+      ],
+      "additionalProperties": false,
+      "description": "Result of accepting a sandbox path grant.",
+      "title": "SandboxGrantPathForRequestResult",
+      "stability": "experimental"
+    },
     "SandboxHostCapability": {
       "type": "object",
       "properties": {
@@ -38424,6 +39292,24 @@
       "additionalProperties": false,
       "description": "Whether the host running this runtime can run the command sandbox. The runtime checks `supported` once per process. A capability answer can change while the process runs, for example after the user installs a missing package.",
       "title": "SandboxHostSupport"
+    },
+    "SandboxMaskedEnvVar": {
+      "type": "object",
+      "properties": {
+        "injectHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Nonempty list of HTTPS injection hostnames or *.example.com patterns. Bare * is not accepted. These grants never override the sandbox network policy. Values in plaintext HTTP requests, URLs, bodies, encoded credentials, and signed requests are not substituted."
+        }
+      },
+      "required": [
+        "injectHosts"
+      ],
+      "additionalProperties": false,
+      "description": "Destinations authorized to receive one masked environment credential.",
+      "title": "SandboxMaskedEnvVar"
     },
     "SandboxSessionChange": {
       "type": "string",
@@ -41248,7 +42134,8 @@
         },
         "sandboxConfigSource": {
           "$ref": "#/definitions/SandboxConfigSource",
-          "description": "Origin of the sandbox choice. Settings-derived origins (never_configured, user_enabled, user_disabled, repository_policy) let managed policy floor a host preference; explicit below-floor changes remain policy conflicts unless a session opt-out is authorized. Also used for telemetry provenance."
+          "description": "Origin of the sandbox choice. Settings-derived origins (never_configured, user_enabled, user_disabled, repository_policy) let managed policy floor a host preference; explicit below-floor changes remain policy conflicts unless a session opt-out is authorized. Also used for telemetry provenance.",
+          "stability": "experimental"
         },
         "logInteractiveShells": {
           "type": "boolean",
@@ -43363,7 +44250,8 @@
         },
         "sandboxConfigSource": {
           "$ref": "#/definitions/SandboxConfigSource",
-          "description": "Origin of the sandbox choice. Settings-derived origins (never_configured, user_enabled, user_disabled, repository_policy) let managed policy floor a host preference; explicit below-floor changes remain policy conflicts unless a session opt-out is authorized. Also used for telemetry provenance."
+          "description": "Origin of the sandbox choice. Settings-derived origins (never_configured, user_enabled, user_disabled, repository_policy) let managed policy floor a host preference; explicit below-floor changes remain policy conflicts unless a session opt-out is authorized. Also used for telemetry provenance.",
+          "stability": "experimental"
         },
         "logInteractiveShells": {
           "type": "boolean",
@@ -44019,6 +44907,56 @@
       "description": "Skill metadata available to a session, with name, description, source, enabled/invocable state, path, plugin, and argument hint.",
       "title": "Skill"
     },
+    "SkillApplyInstallRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound catalogue and Skill installation capabilities."
+        },
+        "planHandle": {
+          "type": "string",
+          "description": "Opaque original plan, consumed once."
+        },
+        "policySessionId": {
+          "type": "string",
+          "description": "Same existing selected session as planning."
+        }
+      },
+      "required": [
+        "contract",
+        "planHandle",
+        "policySessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Applies exactly one retained verified Skill installation plan.",
+      "title": "SkillApplyInstallRequest"
+    },
+    "SkillApplyUninstallRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound installation contract."
+        },
+        "planHandle": {
+          "type": "string",
+          "description": "Opaque original removal plan, consumed once."
+        },
+        "policySessionId": {
+          "type": "string",
+          "description": "Same existing selected session as removal preparation."
+        }
+      },
+      "required": [
+        "contract",
+        "planHandle",
+        "policySessionId"
+      ],
+      "additionalProperties": false,
+      "description": "One-use application of the exact retained Skill removal plan.",
+      "title": "SkillApplyUninstallRequest"
+    },
     "SkillDiscoveryPath": {
       "type": "object",
       "properties": {
@@ -44084,6 +45022,1073 @@
         "custom": "A configured custom skill directory."
       }
     },
+    "SkillInstallationFailureReason": {
+      "type": "string",
+      "enum": [
+        "feature-disabled",
+        "invalid-request",
+        "operation-limit",
+        "cancelled",
+        "confirmation-unavailable",
+        "confirmation-invalid",
+        "policy-context-unavailable",
+        "policy-changed",
+        "resource-not-found",
+        "plan-expired",
+        "plan-replayed",
+        "foreign-runtime",
+        "wrong-kind",
+        "search-mismatch",
+        "expired",
+        "invalid-candidate",
+        "descriptor-unavailable",
+        "descriptor-invalid",
+        "entrypoint-unavailable",
+        "invalid-skill",
+        "payload-unavailable",
+        "payload-mismatch",
+        "source-changed",
+        "lifecycle-unavailable",
+        "recovery-required",
+        "review-too-large",
+        "busy",
+        "already-installed",
+        "configuration-modified",
+        "write-failed"
+      ],
+      "description": "Bounded refusal categories for verified Skill installation management.",
+      "title": "SkillInstallationFailureReason",
+      "x-enumDescriptions": {
+        "feature-disabled": "The selected session does not have the Agent Finder Skill installation feature flag enabled for acquisition.",
+        "invalid-request": "The request is unsupported or malformed.",
+        "operation-limit": "The bounded operation limit was reached.",
+        "cancelled": "The original operation was cancelled.",
+        "confirmation-unavailable": "The original host cannot receive human confirmation.",
+        "confirmation-invalid": "The confirmation response is malformed or mismatched.",
+        "policy-context-unavailable": "Existing authenticated session and host authority is unavailable.",
+        "policy-changed": "The original authority or policy changed.",
+        "resource-not-found": "No matching owned resource or original operation exists.",
+        "plan-expired": "The original plan deadline elapsed.",
+        "plan-replayed": "The one-use plan was already consumed.",
+        "foreign-runtime": "The handle belongs to a different runtime, session or connection.",
+        "wrong-kind": "The handle is not the expected Skill handle kind.",
+        "search-mismatch": "The handle was minted for a different search result or authority.",
+        "expired": "The handle or operation expired.",
+        "invalid-candidate": "The candidate handle is not a verified installable Skill candidate.",
+        "descriptor-unavailable": "The verified Skill descriptor could not be retrieved safely.",
+        "descriptor-invalid": "The verified Skill descriptor failed validation.",
+        "entrypoint-unavailable": "The Skill entrypoint could not be retrieved or verified.",
+        "invalid-skill": "The Skill entrypoint is not a valid Skill.",
+        "payload-unavailable": "The reviewed Skill payload could not be acquired.",
+        "payload-mismatch": "The acquired payload no longer matches the reviewed descriptor.",
+        "source-changed": "The retained Skill source changed after planning.",
+        "lifecycle-unavailable": "The selected runtime cannot inspect or control the requested lifecycle operation.",
+        "recovery-required": "Durable Skill installation evidence requires recovery before mutation.",
+        "review-too-large": "The Skill entrypoint exceeds the bounded complete review size.",
+        "busy": "Skill installation storage or admission is busy.",
+        "already-installed": "An owned Skill with the same identity or target already exists.",
+        "configuration-modified": "Installed Skill files no longer match ownership evidence.",
+        "write-failed": "A storage operation failed; inspect durable state before retrying."
+      }
+    },
+    "SkillInstallationFileReview": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Relative file path within the Skill root."
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact reviewed file size in bytes."
+        },
+        "mediaType": {
+          "type": "string",
+          "description": "Declared media type for the file."
+        },
+        "executable": {
+          "type": "boolean",
+          "description": "Whether the file is installed with executable permissions."
+        },
+        "digest": {
+          "type": "string",
+          "description": "SHA-256 digest of the exact file bytes."
+        }
+      },
+      "required": [
+        "path",
+        "sizeBytes",
+        "mediaType",
+        "executable",
+        "digest"
+      ],
+      "additionalProperties": false,
+      "description": "One reviewed Skill file.",
+      "title": "SkillInstallationFileReview"
+    },
+    "SkillInstallationLocation": {
+      "type": "object",
+      "properties": {
+        "scope": {
+          "$ref": "#/definitions/SkillInstallationScope",
+          "description": "Installation scope. Agent Finder Skills are installed in the user's personal Copilot home."
+        },
+        "relativePath": {
+          "type": "string",
+          "description": "Path relative to the Copilot home."
+        },
+        "displayLabel": {
+          "type": "string",
+          "description": "Safe display label, for example ~/.copilot/skills/run-checks."
+        },
+        "diagnosticsAbsolutePath": {
+          "type": "string",
+          "description": "Diagnostics-only absolute host path. Hosts must not display it by default."
+        }
+      },
+      "required": [
+        "scope",
+        "relativePath",
+        "displayLabel"
+      ],
+      "additionalProperties": false,
+      "description": "A user-facing personal Skill installation location without absolute host paths.",
+      "title": "SkillInstallationLocation"
+    },
+    "SkillInstallationManagementOutcome": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "recovery-required",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false,
+          "description": "Already-confirmed durable work must be reconciled before new mutations or inventory."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/definitions/SkillInstallPlan",
+              "description": "Prepared install plan."
+            },
+            "kind": {
+              "type": "string",
+              "const": "install-planned",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "plan"
+          ],
+          "additionalProperties": false,
+          "description": "A verified Skill installation plan was prepared."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "installations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SkillInstallationSummary",
+                "description": "Durable verified Skill ownership summary."
+              },
+              "description": "Owned Skill installation summaries."
+            },
+            "kind": {
+              "type": "string",
+              "const": "listed",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "installations"
+          ],
+          "additionalProperties": false,
+          "description": "Owned Skill installations were listed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "installations": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SkillInstallationSummary",
+                "description": "Durable verified Skill ownership summary."
+              },
+              "description": "Owned Skill installation summaries after recovery."
+            },
+            "kind": {
+              "type": "string",
+              "const": "recovered",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "installations"
+          ],
+          "additionalProperties": false,
+          "description": "Recovery completed and inventory was inspected."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "$ref": "#/definitions/SkillInstallationFailureReason",
+              "description": "Cause of the compensation."
+            },
+            "operation_id": {
+              "type": "string",
+              "description": "Original operation identity."
+            },
+            "kind": {
+              "type": "string",
+              "const": "rolled-back",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "reason",
+            "operation_id"
+          ],
+          "additionalProperties": false,
+          "description": "Interrupted work was safely compensated and the pending marker was cleared."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "plan": {
+              "$ref": "#/definitions/SkillUninstallPlan",
+              "description": "Prepared uninstall plan."
+            },
+            "kind": {
+              "type": "string",
+              "const": "uninstall-planned",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "plan"
+          ],
+          "additionalProperties": false,
+          "description": "An owned Skill uninstall plan was prepared."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operation": {
+              "$ref": "#/definitions/SkillInstallationOperationStatus",
+              "description": "Operation status."
+            },
+            "kind": {
+              "type": "string",
+              "const": "operation",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "operation"
+          ],
+          "additionalProperties": false,
+          "description": "Original-connection operation snapshot."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "installation": {
+              "$ref": "#/definitions/SkillInstallationSummary",
+              "description": "Updated installation summary."
+            },
+            "diagnostics": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Safe reload or reconciliation diagnostics."
+            },
+            "kind": {
+              "type": "string",
+              "const": "enabled-changed",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "installation",
+            "diagnostics"
+          ],
+          "additionalProperties": false,
+          "description": "Enablement changed and the selected session was reconciled."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "$ref": "#/definitions/SkillInstallationFailureReason",
+              "description": "Bounded refusal reason."
+            },
+            "kind": {
+              "type": "string",
+              "const": "refused",
+              "description": "Skill installation management outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "reason"
+          ],
+          "additionalProperties": false,
+          "description": "The management request was refused."
+        }
+      ],
+      "description": "Management outcome for verified Skill inventory, planning and removal.",
+      "title": "SkillInstallationManagementOutcome"
+    },
+    "SkillInstallationManagementResult": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "outcome",
+              "description": "Discriminator: handled management outcome."
+            },
+            "outcome": {
+              "$ref": "#/definitions/SkillInstallationManagementOutcome",
+              "description": "Observed management outcome."
+            },
+            "negotiated": {
+              "$ref": "#/definitions/CatalogNegotiatedContract",
+              "description": "Capabilities honoured for this request."
+            }
+          },
+          "required": [
+            "kind",
+            "outcome",
+            "negotiated"
+          ]
+        },
+        {
+          "$ref": "#/definitions/CatalogNegotiationRefusedError",
+          "description": "The caller's protocol version or required capabilities cannot be honoured. Returned instead of a partial or ambiguous success."
+        },
+        {
+          "$ref": "#/definitions/CatalogInvalidRequestError",
+          "description": "The request was rejected because a bounded field fell outside its permitted range or a required field was unusable. Pagination may also be rejected by the authority after a continuation request; repeat the search without page."
+        }
+      ],
+      "description": "Skill installation management result with the honoured contract, or a typed refusal.",
+      "title": "SkillInstallationManagementResult"
+    },
+    "SkillInstallationOperationRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound Skill installation capability."
+        },
+        "operationId": {
+          "type": "string",
+          "description": "Exact runtime-issued operation ID on the original connection."
+        }
+      },
+      "required": [
+        "contract",
+        "operationId"
+      ],
+      "additionalProperties": false,
+      "description": "Existing-operation control. A new session selector is deliberately not accepted.",
+      "title": "SkillInstallationOperationRequest"
+    },
+    "SkillInstallationOperationStatus": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original runtime-issued operation identity."
+            },
+            "cancellationRequested": {
+              "type": "boolean",
+              "description": "Whether cancellation has been requested."
+            },
+            "phase": {
+              "type": "string",
+              "const": "preparing"
+            }
+          },
+          "required": [
+            "phase",
+            "operationId",
+            "cancellationRequested"
+          ],
+          "additionalProperties": false,
+          "description": "Original operation progress discriminator."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original runtime-issued operation identity."
+            },
+            "cancellationRequested": {
+              "type": "boolean",
+              "description": "Whether cancellation has been requested."
+            },
+            "phase": {
+              "type": "string",
+              "const": "prepared"
+            }
+          },
+          "required": [
+            "phase",
+            "operationId",
+            "cancellationRequested"
+          ],
+          "additionalProperties": false,
+          "description": "Original operation progress discriminator."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original runtime-issued operation identity."
+            },
+            "cancellationRequested": {
+              "type": "boolean",
+              "description": "Whether cancellation has been requested."
+            },
+            "phase": {
+              "type": "string",
+              "const": "awaiting-confirmation"
+            }
+          },
+          "required": [
+            "phase",
+            "operationId",
+            "cancellationRequested"
+          ],
+          "additionalProperties": false,
+          "description": "Original operation progress discriminator."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original runtime-issued operation identity."
+            },
+            "cancellationRequested": {
+              "type": "boolean",
+              "description": "Whether cancellation has been requested."
+            },
+            "phase": {
+              "type": "string",
+              "const": "revalidating"
+            }
+          },
+          "required": [
+            "phase",
+            "operationId",
+            "cancellationRequested"
+          ],
+          "additionalProperties": false,
+          "description": "Original operation progress discriminator."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original runtime-issued operation identity."
+            },
+            "cancellationRequested": {
+              "type": "boolean",
+              "description": "Whether cancellation has been requested; already-started effects require recovery."
+            },
+            "phase": {
+              "type": "string",
+              "const": "applying"
+            }
+          },
+          "required": [
+            "phase",
+            "operationId",
+            "cancellationRequested"
+          ],
+          "additionalProperties": false,
+          "description": "Original operation progress discriminator."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original runtime-issued operation identity."
+            },
+            "cancellationRequested": {
+              "type": "boolean",
+              "description": "Whether cancellation was requested before the terminal result."
+            },
+            "outcome": {
+              "$ref": "#/definitions/SkillInstallationOutcome",
+              "description": "Immutable terminal receipt."
+            },
+            "phase": {
+              "type": "string",
+              "const": "completed"
+            }
+          },
+          "required": [
+            "phase",
+            "operationId",
+            "cancellationRequested",
+            "outcome"
+          ],
+          "additionalProperties": false,
+          "description": "Original operation progress discriminator."
+        }
+      ],
+      "description": "Status snapshot from the original connection, independent of new-work account availability.",
+      "title": "SkillInstallationOperationStatus"
+    },
+    "SkillInstallationOutcome": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "installation": {
+              "$ref": "#/definitions/SkillInstallationSummary",
+              "description": "Durable installed Skill summary."
+            },
+            "kind": {
+              "type": "string",
+              "const": "installed",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "installation"
+          ],
+          "additionalProperties": false,
+          "description": "The verified Skill was installed disabled."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "installationId": {
+              "type": "string",
+              "description": "Removed installation identity."
+            },
+            "operationId": {
+              "type": "string",
+              "description": "Original removal operation identity."
+            },
+            "kind": {
+              "type": "string",
+              "const": "uninstalled",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "installationId",
+            "operationId"
+          ],
+          "additionalProperties": false,
+          "description": "The owned Skill was removed."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "$ref": "#/definitions/SkillInstallationFailureReason",
+              "description": "Cause of the fully aborted or compensated operation."
+            },
+            "operationId": {
+              "type": "string",
+              "description": "Original operation identity."
+            },
+            "kind": {
+              "type": "string",
+              "const": "rolled-back",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "reason",
+            "operationId"
+          ],
+          "additionalProperties": false,
+          "description": "The durable transaction was aborted or fully compensated."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Operation whose durable result must be recovered and inspected."
+            },
+            "kind": {
+              "type": "string",
+              "const": "recovery-required",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "operationId"
+          ],
+          "additionalProperties": false,
+          "description": "A write may have completed. Recover and inspect durable state before retrying."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original operation identity."
+            },
+            "kind": {
+              "type": "string",
+              "const": "declined",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "operationId"
+          ],
+          "additionalProperties": false,
+          "description": "The user declined the confirmation request."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "description": "Original operation identity."
+            },
+            "kind": {
+              "type": "string",
+              "const": "cancelled",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "operationId"
+          ],
+          "additionalProperties": false,
+          "description": "The operation was cancelled before a terminal mutation."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "reason": {
+              "$ref": "#/definitions/SkillInstallationFailureReason",
+              "description": "Bounded refusal reason."
+            },
+            "operationId": {
+              "type": "string",
+              "description": "Present once an operation has been allocated."
+            },
+            "kind": {
+              "type": "string",
+              "const": "refused",
+              "description": "Terminal Skill installation outcome discriminator."
+            }
+          },
+          "required": [
+            "kind",
+            "reason"
+          ],
+          "additionalProperties": false,
+          "description": "The operation was refused without applying changes."
+        }
+      ],
+      "description": "Terminal verified Skill mutation result.",
+      "title": "SkillInstallationOutcome"
+    },
+    "SkillInstallationOwnershipState": {
+      "type": "string",
+      "enum": [
+        "intact",
+        "modified",
+        "recovery-required"
+      ],
+      "description": "Owned Skill state observed from files and receipts.",
+      "title": "SkillInstallationOwnershipState",
+      "x-enumDescriptions": {
+        "intact": "Owned files and receipt evidence match.",
+        "modified": "Owned files no longer match the receipt.",
+        "recovery-required": "Ownership evidence requires recovery before mutation."
+      }
+    },
+    "SkillInstallationResult": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "outcome",
+              "description": "Discriminator: handled operation outcome."
+            },
+            "outcome": {
+              "$ref": "#/definitions/SkillInstallationOutcome",
+              "description": "Terminal operation outcome."
+            },
+            "negotiated": {
+              "$ref": "#/definitions/CatalogNegotiatedContract",
+              "description": "Capabilities honoured for this request."
+            }
+          },
+          "required": [
+            "kind",
+            "outcome",
+            "negotiated"
+          ]
+        },
+        {
+          "$ref": "#/definitions/CatalogNegotiationRefusedError",
+          "description": "The caller's protocol version or required capabilities cannot be honoured. Returned instead of a partial or ambiguous success."
+        },
+        {
+          "$ref": "#/definitions/CatalogInvalidRequestError",
+          "description": "The request was rejected because a bounded field fell outside its permitted range or a required field was unusable. Pagination may also be rejected by the authority after a continuation request; repeat the search without page."
+        }
+      ],
+      "description": "Skill installation result with the honoured contract, or a typed request/negotiation refusal.",
+      "title": "SkillInstallationResult"
+    },
+    "SkillInstallationReview": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Skill invocation name from SKILL.md."
+            },
+            "description": {
+              "type": "string",
+              "description": "Skill description from SKILL.md when present."
+            },
+            "catalogue": {
+              "$ref": "#/definitions/InstallationCatalogueIdentity",
+              "description": "Catalogue identity retained from the bound candidate before consent."
+            },
+            "source": {
+              "$ref": "#/definitions/SkillInstallationSource",
+              "description": "Exact verified source identity."
+            },
+            "target": {
+              "$ref": "#/definitions/SkillInstallationLocation",
+              "description": "Exact user-scope target location without an absolute host path."
+            },
+            "installsDisabled": {
+              "type": "boolean",
+              "description": "Installing never grants immediate use; the Skill is written disabled."
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SkillInstallationFileReview",
+                "description": "One reviewed Skill file."
+              },
+              "description": "Reviewed files and digests."
+            },
+            "totalBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total reviewed payload size in bytes."
+            },
+            "entrypointPath": {
+              "type": "string",
+              "description": "Relative path of the verified Skill entrypoint."
+            },
+            "entrypointContent": {
+              "type": "string",
+              "description": "Complete verified SKILL.md content. Planning refuses with review-too-large\nwhen this exceeds 262144 UTF-8 bytes; it is never truncated."
+            },
+            "action": {
+              "type": "string",
+              "const": "install",
+              "description": "Exact reviewed Skill installation action."
+            }
+          },
+          "required": [
+            "action",
+            "name",
+            "catalogue",
+            "source",
+            "target",
+            "installsDisabled",
+            "files",
+            "totalBytes",
+            "entrypointPath",
+            "entrypointContent"
+          ],
+          "additionalProperties": false,
+          "description": "Review for installing a verified Skill."
+        },
+        {
+          "type": "object",
+          "properties": {
+            "installation": {
+              "$ref": "#/definitions/SkillInstallationSummary",
+              "description": "Owned installation being removed."
+            },
+            "filesModified": {
+              "type": "boolean",
+              "description": "Whether current files differ from the receipt. Apply refuses drift."
+            },
+            "files": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/SkillInstallationFileReview",
+                "description": "One reviewed Skill file."
+              },
+              "description": "Files recorded by the installation receipt."
+            },
+            "totalBytes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Total receipt-owned payload size in bytes."
+            },
+            "catalogue": {
+              "$ref": "#/definitions/InstallationCatalogueIdentity",
+              "description": "Catalogue identity retained at install time."
+            },
+            "action": {
+              "type": "string",
+              "const": "uninstall",
+              "description": "Exact reviewed Skill installation action."
+            }
+          },
+          "required": [
+            "action",
+            "installation",
+            "filesModified",
+            "files",
+            "totalBytes",
+            "catalogue"
+          ],
+          "additionalProperties": false,
+          "description": "Review for uninstalling an owned verified Skill."
+        }
+      ],
+      "description": "Safe verified Skill review fields. No raw credential, candidate handle or plan handle.",
+      "title": "SkillInstallationReview"
+    },
+    "SkillInstallationScope": {
+      "type": "string",
+      "enum": [
+        "personal"
+      ],
+      "title": "SkillInstallationScope",
+      "x-enumDescriptions": {
+        "personal": "The user's personal Copilot home."
+      }
+    },
+    "SkillInstallationSessionState": {
+      "type": "string",
+      "enum": [
+        "loaded-enabled",
+        "loaded-disabled",
+        "not-loaded",
+        "unknown"
+      ],
+      "description": "Bound-session observation after reconciling persisted enablement.",
+      "title": "SkillInstallationSessionState",
+      "x-enumDescriptions": {
+        "loaded-enabled": "The selected session has loaded this Skill and it is enabled.",
+        "loaded-disabled": "The selected session has loaded this Skill or settings and it is disabled.",
+        "not-loaded": "The selected session has not loaded Skills after the latest change.",
+        "unknown": "The selected session could not be inspected."
+      }
+    },
+    "SkillInstallationSource": {
+      "type": "object",
+      "properties": {
+        "resourceId": {
+          "type": "string",
+          "description": "Agent Finder resource identifier."
+        },
+        "catalogRevisionId": {
+          "type": "string",
+          "description": "Agent Finder materialisation revision identifier."
+        },
+        "repositoryId": {
+          "type": "string",
+          "description": "GitHub repository database identifier."
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository full name, for example owner/name."
+        },
+        "revision": {
+          "type": "string",
+          "description": "Pinned Git commit revision."
+        },
+        "root": {
+          "type": "string",
+          "description": "Root path within the pinned repository."
+        },
+        "descriptorDigest": {
+          "type": "string",
+          "description": "Digest of the canonical materialisation descriptor."
+        },
+        "bundleDigest": {
+          "type": "string",
+          "description": "Digest of the descriptor's bundle manifest."
+        }
+      },
+      "required": [
+        "resourceId",
+        "catalogRevisionId",
+        "repositoryId",
+        "repository",
+        "revision",
+        "root",
+        "descriptorDigest",
+        "bundleDigest"
+      ],
+      "additionalProperties": false,
+      "description": "Source identity retained from Agent Finder and the pinned GitHub descriptor.",
+      "title": "SkillInstallationSource"
+    },
+    "SkillInstallationsRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound installation contract."
+        },
+        "policySessionId": {
+          "type": "string",
+          "description": "Existing selected local session on this connection."
+        }
+      },
+      "required": [
+        "contract",
+        "policySessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Inventory request under an explicitly selected existing session.",
+      "title": "SkillInstallationsRequest"
+    },
+    "SkillInstallationSummary": {
+      "type": "object",
+      "properties": {
+        "installationId": {
+          "type": "string",
+          "description": "Exact durable installation receipt identity."
+        },
+        "operationId": {
+          "type": "string",
+          "description": "Operation that installed this Skill."
+        },
+        "name": {
+          "type": "string",
+          "description": "Skill invocation name."
+        },
+        "target": {
+          "$ref": "#/definitions/SkillInstallationLocation",
+          "description": "User-facing installation location without an absolute host path."
+        },
+        "configuredEnabled": {
+          "type": "boolean",
+          "description": "Persisted enablement requested for this installation."
+        },
+        "sessionState": {
+          "$ref": "#/definitions/SkillInstallationSessionState",
+          "description": "Bound-session load observation."
+        },
+        "source": {
+          "$ref": "#/definitions/SkillInstallationSource",
+          "description": "Exact retained verified source identity."
+        },
+        "catalogue": {
+          "$ref": "#/definitions/InstallationCatalogueIdentity",
+          "description": "Catalogue identity retained at install time."
+        },
+        "installedAt": {
+          "type": "string",
+          "description": "ISO 8601 wall-clock installation time."
+        },
+        "ownershipState": {
+          "$ref": "#/definitions/SkillInstallationOwnershipState",
+          "description": "Ownership state observed from files and receipts."
+        }
+      },
+      "required": [
+        "installationId",
+        "operationId",
+        "name",
+        "target",
+        "configuredEnabled",
+        "sessionState",
+        "source",
+        "catalogue",
+        "installedAt",
+        "ownershipState"
+      ],
+      "additionalProperties": false,
+      "description": "Durable verified Skill ownership summary.",
+      "title": "SkillInstallationSummary"
+    },
+    "SkillInstallPlan": {
+      "type": "object",
+      "properties": {
+        "planHandle": {
+          "type": "string",
+          "description": "One-use plan handle, bound to the original candidate authority."
+        },
+        "operationId": {
+          "type": "string",
+          "description": "Original operation identifier returned before confirmation."
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "Original wall-clock expiry as an ISO 8601 timestamp."
+        },
+        "review": {
+          "$ref": "#/definitions/SkillInstallationReview",
+          "description": "Safe review to present before applying the plan."
+        }
+      },
+      "required": [
+        "planHandle",
+        "operationId",
+        "expiresAt",
+        "review"
+      ],
+      "additionalProperties": false,
+      "description": "A computed Skill install plan. Nothing has been applied.",
+      "title": "SkillInstallPlan"
+    },
     "SkillList": {
       "type": "object",
       "properties": {
@@ -44102,6 +46107,56 @@
       "additionalProperties": false,
       "description": "Skills available to the session, with their enabled state.",
       "title": "SkillList"
+    },
+    "SkillPlanInstallRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound catalogue and Skill installation capabilities."
+        },
+        "candidateHandle": {
+          "type": "string",
+          "description": "Fresh single-use AI skill candidate handle returned by a bound catalogue search."
+        },
+        "policySessionId": {
+          "type": "string",
+          "description": "Existing local session attached to this connection."
+        }
+      },
+      "required": [
+        "contract",
+        "candidateHandle",
+        "policySessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Side-effect-free planning of one verified Agent Finder Skill candidate.",
+      "title": "SkillPlanInstallRequest"
+    },
+    "SkillPlanUninstallRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound installation contract."
+        },
+        "installationId": {
+          "type": "string",
+          "description": "Exact receipt to inspect."
+        },
+        "policySessionId": {
+          "type": "string",
+          "description": "Existing selected local session on this connection."
+        }
+      },
+      "required": [
+        "contract",
+        "installationId",
+        "policySessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Read-only preparation of one owned Skill removal under fresh selected-session authority.",
+      "title": "SkillPlanUninstallRequest"
     },
     "SkillProviderDescriptor": {
       "type": "object",
@@ -44295,6 +46350,36 @@
       "title": "SkillsEnableRequest",
       "stability": "experimental"
     },
+    "SkillSetEnabledRequest": {
+      "type": "object",
+      "properties": {
+        "contract": {
+          "$ref": "#/definitions/CatalogClientContract",
+          "description": "Required authenticated bound Skill installation capability."
+        },
+        "installationId": {
+          "type": "string",
+          "description": "Exact receipt identity to update."
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Persisted enablement value."
+        },
+        "policySessionId": {
+          "type": "string",
+          "description": "Existing selected local session to reconcile after persistence."
+        }
+      },
+      "required": [
+        "contract",
+        "installationId",
+        "enabled",
+        "policySessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Persisted enablement update for one owned Skill installation.",
+      "title": "SkillSetEnabledRequest"
+    },
     "SkillsGetDiscoveryPathsRequest": {
       "type": "object",
       "properties": {
@@ -44432,6 +46517,41 @@
         "builtin": "Skill bundled with the runtime.",
         "sdk": "Pathless skill supplied lazily by an SDK skill provider."
       }
+    },
+    "SkillUninstallPlan": {
+      "type": "object",
+      "properties": {
+        "planHandle": {
+          "type": "string",
+          "description": "One-use uninstall plan handle."
+        },
+        "operationId": {
+          "type": "string",
+          "description": "Original removal operation identifier returned before confirmation."
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "Original wall-clock expiry as an ISO 8601 timestamp."
+        },
+        "installation": {
+          "$ref": "#/definitions/SkillInstallationSummary",
+          "description": "Owned Skill installation being removed."
+        },
+        "review": {
+          "$ref": "#/definitions/SkillInstallationReview",
+          "description": "Safe review to present before applying removal."
+        }
+      },
+      "required": [
+        "planHandle",
+        "operationId",
+        "expiresAt",
+        "installation",
+        "review"
+      ],
+      "additionalProperties": false,
+      "description": "A computed Skill uninstall plan. Nothing has been removed.",
+      "title": "SkillUninstallPlan"
     },
     "SlashCommandAddTimelineEntryResult": {
       "type": "object",

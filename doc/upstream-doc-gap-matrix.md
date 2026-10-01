@@ -53,6 +53,13 @@ supports the existing orchestration operations under canonical Workflow names.
 options remain intentionally absent. Observing a paused attempt does not
 require exposing the pause APIs.
 
+Runtime-supervised AHP hosting (`AhpHost`, `startAhpHost`), installation
+confirmation and skill-installation management, sandbox provenance and path
+grants, and read-only session permission decisions remain experimental and
+intentionally absent. Package-root re-exports do not change their experimental
+status. The stable `:allowed-models` create/resume/join option does not expose
+the experimental live model-policy setter.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |

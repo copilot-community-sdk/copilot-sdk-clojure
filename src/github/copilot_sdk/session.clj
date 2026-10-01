@@ -290,7 +290,7 @@
         event-chan (chan (async/sliding-buffer 4096))
         event-mult (mult event-chan)
         send-lock (doto (chan 1) (>!! :token))
-        shutdown-chan (chan)
+        shutdown-chan (async/promise-chan)
         async-send-state (atom nil)
         structured-wait-state (atom {:waiter-count 0
                                      :admission nil})
@@ -849,48 +849,53 @@
     (close! cancel-chan)))
 
 (defn- release-session-resources!
-  [session-id session {:keys [event-chan send-lock shutdown-chan]}]
-  (teardown/collect
-   [(teardown/attempt
-     {:operation :cancel
-      :resource :async-sends
-      :session-id session-id}
-     (when shutdown-chan
-       (close! shutdown-chan)))
-    (teardown/attempt
-     {:operation :cancel
-      :resource :pending-external-tools
-      :session-id session-id}
-     (cancel-pending-external-tools!
-      (vals (:pending-external-tools session))))
-    (teardown/attempt
-     {:operation :cancel
-      :resource :workflow-executions
-      :session-id session-id}
-     (cancel-executions!
-      (mapcat vals (vals (:workflow-executions session)))))
-    (teardown/attempt
-     {:operation :close
-      :resource :event-channel
-      :session-id session-id}
-     (when event-chan
-       (close! event-chan)))
-    (teardown/attempt
-     {:operation :close
-      :resource :send-lock
-      :session-id session-id}
-     (when send-lock
-       (close! send-lock)))]))
+  ([session-id session io]
+   (release-session-resources! session-id session io :local-disconnect))
+  ([session-id session {:keys [event-chan send-lock shutdown-chan]} reason]
+   (teardown/collect
+    [(teardown/attempt
+      {:operation :cancel
+       :resource :async-sends
+       :session-id session-id}
+      (when shutdown-chan
+        (put! shutdown-chan reason)
+        (close! shutdown-chan)))
+     (teardown/attempt
+      {:operation :cancel
+       :resource :pending-external-tools
+       :session-id session-id}
+      (cancel-pending-external-tools!
+       (vals (:pending-external-tools session))))
+     (teardown/attempt
+      {:operation :cancel
+       :resource :workflow-executions
+       :session-id session-id}
+      (cancel-executions!
+       (mapcat vals (vals (:workflow-executions session)))))
+     (teardown/attempt
+      {:operation :close
+       :resource :event-channel
+       :session-id session-id}
+      (when event-chan
+        (close! event-chan)))
+     (teardown/attempt
+      {:operation :close
+       :resource :send-lock
+       :session-id session-id}
+      (when send-lock
+        (close! send-lock)))])))
 
 (defn ^:no-doc release-session-snapshots!
   "Release resources from session state that has already been detached atomically."
-  [sessions session-ios]
-  (vec
-   (mapcat
-    (fn [[session-id copilot-session]]
-      (release-session-resources!
-       session-id copilot-session (get session-ios session-id)))
-    sessions)))
+  ([sessions session-ios]
+   (release-session-snapshots! sessions session-ios :local-disconnect))
+  ([sessions session-ios reason]
+   (vec
+    (mapcat
+     (fn [[session-id copilot-session]]
+       (release-session-resources!
+        session-id copilot-session (get session-ios session-id) reason))
+     sessions))))
 
 (defn ^:no-doc remove-session-registration!
   [client session-id expected-registration-token]
@@ -2807,13 +2812,22 @@
              delivered?
              (loop [remaining (cond-> []
                                 pending-root (conj pending-root)
-                                true (conj terminal))]
+                                true (conj terminal))
+                    observe-shutdown? true]
                (if-let [event (first remaining)]
                  (let [[accepted? port]
-                       (async/alts! [cancel-chan shutdown-chan [output event]] :priority true)]
-                   (if (and (= port output) accepted?)
-                     (recur (next remaining))
-                     false))
+                       (async/alts! (cond-> [cancel-chan]
+                                      observe-shutdown? (conj shutdown-chan)
+                                      true (conj [output event]))
+                                    :priority true)]
+                   (cond
+                     (and (= port shutdown-chan) (= accepted? :connection-closed))
+                     (recur remaining false)
+
+                     (and (= port output) accepted?)
+                     (recur (next remaining) observe-shutdown?)
+
+                     :else false))
                  true))))
           (finally
             (close! output)
@@ -2861,7 +2875,7 @@
               (let [response-ch (proto/send-request connection "session.send" params)]
                 (vreset! pending-response response-ch)
                 (let [[response port]
-                      (async/alts! (cond-> [cancel-chan shutdown-chan response-ch]
+                      (async/alts! (cond-> [cancel-chan response-ch shutdown-chan]
                                      deadline-chan (conj deadline-chan))
                                    :priority true)
                       removed? (when (not= port response-ch)
@@ -2870,7 +2884,7 @@
                       [response port]
                       ;; A claimed response belongs to the reader, not the expired deadline.
                       (if (and (= port deadline-chan) (not removed?))
-                        (async/alts! [cancel-chan shutdown-chan response-ch] :priority true)
+                        (async/alts! [cancel-chan response-ch shutdown-chan] :priority true)
                         [response port])]
                   (if (not= port response-ch)
                     (do
@@ -2881,7 +2895,7 @@
                       (let [result (proto/response-result! "session.send" response)]
                         (acknowledge-async-send! context {:message-id (:message-id result)}))
                       (let [[_ outcome]
-                            (async/alts! (cond-> [cancel-chan shutdown-chan done-chan]
+                            (async/alts! (cond-> [cancel-chan done-chan shutdown-chan]
                                            deadline-chan (conj deadline-chan))
                                          :priority true)]
                         (finish-async-send!
@@ -2938,8 +2952,9 @@
    A timeout is emitted as a final `:copilot/session.error` event whose data
    includes `:timeout-ms`, then the channel closes.
    Closing the returned channel cancels the local wait and pending delivery,
-   not the remote run. Session teardown also cancels pending delivery, even
-   with no timeout.
+   not the remote run. Explicit local teardown also cancels pending delivery,
+   even with no timeout. Unexpected connection closure preserves a captured
+   completion for the result consumer; close that channel to abandon delivery.
    
    Options: same as send! (including :request-headers).
    

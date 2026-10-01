@@ -874,17 +874,20 @@
     (log/warn failure "Connection-close cleanup step failed")))
 
 (defn- release-session-setup-snapshot-entries!
-  [entries]
-  (vec
-   (mapcat
-    (fn [[session-id {:keys [snapshot release-token]}]]
-      (when-not release-token
-        (session/release-session-snapshots!
-         {session-id (:session snapshot)}
-         (if (:session-io-present? snapshot)
-           {session-id (:session-io snapshot)}
-           {}))))
-    entries)))
+  ([entries]
+   (release-session-setup-snapshot-entries! entries :local-disconnect))
+  ([entries reason]
+   (vec
+    (mapcat
+     (fn [[session-id {:keys [snapshot release-token]}]]
+       (when-not release-token
+         (session/release-session-snapshots!
+          {session-id (:session snapshot)}
+          (if (:session-io-present? snapshot)
+            {session-id (:session-io snapshot)}
+            {})
+          reason)))
+     entries))))
 
 (defn- claim-session-shutdown-resources!
   [client state-updates]
@@ -977,9 +980,9 @@
    (td/collect
     (concat
      (session/release-session-snapshots!
-      (:sessions old-state) (:session-io old-state))
+      (:sessions old-state) (:session-io old-state) :connection-closed)
      (release-session-setup-snapshot-entries!
-      (:session-setup-snapshots old-state))
+      (:session-setup-snapshots old-state) :connection-closed)
      [(td/attempt
        {:operation :close :resource :github-token-provider-invocations}
        (token-provider/close-removed-invocations!
@@ -2192,7 +2195,8 @@
    `:process` is `:none` (the caller owns the process, or there is none),
    `:graceful` (SIGTERM, then SIGKILL if it overstays), or `:forcible`
    (SIGKILL). When `:wait-for-exit-ms` is set, a process that has already been
-   asked to shut down is first given that long to exit on its own.
+   asked to shut down starts closing owned stdin while the bounded exit wait
+   runs independently, so a blocked write cannot prevent process termination.
 
    Every step runs even when an earlier one fails, and the whole sequence is
    idempotent. Returns a vector of unexpected teardown failures.
@@ -2216,12 +2220,17 @@
             (td/attempt-collecting {:operation :destroy-forcibly :resource :process}
                                    (proc/destroy-forcibly! proc-handle))
             (td/attempt-collecting {:operation :destroy :resource :process}
-                                   ;; A runtime that already accepted
-                                   ;; `runtime.shutdown` gets to exit on its own
-                                   ;; before we signal it.
-                                   (if (and wait-for-exit-ms
-                                            (proc/wait-for-exit! proc-handle wait-for-exit-ms))
+                                   (cond
+                                     (and wait-for-exit-ms
+                                          (:use-stdio? (:options client))
+                                          (:stdin proc-handle))
+                                     (proc/finish-stdio! proc-handle wait-for-exit-ms)
+
+                                     (and wait-for-exit-ms
+                                          (proc/wait-for-exit! proc-handle wait-for-exit-ms))
                                      []
+
+                                     :else
                                      (proc/destroy! proc-handle)))))
         failures
         (td/collect
@@ -2242,7 +2251,7 @@
     ;; Only drop the process handle once the child is confirmed gone. Clearing
     ;; it after a failed kill would discard the only reference to a live
     ;; process, leaving the host no way to retry or report it.
-    (when (and own-process? (empty? process-failures))
+    (when (and own-process? (not (proc/alive? proc-handle)))
       (swap! (:state client) assoc :process nil))
     failures))
 
@@ -2429,6 +2438,8 @@
             (not (:use-stdio? (:options client))))
         (do
           (log/debug "Connecting via TCP")
+          (when (:cli-url (:options client))
+            (swap! (:state client) assoc :actual-port (:port (:options client))))
           (connect-tcp! client))
 
         ;; Normal stdio to spawned process
@@ -2498,9 +2509,11 @@
 
    Performs graceful cleanup in order: disconnect sessions, request
    `runtime.shutdown` for SDK-owned CLI processes (bounded by a 10s timeout),
-   close the connection and socket, then terminate the process. When the
-   `runtime.shutdown` request succeeds, the child is given up to 10s to exit on
-   its own before being force-killed. External runtimes (`:external-server?`)
+   finish the owned process, then close the connection and socket. After a
+   successful shutdown response, owned stdio receives stdin EOF so host
+   finalizers can flush telemetry. Stdin closure and natural exit share a 10s
+   window before termination; a blocked stdin close cannot delay that deadline.
+   External runtimes (`:external-server?`)
    are never asked to shut down — only the connection to them is closed. Use
    force-stop! to skip graceful shutdown.
 
@@ -3546,12 +3559,18 @@
             entry (get-in claimed-state snapshot-path)]
         (if-not (identical? release-token (:release-token entry))
           []
-          (let [failures
+          ;; A pending resume can fail before notification EOF cleanup claims the snapshot.
+          (let [reason (if (and (not (:stopping? claimed-state))
+                                (false? (get-in claimed-state [:connection :running?])))
+                         :connection-closed
+                         :local-disconnect)
+                failures
                 (session/release-session-snapshots!
                  {session-id (get-in entry [:snapshot :session])}
                  (if (get-in entry [:snapshot :session-io-present?])
                    {session-id (get-in entry [:snapshot :session-io])}
-                   {}))]
+                   {})
+                 reason)]
             (swap! (:state client)
                    (fn [state]
                      (let [current (get-in state snapshot-path)]
@@ -3735,6 +3754,7 @@
       (:session-id config) (assoc :session-id (:session-id config))
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
+      (contains? config :allowed-models) (assoc :allowed-models (:allowed-models config))
       (:github-token config) (assoc :git-hub-token (:github-token config))
       (:github-token-provider-registration-id config)
       (assoc :git-hub-token-provider-registration-id
@@ -3951,6 +3971,7 @@
     (cond-> {:session-id session-id}
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
+      (contains? config :allowed-models) (assoc :allowed-models (:allowed-models config))
       (:github-token config) (assoc :git-hub-token (:github-token config))
       (:github-token-provider-registration-id config)
       (assoc :git-hub-token-provider-registration-id
@@ -4415,6 +4436,9 @@
    - :session-id         - Custom session ID
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.4\")
+   - :allowed-models     - Vector of exact model IDs permitted by the host.
+                           Omission preserves runtime policy; [] is forwarded,
+                           and nil is invalid. Runtime policy validates the IDs.
    - :tools              - Vector of tool definitions
    - :commands           - Vector of command definitions (slash commands for TUI).
                            An omitted command :description is sent as an empty string.
@@ -4748,6 +4772,9 @@
                               pending until resolved by the application.
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Change the model for the resumed session
+   - :allowed-models     - Vector of exact model IDs permitted by the host.
+                           Omission preserves runtime policy; [] is forwarded,
+                           and nil is invalid. Also accepted by join-session.
    - :tools              - Tools exposed to the CLI server
    - :system-message     - System message configuration {:mode :content}
    - :available-tools    - List of tool names to allow

@@ -428,6 +428,7 @@
     :github.copilot-sdk.specs/agent-type
     :github.copilot-sdk.specs/agents
     :github.copilot-sdk.specs/allow
+    :github.copilot-sdk.specs/allowed-models
     :github.copilot-sdk.specs/allowed-tools
     :github.copilot-sdk.specs/already-in-use?
     :github.copilot-sdk.specs/api-call-id
@@ -524,6 +525,7 @@
     :github.copilot-sdk.specs/commands
     :github.copilot-sdk.specs/config-dir
     :github.copilot-sdk.specs/config-directory
+    :github.copilot-sdk.specs/config-source
     :github.copilot-sdk.specs/configured-model-matches-actual
     :github.copilot-sdk.specs/configured-model-preference
     :github.copilot-sdk.specs/connection-state
@@ -607,6 +609,7 @@
     :github.copilot-sdk.specs/env
     :github.copilot-sdk.specs/environment-variables
     :github.copilot-sdk.specs/ephemeral?
+    :github.copilot-sdk.specs/error-classification
     :github.copilot-sdk.specs/error-code
     :github.copilot-sdk.specs/error-reason
     :github.copilot-sdk.specs/error-type

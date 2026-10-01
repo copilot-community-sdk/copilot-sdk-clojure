@@ -3,6 +3,43 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (tests)
+- Shutdown lifecycle tests wait for complete telemetry records before forcing
+  runtime termination, eliminating a file-creation race on CI.
+
+### Added (post-v1.0.15 sync)
+- Added `:allowed-models` for create, resume, and join. Exact model IDs and
+  explicit empty vectors are forwarded unchanged; omission preserves runtime
+  policy, and explicit `nil` is rejected.
+- Added optional, extensible `:config-source` and `:error-classification`
+  strings to MCP server status events, with matching live and history behavior.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/a2b2c18eb5a20417fc613eaaa93199f55ad22ea4))
+
+### Fixed (post-v1.0.15 sync)
+- Graceful shutdown now sends stdin EOF to owned stdio runtimes before waiting
+  for process exit, allowing host telemetry finalization without consuming the
+  whole shutdown window. The exit deadline bounds stdin closure even behind a
+  blocked writer. Forced shutdown remains bounded and can interrupt the wait.
+- Parsed notifications drain before remote EOF closes the notification
+  channel. Completed async sends retain their final reply and terminal outcome
+  through unexpected connection cleanup, including registrations displaced by
+  an in-flight resume; explicit local disconnect and closing the result channel
+  remain cancellation paths. NIO input closure also releases pending requests
+  and connection resources.
+- Clients using `:cli-url` can reconnect after graceful or forced shutdown
+  without losing their configured port.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/a2b2c18eb5a20417fc613eaaa93199f55ad22ea4))
+
+### Changed (post-v1.0.15 sync)
+- Advanced the CLI compatibility and schema-provenance pin to `1.0.90-5`
+  and recertified the Node SDK surface through
+  [`a2b2c18eb5a20417fc613eaaa93199f55ad22ea4`](https://github.com/github/copilot-sdk/commit/a2b2c18eb5a20417fc613eaaa93199f55ad22ea4).
+  New experimental AHP hosting, installation confirmation, sandbox controls,
+  read-only permission decisions, and Fusion additions remain excluded.
+  Passive permission-result event data is preserved without adding new
+  permission-granting APIs. The library version remains `1.0.14.0`; no release,
+  tag, or deployment is cut.
+
 ### Added (post-v1.0.14 sync)
 - Added optional `:parent-tool-call-id` metadata to assistant turn-start,
   turn-end, and model-call-failure events, plus the
