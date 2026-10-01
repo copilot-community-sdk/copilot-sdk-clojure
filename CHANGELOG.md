@@ -3,6 +3,10 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (tests)
+- Shutdown lifecycle tests wait for complete telemetry records before forcing
+  runtime termination, eliminating a file-creation race on CI.
+
 ### Added (post-v1.0.15 sync)
 - Added `:allowed-models` for create, resume, and join. Exact model IDs and
   explicit empty vectors are forwarded unchanged; omission preserves runtime

@@ -14,11 +14,12 @@
            [java.nio.file Files StandardWatchEventKinds WatchEvent$Kind]
            [java.util.concurrent TimeUnit]))
 
-(defn- await-created! [watch directory filename]
+(defn- await-file-content! [watch directory filename expected-content]
   (let [path (.resolve directory filename)
         deadline (+ (System/nanoTime) (.toNanos TimeUnit/SECONDS 5))]
     (loop []
-      (when-not (Files/exists path (make-array java.nio.file.LinkOption 0))
+      (when-not (and (Files/exists path (make-array java.nio.file.LinkOption 0))
+                     (= (slurp (str path)) expected-content))
         (let [remaining (- deadline (System/nanoTime))]
           (when-not (pos? remaining)
             (throw (ex-info "Timed out waiting for runtime shutdown" {})))
@@ -49,7 +50,8 @@
         (try
           (with-open [watch (.newWatchService (.getFileSystem directory))]
             (.register directory watch
-                       (into-array WatchEvent$Kind [StandardWatchEventKinds/ENTRY_CREATE]))
+                       (into-array WatchEvent$Kind [StandardWatchEventKinds/ENTRY_CREATE
+                                                    StandardWatchEventKinds/ENTRY_MODIFY]))
             (if (= mode :start-failure)
               (is (thrown-with-msg? clojure.lang.ExceptionInfo #"protocol version"
                                     (sdk/start! client)))
@@ -60,12 +62,14 @@
                     :force (sdk/force-stop! client)
                     :force-during-stop
                     (let [stopping (future (sdk/stop! client))]
-                      (await-created! watch directory (str (.getFileName marker)))
+                      (await-file-content! watch directory (str (.getFileName marker))
+                                           "{\"type\":\"span\"}\n")
                       (sdk/force-stop! client)
                       (is (= (deref stopping 15000 ::timeout) [])))
                     :blocked-writer
                     (let [stopping (future (sdk/stop! client))]
-                      (await-created! watch directory (str (.getFileName requested)))
+                      (await-file-content! watch directory (str (.getFileName requested))
+                                           "ready\n")
                       (protocol/send-request (:connection-io @(:state client))
                                              "ping" {:message (apply str (repeat (* 2 1024 1024) "x"))})
                       (is (= (deref stopping 15000 ::timeout) [])))
