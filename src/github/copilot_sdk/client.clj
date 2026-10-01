@@ -874,17 +874,20 @@
     (log/warn failure "Connection-close cleanup step failed")))
 
 (defn- release-session-setup-snapshot-entries!
-  [entries]
-  (vec
-   (mapcat
-    (fn [[session-id {:keys [snapshot release-token]}]]
-      (when-not release-token
-        (session/release-session-snapshots!
-         {session-id (:session snapshot)}
-         (if (:session-io-present? snapshot)
-           {session-id (:session-io snapshot)}
-           {}))))
-    entries)))
+  ([entries]
+   (release-session-setup-snapshot-entries! entries :local-disconnect))
+  ([entries reason]
+   (vec
+    (mapcat
+     (fn [[session-id {:keys [snapshot release-token]}]]
+       (when-not release-token
+         (session/release-session-snapshots!
+          {session-id (:session snapshot)}
+          (if (:session-io-present? snapshot)
+            {session-id (:session-io snapshot)}
+            {})
+          reason)))
+     entries))))
 
 (defn- claim-session-shutdown-resources!
   [client state-updates]
@@ -979,7 +982,7 @@
      (session/release-session-snapshots!
       (:sessions old-state) (:session-io old-state) :connection-closed)
      (release-session-setup-snapshot-entries!
-      (:session-setup-snapshots old-state))
+      (:session-setup-snapshots old-state) :connection-closed)
      [(td/attempt
        {:operation :close :resource :github-token-provider-invocations}
        (token-provider/close-removed-invocations!
@@ -3556,12 +3559,18 @@
             entry (get-in claimed-state snapshot-path)]
         (if-not (identical? release-token (:release-token entry))
           []
-          (let [failures
+          ;; A pending resume can fail before notification EOF cleanup claims the snapshot.
+          (let [reason (if (and (not (:stopping? claimed-state))
+                                (false? (get-in claimed-state [:connection :running?])))
+                         :connection-closed
+                         :local-disconnect)
+                failures
                 (session/release-session-snapshots!
                  {session-id (get-in entry [:snapshot :session])}
                  (if (get-in entry [:snapshot :session-io-present?])
                    {session-id (get-in entry [:snapshot :session-io])}
-                   {}))]
+                   {})
+                 reason)]
             (swap! (:state client)
                    (fn [state]
                      (let [current (get-in state snapshot-path)]

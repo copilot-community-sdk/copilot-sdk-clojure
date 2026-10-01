@@ -18,9 +18,10 @@ All notable changes to this project will be documented in this file. This change
   blocked writer. Forced shutdown remains bounded and can interrupt the wait.
 - Parsed notifications drain before remote EOF closes the notification
   channel. Completed async sends retain their final reply and terminal outcome
-  through unexpected connection cleanup; explicit local disconnect and closing
-  the result channel remain cancellation paths. NIO input closure also releases
-  pending requests and connection resources.
+  through unexpected connection cleanup, including registrations displaced by
+  an in-flight resume; explicit local disconnect and closing the result channel
+  remain cancellation paths. NIO input closure also releases pending requests
+  and connection resources.
 - Clients using `:cli-url` can reconnect after graceful or forced shutdown
   without losing their configured port.
   ([upstream snapshot](https://github.com/github/copilot-sdk/commit/a2b2c18eb5a20417fc613eaaa93199f55ad22ea4))

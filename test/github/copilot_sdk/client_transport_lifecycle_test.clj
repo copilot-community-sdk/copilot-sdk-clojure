@@ -7,6 +7,7 @@
             [github.copilot-sdk.integration.support :refer [await-atom! await-value!]]
             [github.copilot-sdk.process :as proc]
             [github.copilot-sdk.protocol :as protocol]
+            [github.copilot-sdk.session :as session]
             [github.copilot-sdk.stdio-runtime-fixture :as runtime])
   (:import [java.io BufferedInputStream ByteArrayOutputStream IOException OutputStream]
            [java.net InetAddress ServerSocket]
@@ -92,16 +93,19 @@
             (Files/deleteIfExists directory)))))))
 
 (deftest remote-eof-preserves-completed-channel-sends
-  (doseq [[label start] [[:events sdk/send-async]
+  (doseq [displacement [:none :resume-rpc :setup-snapshot]
+          [label start] [[:events sdk/send-async]
                          [:with-id #(-> (sdk/send-async-with-id %1 %2) :events-ch)]
                          [:content sdk/<send!]
                          [:message sdk/<send-and-wait!]]
           terminal ["session.idle" "session.error"]]
-    (testing (str label " " terminal)
+    (testing (str label " " terminal " " displacement)
       (with-open [server (ServerSocket. 0 50 (InetAddress/getByName "127.0.0.1"))]
         (.setSoTimeout server 10000)
         (let [send-received (promise)
               release-events (promise)
+              resume-received (promise)
+              release-eof (promise)
               serving
               (future
                 (with-open [socket (.accept server)]
@@ -110,15 +114,24 @@
                         output (.getOutputStream socket)]
                     (loop []
                       (when-let [{:keys [id method params]} (runtime/read-message! input)]
-                        (runtime/write-message!
-                         output {:jsonrpc "2.0" :id id
-                                 :result (case method
-                                           "connect" {:protocolVersion 3}
-                                           "session.create" {:sessionId (:sessionId params)}
-                                           "session.send" {:messageId "send-1"}
-                                           (throw (ex-info "Unexpected EOF-fixture request"
-                                                           {:method method})))})
-                        (if (= method "session.send")
+                        (when-not (= method "session.resume")
+                          (runtime/write-message!
+                           output {:jsonrpc "2.0" :id id
+                                   :result (case method
+                                             "connect" {:protocolVersion 3}
+                                             "session.create" {:sessionId (:sessionId params)}
+                                             "session.send" {:messageId "send-1"}
+                                             (throw (ex-info "Unexpected EOF-fixture request"
+                                                             {:method method})))}))
+                        (cond
+                          (= method "session.resume")
+                          (do
+                            (deliver resume-received true)
+                            (await-value! release-eof "displaced EOF fixture release" 5000)
+                            (.shutdownOutput socket)
+                            (is (nil? (runtime/read-message! input))))
+
+                          (= method "session.send")
                           (do
                             (deliver send-received true)
                             (await-value! release-events "EOF fixture release" 5000)
@@ -137,20 +150,47 @@
                                                              {:message "original failure" :errorType "test"}
                                                              {})})
                               (.write output (.toByteArray frames))
-                              (.flush output)
-                              (.shutdownOutput socket))
-                            (is (nil? (runtime/read-message! input))))
-                          (recur)))))))
+                              (.flush output))
+                            (if (= displacement :resume-rpc)
+                              (recur)
+                              (do
+                                (when (= displacement :setup-snapshot)
+                                  (await-value! release-eof "snapshot EOF fixture release" 5000))
+                                (.shutdownOutput socket)
+                                (is (nil? (runtime/read-message! input))))))
+
+                          :else (recur)))))))
               client (sdk/client {:cli-url (str "127.0.0.1:" (.getLocalPort server))
                                   :auto-start? false})
-              result (atom nil)]
+              result (atom nil)
+              resuming (atom nil)]
           (try
             (sdk/start! client)
-            (let [session (sdk/create-session client {})]
+            (let [session (sdk/create-session client {})
+                  session-id (sdk/session-id session)
+                  original-io (get-in @(:state client) [:session-io session-id])]
               (reset! result (start session {:prompt "hi" :timeout-ms nil}))
               (await-value! send-received "send acknowledgement" 5000)
               (deliver release-events true)
+              (when-not (= displacement :none)
+                (await-atom! (:async-send-state original-io) nil? "selected completion" 5000)
+                (if (= displacement :resume-rpc)
+                  (do
+                    (reset! resuming (sdk/<resume-session client session-id {}))
+                    (await-value! resume-received "resume awaiting response" 5000))
+                  (let [setup-token (Object.)]
+                    (swap! (:state client) assoc-in [:session-setups session-id] setup-token)
+                    (session/create-session
+                     client session-id {:config {::session/setup-token setup-token}})))
+                (is (identical? (get-in @(:state client)
+                                        [:session-setup-snapshots session-id :snapshot :session-io])
+                                original-io))
+                (deliver release-eof true))
               (await-atom! (:state client) #(= (:status %) :disconnected) "remote EOF cleanup" 5000)
+              (when-let [channel @resuming]
+                (let [[failure port] (async/alts!! [channel (async/timeout 5000)])]
+                  (is (= port channel))
+                  (is (instance? Throwable failure))))
               (let [collected (if (#{:events :with-id} label) (async/into [] @result) @result)
                     [value port] (async/alts!! [collected (async/timeout 5000)])]
                 (is (= port collected))
@@ -163,11 +203,14 @@
                     (when (= terminal "session.error")
                       (is (= (get-in (last value) [:data :message]) "original failure"))))
                   (is (= (if (= label :content) value (get-in value [:data :content]))
-                         "final answer")))))
+                         "final answer"))))
+              (is (empty? (:session-setup-snapshots @(:state client)))))
             (is (true? (await-value! serving "EOF fixture exit" 5000)))
             (finally
               (deliver release-events true)
+              (deliver release-eof true)
               (when-let [channel @result] (async/close! channel))
+              (when-let [channel @resuming] (async/close! channel))
               (sdk/force-stop! client)
               (.close server)
               (future-cancel serving))))))))
