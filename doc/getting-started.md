@@ -34,7 +34,7 @@ copilot --version
 Add to your `deps.edn`:
 
 ```clojure
-{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.14.0"}}}
+{:deps {io.github.copilot-community-sdk/copilot-sdk-clojure {:mvn/version "1.0.16.0"}}}
 ```
 
 Or use as a Git dependency:
@@ -42,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "7c51102b033dd29fb82eec65995a3f445f1555a8"}}}
+         :git/sha "4598538153bd336e0708db692e3eb500845bad8c"}}}
 ```
 
 Features documented under **Unreleased**, including structured outputs, require
