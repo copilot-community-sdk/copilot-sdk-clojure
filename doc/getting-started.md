@@ -45,9 +45,6 @@ Or use as a Git dependency:
          :git/sha "4598538153bd336e0708db692e3eb500845bad8c"}}}
 ```
 
-Features documented under **Unreleased**, including structured outputs, require
-the Git dependency until the next Maven Central release.
-
 ## Step 2: Send Your First Message
 
 The simplest way to use the SDK — about 3 lines of code:
