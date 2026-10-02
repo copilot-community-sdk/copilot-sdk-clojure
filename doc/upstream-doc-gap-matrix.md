@@ -59,6 +59,10 @@ grants, and read-only session permission decisions remain experimental and
 intentionally absent. Package-root re-exports do not change their experimental
 status. The stable `:allowed-models` create/resume/join option does not expose
 the experimental live model-policy setter.
+Hosting transport selection (`localServer` / `githubEnvironment`),
+Connector-account selection and credential-free identity metadata, sessionless
+managed-settings composition/resolution, environment management, and provider
+withdrawal retain those experimental or generated-only boundaries.
 
 ## auth/
 
@@ -83,7 +87,7 @@ the experimental live model-policy setter.
 | `features/custom-agents.md` | Adapted | [`guides/custom-agents.md`](guides/custom-agents.md) |
 | `features/skills.md` | Folded | API.md [Config Directory and Skills](reference/API.md#config-directory-and-skills) + `:skill-directories`/`:enable-skills`/`:disabled-skills` |
 | `features/image-input.md` | Folded | API.md [File Attachments](reference/API.md#file-attachments) / [Blob Attachments](reference/API.md#blob-attachments) |
-| `features/session-persistence.md` | Folded | API.md `resume-session`, `list-sessions`, `get-session-metadata`, and stable `:enable-file-change-tracking?`; experimental rewind RPCs are excluded |
+| `features/session-persistence.md` | Folded | API.md `resume-session`, `transcript-recovery`, `list-sessions`, `get-session-metadata`, and stable `:enable-file-change-tracking?`; experimental rewind RPCs are excluded |
 | `features/steering-and-queueing.md` | Folded | API.md `send!` `:mode` (`:enqueue`/`:immediate`) |
 | `features/plugin-directories.md` | Folded | API.md client `:builtin-plugin-directories` and session `:plugin-directories` config rows |
 | `features/remote-sessions.md` | Folded (experimental) | API.md `:remote?` / `:remote-session` config rows |

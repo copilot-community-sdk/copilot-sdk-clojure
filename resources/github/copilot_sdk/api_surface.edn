@@ -97,6 +97,7 @@
     switch-model! {:kind :fn, :arglists ([session model-id] [session model-id opts])}
     system-prompt-sections {:kind :value}
     tool-events {:kind :value}
+    transcript-recovery {:kind :fn, :arglists ([session])}
     ui-elicitation! {:kind :fn, :arglists ([session params])}
     unsubscribe-events! {:kind :fn, :arglists ([session ch])}
     wait-for-workflow-run! {:kind :fn, :arglists ([session run-id] [session run-id options]), :experimental true}
@@ -111,7 +112,8 @@
     github.copilot-sdk/result-denied (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-failure (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-failure-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-rejected (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
-    github.copilot-sdk/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)}}
+    github.copilot-sdk/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk/transcript-recovery (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret (clojure.spec.alpha/nilable :github.copilot-sdk.specs/transcript-recovery) :fn nil)}}
   github.copilot-sdk.client
   {:vars
    {<create-session {:kind :fn, :arglists ([client config])}
@@ -304,6 +306,7 @@
     skills-reload! {:kind :fn, :arglists ([session]), :experimental true}
     subscribe-events {:kind :fn, :arglists ([session])}
     switch-model! {:kind :fn, :arglists ([session model-id] [session model-id opts])}
+    transcript-recovery {:kind :fn, :arglists ([session])}
     ui-elicitation! {:kind :fn, :arglists ([session params])}
     unsubscribe-events! {:kind :fn, :arglists ([session ch])}
     update-capabilities! {:kind :fn, :arglists ([client session-id capability-changes])}
@@ -383,6 +386,7 @@
     github.copilot-sdk.session/skills-reload! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/subscribe-events (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/switch-model! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :model-id clojure.core/string? :opts (clojure.spec.alpha/? (clojure.spec.alpha/nilable :github.copilot-sdk.instrument/model-switch-options))) :ret (clojure.spec.alpha/nilable :github.copilot-sdk.specs/model-id) :fn nil)
+    github.copilot-sdk.session/transcript-recovery (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret (clojure.spec.alpha/nilable :github.copilot-sdk.specs/transcript-recovery) :fn nil)
     github.copilot-sdk.session/ui-elicitation! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :params :github.copilot-sdk.specs/elicitation-params) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.session/unsubscribe-events! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :ch clojure.core/any?) :ret clojure.core/nil? :fn nil)
     github.copilot-sdk.session/usage-get-metrics (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/map? :fn nil)
@@ -428,6 +432,7 @@
     :github.copilot-sdk.specs/agent-type
     :github.copilot-sdk.specs/agents
     :github.copilot-sdk.specs/allow
+    :github.copilot-sdk.specs/allow-transcript-recovery?
     :github.copilot-sdk.specs/allowed-models
     :github.copilot-sdk.specs/allowed-tools
     :github.copilot-sdk.specs/already-in-use?
@@ -704,6 +709,7 @@
     :github.copilot-sdk.specs/interaction-id
     :github.copilot-sdk.specs/interaction-type
     :github.copilot-sdk.specs/interval-ms
+    :github.copilot-sdk.specs/invalid-line-numbers
     :github.copilot-sdk.specs/invoked-at-turn
     :github.copilot-sdk.specs/is-auto
     :github.copilot-sdk.specs/is-autopilot-continuation
@@ -881,6 +887,7 @@
     :github.copilot-sdk.specs/phase
     :github.copilot-sdk.specs/phases
     :github.copilot-sdk.specs/plan-content
+    :github.copilot-sdk.specs/planned-backup-path
     :github.copilot-sdk.specs/plugin-directories
     :github.copilot-sdk.specs/plugin-name
     :github.copilot-sdk.specs/plugin-version
@@ -992,6 +999,7 @@
     :github.copilot-sdk.specs/session-list-filter
     :github.copilot-sdk.specs/session-log
     :github.copilot-sdk.specs/session-metadata
+    :github.copilot-sdk.specs/session-start-moved?
     :github.copilot-sdk.specs/session-start-time
     :github.copilot-sdk.specs/session-state-path
     :github.copilot-sdk.specs/session.canvas.closed-data
@@ -1123,6 +1131,7 @@
     :github.copilot-sdk.specs/total-response-size-bytes
     :github.copilot-sdk.specs/total-tokens
     :github.copilot-sdk.specs/total-tool-calls
+    :github.copilot-sdk.specs/transcript-recovery
     :github.copilot-sdk.specs/transport
     :github.copilot-sdk.specs/trigger
     :github.copilot-sdk.specs/ttft-ms

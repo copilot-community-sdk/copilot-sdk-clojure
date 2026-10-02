@@ -1,0 +1,1650 @@
+{:schema
+ {:runtime-pin "1.0.92-0",
+  :runtime-only-deltas
+  [{:symbol "ModelCallFinalResultEvent",
+    :classification :internal,
+    :decision :wire-only,
+    :reason
+    "CLI schema visibility is internal and the Node package does not export this event. Generated private specs follow the schema; curated public event sets and idiom specs do not expose it."}],
+  :artifacts
+  {"schemas/api.schema.json"
+   "93a58925e09cdcc87ce7ad2cae8e76895e65f0afbd0b2cb03001896d1a578ee1",
+   "schemas/session-events.schema.json"
+   "8d87b1aec9c6f2e96c1d403d2dc0a048599ab7b708bf42f997ef29d9624eb9e7",
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
+   "src/github/copilot_sdk/generated/event_metadata.clj"
+   "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e",
+   "src/github/copilot_sdk/generated/event_specs.clj"
+   "f781e615001a5733def1d6d8487715a70ba6381d6933befe3a583634a4f6a952"}},
+ :commit-classifications
+ [{:commit "5792c40f96369898305a37950b4d627b18e27490",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.90-6",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/5792c40f96369898305a37950b4d627b18e27490",
+   :classifications
+   #{:language-specific
+     :generated-only
+     :experimental
+     :internal
+     :stable-public},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 253,
+   :changed-paths-sha256
+   "877ddcb421f4932c4331cb90f56b903179625b2e3e75fbda3cb79c217f2639f9"}
+  {:commit "4dc774c91aff609c338563aadc699d5c2dc596f7",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.90-7",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/4dc774c91aff609c338563aadc699d5c2dc596f7",
+   :classifications #{:internal},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 3,
+   :changed-paths-sha256
+   "6a65eed96adad0f2113707638875f54d47b1a4ca7c5738643b1400908bc45beb"}
+  {:commit "f8ae645902b74b62cd47aac1fd9b29adaec3aff2",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.90",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/f8ae645902b74b62cd47aac1fd9b29adaec3aff2",
+   :classifications #{:internal},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 2,
+   :changed-paths-sha256
+   "4b04f001dd9fe1efbd1da4423f3f92211aaead6fc85295d225529eb931e1da74"}
+  {:commit "b6bb031d2d4dc67345b054119f39142edff0bcaf",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.91-0",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/b6bb031d2d4dc67345b054119f39142edff0bcaf",
+   :classifications
+   #{:language-specific
+     :generated-only
+     :experimental
+     :internal
+     :stable-public},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 78,
+   :changed-paths-sha256
+   "8d7bfbd71a5d5212973f80e9714c4df984a640071fa11092dabea9c4c572ade9"}
+  {:commit "2cc3231a8bb433e6be84804d67b19b2880f901d8",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.91-1",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/2cc3231a8bb433e6be84804d67b19b2880f901d8",
+   :classifications
+   #{:language-specific
+     :generated-only
+     :experimental
+     :internal
+     :stable-public},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 25,
+   :changed-paths-sha256
+   "97822137f877070a53f3a8b6f1c73d7b800f3a33c018b70c5901d167e5a0331d"}
+  {:commit "0584472932d8124dc139f6e4fc35ea76397ef868",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.91",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/0584472932d8124dc139f6e4fc35ea76397ef868",
+   :classifications #{:internal},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 2,
+   :changed-paths-sha256
+   "4b04f001dd9fe1efbd1da4423f3f92211aaead6fc85295d225529eb931e1da74"}
+  {:commit "19e9a4b9c620d1032110cb6739961c4c1a651278",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.92-0",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/19e9a4b9c620d1032110cb6739961c4c1a651278",
+   :classifications
+   #{:language-specific
+     :generated-only
+     :experimental
+     :internal
+     :stable-public},
+   :reason
+   "Snapshot aggregation; each affected contract and exclusion is classified by symbol and path.",
+   :changed-path-count 146,
+   :changed-paths-sha256
+   "487aad8d722363f309c1841aa22e82342f5da6e845105a9c3db6484ca8c5c81e"}],
+ :test-inventory
+ {"nodejs/test/client.test.ts"
+  {:blobs
+   ["174f911287c3137f0298b5434b372268ed7869b4"
+    "3ddc13d4c64d298893e844da30f00b5ddf29103a"],
+   :classification :stable-public,
+   :review
+   "Recovery option/report matrix and process-exit, startup, draining, cache and stale-connection regressions drive the Clojure contracts."},
+  "nodejs/test/connectors.test.ts"
+  {:blobs
+   ["b6046a434d5c1aaea0d7003a21da44619300ba8e"
+    "e19d0e7c3e69c20f8e0578f7c47b1bcf9d96f7f7"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/agent_and_compact_rpc.e2e.test.ts"
+  {:blobs
+   ["ba0455282f326d98a98743c1db51a8ad60429c5c"
+    "bbb446d729ee5ebefe23437d3276df0deb1df2fd"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/client.e2e.test.ts"
+  {:blobs
+   ["a529ea8e4ce82d9495efc185dea707e49bce285c"
+    "e4e826a92244819940b334b35c6bddf3498e1879"],
+   :classification :stable-public,
+   :review
+   "Existing stable client/model or hook behavior is corroborated; no additional option, callback or value delta beyond the contract matrix."},
+  "nodejs/test/e2e/connectors.e2e.test.ts"
+  {:blobs [nil "3a7717e71a61efa407909cac80cf113cfeff0819"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/harness/ahpClient.ts"
+  {:blobs
+   ["8ad23d6e1a61a37e4544d6ee2994325dddba7514"
+    "13fea3ef5ac8c93a149ee2b0231610da3453e146"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/harness/runtimeHostTopology.ts"
+  {:blobs
+   ["9a8b9d31883295c8d6ad68b63cab5da2eccbda29"
+    "1676af9e10ed5c42bb6c3e9a9527c471c1626dfd"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/mcp_cached_oauth_overlap.e2e.test.ts"
+  {:blobs [nil "ecbacd34fda2c9d286858d81909e02de0dfcdc72"],
+   :classification :stable-public,
+   :review
+   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
+  "nodejs/test/e2e/mcp_catalog_recovery.e2e.test.ts"
+  {:blobs [nil "c9f2a8b4fd3633327b5c949c4d8c04c9c3aee6a9"],
+   :classification :stable-public,
+   :review
+   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
+  "nodejs/test/e2e/pending_work_resume.e2e.test.ts"
+  {:blobs
+   ["f2bb16ca6db289f2e4c0945747ab2b318e5fad82"
+    "0f4fd4a74f23150785269ed861a10054e0cc2719"],
+   :classification :stable-public,
+   :review
+   "Cold resume retains a durably completed sibling result, does not rerun it, and invalidates stale completion requests; persistence is runtime-owned."},
+  "nodejs/test/e2e/rewind.e2e.test.ts"
+  {:blobs
+   ["7fdfee94c81a7d677262817b8c9f633c1d7fd046"
+    "25e8199bf11219df52b20a0b521a7b19e708cf18"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/rpc_additional_edge_cases.e2e.test.ts"
+  {:blobs [nil "d31aa61cedc27305a75cdfc75accbe7a4c6dd43e"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_extensions_loaded.e2e.test.ts"
+  {:blobs [nil "c2dd9f39312f30c108d3bd99f6d76076e9086888"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_mcp_config.e2e.test.ts"
+  {:blobs
+   ["95694a8c63448d0249d1177da5f1f4401c0f9fba"
+    "813a56bbd9598f495dffb34d335b8f27d26fc6f0"],
+   :classification :generated-only,
+   :review
+   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
+  "nodejs/test/e2e/rpc_server.e2e.test.ts"
+  {:blobs
+   ["7bab043a1a26b2351a3c6d80e7ca2b3098d79658"
+    "d89b2c3e1e31561ec8a05d09d34d3e3d66e4f046"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_shell_and_fleet.e2e.test.ts"
+  {:blobs
+   ["9344277b05df901b606ee1f4e3e8da6eddeffd9d"
+    "521a4b0c1ba4ab79fcbcfd32f342374ae09dd3c2"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
+  {:blobs
+   ["e03020e4a8b9af696bbfd28a3fd97b4dc571060e"
+    "9311d1aaf288e0f5a2d711debbf479839407e531"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
+  {:blobs
+   ["cb41c69e6863db5f8fd11bd27a06b04395f42fe0"
+    "0071e1ff458012c7adf9052c1c44e58f2a9e305f"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_workspace_checkpoints.e2e.test.ts"
+  {:blobs
+   ["f1d8050925dbfc0205a460d3ac03911c1c968f0f"
+    "83ba34434c1e33138519080f0e3152be8bec0da4"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/runtime_host.e2e.test.ts"
+  {:blobs
+   ["2a2f72d52e313ccd895f2dd3fddcd0a277eae786"
+    "b1b8a1d9d250af22f47b29dc97b4420145c1c746"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/scenario_testing_control_state.e2e.test.ts"
+  {:blobs [nil "071f6df2b4b6c96643fe63d25ef33c185f56febb"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/scenario_testing_permissions.e2e.test.ts"
+  {:blobs [nil "577c1bef589e98e9458e4874ecb426d81315243e"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/scenario_testing_persistence.e2e.test.ts"
+  {:blobs
+   ["6d776ac57cb5ecdc669bb9612f4c659b250e1eb5"
+    "5b179a77ace78027493e2d61ac3bab638b3a8322"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/scenario_testing_server_control.e2e.test.ts"
+  {:blobs [nil "0bef912e0e91f10ca4f74d867082088f676629c8"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/subagent_hooks.e2e.test.ts"
+  {:blobs
+   ["dbc3ca673ba0907d0cf46b7be10467aa8681f191"
+    "767bc4b656251bd4ee7036427a74257c651eb334"],
+   :classification :stable-public,
+   :review
+   "Existing stable client/model or hook behavior is corroborated; no additional option, callback or value delta beyond the contract matrix."},
+  "nodejs/test/e2e/transcript_recovery.e2e.test.ts"
+  {:blobs [nil "7fd22215ef3c5dc4c3587dac07de6961abf58482"],
+   :classification :stable-public,
+   :review
+   "Both modes reject torn/misordered transcripts with -32075 without rewriting; permissive resume reports physical lines, moved start and planned backup."},
+  "nodejs/test/e2e/workflow.e2e.test.ts"
+  {:blobs
+   ["d5da188691af7d3202ef0578e1563a115b2dbfba"
+    "093654d79a21d8daa39d60cfa5b6cf0bdf71e6b4"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/ffiRuntimeHost.test.ts"
+  {:blobs
+   ["e0fb3d71af4a1733b4160cee58315a9c18b80f65"
+    "b5badfb27c835668407dbddb9a10f0ab48d916fd"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/host-client.test.ts"
+  {:blobs
+   ["22766bd81cafb4ee9e4cb97a4ce074404ba1b080"
+    "98d2f48e28cbb866e53c3b6e1557afffd789ffad"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/host.test.ts"
+  {:blobs
+   ["3816112f4139cee002be16db790805971cd103d8"
+    "36549de70b46b0d10971ba10f44129a22e831bf8"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/npm-release.test.ts"
+  {:blobs
+   ["f3d26da5df4833811cca183abf7298ad5894fe9f"
+    "04bed8b8d962cb283e76dd116b52e659cfff8cd6"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/package-sdk.test.ts"
+  {:blobs
+   ["aa521e26fd91beaccf3ae34a44e8c2e0789b2c7d"
+    "1b9f38bee3fb01ee5abc5e261164f94ec8dc19f4"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/python-codegen.test.ts"
+  {:blobs
+   ["bbad9e216d34a36f9e42191dc63f6d2fa7f2bcc9"
+    "2fdc6ffa3a20bdd6ceafa6ead1e83d45d825d7f0"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/release-manifest.test.ts"
+  {:blobs
+   ["5b389a11e9e384cb99c5de9aed03e8c5c7be050d"
+    "cc4fe8d508d6f76de6ea1cc2ea3caa52fb66f78b"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/runtime-package-acquisition.test.ts"
+  {:blobs ["ae36d334d6f5af0a0ecb3fea7290467b60241199" nil],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/runtime-release-identity.test.ts"
+  {:blobs ["e1184bbc31245ae198db24d978d05360a9046232" nil],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/runtimeArtifacts.test.ts"
+  {:blobs
+   ["24eef787976d8b635b2cb5b7428b27c67277efbe"
+    "b59d43de8231a240e60a76b9b5ee9c7e578eb951"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/rust-codegen.test.ts"
+  {:blobs
+   ["d38141cab6637f3059bbc35068a3f1c29d547d50"
+    "3087dc2c114a04832546c68f6946fd1bdf93b868"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/typescript-codegen.test.ts"
+  {:blobs
+   ["77009e90a8b726f033a22eb83f81844727984ccd"
+    "e2343daa4cde68ecbfbad1a1f9bb455c2b752e41"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/unified-release.test.ts"
+  {:blobs [nil "0463b2d20174d983112954ef349838b9ae63690e"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."}},
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/package.json"
+   ["7748258c8c41edecbac60636b497195fea9afa31"
+    "1a0e11a89306ee8d21156d62dc1ee51fd00a33bb"],
+   "nodejs/src/canvas.ts"
+   ["aeb1f00ec42926977c010df2471123dc18ddddd3"
+    "aeb1f00ec42926977c010df2471123dc18ddddd3"],
+   "nodejs/src/client.ts"
+   ["32af18890a4e07f9f7ce0b71b62cc497c3c6fcac"
+    "858697fe8a4f90f9231f84e12ae453c97513cad2"],
+   "nodejs/src/extension.ts"
+   ["e7bb21e3b2fc8a84d16bde7885cd50308d61116f"
+    "e7bb21e3b2fc8a84d16bde7885cd50308d61116f"],
+   "nodejs/src/ffiRuntimeHost.ts"
+   ["f2db8eb163f1404609a6f1a2a03c6360c91e6f36"
+    "947417871a284d6d679e64c253a3ce8fc1bd280b"],
+   "nodejs/src/generated/rpc.ts"
+   ["3aa1574748f2c69d5f5d4b790fa225cbdc7240d7"
+    "0efa914e67f58ee951da3fb8f97c9962674f38ce"],
+   "nodejs/src/generated/session-events.ts"
+   ["96f6f247c595b9056847cbcba304e36d3467a1dc"
+    "06032163f5d6f5d30e5511932ef7196f430eb8d7"],
+   "nodejs/src/host.ts"
+   ["7ae4036531f38afffbae8a38d5af3020b3f3f942"
+    "28d64b89f64371c7f0c0b02b37079002e4337c52"],
+   "nodejs/src/index.ts"
+   ["5ce938d368a2858c7b8244759f15af056575ecb8"
+    "ec2d43fa8fd393ff9556f50fdca5f3ad5f509a74"],
+   "nodejs/src/installationConfirmation.ts"
+   ["897c81915f4a398a66bfaffe9d93b0da09955767"
+    "897c81915f4a398a66bfaffe9d93b0da09955767"],
+   "nodejs/src/session.ts"
+   ["39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da"
+    "e34cf242fde26fdec2dfc79f087be03fe2a6449a"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534"
+    "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/types.ts"
+   ["cc64c3516d900728cd8bd3ae4d48618cc57ee034"
+    "5fa5cf6b971ace1e540808298d0601786e46b1b5"],
+   "nodejs/src/workflow.ts"
+   ["f7c0abe2d1b819154d284132a7b83f98fecb6c78"
+    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"]},
+  :trees
+  {"nodejs/src"
+   ["48b7b7610f551b009a0598c9a181d9ce960460db"
+    "c237cfe673088bb34ef13375ae61d35ca542049e"],
+   "nodejs/src/generated"
+   ["133971d89d6fe72711554e5582f714f7616acf32"
+    "6552be57bcb74811242122ac08505412299481cf"],
+   "nodejs/test"
+   ["87aaff1cc9855d5fab990a9447b6e351156c374a"
+    "f4a727fd2ebbb697b3f77597d33715953f99ae3b"]},
+  :modules
+  {"nodejs/src/canvas.ts"
+   {:fingerprint
+    [9
+     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/client.ts"
+   {:fingerprint
+    [1
+     "a5431bbd92ac780f6179f17f47c4e9a9227510a9f3682f56a6893c7db8d90dba"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/extension.ts"
+   {:fingerprint
+    [40
+     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/ffiRuntimeHost.ts"
+   {:fingerprint
+    [1
+     "fea0bbe2fd3afeb4e248f3d6bff0345a005350debb99f3f57768d026a77774c1"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/generated/rpc.ts"
+   {:fingerprint
+    [1517
+     "e691e16aa6338a326cf15a9e78432b4ce925d8c06a84be8f34cb5f1490c32848"],
+    :added
+    {:generated-only
+     #{"ManagedSettingMeta"
+       "ManagedSettingsValidateResult"
+       "ManagedSettingsLayer"
+       "EnvironmentsDeleteRequest"
+       "HostGetEnvironmentCredentialsResult"
+       "ManagedSettingsComposeLayer"
+       "EnvironmentsListRequest"
+       "ManagedSettingsChannel"
+       "ProviderWithdrawResult"
+       "EnvironmentsGetResult"
+       "GitHubEnvironment"
+       "ProviderWithdrawRequest"
+       "EnvironmentsDeleteResult"
+       "ManagedSettingsValues"
+       "ManagedSettingsResolveRequest"
+       "ManagedSettingsSchemaResult"
+       "EnvironmentsListResult"
+       "ManagedSettingsComposeRequest"
+       "ManagedSettingsDiagnostic"
+       "ManagedSettingsComposeResult"
+       "EnvironmentCapabilities"
+       "ManagedSettingsDiagnosticSeverity"
+       "ManagedSettingsValidateRequest"
+       "HostEnvironmentCredentials"
+       "ManagedSettingsResolveResult"
+       "EnvironmentKind"
+       "HostLocalServerConfiguration"
+       "EnvironmentsGetRequest"
+       "ManagedSettingsMeta"},
+     :experimental
+     #{"ConnectorSessionAccount"
+       "HostGitHubEnvironmentOptions"
+       "AuthIdentityMetadata"
+       "HostLocalServerOptions"
+       "ConnectorSessionAccountResult"}},
+    :removed {},
+    :changed
+    {:generated-only
+     #{"HostConfiguration"
+       "HostStartRequest"
+       "HostGetConfigurationResult"
+       "HostStartResult"
+       "HostReadyRequest"},
+     :experimental
+     #{"ConnectorCatalogEntry"
+       "ConnectorCapabilities"
+       "ConnectorReconcileRequest"}}},
+   "nodejs/src/generated/session-events.ts"
+   {:fingerprint
+    [578
+     "bb54defac1e811c1ea52ac305517a822120367b0268b343ae1451dee15d8c94c"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/host.ts"
+   {:fingerprint
+    [5
+     "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
+    :added {},
+    :removed {},
+    :changed {:experimental #{"AhpHostOptions"}}},
+   "nodejs/src/index.ts"
+   {:fingerprint
+    [239
+     "282c2808da769b67e986b4f07da002cbc04dcb08781b0a3e0d22ee503dbee378"],
+    :added
+    {:experimental
+     #{"ConnectorSessionAccount"
+       "HostGitHubEnvironmentOptions"
+       "AuthIdentityMetadata"
+       "AuthInfoType"
+       "HostLocalServerOptions"
+       "ConnectorSessionAccountResult"},
+     :stable-public #{"TranscriptRecovery"}},
+    :removed {},
+    :changed {}},
+   "nodejs/src/installationConfirmation.ts"
+   {:fingerprint
+    [3
+     "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/session.ts"
+   {:fingerprint
+    [2
+     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/toolSet.ts"
+   {:fingerprint
+    [2
+     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/types.ts"
+   {:fingerprint
+    [237
+     "6e38e2462179314a47e58d024652f643beabba1f9dde7accba2ec1ed32a7125e"],
+    :added
+    {:experimental
+     #{"ConnectorSessionAccount"
+       "AuthIdentityMetadata"
+       "AuthInfoType"
+       "ConnectorSessionAccountResult"},
+     :stable-public #{"TranscriptRecovery"}},
+    :removed {},
+    :changed {:stable-public #{"ResumeSessionConfig"}}},
+   "nodejs/src/workflow.ts"
+   {:fingerprint
+    [31
+     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :added {},
+    :removed {},
+    :changed {}}},
+  :package-root
+  {:fingerprint
+   [807
+    "88278074e9dc5b237a6dd8a11d4725d9a82f2c327de6db6628a5992620e57ddc"],
+   :star-exports #{"./generated/session-events.js"},
+   :added
+   #{"ConnectorSessionAccount"
+     "HostGitHubEnvironmentOptions"
+     "AuthIdentityMetadata"
+     "AuthInfoType"
+     "TranscriptRecovery"
+     "HostLocalServerOptions"
+     "ConnectorSessionAccountResult"},
+   :removed #{}},
+  :interfaces
+  {"AgentStopHookInput"
+   {:fingerprint
+    [3
+     "d7aae98f0cc52eeb3d873d3a93e9d6e86cbf481b18ed057cc5c088401a197c56"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AgentStopHookOutput"
+   {:fingerprint
+    [2
+     "a8d6282ad71216f6b53ec97f4bff536e7d95553b0a202f94a088c8997b480a2a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AttributedPermissionResult"
+   {:fingerprint
+    [3
+     "3e666388906f2c4d7f66c719a39fc4cc4b4fbbe6b9e4eacebc4fe8afa5ca1f42"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AutoModeSwitchRequest"
+   {:fingerprint
+    [2
+     "e4782af4f0ac6515d1ee6ee94cd5d92a1bff4cb0ecfe068ec26da58de0e87e0c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "BaseHookInput"
+   {:fingerprint
+    [3
+     "4dd1b38a04fcb164a3cfabb076c1d20be6478cae2b5121395c64c6cd3ed71e4f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CanvasProviderIdentity"
+   {:fingerprint
+    [2
+     "d34f65e4568f8b250fa90e3b729aceda0e28427ed71e97daf572fd6087b41651"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CapiSessionOptions"
+   {:fingerprint
+    [2
+     "04fdf770b98a6685b88426bfccbba71d6590f0f4d3df50d71bb0107a45a64d18"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ChildProcessRuntimeConnection"
+   {:fingerprint
+    [3
+     "10f4b910eff296cd95d9b508dfb32b1adfe3f19d0ddc1fcfa0766840eba99fb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CloudSessionOptions"
+   {:fingerprint
+    [1
+     "c522c0aef8fd4d1b056c3c00743aba37ab783d78fd2aaf762628ec4f6e888883"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CloudSessionRepository"
+   {:fingerprint
+    [3
+     "25f76277fcd3cb18cefb89f99375ece5ea669d36be3c3633fa73e37bb8086a04"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandContext"
+   {:fingerprint
+    [4
+     "2abc8272a50c6157bd2817bc82efb303ee6df3457bdce0566386522186473438"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandDefinition"
+   {:fingerprint
+    [3
+     "178ed0dd5814eb48429287bc7c7ad0a94792f6e16876e299ac60d9fb8ef1739b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientInfo"
+   {:fingerprint
+    [4
+     "ce40539ce9776e3de53751819314cf2bf5e987316f3fc83af517cf3c243c5ae8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientOptions"
+   {:fingerprint
+    [21
+     "38ffdda8bb859050724c5f36cc54bd41589fc37c3c82091d68a5c0e5a0b051ff"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotExpAssignmentResponse"
+   {:fingerprint
+    [7
+     "32a158aa6403a21ef986a92b74eebb36bcc10fb3f29623c86f94a096c1acae84"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CustomAgentConfig"
+   {:fingerprint
+    [10
+     "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "DefaultAgentConfig"
+   {:fingerprint
+    [1
+     "1efea93dfd1b1564e5c9b8740f213fed3a1cb7de0887b5ca35d1f938b4f735e4"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationContext"
+   {:fingerprint
+    [6
+     "ce438df7d53625351163bfb8776dc9fa4391717793e32832c3dbc36cca196e1c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationParams"
+   {:fingerprint
+    [2
+     "3bcc3ed4d42dcee9ab2a63453df6a446d5aea15f1bb74a3edf0d86e4919daddd"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationResult"
+   {:fingerprint
+    [2
+     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationSchema"
+   {:fingerprint
+    [3
+     "0f09ec622fa8c08dc47ee6e5e82db350dbecc15e1608a643fae4411e25e6e569"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookInput"
+   {:fingerprint
+    [3
+     "45d8d02d4ceec04589622b0418c51ed0729163f16bf5ef05398b5a9669afa855"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookOutput"
+   {:fingerprint
+    [4
+     "a8f1f611cd03328ae20beea1197c85cc017c6d162f78928cc8424fe50f41ff76"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeRequest"
+   {:fingerprint
+    [4
+     "b52745cfef581e6e4ee19b6e1a2f59ab6616e24465a04f91fe4ae0a58b134805"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeResult"
+   {:fingerprint
+    [3
+     "1cea17098a8983cdce8919c7780c8df08eeabf4e9bb8f26bbdc9a5b52133e688"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExpConfigEntry"
+   {:fingerprint
+    [2
+     "8f8f41330d03718d5f3af2ba662653777d0a642dc53d0d0e7c33169d19a3a33d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionInfo"
+   {:fingerprint
+    [2
+     "51a3ec2d9f339d61149bc42f891effe4b27a4f7de36f00071b521594602314ba"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionJoinOptions"
+   {:fingerprint
+    [1
+     "8c90f960b5234d0a6e65e7b595a4b804c7518b0cd65714b65ee6c1afe41ecf1d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ForegroundSessionInfo"
+   {:fingerprint
+    [2
+     "8e82715cf957cc02d02fc29ed3465ba9aacb8cfaa3fb2ad4baf099afa08777df"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetAuthStatusResponse"
+   {:fingerprint
+    [5
+     "e5e4cbc20448aa346b9bf7faacdf42378e33fb63d9968cb2c18f3824c784ede7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetStatusResponse"
+   {:fingerprint
+    [2
+     "99fab2e37f12088ba36bfd9d2a23df8f4fd397adf3da8aeec1075d75b19f29a9"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GitHubMcpToolConfig"
+   {:fingerprint
+    [5
+     "2fc2df200a2394b7816eeb819d45910017aa11c07da3ee4525b9dc5f72450ceb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "InProcessRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "InfiniteSessionConfig"
+   {:fingerprint
+    [3
+     "cc4378413170ee5902e492badbb9de427c40d8b8451ee669f79a436a01cdc5cb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "LargeToolOutputConfig"
+   {:fingerprint
+    [3
+     "bffd26715602f2fafc9e9e5209b876d48666cb8341935886a0e560c5a2d3b0ae"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPHTTPServerConfig"
+   {:fingerprint
+    [3
+     "e9ecfecab2c125bdeff68f35ea0d02d9cd1fdafde542d4b2b7aea5355c26e21b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPStdioServerConfig"
+   {:fingerprint
+    [5
+     "8919766ccef8181491cdaccac2dc6f8201c177579ebb3b70cb35686549374b6e"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettings"
+   {:fingerprint
+    [1
+     "be8765b8a6a278b6f98d4e6a6a75aa71ac31661c434fe47eac56a9a2ff13decb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettingsPermissions"
+   {:fingerprint
+    [4
+     "48d1b198a804157c8d11c51fa5a6fdb0b009f07ee8edd2e43cdffb4798975d51"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthRequest"
+   {:fingerprint
+    [7
+     "1ee39eb587296975dbb1e50bdaf57e6aa2dd416ffccf808fd83a17f01ed70139"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthStaticClientConfig"
+   {:fingerprint
+    [5
+     "a19ab9137f33746e02c86b686afb0a10ddfbcaec81b9a3fa193bbf3a04f2fcb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthToken"
+   {:fingerprint
+    [3
+     "16c82cc163d91adb3371838d68fb9c79d04379c92e69968663351dba662a554c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthWwwAuthenticateParams"
+   {:fingerprint
+    [3
+     "8c3f66ef8c9bea4e571bbe4b4f829da3befc35d446f9df55adabd1857e07fa55"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MemoryConfiguration"
+   {:fingerprint
+    [1
+     "e056a35db086947e2f5969d747f0a7517bff00c7ffff1f9e7b47b72bfac9d948"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MessageOptions"
+   {:fingerprint
+    [8
+     "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelBilling"
+   {:fingerprint
+    [2
+     "fddd7875cc476172b4e39ddddd035de33f231298ea757ed6c50ab261aaa87ad2"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelCapabilities"
+   {:fingerprint
+    [2
+     "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelInfo"
+   {:fingerprint
+    [7
+     "0253b7f00acd12a6a4fa8db2811a4db772c782428b493a5a549d7a86202b9b28"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelPolicy"
+   {:fingerprint
+    [2
+     "49da08af7225842b41693c988a0ca8d14361528ef625c81d9781f0b926f3bab6"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "NamedProviderConfig"
+   {:fingerprint
+    [9
+     "10dd63ca62e4c945d1d6f1fe4d71c79ebd58fcb6bd71cc1958408876dd23e279"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ParentProcessRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseFailureHookInput"
+   {:fingerprint
+    [3
+     "8b74ccaa661e5b3c9ac645b070f15911379b8ce43282b30a536e88ecbe4eb833"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseFailureHookOutput"
+   {:fingerprint
+    [1
+     "d86d56aaf18b868563d279485728ef9e6ffbc4a1596c7c321068e0b1be0a9033"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookInput"
+   {:fingerprint
+    [3
+     "1a2381673cedc79fe58f9868a4b2b5ae605b3cffe1609cac26e7d94f20d848e0"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookOutput"
+   {:fingerprint
+    [3
+     "77c75bf1cbef77d53d374a50c9d082c438685b8534bfefe588bbc229af19e442"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreMcpToolCallHookInput"
+   {:fingerprint
+    [5
+     "59aa2e6b4e03ca71072576e0d68e89f5d15d22e4a4cf922e562f272fbb8b8055"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreMcpToolCallHookOutput"
+   {:fingerprint
+    [1
+     "4b747b30e9eab2e4a7a64075f9c521d754890818949b1dbb91b5003f37bf6bec"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreToolUseHookInput"
+   {:fingerprint
+    [2
+     "8c2ffdf872c77d227d45b274f89408e29f8d582825aa7a0051771c9a7246577c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PreToolUseHookOutput"
+   {:fingerprint
+    [5
+     "b08e7b19e21adaeaf58ec4405ae939f6e8813734f03a69253ecde8bc8e39f703"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderConfig"
+   {:fingerprint
+    [13
+     "bdbdc09988a227b2eb4acb9fa4d9c755c401ead06ef4a6635cba4278b6d8cfda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderModelConfig"
+   {:fingerprint
+    [9
+     "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderTokenArgs"
+   {:fingerprint
+    [2
+     "09133ff6dd8edbaf925da4f4f993b3f73a62d9743c18bf34b96cbdcb22c9bcef"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ResponseSchema"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ResumeSessionConfig"
+   {:fingerprint
+    [4
+     "1926530d9d586b5aeae926348b9be4bec606e39469bf1c0fbcb595d486cdc7fa"],
+    :added-fields #{"allowTranscriptRecovery"},
+    :removed-fields #{}},
+   "SectionOverride"
+   {:fingerprint
+    [2
+     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionBackgroundEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionCapabilities"
+   {:fingerprint
+    [1
+     "09cc1d0a4273c286401cd38c9bf6735ef0ab29f085dfb71ca7c408db4a5ed728"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfig"
+   {:fingerprint
+    [3
+     "54e55949b3d0df86b5afaa2f70e255c33aec4eb46bed509a8569f99b2d8dbd83"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfigBase"
+   {:fingerprint
+    [82
+     "3b66692049bbc130d73ab41855be4abda7f03de4b1f1290787b8d73e3c021dab"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionContext"
+   {:fingerprint
+    [4
+     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionCreatedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionDeletedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionEndHookInput"
+   {:fingerprint
+    [3
+     "db9e60c11949d099daddfb1e1fdf317c629e4bbeb28bdc0dc50c26cb1c989a9a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionEndHookOutput"
+   {:fingerprint
+    [3
+     "3c4f59c4d00ac8d06b46bec2738a4e0a8683c73f22fa4ae6e522cb8e266d3cda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionForegroundEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionFsConfig"
+   {:fingerprint
+    [4
+     "a0138a4a7b603c87d6370093fdc31ca7eabd02857bb4c5ca99e07f391bb93886"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionHooks"
+   {:fingerprint
+    [10
+     "23ebb885ecf68b57128ddf76c3c610c874405481b9ace33e16291e84d4e70e37"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionLifecycleEventMetadata"
+   {:fingerprint
+    [3
+     "7a583d77773d2303de442ac85894ca460c6f708aef0f55ce4547fd053c4a2031"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionListFilter"
+   {:fingerprint
+    [4
+     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionMetadata"
+   {:fingerprint
+    [6
+     "7327dd694a90533017bb1701a6aab035e1bcd0fb0f84e2015010c474a85dce42"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionStartHookInput"
+   {:fingerprint
+    [2
+     "ff899a5646f4978b73153825aac0ad750ae6f2fc79ca6afb45dbbaf7b3efbcbe"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionStartHookOutput"
+   {:fingerprint
+    [2
+     "b4d308d2be27710567c3faae7e832c88212079ec8b3585b0f07f5c0a5e23e751"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionUiApi"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionUpdatedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "StdioRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageAppendConfig"
+   {:fingerprint
+    [2
+     "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageCustomizeConfig"
+   {:fingerprint
+    [3
+     "9e4b567ba896951e054fc5d0cb57219b2b58248f8a208c78ae3a2bf677182bcb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageReplaceConfig"
+   {:fingerprint
+    [2
+     "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TcpRuntimeConnection"
+   {:fingerprint
+    [3
+     "4965411ad2991bcdf6b942994f6b640f811f29e2b4a689e027a5098d3ef9515b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TelemetryConfig"
+   {:fingerprint
+    [6
+     "114b96645c30a8ad8fab2d8ffd20dba794ec9d87b56798c027cf03085251e25e"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "Tool"
+   {:fingerprint
+    [9
+     "0e2ef32e0f5098f470ca44961f56f61445b0fbceabb679e7aaf0e86e66e07bb7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolCallRequestPayload"
+   {:fingerprint
+    [4
+     "63dd509594d1480e379ff124a653f2b12f0230873c9023a2461f52da67f52022"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolCallResponsePayload"
+   {:fingerprint
+    [1
+     "5656fafa00d4f294bcb606cf4f7d4fa877390e46f583e8b3c8744ace104a31d1"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolInvocation"
+   {:fingerprint
+    [8
+     "8cb44108bb64c804e982c98dc593c89a5d3182cad1284be4c0484c91ea5e5a2c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolSearchConfig"
+   {:fingerprint
+    [2
+     "1f7f717c833ebbdf7e8b7cff148e82bba8c7a79a6717fd51ae20c73d6b1281a1"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TraceContext"
+   {:fingerprint
+    [2
+     "1a894915a2a0e05212477c41b5f14bda5827be9297a17f04a65b32c8c98e0e7c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "TranscriptRecovery"
+   {:fingerprint
+    [3
+     "ecdf8d2f6efbe7ad3f0c92f504f04f07a9ab7801d5e0b1466b2a81cc5f40c197"],
+    :added-fields
+    #{"sessionStartMoved" "plannedBackupPath" "invalidLineNumbers"},
+    :removed-fields #{}},
+   "UiInputOptions"
+   {:fingerprint
+    [6
+     "98b9a309478887ef203ea2c72314757ccf59078508cc3d927817b44f088bcc0f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UriRuntimeConnection"
+   {:fingerprint
+    [3
+     "48a57da794210d9851b003d4f109ab0b4b022cefd2a67be7d9b3ba8e85b17d21"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserInputRequest"
+   {:fingerprint
+    [3
+     "e7a56785d1ebde5b8fb87469ab88eb812503c4bd105e6c7b69340da5fe910ca7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserInputResponse"
+   {:fingerprint
+    [2
+     "7877f9385baa344cd428667c490aa4d85a28094d1b37458ff108704288368cb3"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookInput"
+   {:fingerprint
+    [1
+     "2934d46a57407eb0d71f0ffd9dc3773905a1150aa2fd2ecf8947cb29b4218028"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookOutput"
+   {:fingerprint
+    [3
+     "9ff8f9ed4aad6be83387e14813c9d02c9b2dd8c151d9f470418bfc6d16a61954"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptTransformedHookInput"
+   {:fingerprint
+    [2
+     "94061bbe65b6fe2d7b95af74cc9684f33a0db1cc95f2f132fcdd2f7958a36d6c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptTransformedHookOutput"
+   {:fingerprint
+    [1
+     "8edd29a2e5f4508b58ba78df597ced68c989974cb74e315bccdf55774b121c68"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ZodSchema"
+   {:fingerprint
+    [1
+     "bccaec1f339f99936b4be317527ab8a2b033f1d913b1a0e75c6640f34af8091c"],
+    :added-fields #{},
+    :removed-fields #{}}},
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts",
+    :class-name "CopilotClient",
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async createSession(config: SessionConfig): Promise<CopilotSession>"
+     "async deleteSession(sessionId: string): Promise<void>"
+     "async forceStop(): Promise<void>"
+     "async getAuthStatus(): Promise<GetAuthStatusResponse>"
+     "async getForegroundSessionId(): Promise<string | undefined>"
+     "async getLastSessionId(): Promise<string | undefined>"
+     "async getSessionMetadata(sessionId: string): Promise<SessionMetadata | undefined>"
+     "async getStatus(): Promise<GetStatusResponse>"
+     "async listModels(): Promise<ModelInfo[]>"
+     "async listSessions(filter?: SessionListFilter): Promise<SessionMetadata[]>"
+     "async ping(message?: string): Promise<{ message: string; timestamp: string; protocolVersion?: number }>"
+     "async resumeSession(sessionId: string, config: ResumeSessionConfig): Promise<CopilotSession>"
+     "async setForegroundSessionId(sessionId: string): Promise<void>"
+     "async start(): Promise<void>"
+     "async startAhpHost(options: AhpHostOptions): Promise<AhpHost>"
+     "async stop(): Promise<Error[]>"
+     "constructor(options: CopilotClientOptions = {})"
+     "get rpc(): ReturnType<typeof createServerRpc>"
+     "onLifecycle(handler: SessionLifecycleHandler): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventType: K, handler: TypedSessionLifecycleHandler<K>): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventTypeOrHandler: K | SessionLifecycleHandler, handler?: TypedSessionLifecycleHandler<K>): () => void"],
+    :fingerprint
+    [22
+     "99a26a2d6e0e3f0f7c2ccbc5f24586a052dd7ad17ef171e79847f8a228692030"],
+    :fields #{},
+    :added-signatures
+    ["async startAhpHost(options: AhpHostOptions): Promise<AhpHost>"],
+    :removed-signatures
+    ["async startAhpHost(options: AhpHostOptions = {}): Promise<AhpHost>"]},
+   :host
+   {:path "nodejs/src/host.ts",
+    :class-name "AhpHost",
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "dispose(): Promise<void>"
+     "publishSession(sessionId: string): Promise<HostPublishSessionResult>"],
+    :fingerprint
+    [3
+     "10d08a15fc8eaef786e2b061318bac2568baf8ee51de5b51d337ed908f778e76"],
+    :fields
+    #{"readonly url: string | undefined"
+      "readonly token: string | undefined"
+      "readonly hostId: string"
+      "readonly environmentId: string | undefined"
+      "readonly pid: number | undefined"},
+    :added-signatures [],
+    :removed-signatures [],
+    :classification :experimental},
+   :session
+   {:path "nodejs/src/session.ts",
+    :class-name "CopilotSession",
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async abort(): Promise<void>"
+     "async disconnect(): Promise<void>"
+     "async getEvents(): Promise<SessionEvent[]>"
+     "async log(message: string, options?: { level?: \"info\" | \"warning\" | \"error\"; ephemeral?: boolean }): Promise<void>"
+     "async send(options: MessageOptions): Promise<string>"
+     "async send(optionsOrPrompt: MessageOptions | string): Promise<string>"
+     "async send(prompt: string): Promise<string>"
+     "async sendAndWait(options: MessageOptions, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait(optionsOrPrompt: MessageOptions | string, schemaOrTimeout?: ResponseSchema | number, timeout?: number): Promise<unknown>"
+     "async sendAndWait(prompt: string, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait<TResult>(options: MessageOptions | string, responseSchema: ResponseSchema<TResult>, timeout?: number): Promise<TResult>"
+     "async setAutoTier(autoTier: AutoTier | null): Promise<ModelSwitchAutoTierResult>"
+     "async setModel(model: string, options?: { reasoningEffort?: ReasoningEffort; reasoningSummary?: ReasoningSummary; contextTier?: ContextTier; modelCapabilities?: ModelCapabilitiesOverride; autoTier?: AutoTier | null; }): Promise<void>"
+     "get capabilities(): SessionCapabilities"
+     "get openCanvases(): OpenCanvasInstance[]"
+     "get rpc(): ReturnType<typeof createSessionRpc>"
+     "get transcriptRecovery(): TranscriptRecovery | undefined"
+     "get ui(): SessionUiApi"
+     "get workspacePath(): string | undefined"
+     "on(handler: SessionEventHandler): () => void"
+     "on<K extends SessionEventType>(eventType: K, handler: TypedSessionEventHandler<K>): () => void"
+     "on<K extends SessionEventType>(eventTypeOrHandler: K | SessionEventHandler, handler?: TypedSessionEventHandler<K>): () => void"],
+    :fingerprint
+    [23
+     "0248317a35539fb0e6e20fd45cf19628eb936b4cec633dea861b0d46c10a69e3"],
+    :fields
+    #{"readonly workflow: SessionWorkflowApi"
+      "public readonly sessionId: string"
+      "clientSessionApis: ClientSessionApiHandlers"},
+    :added-signatures
+    ["get transcriptRecovery(): TranscriptRecovery | undefined"],
+    :removed-signatures []}},
+  :unchanged-authority-paths
+  #{"nodejs/src/extension.ts"
+    "nodejs/src/installationConfirmation.ts"
+    "nodejs/src/workflow.ts"
+    "nodejs/src/toolSet.ts"
+    "nodejs/src/canvas.ts"}},
+ :intentional-exclusions
+ [{:id :ahp-transport-selection,
+   :classification :experimental,
+   :decision :exclude,
+   :reason
+   "AhpHostOptions now requires localServer and/or githubEnvironment; HostLocalServerOptions and HostGitHubEnvironmentOptions remain explicitly experimental. No hosting authority is added."}
+  {:id :connector-account-selection,
+   :classification :experimental,
+   :decision :exclude,
+   :reason
+   "AuthIdentityMetadata, AuthInfoType, ConnectorSessionAccount and ConnectorSessionAccountResult resolve to explicitly experimental generated types. Connector capability/reconciliation changes remain excluded."}
+  {:id :generated-management-rpcs,
+   :classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Managed-settings schema/validate/resolve/compose, environment management, provider withdrawal, and hosting wire declarations do not independently enlarge the stable SDK API."}
+  {:id :native-runtime-shutdown,
+   :classification :experimental,
+   :decision :exclude,
+   :reason
+   "Async native host shutdown belongs to the excluded in-process FFI runtime, not the supported Clojure stdio/TCP process transports."}
+  {:id :completed-pending-work,
+   :classification :stable-public,
+   :decision :retain-runtime-owned-behavior,
+   :reason
+   "The continuePendingWork documentation clarifies that durably completed tool results survive cold resume. No handwritten builder or value contract changed; the Clojure option remains a literal boolean and runtime persistence owns replay."}
+  {:id :mcp-runtime-catalogue-recovery,
+   :classification :stable-public,
+   :decision :retain-runtime-owned-behavior,
+   :reason
+   "New cached OAuth overlap and catalogue recovery scenarios exercise existing session MCP configuration and runtime-owned catalogue/transport recovery; no new SDK callback or builder is introduced."}
+  {:id :other-generated-rpc-tests,
+   :classification :generated-only,
+   :decision :retain-existing-boundary,
+   :reason
+   "Expanded raw RPC scenario coverage for shell, tasks, extension management, rewind, queues, server control, and workspace operations does not promote experimental wrappers to stable API."}
+  {:id :unchanged-experimental-subsystems,
+   :classification :experimental,
+   :decision :retain-exclusions,
+   :reason
+   "Canvas authoring, host-owned inference, installation confirmation, Fusion, additional Workflow authoring/pause operations, sandbox controls, and extension launch providers retain their prior boundaries."}
+  {:id :foreign-language-and-release-tooling,
+   :classification :language-specific,
+   :decision :no-port,
+   :reason
+   "Foreign SDK code generation, packaging, and unified upstream release tooling have no independent Clojure public API counterpart. This sync creates no release, tag, or deployment."}],
+ :certification
+ {:clojure-base-commit "fe4666e9efa8cc8c9f20ba8a60113d8608d8bd90",
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_a2b2c18.edn",
+   :sha256
+   "a7c2d1d9e290151ae0f65188e8a9095e560a648d70f50cf9b0fddc36181dba6b"},
+  :local-artifact-seal {:status :pending}},
+ :changed-paths
+ {:rename-policy :no-renames,
+  :hash-format :newline-joined-without-trailing-newline,
+  :exact-classifications
+  {"nodejs/test/e2e/connectors.e2e.test.ts" :experimental,
+   "CONTRIBUTING.md" :internal,
+   "docs/runtime-supervised-host.md" :experimental,
+   "nodejs/src/host.ts" :experimental,
+   "nodejs/test/e2e/runtime_host.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/agent_and_compact_rpc.e2e.test.ts" :generated-only,
+   "BUILD.bazel" :internal,
+   "test/snapshots/pending_work_resume/should_preserve_a_completed_siblings_result_on_cold_resume.yaml"
+   :stable-public,
+   "nodejs/src/types.ts" :stable-public,
+   "test/harness/test-mcp-catalog-recovery-server.mjs" :stable-public,
+   "test/snapshots/rpc_tasks_and_handlers/should_start_a_general_purpose_agent_on_the_parent_s_model.yaml"
+   :generated-only,
+   "nodejs/src/ffiRuntimeHost.ts" :experimental,
+   "nodejs/README.md" :stable-public,
+   "nodejs/test/e2e/pending_work_resume.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/mcp_cached_oauth_overlap.e2e.test.ts"
+   :stable-public,
+   "nodejs/src/session.ts" :stable-public,
+   "nodejs/src/client.ts" :stable-public,
+   "nodejs/src/index.ts" :stable-public,
+   "docs/features/session-persistence.md" :stable-public,
+   "test/harness/test-mcp-oauth-server.mjs" :stable-public,
+   "nodejs/test/host.test.ts" :experimental,
+   "nodejs/test/ffiRuntimeHost.test.ts" :experimental,
+   "AGENTS.md" :internal,
+   "nodejs/src/generated/rpc.ts" :generated-only,
+   "nodejs/test/host-client.test.ts" :experimental,
+   "nodejs/src/generated/session-events.ts" :stable-public,
+   "nodejs/test/e2e/subagent_hooks.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/mcp_catalog_recovery.e2e.test.ts" :stable-public,
+   "nodejs/test/client.test.ts" :stable-public,
+   "nodejs/test/e2e/rewind.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/client.e2e.test.ts" :stable-public,
+   "nodejs/test/connectors.test.ts" :experimental,
+   "nodejs/test/e2e/workflow.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/transcript_recovery.e2e.test.ts" :stable-public},
+  :prefix-classifications
+  [{:prefix ".github/",
+    :classification :internal,
+    :reason "Upstream build, CI and release orchestration."}
+   {:prefix "docs/developer-docs/",
+    :classification :internal,
+    :reason
+    "Contributor-only release and secret-management documentation."}
+   {:prefix "nodejs/test/e2e/harness/",
+    :classification :experimental,
+    :reason
+    "Changed harness paths serve the excluded AHP hosting subsystem."}
+   {:prefix "nodejs/test/e2e/rpc_",
+    :classification :generated-only,
+    :reason
+    "Additional raw RPC scenarios, not new handwritten stable SDK contracts."}
+   {:prefix "nodejs/test/e2e/scenario_testing_",
+    :classification :generated-only,
+    :reason "Scenario coverage of generated RPC controls."}
+   {:prefix "nodejs/",
+    :classification :internal,
+    :reason
+    "Remaining packaging, runtime pins, generator and harness tests; public source and behavioral tests are classified explicitly."}
+   {:prefix "samples/runtime-host/",
+    :classification :experimental,
+    :reason "Examples for excluded AHP hosting transports."}
+   {:prefix "scripts/",
+    :classification :internal,
+    :reason
+    "Build-time code generators, release tools and CI infrastructure."}
+   {:prefix "test/",
+    :classification :internal,
+    :reason "Remaining shared replay/certificate harness changes."}
+   {:prefix "dotnet/",
+    :classification :language-specific,
+    :reason "Foreign SDK bindings, tests and packaging."}
+   {:prefix "go/",
+    :classification :language-specific,
+    :reason "Foreign SDK bindings, tests and packaging."}
+   {:prefix "java/",
+    :classification :language-specific,
+    :reason "Foreign SDK bindings, tests and packaging."}
+   {:prefix "python/",
+    :classification :language-specific,
+    :reason "Foreign SDK bindings, tests and packaging."}
+   {:prefix "rust/",
+    :classification :language-specific,
+    :reason "Foreign SDK bindings, tests and packaging."}],
+  :count 427,
+  :sha256
+  "f3c2c801cd5385e271436ad9d88b945360009c4a7f4c43415a885835938cd1b2",
+  :classification-counts
+  {:internal 48,
+   :stable-public 17,
+   :experimental 14,
+   :language-specific 333,
+   :generated-only 15}},
+ :stable-deltas
+ [{:wire
+   {:key "allowTranscriptRecovery",
+    :shape :optional-non-null-boolean,
+    :response-key "transcriptRecovery",
+    :response-fields
+    {"plannedBackupPath" :string,
+     "invalidLineNumbers" :one-based-line-number-array,
+     "sessionStartMoved" :boolean}},
+   :semantics
+   ["Omission preserves the runtime default, true in both client modes."
+    "False and true are forwarded literally; nil and non-booleans are rejected."
+    "Create and session.options.update never receive this resume/join-only option."
+    "Freshly created and cleanly resumed sessions return nil from the report accessor."
+    "Only transcript loads apply the policy; resident reconnects do not revalidate storage."
+    "A planned byte-exact backup is written on the next durable append, not by the SDK."
+    "Rejected recovery preserves JSON-RPC -32075 and source-spelled opaque error data."],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-0-test/recovery-option-is-resume-and-join-only
+    github.copilot-sdk.integration.upstream-1-0-92-0-test/recovery-option-preserves-omission-and-booleans-through-every-builder
+    github.copilot-sdk.integration.upstream-1-0-92-0-test/recovery-report-is-idiomatic-and-cleared-on-clean-resume
+    github.copilot-sdk.e2e-test/test-e2e-transcript-recovery],
+   :authority
+   ["nodejs/src/index.ts:TranscriptRecovery"
+    "nodejs/src/types.ts:ResumeSessionConfig"
+    "nodejs/src/types.ts:TranscriptRecovery"
+    "nodejs/src/client.ts:resumeSession"
+    "nodejs/src/session.ts:transcriptRecovery"
+    "nodejs/src/extension.ts:JoinSessionConfig"],
+   :idiom
+   {:key :allow-transcript-recovery?,
+    :scopes #{:resume :join},
+    :accessors
+    [github.copilot-sdk/transcript-recovery
+     github.copilot-sdk.session/transcript-recovery],
+    :response-keys
+    #{:session-start-moved?
+      :planned-backup-path
+      :invalid-line-numbers}},
+   :docs
+   ["doc/reference/API.md"
+    "examples/session_resume.clj"
+    "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.client/resume-session
+    github.copilot-sdk.client/<resume-session
+    github.copilot-sdk.client/join-session
+    github.copilot-sdk/transcript-recovery
+    github.copilot-sdk.session/transcript-recovery],
+   :classification :stable-public,
+   :proof-states
+   [:absent
+    :false
+    :true
+    :empty
+    :nil
+    :both-client-modes
+    :blocking
+    :channel
+    :join
+    :create-rejection
+    :mutable-update-omission
+    :clean-report
+    :damaged-report],
+   :id :session/transcript-recovery,
+   :specs
+   [:github.copilot-sdk.specs/allow-transcript-recovery?
+    :github.copilot-sdk.specs/transcript-recovery
+    :github.copilot-sdk.specs/planned-backup-path
+    :github.copilot-sdk.specs/invalid-line-numbers
+    :github.copilot-sdk.specs/session-start-moved?],
+   :builders [:resume-session :<resume-session :join-session]}
+  {:wire
+   {:pending-error-code -32000,
+    :pending-error-message "CLI process exited",
+    :new-rpcs []},
+   :semantics
+   ["Observe the owned process independently of inherited output or a surviving TCP peer."
+    "Give stdio EOF up to ten seconds to drain, then end input through the existing notification-drain owner."
+    "End owned TCP input immediately on process exit; Java socket closure does not wait for peer FIN."
+    "Fence exit work to the exact process and connection; stale readers cannot disconnect a replacement."
+    "Reject startup if the owned process died after handshake but before startup publication."
+    "Release session resources and pending RPCs, clear the model cache, and permit explicit restart."
+    "Process exit rejects pending detach requests while stop! retains teardown ownership."
+    "External runtimes and independently surviving descendants are not killed."],
+   :tests
+   [github.copilot-sdk.owned-process-exit-test/owned-tcp-exit-does-not-wait-for-a-surviving-peer
+    github.copilot-sdk.owned-process-exit-test/owned-exit-unblocks-an-in-progress-stop
+    github.copilot-sdk.owned-process-exit-test/owned-exit-during-startup-cannot-publish-a-connected-client
+    github.copilot-sdk.owned-process-exit-test/owned-stdio-exit-drains-before-bounded-disconnection
+    github.copilot-sdk.client-transport-lifecycle-test/remote-eof-preserves-completed-channel-sends],
+   :authority
+   ["nodejs/src/client.ts:attachConnectionHandlers"
+    "nodejs/src/client.ts:doStart"
+    "nodejs/src/client.ts:stop"
+    "nodejs/test/client.test.ts"],
+   :idiom {:state :disconnected, :resource-owner :client},
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.client/start!
+    github.copilot-sdk.client/stop!
+    github.copilot-sdk.client/force-stop!],
+   :classification :stable-public,
+   :proof-states
+   [:owned-tcp-peer-survives
+    :owned-stdio-descendant-survives
+    :bounded-disconnection
+    :pending-rpc-rejection
+    :post-handshake-exit
+    :exit-during-stop
+    :deprecated-auto-restart
+    :pre-eof-completion
+    :replacement-connection
+    :cache-invalidation],
+   :id :client/owned-process-exit,
+   :specs
+   [:github.copilot-sdk.specs/client
+    :github.copilot-sdk.specs/connection-state],
+   :builders [:start! :stop! :force-stop! :owned-stdio :owned-tcp]}
+  {:wire
+   {:key "configSource", :shape :optional-non-null-extensible-string},
+   :semantics
+   ["Configuration provenance describes connected as well as failed MCP servers."
+    "The existing optional string spec and live/history conversion already satisfy the expanded documentation."],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-0-test/connected-mcp-provenance-survives-live-and-history],
+   :authority
+   ["nodejs/src/generated/session-events.ts:McpServerStatusChangedData"],
+   :idiom
+   {:key :config-source,
+    :event :copilot/session.mcp_server_status_changed},
+   :docs
+   ["doc/reference/API.md" "doc/mcp/debugging.md" "CHANGELOG.md"],
+   :fdefs [github.copilot-sdk.session/get-messages],
+   :classification :stable-public,
+   :proof-states [:absent :empty :future-string :live :history],
+   :id :events/connected-mcp-provenance,
+   :specs
+   [:github.copilot-sdk.specs/config-source
+    :github.copilot-sdk.specs/session.mcp_server_status_changed-data],
+   :builders [:live-notification :get-messages]}],
+ :version {:sdk "1.0.14.0", :changed? false, :release-required? false},
+ :unclassified-deltas [],
+ :upstream
+ {:base-commit "a2b2c18eb5a20417fc613eaaa93199f55ad22ea4",
+  :target-commit "19e9a4b9c620d1032110cb6739961c4c1a651278",
+  :runtime-version "1.0.92-0",
+  :release-tag
+  {:name "v1.0.16",
+   :commit "f8ae645902b74b62cd47aac1fd9b29adaec3aff2"},
+  :hash-format :newline-joined-without-trailing-newline,
+  :commit-count 7,
+  :commits-sha256
+  "531d4dc0abef3b4c4b70e7b4bc8c318423c4055ebe19d966231bb51279d8e529"},
+ :decision "doc/adr/2026-10-02-transcript-recovery-and-owned-exit.md",
+ :method-deltas
+ [{:class "CopilotSession",
+   :method "transcriptRecovery",
+   :classification :stable-public,
+   :decision :port}
+  {:class "CopilotClient",
+   :method "startAhpHost",
+   :classification :experimental,
+   :decision :exclude}],
+ :api-snapshot-impact
+ {:added-functions
+  #{github.copilot-sdk/transcript-recovery
+    github.copilot-sdk.session/transcript-recovery},
+  :added-fdefs
+  #{github.copilot-sdk/transcript-recovery
+    github.copilot-sdk.session/transcript-recovery},
+  :added-spec-keys
+  #{:github.copilot-sdk.specs/session-start-moved?
+    :github.copilot-sdk.specs/invalid-line-numbers
+    :github.copilot-sdk.specs/transcript-recovery
+    :github.copilot-sdk.specs/planned-backup-path
+    :github.copilot-sdk.specs/allow-transcript-recovery?}}}

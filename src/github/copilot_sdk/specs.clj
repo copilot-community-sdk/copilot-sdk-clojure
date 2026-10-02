@@ -887,6 +887,14 @@
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
 (s/def ::continue-pending-work? boolean?)
+(s/def ::allow-transcript-recovery? boolean?)
+(s/def ::planned-backup-path string?)
+(s/def ::invalid-line-numbers (s/coll-of pos-int? :kind vector?))
+(s/def ::session-start-moved? boolean?)
+(s/def ::transcript-recovery
+  (closed-keys
+   (s/keys :req-un [::planned-backup-path ::invalid-line-numbers ::session-start-moved?])
+   #{:planned-backup-path :invalid-line-numbers :session-start-moved?}))
 
 ;; Event handler — 1-arity fn receiving event map. Uses fn? for consistency
 ;; with ::on-permission-request and ::on-user-input-request specs.
@@ -1466,7 +1474,7 @@
     :reasoning-effort :reasoning-summary :context-tier
     :on-user-input-request :on-elicitation-request :hooks :working-directory :disable-resume? :agent :on-event
     :on-exit-plan-mode :on-auto-mode-switch
-    :continue-pending-work?
+    :continue-pending-work? :allow-transcript-recovery?
     :create-session-fs-handler :enable-config-discovery :enable-mcp-apps :model-capabilities
     :github-token :github-token-provider :ask-user-variant
     :enable-session-telemetry?
@@ -1520,7 +1528,7 @@
                     ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::enable-mcp-apps ::model-capabilities
                     ::github-token ::github-token-provider ::ask-user-variant
-                    ::continue-pending-work?
+                    ::continue-pending-work? ::allow-transcript-recovery?
                     ::enable-session-telemetry?
                     ::remote-session
                     ::mcp-oauth-token-storage
@@ -1580,7 +1588,7 @@
                     ::on-event ::create-session-fs-handler
                     ::enable-config-discovery ::enable-mcp-apps ::model-capabilities
                     ::github-token ::github-token-provider ::ask-user-variant
-                    ::continue-pending-work?
+                    ::continue-pending-work? ::allow-transcript-recovery?
                     ::enable-session-telemetry?
                     ::remote-session
                     ::mcp-oauth-token-storage

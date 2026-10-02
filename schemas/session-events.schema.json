@@ -9775,7 +9775,7 @@
         "managedKeys"
       ],
       "additionalProperties": false,
-      "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Effective enterprise managed settings and contributing channels. Session events report applied policy; sessionless resolve reports an account/device snapshot, and compose reports a non-applying preview of candidate documents. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively. Session-local SDK-client policy is included only in session results. Marked experimental while the managed-settings surface stabilizes.",
       "title": "ManagedSettingsResolvedData",
       "stability": "experimental"
     },
@@ -9820,7 +9820,7 @@
         },
         "data": {
           "$ref": "#/definitions/ManagedSettingsResolvedData",
-          "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Effective enterprise managed settings applied to the session and their contributing channels. Emitted whenever managed policy is applied or reapplied, including session start, resume, and account switch. This ephemeral live snapshot is delivered to subscribers but not persisted to the session event log; initial resolution occurs before session.start."
         }
       },
       "required": [
@@ -9832,7 +9832,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Session event \"session.managed_settings_resolved\". Effective enterprise managed settings applied to the session and their contributing channels. Emitted whenever managed policy is applied or reapplied, including session start, resume, and account switch. This ephemeral live snapshot is delivered to subscribers but not persisted to the session event log; initial resolution occurs before session.start.",
       "title": "ManagedSettingsResolvedEvent",
       "stability": "experimental"
     },
@@ -10966,7 +10966,7 @@
         },
         "configSource": {
           "type": "string",
-          "description": "Runtime configuration provenance for a failed connection, or unknown when unavailable. Additional string values may be introduced."
+          "description": "Runtime configuration provenance for a connected or failed server, or unknown when unavailable. Additional string values may be introduced."
         }
       },
       "required": [
@@ -11532,6 +11532,112 @@
         "http": "HTTP transport, including SSE streams.",
         "websocket": "WebSocket transport."
       }
+    },
+    "ModelCallFinalResult": {
+      "type": "string",
+      "enum": [
+        "success",
+        "http_400",
+        "http_413",
+        "http_429",
+        "http_4xx",
+        "http_5xx",
+        "transport_error",
+        "other_error"
+      ],
+      "description": "Final bounded result of one logical model operation after its internal retry loop settles",
+      "title": "ModelCallFinalResult",
+      "x-enumDescriptions": {
+        "success": "The final attempt succeeded.",
+        "http_400": "The final attempt failed with HTTP 400.",
+        "http_413": "The final attempt failed with HTTP 413.",
+        "http_429": "The final attempt failed with HTTP 429.",
+        "http_4xx": "The final attempt failed with another HTTP 4xx status.",
+        "http_5xx": "The final attempt failed with an HTTP 5xx status.",
+        "transport_error": "The final attempt failed in the request transport.",
+        "other_error": "The final attempt failed without another bounded classification."
+      }
+    },
+    "ModelCallFinalResultData": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Model identifier used by the final attempt"
+        },
+        "isByok": {
+          "type": "boolean",
+          "description": "Whether the final attempt used a bring-your-own-key provider"
+        },
+        "result": {
+          "$ref": "#/definitions/ModelCallFinalResult",
+          "description": "Bounded result of the final attempt"
+        }
+      },
+      "required": [
+        "model",
+        "result"
+      ],
+      "additionalProperties": false,
+      "description": "Internal telemetry result for one logical model operation after all orchestrator-owned retries settle",
+      "title": "ModelCallFinalResultData"
+    },
+    "ModelCallFinalResultEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "model.call_final_result",
+          "description": "Type discriminator. Always \"model.call_final_result\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ModelCallFinalResultData",
+          "description": "Internal telemetry result for one logical model operation after all orchestrator-owned retries settle"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"model.call_final_result\". Internal telemetry result for one logical model operation after all orchestrator-owned retries settle",
+      "title": "ModelCallFinalResultEvent",
+      "visibility": "internal"
     },
     "ModelCallFinishedData": {
       "type": "object",
@@ -17751,6 +17857,11 @@
           "description": "Session event \"model.call_failure\". Failed LLM API call metadata for telemetry"
         },
         {
+          "$ref": "#/definitions/ModelCallFinalResultEvent",
+          "description": "Session event \"model.call_final_result\". Internal telemetry result for one logical model operation after all orchestrator-owned retries settle",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/ModelCallFinishedEvent",
           "description": "Session event \"model.call_finished\". Final lifecycle outcome for one logical model dispatch. A logical dispatch may include internal reconnect or fallback work, so event count is not provider HTTP-request count."
         },
@@ -17981,7 +18092,7 @@
         },
         {
           "$ref": "#/definitions/ManagedSettingsResolvedEvent",
-          "description": "Session event \"session.managed_settings_resolved\". Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Session event \"session.managed_settings_resolved\". Effective enterprise managed settings applied to the session and their contributing channels. Emitted whenever managed policy is applied or reapplied, including session start, resume, and account switch. This ephemeral live snapshot is delivered to subscribers but not persisted to the session event log; initial resolution occurs before session.start."
         },
         {
           "$ref": "#/definitions/ManagedSettingsEnforcedEvent",

@@ -4,6 +4,7 @@
             [clojure.core.async.impl.protocols :as async-protocols]
             [clojure.spec.alpha :as s]
             [clojure.java.io :as io]
+            [clojure.set :as set]
             [clojure.string :as str]
             [clojure.data.json :as json]
             [github.copilot-sdk.workflow :as workflow]
@@ -1219,18 +1220,29 @@
   nil)
 
 (defn- watch-process-exit!
-  "Trigger auto-restart when the managed CLI process exits."
+  "Drain an exited runtime's connection without waiting indefinitely for its peers."
   [client mp]
-  (when-let [exit-ch (:exit-chan mp)]
+  (let [connection-io (:connection-io @(:state client))
+        current? (fn []
+                   (let [state @(:state client)]
+                     (and (identical? mp (:process state))
+                          (identical? connection-io (:connection-io state)))))]
     (go
-      (when-let [{:keys [exit-code]} (<! exit-ch)]
-        (let [stopping? (:stopping? @(:state client))]
-          (if stopping?
-            (log/debug "CLI process exited with code" exit-code "(expected during stop)")
-            (log/warn "CLI process exited with code" exit-code))
-          (maybe-reconnect! client (str "cli-process-exit-" exit-code))
-          (when stopping?
-            (swap! (:state client) assoc :stopping? false)))))))
+      (when-let [{:keys [exit-code]} (<! (:exit-chan mp))]
+        (async/thread
+          (when (current?)
+            (if (:stopping? @(:state client))
+              (log/debug "CLI process exited during shutdown" {:exit-code exit-code})
+              (log/warn "CLI process exited" {:exit-code exit-code}))
+            ;; EOF owns buffered stdio messages, but descendants can retain the pipe.
+            (when (:use-stdio? (:options client))
+              (log-connection-close-failures!
+               (td/collect
+                [(td/attempt {:operation :join :resource :exited-runtime-reader}
+                             (.join ^Thread (:read-thread connection-io) 10000))])))
+            (when (current?)
+              ;; stop! may itself be waiting for an unanswered session.detach.
+              (proto/end-input! connection-io))))))))
 
 (def ^:private stderr-buffer-max-lines
   "Maximum number of stderr lines to retain for error context."
@@ -2385,7 +2397,9 @@
                     (identical? startup-token
                                 (:connection-start-token state))
                     (identical? connection-io (:connection-io state))
-                    (true? (get-in state [:connection :running?])))
+                    (true? (get-in state [:connection :running?]))
+                    (or (nil? (:process state))
+                        (proc/alive? (:process state))))
              (assoc state
                     :connection-start-token nil
                     :status :connected)
@@ -2394,7 +2408,9 @@
                    (identical? startup-token
                                (:connection-start-token old-state))
                    (identical? connection-io (:connection-io old-state))
-                   (true? (get-in old-state [:connection :running?])))
+                   (true? (get-in old-state [:connection :running?]))
+                   (or (nil? (:process old-state))
+                       (proc/alive? (:process old-state))))
       (throw
        (ex-info
         "Client connection closed before startup completed"
@@ -2418,7 +2434,6 @@
               mp (proc/spawn-cli opts)]
           (swap! (:state client) assoc :process mp)
           (start-stderr-forwarder! client mp)
-          (watch-process-exit! client mp)
 
           ;; For TCP mode, wait for port announcement
           (when-not (:use-stdio? opts)
@@ -2447,6 +2462,9 @@
         (do
           (log/debug "Connecting via stdio")
           (connect-stdio! client)))
+
+      (when-let [mp (:process @(:state client))]
+        (watch-process-exit! client mp))
 
       ;; Verify protocol version
       (verify-protocol-version! client)
@@ -3347,7 +3365,10 @@
   (let [open-canvases
         (when resume?
           (session/normalize-open-canvases
-           session-id (:open-canvases result)))]
+           session-id (:open-canvases result)))
+        transcript-recovery
+        (some-> (:transcript-recovery result)
+                (set/rename-keys {:session-start-moved :session-start-moved?}))]
     (update-session-setup-state!
      client
      transaction
@@ -3362,7 +3383,8 @@
             (assoc :workspace-path (:workspace-path result))
 
             resume?
-            (assoc :open-canvases open-canvases))))))))
+            (assoc :open-canvases open-canvases
+                   :transcript-recovery transcript-recovery))))))))
 
 (defn- cleanup-failed-session-setup!
   "Release every locally owned resource from a failed session setup.
@@ -3969,6 +3991,8 @@
         wire-workflows (when (contains? config :workflows)
                          (mapv workflow/workflow-meta (:workflows config)))]
     (cond-> {:session-id session-id}
+      (contains? config :allow-transcript-recovery?)
+      (assoc :allow-transcript-recovery (:allow-transcript-recovery? config))
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
       (contains? config :allowed-models) (assoc :allowed-models (:allowed-models config))
@@ -4775,6 +4799,11 @@
    - :allowed-models     - Vector of exact model IDs permitted by the host.
                            Omission preserves runtime policy; [] is forwarded,
                            and nil is invalid. Also accepted by join-session.
+   - :allow-transcript-recovery? - Allow the runtime to repair a damaged transcript.
+                                   Omission uses the runtime default (true in all
+                                   modes); false rejects recovery, and nil is invalid.
+                                   Also accepted by join-session. Inspect the report
+                                   with session/transcript-recovery after resume.
    - :tools              - Tools exposed to the CLI server
    - :system-message     - System message configuration {:mode :content}
    - :available-tools    - List of tool names to allow

@@ -196,6 +196,65 @@
            (finally
              (sdk/destroy! session))))))))
 
+(deftest ^:e2e test-e2e-transcript-recovery
+  (when-e2e
+   (doseq [mode [:empty :copilot-cli]]
+     (let [home (.toFile
+                 (Files/createTempDirectory
+                  "copilot-transcript-recovery-"
+                  (make-array java.nio.file.attribute.FileAttribute 0)))
+           home-path (.getCanonicalPath home)
+           client (sdk/client {:cli-path cli-path :mode mode :copilot-home home-path})]
+       (teardown/call-with-cleanup
+        (fn []
+          (doseq [damage [:torn-tail :misordered-start]]
+            (testing (str mode " " damage)
+              (let [session-id (str (java.util.UUID/randomUUID))
+                    directory (io/file home "session-state" session-id)
+                    events-path (io/file directory "events.jsonl")
+                    timestamp "2024-01-02T03:04:05.000Z"
+                    intact (str (json/write-str
+                                 {:id (str (java.util.UUID/randomUUID))
+                                  :parentId nil :type "session.start" :timestamp timestamp
+                                  :data {:sessionId session-id :version 1 :producer "copilot-agent"
+                                         :copilotVersion "0.0.353" :startTime timestamp}})
+                                "\n")
+                    damaged (case damage
+                              :torn-tail (str intact "{\"type\":\"user.message\",\"data\":")
+                              :misordered-start
+                              (str (json/write-str {:id (str (java.util.UUID/randomUUID))
+                                                    :type "newer.event" :data {}})
+                                   "\n" intact))
+                    config {:available-tools [] :on-permission-request sdk/approve-all}
+                    expected-lines (if (= damage :torn-tail) [2] [])
+                    expected-moved? (= damage :misordered-start)]
+                (io/make-parents events-path)
+                (spit events-path damaged)
+                (spit (io/file directory "workspace.yaml")
+                      (json/write-str {:id session-id :cwd home-path :summary_count 0
+                                       :created_at timestamp :updated_at timestamp}))
+                (let [error (try
+                              (sdk/resume-session client session-id
+                                                  (assoc config :allow-transcript-recovery? false))
+                              nil
+                              (catch clojure.lang.ExceptionInfo error error))]
+                  (is (= (get-in (ex-data error) [:error :code]) -32075))
+                  (is (= (get-in (ex-data error) [:error :data :invalidLineNumbers]) expected-lines))
+                  (is (= (get-in (ex-data error) [:error :data :sessionStartMoved]) expected-moved?))
+                  (is (= (slurp events-path) damaged)))
+                (let [resumed (sdk/resume-session client session-id config)]
+                  (teardown/call-with-cleanup
+                   #(let [report (sdk/transcript-recovery resumed)]
+                      (is (= (:invalid-line-numbers report) expected-lines))
+                      (is (= (:session-start-moved? report) expected-moved?))
+                      (is (str/includes? (:planned-backup-path report)
+                                         "events.jsonl.backup-before-recovery-")))
+                   #(sdk/disconnect! resumed)))))))
+        #(throw-cleanup-failures!
+          "Failed to clean up transcript recovery fixtures"
+          (into (stop-client-failures :recovery-client client)
+                (delete-tree-failures :recovery-home home))))))))
+
 (deftest ^:e2e test-e2e-refresh-custom-instructions
   (when-e2e
    (let [root (.toFile

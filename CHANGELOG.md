@@ -3,6 +3,29 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.16 sync)
+- Added resume/join `:allow-transcript-recovery?` and the `transcript-recovery`
+  accessor. Omission preserves the runtime's permissive default, explicit false
+  rejects repair, and reports expose planned backup paths, invalid physical
+  lines, and whether the start record moved.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/19e9a4b9c620d1032110cb6739961c4c1a651278))
+
+### Fixed (post-v1.0.16 sync)
+- Owned runtime exit now releases pending RPCs and session resources even when
+  descendants retain stdio or a TCP peer stays open. Buffered stdio receives a
+  bounded drain window; startup cannot publish a dead runtime as connected,
+  model caches are cleared, and old cleanup cannot disconnect a replacement.
+
+### Changed (post-v1.0.16 sync)
+- Advanced the CLI compatibility and schema-provenance pin to `1.0.92-0`
+  and recertified the complete Node SDK surface through
+  [`19e9a4b9c620d1032110cb6739961c4c1a651278`](https://github.com/github/copilot-sdk/commit/19e9a4b9c620d1032110cb6739961c4c1a651278).
+  New hosting, Connector-account, and managed-settings controls remain
+  excluded; internal final-model-result telemetry remains wire-only.
+- Documented MCP provenance on connected servers and preservation of durably
+  completed tool results when pending work is interrupted on resume.
+  The library version remains `1.0.14.0`; no release, tag, or deployment is cut.
+
 ### Fixed (tests)
 - Shutdown lifecycle tests wait for complete telemetry records before forcing
   runtime termination, eliminating a file-creation race on CI.

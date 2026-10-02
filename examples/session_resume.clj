@@ -32,8 +32,12 @@
         (let [resumed (copilot/resume-session
                        client session-id
                        {:on-permission-request copilot/approve-all
+                        :allow-transcript-recovery? false
                         :available-tools []})]
           (try
+            (when-let [report (copilot/transcript-recovery resumed)]
+              (throw (ex-info "Clean session unexpectedly reported transcript recovery"
+                              {:recovery report})))
             (println "Asking:" prompt)
             (let [result (copilot/send-and-wait! resumed {:prompt prompt})]
               (println "🤖:" (get-in result [:data :content])))

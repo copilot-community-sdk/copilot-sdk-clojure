@@ -722,10 +722,17 @@
 
 (defn resume-session
   "Resume an existing session by ID.
-   Accepts the same config options as `create-session` (except `:session-id` and `:cloud`),
+   Accepts the same config options as `create-session` (except `:session-id`, `:cloud`,
+   and `:refresh-custom-instructions?`),
    including the experimental `:enable-mcp-apps` host opt-in,
    plus:
    - :disable-resume?  - When true, skip emitting the session.resume event (default: false)
+   - :allow-transcript-recovery? - Allow transcript repair (runtime default: true).
+                                   False rejects recovery; nil is invalid. Inspect
+                                   any repair with `transcript-recovery`.
+   - :continue-pending-work? - Continue pending tools and permission prompts.
+                               Defaults to false; durably completed tool results
+                               are preserved either way.
 
    `:on-permission-request` is **optional** (since upstream PR #1308) — omit it to
    leave permission requests pending for manual resolution.
@@ -1172,6 +1179,13 @@
   "Get the session workspace path when provided by the CLI."
   [session]
   (session/workspace-path session))
+
+(defn transcript-recovery
+  "Get the transcript repair report from the most recent resume, or nil.
+   Keys: :planned-backup-path, :invalid-line-numbers (one-based physical lines),
+   and :session-start-moved?. The backup is written on the next runtime append."
+  [session]
+  (session/transcript-recovery session))
 
 (defn capabilities
   "Get the host capabilities reported when the session was created or resumed.
