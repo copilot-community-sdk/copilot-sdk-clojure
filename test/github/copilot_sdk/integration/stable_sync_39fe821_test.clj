@@ -506,7 +506,8 @@
     (is (= "1.0.87-0"
            (git-output "." "show"
                        (str expected-certification-commit ":.copilot-schema-version"))))
-    (is (str/includes? (slurp "build.clj")
+    (is (str/includes? (git-output "." "show"
+                                   (str expected-certification-commit ":build.clj"))
                        "(def version \"1.0.14.0\")"))
     (doseq [path expected-unchanged-contract-artifact-paths]
       (testing path
