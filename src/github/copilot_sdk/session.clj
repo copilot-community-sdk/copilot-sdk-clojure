@@ -3499,6 +3499,18 @@
   (let [{:keys [session-id client]} session]
     (:workspace-path (session-state client session-id))))
 
+(defn transcript-recovery
+  "Get the transcript repair report from the most recent resume, or nil.
+
+   The report contains :planned-backup-path (string), :invalid-line-numbers
+   (vector of one-based physical line numbers), and :session-start-moved?
+   (boolean). The runtime writes the planned backup on the next append, not
+   when this report is returned. Newly created and cleanly resumed sessions
+   have no report."
+  [session]
+  (let [{:keys [session-id client]} session]
+    (:transcript-recovery (session-state client session-id))))
+
 (defn ^:experimental get-current-model
   "Get the current model for this session.
    Returns the model ID string, or nil if none set.

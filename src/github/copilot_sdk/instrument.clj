@@ -316,6 +316,14 @@
                 :args (s/cat :session ::specs/session)
                 :ret ::specs/workspace-path)
 
+(register-fdef! github.copilot-sdk.session/transcript-recovery
+                :args (s/cat :session ::specs/session)
+                :ret (s/nilable ::specs/transcript-recovery))
+
+(register-fdef! github.copilot-sdk/transcript-recovery
+                :args (s/cat :session ::specs/session)
+                :ret (s/nilable ::specs/transcript-recovery))
+
 (register-fdef! github.copilot-sdk.session/events
                 :args (s/cat :session ::specs/session)
                 :ret any?)  ; core.async mult

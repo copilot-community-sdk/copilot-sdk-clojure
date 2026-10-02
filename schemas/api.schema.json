@@ -3,6 +3,47 @@
   "title": "CopilotApi",
   "description": "Describes all JSON-RPC methods exposed by the Copilot CLI server. SDK codegen tools consume this to produce typed client wrappers.",
   "server": {
+    "environments": {
+      "list": {
+        "rpcMethod": "environments.list",
+        "description": "Lists GitHub Mission Control environments visible to the authenticated identity. Does not require a running host and excludes host relay credentials.",
+        "params": {
+          "$ref": "#/definitions/EnvironmentsListRequest",
+          "description": "Optional discovery filters supported by GitHub Mission Control."
+        },
+        "result": {
+          "$ref": "#/definitions/EnvironmentsListResult",
+          "description": "Environments visible to the authenticated caller and matching the supplied filters."
+        },
+        "stability": "experimental"
+      },
+      "get": {
+        "rpcMethod": "environments.get",
+        "description": "Gets safe discovery information for a GitHub Mission Control environment without requiring a running host.",
+        "params": {
+          "$ref": "#/definitions/EnvironmentsGetRequest",
+          "description": "Identify a Mission Control environment to retrieve."
+        },
+        "result": {
+          "$ref": "#/definitions/EnvironmentsGetResult",
+          "description": "Safe discovery information for the requested environment."
+        },
+        "stability": "experimental"
+      },
+      "delete": {
+        "rpcMethod": "environments.delete",
+        "description": "Deletes a user-managed GitHub Mission Control environment. GitHub-managed environments cannot be deleted. Does not stop a running host, which may register again.",
+        "params": {
+          "$ref": "#/definitions/EnvironmentsDeleteRequest",
+          "description": "Identify a user-managed Mission Control environment to delete."
+        },
+        "result": {
+          "$ref": "#/definitions/EnvironmentsDeleteResult",
+          "description": "Acknowledgement that the requested environment was deleted."
+        },
+        "stability": "experimental"
+      }
+    },
     "host": {
       "publishSession": {
         "rpcMethod": "host.publishSession",
@@ -47,10 +88,10 @@
       },
       "start": {
         "rpcMethod": "host.start",
-        "description": "Starts a connection-owned local AHP listener as a supervised SDK participant.",
+        "description": "Starts a connection-owned AHP host with explicit localServer and/or githubEnvironment transports as a supervised SDK participant.",
         "params": {
           "$ref": "#/definitions/HostStartRequest",
-          "description": "Starts a supervised AHP listener in the runtime's configured working directory."
+          "description": "Starts a supervised AHP host with at least one explicitly selected transport."
         },
         "result": {
           "$ref": "#/definitions/HostStartResult",
@@ -70,6 +111,20 @@
           "description": "Empty acknowledgement for a completed host lifecycle operation."
         },
         "stability": "experimental"
+      },
+      "getEnvironmentCredentials": {
+        "rpcMethod": "host.getEnvironmentCredentials",
+        "description": "Resolves current authenticated credentials and remote-control policy only for the runtime-owned Mission Control hosting participant.",
+        "params": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEnvironmentCredentials",
+          "description": "Private credentials delivered only to a runtime-owned Mission Control hosting participant."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
       },
       "getConfiguration": {
         "rpcMethod": "host.getConfiguration",
@@ -1006,7 +1061,7 @@
     "managedSettings": {
       "read": {
         "rpcMethod": "managedSettings.read",
-        "description": "Discovers device-managed settings from production MDM and managed-file sources, validates them against the runtime-owned managed-settings schema, and returns the canonical JSON without requiring a session.",
+        "description": "Discovers device-managed settings from production MDM and managed-file sources, validates them against the runtime-owned managed-settings schema, and returns the canonical JSON without requiring a session. `managedSettings.resolve` returns the same device settings together with the account's server policy.",
         "params": null,
         "result": {
           "$ref": "#/definitions/ManagedSettingsReadResult",
@@ -1016,10 +1071,59 @@
       },
       "clearCache": {
         "rpcMethod": "managedSettings.clearCache",
-        "description": "Force-refreshes enterprise managed settings for every account: wipes the persistent server-policy cache (the whole `<cacheHome>/managed-settings` directory) and drops this runtime process's in-memory retained server policy. It does not itself fetch policy — the effect is that the next time a session resolves managed settings for an account, that resolution re-fetches the account's org policy from the network instead of serving a cached response. Note that `managedSettings.read` returns only device/MDM settings and never triggers the account server-policy fetch, so a host implementing \"sync account policy\" should start a fresh session resolution rather than treat a subsequent `managedSettings.read` as the refreshed org policy. Mirrors the invalidation a sign-out performs, broadened from the one signing-out account to all of them; device/MDM layers describe the machine, not the account, and are left untouched. Rejects if the on-disk cache cannot be removed.",
+        "description": "Force-refreshes enterprise managed settings for every account: wipes the persistent server-policy cache (the whole `<cacheHome>/managed-settings` directory) and drops this runtime process's in-memory retained server policy. It does not itself fetch policy — the effect is that the next time a session resolves managed settings for an account, that resolution re-fetches the account's org policy from the network instead of serving a cached response. Note that `managedSettings.read` returns only device/MDM settings and never triggers the account server-policy fetch, so a host implementing \"sync account policy\" should call `managedSettings.resolve` or start a fresh session resolution rather than treat a subsequent `managedSettings.read` as the refreshed org policy. Mirrors the invalidation a sign-out performs, broadened from the one signing-out account to all of them; device/MDM layers describe the machine, not the account, and are left untouched. Rejects if the on-disk cache cannot be removed.",
         "params": null,
         "result": {
           "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "resolve": {
+        "rpcMethod": "managedSettings.resolve",
+        "description": "Resolves the effective enterprise managed settings without a session, from the device channel and, when an account is available, the account's server policy through the same per-account cache sessions use. A cached server policy less than an hour old is used without a fetch; otherwise the policy is fetched, and when the fetch fails a cached policy up to 24 hours old is used instead, unless `forceRemoteSettingsRefresh` requires a live fetch. With no account requested or signed in, it reports device policy only; signing out removes the account's cached policy. It can fetch server policy over the network when the cache is stale, so call it off latency-critical paths such as startup rather than before listing models. The policy helper is not run. `layers` lists each channel's document before merging, and `values` and `meta` carry typed effective values and their lock state for the keys typed so far.",
+        "params": {
+          "$ref": "#/definitions/ManagedSettingsResolveRequest",
+          "description": "Optional opaque account selection or GitHub token whose managed settings are resolved."
+        },
+        "result": {
+          "$ref": "#/definitions/ManagedSettingsResolveResult",
+          "description": "Effective enterprise managed settings for an account, resolved without a session."
+        },
+        "stability": "experimental"
+      },
+      "schema": {
+        "rpcMethod": "managedSettings.schema",
+        "description": "Returns the managed-settings authoring JSON schema with descriptive `x-composition` annotations aligned with the shared settings-engine vocabulary. These annotations are not a complete runtime composition contract: model, effortLevel, and contextTier remain coupled. Use `managedSettings.compose` for the runtime's effective result. Performs no I/O.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/ManagedSettingsSchemaResult",
+          "description": "The authoring JSON schema for managed settings recognized by this runtime."
+        },
+        "stability": "experimental"
+      },
+      "validate": {
+        "rpcMethod": "managedSettings.validate",
+        "description": "Validates a candidate managed-settings document the way the runtime validates delivered policy, without applying it. Reports errors that would reject the document, warnings for content the runtime ignores, and the canonical document it would apply. Document text nested more than 64 levels deep is rejected. Performs no I/O.",
+        "params": {
+          "$ref": "#/definitions/ManagedSettingsValidateRequest",
+          "description": "A candidate managed-settings document to validate without applying it."
+        },
+        "result": {
+          "$ref": "#/definitions/ManagedSettingsValidateResult",
+          "description": "Result of validating a managed-settings document."
+        },
+        "stability": "experimental"
+      },
+      "compose": {
+        "rpcMethod": "managedSettings.compose",
+        "description": "Merges candidate managed-settings documents for the device, server, and policy-helper channels into the effective settings the runtime would enforce on this host, using the same precedence and composition rules as live resolution, without applying them. Like live resolution, a server's advisory sandbox force-enable is declined on a host that cannot run the sandbox. Does not fetch policy or read policy files, but may perform blocking OS or subprocess probes for sandbox support. Preview documents are limited to 1 MiB and 64 levels of nesting.",
+        "params": {
+          "$ref": "#/definitions/ManagedSettingsComposeRequest",
+          "description": "Candidate managed-settings documents to merge without applying them."
+        },
+        "result": {
+          "$ref": "#/definitions/ManagedSettingsComposeResult",
+          "description": "The effective managed settings the runtime would enforce for the given documents, in the same shape `managedSettings.resolve` returns."
         },
         "stability": "experimental"
       }
@@ -6885,6 +6989,29 @@
         },
         "stability": "experimental"
       },
+      "getAccount": {
+        "rpcMethod": "session.connectors.getAccount",
+        "description": "Returns the session account selection, or null.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/ConnectorSessionAccountResult",
+          "description": "Session account selection, or null."
+        },
+        "stability": "experimental"
+      },
       "getStatus": {
         "rpcMethod": "session.connectors.getStatus",
         "description": "Returns authoritative session Connector state from current availability, pinned account selection, cached catalog, and live MCP projection without performing a Connector service request.",
@@ -7141,6 +7268,10 @@
             "refreshCatalog": {
               "type": "boolean",
               "description": "When true, refresh the catalog before reconciling. A disabled Connector API performs no service request."
+            },
+            "forceConnectorName": {
+              "type": "string",
+              "description": "Optional Connector name to reinitialize. Requires the targetedReconcile capability."
             }
           },
           "required": [
@@ -7150,7 +7281,11 @@
           "additionalProperties": false,
           "description": "Requests authoritative Connector-to-MCP reconciliation for the pinned account.",
           "title": "ConnectorReconcileRequest",
-          "stability": "experimental"
+          "stability": "experimental",
+          "x-legacy-parameters": [
+            "accountId",
+            "refreshCatalog"
+          ]
         },
         "result": {
           "$ref": "#/definitions/ConnectorStatus",
@@ -7234,7 +7369,7 @@
         },
         "result": {
           "$ref": "#/definitions/ManagedSettingsResolvedData",
-          "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Effective enterprise managed settings and contributing channels. Session events report applied policy; sessionless resolve reports an account/device snapshot, and compose reports a non-applying preview of candidate documents. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively. Session-local SDK-client policy is included only in session results. Marked experimental while the managed-settings surface stabilizes."
         },
         "stability": "experimental"
       }
@@ -7744,6 +7879,39 @@
         "result": {
           "$ref": "#/definitions/ProviderSyncResult",
           "description": "The selectable model entries and selection ids synthesized for the synchronized BYOK models."
+        },
+        "stability": "experimental"
+      },
+      "withdraw": {
+        "rpcMethod": "session.provider.withdraw",
+        "description": "Withdraws named host-managed models from the session's BYOK registry, leaving every other entry untouched. The scoped counterpart to `provider.sync`: a snapshot can only describe entries the caller knows about, so using it to remove one model silently withdraws rows registered by another source, such as a plugin calling `provider.add` at runtime. Naming what to remove leaves unrelated entries alone. Selection ids that are not registered are ignored, so withdrawal is idempotent. A provider is removed only when one of the withdrawn models was the last entry referencing it; a provider that simply has no models, which is the normal state while its rows are supplied by catalog discovery, is left in place.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "models": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Provider-qualified selection ids to withdraw. Ids that are not registered are ignored, so withdrawal is idempotent. A provider left with no models referencing it is removed too."
+            }
+          },
+          "required": [
+            "sessionId",
+            "models"
+          ],
+          "additionalProperties": false,
+          "description": "Host-managed model selection ids to withdraw from the session's BYOK registry.",
+          "title": "ProviderWithdrawRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/ProviderWithdrawResult",
+          "description": "What the withdrawal actually removed from the registry."
         },
         "stability": "experimental"
       }
@@ -15232,6 +15400,32 @@
       "description": "Credential-free authentication identity safe to expose to hosts and user interfaces.",
       "title": "AuthIdentity"
     },
+    "AuthIdentityMetadata": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/AuthInfoType",
+          "description": "Authentication type."
+        },
+        "host": {
+          "type": "string",
+          "description": "Identity host."
+        },
+        "login": {
+          "type": "string",
+          "description": "User login."
+        }
+      },
+      "required": [
+        "type",
+        "host",
+        "login"
+      ],
+      "additionalProperties": false,
+      "description": "Credential-free identity metadata.",
+      "title": "AuthIdentityMetadata",
+      "stability": "experimental"
+    },
     "AuthInfo": {
       "anyOf": [
         {
@@ -19434,6 +19628,16 @@
           "type": "boolean",
           "description": "Whether callers select a host-owned GitHub account through an opaque selection ID rather than supplying a provider token."
         },
+        "sessionAccountSelection": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether getAccount is supported. Absence means false."
+        },
+        "targetedReconcile": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether reconcile accepts forceConnectorName. Absence means false."
+        },
         "maxPollAttempts": {
           "type": "integer",
           "minimum": 0,
@@ -19462,7 +19666,16 @@
       "additionalProperties": false,
       "description": "Feature detection and hard polling limits for the EXPERIMENTAL session connector API.",
       "title": "ConnectorCapabilities",
-      "stability": "experimental"
+      "stability": "experimental",
+      "x-legacy-parameters": [
+        "apiVersion",
+        "availability",
+        "consentContinuation",
+        "opaqueAccountSelection",
+        "maxPollAttempts",
+        "maxPollIntervalMs",
+        "maxDeadlineMs"
+      ]
     },
     "ConnectorCatalogEntry": {
       "type": "object",
@@ -19478,6 +19691,18 @@
         "description": {
           "type": "string",
           "description": "Untrusted service description, when present."
+        },
+        "logo": {
+          "type": "string",
+          "description": "Optional catalog logo."
+        },
+        "tier": {
+          "type": "string",
+          "description": "Optional catalog tier."
+        },
+        "releaseTag": {
+          "type": "string",
+          "description": "Optional catalog release tag."
         },
         "status": {
           "$ref": "#/definitions/ConnectorCatalogStatus",
@@ -19500,7 +19725,14 @@
       "additionalProperties": false,
       "description": "Credential-free Connector catalog entry.",
       "title": "ConnectorCatalogEntry",
-      "stability": "experimental"
+      "stability": "experimental",
+      "x-legacy-parameters": [
+        "name",
+        "displayName",
+        "description",
+        "status",
+        "runtimeServerIds"
+      ]
     },
     "ConnectorCatalogResult": {
       "type": "object",
@@ -19742,6 +19974,10 @@
         "refreshCatalog": {
           "type": "boolean",
           "description": "When true, refresh the catalog before reconciling. A disabled Connector API performs no service request."
+        },
+        "forceConnectorName": {
+          "type": "string",
+          "description": "Optional Connector name to reinitialize. Requires the targetedReconcile capability."
         }
       },
       "required": [
@@ -19750,7 +19986,11 @@
       "additionalProperties": false,
       "description": "Requests authoritative Connector-to-MCP reconciliation for the pinned account.",
       "title": "ConnectorReconcileRequest",
-      "stability": "experimental"
+      "stability": "experimental",
+      "x-legacy-parameters": [
+        "accountId",
+        "refreshCatalog"
+      ]
     },
     "ConnectorRuntimeStatus": {
       "type": "object",
@@ -19776,6 +20016,41 @@
       "additionalProperties": false,
       "description": "Live status of one session-owned MCP projection.",
       "title": "ConnectorRuntimeStatus",
+      "stability": "experimental"
+    },
+    "ConnectorSessionAccount": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "description": "Opaque session-scoped account selection ID."
+        },
+        "authInfo": {
+          "$ref": "#/definitions/AuthIdentityMetadata",
+          "description": "Credential-free identity metadata."
+        }
+      },
+      "required": [
+        "accountId",
+        "authInfo"
+      ],
+      "additionalProperties": false,
+      "description": "Session account selection.",
+      "title": "ConnectorSessionAccount",
+      "stability": "experimental"
+    },
+    "ConnectorSessionAccountResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/ConnectorSessionAccount",
+          "description": "Session account selection."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Session account selection, or null.",
+      "title": "ConnectorSessionAccountResult",
       "stability": "experimental"
     },
     "ConnectorStatus": {
@@ -21710,6 +21985,133 @@
       "description": "Authentication-info input variant for a token sourced from an environment variable, with host, optional login, token, and env var name.",
       "title": "EnvAuthInfo"
     },
+    "EnvironmentCapabilities": {
+      "type": "object",
+      "properties": {
+        "ahpVersion": {
+          "type": "string",
+          "description": "Advertised Agent Host Protocol version."
+        },
+        "features": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Feature identifiers advertised by the environment."
+        },
+        "maxSessions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum session capacity, when advertised."
+        },
+        "currentSessions": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Current session count, when advertised."
+        }
+      },
+      "required": [
+        "features"
+      ],
+      "description": "Hosting capabilities and session capacity advertised by an environment."
+    },
+    "EnvironmentKind": {
+      "type": "string",
+      "enum": [
+        "user-local",
+        "user-codespace",
+        "managed-actions",
+        "managed-sandbox",
+        "managed-cca"
+      ],
+      "description": "GitHub Mission Control compute kind.",
+      "x-enumDescriptions": {
+        "user-local": "A user-managed environment on a local machine.",
+        "user-codespace": "A user-managed environment in a GitHub Codespace.",
+        "managed-actions": "A GitHub-managed environment backed by GitHub Actions.",
+        "managed-sandbox": "A GitHub-managed sandbox environment.",
+        "managed-cca": "A GitHub-managed cloud coding agent environment."
+      }
+    },
+    "EnvironmentsDeleteRequest": {
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "type": "string",
+          "description": "User-managed environment to delete. GitHub-managed environments cannot be deleted."
+        }
+      },
+      "required": [
+        "environmentId"
+      ],
+      "additionalProperties": false,
+      "description": "Identify a user-managed Mission Control environment to delete."
+    },
+    "EnvironmentsDeleteResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "Acknowledgement that the requested environment was deleted."
+    },
+    "EnvironmentsGetRequest": {
+      "type": "object",
+      "properties": {
+        "environmentId": {
+          "type": "string",
+          "description": "Identifier assigned by Mission Control."
+        }
+      },
+      "required": [
+        "environmentId"
+      ],
+      "additionalProperties": false,
+      "description": "Identify a Mission Control environment to retrieve."
+    },
+    "EnvironmentsGetResult": {
+      "type": "object",
+      "properties": {
+        "environment": {
+          "$ref": "#/definitions/GitHubEnvironment",
+          "description": "The requested environment without relay bootstrap credentials."
+        }
+      },
+      "required": [
+        "environment"
+      ],
+      "description": "Safe discovery information for the requested environment."
+    },
+    "EnvironmentsListRequest": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "$ref": "#/definitions/EnvironmentKind",
+          "description": "Restrict discovery to this compute kind."
+        },
+        "status": {
+          "type": "string",
+          "description": "Operational status, such as online, offline, degraded, waking, or draining."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Optional discovery filters supported by GitHub Mission Control."
+    },
+    "EnvironmentsListResult": {
+      "type": "object",
+      "properties": {
+        "environments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GitHubEnvironment",
+            "description": "Safe discovery information. Host-side relay bootstrap credentials are never included."
+          },
+          "description": "Safe discovery records without relay bootstrap credentials."
+        }
+      },
+      "required": [
+        "environments"
+      ],
+      "description": "Environments visible to the authenticated caller and matching the supplied filters."
+    },
     "EventLogReadRequest": {
       "type": "object",
       "properties": {
@@ -22713,6 +23115,61 @@
       "additionalProperties": false,
       "description": "Authentication-info input variant for GitHub CLI credentials, carrying host, login, and the `gh auth token` value.",
       "title": "GhCliAuthInfo"
+    },
+    "GitHubEnvironment": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Identifier assigned by Mission Control."
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable environment name."
+        },
+        "kind": {
+          "$ref": "#/definitions/EnvironmentKind",
+          "description": "Compute kind reported by Mission Control."
+        },
+        "status": {
+          "type": "string",
+          "description": "Open-ended operational status vocabulary."
+        },
+        "capabilities": {
+          "$ref": "#/definitions/EnvironmentCapabilities",
+          "description": "Hosting capabilities advertised by the environment."
+        },
+        "ownerId": {
+          "type": "string",
+          "description": "Identifier of the environment owner."
+        },
+        "ownerType": {
+          "type": "string",
+          "description": "Owner category reported by Mission Control."
+        },
+        "orgId": {
+          "type": "string",
+          "description": "Organization identifier, when the environment belongs to an organization."
+        },
+        "labels": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Discovery labels attached to the environment."
+        },
+        "lastHeartbeatAt": {
+          "type": "string",
+          "description": "Timestamp of the last heartbeat received by Mission Control."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "kind",
+        "status"
+      ],
+      "description": "Safe discovery information. Host-side relay bootstrap credentials are never included."
     },
     "GitHubRepoRef": {
       "type": "object",
@@ -23772,39 +24229,26 @@
     "HostConfiguration": {
       "type": "object",
       "properties": {
-        "hostname": {
-          "type": "string",
-          "description": "Hostname or IP address to bind."
+        "localServer": {
+          "$ref": "#/definitions/HostLocalServerConfiguration",
+          "description": "Normalized local listener settings, absent for relay-only hosts."
         },
-        "port": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 65535,
-          "description": "Port to bind, with zero requesting OS allocation."
-        },
-        "token": {
-          "type": "string",
-          "description": "Secret connection token, absent when authentication is disabled."
-        },
-        "requireConnectionToken": {
-          "type": "boolean",
-          "description": "Whether the listener requires token authentication."
+        "githubEnvironment": {
+          "$ref": "#/definitions/HostGithubEnvironmentOptions",
+          "description": "Requested GitHub Mission Control registration."
         },
         "sessionFactory": {
           "type": "boolean",
-          "default": false,
           "description": "Whether session materialization is delegated to the owning application."
         },
         "resumeFactory": {
           "type": "boolean",
-          "default": false,
           "description": "Whether app-owned durable sessions are resumed by the owning application."
         }
       },
       "required": [
-        "hostname",
-        "port",
-        "requireConnectionToken"
+        "sessionFactory",
+        "resumeFactory"
       ],
       "description": "Normalized listener settings delivered only to the supervised hosting participant."
     },
@@ -23826,6 +24270,35 @@
       "properties": {},
       "additionalProperties": false,
       "description": "Empty acknowledgement for a completed host lifecycle operation."
+    },
+    "HostEnvironmentCredentials": {
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Current bearer token for the authenticated GitHub identity."
+        },
+        "githubHost": {
+          "type": "string",
+          "description": "Hostname of the authenticated GitHub service."
+        },
+        "githubApiUrl": {
+          "type": "string",
+          "description": "GitHub API base URL for the authenticated service."
+        },
+        "missionControlUrl": {
+          "type": "string",
+          "description": "Mission Control API origin for environment registration and management."
+        }
+      },
+      "required": [
+        "token",
+        "githubHost",
+        "githubApiUrl",
+        "missionControlUrl"
+      ],
+      "additionalProperties": false,
+      "description": "Private credentials delivered only to a runtime-owned Mission Control hosting participant."
     },
     "HostExitedNotification": {
       "type": "object",
@@ -23873,6 +24346,79 @@
         "ownerDisconnected": "The owning SDK connection disconnected.",
         "runtimeShutdown": "The runtime is shutting down."
       }
+    },
+    "HostGithubEnvironmentOptions": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable environment display name."
+        },
+        "computeId": {
+          "type": "string",
+          "description": "Stable application installation identity, reused across host restarts."
+        }
+      },
+      "required": [
+        "name",
+        "computeId"
+      ],
+      "additionalProperties": false,
+      "description": "GitHub Mission Control registration options. The compute ID is application-owned and stable."
+    },
+    "HostLocalServerConfiguration": {
+      "type": "object",
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "description": "Hostname or IP address to bind."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Port to bind, with zero requesting OS allocation."
+        },
+        "token": {
+          "type": "string",
+          "description": "Secret connection token, absent when authentication is disabled."
+        },
+        "requireConnectionToken": {
+          "type": "boolean",
+          "description": "Whether the listener requires token authentication."
+        }
+      },
+      "required": [
+        "hostname",
+        "port",
+        "requireConnectionToken"
+      ],
+      "description": "Normalized local WebSocket listener settings."
+    },
+    "HostLocalServerOptions": {
+      "type": "object",
+      "properties": {
+        "hostname": {
+          "type": "string",
+          "description": "Listener hostname. Defaults to 127.0.0.1; explicit non-loopback binds are allowed."
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 65535,
+          "description": "Listener port. Omitted or zero requests an OS-allocated port."
+        },
+        "token": {
+          "type": "string",
+          "description": "Nonempty connection token. Generated randomly when required and omitted."
+        },
+        "requireConnectionToken": {
+          "type": "boolean",
+          "description": "Require token authentication (default true). Cannot be false with a token."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Local WebSocket transport options."
     },
     "HostPublishSessionRequest": {
       "type": "object",
@@ -23922,11 +24468,13 @@
         "token": {
           "type": "string",
           "description": "Configured secret token, absent when authentication is disabled."
+        },
+        "environmentId": {
+          "type": "string",
+          "description": "Registered environment ID, reported only once the relay transport is connected."
         }
       },
-      "required": [
-        "address"
-      ],
+      "additionalProperties": false,
       "description": "Readiness reported by the supervised hosting participant on its own SDK connection."
     },
     "HostRegisterSessionRequest": {
@@ -24078,23 +24626,13 @@
           "type": "string",
           "description": "Caller-generated UUID identifying this connection-owned listener."
         },
-        "hostname": {
-          "type": "string",
-          "description": "Listener hostname. Defaults to 127.0.0.1; explicit non-loopback binds are allowed."
+        "localServer": {
+          "$ref": "#/definitions/HostLocalServerOptions",
+          "description": "Enables a local WebSocket listener."
         },
-        "port": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 65535,
-          "description": "Listener port. Omitted or zero requests an OS-allocated port."
-        },
-        "token": {
-          "type": "string",
-          "description": "Nonempty connection token. Generated randomly when required and omitted."
-        },
-        "requireConnectionToken": {
-          "type": "boolean",
-          "description": "Require token authentication (default true). Cannot be false with a token."
+        "githubEnvironment": {
+          "$ref": "#/definitions/HostGithubEnvironmentOptions",
+          "description": "Registers a GitHub Mission Control environment and enables its relay transport."
         },
         "sessionFactory": {
           "type": "boolean",
@@ -24109,7 +24647,7 @@
         "hostId"
       ],
       "additionalProperties": false,
-      "description": "Starts a supervised AHP listener in the runtime's configured working directory."
+      "description": "Starts a supervised AHP host with at least one explicitly selected transport."
     },
     "HostStartResult": {
       "type": "object",
@@ -24126,6 +24664,10 @@
           "type": "string",
           "description": "Secret connection token, absent when authentication is disabled."
         },
+        "environmentId": {
+          "type": "string",
+          "description": "GitHub Mission Control environment ID, present when its relay transport is ready."
+        },
         "pid": {
           "type": "integer",
           "minimum": 0,
@@ -24133,8 +24675,7 @@
         }
       },
       "required": [
-        "hostId",
-        "url"
+        "hostId"
       ],
       "description": "Listener readiness, returned only after binding and the supervised participant's SDK handshake."
     },
@@ -25275,6 +25816,202 @@
       "description": "Non-secret host-managed HTTP MCP server configuration. The containing map key is the stable managed identity; credentials are supplied dynamically by the host.",
       "title": "ManagedMcpServerConfig"
     },
+    "ManagedSettingMeta": {
+      "type": "object",
+      "properties": {
+        "overridable": {
+          "type": "boolean",
+          "description": "Whether users and repositories may choose a different value. `false` means policy locks the value."
+        },
+        "source": {
+          "type": "string",
+          "description": "Channel that supplied this scalar value, matching a `layers[].source`: `device`, `server`, or `policyHelper`. These scalar defaults select one winning channel, not a mixed source. Treat unknown values as additional channels; more may be added."
+        }
+      },
+      "required": [
+        "overridable",
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "Lock state and provenance of one managed setting.",
+      "title": "ManagedSettingMeta",
+      "stability": "experimental"
+    },
+    "ManagedSettingsChannel": {
+      "type": "string",
+      "enum": [
+        "device",
+        "server",
+        "policyHelper"
+      ],
+      "description": "A channel accepted by managedSettings.compose.",
+      "title": "ManagedSettingsChannel",
+      "x-enumDescriptions": {
+        "device": "Device policy, the strongest channel.",
+        "server": "Account or organization policy.",
+        "policyHelper": "Session-local helper output, the weakest channel."
+      },
+      "stability": "experimental"
+    },
+    "ManagedSettingsComposeLayer": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "$ref": "#/definitions/ManagedSettingsChannel",
+          "description": "The channel whose candidate document is being supplied."
+        },
+        "settings": {
+          "description": "Candidate managed-settings document. Omit when the channel delivered none, as in resolve output.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "One candidate channel; absent settings represents a channel that delivered no document.",
+      "title": "ManagedSettingsComposeLayer",
+      "stability": "experimental"
+    },
+    "ManagedSettingsComposeRequest": {
+      "type": "object",
+      "properties": {
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedSettingsComposeLayer",
+            "description": "One candidate channel; absent settings represents a channel that delivered no document."
+          },
+          "description": "One entry per channel. `source` must be `device`, `server`, or `policyHelper`, each at most once (checked at runtime); order does not matter, because channel precedence is fixed. To preview documents from resolve output, map recognized source strings to ManagedSettingsChannel and copy their settings; generated resolve and compose layer types are distinct. Omitted settings means this channel delivered no document. Supplied documents must be valid within the preview limits; warnings are returned in diagnostics. Compose does not reproduce source-failure state or retained enforcement floors from resolve."
+        }
+      },
+      "required": [
+        "layers"
+      ],
+      "additionalProperties": false,
+      "description": "Candidate managed-settings documents to merge without applying them.",
+      "title": "ManagedSettingsComposeRequest",
+      "stability": "experimental"
+    },
+    "ManagedSettingsComposeResult": {
+      "type": "object",
+      "properties": {
+        "resolved": {
+          "$ref": "#/definitions/ManagedSettingsResolvedData",
+          "description": "Effective managed settings, in the same shape as `session.managedSettings.get`."
+        },
+        "values": {
+          "$ref": "#/definitions/ManagedSettingsValues",
+          "description": "Typed effective values, as in `managedSettings.resolve`."
+        },
+        "meta": {
+          "$ref": "#/definitions/ManagedSettingsMeta",
+          "description": "Per-key lock state and provenance for `values`."
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedSettingsLayer",
+            "description": "One managed-settings channel and the document it delivered."
+          },
+          "description": "Only the supplied channels, strongest first, with canonical documents. Empty canonical documents are represented as absent settings, as in live resolution."
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedSettingsDiagnostic",
+            "description": "One validation finding for a managed-settings document."
+          },
+          "description": "Warnings about ignored content, with paths prefixed by the channel name."
+        }
+      },
+      "required": [
+        "resolved",
+        "layers",
+        "diagnostics"
+      ],
+      "additionalProperties": false,
+      "description": "The effective managed settings the runtime would enforce for the given documents, in the same shape `managedSettings.resolve` returns.",
+      "title": "ManagedSettingsComposeResult",
+      "stability": "experimental"
+    },
+    "ManagedSettingsDiagnostic": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Dot-separated path of the offending setting, such as `autoTier.overridable`. Empty for the document as a whole."
+        },
+        "severity": {
+          "$ref": "#/definitions/ManagedSettingsDiagnosticSeverity",
+          "description": "Whether the finding rejects the document."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable description of the finding."
+        }
+      },
+      "required": [
+        "path",
+        "severity",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "One validation finding for a managed-settings document.",
+      "title": "ManagedSettingsDiagnostic",
+      "stability": "experimental"
+    },
+    "ManagedSettingsDiagnosticSeverity": {
+      "type": "string",
+      "enum": [
+        "error",
+        "warning"
+      ],
+      "description": "Severity of a managed-settings validation finding.",
+      "title": "ManagedSettingsDiagnosticSeverity",
+      "x-enumDescriptions": {
+        "error": "The runtime rejects the document.",
+        "warning": "The runtime accepts the document but ignores the flagged content."
+      },
+      "stability": "experimental"
+    },
+    "ManagedSettingsLayer": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "description": "Channel identifier: `device` (MDM, plist, registry, or managed file), `server` (account or organization policy), or `policyHelper` (session-local helper output, supported by compose). Treat unknown output values as additional channels; more may be added."
+        },
+        "settings": {
+          "description": "Validated managed-settings document this channel delivered. Absent when the channel delivered none.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "source"
+      ],
+      "additionalProperties": false,
+      "description": "One managed-settings channel and the document it delivered.",
+      "title": "ManagedSettingsLayer",
+      "stability": "experimental"
+    },
+    "ManagedSettingsMeta": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "$ref": "#/definitions/ManagedSettingMeta",
+          "description": "Lock state and provenance of `values.model`."
+        },
+        "autoTier": {
+          "$ref": "#/definitions/ManagedSettingMeta",
+          "description": "Lock state and provenance of `values.autoTier`."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Per-key lock state and provenance for `ManagedSettingsValues`, with the same field names. Producers emit each typed key in values and meta together; both outer objects are omitted when no typed key is set.",
+      "title": "ManagedSettingsMeta",
+      "stability": "experimental"
+    },
     "ManagedSettingsReadResult": {
       "type": "object",
       "properties": {
@@ -25351,7 +26088,7 @@
         "managedKeys"
       ],
       "additionalProperties": false,
-      "description": "Enterprise managed-settings resolution: the effective managed settings the session applied and which channels contributed, so SDK clients can show users what is enterprise-managed. Fires whenever managed policy is (re)applied — at session start, on resume, and on account switch. This is an ephemeral live snapshot (delivered to subscribers but not persisted to the session event log), because at session start it resolves before `session.start` is emitted. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively across device, server, policy-helper, and SDK-client layers. The account-scoped `getManagedSettings()` API does not include session-local client injection. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Effective enterprise managed settings and contributing channels. Session events report applied policy; sessionless resolve reports an account/device snapshot, and compose reports a non-applying preview of candidate documents. Device values take precedence over server values, then the policy helper, per ordinary key, while permissions compose restrictively. Session-local SDK-client policy is included only in session results. Marked experimental while the managed-settings surface stabilizes.",
       "title": "ManagedSettingsResolvedData",
       "stability": "experimental"
     },
@@ -25375,6 +26112,167 @@
         "mixed": "More than one channel contributed. Ordinary keys resolve device over server over policy helper per key, while permissions compose restrictively across all present layers.",
         "none": "No managed policy is in force (no channel contributed)."
       }
+    },
+    "ManagedSettingsResolveRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "selectionId": {
+              "type": "string",
+              "description": "Opaque account identifier returned by `account.getAllUsers`. When omitted, the current account is used, or device policy only when no account is signed in."
+            },
+            "gitHubToken": {
+              "type": "string",
+              "description": "GitHub token to resolve instead of the current account. The call fails when the token cannot be resolved."
+            },
+            "clientName": {
+              "type": "string",
+              "description": "Embedding client identity for server policy requests, as in session creation. Omit for the CLI identity."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Optional opaque account selection or GitHub token whose managed settings are resolved.",
+      "title": "ManagedSettingsResolveRequest",
+      "stability": "experimental"
+    },
+    "ManagedSettingsResolveResult": {
+      "type": "object",
+      "properties": {
+        "account": {
+          "type": "string",
+          "description": "Printable opaque identity of the account the settings were resolved for, suitable for comparison and storage, not an account selectionId. Absent when no account was available, in which case only device policy is reported."
+        },
+        "resolved": {
+          "$ref": "#/definitions/ManagedSettingsResolvedData",
+          "description": "Effective managed settings from the device and account (server) channels, in the same shape as `session.managedSettings.get`, excluding session-local injection."
+        },
+        "values": {
+          "$ref": "#/definitions/ManagedSettingsValues",
+          "description": "Typed effective values of managed settings, keyed like the managed-settings schema and already resolved across channels, with the `{ \"overridable\": ... }` wrapper removed. Present when policy sets at least one typed key. Keys not typed here are available in `resolved.settings`."
+        },
+        "meta": {
+          "$ref": "#/definitions/ManagedSettingsMeta",
+          "description": "Per-key lock state and provenance for the entries in `values`, using the same key names."
+        },
+        "layers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedSettingsLayer",
+            "description": "One managed-settings channel and the document it delivered."
+          },
+          "description": "Each managed-settings channel consulted, strongest first, with the validated document it delivered before merging. `resolved.settings` is the merged result. More channels may be added over time."
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedSettingsDiagnostic",
+            "description": "One validation finding for a managed-settings document."
+          },
+          "description": "Warnings about unavailable policy sources or a failed refresh served from cache. A cached response is not proof of a successful live fetch; `resolved.failClosed` separately describes enforcement."
+        }
+      },
+      "required": [
+        "resolved",
+        "layers",
+        "diagnostics"
+      ],
+      "additionalProperties": false,
+      "description": "Effective enterprise managed settings for an account, resolved without a session.",
+      "title": "ManagedSettingsResolveResult",
+      "stability": "experimental"
+    },
+    "ManagedSettingsSchemaResult": {
+      "type": "object",
+      "properties": {
+        "schema": {
+          "description": "JSON schema (draft 2020-12) with descriptive shared `x-composition` annotations, not a complete runtime composition contract. Model, effortLevel, and contextTier remain coupled; use `managedSettings.compose` for the runtime's effective result.",
+          "x-opaque-json": true
+        },
+        "runtimeVersion": {
+          "type": "string",
+          "description": "Version of the runtime that owns this schema."
+        }
+      },
+      "required": [
+        "schema",
+        "runtimeVersion"
+      ],
+      "additionalProperties": false,
+      "description": "The authoring JSON schema for managed settings recognized by this runtime.",
+      "title": "ManagedSettingsSchemaResult",
+      "stability": "experimental"
+    },
+    "ManagedSettingsValidateRequest": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "description": "The document to validate: a JSON object, or a string containing the document's JSON text. Preview documents are limited to 1 MiB and 64 levels of nesting, a stricter resource limit than delivered-policy parsing; violations are returned as diagnostics.",
+          "x-opaque-json": true
+        },
+        "layer": {
+          "type": "string",
+          "description": "Channel the document is meant for (`device`, `server`, or `policyHelper`). Some keys are only honored in some channels; for example, a `policyHelper` registration is ignored in policy-helper output. When omitted, no channel-specific checks run."
+        }
+      },
+      "required": [
+        "content"
+      ],
+      "additionalProperties": false,
+      "description": "A candidate managed-settings document to validate without applying it.",
+      "title": "ManagedSettingsValidateRequest",
+      "stability": "experimental"
+    },
+    "ManagedSettingsValidateResult": {
+      "type": "object",
+      "properties": {
+        "valid": {
+          "type": "boolean",
+          "description": "Whether the runtime would accept the document within the preview resource limits. Always equals whether `settings` is present. An invalid document is rejected as a whole."
+        },
+        "settings": {
+          "description": "Canonical form of the document the runtime would apply, with unrecognized keys removed. Absent when the document is invalid.",
+          "x-opaque-json": true
+        },
+        "diagnostics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedSettingsDiagnostic",
+            "description": "One validation finding for a managed-settings document."
+          },
+          "description": "Errors that reject the document and warnings about content the runtime ignores."
+        }
+      },
+      "required": [
+        "valid",
+        "diagnostics"
+      ],
+      "additionalProperties": false,
+      "description": "Result of validating a managed-settings document.",
+      "title": "ManagedSettingsValidateResult",
+      "stability": "experimental"
+    },
+    "ManagedSettingsValues": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Managed default model identifier, as configured. New sessions start with it; it can name a model the account cannot use, so hosts match it against the listed models."
+        },
+        "autoTier": {
+          "$ref": "#/definitions/AutoTier",
+          "description": "Managed Auto routing preference, used when the selected model is `auto`."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Typed effective values of managed settings. Each field mirrors the managed-settings schema key of the same name; more keys are added as they are typed.",
+      "title": "ManagedSettingsValues",
+      "stability": "experimental"
     },
     "MarketplaceAddResult": {
       "type": "object",
@@ -36849,6 +37747,56 @@
       "description": "A bearer token supplied by the SDK client for a BYOK provider. The runtime sets it as `Authorization: Bearer <token>` on the outbound request and does no caching; the SDK consumer owns token caching and refresh.",
       "title": "ProviderTokenAcquireResult"
     },
+    "ProviderWithdrawRequest": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Provider-qualified selection ids to withdraw. Ids that are not registered are ignored, so withdrawal is idempotent. A provider left with no models referencing it is removed too."
+        }
+      },
+      "required": [
+        "models"
+      ],
+      "additionalProperties": false,
+      "description": "Host-managed model selection ids to withdraw from the session's BYOK registry.",
+      "title": "ProviderWithdrawRequest",
+      "stability": "experimental"
+    },
+    "ProviderWithdrawResult": {
+      "type": "object",
+      "properties": {
+        "withdrawn": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Selection ids that were registered and are now withdrawn. Excludes requested ids that were not present."
+        },
+        "providersRemoved": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Providers removed because one of the withdrawn models was the last entry referencing them. A provider that merely has no models is not removed."
+        },
+        "modelDeselected": {
+          "type": "boolean",
+          "description": "True when withdrawal removed the selected host-managed model, leaving the session with no explicit selection, so ordinary model resolution picks the session default. Withdrawal never promotes a surviving model in its place: the choice of which model to use stays with the user."
+        }
+      },
+      "required": [
+        "withdrawn",
+        "providersRemoved"
+      ],
+      "additionalProperties": false,
+      "description": "What the withdrawal actually removed from the registry.",
+      "title": "ProviderWithdrawResult",
+      "stability": "experimental"
+    },
     "PushAttachment": {
       "anyOf": [
         {
@@ -39238,7 +40186,7 @@
       "properties": {
         "name": {
           "$ref": "#/definitions/SandboxHostCapabilityName",
-          "description": "The policy feature, as an extensible string: ignore names you do not recognize. Known values: `network` (sandboxed commands can reach the network; on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns), `network_filtering` (host rules and the sandbox proxy; on Linux this needs the same tooling as `network`; on Windows it needs Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`), `denied_paths` (native enforcement of `filesystem.deniedPaths`), and `shell` (shell commands inside the sandbox; on Windows this needs Process Security Environment 1.1 filesystem enumeration support)."
+          "description": "The policy feature, as an extensible string: ignore names you do not recognize. Known values: `network` (sandboxed commands can reach the network; on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns), `network_filtering` (host rules and the sandbox proxy; on Linux this needs the same tooling as `network`; on Windows it needs Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`), `denied_paths` (native enforcement of `filesystem.deniedPaths`), `shell` (shell commands inside the sandbox), and `filesystem_enumeration` (enumerate-only filesystem grants; on Windows this needs Process Security Environment 1.1 filesystem enumeration support, and without it sandboxed PowerShell still runs but cannot resolve its current location; other platforms always report it)."
         },
         "supported": {
           "type": "boolean",
@@ -39254,7 +40202,7 @@
         "supported"
       ],
       "additionalProperties": false,
-      "description": "Whether this host can run one sandbox policy feature. A session whose effective policy uses an unsupported feature fails each sandboxed command with `reason`.",
+      "description": "Whether this host can run one sandbox policy feature. A session whose effective policy uses an unsupported feature fails each sandboxed command with `reason`, except `filesystem_enumeration`, whose absence degrades sandboxed PowerShell instead of failing it.",
       "title": "SandboxHostCapability"
     },
     "SandboxHostCapabilityName": {
@@ -39262,7 +40210,7 @@
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
-      "description": "Extensible identifier of a sandbox policy feature whose availability varies between hosts. A plain string, so an older client decodes a name added by a newer runtime; ignore names you do not recognize. Known values: `network` — sandboxed commands can reach the network (`network.allowOutbound`, on by default); on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns. `network_filtering` — host rules and the sandbox proxy (`network.allowedHosts`, `network.blockedHosts`, `network.proxy`); on Linux this needs the same tooling as `network`; on Windows it needs a version with Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`, because Windows reaches the local proxy only together with private-network access. `denied_paths` — native enforcement of `filesystem.deniedPaths`; on Windows this needs a version whose sandbox contract reports denied-path support. `shell` — shell commands inside the sandbox: bash on macOS and Linux, PowerShell on Windows; on Windows this needs a version with Process Security Environment 1.1 filesystem enumeration support.",
+      "description": "Extensible identifier of a sandbox policy feature whose availability varies between hosts. A plain string, so an older client decodes a name added by a newer runtime; ignore names you do not recognize. Known values: `network` — sandboxed commands can reach the network (`network.allowOutbound`, on by default); on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns. `network_filtering` — host rules and the sandbox proxy (`network.allowedHosts`, `network.blockedHosts`, `network.proxy`); on Linux this needs the same tooling as `network`; on Windows it needs a version with Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`, because Windows reaches the local proxy only together with private-network access. `denied_paths` — native enforcement of `filesystem.deniedPaths`; on Windows this needs a version whose sandbox contract reports denied-path support. `shell` — shell commands inside the sandbox: bash on macOS and Linux, PowerShell on Windows. `filesystem_enumeration` — enumerate-only filesystem grants, which PowerShell's drive roots use on Windows; this needs a version with Process Security Environment 1.1 filesystem enumeration support. Without it, sandboxed PowerShell still runs, but `Get-Location` may report the drive root, `Set-Location` may fail, and relative paths may resolve against the drive root; the session also receives a `session.warning` with `warningType` `sandbox`. Other platforms always report it.",
       "title": "SandboxHostCapabilityName"
     },
     "SandboxHostSupport": {
@@ -39280,7 +40228,7 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/SandboxHostCapability",
-            "description": "Whether this host can run one sandbox policy feature. A session whose effective policy uses an unsupported feature fails each sandboxed command with `reason`."
+            "description": "Whether this host can run one sandbox policy feature. A session whose effective policy uses an unsupported feature fails each sandboxed command with `reason`, except `filesystem_enumeration`, whose absence degrades sandboxed PowerShell instead of failing it."
           },
           "description": "Sandbox policy features whose availability varies between hosts that can run the backend. Empty when `supported` is false, because no feature can run without a backend. Later runtimes can add entries; ignore an entry whose `name` you do not recognize."
         }

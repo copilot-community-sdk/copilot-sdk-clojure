@@ -42,7 +42,7 @@ Or use as a Git dependency:
 ```clojure
 {:deps {io.github.copilot-community-sdk/copilot-sdk-clojure
         {:git/url "https://github.com/copilot-community-sdk/copilot-sdk-clojure"
-         :git/sha "db3d4e2e92f499f1d97ac718786b5530d19e5898"}}}
+         :git/sha "7c51102b033dd29fb82eec65995a3f445f1555a8"}}}
 ```
 
 Features documented under **Unreleased**, including structured outputs, require

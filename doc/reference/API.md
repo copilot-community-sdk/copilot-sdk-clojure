@@ -328,6 +328,16 @@ left holding no reference to a live process. The wait ends as soon as the child
 dies, so it is a worst-case bound, not a fixed delay. `force-stop!` still
 returns `nil`.
 
+Unexpected owned-runtime exit also ends the connection, rejects unanswered
+RPCs, releases session resources, and clears the model cache. For stdio, the SDK
+allows up to ten seconds for buffered output to reach EOF before ending input;
+a descendant holding the pipe open cannot keep the client connected indefinitely.
+An owned TCP runtime's exit ends its connection without waiting for the peer.
+Already accepted notifications drain before session cleanup. A subsequent
+`start!` establishes a new connection; late cleanup from the old connection
+cannot disconnect it. External runtimes and surviving descendants remain
+outside the SDK's process ownership.
+
 #### `client-options`
 
 ```clojure
@@ -495,9 +505,17 @@ including per-session `:github-token`, plus:
 
 | Option | Type | Description |
 |---|---|---|
+| `:allow-transcript-recovery?` | boolean | Allow repair when loading a damaged transcript. Omission uses the runtime default, `true` in every client mode; explicit `false` rejects recovery. `nil` is invalid. Also accepted by async resume and `join-session`, but not create or mutable option updates. |
 | `:disable-resume?` | boolean | When true, skip emitting the session.resume event (default: false). Explicit `false` is forwarded as `disableResume: false`; omission leaves the runtime default unchanged. |
-| `:continue-pending-work?` | boolean | When true, the runtime re-emits any pending `permission.requested` and external tool calls so handlers can re-respond on resume; default false treats pending work as interrupted. Forwarded as `continuePendingWork` on `session.resume`. |
+| `:continue-pending-work?` | boolean | When true, the runtime re-emits any pending `permission.requested` and external tool calls so handlers can re-respond on resume; default false treats pending work as interrupted. Durably recorded, completed tool results are preserved either way. Forwarded as `continuePendingWork` on `session.resume`. |
 | `:large-output` | map | Tool output handling config. Forwarded on `session.resume` as the official SDK's `largeOutput` field. |
+
+Inspect [`transcript-recovery`](#transcript-recovery) on the returned session for
+the repair report. Recovery policy applies when loading from storage, not when
+reconnecting to history already resident in the runtime. Disabling recovery
+rejects damaged records or a misplaced `session.start` with JSON-RPC error
+`-32075`, without rewriting the transcript; an intact final record missing only
+its newline is still accepted. The error's original opaque data is preserved.
 
 When `:mcp-servers` is present, the SDK sends the converted server configuration
 as `mcpServers` in the `session.resume` request. This applies to blocking and
@@ -1434,6 +1452,28 @@ Get the session's unique identifier.
 
 Get the session workspace path when provided by the CLI (may be nil).
 
+#### `transcript-recovery`
+
+```clojure
+(copilot/transcript-recovery session)
+;; => {:planned-backup-path "/session/events.jsonl.backup-before-recovery-..."
+;;     :invalid-line-numbers [2 7]
+;;     :session-start-moved? false}
+```
+
+Get the report returned by resume, or `nil` for a newly created session or a
+resume that reports no repair. The report has three required fields:
+
+| Key | Type | Meaning |
+|-----|------|---------|
+| `:planned-backup-path` | string | Planned byte-exact backup of the damaged transcript. The runtime writes it on the next durable append; returning the report does not itself create the backup. |
+| `:invalid-line-numbers` | vector of positive integers | One-based physical lines removed from the transcript. An empty vector is valid. |
+| `:session-start-moved?` | boolean | Whether an existing `session.start` record was moved to the beginning. |
+
+The report describes the load that repaired history, not a new validation of
+storage on every resident reconnect. See [`resume-session`](#resume-session)
+for `:allow-transcript-recovery?`.
+
 #### `session-config`
 
 ```clojure
@@ -1917,7 +1957,7 @@ copilot/interaction-events
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
 ```
 
-For schema 1.0.90-5, `:copilot/assistant.server_tool_progress` also belongs to
+For schema 1.0.92-0, `:copilot/assistant.server_tool_progress` also belongs to
 `copilot/assistant-events`. `:copilot/session.managed_settings_enforced` and
 `:copilot/session.managed_settings_resolved`, `:copilot/session.indexed_search`,
 `:copilot/session.permission_recovery`, and `:copilot/session.model_deselected`
@@ -1926,14 +1966,14 @@ belong to `copilot/session-events`.
 `copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
 
 The generated wire schemas also contain internal events such as
-`assistant.turn_retry`, `model.call_start`, and the durable skill-context
+`assistant.turn_retry`, `model.call_start`, `model.call_final_result`, and the durable skill-context
 reference events. They are wire-only and intentionally excluded from every
 curated public event set. Experimental HydraFusion routing events likewise
 remain generated wire evidence and are not curated as public idiom events.
 The experimental `reasoningBlocks` field on `assistant.message` and
 `:shell-execution` field on `tool.execution_complete` also remain generated
 wire evidence rather than stable curated idiom fields. Runtime schema
-`1.0.90-5` additionally carries experimental workflow pause/checkpoint,
+`1.0.92-0` additionally carries experimental workflow pause/checkpoint,
 permission, workspace, and managed-catalog protocol declarations that are not
 part of the stable Clojure API. The new experimental permission declarations
 include `permission.assentDetected`, `permission.contextualAuthorization`, and
@@ -1956,6 +1996,9 @@ and read-only session permission decisions remain excluded. Passive
 `permission.completed` events can still carry the runtime's
 `"approved-read-only-for-session"` result and its directory vector; observing
 that result does not add permission-granting authority to the SDK.
+New AHP transport-selection and Connector-account type exports, sessionless
+managed-settings composition/resolution, environment management, and provider
+withdrawal also remain outside the stable API.
 
 ### `evt` — Event Keyword Helper
 
@@ -2078,7 +2121,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.background_tasks_changed` | Background tasks status changed |
 | `:copilot/session.skills_loaded` | Skills loaded for the session |
 | `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session. Each server may include a managed-catalog `:display-name`, `:source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), plugin identity, `:error`, and `:server-metadata {:instructions <string-or-nil>}`. |
-| `:copilot/session.mcp_server_status_changed` | MCP server status changed. Optional `:error`, `:config-source`, and `:error-classification` are non-null strings. Provenance and failure classifications are extensible strings, not closed enums; omission, empty strings, and future runtime values remain distinct in live events and history. |
+| `:copilot/session.mcp_server_status_changed` | MCP server status changed. Optional `:error`, `:config-source`, and `:error-classification` are non-null strings. `:config-source` describes connected or failed servers. Provenance and failure classifications are extensible strings, not closed enums; omission, empty strings, and future runtime values remain distinct in live events and history. |
 | `:copilot/session.mcp_server_removed` | MCP server was removed; data: `{:server-name "..."}` |
 | `:copilot/session.mcp_server_needs_reconnect` | MCP server requires reconnection; data: `{:server-name "..."}` |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |

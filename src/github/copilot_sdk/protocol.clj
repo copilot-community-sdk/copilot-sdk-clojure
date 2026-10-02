@@ -206,16 +206,24 @@
 
 (defn- close-input! [{:keys [state-atom connection-id]} error]
   (let [[old new]
-        (swap-vals! state-atom
-                    (fn [{:keys [connection] :as state}]
-                      (if (and (:running? connection)
-                               (identical? connection-id (:connection-id connection)))
-                        (update state :connection assoc :running? false :pending-requests {})
-                        state)))]
+        (locking state-atom
+          (swap-vals! state-atom
+                      (fn [{:keys [connection] :as state}]
+                        (if (and (:running? connection)
+                                 (identical? connection-id (:connection-id connection)))
+                          (update state :connection assoc :running? false :pending-requests {})
+                          state))))]
     (when-not (identical? old new)
       (doseq [[_ {:keys [ch]}] (get-in old [:connection :pending-requests])]
         (put! ch {:error error})
         (close! ch)))))
+
+(defn ^:no-doc end-input!
+  "End input after the owning runtime exits without closing its inherited pipes.
+   Reject unanswered RPCs and let accepted notifications drain before cleanup.
+   An obsolete connection cannot alter a replacement connection."
+  [conn]
+  (close-input! conn {:code -32000 :message "CLI process exited"}))
 
 (defn- drain-pending!
   "Atomically clear all pending requests and deliver `error` to each response
@@ -713,10 +721,13 @@
           (:method normalized)
           (do
             (log/debug "Received notification: method=" (:method normalized))
-            (when-not (.offer ^LinkedBlockingQueue (:notification-queue conn) normalized)
-              (let [total (.incrementAndGet ^AtomicLong (:dropped-notifications conn))]
-                (log/warn "Dropping notification due to full queue: method="
-                          (:method normalized) " dropped-total=" total))))
+            ;; Input closure must not overtake an accepted notification.
+            (locking state-atom
+              (when (connection-running? conn)
+                (when-not (.offer ^LinkedBlockingQueue (:notification-queue conn) normalized)
+                  (let [total (.incrementAndGet ^AtomicLong (:dropped-notifications conn))]
+                    (log/warn "Dropping notification due to full queue: method="
+                              (:method normalized) " dropped-total=" total))))))
 
           :else nil)))))
 
