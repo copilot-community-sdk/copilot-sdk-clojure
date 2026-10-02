@@ -120,6 +120,9 @@ script/release.sh --snapshot --bump
 
 # Preview the gh command without dispatching
 script/release.sh --dry-run
+
+# Attribute an assistant-dispatched release to Copilot
+script/release.sh --sync-upstream 0.1.33 --copilot-attribution
 ```
 
 Run `script/release.sh --help` for full usage.
@@ -136,16 +139,24 @@ Go to **Actions → Release → Run workflow** and fill in the inputs below.
 | `upstream_version` | string | Required for `sync-upstream`; upstream version, e.g., `0.1.23` or `1.0.0-beta.3` |
 | `explicit_version` | string | Required for `set-version`; full version with Clojure patch, e.g., `0.1.23.1`, `0.1.23.1-SNAPSHOT`, or `1.0.0-beta.3.0` |
 | `snapshot` | boolean | Append `-SNAPSHOT` for `sync-upstream`/`bump-clj-patch` |
+| `copilot_attribution` | boolean | Default `false`; prefix the release PR body and GitHub release notes with Copilot attribution on behalf of the dispatch actor |
 
-When `version_strategy` is not `none`, the workflow:
+For assistant-dispatched releases, set `copilot_attribution=true` (or use
+`--copilot-attribution`). Both GitHub bodies start with the attribution header
+and a blank line; the release commit also receives a `Co-authored-by` trailer.
+The trailer is not added to either GitHub body. Manual runs leave attribution
+disabled by default.
 
-1. Bumps the version in `build.clj` and `README.md`
-2. Updates the README git SHA
-3. Opens a PR to `main` with auto-merge enabled
-4. Waits for CI to pass and the PR to merge
-5. Deploys to Maven Central
-6. Tags the release (`vX.Y.Z.N`)
-7. Creates a [GitHub release](https://github.com/copilot-community-sdk/copilot-sdk-clojure/releases) with auto-generated notes and attached JAR/bundle artifacts
+The workflow:
+
+1. Updates the version in `build.clj`, `README.md`, and `doc/getting-started.md` when `version_strategy` is not `none`
+2. Updates both installation-doc git SHAs and stamps the changelog
+3. Regenerates API documentation with `bb docs` and stages it with the canonical release edits
+4. Opens a PR to `main` if any staged release files changed, including generated documentation
+5. Waits for CI and auto-merges the PR with a merge commit, preserving commit history
+6. Deploys to Maven Central
+7. Tags the release (`vX.Y.Z.N`)
+8. Creates a [GitHub release](https://github.com/copilot-community-sdk/copilot-sdk-clojure/releases) with auto-generated notes and attached JAR/bundle artifacts
 
 SNAPSHOT versions are marked as pre-release.
 

@@ -3,6 +3,16 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (release automation)
+- Added opt-in `copilot_attribution` / `--copilot-attribution` for
+  assistant-dispatched releases: attribution prefixes the release PR and
+  GitHub release notes, with a co-author trailer only in the release commit.
+
+### Fixed (release automation)
+- Release preparation regenerates and stages API documentation alongside
+  canonical version, installation-SHA, and changelog edits before checking
+  for changes. Release PRs auto-merge with a merge commit instead of squashing.
+
 ### Added (post-v1.0.16 sync)
 - Added resume/join `:allow-transcript-recovery?` and the `transcript-recovery`
   accessor. Omission preserves the runtime's permissive default, explicit false
