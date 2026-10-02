@@ -3,6 +3,7 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+## [1.0.16.0] - 2026-10-02
 ### Added (release automation)
 - Added opt-in `copilot_attribution` / `--copilot-attribution` for
   assistant-dispatched releases: attribution prefixes the release PR and
@@ -2949,7 +2950,8 @@ This release bumps the upstream marker from `1.0.0-beta.3` to `1.0.0-beta.4`.
 - org.clojure/spec.alpha 0.5.238
 - cheshire/cheshire 5.13.0
 
-[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.11.0...HEAD
+[Unreleased]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.16.0...HEAD
+[1.0.16.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.11.0...v1.0.16.0
 [1.0.11.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.9.0...v1.0.11.0
 [1.0.9.0]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.1...v1.0.9.0
 [1.0.7-preview.2.1]: https://github.com/copilot-community-sdk/copilot-sdk-clojure/compare/v1.0.7-preview.2.0...v1.0.7-preview.2.1
