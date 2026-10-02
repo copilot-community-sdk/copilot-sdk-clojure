@@ -40,8 +40,6 @@ io.github.copilot-community-sdk/copilot-sdk-clojure {:git/url "https://github.co
 > **Note:** The Clojars artifact `net.clojars.krukow/copilot-sdk` is deprecated.
 > Starting from version `0.1.22.0`, releases are published to Maven Central only.
 > Versioning follows the upstream [github/copilot-sdk](https://github.com/github/copilot-sdk/releases) releases.
-> Features documented under **Unreleased**, including structured outputs, require
-> the Git dependency until the next Maven Central release.
 
 ## Quick Start
 
