@@ -1,4 +1,9 @@
-{:schema
+{:unchanged-local-artifacts
+ #{"test/github/copilot_sdk/client_transport_lifecycle_test.clj"
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "build.clj"
+   "src/github/copilot_sdk/generated/event_metadata.clj"},
+ :schema
  {:runtime-pin "1.0.92-0",
   :runtime-only-deltas
   [{:symbol "ModelCallFinalResultEvent",
@@ -108,21 +113,184 @@
    :changed-path-count 146,
    :changed-paths-sha256
    "487aad8d722363f309c1841aa22e82342f5da6e845105a9c3db6484ca8c5c81e"}],
+ :sealed-local-artifacts
+ {".copilot-schema-version"
+  "3ac848b210798a2656128956e947f83f37b0283fc3aae595d4c6d89b269f6737",
+  ".github/workflows/ci.yml"
+  "0a0521a6883f22e67594092e076d82a49ac827cf5c702f4be3f5f19453efe857",
+  "CHANGELOG.md"
+  "97c50670e78f48dda34a6f014776e7ff4c1ae000f21a9879fa32571ba917afe3",
+  "README.md"
+  "33517453e5cbb38ecd6e7f56a31a01c4a661e51521da9c29f598685c9bcaaa91",
+  "build.clj"
+  "a4854642442641fe452ca9cc2480746140f1fa6c5516ee2e09c50f8326ce2993",
+  "doc/adr/2026-10-02-transcript-recovery-and-owned-exit.md"
+  "ae4418be6b41f5bb0e8e79cb85f148db38cae4809932fcb0b827c6b27a7d3acf",
+  "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
+  "e25d05ed1b9c1282194fd6321a8a1933fd694c33a32c12b2fe0b50d75be57493",
+  "doc/api/2026-08-10-host-owned-inference-boundary.html"
+  "509f161193bc3f060da06e38dc40d87633c00d2c8fdf3aefc5141c6947767c8b",
+  "doc/api/2026-09-27-dynamic-workflow-migration.html"
+  "f15c2a48a05106af28067ab65a066ce686e8de67461ad6be0baa35c19f1aeb36",
+  "doc/api/2026-09-30-model-policy-and-lifecycle-sync.html"
+  "13f3cef18530e5254598346c273ea685beb11a03cd7294a10b0f1932ad406436",
+  "doc/api/2026-10-02-transcript-recovery-and-owned-exit.html"
+  "4f740f15824d73351a008aa4df419c2073d423cfa9907e5137497c61e4602e55",
+  "doc/api/API.html"
+  "16a63806112678632c0318eb1a9099daab500f9f2e3d76e4b37127181c3d81e4",
+  "doc/api/azure-managed-identity.html"
+  "f2c8f39848f8463aca9210d91f676db07020a930911b61c881652d8e255d37aa",
+  "doc/api/byok.html"
+  "a4de6ab82641e48b27a9c666cca02bd40a7d1e06c8dd558912a258d7d4dc4856",
+  "doc/api/codegen.html"
+  "36b694517973a7be1c7378821d82d742e6a1ffc336763d99b0608afd160f5a16",
+  "doc/api/custom-agents.html"
+  "32814b3928f155184970a39158572f77108b83cb12f303d850f98f82e794983d",
+  "doc/api/debugging.html"
+  "8612f80fc0b507c8ac5a427a0aaa97310dc05cfc756a16662ef9bae259df4633",
+  "doc/api/doc-auth-index.html"
+  "ab13a0c584404f8bd3baade3fb531563313bda95b8950664317a73127f7261da",
+  "doc/api/doc-index.html"
+  "2ed71b5a9a32d90e66b7122c56c8091c72e9f640d8a6f5d76715ee11bcedadf3",
+  "doc/api/dynamic-workflows.html"
+  "2f7c5e9d7d243f34f89e092d33a9e847adb123ee6255319e11169d59a28b2ccc",
+  "doc/api/getting-started.html"
+  "f5ce6875e6e1ef2ac9b8e6af5f596b59085a3206655aa16d358ccd8fee3f9244",
+  "doc/api/github.copilot-sdk.client.html"
+  "5881325f8963b26ebc2336197b3c74459eea5720feda46fd5356bd98e8549f5b",
+  "doc/api/github.copilot-sdk.generated.coerce.html"
+  "629c28c68c32f222e3d4de06691cc75a8190c97d1ab326d2f37e05638dd700dd",
+  "doc/api/github.copilot-sdk.generated.event-metadata.html"
+  "84df14730c32717542194d5a66848ef6286dd48425a3c918f5f3740bc3bee070",
+  "doc/api/github.copilot-sdk.generated.event-specs.html"
+  "937a927baf9d528eeac2c88bc274bb3013d4f6bab8468f878a70743e632f79f0",
+  "doc/api/github.copilot-sdk.helpers.html"
+  "34db545d4d56a18a10d814866cccd16504c905209641127ea4ac2edae210eaac",
+  "doc/api/github.copilot-sdk.html"
+  "cac95c303c3692368e6d5184a062ef5758bc208ad395e902e478870e23ab7761",
+  "doc/api/github.copilot-sdk.instrument.html"
+  "5f625e7ac81f203c810fa494ab4219d0a34b944fba4dd26c0529776ac1f3d5e2",
+  "doc/api/github.copilot-sdk.logging.html"
+  "1e8364af70a31a16fcc9916772e9ac08cfbf50906cd88f936285c04028d21d2b",
+  "doc/api/github.copilot-sdk.process.html"
+  "8eb4368035f9db1d71f2c825989ab2174e659dc3a54ca9790cc34a49e82fa533",
+  "doc/api/github.copilot-sdk.protocol.html"
+  "1fa5fefdee7201a35e5d4e816bbb3feb6fbb990849322be30bf8fa02ea7678c4",
+  "doc/api/github.copilot-sdk.session.html"
+  "dc76bcd789331b3e2a73f201127a7a1395d57b87c23615d295b984b35370f214",
+  "doc/api/github.copilot-sdk.specs.html"
+  "01049b0ce4c414aeed43debfeb6e7e767e773f4f2a283e161af21866c042e964",
+  "doc/api/github.copilot-sdk.teardown.html"
+  "dfa76fe51f258960b0d6665df872a006f60a4ed835abe2de59f3d072d0a157bc",
+  "doc/api/github.copilot-sdk.tool-set.html"
+  "493a9ceae777c08138be133778e30bca9a192890e923075dbe8c6ae06a58057b",
+  "doc/api/github.copilot-sdk.tools.html"
+  "66356a3d9a4e2befc3d67706a1561a5fd7217dce449e4fb9265d10a6717a9fd8",
+  "doc/api/github.copilot-sdk.util.html"
+  "b96ac2555994ca2420c062ee010697b8ff9f61adb521391976193c8c44a77ab3",
+  "doc/api/github.copilot-sdk.workflow.html"
+  "6fcd4fdfc4d4514089d4024e757f4d535a50d58139979c38646e787c0173ff14",
+  "doc/api/index.html"
+  "a466936b0b18572f3d6843559679d2c8ab26f678b9f7441a3043fbba62d41700",
+  "doc/api/overview.html"
+  "0ce600613c9c5810293e92467e99c8c6e3ca01ca66fe628e24914e63013070e3",
+  "doc/api/style.html"
+  "879bffa5f374ecf31b6cb96cb5393567eb9e21c7e28251fc1fece146d8a5bc91",
+  "doc/api/topic-manifest.edn"
+  "212a0cef8d971aad86c38957f58d2be5e39735958c2fe8a47566f345dd111518",
+  "doc/api/upstream-doc-gap-matrix.html"
+  "a00d8e7fd2e844538b4535b4ca30bc4b8602cc8c8840ea5a0a614516e56498d2",
+  "doc/getting-started.md"
+  "e12446d9cc423d9bd1cfaad86b221f603e44c8b59c989b2a9de26458f88534b4",
+  "doc/index.md"
+  "032c1e544caab104244b258e03497a01fe3723d282c5d6f5124c7c4fb95e8388",
+  "doc/mcp/debugging.md"
+  "67dd957ee960f9ecc5ac6b5ac6b53e501aa3e80747a34507976ddfd6a4cf2c91",
+  "doc/reference/API.md"
+  "2c843c6bc09d60cce5bf94782211d2d35352c2dc7aba2c79862893f1c03f386f",
+  "doc/upstream-doc-gap-matrix.md"
+  "7c64cefff7a30fd58498034c152bc3852593fa94624ade74a33e0dd16eb0bba8",
+  "examples/session_resume.clj"
+  "d0117f8f9556b26b209ae636c3e63b21a5f03b279e553ec56aa1583bcc3723a3",
+  "resources/github/copilot_sdk/api_surface.edn"
+  "47fc20bd3618d26b780b6d0455187b27d567f9887fa3c0410517d65c276e2958",
+  "schemas/README.md"
+  "b19469680ba6e5d903a1b2e158e662f3ca7b06af02626ea90c779ef85cb320f0",
+  "schemas/api.schema.json"
+  "93a58925e09cdcc87ce7ad2cae8e76895e65f0afbd0b2cb03001896d1a578ee1",
+  "schemas/session-events.schema.json"
+  "8d87b1aec9c6f2e96c1d403d2dc0a048599ab7b708bf42f997ef29d9624eb9e7",
+  "src/github/copilot_sdk.clj"
+  "36736842a4ac47a2109e941cf280bdbfdf5a5563ec58e92263d5916aee6d15f4",
+  "src/github/copilot_sdk/client.clj"
+  "15b88985a05d0add6f1434fdd8fedddcbc613fb996202a7e267c461a185254cb",
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "28da2c970c8cd1d758e8d89e8442ed41c9afec6ed28624b31bac81bb2a18dc1e",
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "f781e615001a5733def1d6d8487715a70ba6381d6933befe3a583634a4f6a952",
+  "src/github/copilot_sdk/instrument.clj"
+  "bda25769f5dc37f86209adafc30b7446ad8442a96666cef08d6abc01c3ec52b5",
+  "src/github/copilot_sdk/protocol.clj"
+  "734a4422980d0a58e17c0c917f3144aaf89ffccf8d662db3ba1cdebf344be0d3",
+  "src/github/copilot_sdk/session.clj"
+  "bac3d792bc971701057ce8d99859f428a693cc802aa9229d973b2c9f4eee308e",
+  "src/github/copilot_sdk/specs.clj"
+  "9d09f4b096870953e0b438870eae49c08cb44d95e3f2c9028dbf08c056f663fe",
+  "test/github/copilot_sdk/client_transport_lifecycle_test.clj"
+  "5120e6dc7603726ffefb0f95852796c1a20b43a5ea9a4deb064529ef955f5c47",
+  "test/github/copilot_sdk/e2e_test.clj"
+  "fab1c36daff0512ed8accf268c51c08568ff98ab855d8d1ca54dc73b0914de81",
+  "test/github/copilot_sdk/integration/client_test.clj"
+  "dbf7ba0febe9c11f1403b3390e89a1462b6851109f06821219bd0471590ae7af",
+  "test/github/copilot_sdk/integration/upstream_1_0_92_0_test.clj"
+  "d2bd63a9a11dcbbf11603fbc036dedadbfe8f5ac461e415aba1bbc2d37211c65",
+  "test/github/copilot_sdk/optional_wire_contract_test.clj"
+  "c7d0ec413baacf25ac1280bfab60950f9f434af2389dfd90325513289cf1b450",
+  "test/github/copilot_sdk/owned_process_exit_fixture.clj"
+  "0962d386a2f098b474659acc4c1b8886357058c1b85b5b21d3e9d5c8d3dd929c",
+  "test/github/copilot_sdk/owned_process_exit_test.clj"
+  "4dc898121ec1ddf8fd9c38fbce9f27508dedbf9341b50db5d694e1a939d84677"},
  :test-inventory
- {"nodejs/test/client.test.ts"
-  {:blobs
-   ["174f911287c3137f0298b5434b372268ed7869b4"
-    "3ddc13d4c64d298893e844da30f00b5ddf29103a"],
-   :classification :stable-public,
-   :review
-   "Recovery option/report matrix and process-exit, startup, draining, cache and stale-connection regressions drive the Clojure contracts."},
-  "nodejs/test/connectors.test.ts"
-  {:blobs
-   ["b6046a434d5c1aaea0d7003a21da44619300ba8e"
-    "e19d0e7c3e69c20f8e0578f7c47b1bcf9d96f7f7"],
+ {"nodejs/test/e2e/connectors.e2e.test.ts"
+  {:blobs [nil "3a7717e71a61efa407909cac80cf113cfeff0819"],
    :classification :experimental,
    :review
    "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/release-manifest.test.ts"
+  {:blobs
+   ["5b389a11e9e384cb99c5de9aed03e8c5c7be050d"
+    "cc4fe8d508d6f76de6ea1cc2ea3caa52fb66f78b"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/e2e/scenario_testing_persistence.e2e.test.ts"
+  {:blobs
+   ["6d776ac57cb5ecdc669bb9612f4c659b250e1eb5"
+    "5b179a77ace78027493e2d61ac3bab638b3a8322"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/runtime-package-acquisition.test.ts"
+  {:blobs ["ae36d334d6f5af0a0ecb3fea7290467b60241199" nil],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/e2e/runtime_host.e2e.test.ts"
+  {:blobs
+   ["2a2f72d52e313ccd895f2dd3fddcd0a277eae786"
+    "b1b8a1d9d250af22f47b29dc97b4420145c1c746"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/rpc_mcp_config.e2e.test.ts"
+  {:blobs
+   ["95694a8c63448d0249d1177da5f1f4401c0f9fba"
+    "813a56bbd9598f495dffb34d335b8f27d26fc6f0"],
+   :classification :generated-only,
+   :review
+   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
   "nodejs/test/e2e/agent_and_compact_rpc.e2e.test.ts"
   {:blobs
    ["ba0455282f326d98a98743c1db51a8ad60429c5c"
@@ -130,53 +298,10 @@
    :classification :generated-only,
    :review
    "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/client.e2e.test.ts"
-  {:blobs
-   ["a529ea8e4ce82d9495efc185dea707e49bce285c"
-    "e4e826a92244819940b334b35c6bddf3498e1879"],
-   :classification :stable-public,
-   :review
-   "Existing stable client/model or hook behavior is corroborated; no additional option, callback or value delta beyond the contract matrix."},
-  "nodejs/test/e2e/connectors.e2e.test.ts"
-  {:blobs [nil "3a7717e71a61efa407909cac80cf113cfeff0819"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
   "nodejs/test/e2e/harness/ahpClient.ts"
   {:blobs
    ["8ad23d6e1a61a37e4544d6ee2994325dddba7514"
     "13fea3ef5ac8c93a149ee2b0231610da3453e146"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/e2e/harness/runtimeHostTopology.ts"
-  {:blobs
-   ["9a8b9d31883295c8d6ad68b63cab5da2eccbda29"
-    "1676af9e10ed5c42bb6c3e9a9527c471c1626dfd"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/e2e/mcp_cached_oauth_overlap.e2e.test.ts"
-  {:blobs [nil "ecbacd34fda2c9d286858d81909e02de0dfcdc72"],
-   :classification :stable-public,
-   :review
-   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
-  "nodejs/test/e2e/mcp_catalog_recovery.e2e.test.ts"
-  {:blobs [nil "c9f2a8b4fd3633327b5c949c4d8c04c9c3aee6a9"],
-   :classification :stable-public,
-   :review
-   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
-  "nodejs/test/e2e/pending_work_resume.e2e.test.ts"
-  {:blobs
-   ["f2bb16ca6db289f2e4c0945747ab2b318e5fad82"
-    "0f4fd4a74f23150785269ed861a10054e0cc2719"],
-   :classification :stable-public,
-   :review
-   "Cold resume retains a durably completed sibling result, does not rerun it, and invalidates stale completion requests; persistence is runtime-owned."},
-  "nodejs/test/e2e/rewind.e2e.test.ts"
-  {:blobs
-   ["7fdfee94c81a7d677262817b8c9f633c1d7fd046"
-    "25e8199bf11219df52b20a0b521a7b19e708cf18"],
    :classification :experimental,
    :review
    "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
@@ -185,129 +310,6 @@
    :classification :generated-only,
    :review
    "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/rpc_extensions_loaded.e2e.test.ts"
-  {:blobs [nil "c2dd9f39312f30c108d3bd99f6d76076e9086888"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/rpc_mcp_config.e2e.test.ts"
-  {:blobs
-   ["95694a8c63448d0249d1177da5f1f4401c0f9fba"
-    "813a56bbd9598f495dffb34d335b8f27d26fc6f0"],
-   :classification :generated-only,
-   :review
-   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
-  "nodejs/test/e2e/rpc_server.e2e.test.ts"
-  {:blobs
-   ["7bab043a1a26b2351a3c6d80e7ca2b3098d79658"
-    "d89b2c3e1e31561ec8a05d09d34d3e3d66e4f046"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/rpc_shell_and_fleet.e2e.test.ts"
-  {:blobs
-   ["9344277b05df901b606ee1f4e3e8da6eddeffd9d"
-    "521a4b0c1ba4ab79fcbcfd32f342374ae09dd3c2"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
-  {:blobs
-   ["e03020e4a8b9af696bbfd28a3fd97b4dc571060e"
-    "9311d1aaf288e0f5a2d711debbf479839407e531"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
-  {:blobs
-   ["cb41c69e6863db5f8fd11bd27a06b04395f42fe0"
-    "0071e1ff458012c7adf9052c1c44e58f2a9e305f"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/rpc_workspace_checkpoints.e2e.test.ts"
-  {:blobs
-   ["f1d8050925dbfc0205a460d3ac03911c1c968f0f"
-    "83ba34434c1e33138519080f0e3152be8bec0da4"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/runtime_host.e2e.test.ts"
-  {:blobs
-   ["2a2f72d52e313ccd895f2dd3fddcd0a277eae786"
-    "b1b8a1d9d250af22f47b29dc97b4420145c1c746"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/e2e/scenario_testing_control_state.e2e.test.ts"
-  {:blobs [nil "071f6df2b4b6c96643fe63d25ef33c185f56febb"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/scenario_testing_permissions.e2e.test.ts"
-  {:blobs [nil "577c1bef589e98e9458e4874ecb426d81315243e"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/scenario_testing_persistence.e2e.test.ts"
-  {:blobs
-   ["6d776ac57cb5ecdc669bb9612f4c659b250e1eb5"
-    "5b179a77ace78027493e2d61ac3bab638b3a8322"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/scenario_testing_server_control.e2e.test.ts"
-  {:blobs [nil "0bef912e0e91f10ca4f74d867082088f676629c8"],
-   :classification :generated-only,
-   :review
-   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
-  "nodejs/test/e2e/subagent_hooks.e2e.test.ts"
-  {:blobs
-   ["dbc3ca673ba0907d0cf46b7be10467aa8681f191"
-    "767bc4b656251bd4ee7036427a74257c651eb334"],
-   :classification :stable-public,
-   :review
-   "Existing stable client/model or hook behavior is corroborated; no additional option, callback or value delta beyond the contract matrix."},
-  "nodejs/test/e2e/transcript_recovery.e2e.test.ts"
-  {:blobs [nil "7fd22215ef3c5dc4c3587dac07de6961abf58482"],
-   :classification :stable-public,
-   :review
-   "Both modes reject torn/misordered transcripts with -32075 without rewriting; permissive resume reports physical lines, moved start and planned backup."},
-  "nodejs/test/e2e/workflow.e2e.test.ts"
-  {:blobs
-   ["d5da188691af7d3202ef0578e1563a115b2dbfba"
-    "093654d79a21d8daa39d60cfa5b6cf0bdf71e6b4"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/ffiRuntimeHost.test.ts"
-  {:blobs
-   ["e0fb3d71af4a1733b4160cee58315a9c18b80f65"
-    "b5badfb27c835668407dbddb9a10f0ab48d916fd"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/host-client.test.ts"
-  {:blobs
-   ["22766bd81cafb4ee9e4cb97a4ce074404ba1b080"
-    "98d2f48e28cbb866e53c3b6e1557afffd789ffad"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/host.test.ts"
-  {:blobs
-   ["3816112f4139cee002be16db790805971cd103d8"
-    "36549de70b46b0d10971ba10f44129a22e831bf8"],
-   :classification :experimental,
-   :review
-   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
-  "nodejs/test/npm-release.test.ts"
-  {:blobs
-   ["f3d26da5df4833811cca183abf7298ad5894fe9f"
-    "04bed8b8d962cb283e76dd116b52e659cfff8cd6"],
-   :classification :internal,
-   :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."},
   "nodejs/test/package-sdk.test.ts"
   {:blobs
    ["aa521e26fd91beaccf3ae34a44e8c2e0789b2c7d"
@@ -322,37 +324,6 @@
    :classification :internal,
    :review
    "Language packaging, code generation, release artifacts or test infrastructure only."},
-  "nodejs/test/release-manifest.test.ts"
-  {:blobs
-   ["5b389a11e9e384cb99c5de9aed03e8c5c7be050d"
-    "cc4fe8d508d6f76de6ea1cc2ea3caa52fb66f78b"],
-   :classification :internal,
-   :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."},
-  "nodejs/test/runtime-package-acquisition.test.ts"
-  {:blobs ["ae36d334d6f5af0a0ecb3fea7290467b60241199" nil],
-   :classification :internal,
-   :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."},
-  "nodejs/test/runtime-release-identity.test.ts"
-  {:blobs ["e1184bbc31245ae198db24d978d05360a9046232" nil],
-   :classification :internal,
-   :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."},
-  "nodejs/test/runtimeArtifacts.test.ts"
-  {:blobs
-   ["24eef787976d8b635b2cb5b7428b27c67277efbe"
-    "b59d43de8231a240e60a76b9b5ee9c7e578eb951"],
-   :classification :internal,
-   :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."},
-  "nodejs/test/rust-codegen.test.ts"
-  {:blobs
-   ["d38141cab6637f3059bbc35068a3f1c29d547d50"
-    "3087dc2c114a04832546c68f6946fd1bdf93b868"],
-   :classification :internal,
-   :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."},
   "nodejs/test/typescript-codegen.test.ts"
   {:blobs
    ["77009e90a8b726f033a22eb83f81844727984ccd"
@@ -360,55 +331,228 @@
    :classification :internal,
    :review
    "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/e2e/pending_work_resume.e2e.test.ts"
+  {:blobs
+   ["f2bb16ca6db289f2e4c0945747ab2b318e5fad82"
+    "0f4fd4a74f23150785269ed861a10054e0cc2719"],
+   :classification :stable-public,
+   :review
+   "Cold resume retains a durably completed sibling result, does not rerun it, and invalidates stale completion requests; persistence is runtime-owned."},
+  "nodejs/test/e2e/mcp_cached_oauth_overlap.e2e.test.ts"
+  {:blobs [nil "ecbacd34fda2c9d286858d81909e02de0dfcdc72"],
+   :classification :stable-public,
+   :review
+   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
+  "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
+  {:blobs
+   ["cb41c69e6863db5f8fd11bd27a06b04395f42fe0"
+    "0071e1ff458012c7adf9052c1c44e58f2a9e305f"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_workspace_checkpoints.e2e.test.ts"
+  {:blobs
+   ["f1d8050925dbfc0205a460d3ac03911c1c968f0f"
+    "83ba34434c1e33138519080f0e3152be8bec0da4"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_server.e2e.test.ts"
+  {:blobs
+   ["7bab043a1a26b2351a3c6d80e7ca2b3098d79658"
+    "d89b2c3e1e31561ec8a05d09d34d3e3d66e4f046"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/rpc_extensions_loaded.e2e.test.ts"
+  {:blobs [nil "c2dd9f39312f30c108d3bd99f6d76076e9086888"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
   "nodejs/test/unified-release.test.ts"
   {:blobs [nil "0463b2d20174d983112954ef349838b9ae63690e"],
    :classification :internal,
    :review
-   "Language packaging, code generation, release artifacts or test infrastructure only."}},
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
+  {:blobs
+   ["e03020e4a8b9af696bbfd28a3fd97b4dc571060e"
+    "9311d1aaf288e0f5a2d711debbf479839407e531"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/rust-codegen.test.ts"
+  {:blobs
+   ["d38141cab6637f3059bbc35068a3f1c29d547d50"
+    "3087dc2c114a04832546c68f6946fd1bdf93b868"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/npm-release.test.ts"
+  {:blobs
+   ["f3d26da5df4833811cca183abf7298ad5894fe9f"
+    "04bed8b8d962cb283e76dd116b52e659cfff8cd6"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/e2e/harness/runtimeHostTopology.ts"
+  {:blobs
+   ["9a8b9d31883295c8d6ad68b63cab5da2eccbda29"
+    "1676af9e10ed5c42bb6c3e9a9527c471c1626dfd"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/runtimeArtifacts.test.ts"
+  {:blobs
+   ["24eef787976d8b635b2cb5b7428b27c67277efbe"
+    "b59d43de8231a240e60a76b9b5ee9c7e578eb951"],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/host.test.ts"
+  {:blobs
+   ["3816112f4139cee002be16db790805971cd103d8"
+    "36549de70b46b0d10971ba10f44129a22e831bf8"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/scenario_testing_control_state.e2e.test.ts"
+  {:blobs [nil "071f6df2b4b6c96643fe63d25ef33c185f56febb"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/ffiRuntimeHost.test.ts"
+  {:blobs
+   ["e0fb3d71af4a1733b4160cee58315a9c18b80f65"
+    "b5badfb27c835668407dbddb9a10f0ab48d916fd"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/runtime-release-identity.test.ts"
+  {:blobs ["e1184bbc31245ae198db24d978d05360a9046232" nil],
+   :classification :internal,
+   :review
+   "Language packaging, code generation, release artifacts or test infrastructure only."},
+  "nodejs/test/host-client.test.ts"
+  {:blobs
+   ["22766bd81cafb4ee9e4cb97a4ce074404ba1b080"
+    "98d2f48e28cbb866e53c3b6e1557afffd789ffad"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/rpc_shell_and_fleet.e2e.test.ts"
+  {:blobs
+   ["9344277b05df901b606ee1f4e3e8da6eddeffd9d"
+    "521a4b0c1ba4ab79fcbcfd32f342374ae09dd3c2"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/subagent_hooks.e2e.test.ts"
+  {:blobs
+   ["dbc3ca673ba0907d0cf46b7be10467aa8681f191"
+    "767bc4b656251bd4ee7036427a74257c651eb334"],
+   :classification :stable-public,
+   :review
+   "Existing stable client/model or hook behavior is corroborated; no additional option, callback or value delta beyond the contract matrix."},
+  "nodejs/test/e2e/scenario_testing_permissions.e2e.test.ts"
+  {:blobs [nil "577c1bef589e98e9458e4874ecb426d81315243e"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/e2e/mcp_catalog_recovery.e2e.test.ts"
+  {:blobs [nil "c9f2a8b4fd3633327b5c949c4d8c04c9c3aee6a9"],
+   :classification :stable-public,
+   :review
+   "Existing MCP configuration, cached OAuth isolation, tool-catalogue publication/recovery and timeout handling are runtime-owned; no new public SDK builder."},
+  "nodejs/test/e2e/scenario_testing_server_control.e2e.test.ts"
+  {:blobs [nil "0bef912e0e91f10ca4f74d867082088f676629c8"],
+   :classification :generated-only,
+   :review
+   "Raw generated RPC scenario coverage is wire evidence, not an independent stable wrapper requirement."},
+  "nodejs/test/client.test.ts"
+  {:blobs
+   ["174f911287c3137f0298b5434b372268ed7869b4"
+    "3ddc13d4c64d298893e844da30f00b5ddf29103a"],
+   :classification :stable-public,
+   :review
+   "Recovery option/report matrix and process-exit, startup, draining, cache and stale-connection regressions drive the Clojure contracts."},
+  "nodejs/test/e2e/rewind.e2e.test.ts"
+  {:blobs
+   ["7fdfee94c81a7d677262817b8c9f633c1d7fd046"
+    "25e8199bf11219df52b20a0b521a7b19e708cf18"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/client.e2e.test.ts"
+  {:blobs
+   ["a529ea8e4ce82d9495efc185dea707e49bce285c"
+    "e4e826a92244819940b334b35c6bddf3498e1879"],
+   :classification :stable-public,
+   :review
+   "Existing stable client/model or hook behavior is corroborated; no additional option, callback or value delta beyond the contract matrix."},
+  "nodejs/test/connectors.test.ts"
+  {:blobs
+   ["b6046a434d5c1aaea0d7003a21da44619300ba8e"
+    "e19d0e7c3e69c20f8e0578f7c47b1bcf9d96f7f7"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/workflow.e2e.test.ts"
+  {:blobs
+   ["d5da188691af7d3202ef0578e1563a115b2dbfba"
+    "093654d79a21d8daa39d60cfa5b6cf0bdf71e6b4"],
+   :classification :experimental,
+   :review
+   "Changed tests exercise the named excluded experimental subsystem; they do not authorize a stable Clojure API."},
+  "nodejs/test/e2e/transcript_recovery.e2e.test.ts"
+  {:blobs [nil "7fd22215ef3c5dc4c3587dac07de6961abf58482"],
+   :classification :stable-public,
+   :review
+   "Both modes reject torn/misordered transcripts with -32075 without rewriting; permissive resume reports physical lines, moved start and planned backup."}},
  :target-public-surface
  {:source-blobs
-  {"nodejs/package.json"
-   ["7748258c8c41edecbac60636b497195fea9afa31"
-    "1a0e11a89306ee8d21156d62dc1ee51fd00a33bb"],
-   "nodejs/src/canvas.ts"
-   ["aeb1f00ec42926977c010df2471123dc18ddddd3"
-    "aeb1f00ec42926977c010df2471123dc18ddddd3"],
-   "nodejs/src/client.ts"
-   ["32af18890a4e07f9f7ce0b71b62cc497c3c6fcac"
-    "858697fe8a4f90f9231f84e12ae453c97513cad2"],
+  {"nodejs/src/host.ts"
+   ["7ae4036531f38afffbae8a38d5af3020b3f3f942"
+    "28d64b89f64371c7f0c0b02b37079002e4337c52"],
    "nodejs/src/extension.ts"
    ["e7bb21e3b2fc8a84d16bde7885cd50308d61116f"
     "e7bb21e3b2fc8a84d16bde7885cd50308d61116f"],
-   "nodejs/src/ffiRuntimeHost.ts"
-   ["f2db8eb163f1404609a6f1a2a03c6360c91e6f36"
-    "947417871a284d6d679e64c253a3ce8fc1bd280b"],
-   "nodejs/src/generated/rpc.ts"
-   ["3aa1574748f2c69d5f5d4b790fa225cbdc7240d7"
-    "0efa914e67f58ee951da3fb8f97c9962674f38ce"],
-   "nodejs/src/generated/session-events.ts"
-   ["96f6f247c595b9056847cbcba304e36d3467a1dc"
-    "06032163f5d6f5d30e5511932ef7196f430eb8d7"],
-   "nodejs/src/host.ts"
-   ["7ae4036531f38afffbae8a38d5af3020b3f3f942"
-    "28d64b89f64371c7f0c0b02b37079002e4337c52"],
-   "nodejs/src/index.ts"
-   ["5ce938d368a2858c7b8244759f15af056575ecb8"
-    "ec2d43fa8fd393ff9556f50fdca5f3ad5f509a74"],
-   "nodejs/src/installationConfirmation.ts"
-   ["897c81915f4a398a66bfaffe9d93b0da09955767"
-    "897c81915f4a398a66bfaffe9d93b0da09955767"],
-   "nodejs/src/session.ts"
-   ["39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da"
-    "e34cf242fde26fdec2dfc79f087be03fe2a6449a"],
-   "nodejs/src/toolSet.ts"
-   ["559e9234e5b178036d88a7045a632bd16a97f534"
-    "559e9234e5b178036d88a7045a632bd16a97f534"],
    "nodejs/src/types.ts"
    ["cc64c3516d900728cd8bd3ae4d48618cc57ee034"
     "5fa5cf6b971ace1e540808298d0601786e46b1b5"],
+   "nodejs/src/ffiRuntimeHost.ts"
+   ["f2db8eb163f1404609a6f1a2a03c6360c91e6f36"
+    "947417871a284d6d679e64c253a3ce8fc1bd280b"],
+   "nodejs/src/installationConfirmation.ts"
+   ["897c81915f4a398a66bfaffe9d93b0da09955767"
+    "897c81915f4a398a66bfaffe9d93b0da09955767"],
    "nodejs/src/workflow.ts"
    ["f7c0abe2d1b819154d284132a7b83f98fecb6c78"
-    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"]},
+    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"],
+   "nodejs/src/session.ts"
+   ["39e023a7bcda2825e05b11a2bdb0a5a5ad6eb0da"
+    "e34cf242fde26fdec2dfc79f087be03fe2a6449a"],
+   "nodejs/src/client.ts"
+   ["32af18890a4e07f9f7ce0b71b62cc497c3c6fcac"
+    "858697fe8a4f90f9231f84e12ae453c97513cad2"],
+   "nodejs/src/index.ts"
+   ["5ce938d368a2858c7b8244759f15af056575ecb8"
+    "ec2d43fa8fd393ff9556f50fdca5f3ad5f509a74"],
+   "nodejs/package.json"
+   ["7748258c8c41edecbac60636b497195fea9afa31"
+    "1a0e11a89306ee8d21156d62dc1ee51fd00a33bb"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534"
+    "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/generated/rpc.ts"
+   ["3aa1574748f2c69d5f5d4b790fa225cbdc7240d7"
+    "0efa914e67f58ee951da3fb8f97c9962674f38ce"],
+   "nodejs/src/canvas.ts"
+   ["aeb1f00ec42926977c010df2471123dc18ddddd3"
+    "aeb1f00ec42926977c010df2471123dc18ddddd3"],
+   "nodejs/src/generated/session-events.ts"
+   ["96f6f247c595b9056847cbcba304e36d3467a1dc"
+    "06032163f5d6f5d30e5511932ef7196f430eb8d7"]},
   :trees
   {"nodejs/src"
    ["48b7b7610f551b009a0598c9a181d9ce960460db"
@@ -420,10 +564,58 @@
    ["87aaff1cc9855d5fab990a9447b6e351156c374a"
     "f4a727fd2ebbb697b3f77597d33715953f99ae3b"]},
   :modules
-  {"nodejs/src/canvas.ts"
+  {"nodejs/src/host.ts"
    {:fingerprint
-    [9
-     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    [5
+     "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
+    :added {},
+    :removed {},
+    :changed {:experimental #{"AhpHostOptions"}}},
+   "nodejs/src/extension.ts"
+   {:fingerprint
+    [40
+     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/types.ts"
+   {:fingerprint
+    [237
+     "6e38e2462179314a47e58d024652f643beabba1f9dde7accba2ec1ed32a7125e"],
+    :added
+    {:experimental
+     #{"ConnectorSessionAccount"
+       "AuthIdentityMetadata"
+       "AuthInfoType"
+       "ConnectorSessionAccountResult"},
+     :stable-public #{"TranscriptRecovery"}},
+    :removed {},
+    :changed {:stable-public #{"ResumeSessionConfig"}}},
+   "nodejs/src/ffiRuntimeHost.ts"
+   {:fingerprint
+    [1
+     "fea0bbe2fd3afeb4e248f3d6bff0345a005350debb99f3f57768d026a77774c1"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/installationConfirmation.ts"
+   {:fingerprint
+    [3
+     "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/workflow.ts"
+   {:fingerprint
+    [31
+     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/session.ts"
+   {:fingerprint
+    [2
+     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
     :added {},
     :removed {},
     :changed {}},
@@ -434,17 +626,25 @@
     :added {},
     :removed {},
     :changed {}},
-   "nodejs/src/extension.ts"
+   "nodejs/src/index.ts"
    {:fingerprint
-    [40
-     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
-    :added {},
+    [239
+     "282c2808da769b67e986b4f07da002cbc04dcb08781b0a3e0d22ee503dbee378"],
+    :added
+    {:experimental
+     #{"ConnectorSessionAccount"
+       "HostGitHubEnvironmentOptions"
+       "AuthIdentityMetadata"
+       "AuthInfoType"
+       "HostLocalServerOptions"
+       "ConnectorSessionAccountResult"},
+     :stable-public #{"TranscriptRecovery"}},
     :removed {},
     :changed {}},
-   "nodejs/src/ffiRuntimeHost.ts"
+   "nodejs/src/toolSet.ts"
    {:fingerprint
-    [1
-     "fea0bbe2fd3afeb4e248f3d6bff0345a005350debb99f3f57768d026a77774c1"],
+    [2
+     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
     :added {},
     :removed {},
     :changed {}},
@@ -501,73 +701,17 @@
      #{"ConnectorCatalogEntry"
        "ConnectorCapabilities"
        "ConnectorReconcileRequest"}}},
+   "nodejs/src/canvas.ts"
+   {:fingerprint
+    [9
+     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :added {},
+    :removed {},
+    :changed {}},
    "nodejs/src/generated/session-events.ts"
    {:fingerprint
     [578
      "bb54defac1e811c1ea52ac305517a822120367b0268b343ae1451dee15d8c94c"],
-    :added {},
-    :removed {},
-    :changed {}},
-   "nodejs/src/host.ts"
-   {:fingerprint
-    [5
-     "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
-    :added {},
-    :removed {},
-    :changed {:experimental #{"AhpHostOptions"}}},
-   "nodejs/src/index.ts"
-   {:fingerprint
-    [239
-     "282c2808da769b67e986b4f07da002cbc04dcb08781b0a3e0d22ee503dbee378"],
-    :added
-    {:experimental
-     #{"ConnectorSessionAccount"
-       "HostGitHubEnvironmentOptions"
-       "AuthIdentityMetadata"
-       "AuthInfoType"
-       "HostLocalServerOptions"
-       "ConnectorSessionAccountResult"},
-     :stable-public #{"TranscriptRecovery"}},
-    :removed {},
-    :changed {}},
-   "nodejs/src/installationConfirmation.ts"
-   {:fingerprint
-    [3
-     "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
-    :added {},
-    :removed {},
-    :changed {}},
-   "nodejs/src/session.ts"
-   {:fingerprint
-    [2
-     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
-    :added {},
-    :removed {},
-    :changed {}},
-   "nodejs/src/toolSet.ts"
-   {:fingerprint
-    [2
-     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
-    :added {},
-    :removed {},
-    :changed {}},
-   "nodejs/src/types.ts"
-   {:fingerprint
-    [237
-     "6e38e2462179314a47e58d024652f643beabba1f9dde7accba2ec1ed32a7125e"],
-    :added
-    {:experimental
-     #{"ConnectorSessionAccount"
-       "AuthIdentityMetadata"
-       "AuthInfoType"
-       "ConnectorSessionAccountResult"},
-     :stable-public #{"TranscriptRecovery"}},
-    :removed {},
-    :changed {:stable-public #{"ResumeSessionConfig"}}},
-   "nodejs/src/workflow.ts"
-   {:fingerprint
-    [31
-     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
     :added {},
     :removed {},
     :changed {}}},
@@ -586,40 +730,28 @@
      "ConnectorSessionAccountResult"},
    :removed #{}},
   :interfaces
-  {"AgentStopHookInput"
+  {"ResumeSessionConfig"
+   {:fingerprint
+    [4
+     "1926530d9d586b5aeae926348b9be4bec606e39469bf1c0fbcb595d486cdc7fa"],
+    :added-fields #{"allowTranscriptRecovery"},
+    :removed-fields #{}},
+   "SessionEndHookInput"
    {:fingerprint
     [3
-     "d7aae98f0cc52eeb3d873d3a93e9d6e86cbf481b18ed057cc5c088401a197c56"],
+     "db9e60c11949d099daddfb1e1fdf317c629e4bbeb28bdc0dc50c26cb1c989a9a"],
     :added-fields #{},
     :removed-fields #{}},
-   "AgentStopHookOutput"
+   "SessionCreatedEvent"
    {:fingerprint
     [2
-     "a8d6282ad71216f6b53ec97f4bff536e7d95553b0a202f94a088c8997b480a2a"],
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
     :added-fields #{},
     :removed-fields #{}},
-   "AttributedPermissionResult"
-   {:fingerprint
-    [3
-     "3e666388906f2c4d7f66c719a39fc4cc4b4fbbe6b9e4eacebc4fe8afa5ca1f42"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "AutoModeSwitchRequest"
+   "ProviderTokenArgs"
    {:fingerprint
     [2
-     "e4782af4f0ac6515d1ee6ee94cd5d92a1bff4cb0ecfe068ec26da58de0e87e0c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "BaseHookInput"
-   {:fingerprint
-    [3
-     "4dd1b38a04fcb164a3cfabb076c1d20be6478cae2b5121395c64c6cd3ed71e4f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CanvasProviderIdentity"
-   {:fingerprint
-    [2
-     "d34f65e4568f8b250fa90e3b729aceda0e28427ed71e97daf572fd6087b41651"],
+     "09133ff6dd8edbaf925da4f4f993b3f73a62d9743c18bf34b96cbdcb22c9bcef"],
     :added-fields #{},
     :removed-fields #{}},
    "CapiSessionOptions"
@@ -628,154 +760,28 @@
      "04fdf770b98a6685b88426bfccbba71d6590f0f4d3df50d71bb0107a45a64d18"],
     :added-fields #{},
     :removed-fields #{}},
-   "ChildProcessRuntimeConnection"
+   "McpAuthWwwAuthenticateParams"
    {:fingerprint
     [3
-     "10f4b910eff296cd95d9b508dfb32b1adfe3f19d0ddc1fcfa0766840eba99fb8"],
+     "8c3f66ef8c9bea4e571bbe4b4f829da3befc35d446f9df55adabd1857e07fa55"],
     :added-fields #{},
     :removed-fields #{}},
-   "CloudSessionOptions"
-   {:fingerprint
-    [1
-     "c522c0aef8fd4d1b056c3c00743aba37ab783d78fd2aaf762628ec4f6e888883"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CloudSessionRepository"
-   {:fingerprint
-    [3
-     "25f76277fcd3cb18cefb89f99375ece5ea669d36be3c3633fa73e37bb8086a04"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CommandContext"
-   {:fingerprint
-    [4
-     "2abc8272a50c6157bd2817bc82efb303ee6df3457bdce0566386522186473438"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CommandDefinition"
-   {:fingerprint
-    [3
-     "178ed0dd5814eb48429287bc7c7ad0a94792f6e16876e299ac60d9fb8ef1739b"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CopilotClientInfo"
-   {:fingerprint
-    [4
-     "ce40539ce9776e3de53751819314cf2bf5e987316f3fc83af517cf3c243c5ae8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CopilotClientOptions"
-   {:fingerprint
-    [21
-     "38ffdda8bb859050724c5f36cc54bd41589fc37c3c82091d68a5c0e5a0b051ff"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CopilotExpAssignmentResponse"
-   {:fingerprint
-    [7
-     "32a158aa6403a21ef986a92b74eebb36bcc10fb3f29623c86f94a096c1acae84"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "CustomAgentConfig"
-   {:fingerprint
-    [10
-     "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "DefaultAgentConfig"
-   {:fingerprint
-    [1
-     "1efea93dfd1b1564e5c9b8740f213fed3a1cb7de0887b5ca35d1f938b4f735e4"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationContext"
+   "TelemetryConfig"
    {:fingerprint
     [6
-     "ce438df7d53625351163bfb8776dc9fa4391717793e32832c3dbc36cca196e1c"],
+     "114b96645c30a8ad8fab2d8ffd20dba794ec9d87b56798c027cf03085251e25e"],
     :added-fields #{},
     :removed-fields #{}},
-   "ElicitationParams"
+   "ToolInvocation"
+   {:fingerprint
+    [8
+     "8cb44108bb64c804e982c98dc593c89a5d3182cad1284be4c0484c91ea5e5a2c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserInputResponse"
    {:fingerprint
     [2
-     "3bcc3ed4d42dcee9ab2a63453df6a446d5aea15f1bb74a3edf0d86e4919daddd"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationResult"
-   {:fingerprint
-    [2
-     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ElicitationSchema"
-   {:fingerprint
-    [3
-     "0f09ec622fa8c08dc47ee6e5e82db350dbecc15e1608a643fae4411e25e6e569"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ErrorOccurredHookInput"
-   {:fingerprint
-    [3
-     "45d8d02d4ceec04589622b0418c51ed0729163f16bf5ef05398b5a9669afa855"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ErrorOccurredHookOutput"
-   {:fingerprint
-    [4
-     "a8f1f611cd03328ae20beea1197c85cc017c6d162f78928cc8424fe50f41ff76"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExitPlanModeRequest"
-   {:fingerprint
-    [4
-     "b52745cfef581e6e4ee19b6e1a2f59ab6616e24465a04f91fe4ae0a58b134805"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExitPlanModeResult"
-   {:fingerprint
-    [3
-     "1cea17098a8983cdce8919c7780c8df08eeabf4e9bb8f26bbdc9a5b52133e688"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExpConfigEntry"
-   {:fingerprint
-    [2
-     "8f8f41330d03718d5f3af2ba662653777d0a642dc53d0d0e7c33169d19a3a33d"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExtensionInfo"
-   {:fingerprint
-    [2
-     "51a3ec2d9f339d61149bc42f891effe4b27a4f7de36f00071b521594602314ba"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ExtensionJoinOptions"
-   {:fingerprint
-    [1
-     "8c90f960b5234d0a6e65e7b595a4b804c7518b0cd65714b65ee6c1afe41ecf1d"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ForegroundSessionInfo"
-   {:fingerprint
-    [2
-     "8e82715cf957cc02d02fc29ed3465ba9aacb8cfaa3fb2ad4baf099afa08777df"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "GetAuthStatusResponse"
-   {:fingerprint
-    [5
-     "e5e4cbc20448aa346b9bf7faacdf42378e33fb63d9968cb2c18f3824c784ede7"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "GetStatusResponse"
-   {:fingerprint
-    [2
-     "99fab2e37f12088ba36bfd9d2a23df8f4fd397adf3da8aeec1075d75b19f29a9"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "GitHubMcpToolConfig"
-   {:fingerprint
-    [5
-     "2fc2df200a2394b7816eeb819d45910017aa11c07da3ee4525b9dc5f72450ceb"],
+     "7877f9385baa344cd428667c490aa4d85a28094d1b37458ff108704288368cb3"],
     :added-fields #{},
     :removed-fields #{}},
    "InProcessRuntimeConnection"
@@ -790,106 +796,34 @@
      "cc4378413170ee5902e492badbb9de427c40d8b8451ee669f79a436a01cdc5cb"],
     :added-fields #{},
     :removed-fields #{}},
-   "LargeToolOutputConfig"
+   "SessionMetadata"
    {:fingerprint
-    [3
-     "bffd26715602f2fafc9e9e5209b876d48666cb8341935886a0e560c5a2d3b0ae"],
+    [6
+     "7327dd694a90533017bb1701a6aab035e1bcd0fb0f84e2015010c474a85dce42"],
     :added-fields #{},
     :removed-fields #{}},
-   "MCPHTTPServerConfig"
+   "ForegroundSessionInfo"
    {:fingerprint
-    [3
-     "e9ecfecab2c125bdeff68f35ea0d02d9cd1fdafde542d4b2b7aea5355c26e21b"],
+    [2
+     "8e82715cf957cc02d02fc29ed3465ba9aacb8cfaa3fb2ad4baf099afa08777df"],
     :added-fields #{},
     :removed-fields #{}},
-   "MCPStdioServerConfig"
+   "PreMcpToolCallHookInput"
    {:fingerprint
     [5
-     "8919766ccef8181491cdaccac2dc6f8201c177579ebb3b70cb35686549374b6e"],
+     "59aa2e6b4e03ca71072576e0d68e89f5d15d22e4a4cf922e562f272fbb8b8055"],
     :added-fields #{},
     :removed-fields #{}},
-   "ManagedSettings"
+   "ExpConfigEntry"
    {:fingerprint
-    [1
-     "be8765b8a6a278b6f98d4e6a6a75aa71ac31661c434fe47eac56a9a2ff13decb"],
+    [2
+     "8f8f41330d03718d5f3af2ba662653777d0a642dc53d0d0e7c33169d19a3a33d"],
     :added-fields #{},
     :removed-fields #{}},
-   "ManagedSettingsPermissions"
+   "ToolCallRequestPayload"
    {:fingerprint
     [4
-     "48d1b198a804157c8d11c51fa5a6fdb0b009f07ee8edd2e43cdffb4798975d51"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthRequest"
-   {:fingerprint
-    [7
-     "1ee39eb587296975dbb1e50bdaf57e6aa2dd416ffccf808fd83a17f01ed70139"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthStaticClientConfig"
-   {:fingerprint
-    [5
-     "a19ab9137f33746e02c86b686afb0a10ddfbcaec81b9a3fa193bbf3a04f2fcb8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthToken"
-   {:fingerprint
-    [3
-     "16c82cc163d91adb3371838d68fb9c79d04379c92e69968663351dba662a554c"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "McpAuthWwwAuthenticateParams"
-   {:fingerprint
-    [3
-     "8c3f66ef8c9bea4e571bbe4b4f829da3befc35d446f9df55adabd1857e07fa55"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "MemoryConfiguration"
-   {:fingerprint
-    [1
-     "e056a35db086947e2f5969d747f0a7517bff00c7ffff1f9e7b47b72bfac9d948"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "MessageOptions"
-   {:fingerprint
-    [8
-     "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelBilling"
-   {:fingerprint
-    [2
-     "fddd7875cc476172b4e39ddddd035de33f231298ea757ed6c50ab261aaa87ad2"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelCapabilities"
-   {:fingerprint
-    [2
-     "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelInfo"
-   {:fingerprint
-    [7
-     "0253b7f00acd12a6a4fa8db2811a4db772c782428b493a5a549d7a86202b9b28"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ModelPolicy"
-   {:fingerprint
-    [2
-     "49da08af7225842b41693c988a0ca8d14361528ef625c81d9781f0b926f3bab6"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "NamedProviderConfig"
-   {:fingerprint
-    [9
-     "10dd63ca62e4c945d1d6f1fe4d71c79ebd58fcb6bd71cc1958408876dd23e279"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ParentProcessRuntimeConnection"
-   {:fingerprint
-    [1
-     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+     "63dd509594d1480e379ff124a653f2b12f0230873c9023a2461f52da67f52022"],
     :added-fields #{},
     :removed-fields #{}},
    "PostToolUseFailureHookInput"
@@ -898,28 +832,148 @@
      "8b74ccaa661e5b3c9ac645b070f15911379b8ce43282b30a536e88ecbe4eb833"],
     :added-fields #{},
     :removed-fields #{}},
+   "Tool"
+   {:fingerprint
+    [9
+     "0e2ef32e0f5098f470ca44961f56f61445b0fbceabb679e7aaf0e86e66e07bb7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageReplaceConfig"
+   {:fingerprint
+    [2
+     "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionForegroundEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfig"
+   {:fingerprint
+    [3
+     "54e55949b3d0df86b5afaa2f70e255c33aec4eb46bed509a8569f99b2d8dbd83"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionFsConfig"
+   {:fingerprint
+    [4
+     "a0138a4a7b603c87d6370093fdc31ca7eabd02857bb4c5ca99e07f391bb93886"],
+    :added-fields #{},
+    :removed-fields #{}},
    "PostToolUseFailureHookOutput"
    {:fingerprint
     [1
      "d86d56aaf18b868563d279485728ef9e6ffbc4a1596c7c321068e0b1be0a9033"],
     :added-fields #{},
     :removed-fields #{}},
-   "PostToolUseHookInput"
+   "SessionStartHookInput"
    {:fingerprint
-    [3
-     "1a2381673cedc79fe58f9868a4b2b5ae605b3cffe1609cac26e7d94f20d848e0"],
+    [2
+     "ff899a5646f4978b73153825aac0ad750ae6f2fc79ca6afb45dbbaf7b3efbcbe"],
     :added-fields #{},
     :removed-fields #{}},
-   "PostToolUseHookOutput"
+   "ToolCallResponsePayload"
    {:fingerprint
-    [3
-     "77c75bf1cbef77d53d374a50c9d082c438685b8534bfefe588bbc229af19e442"],
+    [1
+     "5656fafa00d4f294bcb606cf4f7d4fa877390e46f583e8b3c8744ace104a31d1"],
     :added-fields #{},
     :removed-fields #{}},
-   "PreMcpToolCallHookInput"
+   "ZodSchema"
+   {:fingerprint
+    [1
+     "bccaec1f339f99936b4be317527ab8a2b033f1d913b1a0e75c6640f34af8091c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelCapabilities"
+   {:fingerprint
+    [2
+     "794f1c0f9f11514b25ddd4d73751a137681426b3f0bda6d525ce257f41ea22d8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelPolicy"
+   {:fingerprint
+    [2
+     "49da08af7225842b41693c988a0ca8d14361528ef625c81d9781f0b926f3bab6"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SystemMessageCustomizeConfig"
+   {:fingerprint
+    [3
+     "9e4b567ba896951e054fc5d0cb57219b2b58248f8a208c78ae3a2bf677182bcb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandDefinition"
+   {:fingerprint
+    [3
+     "178ed0dd5814eb48429287bc7c7ad0a94792f6e16876e299ac60d9fb8ef1739b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CommandContext"
+   {:fingerprint
+    [4
+     "2abc8272a50c6157bd2817bc82efb303ee6df3457bdce0566386522186473438"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MCPStdioServerConfig"
    {:fingerprint
     [5
-     "59aa2e6b4e03ca71072576e0d68e89f5d15d22e4a4cf922e562f272fbb8b8055"],
+     "8919766ccef8181491cdaccac2dc6f8201c177579ebb3b70cb35686549374b6e"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetStatusResponse"
+   {:fingerprint
+    [2
+     "99fab2e37f12088ba36bfd9d2a23df8f4fd397adf3da8aeec1075d75b19f29a9"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionStartHookOutput"
+   {:fingerprint
+    [2
+     "b4d308d2be27710567c3faae7e832c88212079ec8b3585b0f07f5c0a5e23e751"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookOutput"
+   {:fingerprint
+    [4
+     "a8f1f611cd03328ae20beea1197c85cc017c6d162f78928cc8424fe50f41ff76"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionEndHookOutput"
+   {:fingerprint
+    [3
+     "3c4f59c4d00ac8d06b46bec2738a4e0a8683c73f22fa4ae6e522cb8e266d3cda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionContext"
+   {:fingerprint
+    [4
+     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientOptions"
+   {:fingerprint
+    [21
+     "38ffdda8bb859050724c5f36cc54bd41589fc37c3c82091d68a5c0e5a0b051ff"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CloudSessionOptions"
+   {:fingerprint
+    [1
+     "c522c0aef8fd4d1b056c3c00743aba37ab783d78fd2aaf762628ec4f6e888883"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderModelConfig"
+   {:fingerprint
+    [9
+     "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationContext"
+   {:fingerprint
+    [6
+     "ce438df7d53625351163bfb8776dc9fa4391717793e32832c3dbc36cca196e1c"],
     :added-fields #{},
     :removed-fields #{}},
    "PreMcpToolCallHookOutput"
@@ -934,166 +988,22 @@
      "8c2ffdf872c77d227d45b274f89408e29f8d582825aa7a0051771c9a7246577c"],
     :added-fields #{},
     :removed-fields #{}},
-   "PreToolUseHookOutput"
-   {:fingerprint
-    [5
-     "b08e7b19e21adaeaf58ec4405ae939f6e8813734f03a69253ecde8bc8e39f703"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ProviderConfig"
-   {:fingerprint
-    [13
-     "bdbdc09988a227b2eb4acb9fa4d9c755c401ead06ef4a6635cba4278b6d8cfda"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ProviderModelConfig"
-   {:fingerprint
-    [9
-     "307dc8531d8b2cd938ffcc55c617f0430e2f880c02b7a5be5d009b79539a3cac"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ProviderTokenArgs"
-   {:fingerprint
-    [2
-     "09133ff6dd8edbaf925da4f4f993b3f73a62d9743c18bf34b96cbdcb22c9bcef"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ResponseSchema"
-   {:fingerprint
-    [0
-     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ResumeSessionConfig"
-   {:fingerprint
-    [4
-     "1926530d9d586b5aeae926348b9be4bec606e39469bf1c0fbcb595d486cdc7fa"],
-    :added-fields #{"allowTranscriptRecovery"},
-    :removed-fields #{}},
-   "SectionOverride"
-   {:fingerprint
-    [2
-     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionBackgroundEvent"
-   {:fingerprint
-    [2
-     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionCapabilities"
-   {:fingerprint
-    [1
-     "09cc1d0a4273c286401cd38c9bf6735ef0ab29f085dfb71ca7c408db4a5ed728"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionConfig"
-   {:fingerprint
-    [3
-     "54e55949b3d0df86b5afaa2f70e255c33aec4eb46bed509a8569f99b2d8dbd83"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionConfigBase"
-   {:fingerprint
-    [82
-     "3b66692049bbc130d73ab41855be4abda7f03de4b1f1290787b8d73e3c021dab"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionContext"
-   {:fingerprint
-    [4
-     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionCreatedEvent"
-   {:fingerprint
-    [2
-     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionDeletedEvent"
-   {:fingerprint
-    [2
-     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionEndHookInput"
-   {:fingerprint
-    [3
-     "db9e60c11949d099daddfb1e1fdf317c629e4bbeb28bdc0dc50c26cb1c989a9a"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionEndHookOutput"
-   {:fingerprint
-    [3
-     "3c4f59c4d00ac8d06b46bec2738a4e0a8683c73f22fa4ae6e522cb8e266d3cda"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionForegroundEvent"
-   {:fingerprint
-    [2
-     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionFsConfig"
-   {:fingerprint
-    [4
-     "a0138a4a7b603c87d6370093fdc31ca7eabd02857bb4c5ca99e07f391bb93886"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionHooks"
-   {:fingerprint
-    [10
-     "23ebb885ecf68b57128ddf76c3c610c874405481b9ace33e16291e84d4e70e37"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionLifecycleEventMetadata"
-   {:fingerprint
-    [3
-     "7a583d77773d2303de442ac85894ca460c6f708aef0f55ce4547fd053c4a2031"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionListFilter"
-   {:fingerprint
-    [4
-     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionMetadata"
-   {:fingerprint
-    [6
-     "7327dd694a90533017bb1701a6aab035e1bcd0fb0f84e2015010c474a85dce42"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionStartHookInput"
-   {:fingerprint
-    [2
-     "ff899a5646f4978b73153825aac0ad750ae6f2fc79ca6afb45dbbaf7b3efbcbe"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionStartHookOutput"
-   {:fingerprint
-    [2
-     "b4d308d2be27710567c3faae7e832c88212079ec8b3585b0f07f5c0a5e23e751"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "SessionUiApi"
-   {:fingerprint
-    [0
-     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
-    :added-fields #{},
-    :removed-fields #{}},
    "SessionUpdatedEvent"
    {:fingerprint
     [2
      "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
     :added-fields #{},
     :removed-fields #{}},
-   "StdioRuntimeConnection"
+   "AutoModeSwitchRequest"
    {:fingerprint
-    [1
-     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    [2
+     "e4782af4f0ac6515d1ee6ee94cd5d92a1bff4cb0ecfe068ec26da58de0e87e0c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MessageOptions"
+   {:fingerprint
+    [8
+     "24fc62563528b0e0dbadd7ea1adadea59fb0002fa4489ee08266a484f7b37e3f"],
     :added-fields #{},
     :removed-fields #{}},
    "SystemMessageAppendConfig"
@@ -1102,64 +1012,118 @@
      "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
     :added-fields #{},
     :removed-fields #{}},
-   "SystemMessageCustomizeConfig"
+   "CloudSessionRepository"
    {:fingerprint
     [3
-     "9e4b567ba896951e054fc5d0cb57219b2b58248f8a208c78ae3a2bf677182bcb"],
+     "25f76277fcd3cb18cefb89f99375ece5ea669d36be3c3633fa73e37bb8086a04"],
     :added-fields #{},
     :removed-fields #{}},
-   "SystemMessageReplaceConfig"
-   {:fingerprint
-    [2
-     "b2777db0a9854220c90cb9ddf2869a4f7e9cd2ca420cbc5f43d3e00f9f83580a"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "TcpRuntimeConnection"
-   {:fingerprint
-    [3
-     "4965411ad2991bcdf6b942994f6b640f811f29e2b4a689e027a5098d3ef9515b"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "TelemetryConfig"
-   {:fingerprint
-    [6
-     "114b96645c30a8ad8fab2d8ffd20dba794ec9d87b56798c027cf03085251e25e"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "Tool"
-   {:fingerprint
-    [9
-     "0e2ef32e0f5098f470ca44961f56f61445b0fbceabb679e7aaf0e86e66e07bb7"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ToolCallRequestPayload"
-   {:fingerprint
-    [4
-     "63dd509594d1480e379ff124a653f2b12f0230873c9023a2461f52da67f52022"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "ToolCallResponsePayload"
+   "UserPromptTransformedHookOutput"
    {:fingerprint
     [1
-     "5656fafa00d4f294bcb606cf4f7d4fa877390e46f583e8b3c8744ace104a31d1"],
+     "8edd29a2e5f4508b58ba78df597ced68c989974cb74e315bccdf55774b121c68"],
     :added-fields #{},
     :removed-fields #{}},
-   "ToolInvocation"
+   "SessionUiApi"
    {:fingerprint
-    [8
-     "8cb44108bb64c804e982c98dc593c89a5d3182cad1284be4c0484c91ea5e5a2c"],
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
     :added-fields #{},
     :removed-fields #{}},
-   "ToolSearchConfig"
+   "SessionLifecycleEventMetadata"
+   {:fingerprint
+    [3
+     "7a583d77773d2303de442ac85894ca460c6f708aef0f55ce4547fd053c4a2031"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionBackgroundEvent"
    {:fingerprint
     [2
-     "1f7f717c833ebbdf7e8b7cff148e82bba8c7a79a6717fd51ae20c73d6b1281a1"],
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthToken"
+   {:fingerprint
+    [3
+     "16c82cc163d91adb3371838d68fb9c79d04379c92e69968663351dba662a554c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeRequest"
+   {:fingerprint
+    [4
+     "b52745cfef581e6e4ee19b6e1a2f59ab6616e24465a04f91fe4ae0a58b134805"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GitHubMcpToolConfig"
+   {:fingerprint
+    [5
+     "2fc2df200a2394b7816eeb819d45910017aa11c07da3ee4525b9dc5f72450ceb"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ResponseSchema"
+   {:fingerprint
+    [0
+     "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookInput"
+   {:fingerprint
+    [1
+     "2934d46a57407eb0d71f0ffd9dc3773905a1150aa2fd2ecf8947cb29b4218028"],
     :added-fields #{},
     :removed-fields #{}},
    "TraceContext"
    {:fingerprint
     [2
      "1a894915a2a0e05212477c41b5f14bda5827be9297a17f04a65b32c8c98e0e7c"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationSchema"
+   {:fingerprint
+    [3
+     "0f09ec622fa8c08dc47ee6e5e82db350dbecc15e1608a643fae4411e25e6e569"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionDeletedEvent"
+   {:fingerprint
+    [2
+     "370248856d39df9c8ed8e8c10eb2df87ec3f7395c94eed6d3e07d8b0b46bedd8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ParentProcessRuntimeConnection"
+   {:fingerprint
+    [1
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UiInputOptions"
+   {:fingerprint
+    [6
+     "98b9a309478887ef203ea2c72314757ccf59078508cc3d927817b44f088bcc0f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "NamedProviderConfig"
+   {:fingerprint
+    [9
+     "10dd63ca62e4c945d1d6f1fe4d71c79ebd58fcb6bd71cc1958408876dd23e279"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookOutput"
+   {:fingerprint
+    [3
+     "77c75bf1cbef77d53d374a50c9d082c438685b8534bfefe588bbc229af19e442"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationParams"
+   {:fingerprint
+    [2
+     "3bcc3ed4d42dcee9ab2a63453df6a446d5aea15f1bb74a3edf0d86e4919daddd"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UserPromptSubmittedHookOutput"
+   {:fingerprint
+    [3
+     "9ff8f9ed4aad6be83387e14813c9d02c9b2dd8c151d9f470418bfc6d16a61954"],
     :added-fields #{},
     :removed-fields #{}},
    "TranscriptRecovery"
@@ -1169,16 +1133,22 @@
     :added-fields
     #{"sessionStartMoved" "plannedBackupPath" "invalidLineNumbers"},
     :removed-fields #{}},
-   "UiInputOptions"
-   {:fingerprint
-    [6
-     "98b9a309478887ef203ea2c72314757ccf59078508cc3d927817b44f088bcc0f"],
-    :added-fields #{},
-    :removed-fields #{}},
-   "UriRuntimeConnection"
+   "TcpRuntimeConnection"
    {:fingerprint
     [3
-     "48a57da794210d9851b003d4f109ab0b4b022cefd2a67be7d9b3ba8e85b17d21"],
+     "4965411ad2991bcdf6b942994f6b640f811f29e2b4a689e027a5098d3ef9515b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "MemoryConfiguration"
+   {:fingerprint
+    [1
+     "e056a35db086947e2f5969d747f0a7517bff00c7ffff1f9e7b47b72bfac9d948"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "PostToolUseHookInput"
+   {:fingerprint
+    [3
+     "1a2381673cedc79fe58f9868a4b2b5ae605b3cffe1609cac26e7d94f20d848e0"],
     :added-fields #{},
     :removed-fields #{}},
    "UserInputRequest"
@@ -1187,22 +1157,58 @@
      "e7a56785d1ebde5b8fb87469ab88eb812503c4bd105e6c7b69340da5fe910ca7"],
     :added-fields #{},
     :removed-fields #{}},
-   "UserInputResponse"
+   "CopilotExpAssignmentResponse"
+   {:fingerprint
+    [7
+     "32a158aa6403a21ef986a92b74eebb36bcc10fb3f29623c86f94a096c1acae84"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettingsPermissions"
+   {:fingerprint
+    [4
+     "48d1b198a804157c8d11c51fa5a6fdb0b009f07ee8edd2e43cdffb4798975d51"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CanvasProviderIdentity"
    {:fingerprint
     [2
-     "7877f9385baa344cd428667c490aa4d85a28094d1b37458ff108704288368cb3"],
+     "d34f65e4568f8b250fa90e3b729aceda0e28427ed71e97daf572fd6087b41651"],
     :added-fields #{},
     :removed-fields #{}},
-   "UserPromptSubmittedHookInput"
+   "DefaultAgentConfig"
    {:fingerprint
     [1
-     "2934d46a57407eb0d71f0ffd9dc3773905a1150aa2fd2ecf8947cb29b4218028"],
+     "1efea93dfd1b1564e5c9b8740f213fed3a1cb7de0887b5ca35d1f938b4f735e4"],
     :added-fields #{},
     :removed-fields #{}},
-   "UserPromptSubmittedHookOutput"
+   "PreToolUseHookOutput"
+   {:fingerprint
+    [5
+     "b08e7b19e21adaeaf58ec4405ae939f6e8813734f03a69253ecde8bc8e39f703"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ErrorOccurredHookInput"
    {:fingerprint
     [3
-     "9ff8f9ed4aad6be83387e14813c9d02c9b2dd8c151d9f470418bfc6d16a61954"],
+     "45d8d02d4ceec04589622b0418c51ed0729163f16bf5ef05398b5a9669afa855"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelInfo"
+   {:fingerprint
+    [7
+     "0253b7f00acd12a6a4fa8db2811a4db772c782428b493a5a549d7a86202b9b28"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SectionOverride"
+   {:fingerprint
+    [2
+     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ManagedSettings"
+   {:fingerprint
+    [1
+     "be8765b8a6a278b6f98d4e6a6a75aa71ac31661c434fe47eac56a9a2ff13decb"],
     :added-fields #{},
     :removed-fields #{}},
    "UserPromptTransformedHookInput"
@@ -1211,16 +1217,154 @@
      "94061bbe65b6fe2d7b95af74cc9684f33a0db1cc95f2f132fcdd2f7958a36d6c"],
     :added-fields #{},
     :removed-fields #{}},
-   "UserPromptTransformedHookOutput"
+   "ExtensionJoinOptions"
    {:fingerprint
     [1
-     "8edd29a2e5f4508b58ba78df597ced68c989974cb74e315bccdf55774b121c68"],
+     "8c90f960b5234d0a6e65e7b595a4b804c7518b0cd65714b65ee6c1afe41ecf1d"],
     :added-fields #{},
     :removed-fields #{}},
-   "ZodSchema"
+   "MCPHTTPServerConfig"
+   {:fingerprint
+    [3
+     "e9ecfecab2c125bdeff68f35ea0d02d9cd1fdafde542d4b2b7aea5355c26e21b"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionConfigBase"
+   {:fingerprint
+    [82
+     "3b66692049bbc130d73ab41855be4abda7f03de4b1f1290787b8d73e3c021dab"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "BaseHookInput"
+   {:fingerprint
+    [3
+     "4dd1b38a04fcb164a3cfabb076c1d20be6478cae2b5121395c64c6cd3ed71e4f"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "StdioRuntimeConnection"
    {:fingerprint
     [1
-     "bccaec1f339f99936b4be317527ab8a2b033f1d913b1a0e75c6640f34af8091c"],
+     "e1ae364ec24dc399e1aac256dfc87d78c5e4a72f9f0da0d8f5342ced42f74358"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "UriRuntimeConnection"
+   {:fingerprint
+    [3
+     "48a57da794210d9851b003d4f109ab0b4b022cefd2a67be7d9b3ba8e85b17d21"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CustomAgentConfig"
+   {:fingerprint
+    [10
+     "bd7c5af3f0b7750553bab4c08c1fa9f31154d5cee7a55dd619b1580c6e3c1a5d"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ToolSearchConfig"
+   {:fingerprint
+    [2
+     "1f7f717c833ebbdf7e8b7cff148e82bba8c7a79a6717fd51ae20c73d6b1281a1"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionHooks"
+   {:fingerprint
+    [10
+     "23ebb885ecf68b57128ddf76c3c610c874405481b9ace33e16291e84d4e70e37"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExtensionInfo"
+   {:fingerprint
+    [2
+     "51a3ec2d9f339d61149bc42f891effe4b27a4f7de36f00071b521594602314ba"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ModelBilling"
+   {:fingerprint
+    [2
+     "fddd7875cc476172b4e39ddddd035de33f231298ea757ed6c50ab261aaa87ad2"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "CopilotClientInfo"
+   {:fingerprint
+    [4
+     "ce40539ce9776e3de53751819314cf2bf5e987316f3fc83af517cf3c243c5ae8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AgentStopHookInput"
+   {:fingerprint
+    [3
+     "d7aae98f0cc52eeb3d873d3a93e9d6e86cbf481b18ed057cc5c088401a197c56"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "LargeToolOutputConfig"
+   {:fingerprint
+    [3
+     "bffd26715602f2fafc9e9e5209b876d48666cb8341935886a0e560c5a2d3b0ae"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "GetAuthStatusResponse"
+   {:fingerprint
+    [5
+     "e5e4cbc20448aa346b9bf7faacdf42378e33fb63d9968cb2c18f3824c784ede7"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AgentStopHookOutput"
+   {:fingerprint
+    [2
+     "a8d6282ad71216f6b53ec97f4bff536e7d95553b0a202f94a088c8997b480a2a"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionCapabilities"
+   {:fingerprint
+    [1
+     "09cc1d0a4273c286401cd38c9bf6735ef0ab29f085dfb71ca7c408db4a5ed728"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ElicitationResult"
+   {:fingerprint
+    [2
+     "cdc1fc52688506477d4ea75db158867d68f991b6ed827895c103a7ddd3828372"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthRequest"
+   {:fingerprint
+    [7
+     "1ee39eb587296975dbb1e50bdaf57e6aa2dd416ffccf808fd83a17f01ed70139"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ChildProcessRuntimeConnection"
+   {:fingerprint
+    [3
+     "10f4b910eff296cd95d9b508dfb32b1adfe3f19d0ddc1fcfa0766840eba99fb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ProviderConfig"
+   {:fingerprint
+    [13
+     "bdbdc09988a227b2eb4acb9fa4d9c755c401ead06ef4a6635cba4278b6d8cfda"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "AttributedPermissionResult"
+   {:fingerprint
+    [3
+     "3e666388906f2c4d7f66c719a39fc4cc4b4fbbe6b9e4eacebc4fe8afa5ca1f42"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "ExitPlanModeResult"
+   {:fingerprint
+    [3
+     "1cea17098a8983cdce8919c7780c8df08eeabf4e9bb8f26bbdc9a5b52133e688"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "McpAuthStaticClientConfig"
+   {:fingerprint
+    [5
+     "a19ab9137f33746e02c86b686afb0a10ddfbcaec81b9a3fa193bbf3a04f2fcb8"],
+    :added-fields #{},
+    :removed-fields #{}},
+   "SessionListFilter"
+   {:fingerprint
+    [4
+     "6e825594d69bdb2b4cf6a2cf02f8aa5449ed1b06fc130487a6ed762914e6673f"],
     :added-fields #{},
     :removed-fields #{}}},
   :classes
@@ -1372,7 +1516,9 @@
   {:resource "resources/stable_upstream_delta_a2b2c18.edn",
    :sha256
    "a7c2d1d9e290151ae0f65188e8a9095e560a648d70f50cf9b0fddc36181dba6b"},
-  :local-artifact-seal {:status :pending}},
+  :local-artifact-seal
+  {:status :sealed,
+   :commit "0e37a4df42747ace354d3b82d11498531db97ce4"}},
  :changed-paths
  {:rename-policy :no-renames,
   :hash-format :newline-joined-without-trailing-newline,
