@@ -221,16 +221,16 @@ jobs:
           set -euo pipefail
           PR_URL="${{ steps.release-pr.outputs.pr_url }}"
           echo "Waiting for CI + auto-merge on $PR_URL"
-          for i in $(seq 1 40); do
+          for i in $(seq 1 80); do
             STATE=$(gh pr view "$PR_URL" --json state -q .state)
             case "$STATE" in
               MERGED) echo "PR merged!"; exit 0 ;;
               CLOSED) echo "::error::PR was closed without merging."; exit 1 ;;
             esac
-            echo "  attempt $i/40 — state=$STATE"
+            echo "  attempt $i/80 — state=$STATE"
             sleep 15
           done
-          echo "::error::Timed out (10 min) waiting for PR to merge."
+          echo "::error::Timed out (20 min) waiting for PR to merge."
           exit 1
 
       - name: Checkout merged main
