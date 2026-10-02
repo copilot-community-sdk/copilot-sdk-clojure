@@ -28,6 +28,7 @@ Version strategies (pick one, default: none):
 
 Options:
   --snapshot                Append -SNAPSHOT (for --sync-upstream or --bump)
+  --copilot-attribution     Attribute an assistant-dispatched release to Copilot
   --dry-run                 Show the gh command without executing
   -h, --help                Show this help
 EOF
@@ -38,6 +39,7 @@ strategy="none"
 upstream_version=""
 explicit_version=""
 snapshot="false"
+copilot_attribution="false"
 dry_run=false
 
 while [[ $# -gt 0 ]]; do
@@ -60,6 +62,10 @@ while [[ $# -gt 0 ]]; do
       snapshot="true"
       shift
       ;;
+    --copilot-attribution)
+      copilot_attribution="true"
+      shift
+      ;;
     --dry-run)
       dry_run=true
       shift
@@ -79,6 +85,7 @@ cmd=(gh workflow run release.yml
   --repo "$REPO"
   -f "version_strategy=$strategy"
   -f "snapshot=$snapshot"
+  -f "copilot_attribution=$copilot_attribution"
 )
 
 [[ -n "$upstream_version" ]] && cmd+=(-f "upstream_version=$upstream_version")

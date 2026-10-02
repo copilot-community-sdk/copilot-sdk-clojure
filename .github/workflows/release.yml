@@ -29,6 +29,11 @@ on:
         type: boolean
         required: false
         default: false
+      copilot_attribution:
+        description: Attribute an assistant-dispatched release to Copilot on behalf of the dispatch actor.
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: write
@@ -44,6 +49,9 @@ jobs:
     timeout-minutes: 30
     env:
       GH_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      COPILOT_ATTRIBUTION: ${{ inputs.copilot_attribution }}
+      COPILOT_ATTRIBUTION_HEADER: >-
+        <sub><em><img src="https://raw.githubusercontent.com/tclem/dotfiles/main/copilot/assets/copilot-signature.svg" alt="" align="absmiddle" style="display: inline;"> Generated via Copilot <a href="https://adaptivepatchwork.com/ai-attribution">on behalf</a> of @${{ github.actor }}</em></sub>
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-java@v5
@@ -167,6 +175,9 @@ jobs:
       - name: Stamp changelog
         run: clojure -T:build stamp-changelog
 
+      - name: Regenerate API documentation
+        run: bb docs
+
       # --- PR flow: branch protection requires changes go through a PR ---
 
       - name: Create release PR
@@ -175,7 +186,8 @@ jobs:
           GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           set -euo pipefail
-          if git diff --quiet; then
+          git add build.clj README.md doc/getting-started.md CHANGELOG.md doc/api
+          if git diff --cached --quiet; then
             echo "No changes to commit — skipping PR."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -185,17 +197,22 @@ jobs:
           # fresh branch instead of colliding with the ref a prior attempt pushed.
           BRANCH="release/v${VERSION}-run${GITHUB_RUN_ID}-attempt${GITHUB_RUN_ATTEMPT}"
           git checkout -b "$BRANCH"
-          git add build.clj README.md doc/getting-started.md CHANGELOG.md
-          git commit -m "chore: release v${VERSION}"
+          PR_BODY="Automated release PR for v${VERSION}. Created by the Release workflow (run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT})."
+          COMMIT_ARGS=(-m "chore: release v${VERSION}")
+          if [[ "$COPILOT_ATTRIBUTION" == "true" ]]; then
+            PR_BODY="${COPILOT_ATTRIBUTION_HEADER}"$'\n\n'"${PR_BODY}"
+            COMMIT_ARGS+=(-m "Co-authored-by: Copilot App <223556219+Copilot@users.noreply.github.com>")
+          fi
+          git commit "${COMMIT_ARGS[@]}"
           git push origin "$BRANCH"
           PR_URL=$(gh pr create \
             --title "chore: release v${VERSION}" \
-            --body "Automated release PR for v${VERSION}. Created by the Release workflow (run ${GITHUB_RUN_ID}, attempt ${GITHUB_RUN_ATTEMPT})." \
+            --body "$PR_BODY" \
             --base main \
             --head "$BRANCH")
           echo "pr_url=$PR_URL" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          gh pr merge --auto --squash --delete-branch "$PR_URL"
+          gh pr merge --auto --merge --delete-branch "$PR_URL"
           echo "Auto-merge enabled for $PR_URL"
 
       - name: Wait for release PR to merge
@@ -316,6 +333,9 @@ jobs:
             --title "$TAG"
             --generate-notes
           )
+          if [[ "$COPILOT_ATTRIBUTION" == "true" ]]; then
+            ARGS+=(--notes "${COPILOT_ATTRIBUTION_HEADER}"$'\n\n')
+          fi
           # Attach artifacts
           ARGS+=("${{ steps.artifacts.outputs.jar }}")
           if [[ -n "${{ steps.artifacts.outputs.bundle }}" ]]; then
