@@ -13,6 +13,8 @@ All notable changes to this project will be documented in this file. This change
 - Release preparation regenerates and stages API documentation alongside
   canonical version, installation-SHA, and changelog edits before checking
   for changes. Release PRs auto-merge with a merge commit instead of squashing.
+- Extend the release PR merge wait from 10 to 20 minutes so CI can finish
+  before the release workflow times out.
 
 ### Added (post-v1.0.16 sync)
 - Added resume/join `:allow-transcript-recovery?` and the `transcript-recovery`
