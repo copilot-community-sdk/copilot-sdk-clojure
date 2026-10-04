@@ -310,6 +310,35 @@
         "Failed to remove instruction-cache fixture"
         (delete-tree-failures :instruction-cache-files root))))))
 
+(deftest ^:e2e test-e2e-byok-provider-identity
+  (when-e2e
+   (call-with-capturing-provider
+    (fn [base-url requests]
+      (let [session (sdk/create-session
+                     *e2e-client*
+                     {:available-tools []
+                      :streaming? false
+                      :model "instruction-cache-fixture"
+                      :provider {:provider-type :openai
+                                 :model-provider :lm-studio
+                                 :base-url base-url
+                                 :wire-api :completions}})
+            events (sdk/subscribe-events session)]
+        (teardown/call-with-cleanup
+         (fn []
+           (is (= (get-in (sdk/send-and-wait! session {:prompt "Say OK."} 30000)
+                          [:data :content])
+                  "OK"))
+           (is (= (count @requests) 1))
+           (let [usage (:data (await-event-type! events :copilot/assistant.usage 5000))]
+             (is (= (select-keys usage [:model-provider :byok-kind])
+                    {:model-provider "lm_studio" :byok-kind "local_user"}))))
+         #(do
+            (sdk/unsubscribe-events! session events)
+            (throw-cleanup-failures!
+             "Failed to disconnect provider-identity session"
+             (disconnect-session-failures :provider-identity-session session)))))))))
+
 (deftest ^:e2e test-e2e-simple-conversation
   (when-e2e
    (testing "Simple conversation with real CLI"

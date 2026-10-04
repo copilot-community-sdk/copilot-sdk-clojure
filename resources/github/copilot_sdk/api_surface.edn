@@ -493,6 +493,8 @@
     :github.copilot-sdk.specs/buffer
     :github.copilot-sdk.specs/buffer-exhaustion-threshold
     :github.copilot-sdk.specs/builtin-plugin-directories
+    :github.copilot-sdk.specs/byok-kind
+    :github.copilot-sdk.specs/byok-model-provider
     :github.copilot-sdk.specs/cache-breakpoint
     :github.copilot-sdk.specs/cache-expires-at
     :github.copilot-sdk.specs/cache-price
@@ -810,6 +812,7 @@
     :github.copilot-sdk.specs/model-picker-category
     :github.copilot-sdk.specs/model-picker-price-category
     :github.copilot-sdk.specs/model-policy
+    :github.copilot-sdk.specs/model-provider
     :github.copilot-sdk.specs/model-selection-source
     :github.copilot-sdk.specs/model-supports
     :github.copilot-sdk.specs/model.call_failure-data

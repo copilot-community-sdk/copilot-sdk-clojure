@@ -3093,7 +3093,7 @@
              m old->new))
 
 (defn- provider->wire
-  "Convert a Clojure ProviderConfig map to its JSON-RPC wire shape.
+  "Convert a Clojure ProviderConfig or NamedProviderConfig to its wire shape.
 
    `util/clj->wire` camelCases keyword keys, but several SDK property names are
    chosen for Clojure clarity and differ from the upstream `ProviderConfig` field
@@ -3101,7 +3101,9 @@
    nodejs/src/client.ts). This helper restores the upstream wire names so BYOK
    works for every provider type: `providerType`->`type`, `azureOptions`->`azure`,
    `maxInputTokens`->`maxPromptTokens`, and the nested `azureApiVersion`->`apiVersion`.
-   Mirrors the `ProviderConfig` shape in nodejs/src/types.ts.
+   The closed `:model-provider` keyword uses underscore-separated wire values.
+   Named providers share these conversions; their spec excludes transport and
+   inline model overrides.
 
    `:bearer-token-provider` (upstream PR #1748; public name settled in #1796) is
    an on-demand token callback, not wire data: the fn is stripped and replaced
@@ -3115,27 +3117,8 @@
                                    :azureOptions :azure
                                    :maxInputTokens :maxPromptTokens})]
     (cond-> wire
-      (contains? wire :azure)
-      (update :azure rename-keys-present {:azureApiVersion :apiVersion})
-      has-btp (assoc :hasBearerTokenProvider true))))
-
-(defn- named-provider->wire
-  "Convert a Clojure NamedProviderConfig map to its JSON-RPC wire shape
-   (upstream PR #1718). Like `provider->wire` for the shared provider fields
-   (`providerType`->`type`, `azureOptions`->`azure`, nested
-   `azureApiVersion`->`apiVersion`), but a named provider carries no transport
-   or inline model-override fields: `name`, `baseUrl`, `apiKey`, `bearerToken`,
-   `wireApi`, `azure`, and `headers` all camelCase cleanly. Mirrors the
-   `NamedProviderConfig` shape in nodejs/src/types.ts.
-
-   `:bearer-token-provider` (upstream PR #1748) is stripped and replaced with a
-   boolean `:hasBearerTokenProvider` flag, exactly as in `provider->wire`."
-  [np]
-  (let [has-btp (some? (:bearer-token-provider np))
-        wire (rename-keys-present (util/clj->wire (dissoc np :bearer-token-provider))
-                                  {:providerType :type
-                                   :azureOptions :azure})]
-    (cond-> wire
+      (contains? wire :modelProvider)
+      (update :modelProvider #(str/replace (name %) "-" "_"))
       (contains? wire :azure)
       (update :azure rename-keys-present {:azureApiVersion :apiVersion})
       has-btp (assoc :hasBearerTokenProvider true))))
@@ -3769,7 +3752,7 @@
         wire-memory (when-let [m (:memory config)]
                       (util/clj->wire m))
         wire-providers (when-let [ps (:providers config)]
-                         (mapv named-provider->wire ps))
+                         (mapv provider->wire ps))
         wire-models (when-let [ms (:models config)]
                       (mapv provider-model->wire ms))]
     (cond-> {}
@@ -3985,7 +3968,7 @@
         wire-memory (when-let [m (:memory config)]
                       (util/clj->wire m))
         wire-providers (when-let [ps (:providers config)]
-                         (mapv named-provider->wire ps))
+                         (mapv provider->wire ps))
         wire-models (when-let [ms (:models config)]
                       (mapv provider-model->wire ms))
         wire-workflows (when (contains? config :workflows)
@@ -4470,7 +4453,11 @@
    - :available-tools    - List of allowed tool names
    - :excluded-tools     - List of excluded tool names
    - :tool-search        - Tool discovery config {:enabled :defer-threshold}
-   - :provider           - Custom provider config (BYOK)
+   - :provider           - Custom provider config (BYOK). Optional :model-provider
+                           identifies the product for telemetry only:
+                           :openai, :anthropic, :azure-openai, :ollama,
+                           :lm-studio, :foundry-local, or :llama-cpp.
+                           Omission is preserved; nil is invalid.
    - :capi               - Copilot API options {:enable-web-socket-responses boolean
                                                 :auto-tier :efficiency|:balance|:intelligence|:fast}.
                            On resident resume, a supplied different tier requests

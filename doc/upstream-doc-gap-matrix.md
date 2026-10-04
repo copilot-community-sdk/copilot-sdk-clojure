@@ -64,6 +64,12 @@ Connector-account selection and credential-free identity metadata, sessionless
 managed-settings composition/resolution, environment management, and provider
 withdrawal retain those experimental or generated-only boundaries.
 
+Experimental live tool replacement (`setTools`), structured tool-progress
+metadata, and Auto routing explanations do not enlarge the curated stable API.
+Private schema-driven conversion preserves opaque progress keys. MCP prompt
+listing/rendering and host-managed OAuth callback controls remain
+generated-only evidence without new Clojure wrappers.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |
