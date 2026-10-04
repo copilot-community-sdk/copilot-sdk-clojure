@@ -6380,6 +6380,11 @@
                 "$ref": "#/definitions/McpOauthLoginGrantType",
                 "description": "Optional OAuth grant type override for this login. Defaults to the server configuration, or authorization_code when no grant type is specified."
               },
+              "redirectUri": {
+                "type": "string",
+                "format": "uri",
+                "description": "Optional externally visible HTTPS redirect URI for a host-managed callback endpoint. When supplied, the runtime still owns discovery, PKCE, token exchange, persistence, and reconnect, but does not bind a loopback listener or terminate HTTPS. The URI must not contain query parameters or a fragment and must be registered for the selected CIMD, DCR, or static OAuth client."
+              },
               "loginId": {
                 "type": "string",
                 "description": "Required for owned login. Consumes the exact prepareLogin handle once.\nSet forceReauth and display options during preparation, not consumption."
@@ -6394,7 +6399,7 @@
               "serverName"
             ],
             "additionalProperties": false,
-            "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, callback success-page copy, and static OAuth client selection.",
+            "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, callback handling, and static OAuth client selection.",
             "title": "McpOauthLoginRequest",
             "stability": "experimental",
             "x-legacy-parameters": [
@@ -6411,6 +6416,42 @@
           "result": {
             "$ref": "#/definitions/McpOauthLoginResult",
             "description": "OAuth authorization URL the caller should open, or empty when cached tokens already authenticated the server."
+          },
+          "stability": "experimental"
+        },
+        "complete": {
+          "rpcMethod": "session.mcp.oauth.complete",
+          "description": "Completes a runtime-managed MCP OAuth login after the authorization server redirects to a host-managed callback URL.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "authorizationId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Opaque identifier returned by session.mcp.oauth.login for the pending external callback."
+              },
+              "callbackUrl": {
+                "type": "string",
+                "format": "uri",
+                "description": "Full externally visible HTTPS callback URL received by the host, including the authorization response query parameters. Applications behind a reverse proxy must reconstruct the public URL rather than passing an internal proxy URL."
+              }
+            },
+            "required": [
+              "sessionId",
+              "authorizationId",
+              "callbackUrl"
+            ],
+            "additionalProperties": false,
+            "description": "Host-delivered callback for a runtime-managed MCP OAuth login.",
+            "title": "McpOauthCompleteRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "type": "null"
           },
           "stability": "experimental"
         },
@@ -6878,6 +6919,89 @@
           "result": {
             "$ref": "#/definitions/McpResourcesListTemplatesResult",
             "description": "One page of resource templates advertised by the named MCP server."
+          },
+          "stability": "experimental"
+        }
+      },
+      "prompts": {
+        "list": {
+          "rpcMethod": "session.mcp.prompts.list",
+          "description": "Enumerate one page of prompts a connected MCP server exposes (proxies MCP `prompts/list`). Pass `cursor` to continue from a prior result's `nextCursor`.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "Name of the MCP server whose prompts to enumerate"
+              },
+              "cursor": {
+                "type": "string",
+                "description": "Opaque MCP pagination cursor from a prior `nextCursor` value"
+              }
+            },
+            "required": [
+              "sessionId",
+              "serverName"
+            ],
+            "additionalProperties": false,
+            "description": "MCP server whose prompts to enumerate.",
+            "title": "McpPromptsListRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/McpPromptsListResult",
+            "description": "One page of prompts advertised by the named MCP server."
+          },
+          "stability": "experimental"
+        },
+        "get": {
+          "rpcMethod": "session.mcp.prompts.get",
+          "description": "Get a prompt's messages from a connected MCP server (proxies MCP `prompts/get`). Content is preserved as opaque JSON. Does not send messages to the model, execute tools, or fetch referenced resources.",
+          "params": {
+            "type": "object",
+            "properties": {
+              "sessionId": {
+                "type": "string",
+                "description": "Target session identifier"
+              },
+              "serverName": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+                "description": "Name of the MCP server hosting the prompt"
+              },
+              "promptName": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The programmatic name of the prompt"
+              },
+              "arguments": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "String-valued arguments to pass to the prompt"
+              }
+            },
+            "required": [
+              "sessionId",
+              "serverName",
+              "promptName"
+            ],
+            "additionalProperties": false,
+            "description": "MCP server, prompt name, and optional string-valued arguments.",
+            "title": "McpPromptsGetRequest",
+            "stability": "experimental"
+          },
+          "result": {
+            "$ref": "#/definitions/McpPromptsGetResult",
+            "description": "Prompt messages returned by the MCP server without sending them to the model."
           },
           "stability": "experimental"
         }
@@ -10549,7 +10673,7 @@
     "shell": {
       "exec": {
         "rpcMethod": "session.shell.exec",
-        "description": "Starts a shell command and streams output through session notifications. The command runs as the leader of its own process group (POSIX) or in a dedicated job object (Windows), so a forced termination — via \"shell.kill\", the request timeout, or session disposal — signals that whole group/job rather than only the direct child. Two gaps are worth planning for: a command that exits on its own does not trigger that teardown, and on POSIX a descendant that moves itself into a new session or process group (for example via \"setsid\") leaves the signalled group, so either can leave a background process running.",
+        "description": "Starts a shell command, returning an RPC error if it cannot be spawned. The command runs as the leader of its own process group (POSIX) or in a dedicated job object (Windows), so a forced termination — via \"shell.kill\", the request timeout, or session disposal — signals that whole group/job rather than only the direct child. Two gaps are worth planning for: a command that exits on its own does not trigger that teardown, and on POSIX a descendant that moves itself into a new session or process group (for example via \"setsid\") leaves the signalled group, so either can leave a background process running.",
         "params": {
           "type": "object",
           "properties": {
@@ -10577,13 +10701,13 @@
             "command"
           ],
           "additionalProperties": false,
-          "description": "Shell command to run, with optional working directory and timeout in milliseconds.",
+          "description": "Shell command to run, with optional working directory and timeout in milliseconds. Spawn failures return an RPC error.",
           "title": "ShellExecRequest",
           "stability": "experimental"
         },
         "result": {
           "$ref": "#/definitions/ShellExecResult",
-          "description": "Identifier of the spawned process, used to correlate streamed output and exit notifications."
+          "description": "Identifier of the spawned shell process, usable with shell.kill while the process is running."
         },
         "stability": "experimental"
       },
@@ -28754,6 +28878,29 @@
       "additionalProperties": false,
       "description": "Honest terminal cancellation result; persistence or recovery failures remain RPC errors."
     },
+    "McpOauthCompleteRequest": {
+      "type": "object",
+      "properties": {
+        "authorizationId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Opaque identifier returned by session.mcp.oauth.login for the pending external callback."
+        },
+        "callbackUrl": {
+          "type": "string",
+          "format": "uri",
+          "description": "Full externally visible HTTPS callback URL received by the host, including the authorization response query parameters. Applications behind a reverse proxy must reconstruct the public URL rather than passing an internal proxy URL."
+        }
+      },
+      "required": [
+        "authorizationId",
+        "callbackUrl"
+      ],
+      "additionalProperties": false,
+      "description": "Host-delivered callback for a runtime-managed MCP OAuth login.",
+      "title": "McpOauthCompleteRequest",
+      "stability": "experimental"
+    },
     "McpOauthHandlePendingRequest": {
       "type": "object",
       "properties": {
@@ -28840,6 +28987,11 @@
           "$ref": "#/definitions/McpOauthLoginGrantType",
           "description": "Optional OAuth grant type override for this login. Defaults to the server configuration, or authorization_code when no grant type is specified."
         },
+        "redirectUri": {
+          "type": "string",
+          "format": "uri",
+          "description": "Optional externally visible HTTPS redirect URI for a host-managed callback endpoint. When supplied, the runtime still owns discovery, PKCE, token exchange, persistence, and reconnect, but does not bind a loopback listener or terminate HTTPS. The URI must not contain query parameters or a fragment and must be registered for the selected CIMD, DCR, or static OAuth client."
+        },
         "loginId": {
           "type": "string",
           "description": "Required for owned login. Consumes the exact prepareLogin handle once.\nSet forceReauth and display options during preparation, not consumption."
@@ -28853,7 +29005,7 @@
         "serverName"
       ],
       "additionalProperties": false,
-      "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, callback success-page copy, and static OAuth client selection.",
+      "description": "Remote MCP server name and optional overrides controlling reauthentication, OAuth client display name, callback handling, and static OAuth client selection.",
       "title": "McpOauthLoginRequest",
       "stability": "experimental",
       "x-legacy-parameters": [
@@ -28881,7 +29033,11 @@
         "authorizationUrl": {
           "type": "string",
           "format": "uri",
-          "description": "URL the caller should open in a browser to complete OAuth. Omitted when cached tokens were still valid and no browser interaction was needed — the server is already reconnected in that case. When present, the runtime starts the callback listener before returning and continues the flow in the background; completion is signaled via session.mcp_server_status_changed."
+          "description": "URL the caller should open in a browser to complete OAuth. Omitted when cached tokens were still valid and no browser interaction was needed — the server is already reconnected in that case. For the default loopback flow, the runtime starts its listener before returning. With redirectUri, the host receives the callback and completes it through session.mcp.oauth.complete. The runtime continues the flow in the background and signals completion via session.mcp_server_status_changed."
+        },
+        "authorizationId": {
+          "type": "string",
+          "description": "Opaque authorization identifier returned only for a host-managed redirect URI. The runtime also sends it as the OAuth state value, so the callback endpoint can read state and pass it with the full callback URL to session.mcp.oauth.complete."
         }
       },
       "additionalProperties": false,
@@ -30094,6 +30250,307 @@
       "additionalProperties": false,
       "description": "Side-effect-free preparation of one original bound remote MCP choice.",
       "title": "McpPrepareInstallRequest"
+    },
+    "McpPrompt": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The programmatic name of the prompt"
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable display title"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what this prompt provides"
+        },
+        "arguments": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpPromptArgument",
+            "description": "An argument accepted by an MCP prompt."
+          },
+          "description": "Arguments accepted by the prompt"
+        },
+        "icons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpPromptIcon",
+            "description": "An MCP prompt icon with standard size hints and preserved non-standard fields."
+          },
+          "description": "Icons associated with this prompt"
+        },
+        "_meta": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Prompt-level metadata"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Server-provided non-standard descriptor fields"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "An MCP prompt descriptor. Server-provided non-standard fields are exposed under `additionalProperties`.",
+      "title": "McpPrompt"
+    },
+    "McpPromptArgument": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the argument"
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the argument"
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Whether the argument is required; omission is distinct from false"
+        },
+        "_meta": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Argument-level metadata"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Server-provided non-standard argument fields"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "An argument accepted by an MCP prompt.",
+      "title": "McpPromptArgument"
+    },
+    "McpPromptIcon": {
+      "type": "object",
+      "properties": {
+        "src": {
+          "type": "string",
+          "description": "Icon URI"
+        },
+        "mimeType": {
+          "type": "string",
+          "description": "Icon MIME type, when known"
+        },
+        "sizes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Icon sizes, such as `48x48` or `any`"
+        },
+        "theme": {
+          "type": "string",
+          "description": "Theme hint for this icon"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Server-provided non-standard icon fields"
+        }
+      },
+      "required": [
+        "src"
+      ],
+      "additionalProperties": false,
+      "description": "An MCP prompt icon with standard size hints and preserved non-standard fields.",
+      "title": "McpPromptIcon"
+    },
+    "McpPromptMessage": {
+      "type": "object",
+      "properties": {
+        "role": {
+          "$ref": "#/definitions/McpPromptRole",
+          "description": "The role of the message sender"
+        },
+        "content": {
+          "description": "The original MCP content block, including nested metadata and unfamiliar content types",
+          "x-opaque-json": true
+        },
+        "_meta": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Message-level metadata"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Server-provided non-standard message fields"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "additionalProperties": false,
+      "description": "An MCP prompt message with opaque JSON content preserved without flattening or content-type filtering.",
+      "title": "McpPromptMessage"
+    },
+    "McpPromptRole": {
+      "type": "string",
+      "enum": [
+        "user",
+        "assistant"
+      ],
+      "description": "The sender role of an MCP prompt message.",
+      "title": "McpPromptRole",
+      "x-enumDescriptions": {
+        "user": "A message from the user.",
+        "assistant": "A message from the assistant."
+      }
+    },
+    "McpPromptsGetRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "Name of the MCP server hosting the prompt"
+        },
+        "promptName": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The programmatic name of the prompt"
+        },
+        "arguments": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "String-valued arguments to pass to the prompt"
+        }
+      },
+      "required": [
+        "serverName",
+        "promptName"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server, prompt name, and optional string-valued arguments.",
+      "title": "McpPromptsGetRequest",
+      "stability": "experimental"
+    },
+    "McpPromptsGetResult": {
+      "type": "object",
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description of the prompt"
+        },
+        "messages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpPromptMessage",
+            "description": "An MCP prompt message with opaque JSON content preserved without flattening or content-type filtering."
+          },
+          "description": "Ordered prompt messages"
+        },
+        "_meta": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "MCP result metadata"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Server-provided non-standard result fields"
+        }
+      },
+      "required": [
+        "messages"
+      ],
+      "additionalProperties": false,
+      "description": "Prompt messages returned by the MCP server without sending them to the model.",
+      "title": "McpPromptsGetResult"
+    },
+    "McpPromptsListRequest": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "Name of the MCP server whose prompts to enumerate"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque MCP pagination cursor from a prior `nextCursor` value"
+        }
+      },
+      "required": [
+        "serverName"
+      ],
+      "additionalProperties": false,
+      "description": "MCP server whose prompts to enumerate.",
+      "title": "McpPromptsListRequest",
+      "stability": "experimental"
+    },
+    "McpPromptsListResult": {
+      "type": "object",
+      "properties": {
+        "prompts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpPrompt",
+            "description": "An MCP prompt descriptor. Server-provided non-standard fields are exposed under `additionalProperties`."
+          },
+          "description": "Prompts advertised by the server"
+        },
+        "nextCursor": {
+          "type": "string",
+          "description": "Opaque cursor for the next page, if the server has more prompts"
+        },
+        "_meta": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "MCP result metadata"
+        },
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Server-provided non-standard result fields"
+        }
+      },
+      "required": [
+        "prompts"
+      ],
+      "additionalProperties": false,
+      "description": "One page of prompts advertised by the named MCP server.",
+      "title": "McpPromptsListResult"
     },
     "McpRegisterExternalClientRequest": {
       "type": "object",
@@ -33525,6 +33982,10 @@
             "type": "string"
           },
           "description": "Additional HTTP headers included with provider requests."
+        },
+        "modelProvider": {
+          "$ref": "#/definitions/ProviderConfigModelProvider",
+          "description": "The product serving the provider's models, reported in telemetry as `model_provider`. Only affects telemetry."
         },
         "hasBearerTokenProvider": {
           "type": "boolean",
@@ -37351,6 +37812,10 @@
           "type": "string",
           "description": "Provider name used for model and telemetry attribution."
         },
+        "modelProvider": {
+          "$ref": "#/definitions/ProviderConfigModelProvider",
+          "description": "The product serving the model, reported in telemetry as `model_provider`. Set it when `type` alone cannot identify the product, such as Ollama or LM Studio behind an OpenAI-compatible endpoint. Only affects telemetry."
+        },
         "wireModel": {
           "type": "string",
           "description": "The model identifier sent to the provider API for inference (the \"wire\" model), as opposed to modelId which is the well-known base."
@@ -37398,6 +37863,29 @@
       "additionalProperties": false,
       "description": "Azure-specific provider options.",
       "title": "ProviderConfigAzure"
+    },
+    "ProviderConfigModelProvider": {
+      "type": "string",
+      "enum": [
+        "openai",
+        "anthropic",
+        "azure_openai",
+        "ollama",
+        "lm_studio",
+        "foundry_local",
+        "llama_cpp"
+      ],
+      "description": "The product serving the model, reported in telemetry as `model_provider`.",
+      "title": "ProviderConfigModelProvider",
+      "x-enumDescriptions": {
+        "openai": "OpenAI API.",
+        "anthropic": "Anthropic API.",
+        "azure_openai": "Azure OpenAI Service.",
+        "ollama": "Ollama.",
+        "lm_studio": "LM Studio.",
+        "foundry_local": "Foundry Local.",
+        "llama_cpp": "llama.cpp server."
+      }
     },
     "ProviderConfigTransport": {
       "type": "string",
@@ -45603,7 +46091,7 @@
         "command"
       ],
       "additionalProperties": false,
-      "description": "Shell command to run, with optional working directory and timeout in milliseconds.",
+      "description": "Shell command to run, with optional working directory and timeout in milliseconds. Spawn failures return an RPC error.",
       "title": "ShellExecRequest",
       "stability": "experimental"
     },
@@ -45612,14 +46100,14 @@
       "properties": {
         "processId": {
           "type": "string",
-          "description": "Unique identifier for tracking streamed output"
+          "description": "Identifier usable with shell.kill while the process is running"
         }
       },
       "required": [
         "processId"
       ],
       "additionalProperties": false,
-      "description": "Identifier of the spawned process, used to correlate streamed output and exit notifications.",
+      "description": "Identifier of the spawned shell process, usable with shell.kill while the process is running.",
       "title": "ShellExecResult"
     },
     "ShellExecuteUserRequestedRequest": {

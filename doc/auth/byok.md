@@ -49,6 +49,7 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
                               {:on-permission-request copilot/approve-all
                                :model "llama3"
                                :provider {:provider-type :openai
+                                          :model-provider :ollama
                                           :base-url "http://localhost:11434/v1"}}]
   (println (h/query "Hello!" :session session)))
 ```
@@ -66,6 +67,7 @@ BYOK allows you to use the Copilot SDK with your own API keys from model provide
                               {:on-permission-request copilot/approve-all
                                :model "phi-4-mini"
                                :provider {:provider-type :openai
+                                          :model-provider :foundry-local
                                           :base-url "http://localhost:<PORT>/v1"}}]
   (println (h/query "Hello!" :session session)))
 ```
@@ -105,6 +107,7 @@ foundry service status
 |-------|------|----------|-------------|
 | `:base-url` | string | **Yes** | API endpoint URL |
 | `:provider-type` | keyword | No | `:openai`, `:azure`, or `:anthropic` (default: `:openai`) |
+| `:model-provider` | keyword | No | Product identity for telemetry only: `:openai`, `:anthropic`, `:azure-openai`, `:ollama`, `:lm-studio`, `:foundry-local`, or `:llama-cpp`. Omitted by default; `nil` is invalid. Requires a supporting runtime such as CLI `1.0.92-3`. |
 | `:wire-api` | keyword | No | `:completions` or `:responses` (default: `:completions`) |
 | `:api-key` | string | No | API key (optional for local providers like Ollama) |
 | `:bearer-token` | string | No | Bearer token auth (takes precedence over `:api-key`) |
@@ -135,6 +138,23 @@ Azure AI Foundry project URL. Do not append `/openai/v1/`; the runtime preserves
 any project prefix and constructs the API path. A trailing slash is optional.
 
 **`:anthropic`** — For direct Anthropic API access. Uses Claude-specific API format.
+
+### Provider Telemetry
+
+`:provider-type` selects the API implementation. `:model-provider` identifies
+the product serving the model without changing authentication, transport, or
+model selection. It is accepted on create, resume, and extension join, not
+through mutable session options. Hyphenated keywords serialize with underscores,
+for example `:lm-studio` becomes wire `modelProvider: "lm_studio"`.
+
+BYOK `:copilot/assistant.usage` and `:copilot/model.call_failure` events may
+include `:model-provider` and `:byok-kind`. Unlike the configuration keyword,
+these event values remain extensible strings. `:model-provider` identifies a
+runtime-defined provider family, never a caller's named-provider registry key.
+`:byok-kind` describes where the model runs and who manages it: `"local_managed"`,
+`"local_user"`, or `"remote_user"`. Both fields are absent for Copilot-served
+models. Missing fields stay absent; empty and future strings pass through, but
+explicit `nil` is invalid.
 
 ## Example Configurations
 
@@ -238,7 +258,7 @@ value is never logged.
 
 To declare several named providers and a catalog of models that reference them,
 use `:providers` (a vector of named providers) with `:models` (a vector of model
-entries). Each named provider takes the same fields as `:provider` plus a
+entries). Each named provider takes the connection fields of `:provider` plus a
 required `:name` (the registry key, which must not contain `/`). Each model entry
 has a required `:id` (provider-local model id) and `:provider` (a name in
 `:providers`); the full model selection id is `"providerName/id"`.
@@ -263,6 +283,10 @@ has a required `:id` (provider-local model id) and `:provider` (a name in
 ```
 
 `:providers` and `:models` cannot be combined with the singular `:provider` — use the multi-provider registry or the whole-session `:provider`, not both.
+
+Named providers accept the same optional `:model-provider` telemetry identity.
+They do not accept `:transport` or inline model overrides; the latter belong
+on the corresponding `:models` entry.
 
 ## Limitations
 

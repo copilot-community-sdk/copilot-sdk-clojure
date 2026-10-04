@@ -1922,6 +1922,14 @@
           "type": "boolean",
           "description": "Whether this model call used a bring-your-own-key provider"
         },
+        "byokKind": {
+          "type": "string",
+          "description": "Where the bring-your-own-key model runs and who manages it: \"local_managed\" (on the device, managed by Copilot), \"local_user\" (on the device, managed by the user), or \"remote_user\" (off the device, managed by the user). Absent for Copilot-served models."
+        },
+        "modelProvider": {
+          "type": "string",
+          "description": "Fixed-set provider family serving the bring-your-own-key model (for example \"openai\", \"anthropic\", \"azure_openai\", \"ollama\", \"llama_cpp\", or \"other\"). Never the caller-supplied provider name. Absent for Copilot-served models."
+        },
         "isAuto": {
           "type": "boolean",
           "description": "Whether Auto mode was selected for this model call"
@@ -3069,6 +3077,10 @@
         "fallbackReason": {
           "type": "string",
           "description": "Server-provided reason for falling back, when available"
+        },
+        "selectionReason": {
+          "type": "string",
+          "description": "Short human-readable sentence from the routing service explaining why this model was chosen, for display alongside the model. Present only when the service supplied one: it is omitted for on-device selections, when the service did not provide an explanation, and when a replayed decision made no routing call. The text is display-only and drawn from a fixed catalogue; several distinct routing categories share identical wording, so it cannot be used to recover the category or keyed on programmatically."
         },
         "stickyOverride": {
           "type": "boolean",
@@ -11327,6 +11339,14 @@
           "type": "boolean",
           "description": "Whether the failed call used a bring-your-own-key provider"
         },
+        "byokKind": {
+          "type": "string",
+          "description": "Where the bring-your-own-key model for the failed call runs and who manages it: \"local_managed\" (on the device, managed by Copilot), \"local_user\" (on the device, managed by the user), or \"remote_user\" (off the device, managed by the user). Absent for Copilot-served models."
+        },
+        "modelProvider": {
+          "type": "string",
+          "description": "Fixed-set provider family serving the bring-your-own-key model for the failed call (for example \"openai\", \"anthropic\", \"azure_openai\", \"ollama\", \"llama_cpp\", or \"other\"). Never the caller-supplied provider name. Absent for Copilot-served models."
+        },
         "isAuto": {
           "type": "boolean",
           "description": "Whether the session selected Auto mode for the failed call"
@@ -15723,6 +15743,15 @@
           },
           "default": [],
           "description": "Raw names of tools redefined since the prior call, restricted because a tool name can be user-authored",
+          "visibility": "internal"
+        },
+        "toolsRedefinedParts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Changed definition parts of redefined tools, as `tool:part` entries; property-level parts only for telemetry-safe tools, whose other names are hashed",
           "visibility": "internal"
         },
         "toolsReordered": {
@@ -22097,6 +22126,11 @@
         "progressMessage": {
           "type": "string",
           "description": "Human-readable progress status message (e.g., from an MCP server)"
+        },
+        "structuredContent": {
+          "description": "Client-only structured progress metadata. Not model-facing tool output.",
+          "x-opaque-json": true,
+          "stability": "experimental"
         }
       },
       "required": [

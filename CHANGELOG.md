@@ -3,6 +3,25 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.16 sync)
+- Added optional BYOK `:model-provider` telemetry identity to create, resume,
+  and join, including the existing experimental named-provider registry.
+  Closed keyword values serialize to the exact upstream strings; omission
+  is preserved and `nil` is rejected.
+- Added optional string `:model-provider` and `:byok-kind` metadata to
+  assistant-usage and model-call-failure events, with matching live and
+  historical conversion.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/ef04633cc84e4ba8e79888a39259ca276f5de732))
+
+### Changed (post-v1.0.16 sync)
+- Advanced CLI compatibility and schema provenance to `1.0.92-3` and
+  recertified the complete Node SDK surface at
+  [`ef04633cc84e4ba8e79888a39259ca276f5de732`](https://github.com/github/copilot-sdk/commit/ef04633cc84e4ba8e79888a39259ca276f5de732).
+  New experimental tool replacement, structured progress, Auto routing
+  explanations, and MCP prompt/OAuth controls do not enlarge the stable API.
+  Opaque progress metadata retains source-defined JSON keys on live and
+  history paths. The library version remains `1.0.16.0`; no release is cut.
+
 ## [1.0.16.0] - 2026-10-02
 ### Added (release automation)
 - Added opt-in `copilot_attribution` / `--copilot-attribution` for

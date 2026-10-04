@@ -544,6 +544,8 @@
 ;; -----------------------------------------------------------------------------
 
 (s/def ::provider-type #{:openai :azure :anthropic})
+(s/def ::model-provider
+  #{:openai :anthropic :azure-openai :ollama :lm-studio :foundry-local :llama-cpp})
 (s/def ::wire-api #{:completions :responses})
 (s/def ::base-url ::non-blank-string)
 (s/def ::api-key string?)
@@ -589,7 +591,7 @@
   (s/and
    (s/keys :req-un [::base-url]
            :opt-un [::provider-type ::wire-api ::api-key ::bearer-token ::azure-options
-                    ::headers ::transport ::bearer-token-provider
+                    ::headers ::transport ::bearer-token-provider ::model-provider
                     ;; ProviderConfig overrides (upstream PR #966).
                     ;; ::model-id ↦ wire `modelId` (well-known model name for
                     ;; agent config + token-limit lookup; default wire model
@@ -631,7 +633,7 @@
   (s/and
    (s/keys :req-un [::name ::base-url]
            :opt-un [::provider-type ::wire-api ::api-key ::bearer-token
-                    ::azure-options ::headers ::bearer-token-provider])
+                    ::azure-options ::headers ::bearer-token-provider ::model-provider])
    #(s/valid? ::non-blank-string (:name %))
    #(not (str/includes? (:name %) "/"))
    ;; `s/keys` is open, so reject the singular-provider-only transport /
@@ -2264,12 +2266,14 @@
 (s/def ::rejected-prediction-tokens nat-int?)
 (s/def ::is-auto boolean?)
 (s/def ::is-byok boolean?)
+(s/def ::byok-kind string?)
+(s/def ::byok-model-provider string?)
 (s/def ::assistant-usage-transport #{"http" "websocket"})
 
 (s/def ::assistant.usage-data
   (s/and
    (s/keys :req-un [::model]
-           :opt-un [::accepted-prediction-tokens ::api-call-id ::api-endpoint
+           :opt-un [::accepted-prediction-tokens ::api-call-id ::api-endpoint ::byok-kind
                     ::cache-read-tokens ::cache-write-tokens ::cache-expires-at
                     ::copilot-usage ::cost ::duration ::initiator
                     ::interaction-type ::input-tokens ::inter-token-latency-ms
@@ -2279,6 +2283,7 @@
                     ::rejected-prediction-tokens ::service-request-id
                     ::time-to-first-token-ms ::ttft-ms ::output-ttft-ms
                     ::content-filter-triggered ::finish-reason ::rte])
+   #(optional-field? % :model-provider (partial s/valid? ::byok-model-provider))
    #(or (not (contains? % :reasoning-summary))
         (contains? #{"none" "concise" "detailed"}
                    (:reasoning-summary %)))
@@ -2876,7 +2881,8 @@
 (s/def ::model-call-failure-source #{"top_level" "subagent" "mcp_sampling"})
 (s/def ::model.call_failure-data
   (s/and (s/keys :req-un [::source]
-                 :opt-un [::interaction-type ::parent-tool-call-id])
+                 :opt-un [::interaction-type ::parent-tool-call-id ::byok-kind])
+         #(optional-field? % :model-provider (partial s/valid? ::byok-model-provider))
          #(s/valid? ::model-call-failure-source (:source %))))
 
 (s/def ::model.call_finished-data
