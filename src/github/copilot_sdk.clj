@@ -85,6 +85,7 @@
     :copilot/tool.user_requested
     :copilot/tool.execution_start
     :copilot/tool.execution_partial_result
+    :copilot/tool.shell_output
     :copilot/tool.execution_progress
     :copilot/tool.execution_complete
     :copilot/subagent.started
@@ -113,6 +114,7 @@
     :copilot/commands.changed
     :copilot/exit_plan_mode.requested
     :copilot/exit_plan_mode.completed
+    :copilot/human_response.recorded
     :copilot/auto_mode_switch.requested
     :copilot/auto_mode_switch.completed
     :copilot/session.tools_updated
@@ -282,6 +284,7 @@
   #{:copilot/tool.user_requested
     :copilot/tool.execution_start
     :copilot/tool.execution_partial_result
+    :copilot/tool.shell_output
     :copilot/tool.execution_progress
     :copilot/tool.execution_complete})
 
@@ -297,6 +300,7 @@
     :copilot/command.queued :copilot/command.execute :copilot/command.completed
     :copilot/commands.changed
     :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+    :copilot/human_response.recorded
     :copilot/auto_mode_switch.requested :copilot/auto_mode_switch.completed
     :copilot/sampling.requested :copilot/sampling.completed
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.67): interactive prompt when a
@@ -1317,6 +1321,17 @@
   "Return true for classified SQLite transaction failures."
   [value]
   (session/session-fs-sqlite-transaction-failure? value))
+
+(defn session-fs-write-failure
+  "Create a failure for a provider :write-file operation that changed its target.
+   The filesystem adapter reports :write-changed true only for this operation."
+  [message]
+  (session/session-fs-write-failure message))
+
+(defn session-fs-write-failure?
+  "Return true for a filesystem write failure that changed its target."
+  [value]
+  (session/session-fs-write-failure? value))
 
 (defn ^:experimental history-clear-context!
   "Clear conversation context and set the prompt used for the new context."

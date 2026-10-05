@@ -42,6 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
+- [ADR: Preserve callback, filesystem, and event authority boundaries](adr/2026-10-05-callback-and-event-contracts.md) -- Subagent hooks, exact binary I/O, scoped cloud cleanup, and passive response provenance.
 - [ADR: Separate BYOK configuration identity from runtime telemetry](adr/2026-10-04-byok-provider-telemetry.md) -- Closed provider keywords, extensible event strings, and shared builder translation.
 - [ADR: Expose transcript recovery and bound owned-runtime disconnection](adr/2026-10-02-transcript-recovery-and-owned-exit.md) -- Resume recovery contracts and process-exit cleanup without new experimental controls.
 - [ADR: Separate stable model policy from experimental host controls](adr/2026-09-30-model-policy-and-lifecycle-sync.md) -- Stable allowlists and lifecycle contracts without new experimental authority.

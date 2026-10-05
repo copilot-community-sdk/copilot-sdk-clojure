@@ -1,5 +1,5 @@
 (ns lifecycle-hooks
-  "Lifecycle hooks: register callbacks for session start/end, agent stop, tool use, prompts, and errors."
+  "Lifecycle hooks: session start/end, agent and subagent lifecycle, tools, prompts, and errors."
   (:require [github.copilot-sdk :as copilot]
             [github.copilot-sdk.helpers :as h]))
 
@@ -53,7 +53,19 @@
                           (record! :on-agent-stop data)
                           ;; {:decision "block" :reason "..."} keeps the agent running;
                           ;; use :stop-hook-active to avoid blocking it repeatedly.
-                          nil)}}]
+                          nil)
+
+                        :on-subagent-start
+                        (fn [data _ctx]
+                          (println "Hook: subagent-start" (:agent-name data))
+                          (record! :on-subagent-start data)
+                          {:additional-context "Check the requested files before reporting."})
+
+                        :on-subagent-stop
+                        (fn [data _ctx]
+                          (println "Hook: subagent-stop" (:agent-name data))
+                          (record! :on-subagent-stop data)
+                          {:modified-response (:response data)})}}]
 
       (println "\nPrompt:" prompt "\n")
       (println "🤖:" (h/query prompt :session session))

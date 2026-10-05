@@ -70,6 +70,13 @@ Private schema-driven conversion preserves opaque progress keys. MCP prompt
 listing/rendering and host-managed OAuth callback controls remain
 generated-only evidence without new Clojure wrappers.
 
+The stable callback and event surface includes subagent start/stop hooks,
+binary session-filesystem operations, append-only shell output, and passive
+response-provenance records. Experimental file-edit metadata and ordered
+provider reasoning blocks remain wire-only. Provider discovery, plan-base-model
+snapshots, thinking-capability discovery, proxy-CA controls, and trusted-human
+response submission do not add public wrappers or host authority.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |
@@ -87,7 +94,7 @@ generated-only evidence without new Clojure wrappers.
 | `features/agent-loop.md` | Folded | Conceptual; reflected in API.md [Event Types](reference/API.md#event-types) + [Streaming](reference/API.md#streaming) |
 | `features/citations.md` | Folded (experimental) | API.md [Citations](reference/API.md#citations-experimental) + `:enable-citations` session config |
 | `features/context-management.md` | Folded | API.md [`history-clear-context!`](reference/API.md#experimental-rpc-methods) + `session.context_cleared` event |
-| `features/streaming-events.md` | Folded | API.md [Streaming](reference/API.md#streaming) |
+| `features/streaming-events.md` | Folded | API.md [Streaming](reference/API.md#streaming) and [Shell output](reference/API.md#shell-output) |
 | `features/hooks.md` | Folded | API.md [Session Hooks](reference/API.md#session-hooks) |
 | `features/mcp.md` | Adapted | [`mcp/overview.md`](mcp/overview.md) |
 | `features/custom-agents.md` | Adapted | [`guides/custom-agents.md`](guides/custom-agents.md) |
@@ -99,7 +106,7 @@ generated-only evidence without new Clojure wrappers.
 | `features/remote-sessions.md` | Folded (experimental) | API.md `:remote?` / `:remote-session` config rows |
 | `features/cloud-sessions.md` | Folded (experimental) | API.md `:cloud` config row |
 | `features/session-limits.md` | Folded (experimental) | API.md `:session-limits` config row + `session.session_limits_changed` event |
-| `features/fleet-mode.md` | Folded (experimental) | API.md [Experimental RPC Methods](reference/API.md#experimental-rpc-methods) (`session/fleet-start!`) |
+| `features/fleet-mode.md` | Folded (experimental) | API.md [Experimental RPC Methods](reference/API.md#experimental-rpc-methods) (`session/fleet-start!`); stable lifecycle callbacks are covered in [Session Hooks](reference/API.md#session-hooks) |
 | `features/usage-and-billing.md` | Folded | API.md [`list-models`](reference/API.md#list-models) billing metadata + `assistant.usage` event |
 
 ## hooks/

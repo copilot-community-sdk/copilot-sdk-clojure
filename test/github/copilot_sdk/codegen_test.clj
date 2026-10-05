@@ -165,7 +165,13 @@
              :idiom [:data :staged-terminal :assistant-message]}]
            ["permission.requested"
             {:wire [:data :permissionRequest :resolvedPaths :map-keys]
-             :idiom [:data :permission-request :resolved-paths :map-keys]}]]]
+             :idiom [:data :permission-request :resolved-paths :map-keys]}]
+           ["human_response.recorded"
+            {:wire [:data :response :content]
+             :idiom [:data :response :content]}]
+           ["elicitation.completed"
+            {:wire [:data :content]
+             :idiom [:data :content]}]]]
     (is (contains? (set (get event-metadata/opaque-json-paths event-type))
                    expected-path)
         (str event-type " should preserve " (:wire expected-path)))))
@@ -385,6 +391,15 @@
    "tool.execution_progress"
    {:tool-call-id "tc-1"
     :progress-message "running…"}
+
+   "tool.shell_output"
+   {:tool-call-id "tc-1" :text "" :sequence 0}
+
+   "human_response.recorded"
+   {:request-id "request-1"
+    :actor "host_automation"
+    :response {:response-kind "user_input" :question "Choose"
+               :answer "Yes" :was-freeform false}}
 
    "tool.execution_complete"
    {:tool-call-id "tc-1"

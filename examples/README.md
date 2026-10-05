@@ -767,11 +767,11 @@ clojure -A:examples -X infinite-sessions/run :prompts '["What is Clojure?" "Who 
 **Difficulty:** Intermediate  
 **Concepts:** Hooks, callbacks, tool use monitoring
 
-Register callbacks for session lifecycle events: start/end, agent stop, tool use, prompts, and errors.
+Register callbacks for session and subagent lifecycle, tool use, prompts, and errors.
 
 ### What It Demonstrates
 
-- Configuring seven lifecycle hooks in a session config
+- Configuring nine lifecycle hooks in a session config
 - `:on-session-start` — fires when session begins
 - `:on-session-end` — fires when session ends
 - `:on-pre-tool-use` — fires before a tool runs (return `{:approved true}` to allow)
@@ -779,12 +779,17 @@ Register callbacks for session lifecycle events: start/end, agent stop, tool use
 - `:on-user-prompt-submitted` — fires when user sends a prompt
 - `:on-error-occurred` — fires on errors
 - `:on-agent-stop` — fires when the top-level agent naturally stops; return `nil` to let it stop, or `{:decision "block" :reason "..."}` to request another turn. Use `:stop-hook-active` to avoid blocking repeatedly.
+- `:on-subagent-start` -- prepends context before a child's first turn; input identifies the parent session.
+- `:on-subagent-stop` -- can continue a child with a block reason or rewrite the response reported to its parent. These callbacks run only when the prompt launches a subagent.
 - Collecting and summarizing hook events
 
 ### Usage
 
 ```bash
 clojure -A:examples -X lifecycle-hooks/run
+
+# Exercise the subagent callbacks
+clojure -A:examples -X lifecycle-hooks/run :prompt '"Use one explore subagent to list the .clj filenames in examples. Report its result."'
 
 # Custom prompt
 clojure -A:examples -X lifecycle-hooks/run :prompt '"List all .md files using glob"'

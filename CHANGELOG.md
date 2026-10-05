@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.16 sync)
+- Added `:on-subagent-start` and `:on-subagent-stop` hooks to create, resume,
+  and join, preserving parent metadata and runtime-owned continuation/rewrite
+  semantics.
+- Added exact-byte session filesystem providers with `:capabilities {:binary true}`,
+  canonical base64 transport, and a 50,330,880-byte limit, plus
+  `session-fs-write-failure` / `session-fs-write-failure?` for partial text writes.
+- Added live-only `:copilot/tool.shell_output`, passive
+  `:copilot/human_response.recorded`, and optional `:reasoning-effort-model`
+  start/resume/model-change metadata.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b))
 - Added optional BYOK `:model-provider` telemetry identity to create, resume,
   and join, including the existing experimental named-provider registry.
   Closed keyword values serialize to the exact upstream strings; omission
@@ -14,6 +24,14 @@ All notable changes to this project will be documented in this file. This change
   ([upstream snapshot](https://github.com/github/copilot-sdk/commit/ef04633cc84e4ba8e79888a39259ca276f5de732))
 
 ### Changed (post-v1.0.16 sync)
+- Advanced CLI compatibility and schema provenance to `1.0.92-4` and
+  recertified the complete Node SDK surface at
+  [`6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b`](https://github.com/github/copilot-sdk/commit/6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b).
+  Deprecated merged `tool.execution_partial_result` snapshots remain supported;
+  use append-only shell output instead. Documented subagent-model prompt
+  guidance and runtime skill/process telemetry naming changes. Experimental
+  provider discovery, trusted-human submission, and sandbox controls remain
+  excluded. The library version remains `1.0.16.0`; no release is cut.
 - Advanced CLI compatibility and schema provenance to `1.0.92-3` and
   recertified the complete Node SDK surface at
   [`ef04633cc84e4ba8e79888a39259ca276f5de732`](https://github.com/github/copilot-sdk/commit/ef04633cc84e4ba8e79888a39259ca276f5de732).
@@ -21,6 +39,17 @@ All notable changes to this project will be documented in this file. This change
   explanations, and MCP prompt/OAuth controls do not enlarge the stable API.
   Opaque progress metadata retains source-defined JSON keys on live and
   history paths. The library version remains `1.0.16.0`; no release is cut.
+
+### Fixed (post-v1.0.16 sync)
+- String-schema `apply_patch` overrides now receive patch strings from either
+  scalar or wrapped calls, without changing object-schema tools or invocation
+  metadata. Invalid inputs do not invoke handlers.
+- Failed local initialization deletes only the newly allocated cloud session,
+  with a ten-second bound and observable cleanup failures. Local setup still
+  rolls back; later failures preserve resumable state.
+- Awaited filesystem failures retain their classification. Generated opaque
+  dictionary references preserve nested response JSON keys, and generated
+  reasoning-block validation enforces mutually exclusive representations.
 
 ## [1.0.16.0] - 2026-10-02
 ### Added (release automation)
