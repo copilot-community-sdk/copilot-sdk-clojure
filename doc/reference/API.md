@@ -3629,7 +3629,8 @@ Provider functions use direct arguments and throw on failure. Errors with `{:cod
 
 Provider results may be immediate values, channels, futures, or promises.
 Channels and promises may yield a `Throwable`; failed futures preserve the
-underlying exception rather than hiding its classification.
+underlying exception rather than hiding its classification. An asynchronous
+error is reported once; it does not retry the filesystem operation.
 
 **Binary files (optional).** Declare `:capabilities {:binary true}` in the
 client's `:session-fs` configuration and implement both operations on every

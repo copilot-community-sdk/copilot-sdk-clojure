@@ -3,6 +3,13 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Fixed (async callbacks)
+- Filesystem mutations are not retried when a channel, promise, or future
+  fails with an `ArityException` (wrong argument count). Legacy call-shape
+  fallback remains limited to direct invocation.
+- Real-runtime shell/provenance assertions wait for the independent callback
+  worker to process the final turn, including a deliberately delayed worker.
+
 ### Added (post-v1.0.16 sync)
 - Added `:on-subagent-start` and `:on-subagent-stop` hooks to create, resume,
   and join, preserving parent metadata and runtime-owned continuation/rewrite

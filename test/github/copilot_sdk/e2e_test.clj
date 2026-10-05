@@ -192,6 +192,10 @@
          shell-output (atom [])
          input-request (promise)
          human-responses (atom [])
+         worker-paused (promise)
+         release-worker (promise)
+         final-response-seen? (atom false)
+         worker-drained (promise)
          windows? (str/starts-with? (System/getProperty "os.name") "Windows")
          shell (if windows? "powershell" "bash")
          command (if windows?
@@ -221,8 +225,19 @@
                                          {:answer "Yes" :was-freeform false})
                 :on-event (fn [event]
                             (case (:type event)
-                              :copilot/tool.shell_output (swap! shell-output conj event)
+                              :copilot/tool.shell_output
+                              (do
+                                (deliver worker-paused true)
+                                @release-worker
+                                (swap! shell-output conj event))
                               :copilot/human_response.recorded (swap! human-responses conj event)
+                              :copilot/assistant.message
+                              (when (and (not (seq (:agent-id event)))
+                                         (= (get-in event [:data :content]) "OK"))
+                                (reset! final-response-seen? true))
+                              :copilot/session.idle
+                              (when (and @final-response-seen? (not (seq (:agent-id event))))
+                                (deliver worker-drained true))
                               nil))
                 :provider {:provider-type :openai :base-url base-url
                            :wire-api :completions}})]
@@ -231,6 +246,12 @@
              (is (= (get-in (sdk/send-and-wait! copilot-session {:prompt "Run the fixture."} 30000)
                             [:data :content])
                     "OK"))
+             (when-not (true? (deref worker-paused 5000 false))
+               (throw (ex-info "Event worker did not receive shell output" {})))
+             (is (empty? @shell-output))
+             (deliver release-worker true)
+             (when-not (true? (deref worker-drained 5000 false))
+               (throw (ex-info "Event worker did not observe the final root idle" {})))
              (let [request (deref input-request 5000 ::timeout)
                    history (sdk/get-messages copilot-session)
                    chunks @shell-output
@@ -246,7 +267,9 @@
                (is (str/includes? combined "SHELL_STDERR"))
                (is (not-any? #(= (:type %) :copilot/tool.shell_output) history))
                (is (not-any? #(= (:type %) :copilot/human_response.recorded) history))))
-           #(sdk/disconnect! copilot-session))))))))
+           #(do
+              (deliver release-worker true)
+              (sdk/disconnect! copilot-session)))))))))
 
 (deftest ^:e2e test-e2e-create-session
   (when-e2e

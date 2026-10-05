@@ -446,6 +446,26 @@
     (is (= ((:write-file-bytes handler) {:path "/missing" :content ""})
            {:code "UNKNOWN" :message "Binary writes are not supported"}))))
 
+(deftest async-arity-failures-never-retry-filesystem-mutations
+  (doseq [delivery [:channel :promise :future]
+          [operation arity] [[:write-file 3] [:append-file 3] [:mkdir 3] [:rm 3] [:rename 2]]]
+    (let [calls (atom [])
+          failure (clojure.lang.ArityException. 0 "provider-body")
+          mutate (fn [& args]
+                   (swap! calls conj (count args))
+                   (when-not (= (count args) 1)
+                     (case delivery
+                       :channel (completed-channel failure)
+                       :promise (doto (promise) (deliver failure))
+                       :future (future (throw failure)))))
+          handler (sdk/create-session-fs-adapter
+                   (assoc (memory-provider (atom {})) operation mutate))
+          result ((operation handler) {:path "/file" :content "value" :mode 384
+                                       :recursive false :force false :src "/before" :dest "/after"})]
+      (is (= @calls [arity]) (str operation " " delivery))
+      (is (= result {:code "UNKNOWN" :message (ex-message failure)})
+          (str operation " " delivery)))))
+
 (def ^:private response-cases
   [[{:responseKind "ask_user" :message ""
      :content {:camelCase {:inner_Key [nil false {"mixed.Key" 1}]}}

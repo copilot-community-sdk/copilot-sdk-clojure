@@ -2582,7 +2582,7 @@ tool-set/isolated
                             (dissoc src)))))}))}))
 </code></pre>
 <p>Provider functions use direct arguments and throw on failure. Errors with <code>{:code "ENOENT"}</code> become structured <code>SessionFsError</code> maps with code <code>"ENOENT"</code>; all other exceptions become <code>"UNKNOWN"</code>. <code>create-session</code>, <code>resume-session</code>, their channel variants, and extension join automatically adapt provider-style factory returns to the low-level RPC handler contract.</p>
-<p>Provider results may be immediate values, channels, futures, or promises. Channels and promises may yield a <code>Throwable</code>; failed futures preserve the underlying exception rather than hiding its classification.</p>
+<p>Provider results may be immediate values, channels, futures, or promises. Channels and promises may yield a <code>Throwable</code>; failed futures preserve the underlying exception rather than hiding its classification. An asynchronous error is reported once; it does not retry the filesystem operation.</p>
 <p><strong>Binary files (optional).</strong> Declare <code>:capabilities {:binary true}</code> in the client’s <code>:session-fs</code> configuration and implement both operations on every session provider:</p>
 <table>
 <thead>

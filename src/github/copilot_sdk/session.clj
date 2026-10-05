@@ -695,14 +695,13 @@
    (session-fs-void-result f args params session-fs-error))
   ([f args params error-result]
    (try
-     (await-session-fs-result (apply f args))
-     nil
-     (catch clojure.lang.ArityException _
-       (try
-         (await-session-fs-result (f params))
-         nil
-         (catch Throwable t
-           (error-result t))))
+     (let [result (try
+                    (apply f args)
+                    (catch clojure.lang.ArityException _
+                      (f params)))]
+       ;; Awaited failures do not indicate a callback-arity mismatch.
+       (await-session-fs-result result)
+       nil)
      (catch Throwable t
        (error-result t)))))
 
@@ -739,7 +738,8 @@
    - :rename             (fn [src dest])
    Provider functions may return values directly, core.async channels, futures,
    or promises. A channel or promise may yield a Throwable to report failure;
-   failed futures preserve the underlying provider exception.
+   failed futures preserve the underlying provider exception. An asynchronous
+   failure never retries a filesystem operation.
 
    Binary operations use exact byte arrays and standard base64 on the wire.
    Both are required when the client's :session-fs declares
