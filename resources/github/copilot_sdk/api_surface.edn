@@ -87,6 +87,8 @@
     session-events {:kind :value}
     session-fs-sqlite-transaction-failure {:kind :fn, :arglists ([message] [message error-class])}
     session-fs-sqlite-transaction-failure? {:kind :fn, :arglists ([value])}
+    session-fs-write-failure {:kind :fn, :arglists ([message])}
+    session-fs-write-failure? {:kind :fn, :arglists ([value])}
     session-id {:kind :fn, :arglists ([session])}
     set-foreground-session-id! {:kind :fn, :arglists ([client session-id])}
     set-model! {:kind :fn, :arglists ([session model-id] [session model-id opts])}
@@ -113,6 +115,8 @@
     github.copilot-sdk/result-failure (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-failure-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-rejected (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
     github.copilot-sdk/result-success (clojure.spec.alpha/fspec :args github.copilot-sdk.instrument/result-success-args :ret :github.copilot-sdk.specs/tool-result-object :fn nil)
+    github.copilot-sdk/session-fs-write-failure (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :message clojure.core/string?) :ret (clojure.core/fn [%] (clojure.core/instance? clojure.lang.ExceptionInfo %)) :fn nil)
+    github.copilot-sdk/session-fs-write-failure? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :value clojure.core/any?) :ret clojure.core/boolean? :fn nil)
     github.copilot-sdk/transcript-recovery (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret (clojure.spec.alpha/nilable :github.copilot-sdk.specs/transcript-recovery) :fn nil)}}
   github.copilot-sdk.client
   {:vars
@@ -289,6 +293,8 @@
     send-async-with-id {:kind :fn, :arglists ([session opts])}
     session-fs-sqlite-transaction-failure {:kind :fn, :arglists ([message] [message error-class])}
     session-fs-sqlite-transaction-failure? {:kind :fn, :arglists ([value])}
+    session-fs-write-failure {:kind :fn, :arglists ([message])}
+    session-fs-write-failure? {:kind :fn, :arglists ([value])}
     session-id {:kind :fn, :arglists ([session])}
     session-name-get {:kind :fn, :arglists ([session]), :experimental true}
     session-name-set! {:kind :fn, :arglists ([session name]), :experimental true}
@@ -373,6 +379,8 @@
     github.copilot-sdk.session/send-async-with-id (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/merge :github.copilot-sdk.specs/send-options (clojure.spec.alpha/keys :opt-un [:github.copilot-sdk.specs/timeout-ms]))) :ret (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/message-id :github.copilot-sdk.specs/events-ch]) :fn nil)
     github.copilot-sdk.session/session-fs-sqlite-transaction-failure (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :message clojure.core/string? :error-class (clojure.spec.alpha/? :github.copilot-sdk.specs/sqlite-transaction-error-class)) :ret (clojure.core/fn [%] (clojure.core/instance? clojure.lang.ExceptionInfo %)) :fn nil)
     github.copilot-sdk.session/session-fs-sqlite-transaction-failure? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :value clojure.core/any?) :ret clojure.core/boolean? :fn nil)
+    github.copilot-sdk.session/session-fs-write-failure (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :message clojure.core/string?) :ret (clojure.core/fn [%] (clojure.core/instance? clojure.lang.ExceptionInfo %)) :fn nil)
+    github.copilot-sdk.session/session-fs-write-failure? (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :value clojure.core/any?) :ret clojure.core/boolean? :fn nil)
     github.copilot-sdk.session/session-id (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret :github.copilot-sdk.specs/session-id :fn nil)
     github.copilot-sdk.session/session-name-get (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.session/session-name-set! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :name clojure.core/string?) :ret clojure.core/map? :fn nil)
@@ -590,6 +598,7 @@
     :github.copilot-sdk.specs/elicitation-context
     :github.copilot-sdk.specs/elicitation-field-value
     :github.copilot-sdk.specs/elicitation-params
+    :github.copilot-sdk.specs/elicitation-requested-schema
     :github.copilot-sdk.specs/elicitation-result
     :github.copilot-sdk.specs/elicitation-source
     :github.copilot-sdk.specs/embedding-cache-storage
@@ -633,6 +642,7 @@
     :github.copilot-sdk.specs/excluded-tools
     :github.copilot-sdk.specs/execution-mode
     :github.copilot-sdk.specs/exists
+    :github.copilot-sdk.specs/exit-plan-mode-action
     :github.copilot-sdk.specs/exit-plan-mode-request
     :github.copilot-sdk.specs/exit-plan-mode-result
     :github.copilot-sdk.specs/exp-assignments
@@ -686,6 +696,9 @@
     :github.copilot-sdk.specs/hooks
     :github.copilot-sdk.specs/host
     :github.copilot-sdk.specs/host-type
+    :github.copilot-sdk.specs/human-response-actor
+    :github.copilot-sdk.specs/human-response-recorded-response
+    :github.copilot-sdk.specs/human_response.recorded-data
     :github.copilot-sdk.specs/icon
     :github.copilot-sdk.specs/id
     :github.copilot-sdk.specs/inbound-attachment
@@ -846,6 +859,8 @@
     :github.copilot-sdk.specs/on-pre-tool-use
     :github.copilot-sdk.specs/on-session-end
     :github.copilot-sdk.specs/on-session-start
+    :github.copilot-sdk.specs/on-subagent-start
+    :github.copilot-sdk.specs/on-subagent-stop
     :github.copilot-sdk.specs/on-user-input-request
     :github.copilot-sdk.specs/on-user-prompt-submitted
     :github.copilot-sdk.specs/on-user-prompt-transformed
@@ -915,10 +930,12 @@
     :github.copilot-sdk.specs/quota-snapshot
     :github.copilot-sdk.specs/quota-snapshots
     :github.copilot-sdk.specs/read-file
+    :github.copilot-sdk.specs/read-file-bytes
     :github.copilot-sdk.specs/readdir
     :github.copilot-sdk.specs/readdir-with-types
     :github.copilot-sdk.specs/reason
     :github.copilot-sdk.specs/reasoning-effort
+    :github.copilot-sdk.specs/reasoning-effort-model
     :github.copilot-sdk.specs/reasoning-id
     :github.copilot-sdk.specs/reasoning-opaque
     :github.copilot-sdk.specs/reasoning-summary
@@ -1121,12 +1138,14 @@
     :github.copilot-sdk.specs/tool-result
     :github.copilot-sdk.specs/tool-result-object
     :github.copilot-sdk.specs/tool-search
+    :github.copilot-sdk.specs/tool-shell-output-stream
     :github.copilot-sdk.specs/tool-telemetry
     :github.copilot-sdk.specs/tool-timeout-ms
     :github.copilot-sdk.specs/tool-title
     :github.copilot-sdk.specs/tool.execution_complete-data
     :github.copilot-sdk.specs/tool.execution_progress-data
     :github.copilot-sdk.specs/tool.execution_start-data
+    :github.copilot-sdk.specs/tool.shell_output-data
     :github.copilot-sdk.specs/tools
     :github.copilot-sdk.specs/total-api-duration-ms
     :github.copilot-sdk.specs/total-nano-aiu
@@ -1171,6 +1190,7 @@
     :github.copilot-sdk.specs/working-directory
     :github.copilot-sdk.specs/workspace-path
     :github.copilot-sdk.specs/write-file
+    :github.copilot-sdk.specs/write-file-bytes
     :github.copilot-sdk.specs/xf]}
   github.copilot-sdk.tool-set
   {:vars

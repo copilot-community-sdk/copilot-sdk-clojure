@@ -3028,7 +3028,7 @@
                        {:phase :session-fs})))
            #'protocol/send-request!
            (fn [connection-io method params & args]
-             (when (= "session.detach" method)
+             (when (= "session.delete" method)
                (deliver cleanup-entered true)
                (.await release-cleanup 1 TimeUnit/SECONDS))
              (apply real-send-request!

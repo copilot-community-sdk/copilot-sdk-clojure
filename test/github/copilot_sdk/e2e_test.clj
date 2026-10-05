@@ -104,35 +104,38 @@
       (throw aggregate))))
 
 (defn- call-with-capturing-provider
-  [f]
-  (let [server (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
-        requests (atom [])
-        response (.getBytes
-                  (json/write-str
-                   {:id "fixture-completion" :object "chat.completion"
-                    :created 1 :model "instruction-cache-fixture"
-                    :choices [{:index 0 :message {:role "assistant" :content "OK"}
-                               :finish_reason "stop"}]
-                    :usage {:prompt_tokens 1 :completion_tokens 1 :total_tokens 2}})
-                  "UTF-8")]
-    (teardown/call-with-cleanup
-     #(do
-        (.createContext
-         server "/v1/chat/completions"
-         (reify HttpHandler
-           (handle [_ exchange]
-             (teardown/call-with-cleanup
-              (fn []
-                (swap! requests conj
-                       (json/read-str (slurp (.getRequestBody exchange) :encoding "UTF-8")
-                                      :key-fn keyword))
-                (.set (.getResponseHeaders exchange) "Content-Type" "application/json")
-                (.sendResponseHeaders exchange 200 (alength response))
-                (.write (.getResponseBody exchange) response))
-              (fn [] (.close exchange))))))
-        (.start server)
-        (f (str "http://127.0.0.1:" (.getPort (.getAddress server)) "/v1") requests))
-     #(.stop server 0))))
+  ([f]
+   (call-with-capturing-provider (constantly {:role "assistant" :content "OK"}) f))
+  ([respond f]
+   (let [server (HttpServer/create (InetSocketAddress. "127.0.0.1" 0) 0)
+         requests (atom [])]
+     (teardown/call-with-cleanup
+      #(do
+         (.createContext
+          server "/v1/chat/completions"
+          (reify HttpHandler
+            (handle [_ exchange]
+              (teardown/call-with-cleanup
+               (fn []
+                 (let [request (json/read-str (slurp (.getRequestBody exchange) :encoding "UTF-8")
+                                              :key-fn keyword)
+                       _ (swap! requests conj request)
+                       message (respond request)
+                       response (.getBytes
+                                 (json/write-str
+                                  {:id "fixture-completion" :object "chat.completion"
+                                   :created 1 :model "instruction-cache-fixture"
+                                   :choices [{:index 0 :message message
+                                              :finish_reason (if (:tool_calls message) "tool_calls" "stop")}]
+                                   :usage {:prompt_tokens 1 :completion_tokens 1 :total_tokens 2}})
+                                 "UTF-8")]
+                   (.set (.getResponseHeaders exchange) "Content-Type" "application/json")
+                   (.sendResponseHeaders exchange 200 (alength response))
+                   (.write (.getResponseBody exchange) response)))
+               (fn [] (.close exchange))))))
+         (.start server)
+         (f (str "http://127.0.0.1:" (.getPort (.getAddress server)) "/v1") requests))
+      #(.stop server 0)))))
 
 (defn with-e2e-client
   "Fixture that creates a real client for E2E tests."
@@ -182,6 +185,91 @@
        (is (string? (:timestamp result)))
        (is (some? (java.time.Instant/parse (:timestamp result)))
            ":timestamp parses as ISO 8601 instant on real CLI ≥ 1.0.51")))))
+
+(deftest ^:e2e test-e2e-shell-output-and-automated-input
+  (when-e2e
+   (let [turn (atom 0)
+         shell-output (atom [])
+         input-request (promise)
+         human-responses (atom [])
+         worker-paused (promise)
+         release-worker (promise)
+         final-response-seen? (atom false)
+         worker-drained (promise)
+         windows? (str/starts-with? (System/getProperty "os.name") "Windows")
+         shell (if windows? "powershell" "bash")
+         command (if windows?
+                   "[Console]::Out.Write('SHELL_STDOUT'); [Console]::Error.Write('SHELL_STDERR')"
+                   "printf 'SHELL_STDOUT'; printf 'SHELL_STDERR' >&2")
+         tool-call (fn [id name arguments]
+                     {:role "assistant" :content nil
+                      :tool_calls [{:id id :type "function"
+                                    :function {:name name :arguments (json/write-str arguments)}}]})]
+     (call-with-capturing-provider
+      (fn [_]
+        (case (swap! turn inc)
+          1 (tool-call "fixture-shell" shell {:command command :description "Fixture output"})
+          2 (tool-call "fixture-question" "ask_user"
+                       {:question "Choose the fixture answer." :choices ["Yes" "No"]})
+          {:role "assistant" :content "OK"}))
+      (fn [base-url _]
+        (let [copilot-session
+              (sdk/create-session
+               *e2e-client*
+               {:model "instruction-cache-fixture"
+                :available-tools [shell "ask_user"]
+                :on-permission-request sdk/approve-all
+                :ask-user-variant :legacy
+                :on-user-input-request (fn [request _]
+                                         (deliver input-request request)
+                                         {:answer "Yes" :was-freeform false})
+                :on-event (fn [event]
+                            (case (:type event)
+                              :copilot/tool.shell_output
+                              (do
+                                (deliver worker-paused true)
+                                @release-worker
+                                (swap! shell-output conj event))
+                              :copilot/human_response.recorded (swap! human-responses conj event)
+                              :copilot/assistant.message
+                              (when (and (not (seq (:agent-id event)))
+                                         (= (get-in event [:data :content]) "OK"))
+                                (reset! final-response-seen? true))
+                              :copilot/session.idle
+                              (when (and @final-response-seen? (not (seq (:agent-id event))))
+                                (deliver worker-drained true))
+                              nil))
+                :provider {:provider-type :openai :base-url base-url
+                           :wire-api :completions}})]
+          (teardown/call-with-cleanup
+           (fn []
+             (is (= (get-in (sdk/send-and-wait! copilot-session {:prompt "Run the fixture."} 30000)
+                            [:data :content])
+                    "OK"))
+             (when-not (true? (deref worker-paused 5000 false))
+               (throw (ex-info "Event worker did not receive shell output" {})))
+             (is (empty? @shell-output))
+             (deliver release-worker true)
+             (when-not (true? (deref worker-drained 5000 false))
+               (throw (ex-info "Event worker did not observe the final root idle" {})))
+             (let [request (deref input-request 5000 ::timeout)
+                   history (sdk/get-messages copilot-session)
+                   chunks @shell-output
+                   combined (apply str (map #(get-in % [:data :text]) chunks))]
+               (is (= (:question request) "Choose the fixture answer."))
+               (is (empty? @human-responses))
+               (is (seq chunks))
+               (is (every? :ephemeral chunks))
+               (is (= (mapv #(get-in % [:data :sequence]) chunks) (vec (range (count chunks)))))
+               (is (every? #(contains? #{"stdout" "stderr" "terminal"}
+                                       (get-in % [:data :stream] "stdout")) chunks))
+               (is (str/includes? combined "SHELL_STDOUT"))
+               (is (str/includes? combined "SHELL_STDERR"))
+               (is (not-any? #(= (:type %) :copilot/tool.shell_output) history))
+               (is (not-any? #(= (:type %) :copilot/human_response.recorded) history))))
+           #(do
+              (deliver release-worker true)
+              (sdk/disconnect! copilot-session)))))))))
 
 (deftest ^:e2e test-e2e-create-session
   (when-e2e

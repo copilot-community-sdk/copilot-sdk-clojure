@@ -266,6 +266,22 @@
            registration-id)))
       (get-in state token-provider/registrations-path))}))
 
+(defn- registered-tool-handler
+  [{:keys [tool-name tool-handler tool-parameters overrides-built-in-tool]}]
+  (when tool-handler
+    (if (and (= tool-name "apply_patch")
+             overrides-built-in-tool
+             (= "string" (or (:type tool-parameters) (get tool-parameters "type"))))
+      (fn [arguments invocation]
+        (tool-handler
+         (cond
+           (string? arguments) arguments
+           (and (map? arguments) (string? (:input arguments))) (:input arguments)
+           :else (throw (ex-info "apply_patch string override requires a string input"
+                                 {:tool-name tool-name})))
+         invocation))
+      tool-handler)))
+
 (defn create-session
   "Create a new session. Internal use - called by client.
    Initializes session state in client's atom and returns a CopilotSession handle.
@@ -299,8 +315,8 @@
         ;; handlers, and unhandled invocations are left pending for manual
         ;; resolution via handle-pending-tool-call!.
         tool-handlers (into {} (keep (fn [t]
-                                       (when-let [h (:tool-handler t)]
-                                         [(:tool-name t) h]))
+                                       (when-let [handler (registered-tool-handler t)]
+                                         [(:tool-name t) handler]))
                                      tools))
         command-handlers (into {} (map (fn [c] [(:name c) (:command-handler c)]) commands))]
     ;; Store session state and IO in client's atom
@@ -524,6 +540,18 @@
                            context))))
   handler)
 
+(defn- validate-binary-session-fs-capability!
+  [client session-id handler]
+  (when (get-in client [:session-fs :capabilities :binary])
+    (let [missing (filterv #(not (fn? (get handler %)))
+                           [:read-file-bytes :write-file-bytes])]
+      (when (seq missing)
+        (throw (ex-info
+                "SessionFs config declares capabilities.binary but the provider does not implement readFileBytes and writeFileBytes."
+                {:session-id session-id
+                 :capabilities (get-in client [:session-fs :capabilities])
+                 :missing-handlers missing}))))))
+
 (defn ^:no-doc validate-session-fs-handler-for-client!
   [client session-id handler]
   (let [validated (validate-session-fs-handler! handler {:session-id session-id})
@@ -532,6 +560,7 @@
         missing (when sqlite-declared?
                   (remove #(contains? validated %)
                           [:sqlite-query :sqlite-exists]))]
+    (validate-binary-session-fs-capability! client session-id validated)
     (when (seq missing)
       (throw
        (ex-info
@@ -615,6 +644,25 @@
        (s/valid? ::specs/sqlite-transaction-error-class
                  (:error-class (ex-data value)))))
 
+(defn session-fs-write-failure
+  "Create a filesystem write failure that changed its target before failing.
+
+   Throw this only from a provider's :write-file operation. The adapter adds
+   :write-changed true to that operation's filesystem error, allowing the runtime
+   to report a committed partial edit without treating the write as successful."
+  [message]
+  (ex-info message {:type :session-fs-write-failure}))
+
+(defn session-fs-write-failure?
+  "Return true for a filesystem write failure that changed its target."
+  [value]
+  (and (instance? clojure.lang.ExceptionInfo value)
+       (= :session-fs-write-failure (:type (ex-data value)))))
+
+(defn- session-fs-write-error [error]
+  (cond-> (session-fs-error error)
+    (session-fs-write-failure? error) (assoc :write-changed true)))
+
 (defn- sqlite-transaction-error-class->wire [error-class]
   (case error-class
     :busy-or-locked "busyOrLocked"
@@ -630,25 +678,47 @@
 
 (defn- await-session-fs-result
   [result]
-  (cond
-    (channel? result) (<!! result)
-    (or (instance? java.util.concurrent.Future result)
-        (instance? clojure.lang.IPending result)) @result
-    :else result))
+  (try
+    (let [value (cond
+                  (channel? result) (<!! result)
+                  (or (instance? java.util.concurrent.Future result)
+                      (instance? clojure.lang.IPending result)) @result
+                  :else result)]
+      (when (instance? Throwable value)
+        (throw value))
+      value)
+    (catch java.util.concurrent.ExecutionException failure
+      (throw (.getCause failure)))))
 
 (defn- session-fs-void-result
-  [f args params]
+  ([f args params]
+   (session-fs-void-result f args params session-fs-error))
+  ([f args params error-result]
+   (try
+     (let [result (try
+                    (apply f args)
+                    (catch clojure.lang.ArityException _
+                      (f params)))]
+       ;; Awaited failures do not indicate a callback-arity mismatch.
+       (await-session-fs-result result)
+       nil)
+     (catch Throwable t
+       (error-result t)))))
+
+(def ^:private max-session-fs-binary-content-length (- (* 64 1024 1024) 1024))
+(def ^:private max-session-fs-binary-bytes (* (quot max-session-fs-binary-content-length 4) 3))
+
+(defn- decode-session-fs-bytes [content]
+  (when (> (count content) max-session-fs-binary-content-length)
+    (throw (ex-info "sessionFs.writeFileBytes content exceeds the binary write limit" {})))
   (try
-    (await-session-fs-result (apply f args))
-    nil
-    (catch clojure.lang.ArityException _
-      (try
-        (await-session-fs-result (f params))
-        nil
-        (catch Throwable t
-          (session-fs-error t))))
-    (catch Throwable t
-      (session-fs-error t))))
+    (let [bytes (.decode (java.util.Base64/getDecoder) ^String content)]
+      (when (or (> (alength bytes) max-session-fs-binary-bytes)
+                (not= content (.encodeToString (java.util.Base64/getEncoder) bytes)))
+        (throw (IllegalArgumentException. "Noncanonical base64")))
+      bytes)
+    (catch IllegalArgumentException error
+      (throw (ex-info "invalid sessionFs.writeFileBytes base64 content" {} error)))))
 
 (defn create-session-fs-adapter
   "Adapt a provider-style session filesystem implementation to a sessionFs handler map.
@@ -656,6 +726,8 @@
    Provider functions use direct arguments and throw on errors:
    - :read-file          (fn [path] content)
    - :write-file         (fn [path content mode])
+   - :read-file-bytes    (fn [path] byte-array), optional
+   - :write-file-bytes   (fn [path byte-array mode]), optional
    - :append-file        (fn [path content mode])
    - :exists             (fn [path] boolean)
    - :stat               (fn [path] file-info-map)
@@ -665,7 +737,17 @@
    - :rm                 (fn [path recursive force])
    - :rename             (fn [src dest])
    Provider functions may return values directly, core.async channels, futures,
-   or promises.
+   or promises. A channel or promise may yield a Throwable to report failure;
+   failed futures preserve the underlying provider exception. An asynchronous
+   failure never retries a filesystem operation.
+
+   Binary operations use exact byte arrays and standard base64 on the wire.
+   Both are required when the client's :session-fs declares
+   :capabilities {:binary true}. Each operation is limited to 50,330,880 raw
+   bytes; unsupported operations, invalid base64, and oversized content return
+   filesystem errors. Text-only providers do not fall back to the host filesystem.
+   Throw [[session-fs-write-failure]] from :write-file only when a failed write
+   changed the target; other operations do not attach the partial-write marker.
 
    The returned handler map has the low-level RPC contract: each function
    receives a params map and returns RPC-shaped result maps or structured
@@ -693,7 +775,32 @@
 
          :write-file
          (fn [{:keys [path content mode] :as params}]
-           (session-fs-void-result (:write-file provider) [path content mode] params))
+           (session-fs-void-result (:write-file provider) [path content mode] params
+                                   session-fs-write-error))
+
+         :read-file-bytes
+         (fn [{:keys [path]}]
+           (if-let [read-bytes (:read-file-bytes provider)]
+             (try
+               (let [bytes (await-session-fs-result (read-bytes path))]
+                 (when-not (bytes? bytes)
+                   (throw (ex-info "sessionFs.readFileBytes provider must return a byte array" {})))
+                 (when (> (alength ^bytes bytes) max-session-fs-binary-bytes)
+                   (throw (ex-info "sessionFs.readFileBytes content exceeds the binary read limit" {})))
+                 {:content (.encodeToString (java.util.Base64/getEncoder) bytes)})
+               (catch Throwable error
+                 {:content "" :error (session-fs-error error)}))
+             {:content "" :error {:code "UNKNOWN" :message "Binary reads are not supported"}}))
+
+         :write-file-bytes
+         (fn [{:keys [path content mode]}]
+           (if-let [write-bytes (:write-file-bytes provider)]
+             (try
+               (await-session-fs-result (write-bytes path (decode-session-fs-bytes content) mode))
+               nil
+               (catch Throwable error
+                 (session-fs-error error)))
+             {:code "UNKNOWN" :message "Binary writes are not supported"}))
 
          :append-file
          (fn [{:keys [path content mode] :as params}]
@@ -810,6 +917,13 @@
                    (contains? (:sqlite handler-or-provider) :exists))))
     (create-session-fs-adapter handler-or-provider)
     handler-or-provider))
+
+(defn ^:no-doc prepare-session-fs-handler
+  "Validate declared binary support before the adapter adds unsupported-operation handlers."
+  [client session-id handler-or-provider]
+  (validate-binary-session-fs-capability! client session-id handler-or-provider)
+  (validate-session-fs-handler-for-client!
+   client session-id (adapt-session-fs-handler handler-or-provider)))
 
 (defn handle-system-message-transform
   "Handle a systemMessage.transform RPC request from the CLI runtime.
@@ -979,6 +1093,8 @@
   "Map RPC method names to handler map keys."
   {"sessionFs.readFile"        :read-file
    "sessionFs.writeFile"       :write-file
+   "sessionFs.readFileBytes"   :read-file-bytes
+   "sessionFs.writeFileBytes"  :write-file-bytes
    "sessionFs.appendFile"      :append-file
    "sessionFs.exists"          :exists
    "sessionFs.stat"            :stat
@@ -1978,6 +2094,8 @@
                              "sessionEnd" :on-session-end
                              "errorOccurred" :on-error-occurred
                              "agentStop" :on-agent-stop
+                             "subagentStart" :on-subagent-start
+                             "subagentStop" :on-subagent-stop
                              nil)
                handler (when handler-key (get hooks handler-key))]
            (if-not handler

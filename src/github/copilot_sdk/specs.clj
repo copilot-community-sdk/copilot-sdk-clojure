@@ -177,7 +177,9 @@
 ;; model capabilities); locally enforced via the predicate below.
 (s/def ::session-fs-capabilities
   (s/and map?
-         #(or (not (contains? % :sqlite)) (boolean? (:sqlite %)))))
+         #(every? (fn [key]
+                    (or (not (contains? % key)) (boolean? (get % key))))
+                  [:sqlite :binary])))
 
 (s/def ::session-fs
   (s/and map?
@@ -189,6 +191,8 @@
 ;; Each fn receives a params map (with :session-id, :path, etc.) and returns a result map (or nil for void ops).
 (s/def ::read-file fn?)
 (s/def ::write-file fn?)
+(s/def ::read-file-bytes fn?)
+(s/def ::write-file-bytes fn?)
 (s/def ::append-file fn?)
 (s/def ::exists fn?)
 (s/def ::stat fn?)
@@ -207,7 +211,8 @@
 (s/def ::session-fs-handler
   (s/keys :req-un [::read-file ::write-file ::append-file ::exists ::stat
                    ::mkdir ::readdir ::readdir-with-types ::rm ::rename]
-          :opt-un [::sqlite-query ::sqlite-exists ::sqlite-transaction]))
+          :opt-un [::read-file-bytes ::write-file-bytes
+                   ::sqlite-query ::sqlite-exists ::sqlite-transaction]))
 
 (defn- fn-accepts-arity?
   [f n]
@@ -241,6 +246,10 @@
        (every? (fn [[operation arity]]
                  (fn-accepts-arity? (get provider operation) arity))
                session-fs-provider-arities)
+       (every? (fn [[operation arity]]
+                 (or (not (contains? provider operation))
+                     (fn-accepts-arity? (get provider operation) arity)))
+               [[:read-file-bytes 1] [:write-file-bytes 3]])
        ;; Optional :sqlite sub-provider — transaction support is optional.
        (let [sql (:sqlite provider)]
          (or (nil? sql)
@@ -419,8 +428,8 @@
    :safety               {:description "Environment limitations, prohibited actions, security policies"}
    :tool-instructions    {:description "Per-tool usage instructions"}
    :custom-instructions  {:description "Repository and organization custom instructions"}
-   :runtime-instructions {:description "Runtime-provided context and instructions (e.g. system notifications, memories, workspace context, mode-specific instructions, content-exclusion policy)"}
-   :last-instructions    {:description "End-of-prompt instructions: parallel tool calling, persistence, task completion"}})
+   :runtime-instructions {:description "Runtime-provided system-prompt context: notifications, memories, workspace context, and content-exclusion policy. Mode instructions may travel in transition messages."}
+   :last-instructions    {:description "End-of-prompt instructions: parallel tool calling, persistence, task completion, and configured subagent-model guidance when the task tool is available"}})
 
 (def system-message-sections
   "Alias for [[system-prompt-sections]] matching the upstream
@@ -879,12 +888,15 @@
 (s/def ::on-session-end fn?)
 (s/def ::on-error-occurred fn?)
 (s/def ::on-agent-stop fn?)
+(s/def ::on-subagent-start fn?)
+(s/def ::on-subagent-stop fn?)
 (s/def ::hooks
   (s/keys :opt-un [::on-pre-tool-use ::on-pre-mcp-tool-call ::on-post-tool-use
                    ::on-post-tool-use-failure
                    ::on-user-prompt-submitted ::on-user-prompt-transformed
                    ::on-session-start ::on-session-end
-                   ::on-error-occurred ::on-agent-stop]))
+                   ::on-error-occurred ::on-agent-stop
+                   ::on-subagent-start ::on-subagent-stop]))
 
 ;; Disable resume flag
 (s/def ::disable-resume? boolean?)
@@ -1884,6 +1896,7 @@
     :copilot/assistant.streaming_delta :copilot/assistant.turn_end :copilot/assistant.usage
     :copilot/abort
     :copilot/tool.user_requested :copilot/tool.execution_start :copilot/tool.execution_partial_result
+    :copilot/tool.shell_output
     :copilot/tool.execution_progress :copilot/tool.execution_complete
     :copilot/subagent.started :copilot/subagent.completed :copilot/subagent.failed :copilot/subagent.selected
     :copilot/subagent.deselected
@@ -1906,6 +1919,7 @@
     :copilot/commands.changed
     ;; Plan mode events
     :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed
+    :copilot/human_response.recorded
     ;; Auto-mode switch events (upstream PR #1228)
     :copilot/auto_mode_switch.requested :copilot/auto_mode_switch.completed
     ;; Session status events
@@ -1974,6 +1988,7 @@
 (s/def ::base-commit string?)
 
 (s/def ::detached-from-spawning-parent-session-id string?)
+(s/def ::reasoning-effort-model string?)
 ;; upstream schema 1.0.83-1: `autoTier` echoes the auto-routing preference
 ;; active at session start/resume. The coercion layer converts the wire enum
 ;; string to the same idiomatic keyword domain used by ::capi options.
@@ -1985,14 +2000,16 @@
   ;; canonical contract for this field.
   (s/keys :req-un [::session-id]
           :opt-un [::producer ::copilot-version ::start-time ::selected-model
-                   ::reasoning-effort ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit
+                   ::reasoning-effort ::reasoning-effort-model
+                   ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit
                    ::detached-from-spawning-parent-session-id ::auto-tier]))
 
 (s/def ::event-count nat-int?)
 (s/def ::events-file-size-bytes nat-int?)
 (s/def ::session.resume-data
   (s/keys :req-un [::event-count]
-          :opt-un [::selected-model ::reasoning-effort ::already-in-use? ::remote-steerable?
+          :opt-un [::selected-model ::reasoning-effort ::reasoning-effort-model
+                   ::already-in-use? ::remote-steerable?
                    ::host-type ::head-commit ::base-commit ::events-file-size-bytes
                    ::auto-tier]))
 
@@ -2311,6 +2328,14 @@
 (s/def ::tool.execution_progress-data
   (s/keys :req-un [::tool-call-id ::progress-message]))
 
+(s/def ::tool-shell-output-stream #{"stdout" "stderr" "terminal"})
+(s/def ::tool.shell_output-data
+  (s/and
+   (s/keys :req-un [::tool-call-id])
+   #(required-value? % :text string?)
+   #(required-value? % :sequence nat-int?)
+   #(optional-field? % :stream (partial s/valid? ::tool-shell-output-stream))))
+
 (defn- tool-execution-complete-error?
   [error]
   (and (map? error)
@@ -2424,7 +2449,7 @@
   (s/and
    (s/keys :req-un [::new-model]
            :opt-un [::previous-model ::previous-reasoning-effort
-                    ::reasoning-effort ::source])
+                    ::reasoning-effort ::reasoning-effort-model ::source])
    #(or (not (contains? % :source))
         (s/valid? ::model-change-source (:source %)))))
 
@@ -3010,6 +3035,56 @@
 (s/def ::external_tool.requested-data
   (s/keys :req-un [::request-id ::session-id ::tool-call-id ::tool-name]
           :opt-un [::provider-id]))
+
+(s/def ::human-response-actor #{"human_response" "host_automation" "unknown"})
+(s/def ::exit-plan-mode-action #{"exit_only" "interactive" "autopilot" "autopilot_fleet"})
+(s/def ::elicitation-requested-schema
+  (s/and
+   map?
+   #(every? #{:type :properties :required} (keys %))
+   #(required-value? % :type #{"object"})
+   #(required-value? % :properties json-object-value?)
+   #(optional-field? % :required (partial vector-of? string?))))
+
+(defn- human-response-recorded-response?
+  [response]
+  (and
+   (map? response)
+   (case (:response-kind response)
+     "ask_user"
+     (and (required-value? response :message string?)
+          (required-value? response :content json-object-value?)
+          (required-value? response :requested-schema
+                           (partial s/valid? ::elicitation-requested-schema)))
+
+     "user_input"
+     (and (required-value? response :question string?)
+          (required-value? response :answer string?)
+          (required-value? response :was-freeform boolean?)
+          (optional-field? response :choices (partial vector-of? string?))
+          (optional-field? response :allow-freeform boolean?))
+
+     "exit_plan_mode"
+     (let [action? (partial s/valid? ::exit-plan-mode-action)]
+       (and (required-value? response :summary string?)
+            (required-value? response :plan-content string?)
+            (required-value? response :approved boolean?)
+            (required-value? response :actions (partial vector-of? action?))
+            (required-value? response :recommended-action action?)
+            (optional-field? response :selected-action action?)
+            (optional-field? response :feedback string?)
+            (optional-field? response :auto-approve-edits boolean?)))
+
+     false)))
+
+(s/def ::human-response-recorded-response human-response-recorded-response?)
+(s/def ::human_response.recorded-data
+  (s/and
+   map?
+   #(required-value? % :request-id string?)
+   #(required-value? % :actor (partial s/valid? ::human-response-actor))
+   #(required-value? % :response human-response-recorded-response?)
+   #(optional-field? % :tool-call-id string?)))
 
 ;; Generic session event
 (s/def ::session-event

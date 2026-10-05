@@ -888,6 +888,12 @@
       "title": "AssistantMessageEvent"
     },
     "AssistantMessageReasoningBlocks": {
+      "not": {
+        "required": [
+          "blocks",
+          "orderedBlocks"
+        ]
+      },
       "type": "object",
       "properties": {
         "provider": {
@@ -900,6 +906,13 @@
             "x-opaque-json": true
           },
           "description": "Provider-native reasoning items or content blocks preserved verbatim, in order. A single response can carry several, and provider signatures or identifiers may depend on their exact content and ordering."
+        },
+        "orderedBlocks": {
+          "type": "array",
+          "items": {
+            "x-opaque-json": true
+          },
+          "description": "Anthropic Messages assistant block ordering preserved when the legacy reasoning-only representation cannot reproduce it exactly. Thinking and text blocks remain verbatim; tool-use entries retain identity and a payload fingerprint when later signed reasoning depends on them, and are hydrated from the message's tool requests during replay."
         }
       },
       "required": [
@@ -9140,6 +9153,235 @@
       "description": "Session event \"hook.start\". Hook invocation start details including type and input data",
       "title": "HookStartEvent"
     },
+    "HumanResponseActor": {
+      "type": "string",
+      "enum": [
+        "human_response",
+        "host_automation",
+        "unknown"
+      ],
+      "description": "Controlled provenance for a typed runtime response. Only `human_response`, minted by a trusted direct-interaction ingress, is human authorization evidence.",
+      "title": "HumanResponseActor",
+      "x-enumDescriptions": {
+        "human_response": "A built-in trusted client submitted the response after direct human interaction.",
+        "host_automation": "A host or SDK automation submitted the response without direct human interaction.",
+        "unknown": "The response came through a legacy or otherwise unattributed ingress."
+      }
+    },
+    "HumanResponseRecordedData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID of the runtime-owned question or plan review."
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that opened the request, when present."
+        },
+        "actor": {
+          "$ref": "#/definitions/HumanResponseActor",
+          "description": "Controlled actor provenance established at response ingress."
+        },
+        "response": {
+          "$ref": "#/definitions/HumanResponseRecordedResponse",
+          "description": "Typed request and response payload."
+        }
+      },
+      "required": [
+        "requestId",
+        "actor",
+        "response"
+      ],
+      "additionalProperties": false,
+      "description": "Durable request-correlated evidence for a typed response to a runtime-owned question or plan review.",
+      "title": "HumanResponseRecordedData"
+    },
+    "HumanResponseRecordedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "human_response.recorded",
+          "description": "Type discriminator. Always \"human_response.recorded\"."
+        },
+        "data": {
+          "$ref": "#/definitions/HumanResponseRecordedData",
+          "description": "Durable request-correlated evidence for a typed response to a runtime-owned question or plan review."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"human_response.recorded\". Durable request-correlated evidence for a typed response to a runtime-owned question or plan review.",
+      "title": "HumanResponseRecordedEvent"
+    },
+    "HumanResponseRecordedResponse": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "content": {
+              "type": "object",
+              "additionalProperties": {
+                "$ref": "#/definitions/ElicitationCompletedContent",
+                "description": "Opaque JSON value submitted for one field in accepted `elicitation.completed` form content."
+              },
+              "description": "Exact answer content accepted from the user."
+            },
+            "message": {
+              "type": "string",
+              "description": "Exact question displayed to the user."
+            },
+            "requestedSchema": {
+              "$ref": "#/definitions/ElicitationRequestedSchema",
+              "description": "Exact response schema displayed to the user."
+            },
+            "responseKind": {
+              "type": "string",
+              "const": "ask_user",
+              "description": "Runtime-owned response kind discriminator."
+            }
+          },
+          "required": [
+            "responseKind",
+            "content",
+            "message",
+            "requestedSchema"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "question": {
+              "type": "string",
+              "description": "Exact question displayed to the user."
+            },
+            "choices": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Exact choices displayed to the user, when the request offered choices."
+            },
+            "allowFreeform": {
+              "type": "boolean",
+              "description": "Whether the displayed request allowed a free-form answer."
+            },
+            "answer": {
+              "type": "string",
+              "description": "Exact selected or free-form answer submitted by the user."
+            },
+            "wasFreeform": {
+              "type": "boolean",
+              "description": "Whether the answer was typed as free-form text rather than selected from the displayed choices."
+            },
+            "responseKind": {
+              "type": "string",
+              "const": "user_input",
+              "description": "Runtime-owned response kind discriminator."
+            }
+          },
+          "required": [
+            "responseKind",
+            "question",
+            "answer",
+            "wasFreeform"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "summary": {
+              "type": "string",
+              "description": "Exact plan summary displayed to the user."
+            },
+            "planContent": {
+              "type": "string",
+              "description": "Exact full plan content available from the review UI."
+            },
+            "actions": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/ExitPlanModeAction",
+                "description": "Exit plan mode action"
+              },
+              "description": "Actions offered by the plan review UI."
+            },
+            "recommendedAction": {
+              "$ref": "#/definitions/ExitPlanModeAction",
+              "description": "Action the plan review UI recommended."
+            },
+            "approved": {
+              "type": "boolean",
+              "description": "Whether the user approved the reviewed plan."
+            },
+            "selectedAction": {
+              "$ref": "#/definitions/ExitPlanModeAction",
+              "description": "Action selected by the user, when applicable."
+            },
+            "autoApproveEdits": {
+              "type": "boolean",
+              "description": "Whether the selected response requested edit auto-approval."
+            },
+            "feedback": {
+              "type": "string",
+              "description": "Exact feedback submitted with the plan decision, when present."
+            },
+            "responseKind": {
+              "type": "string",
+              "const": "exit_plan_mode",
+              "description": "Runtime-owned response kind discriminator."
+            }
+          },
+          "required": [
+            "responseKind",
+            "summary",
+            "planContent",
+            "actions",
+            "recommendedAction",
+            "approved"
+          ]
+        }
+      ],
+      "description": "Exact runtime-owned question or reviewed plan paired with the typed response that settled it.",
+      "title": "HumanResponseRecordedResponse"
+    },
     "IdleData": {
       "type": "object",
       "properties": {
@@ -11884,6 +12126,10 @@
             "null"
           ],
           "description": "Reasoning effort level after the model change, if applicable"
+        },
+        "reasoningEffortModel": {
+          "type": "string",
+          "description": "Model that owns effort embedded in an authored model selection. Omitted for independent reasoning-effort overrides and legacy events."
         },
         "previousReasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -16042,6 +16288,10 @@
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
         },
+        "reasoningEffortModel": {
+          "type": "string",
+          "description": "Model that owns effort embedded in an authored model selection. Omitted for independent reasoning-effort overrides and legacy events."
+        },
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
           "description": "Reasoning summary mode used for model calls, if applicable (e.g. \"none\", \"concise\", \"detailed\")"
@@ -17913,7 +18163,11 @@
         },
         {
           "$ref": "#/definitions/ToolExecutionPartialResultEvent",
-          "description": "Session event \"tool.execution_partial_result\". Streaming tool execution output for incremental result display"
+          "description": "Session event \"tool.execution_partial_result\". Deprecated merged replacement snapshot of shell output. Use tool.shell_output for append-only, stream-tagged output instead."
+        },
+        {
+          "$ref": "#/definitions/ToolShellOutputEvent",
+          "description": "Session event \"tool.shell_output\". Live, append-only shell output. Not persisted or replayed to late subscribers. Text is decoded and redacted per chunk; chunks need not contain complete lines."
         },
         {
           "$ref": "#/definitions/ToolExecutionProgressEvent",
@@ -18142,6 +18396,10 @@
         {
           "$ref": "#/definitions/ExitPlanModeCompletedEvent",
           "description": "Session event \"exit_plan_mode.completed\". Plan mode exit completion with the user's approval decision and optional feedback"
+        },
+        {
+          "$ref": "#/definitions/HumanResponseRecordedEvent",
+          "description": "Session event \"human_response.recorded\". Durable request-correlated evidence for a typed response to a runtime-owned question or plan review."
         },
         {
           "$ref": "#/definitions/ToolsUpdatedEvent",
@@ -19602,6 +19860,10 @@
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
+        },
+        "reasoningEffortModel": {
+          "type": "string",
+          "description": "Model that owns effort embedded in an authored model selection. Omitted for independent reasoning-effort overrides and legacy events."
         },
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -21651,6 +21913,15 @@
           "description": "Experimental shell completion facts captured before the persisted result contents are stripped.",
           "stability": "experimental"
         },
+        "fileEdits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ToolExecutionCompleteFileEdit",
+            "description": "A file mutation that was actually committed by a built-in file editing tool."
+          },
+          "description": "Experimental. File mutations actually committed by a built-in file editing tool, in execution order. Present on successful edits and on partial failures when earlier mutations were committed. Paths are absolute in the session filesystem namespace.",
+          "stability": "experimental"
+        },
         "parentToolCallId": {
           "type": "string",
           "description": "Tool call ID of the parent tool invocation when this event originates from a sub-agent",
@@ -21746,6 +22017,43 @@
       "additionalProperties": false,
       "description": "Session event \"tool.execution_complete\". Tool execution completion results including success status, detailed output, and error information",
       "title": "ToolExecutionCompleteEvent"
+    },
+    "ToolExecutionCompleteFileEdit": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path in the session filesystem namespace."
+        },
+        "kind": {
+          "$ref": "#/definitions/ToolExecutionCompleteFileEditKind",
+          "description": "Kind of mutation committed at this path."
+        }
+      },
+      "required": [
+        "path",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "A file mutation that was actually committed by a built-in file editing tool.",
+      "title": "ToolExecutionCompleteFileEdit",
+      "stability": "experimental"
+    },
+    "ToolExecutionCompleteFileEditKind": {
+      "type": "string",
+      "enum": [
+        "create",
+        "edit",
+        "delete"
+      ],
+      "description": "Kind of file mutation committed by a built-in editing tool.",
+      "title": "ToolExecutionCompleteFileEditKind",
+      "x-enumDescriptions": {
+        "create": "A file was created.",
+        "edit": "A file was written by an edit operation.",
+        "delete": "A file was deleted."
+      },
+      "stability": "experimental"
     },
     "ToolExecutionCompleteResult": {
       "type": "object",
@@ -22049,7 +22357,7 @@
         },
         "partialOutput": {
           "type": "string",
-          "description": "Incremental output chunk from the running tool"
+          "description": "Merged replacement snapshot from the running shell, not an append-only chunk"
         }
       },
       "required": [
@@ -22057,8 +22365,9 @@
         "partialOutput"
       ],
       "additionalProperties": false,
-      "description": "Streaming tool execution output for incremental result display",
-      "title": "ToolExecutionPartialData"
+      "description": "Deprecated merged replacement snapshot of shell output. Use tool.shell_output for append-only, stream-tagged output instead.",
+      "title": "ToolExecutionPartialData",
+      "deprecated": true
     },
     "ToolExecutionPartialResultEvent": {
       "type": "object",
@@ -22101,7 +22410,7 @@
         },
         "data": {
           "$ref": "#/definitions/ToolExecutionPartialData",
-          "description": "Streaming tool execution output for incremental result display"
+          "description": "Deprecated merged replacement snapshot of shell output. Use tool.shell_output for append-only, stream-tagged output instead."
         }
       },
       "required": [
@@ -22113,8 +22422,9 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"tool.execution_partial_result\". Streaming tool execution output for incremental result display",
-      "title": "ToolExecutionPartialResultEvent"
+      "description": "Session event \"tool.execution_partial_result\". Deprecated merged replacement snapshot of shell output. Use tool.shell_output for append-only, stream-tagged output instead.",
+      "title": "ToolExecutionPartialResultEvent",
+      "deprecated": true
     },
     "ToolExecutionProgressData": {
       "type": "object",
@@ -22504,6 +22814,107 @@
       "additionalProperties": false,
       "description": "Session event \"tool_search.activated\". Persisted generic client-side tool activations restored when a session resumes.",
       "title": "ToolSearchActivatedEvent"
+    },
+    "ToolShellOutputData": {
+      "type": "object",
+      "properties": {
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID that owns this shell output"
+        },
+        "stream": {
+          "$ref": "#/definitions/ToolShellOutputStream",
+          "default": "stdout",
+          "description": "Output source. Omission means stdout. Terminal output has no separate stdout/stderr attribution."
+        },
+        "text": {
+          "type": "string",
+          "description": "New output to append, without synthetic shell-result markers or stream-switch separators"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based publication sequence across all output streams for this tool call. Not a byte offset or an OS write-order guarantee."
+        }
+      },
+      "required": [
+        "toolCallId",
+        "text",
+        "sequence"
+      ],
+      "additionalProperties": false,
+      "description": "Live, append-only shell output. Not persisted or replayed to late subscribers. Text is decoded and redacted per chunk; chunks need not contain complete lines.",
+      "title": "ToolShellOutputData"
+    },
+    "ToolShellOutputEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "tool.shell_output",
+          "description": "Type discriminator. Always \"tool.shell_output\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ToolShellOutputData",
+          "description": "Live, append-only shell output. Not persisted or replayed to late subscribers. Text is decoded and redacted per chunk; chunks need not contain complete lines."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"tool.shell_output\". Live, append-only shell output. Not persisted or replayed to late subscribers. Text is decoded and redacted per chunk; chunks need not contain complete lines.",
+      "title": "ToolShellOutputEvent"
+    },
+    "ToolShellOutputStream": {
+      "type": "string",
+      "enum": [
+        "stdout",
+        "stderr",
+        "terminal"
+      ],
+      "description": "Shell output source. Terminal output has no separate stdout/stderr attribution.",
+      "x-enumDescriptions": {
+        "stdout": "Output from the shell command's standard output stream. This is the default when stream is omitted.",
+        "stderr": "Output from the shell command's standard error stream.",
+        "terminal": "Inherently merged output that cannot be attributed separately to stdout or stderr."
+      }
     },
     "ToolsUpdatedData": {
       "type": "object",

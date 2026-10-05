@@ -1,0 +1,1540 @@
+{:api-snapshot-impact
+ {:added-fdefs
+  #{github.copilot-sdk.session/session-fs-write-failure
+    github.copilot-sdk.session/session-fs-write-failure?
+    github.copilot-sdk/session-fs-write-failure
+    github.copilot-sdk/session-fs-write-failure?},
+  :added-functions
+  #{github.copilot-sdk.session/session-fs-write-failure
+    github.copilot-sdk.session/session-fs-write-failure?
+    github.copilot-sdk/session-fs-write-failure
+    github.copilot-sdk/session-fs-write-failure?},
+  :added-spec-keys
+  #{:github.copilot-sdk.specs/elicitation-requested-schema
+    :github.copilot-sdk.specs/exit-plan-mode-action
+    :github.copilot-sdk.specs/human-response-actor
+    :github.copilot-sdk.specs/human-response-recorded-response
+    :github.copilot-sdk.specs/human_response.recorded-data
+    :github.copilot-sdk.specs/on-subagent-start
+    :github.copilot-sdk.specs/on-subagent-stop
+    :github.copilot-sdk.specs/read-file-bytes
+    :github.copilot-sdk.specs/reasoning-effort-model
+    :github.copilot-sdk.specs/tool-shell-output-stream
+    :github.copilot-sdk.specs/tool.shell_output-data
+    :github.copilot-sdk.specs/write-file-bytes}},
+ :certification
+ {:clojure-base-commit "49f74ee22cc335008528b4970898b904b18e1df8",
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_ef04633.edn",
+   :sha256
+   "d139c4b735b90a686a59b6bec4ac4352c6b365e4cfa0b0cca7bef1ecbdde93d4"},
+  :local-artifact-seal
+  {:commit "245fcbff7ec65e157cbebf46d1b9366226342bda",
+   :status :sealed}},
+ :changed-paths
+ {:classification-counts
+  {:experimental 13,
+   :generated-only 8,
+   :internal 54,
+   :language-specific 239,
+   :stable-public 54},
+  :count 368,
+  :exact-classifications
+  {"CONTRIBUTING.md" :internal,
+   "docs/features/fleet-mode.md" :stable-public,
+   "docs/features/streaming-events.md" :stable-public,
+   "docs/getting-started.md" :experimental,
+   "docs/observability/opentelemetry.md" :stable-public,
+   "nodejs/README.md" :stable-public,
+   "nodejs/docs/agent-author.md" :stable-public,
+   "nodejs/src/canvas.ts" :experimental,
+   "nodejs/src/client.ts" :stable-public,
+   "nodejs/src/generated/rpc.ts" :generated-only,
+   "nodejs/src/generated/session-events.ts" :stable-public,
+   "nodejs/src/index.ts" :stable-public,
+   "nodejs/src/session.ts" :stable-public,
+   "nodejs/src/sessionFsProvider.ts" :stable-public,
+   "nodejs/src/types.ts" :stable-public,
+   "nodejs/test/client.test.ts" :stable-public,
+   "nodejs/test/csharp-codegen.test.ts" :internal,
+   "nodejs/test/e2e/anthropic_replay.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/auto_tier.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/builtin_tools.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/client_options.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/compaction.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/copilot_request_handler.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/customizations_reload.e2e.test.ts" :generated-only,
+   "nodejs/test/e2e/disabled_mcp_servers.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/harness/CapiProxy.test.ts" :internal,
+   "nodejs/test/e2e/harness/CapiProxy.ts" :internal,
+   "nodejs/test/e2e/harness/sdkTestContext.test.ts" :internal,
+   "nodejs/test/e2e/harness/sdkTestContext.ts" :internal,
+   "nodejs/test/e2e/harness/testBackend.ts" :internal,
+   "nodejs/test/e2e/mcp_instruction_recovery.e2e.test.ts"
+   :stable-public,
+   "nodejs/test/e2e/mcp_legacy_sse_recovery.e2e.test.ts"
+   :stable-public,
+   "nodejs/test/e2e/mode_handlers.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/model_effort_resume.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/multi-client.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/pending_work_resume.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/permissions.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/rpc_session_state_extras.e2e.test.ts"
+   :generated-only,
+   "nodejs/test/e2e/rpc_shell_user_requested.e2e.test.ts"
+   :experimental,
+   "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts" :generated-only,
+   "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
+   :generated-only,
+   "nodejs/test/e2e/sandbox_devices.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/sandbox_filesystem.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/sandbox_gh_config.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/session.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/session_config.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/session_fs.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/streaming_fidelity.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/structured_output.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/subagent_hooks.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/suspend.e2e.test.ts" :generated-only,
+   "nodejs/test/e2e/system_message_sections.e2e.test.ts"
+   :stable-public,
+   "nodejs/test/e2e/system_message_transform.e2e.test.ts"
+   :stable-public,
+   "nodejs/test/e2e/telemetry-skills.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/telemetry.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/tools.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/tools_anthropic_updates.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/ui_elicitation.e2e.test.ts" :stable-public,
+   "nodejs/test/external-tool-cancellation.test.ts" :stable-public,
+   "nodejs/test/package-sdk.test.ts" :internal,
+   "nodejs/test/runtimeArtifacts.test.ts" :internal,
+   "nodejs/test/rust-codegen.test.ts" :internal,
+   "nodejs/test/session-event-codegen.test.ts" :internal,
+   "nodejs/test/session-event-types.test.ts" :experimental,
+   "nodejs/test/session_fs_adapter.test.ts" :stable-public,
+   "nodejs/test/shared-codegen.test.ts" :internal,
+   "nodejs/test/testBackend.test.ts" :internal,
+   "nodejs/test/typescript-codegen.test.ts" :internal,
+   "package.json" :internal},
+  :hash-format :newline-joined-without-trailing-newline,
+  :language-specific-prefixes
+  ["dotnet/" "go/" "java/" "python/" "rust/"],
+  :prefix-classifications
+  [{:classification :internal,
+    :prefix ".github/",
+    :reason "Upstream build and CI infrastructure."}
+   {:classification :internal,
+    :prefix "nodejs/",
+    :reason
+    "Remaining Node packaging and runtime pins; behavioral sources/tests have exact classifications."}
+   {:classification :internal,
+    :prefix "scripts/",
+    :reason "Build, CI and foreign-language code generation."}
+   {:classification :internal,
+    :prefix "test/harness/",
+    :reason "Shared capture/replay infrastructure."}
+   {:classification :experimental,
+    :prefix "test/snapshots/sandbox_devices/",
+    :reason "Sandbox device policy evidence."}
+   {:classification :generated-only,
+    :prefix "test/snapshots/rpc_tasks_and_handlers/",
+    :reason "Generated task/model selection evidence."}
+   {:classification :stable-public,
+    :prefix "test/snapshots/",
+    :reason
+    "MCP recovery, permission, filesystem, subagent hooks, telemetry, patch dispatch and automated elicitation evidence."}],
+  :rename-policy :no-renames,
+  :sha256
+  "b6a3a1b61ab01089580b0d43b132e52c681e5027965627973e8eeb7db57c2ce9"},
+ :commit-classifications
+ [{:changed-path-count 368,
+   :changed-paths-sha256
+   "b6a3a1b61ab01089580b0d43b132e52c681e5027965627973e8eeb7db57c2ce9",
+   :classifications
+   #{:experimental
+     :generated-only
+     :internal
+     :language-specific
+     :stable-public},
+   :commit "6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b",
+   :reason
+   "Snapshot aggregation; stable contracts, existing experimental maintenance and exclusions are separately classified by symbol and path.",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.92-4"}],
+ :decision "doc/adr/2026-10-05-callback-and-event-contracts.md",
+ :experimental-maintenance
+ [{:classification :experimental,
+   :decision :maintain-existing-cloud-lifecycle,
+   :reason
+   "Existing server-assigned cloud sessions whose local initialization fails are deleted, not merely detached. A ten-second bound and setup ownership fence preserve the primary error and isolate later sessions.",
+   :symbol "CopilotClient.createSession cloud initialization cleanup",
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/uninitialized-cloud-session-is-deleted-on-provider-failure
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/rejected-cloud-deletion-remains-observable
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/cloud-deletion-timeout-preserves-the-provider-failure]}
+  {:classification :experimental,
+   :decision :wire-only,
+   :reason
+   "Preserve provider JSON and enforce the pinned schema's not/required mutual exclusion without new curated stable specs.",
+   :symbol "AssistantMessageReasoningBlocks.orderedBlocks",
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/experimental-reasoning-blocks-preserve-provider-payloads-without-new-public-specs]}],
+ :intentional-exclusions
+ [{:classification :experimental,
+   :decision :wire-only,
+   :reason
+   "Committed edit telemetry remains explicitly experimental; no new curated stable field.",
+   :symbol "ToolExecutionCompleteData.fileEdits and FileEditKind"}
+  {:classification :experimental,
+   :decision :no-new-wrapper,
+   :reason
+   "Generated experimental snapshot/discovery fields do not enlarge the separate handwritten ModelCapabilitiesOverride contract.",
+   :symbol
+   "CurrentModel.planBaseModelId and ModelCapabilitiesSupports.thinking"}
+  {:classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Generated provider-discovery subsystem has no new stable handwritten public builder or method.",
+   :symbol "session.providers discovery/catalog/configuration APIs"}
+  {:classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Trusted-human submission routes are not ordinary SDK automation authority. Passive response event support does not expose these operations.",
+   :symbol
+   "session.ui.handleHumanAskUser/handleHumanUserInput/handleHumanExitPlanMode"}
+  {:classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Experimental sandbox CA controls and removed account helpers are outside the existing stable Clojure API.",
+   :symbol "sandbox.proxyCa and retired accounts.acquireEntraToken"}
+  {:classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "Runtime-owned discovery and generated result taxonomy add no curated Clojure reload API.",
+   :symbol
+   "customizations.reload outcomes and instructions.reload alias"}
+  {:classification :generated-only,
+   :decision :no-new-wrapper,
+   :reason
+   "TypeScript undefined is omitted during JSON serialization; no new wire null contract or Clojure nil alias.",
+   :symbol "ProtocolSectionOverride undefined dictionary entries"}
+  {:classification :experimental,
+   :decision :retain-exclusion,
+   :reason
+   "Canvas authoring remains experimental; clarified binary tool results do not add stable canvas APIs.",
+   :symbol "CanvasAction.handler tool-result documentation"}
+  {:classification :stable-public,
+   :decision :retain-runtime-owned-behavior,
+   :reason
+   "Existing builders carry these behaviors. Update prompt descriptions and telemetry docs, not runtime algorithms or configuration surface.",
+   :symbol
+   "MCP recovery, model-effort restoration, prompt sections and skill/process telemetry"}
+  {:classification :language-specific,
+   :decision :no-port,
+   :reason
+   "Foreign implementations and build infrastructure do not independently establish Clojure parity requirements.",
+   :symbol
+   "Other language SDKs, code generation, packaging and replay infrastructure"}],
+ :method-deltas [],
+ :schema
+ {:artifacts
+  {"schemas/api.schema.json"
+   "0008a4c8646e8d143b44aa4978bf2dfc8a191f492a6f0c5b56a15190e943b74d",
+   "schemas/session-events.schema.json"
+   "af5cee4e397b44a87373c9920a12d318e80efe066695d5cbc7a97edb135d6c66",
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
+   "src/github/copilot_sdk/generated/event_metadata.clj"
+   "4c8f21321850c9a59a3b47c1db9cc351235a4021552f4972843caf5a12150699",
+   "src/github/copilot_sdk/generated/event_specs.clj"
+   "38864564478b54b2c97400aad0f80d3f2d2d0c1f5a1d9a3603d419a665e4f4fe"},
+  :runtime-pin "1.0.92-4"},
+ :sealed-local-artifacts
+ {".copilot-schema-version"
+  "49d8dc3e0cdc4f126809837527560b4f0146894fee7880a46ca682f3b42b1738",
+  ".github/workflows/ci.yml"
+  "f24ca9c30e24070ba2eb0e3688230e17912ad03480b6cc29d7c17276eb5b4e57",
+  "CHANGELOG.md"
+  "1555768b7b444fd84e0648a2df670c7ace4e629dfddadc99954228b902535aaa",
+  "build.clj"
+  "72620df06be0beaf56b9a005a81755713561e526875f89405ca04a3ea94a1cfb",
+  "deps.edn"
+  "ec07cf3d799dcb354766ff7af7b0565cff218e1ecc7811a3a342b8689b06b33b",
+  "doc/adr/2026-10-05-callback-and-event-contracts.md"
+  "bac614c6ece0c8e89ef12df36da8975287f3dc58d2c36a01b689277d3c7602e9",
+  "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
+  "a9c843630c0f5590fb80eacc51e21450bbc8aaa69409e2dd8503ba1c5ab628c8",
+  "doc/api/2026-08-10-host-owned-inference-boundary.html"
+  "7793d28eb7d998e5f25c40380208ad32c5f3b62a3be6733ca306731ad198adaa",
+  "doc/api/2026-09-27-dynamic-workflow-migration.html"
+  "76b6e8fb374e5999b37f7aea22bfc5514feaecb3d8fad1e2973bd5e45efb1679",
+  "doc/api/2026-09-30-model-policy-and-lifecycle-sync.html"
+  "85fc53745f9105ee92dc0c4678e1c5a48baeaff51b5db379f72983393f7c126b",
+  "doc/api/2026-10-02-transcript-recovery-and-owned-exit.html"
+  "bdc0fec9644e8f382f7cf66e3023e219fb8e87fbbded844c09d776bcc265ae25",
+  "doc/api/2026-10-04-byok-provider-telemetry.html"
+  "803c5fa7cc058a5fb2fea5da820e997d2a0e8e2ee299c0478b2329a6fbfc7a15",
+  "doc/api/2026-10-05-callback-and-event-contracts.html"
+  "c70a7bfc43ef0450d166afee5ef22d82fc63a6b268bf1136d385be7b03e46eb8",
+  "doc/api/API.html"
+  "d54be987876aefe7170752c0e82af3c5046502793c1650cd54c09ac1d6f780f3",
+  "doc/api/azure-managed-identity.html"
+  "2c13d4b0ce45f98cb8f6fc3f7664120dc23f9886a3b4cf716d603a21faf48be5",
+  "doc/api/byok.html"
+  "dcf38e4d4c21f63c0c6e51676c948f1c4977a5a2de1c28d7f2b360f5bbce28f5",
+  "doc/api/codegen.html"
+  "e4f3fb3195db4ee70b4afb83f711f2865f25c5492baec09f759f0c3b0390aeae",
+  "doc/api/custom-agents.html"
+  "ed64e98c496bbc5c75f3520019b0f007a1adb1ac60390c2af08490c98eeeee4b",
+  "doc/api/debugging.html"
+  "05651656d82cfc0e68d9498e00a589ed033ca392b3aa18ce60a27216641c30f5",
+  "doc/api/doc-auth-index.html"
+  "68b9189d2f32e583f4ff0827abe773c62eb788a3d14b02ef2f3200862f023e7d",
+  "doc/api/doc-index.html"
+  "4dbeef40f51336f98c291b302ec4f9e50a751a04aeb51c94729b5d158de7d71c",
+  "doc/api/dynamic-workflows.html"
+  "4a8c21ddcac4b8dc174d8c0683a5ad15f64316426da5742484e73282c9bf04cb",
+  "doc/api/getting-started.html"
+  "385a2f767b4a281a7fb8de88f4f8675a0fa11b43e3f54477bfda7429bb82275d",
+  "doc/api/github.copilot-sdk.client.html"
+  "a956abc49005ec30f07a128ef9924515bd39ab77670ab229e8f201fe4a87f732",
+  "doc/api/github.copilot-sdk.generated.coerce.html"
+  "a235c80ddd62fa0ab74902c82ae5aee0620b436a480c86bfecc850f3dbd2d492",
+  "doc/api/github.copilot-sdk.generated.event-metadata.html"
+  "5a3d4cece208064ad0e4ceb12c6482411d6254d9af6cd6e65f16e5e376f4e4b5",
+  "doc/api/github.copilot-sdk.generated.event-specs.html"
+  "85b6b7e69358745f56ea7e9a6193e23c4d79833079ee78398ba0ac7b4212b7bf",
+  "doc/api/github.copilot-sdk.helpers.html"
+  "9af484437b4fae641a3b137601edad2ae28d33edac3911184296812341efce41",
+  "doc/api/github.copilot-sdk.html"
+  "4ca61872ae77ba6fb790135efdca49031fe6cc38567ea194b190381b5fd5d065",
+  "doc/api/github.copilot-sdk.instrument.html"
+  "7a8e9bd9d71b19dde6ed3bb2f3f609a880f6d9f5900acfbc75f843fe5ef4dbe6",
+  "doc/api/github.copilot-sdk.logging.html"
+  "47971164d09285361d907dbe08a2bc782c0f3c857147eb13230855570d6146fd",
+  "doc/api/github.copilot-sdk.process.html"
+  "b1f5c88657cb7fb5932212c553414bd55304a559d854c926a30badef43baa9fd",
+  "doc/api/github.copilot-sdk.protocol.html"
+  "a58b7cdd2438c6db448a491fe9e7927d05e469e9ffb002c2377f1c90e338e9fa",
+  "doc/api/github.copilot-sdk.session.html"
+  "a73872cb9539574bac8f07ed374d5787d4b31a8c45b6c396cc3e90ad774b9de7",
+  "doc/api/github.copilot-sdk.specs.html"
+  "5317c176b2f2db077ee664f84f8ac410b72154cf43c01eda1f3375c72336c66f",
+  "doc/api/github.copilot-sdk.teardown.html"
+  "b48e6944493b67f97d8ba2c3f3854026f2007a4906d94e24273f5ac1d6209321",
+  "doc/api/github.copilot-sdk.tool-set.html"
+  "117f9b9b7bbb3ee584d06d11ac7daf25b09264c81ff3591d8cae1599b4a449d3",
+  "doc/api/github.copilot-sdk.tools.html"
+  "4b9894e784237fdf62a68ef179f2d303d34df723ad37681ac74abe3fe407aa28",
+  "doc/api/github.copilot-sdk.util.html"
+  "12767ecc1c520ce8a1a1da75434e397d147f83066a2a7e20757f9b976bc4ed2f",
+  "doc/api/github.copilot-sdk.workflow.html"
+  "8b46959c33ba57a1a6dd943f8c087f67baf844271d604e308ee6ff71befe775f",
+  "doc/api/index.html"
+  "5cfd32abb1df0db4d7ad8152117a4f8b332d05d3ec86413d3086bdc90127fdbd",
+  "doc/api/overview.html"
+  "234216ebeb4eb9f737c0d385c7a9ef39ce22a43f9c26c78393906804fbc582c7",
+  "doc/api/style.html"
+  "0bb53f24347b2a0a98f96c782db1b0f7253d7187ca85c9075c60b6382aed6d43",
+  "doc/api/topic-manifest.edn"
+  "f6dd4faee000160f0811e432cb3b82f9e7c2b7a5905fb13d59b29dac870ec0c5",
+  "doc/api/upstream-doc-gap-matrix.html"
+  "da1e851973cce0ed503c14c3592689f86d4e5ff170cb71a9043718f3840a2a77",
+  "doc/codegen.md"
+  "2d1018d1068438ac1b23085dcdb12b028a0548d98124386b105cc8f460e45084",
+  "doc/index.md"
+  "8c0ef89a1d2217ef931d7d661b2ac4659c97659b5111e84b859caeb0cd535e02",
+  "doc/reference/API.md"
+  "e76f6d533b6be3c94e13ffda1b94b7dd2282b776d2f89b8e728ea03bce32883a",
+  "doc/upstream-doc-gap-matrix.md"
+  "c11e555bb9ac976c6d090f263d58ffb51c6c73b7222598bd384c1573e5e5b844",
+  "examples/README.md"
+  "49eebda25df35c339b3438caa3a242d49a307b711db00b75896e09c9c3932de5",
+  "examples/lifecycle_hooks.clj"
+  "4f5c06d6cb84a3ae640a621f3b3cba85c65d88f1685bb34f953d87b5d2db6ee9",
+  "resources/github/copilot_sdk/api_surface.edn"
+  "bbf982d62ee27d14b8874bc0cf4b449277d202ac1e9f75a29eab0e2b46dc65bb",
+  "schemas/README.md"
+  "01b808d3c2db2cb2a59a840c1f61bbcdbc1b8cf982554ac3ebf58e3a110bc234",
+  "schemas/api.schema.json"
+  "0008a4c8646e8d143b44aa4978bf2dfc8a191f492a6f0c5b56a15190e943b74d",
+  "schemas/session-events.schema.json"
+  "af5cee4e397b44a87373c9920a12d318e80efe066695d5cbc7a97edb135d6c66",
+  "script/codegen/emit_specs.clj"
+  "ddf8f57801735f5e51d9eb908089fc1e2ce10dbf4fcd87502c6ef3881028a5cf",
+  "src/github/copilot_sdk.clj"
+  "f9165dd74571e0043ac4fbe7a6b5d5e2ad0c7ed099514a3ae6a46947321e5a49",
+  "src/github/copilot_sdk/client.clj"
+  "0a012caaf161152f8cf1c92054c81178e242f4fb241f2990e505d41826279fef",
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "feb89559ba2591f6f9179521840a973df742205e555d029e44e69e6d236e7c71",
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "4c8f21321850c9a59a3b47c1db9cc351235a4021552f4972843caf5a12150699",
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "38864564478b54b2c97400aad0f80d3f2d2d0c1f5a1d9a3603d419a665e4f4fe",
+  "src/github/copilot_sdk/instrument.clj"
+  "1a34501d1792596f5e39d2c02b17d77cc4a4ba28eafb3a15e0f3dc9fc4cc2713",
+  "src/github/copilot_sdk/protocol.clj"
+  "734a4422980d0a58e17c0c917f3144aaf89ffccf8d662db3ba1cdebf344be0d3",
+  "src/github/copilot_sdk/session.clj"
+  "82e45f8dda66cbabae8d5d915832ec926006d940d51c298b8f6bd0f7ea16dcea",
+  "src/github/copilot_sdk/specs.clj"
+  "278b66e2db93af23dc109d5a32f437913d2e8f5017c051596561b8d6d6835010",
+  "src/github/copilot_sdk/tools.clj"
+  "aa2f5c77b74c1e1d56aff7466b5fd30fbe45dbf98beff16d693a6f839f9ddee0",
+  "test/github/copilot_sdk/codegen_test.clj"
+  "746ec3eb3ca21c14fa4d875b35ce56bb3bd64e195c64e03943cb7298d29e0376",
+  "test/github/copilot_sdk/e2e_test.clj"
+  "cef74fd297b0240f412138ca768eb1d7b6b719db44974a8411166cff3f676c99",
+  "test/github/copilot_sdk/integration/schema_provider_test.clj"
+  "1066548158d0622b5fefceca57bbc7bf39534754a5f4a074206af5913133b12e",
+  "test/github/copilot_sdk/integration/upstream_1_0_92_4_test.clj"
+  "03074a32a51685b8baabf6de6ad02861f72298fb97f2d1b6000b35fbf76e916b"},
+ :stable-deltas
+ [{:authority
+   ["nodejs/src/index.ts:SubagentStartHandler"
+    "nodejs/src/types.ts:SessionHooks"
+    "nodejs/src/types.ts:SubagentStopHookOutput"
+    "nodejs/src/session.ts:subagentStart"
+    "nodejs/src/client.ts:createSession"
+    "nodejs/src/client.ts:resumeSession"
+    "nodejs/src/extension.ts:JoinSessionConfig"],
+   :builders
+   [:create-session
+    :<create-session
+    :resume-session
+    :<resume-session
+    :join-session],
+   :classification :stable-public,
+   :docs
+   ["doc/reference/API.md"
+    "examples/lifecycle_hooks.clj"
+    "examples/README.md"
+    "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.client/create-session
+    github.copilot-sdk.client/<create-session
+    github.copilot-sdk.client/resume-session
+    github.copilot-sdk.client/<resume-session
+    github.copilot-sdk.client/join-session],
+   :id :hooks/subagent-lifecycle,
+   :idiom
+   {:input :parent-session-metadata,
+    :keys [:on-subagent-start :on-subagent-stop],
+    :timestamp :epoch-milliseconds,
+    :working-directory :cwd},
+   :proof-states
+   [:absent
+    :nil
+    :invalid
+    :empty-strings
+    :optional-input-omission
+    :all-builders
+    :channel-results
+    :block-and-rewrite],
+   :semantics
+   ["Omitted callbacks do nothing; explicit nil/non-functions are invalid."
+    "Parent lifecycle metadata is distinct from child tool-hook session IDs."
+    "Runtime owns valid block precedence over response rewriting."
+    "Callbacks use the existing off-reader execution facility and may return channels."
+    "Every create/resume/join builder advertises hooks without serializing functions into mutable updates."],
+   :specs
+   [:github.copilot-sdk.specs/hooks
+    :github.copilot-sdk.specs/on-subagent-start
+    :github.copilot-sdk.specs/on-subagent-stop],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/subagent-hooks-round-trip-through-every-session-builder
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/subagent-hook-options-reject-non-functions],
+   :wire
+   {:methods ["hooks.invoke"],
+    :outputs
+    ["additionalContext" "decision" "reason" "modifiedResponse"],
+    :registration "hooks",
+    :types ["subagentStart" "subagentStop"]}}
+  {:authority
+   ["nodejs/src/types.ts:SessionFsConfig"
+    "nodejs/src/sessionFsProvider.ts:SessionFsProvider"
+    "nodejs/src/sessionFsProvider.ts:createSessionFsAdapter"
+    "nodejs/src/client.ts:setupSessionFs"],
+   :builders
+   [:create-session
+    :<create-session
+    :resume-session
+    :<resume-session
+    :join-session
+    :create-session-fs-adapter],
+   :classification :stable-public,
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.client/create-session
+    github.copilot-sdk.client/<create-session
+    github.copilot-sdk.client/resume-session
+    github.copilot-sdk.client/<resume-session
+    github.copilot-sdk.client/join-session
+    github.copilot-sdk.session/create-session-fs-adapter],
+   :id :session-fs/binary,
+   :idiom
+   {:keys [:read-file-bytes :write-file-bytes],
+    :value :java-byte-array},
+   :proof-states
+   [:absent
+    :false
+    :true
+    :nil
+    :invalid
+    :empty
+    :exact-limit
+    :over-limit
+    :noncanonical-base64
+    :all-builders],
+   :semantics
+   ["Absent/false binary capability retains text-only behavior; true requires both callbacks before adaptation."
+    "Base64 validation and bounds occur before writer invocation; oversized reads fail before encoding."
+    "Unsupported binary operations return filesystem errors without accessing host files."
+    "Provider-style and low-level handlers retain distinct argument contracts."],
+   :specs
+   [:github.copilot-sdk.specs/session-fs-capabilities
+    :github.copilot-sdk.specs/session-fs-handler
+    :github.copilot-sdk.specs/session-fs-provider
+    :github.copilot-sdk.specs/read-file-bytes
+    :github.copilot-sdk.specs/write-file-bytes],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/binary-filesystem-round-trips-bytes-through-rpc
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/binary-capability-validates-before-local-rpc-and-rolls-back
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/binary-capabilities-preserve-omission-false-and-true-on-connect
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/binary-adapter-enforces-canonical-base64-and-exact-size-limit
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/text-only-filesystem-keeps-explicit-unsupported-binary-errors],
+   :wire
+   {:capability [:capabilities :binary],
+    :content :canonical-standard-base64,
+    :max-encoded-characters 67107840,
+    :max-raw-bytes 50330880,
+    :methods
+    ["sessionFs.setProvider"
+     "sessionFs.readFileBytes"
+     "sessionFs.writeFileBytes"]}}
+  {:authority
+   ["nodejs/src/index.ts:SessionFsWriteFailure"
+    "nodejs/src/sessionFsProvider.ts:SessionFsWriteFailure"],
+   :builders [:create-session-fs-adapter :write-file],
+   :classification :stable-public,
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk/session-fs-write-failure
+    github.copilot-sdk/session-fs-write-failure?
+    github.copilot-sdk.session/session-fs-write-failure
+    github.copilot-sdk.session/session-fs-write-failure?],
+   :id :session-fs/partial-write-failure,
+   :idiom
+   {:error-type :session-fs-write-failure,
+    :functions [session-fs-write-failure session-fs-write-failure?],
+    :key :write-changed},
+   :proof-states
+   [:ordinary-failure
+    :changed-write
+    :append
+    :binary-write
+    :direct
+    :future
+    :channel],
+   :semantics
+   ["Only a failed text write that changed its target reports the marker."
+    "Append and binary writes never inherit the marker."
+    "Direct, future and channel failures retain the underlying exception classification."],
+   :specs
+   [:github.copilot-sdk.specs/session-fs-provider
+    :github.copilot-sdk.specs/session-fs-handler],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/filesystem-write-failure-retains-partial-mutation-only-for-text-writes],
+   :wire
+   {:key "writeChanged", :scope :text-write-error-only, :value true}}
+  {:authority
+   ["nodejs/src/session.ts:registerTools" "nodejs/src/types.ts:Tool"],
+   :builders
+   [:create-session
+    :<create-session
+    :resume-session
+    :<resume-session
+    :join-session],
+   :classification :stable-public,
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.client/create-session
+    github.copilot-sdk.client/<create-session
+    github.copilot-sdk.client/resume-session
+    github.copilot-sdk.client/<resume-session
+    github.copilot-sdk.client/join-session
+    github.copilot-sdk.tools/define-tool],
+   :id :tools/apply-patch-string-override,
+   :idiom
+   {:handler-argument :string,
+    :invocation-arguments :original-payload},
+   :proof-states
+   [:scalar
+    :wrapped
+    :empty-string
+    :invalid
+    :object-schema
+    :other-tool
+    :non-override
+    :all-builders
+    :broadcast],
+   :semantics
+   ["Normalize at registration so direct and broadcast dispatch share one handler."
+    "Do not unwrap object schemas, other tool names or non-overrides."
+    "Reject invalid input before invoking the application handler; declaration-only tools remain untouched."
+    "Runtime rejects references in string-schema overrides; no speculative SDK schema translation."],
+   :specs
+   [:github.copilot-sdk.specs/tool
+    :github.copilot-sdk.specs/tool-invocation],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/string-schema-patch-overrides-normalize-only-handler-arguments
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/invalid-string-schema-patch-input-never-reaches-handler
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/patch-normalization-also-applies-to-broadcast-tool-requests],
+   :wire
+   {:arguments [:string :input-object],
+    :overridesBuiltInTool true,
+    :parameters {:type "string"},
+    :tool "apply_patch"}}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:ToolShellOutputEvent"
+    "nodejs/src/generated/session-events.ts:ToolShellOutputData"],
+   :builders [:live-notification],
+   :classification :stable-public,
+   :docs
+   ["doc/reference/API.md"
+    "doc/upstream-doc-gap-matrix.md"
+    "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.session/get-messages
+    github.copilot-sdk.session/subscribe-events],
+   :id :events/shell-output,
+   :idiom
+   {:event :copilot/tool.shell_output,
+    :sequence :nonnegative-integer,
+    :stream :string},
+   :proof-states
+   [:absent-stream
+    :all-streams
+    :empty-text
+    :zero
+    :late-sequence
+    :nil
+    :invalid
+    :real-runtime
+    :history-absence],
+   :semantics
+   ["Append-only live output, not persisted or replayed; stream omission means stdout without synthesizing a field."
+    "Sequence counts publication across streams, not bytes or OS write order."
+    "Late subscribers may start above zero; continuing commands may emit after tool completion."
+    "Deprecated merged replacement snapshots remain supported; consumers should not render both."],
+   :specs
+   [:github.copilot-sdk.specs/tool.shell_output-data
+    :github.copilot-sdk.specs/tool-shell-output-stream],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/new-public-events-have-curated-idiom-contracts
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/shell-output-preserves-append-only-stream-and-sequence-data
+    github.copilot-sdk.e2e-test/test-e2e-shell-output-and-automated-input],
+   :wire
+   {:ephemeral true,
+    :event "tool.shell_output",
+    :optional ["stream"],
+    :required ["toolCallId" "text" "sequence"],
+    :streams ["stdout" "stderr" "terminal"]}}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:HumanResponseRecordedEvent"
+    "nodejs/src/generated/session-events.ts:HumanResponseRecordedResponse"
+    "nodejs/src/generated/session-events.ts:HumanResponseActor"],
+   :builders [:live-notification :get-messages],
+   :classification :stable-public,
+   :docs
+   ["doc/reference/API.md"
+    "doc/upstream-doc-gap-matrix.md"
+    "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.session/get-messages
+    github.copilot-sdk.session/subscribe-events],
+   :id :events/response-provenance,
+   :idiom
+   {:actor :string,
+    :event :copilot/human_response.recorded,
+    :response-kind :string},
+   :proof-states
+   [:all-actors
+    :all-response-kinds
+    :absent
+    :false
+    :true
+    :empty
+    :nil
+    :invalid-json
+    :live
+    :history
+    :automated-callback-no-receipt],
+   :semantics
+   ["Passive runtime-owned request/response evidence, never a new SDK authorization mechanism."
+    "Generic SDK input/elicitation callbacks do not mint receipts or trusted-human authority."
+    "Opaque content and requested form properties retain source-defined nested JSON keys live and in history."
+    "Optional booleans and empty strings/vectors remain distinct from omission; null is valid only inside opaque JSON."],
+   :specs
+   [:github.copilot-sdk.specs/human_response.recorded-data
+    :github.copilot-sdk.specs/human-response-actor
+    :github.copilot-sdk.specs/human-response-recorded-response
+    :github.copilot-sdk.specs/elicitation-requested-schema
+    :github.copilot-sdk.specs/exit-plan-mode-action],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/response-provenance-events-retain-exact-live-and-historical-json
+    github.copilot-sdk.integration.upstream-1-0-92-4-test/new-public-events-have-curated-idiom-contracts
+    github.copilot-sdk.e2e-test/test-e2e-shell-output-and-automated-input],
+   :wire
+   {:actors ["human_response" "host_automation" "unknown"],
+    :event "human_response.recorded",
+    :response-kinds ["ask_user" "user_input" "exit_plan_mode"]}}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:StartData"
+    "nodejs/src/generated/session-events.ts:ResumeData"
+    "nodejs/src/generated/session-events.ts:ModelChangeData"],
+   :builders [:live-notification :get-messages],
+   :classification :stable-public,
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   [github.copilot-sdk.session/get-messages
+    github.copilot-sdk.session/subscribe-events],
+   :id :events/reasoning-effort-owner,
+   :idiom {:key :reasoning-effort-model, :value :string},
+   :proof-states [:absent :empty :string :nil :invalid :live :history],
+   :semantics
+   ["Identifies the model owning effort embedded in an authored model selection."
+    "Omitted for independent effort settings and legacy events; preserve empty strings and reject nil."
+    "Runtime owns restart/restoration semantics; do not expose generated plan-base-model controls."],
+   :specs
+   [:github.copilot-sdk.specs/reasoning-effort-model
+    :github.copilot-sdk.specs/session.start-data
+    :github.copilot-sdk.specs/session.resume-data
+    :github.copilot-sdk.specs/session.model_change-data],
+   :tests
+   [github.copilot-sdk.integration.upstream-1-0-92-4-test/model-bound-reasoning-effort-metadata-is-an-optional-string],
+   :wire
+   {:key "reasoningEffortModel", :shape :optional-non-null-string}}],
+ :target-public-surface
+ {:classes
+  {:client
+   {:added-signatures [],
+    :class-name "CopilotClient",
+    :classification :stable-public,
+    :fields #{},
+    :fingerprint
+    [22
+     "99a26a2d6e0e3f0f7c2ccbc5f24586a052dd7ad17ef171e79847f8a228692030"],
+    :path "nodejs/src/client.ts",
+    :removed-signatures [],
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async createSession(config: SessionConfig): Promise<CopilotSession>"
+     "async deleteSession(sessionId: string): Promise<void>"
+     "async forceStop(): Promise<void>"
+     "async getAuthStatus(): Promise<GetAuthStatusResponse>"
+     "async getForegroundSessionId(): Promise<string | undefined>"
+     "async getLastSessionId(): Promise<string | undefined>"
+     "async getSessionMetadata(sessionId: string): Promise<SessionMetadata | undefined>"
+     "async getStatus(): Promise<GetStatusResponse>"
+     "async listModels(): Promise<ModelInfo[]>"
+     "async listSessions(filter?: SessionListFilter): Promise<SessionMetadata[]>"
+     "async ping(message?: string): Promise<{ message: string; timestamp: string; protocolVersion?: number }>"
+     "async resumeSession(sessionId: string, config: ResumeSessionConfig): Promise<CopilotSession>"
+     "async setForegroundSessionId(sessionId: string): Promise<void>"
+     "async start(): Promise<void>"
+     "async startAhpHost(options: AhpHostOptions): Promise<AhpHost>"
+     "async stop(): Promise<Error[]>"
+     "constructor(options: CopilotClientOptions = {})"
+     "get rpc(): ReturnType<typeof createServerRpc>"
+     "onLifecycle(handler: SessionLifecycleHandler): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventType: K, handler: TypedSessionLifecycleHandler<K>): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventTypeOrHandler: K | SessionLifecycleHandler, handler?: TypedSessionLifecycleHandler<K>): () => void"]},
+   :host
+   {:added-signatures [],
+    :class-name "AhpHost",
+    :classification :experimental,
+    :fields
+    #{"readonly environmentId: string | undefined"
+      "readonly hostId: string"
+      "readonly pid: number | undefined"
+      "readonly token: string | undefined"
+      "readonly url: string | undefined"},
+    :fingerprint
+    [3
+     "10d08a15fc8eaef786e2b061318bac2568baf8ee51de5b51d337ed908f778e76"],
+    :path "nodejs/src/host.ts",
+    :removed-signatures [],
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "dispose(): Promise<void>"
+     "publishSession(sessionId: string): Promise<HostPublishSessionResult>"]},
+   :session
+   {:added-signatures [],
+    :class-name "CopilotSession",
+    :classification :stable-public,
+    :fields
+    #{"clientSessionApis: ClientSessionApiHandlers"
+      "public readonly sessionId: string"
+      "readonly workflow: SessionWorkflowApi"},
+    :fingerprint
+    [24
+     "23b083f5d3694a6e7766afd572529fa56f82e91e085d76e18950e984f32db98c"],
+    :path "nodejs/src/session.ts",
+    :removed-signatures [],
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async abort(): Promise<void>"
+     "async disconnect(): Promise<void>"
+     "async getEvents(): Promise<SessionEvent[]>"
+     "async log(message: string, options?: { level?: \"info\" | \"warning\" | \"error\"; ephemeral?: boolean }): Promise<void>"
+     "async send(options: MessageOptions): Promise<string>"
+     "async send(optionsOrPrompt: MessageOptions | string): Promise<string>"
+     "async send(prompt: string): Promise<string>"
+     "async sendAndWait(options: MessageOptions, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait(optionsOrPrompt: MessageOptions | string, schemaOrTimeout?: ResponseSchema | number, timeout?: number): Promise<unknown>"
+     "async sendAndWait(prompt: string, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait<TResult>(options: MessageOptions | string, responseSchema: ResponseSchema<TResult>, timeout?: number): Promise<TResult>"
+     "async setAutoTier(autoTier: AutoTier | null): Promise<ModelSwitchAutoTierResult>"
+     "async setModel(model: string, options?: { reasoningEffort?: ReasoningEffort; reasoningSummary?: ReasoningSummary; contextTier?: ContextTier; modelCapabilities?: ModelCapabilitiesOverride; autoTier?: AutoTier | null; }): Promise<void>"
+     "async setTools(tools: Tool[]): Promise<void>"
+     "get capabilities(): SessionCapabilities"
+     "get openCanvases(): OpenCanvasInstance[]"
+     "get rpc(): ReturnType<typeof createSessionRpc>"
+     "get transcriptRecovery(): TranscriptRecovery | undefined"
+     "get ui(): SessionUiApi"
+     "get workspacePath(): string | undefined"
+     "on(handler: SessionEventHandler): () => void"
+     "on<K extends SessionEventType>(eventType: K, handler: TypedSessionEventHandler<K>): () => void"
+     "on<K extends SessionEventType>(eventTypeOrHandler: K | SessionEventHandler, handler?: TypedSessionEventHandler<K>): () => void"]}},
+  :interfaces
+  {:added
+   #{"SubagentStartHookInput"
+     "SubagentStartHookOutput"
+     "SubagentStopHookInput"},
+   :changed
+   {"SessionHooks"
+    {:added #{"onSubagentStart" "onSubagentStop"},
+     :classification :stable-public,
+     :fields
+     #{"onAgentStop"
+       "onErrorOccurred"
+       "onPostToolUse"
+       "onPostToolUseFailure"
+       "onPreMcpToolCall"
+       "onPreToolUse"
+       "onSessionEnd"
+       "onSessionStart"
+       "onSubagentStart"
+       "onSubagentStop"
+       "onUserPromptSubmitted"
+       "onUserPromptTransformed"},
+     :removed #{}},
+    "SubagentStartHookInput"
+    {:added
+     #{"agentDescription"
+       "agentDisplayName"
+       "agentName"
+       "transcriptPath"},
+     :classification :stable-public,
+     :fields
+     #{"agentDescription"
+       "agentDisplayName"
+       "agentName"
+       "transcriptPath"},
+     :removed #{}},
+    "SubagentStartHookOutput"
+    {:added #{"additionalContext"},
+     :classification :stable-public,
+     :fields #{"additionalContext"},
+     :removed #{}},
+    "SubagentStopHookInput"
+    {:added #{"agentId" "agentType" "response" "stopReason"},
+     :classification :stable-public,
+     :fields #{"agentId" "agentType" "response" "stopReason"},
+     :removed #{}}},
+   :fingerprint
+   [109
+    "1082af8919f4163c0f77b1408665a0baf0e689a32b5a57fa6d8bbd8d59a895ce"],
+   :removed #{}},
+  :modules
+  {"nodejs/src/canvas.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [9
+     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :removed {}},
+   "nodejs/src/cliVersion.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "e6042134f27f7a648f66f14564fee077dbc0dc1b1f108bc5f027c0f2dcabf3f5"],
+    :removed {}},
+   "nodejs/src/client.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [1
+     "a5431bbd92ac780f6179f17f47c4e9a9227510a9f3682f56a6893c7db8d90dba"],
+    :removed {}},
+   "nodejs/src/copilotRequestHandler.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [6
+     "c93bb9e5250504432640afb2521135dcccfc13090190aac28fc689d1f3751766"],
+    :removed {}},
+   "nodejs/src/extension.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [40
+     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :removed {}},
+   "nodejs/src/ffiRuntimeHost.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [1
+     "fea0bbe2fd3afeb4e248f3d6bff0345a005350debb99f3f57768d026a77774c1"],
+    :removed {}},
+   "nodejs/src/generated/rpc.ts"
+   {:added
+    {:generated-only
+     #{"CustomizationReloadOutcome"
+       "CustomizationReloadStatus"
+       "CustomizationReloadSubsystem"
+       "CustomizationsReloadResult"
+       "DiscoveredModel"
+       "DiscoveredModelList"
+       "ModelArtifactDetails"
+       "ModelProviderAdapterCatalog"
+       "ModelProviderAdapterDescriptor"
+       "ModelProviderAdapterOperationDescriptor"
+       "ModelProviderAttribution"
+       "ModelProviderAutomaticDiscoveryMode"
+       "ModelProviderAutomaticDiscoveryPolicy"
+       "ModelProviderConfigurationDisposition"
+       "ModelProviderConfigurationPlan"
+       "ModelProviderDiscoverRequest"
+       "ModelProviderDiscoverResult"
+       "ModelProviderDiscoveryNetworkScope"
+       "ModelProviderGetStatusRequest"
+       "ModelProviderInstance"
+       "ModelProviderInstanceReference"
+       "ModelProviderModelsListRequest"
+       "ModelProviderOperationOutcome"
+       "ModelProviderOperationOutcomeCode"
+       "ModelProviderPrepareConfigurationRequest"
+       "ModelProviderProvenance"
+       "ModelProviderProvenanceSource"
+       "ModelProviderStatus"
+       "ModelProviderWarning"
+       "SandboxProxyCaCreateResult"
+       "SandboxProxyCaRequest"
+       "SandboxProxyCaState"
+       "SandboxProxyCaStatus"
+       "SessionFsReadFileBytesRequest"
+       "SessionFsReadFileBytesResult"
+       "SessionFsWriteFileBytesRequest"}},
+    :changed
+    {:generated-only
+     #{"CurrentModel"
+       "ModelCapabilitiesSupports"
+       "ProtocolSectionOverride"
+       "ProtocolSystemMessageCustomizeConfig"
+       "SessionFsError"
+       "SessionFsHandler"
+       "SessionFsSetProviderCapabilities"}},
+    :fingerprint
+    [1561
+     "c6a4a8a7a429e2e62a0ae6c500f6de96f4fa47ba8d2f7b6f7d27642f50abc6aa"],
+    :removed
+    {:generated-only
+     #{"EntraTokenAcquireRequest"
+       "EntraTokenAcquireResult"
+       "EntraTokenInteraction"}}},
+   "nodejs/src/generated/session-events.ts"
+   {:added
+    {:experimental
+     #{"ToolExecutionCompleteFileEdit"
+       "ToolExecutionCompleteFileEditKind"},
+     :stable-public
+     #{"HumanResponseActor"
+       "HumanResponseRecordedData"
+       "HumanResponseRecordedEvent"
+       "HumanResponseRecordedResponse"
+       "ToolShellOutputData"
+       "ToolShellOutputEvent"
+       "ToolShellOutputStream"}},
+    :changed
+    {:experimental
+     #{"AssistantMessageReasoningBlocks" "ToolExecutionCompleteData"},
+     :stable-public
+     #{"ModelChangeData" "ResumeData" "SessionEvent" "StartData"}},
+    :fingerprint
+    [587
+     "75c31d8e37d401cf43cf0f3db8a40cc9da7acda71af2b45e4216aa86b856fda9"],
+    :removed {}},
+   "nodejs/src/host.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [5
+     "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
+    :removed {}},
+   "nodejs/src/index.ts"
+   {:added
+    {:stable-public
+     #{"SessionFsWriteFailure"
+       "SubagentStartHandler"
+       "SubagentStartHookInput"
+       "SubagentStartHookOutput"
+       "SubagentStopHandler"
+       "SubagentStopHookInput"
+       "SubagentStopHookOutput"}},
+    :changed {},
+    :fingerprint
+    [247
+     "6154be0a770ce8cd4943c6a02e35468c9e2117eb51b56069b919e3f6d06c0808"],
+    :removed {}},
+   "nodejs/src/installationConfirmation.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [3
+     "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
+    :removed {}},
+   "nodejs/src/runtimeArtifacts.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [11
+     "fd2488d89925326e38efdd0b47ddaf8b3b57c9d9229eb097f6ec38ca15bc4921"],
+    :removed {}},
+   "nodejs/src/schema.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [3
+     "dd598ca6081134e447dfcdf10a79286380beca166c09199d8f84a537e5430b15"],
+    :removed {}},
+   "nodejs/src/sdkProtocolVersion.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "42d26b4df33f9c866247ee6f00931b63c055b4510fa7b89293cf765e7f539b7b"],
+    :removed {}},
+   "nodejs/src/session.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
+    :removed {}},
+   "nodejs/src/sessionFsProvider.ts"
+   {:added {:stable-public #{"SessionFsWriteFailure"}},
+    :changed {:stable-public #{"SessionFsProvider"}},
+    :fingerprint
+    [10
+     "fda7afb30d8f2a19837a65093efa5d12644668754a1374749a4dfcbf3e56b48a"],
+    :removed {}},
+   "nodejs/src/telemetry.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [1
+     "4fa0ad2e0638ed4cd3e40e836bd1df43ab7d3c980ad228dcfbd7d6e85ec29b1c"],
+    :removed {}},
+   "nodejs/src/toolSet.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
+    :removed {}},
+   "nodejs/src/types.ts"
+   {:added
+    {:stable-public
+     #{"SessionFsWriteFailure"
+       "SubagentStartHandler"
+       "SubagentStartHookInput"
+       "SubagentStartHookOutput"
+       "SubagentStopHandler"
+       "SubagentStopHookInput"
+       "SubagentStopHookOutput"}},
+    :changed {:stable-public #{"SessionFsConfig" "SessionHooks"}},
+    :fingerprint
+    [245
+     "e31a74d0b145e421b16cad2919051b64d3f5c3af89e7901130eb1dd9f20b06df"],
+    :removed {}},
+   "nodejs/src/workflow.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [31
+     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :removed {}}},
+  :package-root
+  {:added
+   #{"HumanResponseActor"
+     "HumanResponseRecordedData"
+     "HumanResponseRecordedEvent"
+     "HumanResponseRecordedResponse"
+     "SessionFsWriteFailure"
+     "SubagentStartHandler"
+     "SubagentStartHookInput"
+     "SubagentStartHookOutput"
+     "SubagentStopHandler"
+     "SubagentStopHookInput"
+     "SubagentStopHookOutput"
+     "ToolExecutionCompleteFileEdit"
+     "ToolExecutionCompleteFileEditKind"
+     "ToolShellOutputData"
+     "ToolShellOutputEvent"
+     "ToolShellOutputStream"},
+   :fingerprint
+   [824
+    "21ccfc535b71c36c60645ffec77c9843f955a6760289ff64af9f807eec941297"],
+   :removed #{},
+   :star-exports #{"./generated/session-events.js"}},
+  :source-blobs
+  {"nodejs/package.json"
+   ["806aeefa6f9b2c04eca84c0b09dfcefe168146a9"
+    "e6b1e9992c2fc963a0b72a2cde3936498c104079"],
+   "nodejs/src/canvas.ts"
+   ["aeb1f00ec42926977c010df2471123dc18ddddd3"
+    "b7c2254c4f3d9c96946d0947c73c68eed50dd713"],
+   "nodejs/src/cliVersion.ts"
+   ["987978a92f88dc518852ac8792108248f23d0f8a"
+    "93029c8524fb3161ae2706296f877869c961eb42"],
+   "nodejs/src/client.ts"
+   ["858697fe8a4f90f9231f84e12ae453c97513cad2"
+    "24f7f6ff2e438da560fe981b55b86daae25b6b49"],
+   "nodejs/src/copilotRequestHandler.ts"
+   ["d36deb5e3d2e04bfc2de91a1e13d145cbf1e40a8"
+    "d36deb5e3d2e04bfc2de91a1e13d145cbf1e40a8"],
+   "nodejs/src/extension.ts"
+   ["e7bb21e3b2fc8a84d16bde7885cd50308d61116f"
+    "e7bb21e3b2fc8a84d16bde7885cd50308d61116f"],
+   "nodejs/src/ffiRuntimeHost.ts"
+   ["947417871a284d6d679e64c253a3ce8fc1bd280b"
+    "947417871a284d6d679e64c253a3ce8fc1bd280b"],
+   "nodejs/src/generated/rpc.ts"
+   ["af073a9d0c30b5740f265dd30e487d3d10df81b3"
+    "b423be039f1334a5f03e3e60d5db418528dfb9e5"],
+   "nodejs/src/generated/session-events.ts"
+   ["8f30f0b1fc0cf01ca33a142f28f2f20eff5633ad"
+    "d6e4a099d9c99e340a3ead2bbeb03ffdeabb65d4"],
+   "nodejs/src/host.ts"
+   ["28d64b89f64371c7f0c0b02b37079002e4337c52"
+    "28d64b89f64371c7f0c0b02b37079002e4337c52"],
+   "nodejs/src/index.ts"
+   ["c38b58a5eceda93ea4a7bf9494cc844010d5cbc8"
+    "897be6cb1cdcd9c7f228af4d53c088010e0f01b4"],
+   "nodejs/src/installationConfirmation.ts"
+   ["897c81915f4a398a66bfaffe9d93b0da09955767"
+    "897c81915f4a398a66bfaffe9d93b0da09955767"],
+   "nodejs/src/runtimeArtifacts.ts"
+   ["d33b72c9da6be696f5b07852e854df4fe676a738"
+    "9f749486ac51f8c9c40a248cd87f9bd19edaff00"],
+   "nodejs/src/schema.ts"
+   ["29d94267588a8835d0b0db0623fb6d5ac0508721"
+    "29d94267588a8835d0b0db0623fb6d5ac0508721"],
+   "nodejs/src/sdkProtocolVersion.ts"
+   ["0e5314374ab92487f2714a615181d68b32ac9e69"
+    "0e5314374ab92487f2714a615181d68b32ac9e69"],
+   "nodejs/src/session.ts"
+   ["825464407f5a1e0dbdbf2fbe0237913e6811e9d0"
+    "5790ff2643d64e4c69a1bd28e9fd613526dc8925"],
+   "nodejs/src/sessionFsProvider.ts"
+   ["ecb18a570276dc10c7c42be56d2093a3cb2dae85"
+    "ee9908682da545908cabb3ed9861fe25fd05c903"],
+   "nodejs/src/telemetry.ts"
+   ["f9d331678111330ec259237a2940085b5b2888aa"
+    "f9d331678111330ec259237a2940085b5b2888aa"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534"
+    "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/types.ts"
+   ["73ad7e4f87902da8868a8b8a5369b33af6b79f31"
+    "7b0f1fcf8e7c6ef0dc7f5f0e4ff4485f41fe11bb"],
+   "nodejs/src/workflow.ts"
+   ["f7c0abe2d1b819154d284132a7b83f98fecb6c78"
+    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"]},
+  :trees
+  {"nodejs/src"
+   ["028218a668aed042c2b6d458510061e251244228"
+    "b3aba40e38a7e16620d16ca1d18112b201d4b76d"],
+   "nodejs/src/generated"
+   ["20908c1eb9187b586791181d6a6295a85402d45e"
+    "40503a413fdbbc03c9924749d5df9495b34c15d1"],
+   "nodejs/test"
+   ["2c4df435b055a8fb08577d537da5637072dde69f"
+    "6414448c955d3e5c572387b9ca377fe1a10c2230"]},
+  :unchanged-authority-paths
+  #{"nodejs/src/copilotRequestHandler.ts"
+    "nodejs/src/extension.ts"
+    "nodejs/src/ffiRuntimeHost.ts"
+    "nodejs/src/host.ts"
+    "nodejs/src/installationConfirmation.ts"
+    "nodejs/src/schema.ts"
+    "nodejs/src/sdkProtocolVersion.ts"
+    "nodejs/src/telemetry.ts"
+    "nodejs/src/toolSet.ts"
+    "nodejs/src/workflow.ts"}},
+ :test-inventory
+ {"nodejs/test/client.test.ts"
+  {:blobs
+   ["c1e577fefcf52f021f3173144b1487ded6b3af6e"
+    "d0466fb7a2f905852901e11ff20c414aafc99c0c"],
+   :classification :stable-public,
+   :review
+   "Subagent hook routing and parent metadata; binary provider validation, provisional registration rollback, and bounded deletion of uninitialized cloud allocations."},
+  "nodejs/test/csharp-codegen.test.ts"
+  {:blobs
+   ["cc1f32cad355bee855211f21eefd7f0823680d98"
+    "1ad071369a1e6a8ac9c2df5ae7dea69de90e75ff"],
+   :classification :internal,
+   :review
+   "Foreign binding generator coverage, not an additional Node contract."},
+  "nodejs/test/e2e/anthropic_replay.e2e.test.ts"
+  {:blobs [nil "3b2bad6f2b7cb71d759814c57e1325d1a1ac6121"],
+   :classification :experimental,
+   :review
+   "Provider-native ordered reasoning blocks and replay remain experimental wire data."},
+  "nodejs/test/e2e/auto_tier.e2e.test.ts"
+  {:blobs
+   ["f2b5717e608d8944f621b4c572684c3588f3956b"
+    "21401be17df6b97a16e0af9fb1ac9ac9bca4fe4f"],
+   :classification :experimental,
+   :review
+   "Existing experimental Auto controls; fixture transport/backend adaptation."},
+  "nodejs/test/e2e/builtin_tools.e2e.test.ts"
+  {:blobs
+   ["39900bc7d6b4a095faa95817f458b234e66a19a1"
+    "174af3e9accd9ab64dd4c959575295a95ac143c0"],
+   :classification :stable-public,
+   :review
+   "Built-in tool outcome coverage; runtime-owned behavior under existing tool APIs."},
+  "nodejs/test/e2e/client_options.e2e.test.ts"
+  {:blobs
+   ["b32965ec0f3274d2f8e34dbf95d983593f35a9e9"
+    "544ab712e7fd51ee7baea66fc81538b3b4e49160"],
+   :classification :stable-public,
+   :review
+   "Existing client option semantics across test backends; no new builder field."},
+  "nodejs/test/e2e/compaction.e2e.test.ts"
+  {:blobs
+   ["a74878101d5b06f9be357c48e87668f5869574a5"
+    "04de4d1d4ad15193f442410e29e3d0fbc86fc2b3"],
+   :classification :stable-public,
+   :review
+   "Existing compaction and continuation behavior across test backends."},
+  "nodejs/test/e2e/copilot_request_handler.e2e.test.ts"
+  {:blobs
+   ["04bccb7e084f09a2720cd77299ea2055cbd62403"
+    "af79d84ae3c24c4a960cfeb266db444fa4035c4a"],
+   :classification :experimental,
+   :review
+   "Host-owned HTTP/WebSocket inference interception remains excluded."},
+  "nodejs/test/e2e/customizations_reload.e2e.test.ts"
+  {:blobs [nil "2f33e04791fb6c898dd115f25b25a184da5d6a37"],
+   :classification :generated-only,
+   :review
+   "Generated customization reload reports subsystem outcomes and discovers repository instructions without changing cwd; no new curated wrapper."},
+  "nodejs/test/e2e/disabled_mcp_servers.e2e.test.ts"
+  {:blobs
+   ["8478f93288994d70982dde6e664009d4d8fdf21c"
+    "d9e8cee28c6cdc96037d1eaf30e197e4203e9358"],
+   :classification :stable-public,
+   :review "Existing MCP disable configuration; no new option."},
+  "nodejs/test/e2e/harness/CapiProxy.test.ts"
+  {:blobs
+   ["71a77cc1dfbbc732770508b07c5bfcbfb239db7f"
+    "1c804d7e500683e968591600f5d1a5f4dc26bc48"],
+   :classification :internal,
+   :review "Capture/replay proxy tests."},
+  "nodejs/test/e2e/harness/CapiProxy.ts"
+  {:blobs
+   ["3f5bb63cc22d9f18f9966ef2e62c490aeccab4c7"
+    "a59591b75ffe91b43246d4156655da92e87f3549"],
+   :classification :internal,
+   :review "Capture/replay proxy implementation."},
+  "nodejs/test/e2e/harness/sdkTestContext.test.ts"
+  {:blobs [nil "3503e1080f7c9afab17dfa68e07ee062eb0bde11"],
+   :classification :internal,
+   :review "Backend fixture setup tests."},
+  "nodejs/test/e2e/harness/sdkTestContext.ts"
+  {:blobs
+   ["479443e651a300a3f76713065d4d8052de57ad18"
+    "4a54acca93c499b5ab8c3dd5a698512707b73dc3"],
+   :classification :internal,
+   :review "Backend fixture wiring."},
+  "nodejs/test/e2e/harness/testBackend.ts"
+  {:blobs [nil "21ab4f8b3e4114f96b00f57b31f8bca672e85caa"],
+   :classification :internal,
+   :review "Test backend selection."},
+  "nodejs/test/e2e/mcp_instruction_recovery.e2e.test.ts"
+  {:blobs [nil "9861ad13e909d3b67c57e46e758462110bbdceb3"],
+   :classification :stable-public,
+   :review
+   "Runtime-owned MCP instruction recovery retains peer tools mid-turn; existing SDK MCP configuration is unchanged."},
+  "nodejs/test/e2e/mcp_legacy_sse_recovery.e2e.test.ts"
+  {:blobs [nil "6ba58b3d21a156f23ab14db0118afd3c97b0fee2"],
+   :classification :stable-public,
+   :review
+   "Runtime-owned legacy SSE reconnection behavior under existing MCP configuration."},
+  "nodejs/test/e2e/mode_handlers.e2e.test.ts"
+  {:blobs
+   ["71c4b08963e0b246e34e3e507ed5ad27424f52f1"
+    "b178523cd0e5892c08a69e8c0280414e60475e15"],
+   :classification :stable-public,
+   :review
+   "Per-message plan overrides and in-flight mode changes retain existing builder/handler contracts; model selection and continuation are runtime-owned."},
+  "nodejs/test/e2e/model_effort_resume.e2e.test.ts"
+  {:blobs [nil "d45811876119904b7b4200a8cce69955b071ac61"],
+   :classification :stable-public,
+   :review
+   "Authored reasoning effort ownership survives restart and clears on model replacement; optional reasoningEffortModel event metadata is ported."},
+  "nodejs/test/e2e/multi-client.e2e.test.ts"
+  {:blobs
+   ["79bd0e8c49c28dce6227289b666ff9af147f690b"
+    "f0f7a6c33ebb4e1ae1055ced1ffe7669bc46dc09"],
+   :classification :experimental,
+   :review
+   "Existing multi-client experimental tool replacement scenario; no new stable operation."},
+  "nodejs/test/e2e/pending_work_resume.e2e.test.ts"
+  {:blobs
+   ["0f4fd4a74f23150785269ed861a10054e0cc2719"
+    "65ab9fccc908d16fea398beef30c24a4adc6e81d"],
+   :classification :stable-public,
+   :review
+   "Existing pending-work restoration and resume ownership; no new resume field."},
+  "nodejs/test/e2e/permissions.e2e.test.ts"
+  {:blobs
+   ["565719e0a4685d974af1219ba859d1ce36a58f75"
+    "e9ed80d5d08d6ba156a9f834dbd982f215671a74"],
+   :classification :stable-public,
+   :review
+   "Slow permission handlers and existing approval semantics; no new permission-granting surface."},
+  "nodejs/test/e2e/rpc_session_state_extras.e2e.test.ts"
+  {:blobs
+   ["7b88af7e2d61a1a3f34619e0c9318aab274febb4"
+    "a7e62c185fa749c60ca0e4590ac2ab30c371cda4"],
+   :classification :generated-only,
+   :review
+   "Existing generated state RPC scenario backend adaptation."},
+  "nodejs/test/e2e/rpc_shell_user_requested.e2e.test.ts"
+  {:blobs
+   ["73e8ac6de3d79c42186c332b539271be824f9a79"
+    "b8e339431376aa7955abe6f8a4b402a26121a72b"],
+   :classification :experimental,
+   :review
+   "Existing user-requested shell lifecycle coverage; no new Clojure command submission wrapper."},
+  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
+  {:blobs
+   ["ce10918089b43379b4087aeeb9cc0bef73ec47a2"
+    "2a8f34a7d2d71ea22e60c78b5898d353f4e21d2e"],
+   :classification :generated-only,
+   :review
+   "Generated RPC coverage inventory includes new discovery, customization, sandbox, and trusted-human routes without promoting them to stable."},
+  "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
+  {:blobs
+   ["0071e1ff458012c7adf9052c1c44e58f2a9e305f"
+    "c2e62d3bcdb6a8f18438e3cf834cb09d95758c86"],
+   :classification :generated-only,
+   :review
+   "Generated task/handler routes preserve composed model/effort selection; runtime-owned behavior."},
+  "nodejs/test/e2e/sandbox_devices.e2e.test.ts"
+  {:blobs [nil "173289e71add97a6d053c415aea1f0739903c772"],
+   :classification :experimental,
+   :review
+   "Sandbox device policy and bypass decisions remain experimental."},
+  "nodejs/test/e2e/sandbox_filesystem.e2e.test.ts"
+  {:blobs [nil "80a7baf04aad87215d6548d43a140dcdcb7ce2fe"],
+   :classification :experimental,
+   :review
+   "Experimental sandbox filesystem policy; no new grants exposed."},
+  "nodejs/test/e2e/sandbox_gh_config.e2e.test.ts"
+  {:blobs [nil "69542c5d9f15f16af827ce1336bdb906277392ed"],
+   :classification :experimental,
+   :review
+   "Experimental sandbox GitHub CLI configuration and token isolation."},
+  "nodejs/test/e2e/session.e2e.test.ts"
+  {:blobs
+   ["d9f112429168040313072be527c20dd2aee9e9bd"
+    "10f3b49f8a4622de206ce27e6ea49104007f5394"],
+   :classification :stable-public,
+   :review
+   "Existing session API/lifecycle cases across backends; no additional handwritten method."},
+  "nodejs/test/e2e/session_config.e2e.test.ts"
+  {:blobs
+   ["de81e8be1da71adf0d29511b8eae7bb6212ab303"
+    "0abd7a56f5b54af1a7e0211fbdc492773d8a774e"],
+   :classification :stable-public,
+   :review
+   "Binary-only provider image reads and instruction discovery; stable binary configuration is ported, runtime discovery remains owned by the CLI."},
+  "nodejs/test/e2e/session_fs.e2e.test.ts"
+  {:blobs
+   ["9727de06e13ea6348954d6469ad6e6dcecc5ce0c"
+    "a987127965631d105f84281f1514f2acfb63ce65"],
+   :classification :stable-public,
+   :review
+   "Exact-byte provider operations and inherited SQLite callbacks; adapter and capability contracts are ported."},
+  "nodejs/test/e2e/streaming_fidelity.e2e.test.ts"
+  {:blobs
+   ["98b8eb1884fec03273a16b4b8acc63cfec344f9e"
+    "89e1cb1dc14af750c33d6ae77113c273148bd27a"],
+   :classification :stable-public,
+   :review
+   "Streaming and resume fidelity across provider transports; no new SDK transport API."},
+  "nodejs/test/e2e/structured_output.e2e.test.ts"
+  {:blobs
+   ["0eb5957a61da745fc71bdd827a47be341684e77c"
+    "e92125507f24bb15f047e9c29f24ef75506f92c4"],
+   :classification :stable-public,
+   :review
+   "Existing response-schema parsing and provider/backend fidelity."},
+  "nodejs/test/e2e/subagent_hooks.e2e.test.ts"
+  {:blobs
+   ["767bc4b656251bd4ee7036427a74257c651eb334"
+    "a892d62c8488cfb17fe92cb7a199021939205166"],
+   :classification :stable-public,
+   :review
+   "Start context reaches the child; stop rewrites reach the parent; lifecycle metadata belongs to the parent while child tool hooks retain child IDs."},
+  "nodejs/test/e2e/suspend.e2e.test.ts"
+  {:blobs
+   ["2c8639ad3824c6783e4224f3e0cd8ab8c7ec1764"
+    "64595b2d0cd69f38d2bc666ccc52fe7607c9d3dd"],
+   :classification :generated-only,
+   :review "Existing generated suspend scenario fixture adaptation."},
+  "nodejs/test/e2e/system_message_sections.e2e.test.ts"
+  {:blobs
+   ["51380cf4ba02718fd973a7887031fbea134754a4"
+    "f984d8a9b6ae57c9374533885eec03dab8207728"],
+   :classification :stable-public,
+   :review
+   "Last-instructions controls subagent-model prompt prose, not actual model selection or tool availability; existing section builder remains valid."},
+  "nodejs/test/e2e/system_message_transform.e2e.test.ts"
+  {:blobs
+   ["ef37c39e9a800485a81cecfc4239573100571d21"
+    "55af45fef981532b0c0400c3accdcbcbb5330ebc"],
+   :classification :stable-public,
+   :review
+   "Existing section transform callback coverage across backends."},
+  "nodejs/test/e2e/telemetry-skills.e2e.test.ts"
+  {:blobs [nil "92dbc80f64f87efa0b0ad642d9e76439a1ed9961"],
+   :classification :stable-public,
+   :review
+   "Runtime-owned skill/process semantic conventions, content capture gates, attribution and exit-code semantics; documented without adding SDK telemetry fields."},
+  "nodejs/test/e2e/telemetry.e2e.test.ts"
+  {:blobs
+   ["ddcae643e3fe0b4f497087c5b529e89241c05570"
+    "49d7e66a26a16111b2247df1336094d37a1e33ca"],
+   :classification :stable-public,
+   :review "Existing telemetry configuration and backend coverage."},
+  "nodejs/test/e2e/tools.e2e.test.ts"
+  {:blobs
+   ["16db1aca87c5c22fc643a05b822fd0f089163c1c"
+    "78d18c0ca9ec1769cf29fd5926d4e3ba591ff456"],
+   :classification :stable-public,
+   :review
+   "Scalar apply_patch input binding and rejected referenced string schemas; existing low-level tool updates do not add a stable replacement wrapper."},
+  "nodejs/test/e2e/tools_anthropic_updates.e2e.test.ts"
+  {:blobs [nil "721b432ae1155418c2ebc5df2faf4d6afe362803"],
+   :classification :experimental,
+   :review
+   "Experimental between-turn provider-native tool update/cache optimization remains runtime-owned and excluded from stable APIs."},
+  "nodejs/test/e2e/ui_elicitation.e2e.test.ts"
+  {:blobs
+   ["51195206aac94ad18c7494b8f6352cc3a80cdbd7"
+    "4287b4686b445ef3b6298826f3702837042ef99e"],
+   :classification :stable-public,
+   :review
+   "Automated SDK callbacks settle requests without producing human_response.recorded or trusted-human authority."},
+  "nodejs/test/external-tool-cancellation.test.ts"
+  {:blobs
+   ["35d15bd8e3f029295cabbc166853215af3079985"
+    "d68e5f5bacf900423f67af1f304a0ac4018a0d3b"],
+   :classification :stable-public,
+   :review
+   "Scalar and wrapped apply_patch requests reach the same typed handler; invalid inputs do not invoke it, object schemas remain unchanged, invocation arguments remain raw."},
+  "nodejs/test/package-sdk.test.ts"
+  {:blobs
+   ["1b9f38bee3fb01ee5abc5e261164f94ec8dc19f4"
+    "cabbe0930055c91b26cfa77c21cffcc670e9612e"],
+   :classification :internal,
+   :review "Node package artifact contents."},
+  "nodejs/test/runtimeArtifacts.test.ts"
+  {:blobs
+   ["b59d43de8231a240e60a76b9b5ee9c7e578eb951"
+    "9b00a59f09b253bc3128d7afa69d5fed0d700290"],
+   :classification :internal,
+   :review "Runtime artifact bundling exclusions."},
+  "nodejs/test/rust-codegen.test.ts"
+  {:blobs
+   ["3087dc2c114a04832546c68f6946fd1bdf93b868"
+    "17fc4eea47b4c10bd6063a8c3bb2f0c5cf84ba67"],
+   :classification :internal,
+   :review "Foreign binding generator coverage."},
+  "nodejs/test/session-event-codegen.test.ts"
+  {:blobs
+   ["60906720deae79311bc2349d1daac5956d0bb698"
+    "c18f190bda63763f5b7ef914da7450273331eac2"],
+   :classification :internal,
+   :review
+   "Generated event type/schema coverage, not an independent stable surface."},
+  "nodejs/test/session-event-types.test.ts"
+  {:blobs
+   ["330b3810902624c72e3a5df7beb1aba8098535c8"
+    "de03f98142386f75dc37909265764c2dc8384626"],
+   :classification :experimental,
+   :review
+   "New fileEdits exports remain explicitly experimental, including future edit-kind strings."},
+  "nodejs/test/session_fs_adapter.test.ts"
+  {:blobs
+   ["98749dffbabe2aa291c6acc22a18f4b7cdbbc5e8"
+    "49591f044cfdb1190f7b1196e0372eabdbe2d838"],
+   :classification :stable-public,
+   :review
+   "Binary byte fidelity, canonical base64, exact size bounds, unsupported operations, and writeChanged only for text writes."},
+  "nodejs/test/shared-codegen.test.ts"
+  {:blobs
+   ["1980978936313abddb60a86006b5b6625d69142d"
+    "91e29d07d0c20825297360f4d79f68d800a441b1"],
+   :classification :internal,
+   :review "Shared foreign-language/wire generation."},
+  "nodejs/test/testBackend.test.ts"
+  {:blobs [nil "94f74aaccfbd19e0142a56ae7baf90e7e68231a0"],
+   :classification :internal,
+   :review "Test backend configuration."},
+  "nodejs/test/typescript-codegen.test.ts"
+  {:blobs
+   ["181cb6b781a7a6f888b408eaf631e0260509269f"
+    "1ff222dd19812e6889680675f2bb792b81915862"],
+   :classification :internal,
+   :review "TypeScript wire generator coverage."}},
+ :unchanged-local-artifacts
+ #{"build.clj"
+   "deps.edn"
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "src/github/copilot_sdk/protocol.clj"},
+ :unclassified-deltas [],
+ :upstream
+ {:base-commit "ef04633cc84e4ba8e79888a39259ca276f5de732",
+  :commit-count 1,
+  :commits-sha256
+  "9671c26433c8c36e210a7e4018c88d88d5a908b8ab04e01974d369bddad24dce",
+  :hash-format :newline-joined-without-trailing-newline,
+  :release-tag
+  {:commit "f8ae645902b74b62cd47aac1fd9b29adaec3aff2",
+   :name "v1.0.16"},
+  :runtime-version "1.0.92-4",
+  :target-commit "6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b"},
+ :version {:changed? false, :release-required? false, :sdk "1.0.16.0"}}

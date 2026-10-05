@@ -252,6 +252,20 @@
         closed?     (false? additional-properties)
         closed-pred (when closed?
                       `(~'fn [~'m] (~'every? ~allowed (~'keys ~'m))))
+        excluded-required
+        (when-let [negated (:not node)]
+          (when-not (and (map? negated)
+                         (= (set (keys negated)) #{:required})
+                         (vector? (:required negated))
+                         (every? string? (:required negated)))
+            (throw (ex-info "Unsupported object negation; expected not/required"
+                            {:not negated})))
+          (mapv (comp keyword kebab) (sort (:required negated))))
+        excluded-required-pred
+        (when excluded-required
+          `(~'fn [~'m]
+                 (~'not (~'every? (~'fn [~'key] (~'contains? ~'m ~'key))
+                                  ~excluded-required))))
         additional-pred
         (when (map? additional-properties)
           (let [value-form (emit-type root additional-properties)]
@@ -265,6 +279,7 @@
     `(~'s/and map?
               ~@prop-preds
               ~@(when closed-pred [closed-pred])
+              ~@(when excluded-required-pred [excluded-required-pred])
               ~@(when additional-pred [additional-pred]))))
 
 (defn- register-object-shape!
@@ -731,7 +746,7 @@
       (let [node (cc/deref-once root node)
             seen-refs (cond-> seen-refs ref (conj ref))
             additional-properties (:additionalProperties node)
-            opaque-dictionary? (:x-opaque-json additional-properties)
+            opaque-dictionary? (:x-opaque-json (cc/deref-once root additional-properties))
             typed-dictionary?
             (and (not (:properties node))
                  (map? additional-properties)

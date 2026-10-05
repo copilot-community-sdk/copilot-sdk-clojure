@@ -384,6 +384,22 @@
                 :args (s/cat :value any?)
                 :ret boolean?)
 
+(register-fdef! github.copilot-sdk.session/session-fs-write-failure
+                :args (s/cat :message string?)
+                :ret #(instance? clojure.lang.ExceptionInfo %))
+
+(register-fdef! github.copilot-sdk.session/session-fs-write-failure?
+                :args (s/cat :value any?)
+                :ret boolean?)
+
+(register-fdef! github.copilot-sdk/session-fs-write-failure
+                :args (s/cat :message string?)
+                :ret #(instance? clojure.lang.ExceptionInfo %))
+
+(register-fdef! github.copilot-sdk/session-fs-write-failure?
+                :args (s/cat :value any?)
+                :ret boolean?)
+
 (register-fdef! github.copilot-sdk.session/adapt-session-fs-handler
                 :args (s/cat :handler-or-provider (s/or :handler ::specs/session-fs-handler
                                                         :provider ::specs/session-fs-provider))

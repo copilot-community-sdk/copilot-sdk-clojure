@@ -565,6 +565,13 @@ safe to consume inside `go` blocks. In the deferred cloud case, the
 the response can complete. It must return promptly and must not issue SDK RPCs
 or wait for session events.
 
+If local initialization of a newly assigned cloud session fails, the SDK deletes
+that remote session with a 10-second cleanup timeout. The initialization error
+remains primary; cleanup failures are logged and attached as suppressed
+exceptions. A failure after initialization still detaches the session instead
+of deleting persisted state. Local create/resume validation failures roll back
+their provisional registration before issuing the session RPC.
+
 ```clojure
 (require '[clojure.core.async :refer [go <!]])
 
@@ -2037,12 +2044,12 @@ nested schema objects marked closed by upstream reject unknown keys.
 
 | Event Type | Description |
 |------------|-------------|
-| `:copilot/session.start` | Session created; optional `:auto-tier` is coerced to `:efficiency`, `:balance`, `:intelligence`, or `:fast` |
-| `:copilot/session.resume` | Session resumed; optional `:auto-tier` uses the same idiomatic keyword domain as session start |
+| `:copilot/session.start` | Session created; optional `:auto-tier` is coerced to `:efficiency`, `:balance`, `:intelligence`, or `:fast`. Optional string `:reasoning-effort-model` identifies the model that owns effort embedded in an authored selection. |
+| `:copilot/session.resume` | Session resumed; optional `:auto-tier` uses the same idiomatic keyword domain as session start. Optional `:reasoning-effort-model` retains the authored effort owner. |
 | `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:url`, and `:remediation`. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, and `"allow_sandbox_outbound"`. |
 | `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
 | `:copilot/session.info` | Informational session update |
-| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, and `:source`. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, `"changeboarding_shortcut"`, and `"auto_tier_recommendation"`. |
+| `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, `:reasoning-effort-model`, and `:source`. The effort owner is an optional non-null string, omitted for independent effort overrides and legacy events; empty strings remain distinct from omission. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, `"changeboarding_shortcut"` and `"auto_tier_recommendation"`. |
 | `:copilot/session.model_deselected` | The host withdrew the selected model. Data requires string `:previous-model` and `:reason "provider_withdrawn"`. Clear the displayed model selection; the next turn resolves a default. Reasoning effort, verbosity, and other session preferences remain unchanged. This durable event is also returned by `get-messages`. |
 | `:copilot/session.handoff` | Session handed off to another agent; data: `{:remote-session-id "..." :host "https://github.com"}` (both optional) |
 | `:copilot/session.usage_info` | Token usage information |
@@ -2097,7 +2104,8 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/tool.user_requested` | Tool execution requested by user |
 | `:copilot/tool.execution_start` | Tool execution started; data requires `:tool-call-id` and `:tool-name`. Optional fields are `:tool-title` (human-readable display title), `:arguments` (opaque JSON with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. An absent title stays absent; the spec accepts any string, including empty, but not `nil`. Transport metadata was added in runtime schema `1.0.84-5`; configured-server provenance was introduced in runtime schema `1.0.84-8` by [upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658). |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
-| `:copilot/tool.execution_partial_result` | Tool execution partial result |
+| `:copilot/tool.execution_partial_result` | **Deprecated.** Bounded cumulative replacement snapshot of merged shell output, not an append-only chunk. Use `tool.shell_output` for live output. |
+| `:copilot/tool.shell_output` | Live-only append-only shell output. Data requires string `:tool-call-id`, string `:text`, and non-negative integer `:sequence`. Optional `:stream` is `"stdout"`, `"stderr"`, or `"terminal"`; omission means stdout. See [Shell output](#shell-output). |
 | `:copilot/tool.execution_complete` | Tool execution completed; data may include optional `:structured-content` (arbitrary structured tool result) (upstream schema 1.0.63) and `:result` (recursive opaque JSON). An error may include `:message`, `:code`, and the same `:remediation` values as `session.error`. Generated wire validation still enforces known result variants, including the shell-exit variant's `:exit-code`/`:shell-id`/`:type "shell_exit"` and optional `:cwd`/`:output-file-path`/`:output-preview`/`:output-truncated`; `:output-file-path` was added in upstream schema 1.0.83-1. Successful skill invocations may keep concise model-facing `:detailed-content`; the authoritative skill body remains on the corresponding `:copilot/skill.invoked` event. |
 | `:copilot/tool_search.activated` | Persisted generic client-side tool activations restored when a session resumes. Data: `{:strategy <string> :tool-names [<string> ...]}`. |
 | `:copilot/subagent.started` | Subagent started; data includes `:tool-call-id`, `:agent-name`, `:agent-display-name`, and `:agent-description`, with optional `:workflow-run-id` (string; legacy `:factory-run-id` is retained for history), `:model`, `:resumable` (boolean), `:agent-type` (string), `:execution-mode` (string), `:parent-id` (string — task-registry id of the spawning subagent; unrelated to the envelope-level `:parent-id`), `:task-model-source` (`"task_argument"`, `"subagent_configuration"`, `"custom_agent_definition"`, or `"unset"`), and `:model-selection-source` using the same values as `subagent.completed`. |
@@ -2132,6 +2140,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/commands.changed` | Available commands list changed |
 | `:copilot/exit_plan_mode.requested` | Exit from plan mode requested; data includes `:summary`, `:actions`, `:recommended-action`, and may identify the active `:model`. |
 | `:copilot/exit_plan_mode.completed` | Exit from plan mode completed |
+| `:copilot/human_response.recorded` | Durable request/response provenance emitted by the runtime. Requires string `:request-id`, `:actor`, and a typed `:response`; optional string `:tool-call-id` links the originating tool. See [Response provenance](#response-provenance). |
 | `:copilot/auto_mode_switch.requested` | Auto mode switch request requiring user approval |
 | `:copilot/auto_mode_switch.completed` | Auto mode switch completed |
 | `:copilot/session.tools_updated` | Session tools list updated (e.g., after model change) |
@@ -2158,6 +2167,45 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.canvas.recorded` | Durable record that a canvas instance is open, used to restore open canvases on cold session resume. Omits the transient `:url` and `:availability`. |
 | `:copilot/workflow.run_updated` | An [Dynamic Workflow](#dynamic-workflows-experimental) run's status changed; data: `{:run-id "..." :revision N}` (both required). Consumed internally by `wait-for-run!`/`<wait-for-run!` to detect terminal status. (upstream PR #2114) |
 | `:copilot/session.canvas.removed` | Durable record that a canvas instance was closed, superseding a prior `canvas.recorded` during resume replay. |
+
+### Shell output
+
+Append `:text` from `:copilot/tool.shell_output` by tool call and stream.
+`:sequence` starts at zero and increases across streams for a tool call; a late
+subscriber may first observe a larger value. It identifies publication order,
+not byte offsets or exact ordering between independent operating-system writes.
+`"terminal"` is merged terminal output without recoverable stdout/stderr attribution.
+
+These events are ephemeral: history and resumed subscriptions do not replay
+them. An asynchronously continuing command may emit more chunks after
+`tool.execution_complete`, using the same tool call ID and sequence. Chunks need
+not contain complete lines; apply normal terminal-text handling before display.
+Redaction is per decoded chunk, not cross-chunk secret reconstruction.
+Subscribe to either this event or the deprecated replacement snapshots, not
+both, to avoid duplicate display.
+
+### Response provenance
+
+`:copilot/human_response.recorded` preserves the exact runtime-owned question or
+reviewed plan alongside the response that settled it. `:actor` is
+`"human_response"`, `"host_automation"`, or `"unknown"`. Only `"human_response"`,
+established by a trusted direct-interaction ingress, is human authorization
+evidence. Ordinary SDK input and elicitation callbacks do not mint these
+receipts or acquire human authority. The Clojure SDK observes the event; it does
+not expose trusted-human submission APIs.
+
+| `[:response :response-kind]` | Required response fields | Optional response fields |
+|-----------------------------|--------------------------|--------------------------|
+| `"ask_user"` | `:message`, `:content` (JSON object), `:requested-schema` | None |
+| `"user_input"` | `:question`, `:answer`, `:was-freeform` (boolean) | `:choices` (vector of strings), `:allow-freeform` (boolean) |
+| `"exit_plan_mode"` | `:summary`, `:plan-content`, `:actions`, `:recommended-action`, `:approved` (boolean) | `:feedback`, `:selected-action`, `:auto-approve-edits` (boolean) |
+
+Plan actions are `"exit_only"`, `"interactive"`, `"autopilot"`, or
+`"autopilot_fleet"`. The requested form schema requires `:type "object"` and
+`:properties`, with an optional vector of `:required` field names. Content,
+field names, and nested schema JSON keep their source spelling in live events
+and history. Optional false values, empty strings, and empty vectors remain
+present; explicit `nil` is invalid except within opaque JSON values.
 
 ### Citations (Experimental)
 
@@ -2307,6 +2355,16 @@ spawned CLI. Presence of the map enables OTel; all sub-keys are optional:
 
 When `:telemetry` is present the SDK sets `COPILOT_OTEL_ENABLED=true` on the CLI process.
 (upstream PR #785, [PR #1648](https://github.com/github/copilot-sdk/pull/1648))
+
+The runtime's skill spans use `gen_ai.skill.name` and
+`gen_ai.skill.resource.name`; descriptions and `gen_ai.skill.source.uri` require
+content capture. Local source identities are file URIs, not bare paths.
+`process.executable.name` identifies the actual launcher, while executable
+paths require content capture. Exit codes are integers, including zero; missing
+or pre-spawn results are omitted. Custom tools overriding built-in names do not
+inherit native skill/process attributes. These evolving semantic conventions
+replace the older `github.copilot.skill.name`, `github.copilot.skill.path`, and
+`github.copilot.tool.parameters.skill_name` attributes.
 
 #### Distributed trace propagation (`:on-get-trace-context`)
 
@@ -2619,6 +2677,26 @@ Set `:overrides-built-in-tool true` to override a built-in tool (e.g., `grep`, `
                 (copilot/result-success (my-custom-grep pattern)))}))
 ```
 
+An `apply_patch` override can use a scalar string schema:
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(def patch-tool
+  (copilot/define-tool "apply_patch"
+    {:parameters {:type "string"}
+     :overrides-built-in-tool true
+     :handler (fn [patch _invocation]
+                (copilot/result-success (str "Received " (count patch) " characters")))}))
+```
+
+The handler receives patch text whether the runtime supplied a string or
+`{:input text}`; `:arguments` in the invocation map retains the original payload.
+Object-schema overrides and other tools keep their argument shape. Invalid
+string-override input fails without invoking the handler. String-schema
+`apply_patch` overrides cannot contain JSON Schema references; use an object
+schema when references are needed.
+
 **Deferring tools:**
 
 Set `:defer` to `:auto` or `:never` (upstream PR #1632) to control whether a tool may be *deferred* — loaded lazily via tool search rather than always pre-loaded into the model's context. `:auto` (the default) lets the runtime defer the tool; `:never` forces it to be pre-loaded. Deferring large tool sets keeps the active context smaller.
@@ -2785,10 +2863,16 @@ The `:customize` mode enables section-level overrides of the system prompt. Twel
 | `:safety` | Environment limitations, prohibited actions, security |
 | `:tool-instructions` | Per-tool usage instructions |
 | `:custom-instructions` | Repository and organization custom instructions |
-| `:runtime-instructions` | Runtime-provided context (system notifications, memories, mode-specific instructions, content-exclusion policy) — added in upstream PR #1377 |
-| `:last-instructions` | End-of-prompt instructions |
+| `:runtime-instructions` | Runtime-provided system-prompt context (notifications, memories, workspace context, content-exclusion policy); mode instructions may arrive in transition messages |
+| `:last-instructions` | End-of-prompt instructions, including configured subagent-model guidance when the task tool is available |
 
 Each section supports static actions (`:replace`, `:remove`, `:append`, `:prepend`, `:preserve`) and transform callbacks (1-arity functions). `:preserve` is a no-op marker that opts an individually-addressable section out of a group-level `:remove` — e.g. keep `:tone` when removing the `:identity` group (upstream PR #1713).
+
+Replacing or removing `:last-instructions` also replaces or removes its
+subagent-model guidance. Transforms receive the complete section and their
+returned prose is authoritative. These operations change prompt text, not
+configured models, tool availability, or runtime dispatch policy.
+`:runtime-instructions` is independent of `:last-instructions`.
 
 ```clojure
 (require '[github.copilot-sdk :as copilot])
@@ -3541,7 +3625,44 @@ Provide a provider factory per session:
                             (dissoc src)))))}))}))
 ```
 
-Provider functions use direct arguments and throw on failure. Errors with `{:code "ENOENT"}` become structured `SessionFsError` maps with code `"ENOENT"`; all other exceptions become `"UNKNOWN"`. `create-session` and `resume-session` automatically adapt provider-style factory returns to the low-level RPC handler contract.
+Provider functions use direct arguments and throw on failure. Errors with `{:code "ENOENT"}` become structured `SessionFsError` maps with code `"ENOENT"`; all other exceptions become `"UNKNOWN"`. `create-session`, `resume-session`, their channel variants, and extension join automatically adapt provider-style factory returns to the low-level RPC handler contract.
+
+Provider results may be immediate values, channels, futures, or promises.
+Channels and promises may yield a `Throwable`; failed futures preserve the
+underlying exception rather than hiding its classification. An asynchronous
+error is reported once; it does not retry the filesystem operation.
+
+**Binary files (optional).** Declare `:capabilities {:binary true}` in the
+client's `:session-fs` configuration and implement both operations on every
+session provider:
+
+| Provider key | Arguments | Result |
+|--------------|-----------|--------|
+| `:read-file-bytes` | `[path]` | Java byte array |
+| `:write-file-bytes` | `[path byte-array mode]` | Ignored on success; throw on failure |
+
+This supports images stored only in the virtual filesystem. The adapter uses
+standard canonical base64 on the wire and limits each read or write to
+50,330,880 raw bytes. Invalid base64 and larger content return filesystem
+errors before invoking the writer; oversized reads fail before encoding.
+Missing binary implementations are rejected during session setup when the
+capability is true. Omitted or false capabilities retain text-only behavior;
+unsupported binary operations fail without reading the runtime host's files.
+Explicit `nil` is invalid for either capability flag or operation.
+
+**Partial writes.** Throw `session-fs-write-failure` from `:write-file` only if
+the failed write changed its target. The adapter adds `:write-changed true` to
+that filesystem error; it does not mark append or binary-write errors.
+
+```clojure
+(require '[github.copilot-sdk :as copilot])
+
+(copilot/session-fs-write-failure "Write failed after truncating the target")
+;; => ExceptionInfo with {:type :session-fs-write-failure}
+```
+
+`session-fs-write-failure?` recognizes the classified exception. The marker
+describes a mutation that happened, not a successful write.
 
 Use `create-session-fs-adapter` when you need the low-level handler map explicitly:
 
@@ -3566,15 +3687,17 @@ Use `create-session-fs-adapter` when you need the low-level handler map explicit
   (copilot/create-session-fs-adapter provider))
 ```
 
-The low-level handler map requires the 10 core FS operations below. The three
-`:sqlite-*` keys are optional and only required when the client advertises
-`:capabilities {:sqlite true}` on its `:session-fs` config (see
-[SQLite support](#sqlite-support-optional)).
+The low-level handler map requires the 10 core FS operations below.
+`:read-file-bytes` and `:write-file-bytes` are required when binary capability is
+true. SQLite query/exists handlers are required when SQLite capability is true;
+transaction support remains optional (see [SQLite support](#sqlite-support-optional)).
 
 | Key | Params | Returns |
 |-----|--------|---------|
 | `:read-file` | `{:session-id :path}` | `{:content "..."}` |
 | `:write-file` | `{:session-id :path :content :mode}` | nil |
+| `:read-file-bytes` _(optional)_ | `{:session-id :path}` | `{:content "base64..."}` |
+| `:write-file-bytes` _(optional)_ | `{:session-id :path :content :mode}`; content is base64 | nil |
 | `:append-file` | `{:session-id :path :content :mode}` | nil |
 | `:exists` | `{:session-id :path}` | `{:exists true/false}` |
 | `:stat` | `{:session-id :path}` | `{:is-file :is-directory :size :mtime :birthtime}` |
@@ -3754,6 +3877,14 @@ Lifecycle hooks allow custom logic at various points during the session:
                      {:decision "block"
                       :reason "Run the final validation and fix any failures."}))
 
+                 :on-subagent-start
+                 (fn [_input _invocation]
+                   {:additional-context "Read the requested files before summarizing."})
+
+                 :on-subagent-stop
+                 (fn [input _invocation]
+                   {:modified-response (str "Reviewed child response: " (:response input))})
+
                  :on-error-occurred
                  (fn [input invocation]
                    (println "Error:" (:error input))
@@ -3773,6 +3904,28 @@ Return `nil`, or throw from the handler, to let the agent stop. When
 `:stop-hook-active` is true, a previous block already forced a continuation; use it to
 avoid indefinite re-blocking.
 ([upstream PR #2054](https://github.com/github/copilot-sdk/pull/2054))
+
+`:on-subagent-start` runs before a child's first turn. Input includes the
+parent's `:session-id`, `:timestamp` (Unix milliseconds), `:cwd`, and
+`:transcript-path`, plus `:agent-name` and optional `:agent-display-name` /
+`:agent-description`. `:session-id` in the invocation map also identifies the parent.
+Return `{:additional-context "..."}` to prepend context to the initial child
+prompt.
+
+`:on-subagent-stop` runs after a child completes a turn, independently of
+`:on-agent-stop`. It adds `:agent-type`, `:stop-reason "end_turn"`, the child's
+original `:response`, and optional `:agent-id`. Return
+`{:decision "block" :reason "..."}` with a nonempty reason to continue the child,
+or `{:modified-response "..."}` to replace the response reported to its parent.
+A valid block takes precedence over a rewrite. `{:decision "allow"}` or `nil`
+allows completion; do not block indefinitely.
+
+Both callbacks are available on create, resume, and join, including channel
+variants. They may return an output map directly or through a core.async
+channel. Omitted callbacks do nothing; explicit `nil` and other non-functions
+are invalid configuration. Optional input fields remain absent when the runtime
+omits them. Child tool-use hooks still identify the child session, unlike these
+parent-associated lifecycle hooks.
 
 ### Reasoning Effort
 

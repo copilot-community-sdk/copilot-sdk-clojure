@@ -1922,6 +1922,7 @@
 
          ;; SessionFs operations (upstream PR #917, sqlite added in #1299)
          ("sessionFs.readFile" "sessionFs.writeFile" "sessionFs.appendFile"
+                               "sessionFs.readFileBytes" "sessionFs.writeFileBytes"
                                "sessionFs.exists" "sessionFs.stat" "sessionFs.mkdir"
                                "sessionFs.readdir" "sessionFs.readdirWithTypes"
                                "sessionFs.rm" "sessionFs.rename"
@@ -3369,30 +3370,43 @@
             (assoc :open-canvases open-canvases
                    :transcript-recovery transcript-recovery))))))))
 
+(defn- check-session-deletion!
+  [session-id result]
+  (when-not (:success result)
+    (throw (ex-info (str "Failed to delete session: " (:error result))
+                    {:session-id session-id :error (:error result)}))))
+
 (defn- cleanup-failed-session-setup!
   "Release every locally owned resource from a failed session setup.
 
    `remote-accepted?` is true only after the runtime accepted the create or
-   resume request. Accepted sessions are detached rather than destroyed so
-   their persisted state remains resumable.
+   resume request. Accepted sessions are detached so their persisted state
+   remains resumable, except a server-assigned cloud session whose local
+   initialization failed: that newly created remote resource is deleted.
    `provider-registration-ids` contains only committed registrations visible
    when this setup transaction began, so cleanup cannot remove a provider that
    another concurrent transaction committed later. The caller rolls back this
    operation's provisional registration separately.
    Returns unexpected cleanup failures without replacing the setup failure."
   [client session-id {:keys [connection-io remote-accepted?
-                             provider-registration-ids registration-token]
+                             provider-registration-ids registration-token
+                             uninitialized-cloud-session?]
                       :or {remote-accepted? false
                            provider-registration-ids #{}}}]
   (td/collect
    (concat
     [(when (and remote-accepted? session-id)
        (td/attempt
-        {:operation :detach :resource :failed-session-setup
+        {:operation (if uninitialized-cloud-session? :delete :detach)
+         :resource :failed-session-setup
          :session-id session-id}
         (when connection-io
-          (session/request-session-detach!
-           connection-io session-id))))]
+          (if uninitialized-cloud-session?
+            (check-session-deletion!
+             session-id
+             (proto/send-request! connection-io "session.delete" {:session-id session-id} 10000))
+            (session/request-session-detach!
+             connection-io session-id)))))]
     (map
      (fn [provider-registration-id]
        (td/attempt
@@ -3592,7 +3606,8 @@
 
 (defn- fail-session-setup!
   [client {:keys [session-id provider-registration-id remote-accepted?
-                  snapshot registration-token setup-token connection-io]
+                  snapshot registration-token setup-token connection-io
+                  uninitialized-cloud-session?]
            :as transaction}
    failure]
   (try
@@ -3602,6 +3617,7 @@
            session-id
            {:connection-io connection-io
             :remote-accepted? remote-accepted?
+            :uninitialized-cloud-session? uninitialized-cloud-session?
             :registration-token registration-token
             :provider-registration-ids
             (when remote-accepted?
@@ -4177,10 +4193,7 @@
     (let [factory (:create-session-fs-handler config)
           session-id (:session-id session)
           handler
-          (->> (factory session)
-               session/adapt-session-fs-handler
-               (session/validate-session-fs-handler-for-client!
-                client session-id))]
+          (session/prepare-session-fs-handler client session-id (factory session))]
       (update-session-setup-state!
        client transaction
        #(assoc-in % [:sessions session-id :session-fs-handler]
@@ -4366,7 +4379,9 @@
                (ex-info "Cloud session ID is already registered locally"
                         {:type :session-id-collision
                          :session-id assigned-id})))
-            (let [accepted-context (assoc base-context :remote-accepted? true)
+            (let [accepted-context (assoc base-context
+                                          :remote-accepted? true
+                                          :uninitialized-cloud-session? true)
                   _ (reset! setup-context accepted-context)
                   {:keys [session snapshot]}
                   (pre-register-session
@@ -4416,6 +4431,7 @@
                      transform-callbacks)))
                 (install-session-fs-handler!
                  client transaction session config)
+                (swap! setup-context dissoc :uninitialized-cloud-session?)
                 (deliver result-promise session)
                 (catch Throwable failure
                   (let [cleanup-failures
@@ -4526,9 +4542,13 @@
    - :hooks              - Lifecycle hooks map (PR #269):
                            {:on-pre-tool-use, :on-pre-mcp-tool-call,
                             :on-post-tool-use, :on-post-tool-use-failure,
-                            :on-user-prompt-submitted,
-                            :on-session-start, :on-session-end, :on-error-occurred}
+                            :on-user-prompt-submitted, :on-user-prompt-transformed,
+                            :on-session-start, :on-session-end, :on-error-occurred,
+                            :on-agent-stop, :on-subagent-start, :on-subagent-stop}
                            See `doc/reference/API.md` for hook input/output shapes.
+                           Subagent lifecycle hooks carry parent session metadata.
+                           Start output may prepend :additional-context; stop output
+                           may request another child turn or supply :modified-response.
                            `:on-pre-mcp-tool-call` (upstream PR #1366) fires before
                            an MCP tool call is dispatched; handler returning
                            `{:meta-to-use {...}}` replaces the request `_meta`,
@@ -5349,9 +5369,7 @@
   (ensure-connected! client)
   (let [{:keys [connection-io]} @(:state client)
         result (proto/send-request! connection-io "session.delete" {:session-id session-id})]
-    (when-not (:success result)
-      (throw (ex-info (str "Failed to delete session: " (:error result))
-                      {:session-id session-id :error (:error result)})))
+    (check-session-deletion! session-id result)
     (let [cleanup-failures
           (td/collect
            [(td/attempt

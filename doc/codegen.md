@@ -146,18 +146,25 @@ Currently supported JSON Schema → spec mappings:
 | `string` + `enum`     | `#{"a" "b" ...}` (set literal)             |
 | `string` + `const`    | `#{"x"}`                                   |
 | `integer`             | `integer?`                                 |
-| `number`              | `number?`                                  |
+| `number`              | Finite JSON number predicate               |
 | `boolean`             | `boolean?`                                 |
 | `null`                | `nil?`                                     |
-| `array`               | `(s/coll-of <items>)`                      |
-| `object` w/ properties| `map?` for nested object properties        |
+| `array`               | `(s/coll-of <items> :kind vector?)`         |
+| `object` w/ properties| Recursive property validation; required and closed-key checks |
+| Schema-valued `additionalProperties` | Recursive validation of dictionary values |
+| Object `not: {required: [...]}` | Reject objects containing every listed key |
+| `x-opaque-json`        | Recursive JSON validation and exact key preservation |
 | `anyOf` (incl. `null`)| `(s/or ...)` or `(s/nilable ...)`          |
 | `$ref`                | resolved (single-pass)                     |
-| anything else         | `any?` (with a `WARN:` on stderr)          |
+| anything else         | `any?`                                    |
 
-Note: the generator currently emits `(s/keys :req-un [...] :opt-un [...])`
-only for the top-level `data` payload and event envelope objects. Nested
-object properties are emitted as `map?`.
+The generator emits `(s/keys :req-un [...] :opt-un [...])` for top-level
+`data` payloads and event envelopes. Nested objects use structural predicates;
+referenced object shapes are registered once and reused. Unsupported object
+negation forms fail generation rather than silently dropping the constraint.
+Opaque dictionary values remain opaque when their schema is referenced with
+`$ref`, so both their field names and nested JSON keys survive live and history
+conversion unchanged.
 
 Wire keys (`sessionId`, `parentId`, ...) are converted to kebab-case
 (`session-id`, `parent-id`) before being emitted as spec keywords. This matches

@@ -40,6 +40,13 @@
                   `tool_search_tool`. Each metadata map has :name, :description,
                   and optional :namespaced-name, :mcp-server-name,
                   :mcp-tool-name, :input-schema, :defer-loading.
+
+   An \"apply_patch\" override with :parameters {:type \"string\"} receives
+   patch text whether the runtime sends a scalar or {:input text}. The
+   invocation's :arguments retains the original payload. Object-schema
+   overrides and other tools are not unwrapped. Invalid scalar-override input
+   fails without calling the handler. String-schema overrides cannot use
+   JSON Schema references; use an object schema when references are needed.
    
    The handler should return one of:
    - A string (treated as success)
