@@ -31,7 +31,7 @@
    :sha256
    "6f8e48c5980b955f02604e6d9ba5a7fe6116894e8a40d2c7d06e6bd4005df988"},
   :local-artifact-seal
-  {:commit "d8cfa882d14a65eed142f2cf3d4214313fad0c8b",
+  {:commit "d84350da026a0566953a1ed961a2c882d79364ab",
    :status :sealed}},
  :changed-paths
  {:classification-counts
@@ -509,13 +509,13 @@
   ".github/workflows/ci.yml"
   "189dfa8a2c7b2b90b5b138528e5abe0fccf57fae002ecc6415c3e31513528f6f",
   "CHANGELOG.md"
-  "f1b8f2b449116435e1b2552cef4d5033f5f709888cf0d72b0afd1fe85c028f48",
+  "0809c22b03a1f9861d913aa240c573427f7e61e5d70096543d82dc78d6dde5b0",
   "build.clj"
   "72620df06be0beaf56b9a005a81755713561e526875f89405ca04a3ea94a1cfb",
   "deps.edn"
   "ec07cf3d799dcb354766ff7af7b0565cff218e1ecc7811a3a342b8689b06b33b",
   "doc/adr/2026-10-09-extensible-routing-and-event-contracts.md"
-  "510461fdb899ce87408d7d377796021c94f0dcd834cf476b9c5cf3f315d628ef",
+  "b6a90c45b2d8433f0f773111c9d986ad4003c7ca28f1183bb689a98f1169c22a",
   "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
   "b674d516c2bac1d7b2bd88ca343a1d47da27543c233d8942a886c3de3757eba7",
   "doc/api/2026-08-10-host-owned-inference-boundary.html"
@@ -531,9 +531,9 @@
   "doc/api/2026-10-05-callback-and-event-contracts.html"
   "03d612d32b9e127b62980a9c06e998bdbf47506bd3684a1b9c051f3cf8c9d931",
   "doc/api/2026-10-09-extensible-routing-and-event-contracts.html"
-  "22bda3b612f73b9a543ece3590bc335eada3a53b0bf479bb520465bef0a7f050",
+  "8d5f370654415baf84678a185a4ffb4e14f20291fee9550879fc8670c9e3bfdb",
   "doc/api/API.html"
-  "2b543d2019ba0a8ec61c4f3598e98860e0b3eba35e579d202e8b1ce34bf591ee",
+  "d928f8ceb84129759c4f0526f04ba57c910da62a8c382509ccbc6b4224af822d",
   "doc/api/azure-managed-identity.html"
   "ae2244881539bfb332057b06fc7b272a2abaf2b8f4f1eb9f967c01fd10161871",
   "doc/api/byok.html"
@@ -573,7 +573,7 @@
   "doc/api/github.copilot-sdk.protocol.html"
   "ebb73d4944312b64c66be56ad12f2dc48162afd186177efce7d11acbfbab5543",
   "doc/api/github.copilot-sdk.session.html"
-  "23fec5091b6dfd9c2fa479c8504c3acc59712d502d1314b6a82f8fec01747eec",
+  "cf6688eddd5ac8135642a366681f96ab0fdf0edf0edcfad191e1faf12b48ae8a",
   "doc/api/github.copilot-sdk.specs.html"
   "b31c273b347d89867156e3655aa71fafcb1ca1ce51382feb781c90093d0e62f8",
   "doc/api/github.copilot-sdk.teardown.html"
@@ -605,7 +605,7 @@
   "doc/mcp/overview.md"
   "fbc57dc506a016c12fcf9a3efdd199141a17c9aa3a11ef3737b0aa15bc47f5e4",
   "doc/reference/API.md"
-  "b6d8edea306b6624006b9fb35fa183bb44ad111d4830e42366e0ad5f04886413",
+  "3dd174adf959921ecfa5176ed3115451c0368846bf4ddf0cefafd25368088915",
   "resources/github/copilot_sdk/api_surface.edn"
   "265912631ebef63632a2dbe2927beb3aed771b46600dd8fe6d1c14e4167b58f7",
   "schemas/README.md"
@@ -631,7 +631,7 @@
   "src/github/copilot_sdk/instrument.clj"
   "1a34501d1792596f5e39d2c02b17d77cc4a4ba28eafb3a15e0f3dc9fc4cc2713",
   "src/github/copilot_sdk/session.clj"
-  "be81c1c3764403eef0cba0fafeeed1c9ebe21b6a0511470b13527bcfc5756292",
+  "cdab31b528712c63c1cab1e3c51effb68a6dbb45a5834a64c53b0655ce43f39d",
   "src/github/copilot_sdk/specs.clj"
   "0e62b8c1d307195e3fbf9750f65bdb817b719deb240d51c7e4928358b79d3a99",
   "test/github/copilot_sdk/codegen_test.clj"
@@ -646,16 +646,18 @@
   "971ff1d64b009726b4c25f42e7028c37d20acdba82d5dfa045f48a5e433050f5",
   "test/github/copilot_sdk/integration/stable_sync_2980c78_test.clj"
   "a0b645b3dd09a7dc89a0d52fe81dd561a49d6367991cdb1b39b1acb679cdeed7",
+  "test/github/copilot_sdk/integration/stable_sync_341a526_test.clj"
+  "67ba22fda5fee47588297c7661b7c810fa09b27ac45edca6f160aa05dbfe8df3",
   "test/github/copilot_sdk/integration/stable_sync_bba92dd_test.clj"
   "00fbd92762d2c90eb839a2187dc00bea5e3910a171a58f4598177bdfcd0ebcfb",
   "test/github/copilot_sdk/integration/stable_sync_f45c46fd_test.clj"
   "b056445cbb1fb859aaeff187c1268cf8d524faa23e00317b4a1f60b79ff07027",
   "test/github/copilot_sdk/integration/upstream_1_0_95_2_test.clj"
-  "5c4f0a2b254dc7fe95112bd4937ea8c586feb0c87ba92a6f7298317935733b41",
+  "bc727475e30091a2679d4cf6f56e2b9497be64eb1a3cfc63d6e20edad5f5c4b4",
   "test/github/copilot_sdk/optional_wire_contract_test.clj"
   "ba1c168a343a8d285c8fceb40ee26c8a2ac2cc9cc48d4fa883fc34e22af73bb4",
   "test/resources/stable_upstream_delta_341a526.edn"
-  "866631d51ef325d76a6600750435b5dc3e12bcc67b02e07dd81f0fa2f34184c2"},
+  "a8e7513bea221c5bc1c5e8380a5872e21db1055b1cb3807929c0417892045dbf"},
  :stable-deltas
  [{:authority
    ["nodejs/src/generated/session-events.ts:AutoTier"
@@ -1020,15 +1022,20 @@
     :force-stop
     :racing-admission
     :idempotent-unsubscribe
+    :same-id-resident-replacement
+    :same-id-detached-resume
+    :failed-resume-restoration
     :acknowledged-wait
     :rejected-resume
     :failed-local-setup],
    :semantics
-   "Reject retired subscriptions explicitly and close provisional channels when source retirement wins admission. Existing response-wait cancellation, callback release, and ownership-fenced failed-resume rollback already match upstream and remain unchanged.",
+   "Match immutable handle, session and I/O registration tokens before borrowing an event source; same-ID replacement cannot reactivate stale handles. Reject retired subscriptions and close provisional channels when source retirement wins admission. Existing response-wait cancellation, callback release and failed-resume rollback remain unchanged.",
    :specs [:github.copilot-sdk.specs/session],
    :tests
    [github.copilot-sdk.integration.upstream-1-0-95-2-test/retired-session-event-subscriptions-fail-explicitly
     github.copilot-sdk.integration.upstream-1-0-95-2-test/subscription-admission-racing-retirement-does-not-leak-a-channel
+    github.copilot-sdk.integration.upstream-1-0-95-2-test/event-subscriptions-reject-replaced-session-handles
+    github.copilot-sdk.integration.upstream-1-0-95-2-test/failed-resume-preserves-original-subscription-admission
     github.copilot-sdk.force-stop-test/force-stop-releases-session-owned-resources-without-rpcs
     github.copilot-sdk.integration.schema-provider-test/test-failed-provisional-resume-preserves-live-session],
    :wire

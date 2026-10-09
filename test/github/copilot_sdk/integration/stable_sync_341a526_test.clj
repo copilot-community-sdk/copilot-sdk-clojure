@@ -11,7 +11,7 @@
 (def ^:private base "6b4f3a3bde7eb9a8604617b91effe0f4a2e3921b")
 (def ^:private target "341a526b26ccc170f6a1c6c5651b51f4ba9d3691")
 (def ^:private clojure-base "c11aadd1df313fe11408938e0f5928faf2426648")
-(def ^:private implementation "d8cfa882d14a65eed142f2cf3d4214313fad0c8b")
+(def ^:private implementation "d84350da026a0566953a1ed961a2c882d79364ab")
 (def ^:private classifications
   #{:stable-public :experimental :internal :generated-only :language-specific})
 (def ^:private authority-paths
