@@ -112,28 +112,22 @@
                                  {:value ~'v :value-class (~'class ~'v)}))))
 
    ;; auto-tier-string <-> auto-tier-keyword
-   `(~'def ~(with-meta 'auto-tiers {:private true})
-           #{:efficiency :balance :intelligence :fast})
-
    `(~'defn ~'auto-tier-string->keyword
-            "Convert a wire auto-tier string to its closed idiomatic keyword domain."
+            "Convert an extensible wire Auto-tier identifier to an idiomatic keyword."
             [~'v]
-            (~'let [~'tier (~'cond
-                            (~'nil? ~'v)     ~'nil
-                            (~'keyword? ~'v) ~'v
-                            (~'string? ~'v)  (~'keyword ~'v)
-                            :else
-                            (~'throw (~'ex-info "Expected auto-tier string or keyword"
-                                                {:value ~'v :value-class (~'class ~'v)})))]
-                   (~'when-not (~'or (~'nil? ~'tier) (~'contains? ~'auto-tiers ~'tier))
-                               (~'throw (~'ex-info "Unknown auto-tier value" {:value ~'v})))
-                   ~'tier))
+            (~'cond
+             (~'nil? ~'v)     ~'nil
+             (~'keyword? ~'v) ~'v
+             (~'string? ~'v)  (~'keyword ~'v)
+             :else
+             (~'throw (~'ex-info "Expected auto-tier string or keyword"
+                                 {:value ~'v :value-class (~'class ~'v)}))))
 
    `(~'defn ~'auto-tier-keyword->string
-            "Convert an idiomatic auto-tier keyword to its closed wire enum domain."
+            "Preserve the complete Auto-tier identifier, including a keyword namespace."
             [~'v]
             (~'let [~'tier (~'auto-tier-string->keyword ~'v)]
-                   (~'when ~'tier (~'name ~'tier))))
+                   (~'when ~'tier (~'subs (~'str ~'tier) 1))))
 
    ;; attachment-type-strings <-> attachment-type-keywords
    `(~'def ~(with-meta 'attachment-type-wire->idiom {:private true})

@@ -3540,6 +3540,28 @@
   ([client session-id]
    (disconnect! client session-id)))
 
+(defn- require-event-io
+  [{:keys [session-id client]}]
+  (let [state @(:state client)
+        io (get-in state [:session-io session-id])]
+    (when (or (not (false? (get-in state [:sessions session-id :destroyed?])))
+              (async-protocols/closed? (:event-chan io)))
+      (throw (ex-info "Session has been disconnected" {:session-id session-id})))
+    io))
+
+(defn- tap-session-events
+  [session buffer xf]
+  (let [{:keys [event-mult event-chan]} (require-event-io session)
+        buf (async/sliding-buffer buffer)
+        ch (if xf (chan buf xf) (chan buf))]
+    (tap event-mult ch)
+    ;; A mult cannot close a tap registered after its source has finished closing.
+    (when (async-protocols/closed? event-chan)
+      (untap event-mult ch)
+      (close! ch)
+      (throw (ex-info "Session has been disconnected" {:session-id (:session-id session)})))
+    ch))
+
 (defn events
   "Get the event mult for this session. Use tap to subscribe:
    
@@ -3550,15 +3572,17 @@
          (println event)
          (recur))))
    
-   Remember to untap and close your channel when done."
+   Remember to untap and close your channel when done.
+   Throws if the session is disconnected. Prefer subscribe-events for
+   lifecycle-aware subscription admission."
   [session]
-  (let [{:keys [session-id client]} session]
-    (:event-mult (session-io client session-id))))
+  (:event-mult (require-event-io session)))
 
 (defn subscribe-events
   "Subscribe to session events. Returns a channel that receives events.
    
    The channel will receive nil (close) when the session is disconnected.
+   Subscribing to a disconnected session throws ExceptionInfo.
    For explicit cleanup before session disconnection, call unsubscribe-events!.
    
    Drop behavior: the returned channel uses a sliding buffer of 1024 events.
@@ -3568,11 +3592,7 @@
    
    This is a convenience wrapper around (tap (events session) ch)."
   [session]
-  (let [ch (chan (async/sliding-buffer 1024))
-        {:keys [session-id client]} session
-        {:keys [event-mult]} (session-io client session-id)]
-    (tap event-mult ch)
-    ch))
+  (tap-session-events session 1024 nil))
 
 (defn events->chan
   "Subscribe to session events with options.
@@ -3584,26 +3604,23 @@
    Drop behavior: the returned channel uses a sliding buffer of `:buffer`
    events. If this subscriber falls behind and its buffer fills, the oldest
    buffered events are dropped for this subscriber only — delivery to other
-   subscribers is never blocked."
+   subscribers is never blocked. Subscribing to a disconnected session
+   throws ExceptionInfo."
   ([session]
    (events->chan session {}))
   ([session {:keys [buffer xf] :or {buffer 1024}}]
-   (let [{:keys [session-id client]} session
-         {:keys [event-mult]} (session-io client session-id)
-         buf (async/sliding-buffer buffer)
-         ch (if xf (chan buf xf) (chan buf))]
-     (tap event-mult ch)
-     ch)))
+   (tap-session-events session buffer xf)))
 
 (defn unsubscribe-events!
   "Unsubscribe a channel from session events.
 
    Side effects: untaps `ch` from the session's event mult and closes `ch`.
-   The caller must not use `ch` after calling this."
+   Safe after session teardown. The caller must not use `ch` after calling this."
   [session ch]
   (let [{:keys [session-id client]} session
         {:keys [event-mult]} (session-io client session-id)]
-    (untap event-mult ch)
+    (when event-mult
+      (untap event-mult ch))
     (close! ch)))
 
 (defn session-id

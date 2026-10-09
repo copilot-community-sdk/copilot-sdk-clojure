@@ -267,6 +267,20 @@
         "required": "Require subagent execution to use one of the authored models."
       }
     },
+    "AiCreditsStatus": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ],
+      "description": "Whether the accumulated numeric AI-credit subtotal covers the observed calls.",
+      "x-enumDescriptions": {
+        "complete": "Every observed call supplied an AI-credit amount, including an explicit zero.",
+        "partial": "Some calls supplied amounts and some did not; the numeric value is only a reported subtotal.",
+        "unavailable": "No AI-credit amount was reported for the observed calls. Numeric zero is not a zero-cost claim."
+      }
+    },
     "AssistantFusionPhaseActivityEvent": {
       "type": "object",
       "properties": {
@@ -644,6 +658,10 @@
         "model": {
           "type": "string",
           "description": "Model that produced this assistant message, if known"
+        },
+        "providerId": {
+          "type": "string",
+          "description": "Opaque origin provider identity captured at dispatch. Only an exact match with the target provider permits replay of reasoningOpaque, encryptedContent, reasoningBlocks, serverTools, and provider response/item identifiers. Matching model ids or wire protocols is insufficient. Omitted for legacy or unattributed messages; the runtime excludes unproven opaque state when projecting to a known provider. Text content and client tool requests/results remain portable semantic history."
         },
         "content": {
           "type": "string",
@@ -1846,9 +1864,25 @@
     "AssistantUsageData": {
       "type": "object",
       "properties": {
+        "aiCreditsStatus": {
+          "$ref": "#/definitions/AiCreditsStatus",
+          "description": "Availability of this call's reported AI-credit amount. Missing billing is unavailable, not a zero charge."
+        },
         "model": {
           "type": "string",
           "description": "Model identifier used for this API call"
+        },
+        "provider": {
+          "$ref": "#/definitions/ModelProviderRef",
+          "description": "Provider identity and product label captured by the actual call's dispatch path."
+        },
+        "modelDisplayName": {
+          "type": "string",
+          "description": "Model display name captured for this call, not derived from the current selection."
+        },
+        "accounting": {
+          "$ref": "#/definitions/UsageAccountingIdentity",
+          "description": "Runtime-owned identity shared with the durable accounting receipt."
         },
         "inputTokens": {
           "type": "integer",
@@ -1970,6 +2004,21 @@
         "transport": {
           "$ref": "#/definitions/AssistantUsageTransport",
           "description": "Transport used for this model call (http or websocket)"
+        },
+        "requestBodyBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Serialized (uncompressed) byte length of the request body. A content-free size signal."
+        },
+        "websocketFallbackReason": {
+          "$ref": "#/definitions/ModelCallWebSocketFallbackReason",
+          "description": "Why the call was carried by the HTTP fallback of a WebSocket-capable dispatcher; absent when no fallback occurred"
+        },
+        "websocketFallbackAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "format": "duration",
+          "description": "Milliseconds spent on the WebSocket attempt before falling back to HTTP"
         },
         "apiCallId": {
           "type": "string",
@@ -3480,20 +3529,22 @@
     },
     "AutoTier": {
       "type": "string",
-      "enum": [
-        "efficiency",
-        "balance",
-        "intelligence",
-        "fast"
-      ],
-      "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference.",
+      "minLength": 1,
+      "pattern": "^[^\\s\\u0000-\\u001F\\u007F-\\u009F]+$",
+      "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset.",
       "title": "AutoTier",
       "x-enumDescriptions": {
         "efficiency": "Optimize for efficiency.",
         "balance": "Balance efficiency and intelligence.",
         "intelligence": "Optimize for intelligence.",
         "fast": "Integrator-only preset that optimizes for latency."
-      }
+      },
+      "x-extensible-enum": [
+        "efficiency",
+        "balance",
+        "intelligence",
+        "fast"
+      ]
     },
     "AutoTierRecommendationData": {
       "type": "object",
@@ -3579,7 +3630,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -5203,6 +5254,18 @@
     "CompactionCompleteCompactionTokensUsed": {
       "type": "object",
       "properties": {
+        "aiCreditsStatus": {
+          "$ref": "#/definitions/AiCreditsStatus",
+          "description": "Whether the compaction's credit amount was reported for all, some, or none of its calls."
+        },
+        "provider": {
+          "$ref": "#/definitions/ModelProviderRef",
+          "description": "Provider captured for the compaction call; absent when attribution is unknown."
+        },
+        "modelDisplayName": {
+          "type": "string",
+          "description": "Model display name captured for the compaction call."
+        },
         "inputTokens": {
           "type": "integer",
           "minimum": 0,
@@ -9845,6 +9908,105 @@
       "description": "Session event \"session.info\". Informational message for timeline display with categorization",
       "title": "InfoEvent"
     },
+    "ManagedPluginProgressData": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "$ref": "#/definitions/ManagedPluginProgressPhase",
+          "description": "Current preparation phase."
+        },
+        "pluginSpecs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Ordered plugin install specs affected by this phase. Empty while managed settings initialize and when preparation completes."
+        }
+      },
+      "required": [
+        "phase",
+        "pluginSpecs"
+      ],
+      "additionalProperties": false,
+      "description": "Experimental transient presentation-neutral progress for organization-required plugin preparation. Clients should localize the phase copy and display plugin specs without translating them.",
+      "title": "ManagedPluginProgressData",
+      "stability": "experimental"
+    },
+    "ManagedPluginProgressEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.managed_plugin_progress",
+          "description": "Type discriminator. Always \"session.managed_plugin_progress\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ManagedPluginProgressData",
+          "description": "Experimental transient presentation-neutral progress for organization-required plugin preparation. Clients should localize the phase copy and display plugin specs without translating them."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.managed_plugin_progress\". Experimental transient presentation-neutral progress for organization-required plugin preparation. Clients should localize the phase copy and display plugin specs without translating them.",
+      "title": "ManagedPluginProgressEvent",
+      "stability": "experimental"
+    },
+    "ManagedPluginProgressPhase": {
+      "type": "string",
+      "enum": [
+        "initializing",
+        "installing",
+        "updating",
+        "complete"
+      ],
+      "description": "Current phase of organization-required plugin preparation.",
+      "title": "ManagedPluginProgressPhase",
+      "x-enumDescriptions": {
+        "initializing": "Managed settings are still resolving before plugin preparation can be planned.",
+        "installing": "Required plugin content is being installed.",
+        "updating": "Installed required plugin content is being updated.",
+        "complete": "Managed plugin preparation has completed."
+      },
+      "stability": "experimental"
+    },
     "ManagedSettingsEnforcedAction": {
       "type": "string",
       "enum": [
@@ -9853,7 +10015,7 @@
       "description": "The category of runtime action that enterprise managed settings governed (blocked or capped)",
       "title": "ManagedSettingsEnforcedAction",
       "x-enumDescriptions": {
-        "bypass_permissions_blocked": "An attempt to turn on a bypass-permissions (\"yolo\") escalation was refused or capped because policy disables bypass-permissions mode."
+        "bypass_permissions_blocked": "An attempt to enter a permission mode governed by managed policy was refused or capped. The `setting` and `escalation` fields identify whether this was bypass permissions or Assisted Permissions."
       }
     },
     "ManagedSettingsEnforcedData": {
@@ -9865,11 +10027,11 @@
         },
         "escalation": {
           "$ref": "#/definitions/ManagedSettingsEnforcedEscalation",
-          "description": "For a `bypass_permissions_blocked` action, which permission-escalation primitive was refused. Absent for actions without a specific escalation primitive."
+          "description": "For a `bypass_permissions_blocked` action, which permission-mode or escalation primitive was refused. Absent for actions without a specific primitive."
         },
         "setting": {
           "type": "string",
-          "description": "The managed setting key responsible for the enforcement (e.g. `permissions.disableBypassPermissionsMode`)."
+          "description": "The managed setting key responsible for the enforcement (for example `permissions.disableBypassPermissionsMode` or `permissions.disableAssistedPermissionsMode`)."
         },
         "failClosed": {
           "type": "boolean",
@@ -9887,7 +10049,7 @@
         "message"
       ],
       "additionalProperties": false,
-      "description": "Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on bypass permissions or Assisted Permissions while the corresponding policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes.",
       "title": "ManagedSettingsEnforcedData",
       "stability": "experimental"
     },
@@ -9901,12 +10063,12 @@
         "unrestricted_urls",
         "server_wide_mcp_approval"
       ],
-      "description": "For a `bypass_permissions_blocked` action, which permission-escalation primitive was refused",
+      "description": "For a `bypass_permissions_blocked` action, which permission-mode or escalation primitive was refused",
       "title": "ManagedSettingsEnforcedEscalation",
       "x-enumDescriptions": {
         "allow_all": "Full allow-all permissions — automatically approving tools, paths, and URLs.",
         "approve_all": "Automatic approval of all tool permission requests.",
-        "assisted_approval": "Assisted mode — keeps normal prompt paths and adds an LLM recommendation, distinct from allow-all.",
+        "assisted_approval": "Assisted Permissions — uses an LLM review to reduce prompts, distinct from allow-all and not a hard security boundary.",
         "unrestricted_paths": "Unrestricted filesystem access outside the session's allowed directories.",
         "unrestricted_urls": "Unrestricted URL fetch access.",
         "server_wide_mcp_approval": "A server-wide MCP \"Always Allow\" (or `--allow-tool <server>`) blanket that would auto-approve every tool from an MCP server. Capped to per-tool approval; each tool still prompts."
@@ -9953,7 +10115,7 @@
         },
         "data": {
           "$ref": "#/definitions/ManagedSettingsEnforcedData",
-          "description": "Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on bypass permissions or Assisted Permissions while the corresponding policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes."
         }
       },
       "required": [
@@ -9965,7 +10127,7 @@
         "data"
       ],
       "additionalProperties": false,
-      "description": "Session event \"session.managed_settings_enforced\". Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes.",
+      "description": "Session event \"session.managed_settings_enforced\". Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on bypass permissions or Assisted Permissions while the corresponding policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes.",
       "title": "ManagedSettingsEnforcedEvent",
       "stability": "experimental"
     },
@@ -11164,16 +11326,18 @@
         "workspace",
         "plugin",
         "builtin",
-        "managed"
+        "managed",
+        "account"
       ],
-      "description": "Configuration source: user, workspace, plugin, builtin, or managed",
+      "description": "Configuration source: user, workspace, plugin, builtin, managed, or account",
       "title": "McpServerSource",
       "x-enumDescriptions": {
         "user": "Server configured in the user's global MCP configuration.",
         "workspace": "Server configured by the current workspace.",
         "plugin": "Server contributed by an installed plugin.",
         "builtin": "Server bundled with the runtime.",
-        "managed": "Server supplied by a trusted host-managed catalog."
+        "managed": "Server supplied by a trusted host-managed catalog.",
+        "account": "Server contributed by a signed-in account; enablement and organization policy still apply."
       }
     },
     "McpServerStatus": {
@@ -11195,7 +11359,7 @@
         "needs-auth": "The server requires authentication before it can connect.",
         "pending": "The server connection is still being established.",
         "disabled": "The server is configured but disabled.",
-        "stopped": "The server was intentionally stopped and can be restarted on demand when policy permits; a server quarantined by restrictive managed policy stays stopped and cannot be restarted until the policy allows it.",
+        "stopped": "The server is not running: it may not have started yet, may have been explicitly stopped, or may be quarantined by restrictive managed policy. It can be restarted on demand when policy permits.",
         "not_configured": "The server is not configured for this session."
       }
     },
@@ -11567,6 +11731,26 @@
           "$ref": "#/definitions/ModelCallFailureKind",
           "description": "Whether the failure originated from an API response or the request transport"
         },
+        "requestBodyBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Serialized (uncompressed) byte length of the failed request body. A content-free size signal."
+        },
+        "retryAttempt": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Zero-based orchestrator retry index of the failed attempt"
+        },
+        "websocketFallbackReason": {
+          "$ref": "#/definitions/ModelCallWebSocketFallbackReason",
+          "description": "Why the failed call was carried by the HTTP fallback of a WebSocket-capable dispatcher; absent when no fallback occurred"
+        },
+        "websocketFallbackAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "format": "duration",
+          "description": "Milliseconds spent on the WebSocket attempt before falling back to HTTP"
+        },
         "maxPromptTokens": {
           "type": "integer",
           "minimum": 0,
@@ -11749,6 +11933,21 @@
           "type": "integer",
           "minimum": 0,
           "description": "Image parts whose media type cannot be determined (rejected by strict providers)"
+        },
+        "imageBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Summed byte length of inline image payloads (data URLs and base64 sources)"
+        },
+        "reasoningItemCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of messages carrying opaque or encrypted reasoning"
+        },
+        "encryptedContentBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Summed byte length of opaque or encrypted reasoning payloads"
         },
         "lastMessageRole": {
           "type": "string",
@@ -12105,6 +12304,25 @@
       "title": "ModelCallStartEvent",
       "visibility": "internal"
     },
+    "ModelCallWebSocketFallbackReason": {
+      "type": "string",
+      "enum": [
+        "connect_failed",
+        "connection_unavailable",
+        "send_failed",
+        "api_error",
+        "transport_failed"
+      ],
+      "description": "Why a WebSocket-capable model call was carried by the HTTP fallback",
+      "title": "ModelCallWebSocketFallbackReason",
+      "x-enumDescriptions": {
+        "connect_failed": "The WebSocket connection could not be established.",
+        "connection_unavailable": "No usable WebSocket connection was available for the request.",
+        "send_failed": "Sending the request over the WebSocket failed.",
+        "api_error": "The WebSocket returned a retryable API error.",
+        "transport_failed": "The WebSocket transport failed before any output reached the consumer."
+      }
+    },
     "ModelChangeData": {
       "type": "object",
       "properties": {
@@ -12115,6 +12333,14 @@
         "newModel": {
           "type": "string",
           "description": "Newly selected model identifier"
+        },
+        "providerId": {
+          "type": "string",
+          "description": "Provider selected for newModel. Omitted for legacy or unattributed selections; never inferred from a later selection."
+        },
+        "previousProviderId": {
+          "type": "string",
+          "description": "Provider of previousModel, when known. A provider-only change is a model selection change even when the model identifiers are equal."
         },
         "previousReasoningEffort": {
           "type": "string",
@@ -12130,6 +12356,10 @@
         "reasoningEffortModel": {
           "type": "string",
           "description": "Model that owns effort embedded in an authored model selection. Omitted for independent reasoning-effort overrides and legacy events."
+        },
+        "reasoningEffortManaged": {
+          "type": "boolean",
+          "description": "True when the reasoning effort is a managed-policy default bound to reasoningEffortModel. Omitted for agent-authored, user-authored, independent, and legacy effort."
         },
         "previousReasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -12158,6 +12388,10 @@
           ],
           "description": "Context tier after the model change; null explicitly clears a previously selected tier"
         },
+        "contextTierManaged": {
+          "type": "boolean",
+          "description": "True when contextTier is a managed-policy default. Omitted for user-authored and legacy values."
+        },
         "cause": {
           "type": "string",
           "description": "Reason the change happened, when not user-initiated. `\"rate_limit_auto_switch\"` for changes triggered by the auto-mode-switch rate-limit recovery path, or `\"refusal_fallback\"` when the active model declined a request (content refusal) and the runtime switched to the configured refusal-fallback model. UI clients can use this to render contextual copy."
@@ -12174,13 +12408,17 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
             }
           ],
           "description": "Committed Auto preference after the model configuration change, when applicable."
+        },
+        "autoTierManaged": {
+          "type": "boolean",
+          "description": "True when autoTier is a managed-policy default. Omitted for user-authored and legacy values."
         }
       },
       "required": [
@@ -12188,7 +12426,23 @@
       ],
       "additionalProperties": false,
       "description": "Model change details including previous and new model identifiers",
-      "title": "ModelChangeData"
+      "title": "ModelChangeData",
+      "x-legacy-parameters": [
+        "previousModel",
+        "newModel",
+        "previousReasoningEffort",
+        "reasoningEffort",
+        "reasoningEffortModel",
+        "previousReasoningSummary",
+        "reasoningSummary",
+        "previousVerbosity",
+        "verbosity",
+        "contextTier",
+        "cause",
+        "source",
+        "previousAutoTier",
+        "autoTier"
+      ]
     },
     "ModelChangeEvent": {
       "type": "object",
@@ -12363,6 +12617,46 @@
       "x-enumDescriptions": {
         "provider_withdrawn": "A host-managed provider snapshot no longer publishes the selected model."
       }
+    },
+    "ModelProviderKind": {
+      "type": "string",
+      "enum": [
+        "copilot",
+        "loki"
+      ],
+      "description": "The neutral kind of a model provider — the model analog of `AccountKind`. A model provider is the live, entitled source a model came from; central code never branches on this beyond a single dispatch.",
+      "title": "ModelProviderKind",
+      "x-enumDescriptions": {
+        "copilot": "GitHub Copilot / CAPI models, spawned by a github-resolving account that holds a Copilot seat.",
+        "loki": "Microsoft 365 Copilot (Loki) inference models, spawned by a resolvable Entra-derived Loki account."
+      },
+      "stability": "experimental"
+    },
+    "ModelProviderRef": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Opaque, stable id of the provider that produced this model. Matches the enumerated `ModelProviderDescriptor.id`."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable provider label, owned by the runtime so every consumer renders identical text."
+        },
+        "kind": {
+          "$ref": "#/definitions/ModelProviderKind",
+          "description": "The provider kind."
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "A neutral reference to the model provider that produced a model: an opaque id, a human-readable label, and the provider kind. Carried on each enumerated Model so consumers can group by provider without reaching into a provider-shaped internal type.",
+      "title": "ModelProviderRef",
+      "stability": "experimental"
     },
     "ModeNoticeDeliveredData": {
       "type": "object",
@@ -12583,6 +12877,7 @@
             "sandbox-bypass",
             "action-too-long",
             "path-not-authorized",
+            "content-excluded",
             "invalid-working-directory",
             "unreadable",
             "not-regular-file",
@@ -12595,6 +12890,12 @@
             "interpreter-wrapped-script",
             "unreviewable-script-invocation",
             "argument-binding-unreviewable",
+            "unsupported-command-shape",
+            "unsupported-source",
+            "dynamic-source",
+            "too-many-sources",
+            "executable-unavailable",
+            "executable-too-large",
             "malformed-script-action-review",
             "malformed-script-action-manifest",
             "unavailable",
@@ -12612,6 +12913,7 @@
             "sandbox-bypass": "The request asked to bypass sandbox restrictions.",
             "action-too-long": "An action field exceeded the judge input limit.",
             "path-not-authorized": "The script path was not authorized for inspection.",
+            "content-excluded": "A code source was excluded from review by content exclusion policy.",
             "invalid-working-directory": "The script working directory was invalid.",
             "unreadable": "The script snapshot could not be read.",
             "not-regular-file": "The script path was not a regular file.",
@@ -12624,6 +12926,12 @@
             "interpreter-wrapped-script": "An interpreter wrapped a script that could not be reviewed.",
             "unreviewable-script-invocation": "The script invocation could not be reviewed.",
             "argument-binding-unreviewable": "The script argument binding could not be reviewed.",
+            "unsupported-command-shape": "The shell command could not be analyzed for execution evidence.",
+            "unsupported-source": "The shell command used a code source that cannot be bound for review.",
+            "dynamic-source": "The shell command used a code source computed at run time.",
+            "too-many-sources": "The shell command referenced more code sources than can be reviewed.",
+            "executable-unavailable": "A code-bearing executable could not be inspected.",
+            "executable-too-large": "A code-bearing executable exceeded the binding size limit.",
             "malformed-script-action-review": "The script review metadata was malformed.",
             "malformed-script-action-manifest": "The script snapshot manifest was malformed.",
             "unavailable": "Script review was unavailable.",
@@ -14350,6 +14658,15 @@
           "type": "string",
           "description": "Complete new file contents for newly created files"
         },
+        "fileEdits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PermissionWriteFileEdit",
+            "description": "Complete text snapshots for one proposed file change. At least one side is present. Different before and after paths describe a move."
+          },
+          "minItems": 1,
+          "description": "Complete before/after text previews captured while planning this request. Omitted when a complete preview is unavailable, including pre-read sandbox requests and non-UTF-8 files. Missing sides mean creation or deletion, not unavailable content."
+        },
         "canOfferSessionApproval": {
           "type": "boolean",
           "description": "Whether the UI can offer session-wide approval for file write operations"
@@ -15507,6 +15824,15 @@
           "type": "string",
           "description": "Complete new file contents for newly created files"
         },
+        "fileEdits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PermissionWriteFileEdit",
+            "description": "Complete text snapshots for one proposed file change. At least one side is present. Different before and after paths describe a move."
+          },
+          "minItems": 1,
+          "description": "Complete before/after text previews captured while planning this request. Omitted when a complete preview is unavailable, including pre-read sandbox requests and non-UTF-8 files. Missing sides mean creation or deletion, not unavailable content."
+        },
         "canOfferSessionApproval": {
           "type": "boolean",
           "description": "Whether the UI can offer session-wide approval for file write operations"
@@ -15728,6 +16054,42 @@
       "description": "Session event \"session.permissions_changed\". Permission-mode transition details.",
       "title": "PermissionsChangedEvent",
       "stability": "experimental"
+    },
+    "PermissionWriteFileContent": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute path in the session filesystem namespace."
+        },
+        "content": {
+          "type": "string",
+          "description": "Complete file contents, including an empty string for an empty file."
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ],
+      "additionalProperties": false,
+      "description": "A named, complete UTF-8 text snapshot for a pending file operation.",
+      "title": "PermissionWriteFileContent"
+    },
+    "PermissionWriteFileEdit": {
+      "type": "object",
+      "properties": {
+        "before": {
+          "$ref": "#/definitions/PermissionWriteFileContent",
+          "description": "File content read while planning the operation. Absent only when the file is being created."
+        },
+        "after": {
+          "$ref": "#/definitions/PermissionWriteFileContent",
+          "description": "Complete file content the operation plans to write. Absent only when the file is being deleted."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Complete text snapshots for one proposed file change. At least one side is present. Different before and after paths describe a move.",
+      "title": "PermissionWriteFileEdit"
     },
     "PersistedBinaryImage": {
       "type": "object",
@@ -16119,6 +16481,367 @@
       "title": "PromptCacheBreakEvent",
       "visibility": "internal"
     },
+    "ProviderQuotaAccessState": {
+      "type": "string",
+      "enum": [
+        "allowed",
+        "denied",
+        "not_required",
+        "unknown",
+        "unavailable"
+      ],
+      "description": "Access policy reported by the quota service.",
+      "x-enumDescriptions": {
+        "allowed": "Access is allowed.",
+        "denied": "Access is denied.",
+        "not_required": "Quota is not required for this access.",
+        "unknown": "The service did not supply a recognized access state.",
+        "unavailable": "Client-only compatibility placeholder when acquisitionStatus is unavailable or failed; not an observed service verdict."
+      }
+    },
+    "ProviderQuotaAcquisitionStatus": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "unavailable",
+        "failed"
+      ],
+      "description": "Acquisition state, independent of the service's business access/capacity verdict.",
+      "x-enumDescriptions": {
+        "succeeded": "A service quota observation was received.",
+        "unavailable": "No service snapshot is available for this caller or surface.",
+        "failed": "Acquisition failed; inspect httpStatus/acquisitionError without inferring a business verdict."
+      }
+    },
+    "ProviderQuotaBudgetMetadata": {
+      "type": "object",
+      "properties": {
+        "unlimited": {
+          "type": "boolean",
+          "description": "Whether the budget has unlimited entitlement."
+        },
+        "entitlement": {
+          "type": "number",
+          "description": "Exact budget entitlement, retaining incumbent fractional-unit compatibility."
+        },
+        "consumed": {
+          "type": "number",
+          "description": "Exact measured consumption in the budget's unit."
+        },
+        "remainingPercentage": {
+          "type": "number",
+          "description": "Service-reported remaining percentage for authoritative budget presentation."
+        },
+        "usageAllowedWhenExhausted": {
+          "type": "boolean",
+          "description": "Whether service policy allows continued usage after exhaustion."
+        },
+        "overage": {
+          "type": "number",
+          "description": "Usage beyond entitlement, in the budget's unit."
+        },
+        "overageAllowedWhenExhausted": {
+          "type": "boolean",
+          "description": "Whether additional usage is allowed when the budget is exhausted."
+        },
+        "resetAtEpochMs": {
+          "type": "number",
+          "description": "Reset instant in epoch milliseconds when this budget actually defines a window."
+        },
+        "resetEstimated": {
+          "type": "boolean",
+          "description": "Whether the reset instant is an estimate."
+        },
+        "tokenBasedBilling": {
+          "type": "boolean",
+          "description": "Whether this budget uses token-based billing."
+        },
+        "overageLimit": {
+          "type": "number",
+          "description": "Optional additional-usage budget cap."
+        }
+      },
+      "required": [
+        "unlimited",
+        "entitlement",
+        "consumed",
+        "remainingPercentage",
+        "usageAllowedWhenExhausted",
+        "overage",
+        "overageAllowedWhenExhausted"
+      ],
+      "additionalProperties": false,
+      "description": "Authoritative budget measurements and policy metadata, independent of provider."
+    },
+    "ProviderQuotaCapacityState": {
+      "type": "string",
+      "enum": [
+        "available",
+        "exhausted",
+        "unlimited",
+        "not_required",
+        "not_applicable",
+        "unknown",
+        "unavailable"
+      ],
+      "description": "Capacity is independent of whether a numeric balance was supplied.",
+      "x-enumDescriptions": {
+        "available": "Capacity is available.",
+        "exhausted": "The service explicitly reports exhaustion.",
+        "unlimited": "The reported entitlement is unlimited.",
+        "not_required": "No billable quota is required.",
+        "not_applicable": "The service reports that capacity is not applicable.",
+        "unknown": "No recognized capacity state was supplied.",
+        "unavailable": "Client-only compatibility placeholder when acquisitionStatus is unavailable or failed; not an observed service verdict."
+      }
+    },
+    "ProviderQuotaObservationData": {
+      "type": "object",
+      "properties": {
+        "observation": {
+          "$ref": "#/definitions/ProviderQuotaState",
+          "description": "The admitted provider's state observation. Admission observations never contain quantities or reset/percentage semantics."
+        }
+      },
+      "required": [
+        "observation"
+      ],
+      "additionalProperties": false,
+      "description": "A provider-owned quota observation, distinct from per-call usage and charge accounting.",
+      "stability": "experimental"
+    },
+    "ProviderQuotaObservationEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.quota_observation",
+          "description": "Type discriminator. Always \"session.quota_observation\"."
+        },
+        "data": {
+          "$ref": "#/definitions/ProviderQuotaObservationData",
+          "description": "A provider-owned quota observation, distinct from per-call usage and charge accounting."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.quota_observation\". A provider-owned quota observation, distinct from per-call usage and charge accounting.",
+      "title": "ProviderQuotaObservationEvent",
+      "stability": "experimental"
+    },
+    "ProviderQuotaObservationKind": {
+      "type": "string",
+      "enum": [
+        "account_snapshot",
+        "admission_state"
+      ],
+      "description": "Timing and purpose of a provider quota observation.",
+      "x-enumDescriptions": {
+        "account_snapshot": "An explicit account read; consumption may still be subject to service aggregation delay.",
+        "admission_state": "A verdict attached before an inference response. May be cached; never a post-charge balance."
+      }
+    },
+    "ProviderQuotaQuantityKind": {
+      "type": "string",
+      "enum": [
+        "authoritative_budget",
+        "advisory_balance",
+        "none"
+      ],
+      "description": "Interpretation permitted for independently reported quantities.",
+      "x-enumDescriptions": {
+        "authoritative_budget": "Quantities form an authoritative available-of-entitled budget suitable for percentage presentation.",
+        "advisory_balance": "Raw advisory quantities; do not infer permission, usage percentage, reset cadence, or post-charge balance.",
+        "none": "No quantity measurement, as with admission-only response headers."
+      }
+    },
+    "ProviderQuotaState": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "$ref": "#/definitions/ModelProviderRef",
+          "description": "Provider/account whose service reported this state."
+        },
+        "quotaId": {
+          "type": "string",
+          "description": "Service-owned quota identifier within this provider."
+        },
+        "unit": {
+          "$ref": "#/definitions/ProviderQuotaUnit",
+          "description": "Unit of entitledQuantity and availableQuantity."
+        },
+        "accessState": {
+          "$ref": "#/definitions/ProviderQuotaAccessState",
+          "description": "Whether the service permits access, independently of balance."
+        },
+        "capacityState": {
+          "$ref": "#/definitions/ProviderQuotaCapacityState",
+          "description": "Service capacity state; missing quantities do not imply exhaustion."
+        },
+        "observationKind": {
+          "$ref": "#/definitions/ProviderQuotaObservationKind",
+          "description": "Whether this is a GET account reading or a pre-response admission observation. Observations are never merged across kinds."
+        },
+        "quantityKind": {
+          "$ref": "#/definitions/ProviderQuotaQuantityKind",
+          "description": "Whether quantities are authoritative budget measurements, advisory balances, or absent. Only authoritative budgets support percentage presentation."
+        },
+        "acquisitionStatus": {
+          "$ref": "#/definitions/ProviderQuotaAcquisitionStatus",
+          "description": "Acquisition outcome. Unavailable/failed readings have no service verdict; access/capacity unavailable are compatibility placeholders only."
+        },
+        "observedAt": {
+          "type": "string",
+          "description": "When the runtime observed this reading, not a charge timestamp or guarantee that consumption has settled."
+        },
+        "httpStatus": {
+          "type": "integer",
+          "description": "HTTP status from acquisition, when available."
+        },
+        "acquisitionError": {
+          "type": "string",
+          "description": "Service error code or client acquisition category, separate from the business-state reason."
+        },
+        "budgetMetadata": {
+          "$ref": "#/definitions/ProviderQuotaBudgetMetadata",
+          "description": "Optional metadata for an authoritative budget. Advisory balances and admission-only observations do not populate this."
+        },
+        "compatibilityKey": {
+          "type": "string",
+          "description": "Key for the backwards-compatible snapshots projection, when the authoritative budget supports that contract."
+        },
+        "hasQuota": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit service admission flag, when reported."
+        },
+        "entitledQuantity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Independently reported signed 64-bit entitlement. -1 is an unlimited sentinel, not a capacity-state rewrite; omission and null are preserved."
+        },
+        "availableQuantity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Independently reported signed 64-bit available quantity. Zero does not override the service access/capacity verdict; omission and null are preserved."
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Service-reported explanation for the state."
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Service-reported quota source."
+        },
+        "service": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Service name owning this reading."
+        }
+      },
+      "required": [
+        "provider",
+        "quotaId",
+        "unit",
+        "accessState",
+        "capacityState"
+      ],
+      "additionalProperties": false,
+      "description": "An account quota reading. Absence of a quantity is unknown, never zero.",
+      "stability": "experimental"
+    },
+    "ProviderQuotaUnit": {
+      "type": "string",
+      "enum": [
+        "ai_credits",
+        "requests",
+        "tokens",
+        "unknown"
+      ],
+      "description": "Units explicitly reported by a quota provider.",
+      "x-enumDescriptions": {
+        "ai_credits": "AI credits, not tokens or currency.",
+        "requests": "Requests charged against an entitlement.",
+        "tokens": "Model tokens.",
+        "unknown": "The observation does not establish a quantity unit."
+      }
+    },
     "ReasoningSummary": {
       "type": "string",
       "enum": [
@@ -16136,18 +16859,19 @@
     },
     "RecommendedAutoTier": {
       "type": "string",
-      "enum": [
-        "efficiency",
-        "balance",
-        "intelligence"
-      ],
-      "description": "Auto preferences that Copilot API can recommend.",
+      "minLength": 1,
+      "description": "Enabled Auto preferences that Copilot API can recommend.",
       "title": "RecommendedAutoTier",
       "x-enumDescriptions": {
         "efficiency": "Optimize for efficiency.",
         "balance": "Balance efficiency and intelligence.",
         "intelligence": "Optimize for intelligence."
-      }
+      },
+      "x-extensible-enum": [
+        "efficiency",
+        "balance",
+        "intelligence"
+      ]
     },
     "RemediationAction": {
       "type": "string",
@@ -16284,6 +17008,10 @@
           "type": "string",
           "description": "Model currently selected at resume time"
         },
+        "providerId": {
+          "type": "string",
+          "description": "Provider of selectedModel at resume time, when explicitly selected."
+        },
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
@@ -16291,6 +17019,10 @@
         "reasoningEffortModel": {
           "type": "string",
           "description": "Model that owns effort embedded in an authored model selection. Omitted for independent reasoning-effort overrides and legacy events."
+        },
+        "reasoningEffortManaged": {
+          "type": "boolean",
+          "description": "True when the reasoning effort is a managed-policy default bound to reasoningEffortModel. Omitted for agent-authored, user-authored, independent, and legacy effort."
         },
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -16311,9 +17043,17 @@
           ],
           "description": "Context tier currently selected at resume time; null when no tier is active"
         },
+        "contextTierManaged": {
+          "type": "boolean",
+          "description": "True when contextTier is a managed-policy default. Omitted for user-authored and legacy values."
+        },
         "autoTier": {
           "$ref": "#/definitions/AutoTier",
           "description": "Auto routing preference active at resume time"
+        },
+        "autoTierManaged": {
+          "type": "boolean",
+          "description": "True when autoTier is a managed-policy default. Omitted for user-authored and legacy values."
         },
         "sessionLimits": {
           "anyOf": [
@@ -16354,7 +17094,25 @@
       ],
       "additionalProperties": false,
       "description": "Session resume metadata including current context and event count",
-      "title": "ResumeData"
+      "title": "ResumeData",
+      "x-legacy-parameters": [
+        "resumeTime",
+        "eventCount",
+        "eventsFileSizeBytes",
+        "selectedModel",
+        "reasoningEffort",
+        "reasoningEffortModel",
+        "reasoningSummary",
+        "verbosity",
+        "contextTier",
+        "autoTier",
+        "sessionLimits",
+        "context",
+        "alreadyInUse",
+        "sessionWasActive",
+        "remoteSteerable",
+        "continuePendingWork"
+      ]
     },
     "ResumeEvent": {
       "type": "object",
@@ -17978,6 +18736,15 @@
           "description": "Session event \"session.usage_checkpoint\". Durable session usage checkpoint for reconstructing aggregate accounting on resume"
         },
         {
+          "$ref": "#/definitions/ProviderQuotaObservationEvent",
+          "description": "Session event \"session.quota_observation\". A provider-owned quota observation, distinct from per-call usage and charge accounting."
+        },
+        {
+          "$ref": "#/definitions/UsageAccountingRecordEvent",
+          "description": "Session event \"session.usage_record\". Internal durable accounting receipt; the live usage event shares its accounting identity.",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/FusionChangeCheckpointEvent",
           "description": "Session event \"session.fusion_change_checkpoint\". Internal durable editing-tool totals after a Fusion turn, including edits from discarded phases.",
           "visibility": "internal"
@@ -18374,12 +19141,16 @@
           "description": "Session event \"session.auto_mode_resolved\". Auto Intent resolution: the concrete model the session settled on for the first prompt of an auto-mode session, and why. Lets SDK clients render the chosen model and the full reason it was picked. The core selection fields (chosenModel/reasoningBucket/categoryScores) are stable; the routing-analytics fields (predictedLabel/confidence/candidateModels) mirror the upstream intent service and may evolve, hence the event's experimental stability."
         },
         {
+          "$ref": "#/definitions/ManagedPluginProgressEvent",
+          "description": "Session event \"session.managed_plugin_progress\". Experimental transient presentation-neutral progress for organization-required plugin preparation. Clients should localize the phase copy and display plugin specs without translating them."
+        },
+        {
           "$ref": "#/definitions/ManagedSettingsResolvedEvent",
           "description": "Session event \"session.managed_settings_resolved\". Effective enterprise managed settings applied to the session and their contributing channels. Emitted whenever managed policy is applied or reapplied, including session start, resume, and account switch. This ephemeral live snapshot is delivered to subscribers but not persisted to the session event log; initial resolution occurs before session.start."
         },
         {
           "$ref": "#/definitions/ManagedSettingsEnforcedEvent",
-          "description": "Session event \"session.managed_settings_enforced\". Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on a bypass-permissions escalation while policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes."
+          "description": "Session event \"session.managed_settings_enforced\". Runtime enforcement of enterprise managed settings: fires when the session blocks or caps a runtime action because enterprise policy governs it, so SDK clients can explain *why* an action was governed. Unlike `session.managed_settings_resolved` (which reports *what* is managed), this reports a concrete governed action — e.g. a user or host tried to turn on bypass permissions or Assisted Permissions while the corresponding policy disables it. Emitted live (not persisted to the session event log) on user/host-initiated attempts only, never for silent policy application. Marked experimental while the managed-settings surface stabilizes."
         },
         {
           "$ref": "#/definitions/CommandsChangedEvent",
@@ -18875,6 +19646,27 @@
     "ShutdownData": {
       "type": "object",
       "properties": {
+        "accountingSnapshot": {
+          "$ref": "#/definitions/UsageGetMetricsResult",
+          "description": "Complete accounting state captured atomically with receipt watermarks.",
+          "visibility": "internal"
+        },
+        "providerModelMetrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UsageMetricsProviderModelMetric",
+            "description": "Usage for one recorded provider and model, without merging identical model IDs across providers."
+          },
+          "description": "Provider/model accounting preserved for replay without consulting current provider selection."
+        },
+        "usageAccountingWatermarks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Per-source accounting sequence watermarks subsuming preceding usage receipts."
+        },
         "shutdownType": {
           "$ref": "#/definitions/ShutdownType",
           "description": "Whether the session ended normally (\"routine\") or due to a crash/fatal error (\"error\")"
@@ -19857,6 +20649,10 @@
           "type": "string",
           "description": "Model selected at session creation time, if any"
         },
+        "providerId": {
+          "type": "string",
+          "description": "Provider of selectedModel at creation time, when explicitly selected."
+        },
         "reasoningEffort": {
           "type": "string",
           "description": "Reasoning effort level used for model calls, if applicable (e.g. \"none\", \"low\", \"medium\", \"high\", \"xhigh\", \"max\")"
@@ -19864,6 +20660,10 @@
         "reasoningEffortModel": {
           "type": "string",
           "description": "Model that owns effort embedded in an authored model selection. Omitted for independent reasoning-effort overrides and legacy events."
+        },
+        "reasoningEffortManaged": {
+          "type": "boolean",
+          "description": "True when the reasoning effort is a managed-policy default bound to reasoningEffortModel. Omitted for agent-authored, user-authored, independent, and legacy effort."
         },
         "reasoningSummary": {
           "$ref": "#/definitions/ReasoningSummary",
@@ -19884,9 +20684,17 @@
           ],
           "description": "Context tier selected at session creation time for models with tiered context pricing; null when no tier is selected (e.g., non-tiered model)"
         },
+        "contextTierManaged": {
+          "type": "boolean",
+          "description": "True when contextTier is a managed-policy default. Omitted for user-authored and legacy values."
+        },
         "autoTier": {
           "$ref": "#/definitions/AutoTier",
           "description": "Auto routing preference selected at session creation time"
+        },
+        "autoTierManaged": {
+          "type": "boolean",
+          "description": "True when autoTier is a managed-policy default. Omitted for user-authored and legacy values."
         },
         "sessionLimits": {
           "$ref": "#/definitions/SessionLimitsConfig",
@@ -19922,7 +20730,27 @@
       ],
       "additionalProperties": false,
       "description": "Session initialization metadata including context and configuration",
-      "title": "StartData"
+      "title": "StartData",
+      "x-legacy-parameters": [
+        "sessionId",
+        "version",
+        "producer",
+        "copilotVersion",
+        "startTime",
+        "selectedModel",
+        "reasoningEffort",
+        "reasoningEffortModel",
+        "reasoningSummary",
+        "verbosity",
+        "contextTier",
+        "autoTier",
+        "sessionLimits",
+        "context",
+        "githubMcpToolConfig",
+        "alreadyInUse",
+        "remoteSteerable",
+        "detachedFromSpawningParentSessionId"
+      ]
     },
     "StartEvent": {
       "type": "object",
@@ -23286,6 +24114,102 @@
       },
       "stability": "experimental"
     },
+    "UsageAccountingIdentity": {
+      "type": "object",
+      "properties": {
+        "sourceSessionId": {
+          "type": "string",
+          "description": "Session that assigned this accounting sequence."
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991,
+          "description": "Monotonically increasing sequence within the source session."
+        },
+        "usageId": {
+          "type": "string",
+          "description": "Existing API call identifier, or a runtime-generated identity when none was supplied."
+        }
+      },
+      "required": [
+        "sourceSessionId",
+        "sequence",
+        "usageId"
+      ],
+      "additionalProperties": false,
+      "description": "Ordered accounting identity assigned under the source session's emission lock."
+    },
+    "UsageAccountingRecordData": {
+      "type": "object",
+      "properties": {
+        "usage": {
+          "$ref": "#/definitions/AssistantUsageData",
+          "description": "Normalized call usage with its captured provider and accounting identity."
+        }
+      },
+      "required": [
+        "usage"
+      ],
+      "additionalProperties": false,
+      "description": "Internal durable accounting receipt; the live usage event shares its accounting identity.",
+      "visibility": "internal"
+    },
+    "UsageAccountingRecordEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.usage_record",
+          "description": "Type discriminator. Always \"session.usage_record\"."
+        },
+        "data": {
+          "$ref": "#/definitions/UsageAccountingRecordData",
+          "description": "Internal durable accounting receipt; the live usage event shares its accounting identity."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.usage_record\". Internal durable accounting receipt; the live usage event shares its accounting identity.",
+      "title": "UsageAccountingRecordEvent",
+      "visibility": "internal"
+    },
     "UsageCheckpointData": {
       "type": "object",
       "properties": {
@@ -23293,6 +24217,27 @@
           "type": "number",
           "minimum": 0,
           "description": "Session-wide accumulated nano-AI units cost at checkpoint time"
+        },
+        "accountingSnapshot": {
+          "$ref": "#/definitions/UsageGetMetricsResult",
+          "description": "Complete accounting state captured atomically with the receipt watermarks.",
+          "visibility": "internal"
+        },
+        "providerModelMetrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UsageMetricsProviderModelMetric",
+            "description": "Usage for one recorded provider and model, without merging identical model IDs across providers."
+          },
+          "description": "Provider/model accounting snapshot that subsumes preceding usage receipts."
+        },
+        "usageAccountingWatermarks": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "description": "Highest accounted sequence per source session; no per-call deduplication history is retained."
         },
         "totalPremiumRequests": {
           "type": "number",
@@ -23409,6 +24354,103 @@
       "title": "UsageCheckpointModelCacheState",
       "visibility": "internal"
     },
+    "UsageGetMetricsResult": {
+      "type": "object",
+      "properties": {
+        "aiCreditsStatus": {
+          "$ref": "#/definitions/AiCreditsStatus",
+          "description": "Completeness of totalNanoAiu. Numeric totals remain the reported subtotal; zero is not a claim of free usage when unavailable."
+        },
+        "totalPremiumRequestCost": {
+          "type": "number",
+          "description": "Total user-initiated premium request cost across all models (may be fractional due to multipliers)"
+        },
+        "totalUserRequests": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Raw count of user-initiated API requests"
+        },
+        "totalNanoAiu": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Session-wide accumulated nano-AI units cost"
+        },
+        "tokenDetails": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/UsageMetricsTokenDetail",
+            "description": "Session-wide token-detail entry containing the accumulated token count for one token type."
+          },
+          "description": "Session-wide per-token-type accumulated token counts"
+        },
+        "totalApiDurationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "format": "duration",
+          "description": "Total time spent in model API calls (milliseconds)"
+        },
+        "sessionStartTime": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the session started"
+        },
+        "codeChanges": {
+          "$ref": "#/definitions/UsageMetricsCodeChanges",
+          "description": "Aggregated code change metrics"
+        },
+        "modelMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/UsageMetricsModelMetric",
+            "description": "Per-model usage metrics, including request counts/costs, token usage, nano-AI units, and per-token-type details."
+          },
+          "description": "Per-model token and request metrics, keyed by model identifier"
+        },
+        "providerModelMetrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UsageMetricsProviderModelMetric",
+            "description": "Usage for one recorded provider and model, without merging identical model IDs across providers."
+          },
+          "description": "Provider-attributed model metrics, ordered by first observed provider and model.\nNull attribution preserves historical usage whose provider or model was not recorded."
+        },
+        "agentMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/UsageMetricsAgentMetric",
+            "description": "Usage attributed to one agent instance, including its identity, API duration, AI units, and per-model breakdown."
+          },
+          "description": "Per-agent usage metrics, keyed by agent instance identifier. The main conversation uses the stable key `main`."
+        },
+        "currentModel": {
+          "type": "string",
+          "description": "Currently active model identifier"
+        },
+        "lastCallInputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Input tokens from the most recent main-agent API call"
+        },
+        "lastCallOutputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Output tokens from the most recent main-agent API call"
+        }
+      },
+      "required": [
+        "totalPremiumRequestCost",
+        "totalUserRequests",
+        "totalApiDurationMs",
+        "sessionStartTime",
+        "codeChanges",
+        "modelMetrics",
+        "lastCallInputTokens",
+        "lastCallOutputTokens"
+      ],
+      "additionalProperties": false,
+      "description": "Accumulated session usage metrics, including premium request cost, token counts, model breakdown, and code-change totals.",
+      "title": "UsageGetMetricsResult"
+    },
     "UsageInfoData": {
       "type": "object",
       "properties": {
@@ -23511,6 +24553,255 @@
       "additionalProperties": false,
       "description": "Session event \"session.usage_info\". Current context window usage statistics including token and message counts",
       "title": "UsageInfoEvent"
+    },
+    "UsageMetricsAgentMetric": {
+      "type": "object",
+      "properties": {
+        "agentName": {
+          "type": "string",
+          "description": "Configured agent name, when this is a subagent"
+        },
+        "agentDisplayName": {
+          "type": "string",
+          "description": "Human-readable label for this subagent invocation, copied from the originating `subagent.started` event. For task-tool subagents this is the invocation's task description rather than the agent's configured display name, so group by `agentName` for stable per-agent labels."
+        },
+        "totalApiDurationMs": {
+          "type": "integer",
+          "minimum": 0,
+          "format": "duration",
+          "description": "Time spent in model API calls by this agent, in milliseconds"
+        },
+        "totalNanoAiu": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Accumulated nano-AI units cost for this agent"
+        },
+        "modelMetrics": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/UsageMetricsModelMetric",
+            "description": "Per-model usage metrics, including request counts/costs, token usage, nano-AI units, and per-token-type details."
+          },
+          "description": "Per-model usage for this agent, keyed by model identifier"
+        }
+      },
+      "required": [
+        "totalApiDurationMs",
+        "totalNanoAiu",
+        "modelMetrics"
+      ],
+      "additionalProperties": false,
+      "description": "Usage attributed to one agent instance, including its identity, API duration, AI units, and per-model breakdown.",
+      "title": "UsageMetricsAgentMetric"
+    },
+    "UsageMetricsCodeChanges": {
+      "type": "object",
+      "properties": {
+        "linesAdded": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total lines of code added"
+        },
+        "linesRemoved": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total lines of code removed"
+        },
+        "filesModifiedCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of distinct files modified"
+        },
+        "filesModified": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Distinct file paths modified during the session"
+        }
+      },
+      "required": [
+        "linesAdded",
+        "linesRemoved",
+        "filesModifiedCount",
+        "filesModified"
+      ],
+      "additionalProperties": false,
+      "description": "Aggregated code change metrics",
+      "title": "UsageMetricsCodeChanges"
+    },
+    "UsageMetricsModelMetric": {
+      "type": "object",
+      "properties": {
+        "aiCreditsStatus": {
+          "$ref": "#/definitions/AiCreditsStatus",
+          "description": "Completeness of this model's reported AI-credit subtotal. Explicitly reported zero is complete, not unavailable."
+        },
+        "requests": {
+          "$ref": "#/definitions/UsageMetricsModelMetricRequests",
+          "description": "Request count and cost metrics for this model"
+        },
+        "usage": {
+          "$ref": "#/definitions/UsageMetricsModelMetricUsage",
+          "description": "Token usage metrics for this model"
+        },
+        "cacheExpiresAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Latest known prompt-cache expiration for this model. A timestamp in the past indicates that the observed cache has expired."
+        },
+        "totalNanoAiu": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Accumulated nano-AI units cost for this model"
+        },
+        "tokenDetails": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/UsageMetricsModelMetricTokenDetail",
+            "description": "Per-model token-detail entry containing the accumulated token count for one token type."
+          },
+          "description": "Token count details per type"
+        }
+      },
+      "required": [
+        "requests",
+        "usage"
+      ],
+      "additionalProperties": false,
+      "description": "Per-model usage metrics, including request counts/costs, token usage, nano-AI units, and per-token-type details.",
+      "title": "UsageMetricsModelMetric"
+    },
+    "UsageMetricsModelMetricRequests": {
+      "type": "object",
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of API requests made with this model"
+        },
+        "cost": {
+          "type": "number",
+          "description": "User-initiated premium request cost (with multiplier applied)"
+        }
+      },
+      "required": [
+        "count",
+        "cost"
+      ],
+      "additionalProperties": false,
+      "description": "Request count and cost metrics for this model",
+      "title": "UsageMetricsModelMetricRequests"
+    },
+    "UsageMetricsModelMetricTokenDetail": {
+      "type": "object",
+      "properties": {
+        "tokenCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Accumulated token count for this token type"
+        }
+      },
+      "required": [
+        "tokenCount"
+      ],
+      "additionalProperties": false,
+      "description": "Per-model token-detail entry containing the accumulated token count for one token type.",
+      "title": "UsageMetricsModelMetricTokenDetail"
+    },
+    "UsageMetricsModelMetricUsage": {
+      "type": "object",
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total input tokens consumed"
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total output tokens produced"
+        },
+        "cacheReadTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total tokens read from prompt cache"
+        },
+        "cacheWriteTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total tokens written to prompt cache"
+        },
+        "reasoningTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total output tokens used for reasoning"
+        }
+      },
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "cacheReadTokens",
+        "cacheWriteTokens"
+      ],
+      "additionalProperties": false,
+      "description": "Token usage metrics for this model",
+      "title": "UsageMetricsModelMetricUsage"
+    },
+    "UsageMetricsProviderModelMetric": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelProviderRef",
+              "description": "A neutral reference to the model provider that produced a model: an opaque id, a human-readable label, and the provider kind. Carried on each enumerated Model so consumers can group by provider without reaching into a provider-shaped internal type."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Provider identity and product label captured when the call was dispatched; null when unknown."
+        },
+        "modelId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Model identity, or null for legacy aggregate-only usage."
+        },
+        "modelDisplayName": {
+          "type": "string",
+          "description": "Model display name captured at call time, when known."
+        },
+        "metrics": {
+          "$ref": "#/definitions/UsageMetricsModelMetric",
+          "description": "Request, token, and cost totals for this provider/model."
+        }
+      },
+      "required": [
+        "provider",
+        "modelId",
+        "metrics"
+      ],
+      "additionalProperties": false,
+      "description": "Usage for one recorded provider and model, without merging identical model IDs across providers."
+    },
+    "UsageMetricsTokenDetail": {
+      "type": "object",
+      "properties": {
+        "tokenCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Accumulated token count for this token type"
+        }
+      },
+      "required": [
+        "tokenCount"
+      ],
+      "additionalProperties": false,
+      "description": "Session-wide token-detail entry containing the accumulated token count for one token type.",
+      "title": "UsageMetricsTokenDetail"
     },
     "UserInputCompletedData": {
       "type": "object",

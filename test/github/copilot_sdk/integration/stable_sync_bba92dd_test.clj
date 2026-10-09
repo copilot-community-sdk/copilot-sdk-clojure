@@ -277,7 +277,7 @@
       (is (.isFile (io/file path)) (str "missing Clojure evidence: " path)))
     (doseq [{delta-id :id :keys [clojure-evidence]} (:stable-deltas report)
             {:keys [path contains]} clojure-evidence
-            :let [source (slurp path)]
+            :let [source (git-output "." "show" (str expected-certification-commit ":" path))]
             expected contains]
       (is (str/includes? source expected)
           (str delta-id " is missing documented evidence "
@@ -430,7 +430,9 @@
 
 (deftest schema-and-exclusion-boundaries-are-executable
   (let [schema
-        (json/read-str (slurp "schemas/session-events.schema.json"))
+        (json/read-str
+         (git-output "." "show"
+                     (str expected-certification-commit ":schemas/session-events.schema.json")))
         definitions (get schema "definitions")]
     (is (= ["efficiency" "balance" "intelligence" "fast"]
            (get-in definitions ["AutoTier" "enum"])))
@@ -613,10 +615,9 @@
            (get-in parsed
                    [:model-capabilities :limits :max-output-tokens])))
     (is (s/valid? ::specs/auto-tier :fast))
-    (is (= :fast (get-in create-wire [:capi :autoTier])))
-    (is (str/includes?
-         (json/write-str create-wire)
-         "\"autoTier\":\"fast\""))))
+    (is (= (get-in (json/read-str (json/write-str create-wire) :key-fn keyword)
+                   [:capi :autoTier])
+           "fast"))))
 
 (deftest stable-generated-event-fields-have-curated-idiom-contracts
   (let [subagent-started

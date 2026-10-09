@@ -7,11 +7,9 @@
 
 (defn instant->iso-string "Render a java.time.Instant as an ISO-8601 string. nil-safe and\n      idempotent: returns nil for nil, the same string for a string input,\n      and throws ex-info for any other value class." [v] (cond (nil? v) nil (string? v) v (instance? java.time.Instant v) (.toString v) :else (throw (ex-info "Expected Instant or ISO string" {:value v, :value-class (class v)}))))
 
-(def ^{:private true} auto-tiers #{:fast :intelligence :balance :efficiency})
+(defn auto-tier-string->keyword "Convert an extensible wire Auto-tier identifier to an idiomatic keyword." [v] (cond (nil? v) nil (keyword? v) v (string? v) (keyword v) :else (throw (ex-info "Expected auto-tier string or keyword" {:value v, :value-class (class v)}))))
 
-(defn auto-tier-string->keyword "Convert a wire auto-tier string to its closed idiomatic keyword domain." [v] (let [tier (cond (nil? v) nil (keyword? v) v (string? v) (keyword v) :else (throw (ex-info "Expected auto-tier string or keyword" {:value v, :value-class (class v)})))] (when-not (or (nil? tier) (contains? auto-tiers tier)) (throw (ex-info "Unknown auto-tier value" {:value v}))) tier))
-
-(defn auto-tier-keyword->string "Convert an idiomatic auto-tier keyword to its closed wire enum domain." [v] (let [tier (auto-tier-string->keyword v)] (when tier (name tier))))
+(defn auto-tier-keyword->string "Preserve the complete Auto-tier identifier, including a keyword namespace." [v] (let [tier (auto-tier-string->keyword v)] (when tier (subs (str tier) 1))))
 
 (def ^{:private true} attachment-type-wire->idiom {"file" :file, "directory" :directory, "selection" :selection, "github_reference" :github-reference, "blob" :blob, "extension_context" :extension-context})
 

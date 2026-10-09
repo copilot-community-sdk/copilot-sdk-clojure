@@ -421,14 +421,15 @@ failures.
 | `:provider` | map | Provider config for BYOK (see [BYOK docs](../auth/byok.md)). Required key: `:base-url`; Azure accepts either a resource host or a full Azure AI Foundry project URL. The SDK forwards an Azure project URL unchanged, including its optional trailing slash; the connected Copilot CLI runtime constructs the final provider endpoint. Copilot CLI `1.0.86-0` is a known supporting runtime for project URLs. Optional: `:provider-type` (`:openai`/`:azure`/`:anthropic`), `:wire-api` (`:completions`/`:responses`), `:api-key`, `:bearer-token`, `:azure-options`, `:headers` (map of HTTP header name→value, sent with each provider request — upstream PR #1094), `:model-id` (string — the model identifier to send to the provider; overrides session `:model`), `:wire-model` (string — model name as sent on the provider wire when it differs from `:model-id`), `:max-input-tokens` (integer — input/prompt token cap; serialized as wire `maxPromptTokens`), `:max-output-tokens` (integer — output token cap), `:transport` (`:http`/`:websockets` — provider transport; serialized as wire `transport` — upstream PR #1711), `:bearer-token-provider` (fn — dynamic bearer-token callback, see [BYOK docs](../auth/byok.md#dynamic-bearer-tokens) — upstream PR #1748). The four override fields were added in upstream PR #966 |
 | `:providers` | vector | (Experimental) Multi-provider BYOK registry — a vector of named providers. Each entry takes the connection fields of `:provider` — `:base-url` (required), `:provider-type`, `:wire-api`, `:api-key`, `:bearer-token`, `:azure-options`, `:headers`, `:bearer-token-provider` — and optional `:model-provider` telemetry identity, plus a required `:name` (the registry key, no `/`). Unlike the singular `:provider`, a named provider does **not** accept `:transport` or the inline model-override fields (`:model-id`, `:wire-model`, `:max-input-tokens`, `:max-output-tokens`); model overrides are declared in `:models` instead. Pairs with `:models` to declare a model catalog. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
 | `:models` | vector | (Experimental) Model catalog referencing the `:providers` registry. Each entry: `:id` (required, provider-local model id), `:provider` (required, a `:name` in `:providers`), and optional override fields (`:model-id`, `:wire-model`, `:capabilities`, `:max-input-tokens`, `:max-context-window-tokens`, `:max-output-tokens`). Prefer the canonical `:capabilities` idiom documented for `:model-capabilities`; exact string-keyed wire maps remain accepted as a deprecated compatibility escape hatch. The full model selection id is `"providerName/id"`. Cannot be combined with the singular `:provider`. (upstream PR #1718) |
-| `:capi` | map | CAPI (Copilot API) session options. Optional keys: `:enable-web-socket-responses` (boolean) and `:auto-tier` (`:efficiency`, `:balance`, `:intelligence`, or the integrator-only latency preset `:fast`). WebSocket responses default to `true` and are used whenever the selected model advertises `ws:/responses`; set this option to `false` on resume to force HTTP when a proxy blocks WebSockets or the runtime reports `400 input item ID does not belong to this connection`. `COPILOT_CLI_DISABLE_WEBSOCKET_RESPONSES` is equivalent to `false` and therefore has the opposite polarity. The tier is serialized as `capi.autoTier`; omission uses or restores the runtime's persisted preference. Supplying a different tier while resuming a resident session requests a safe runtime switch. The SDK forwards `:fast` unchanged; the connected runtime determines support and returns its native unsupported-runtime error rather than the SDK downgrading or silently ignoring the request. Experimental live setters, nullable reset, recommendation events, and tier-status APIs are not exposed. ([upstream PR #2437](https://github.com/github/copilot-sdk/pull/2437), [upstream PR #2514](https://github.com/github/copilot-sdk/pull/2514), [upstream PR #2578](https://github.com/github/copilot-sdk/pull/2578), [upstream PR #2609](https://github.com/github/copilot-sdk/pull/2609), [upstream PR #2669](https://github.com/github/copilot-sdk/pull/2669)) |
+| `:capi` | map | CAPI (Copilot API) session options. Optional keys: `:enable-web-socket-responses` (boolean) and `:auto-tier` (extensible keyword identifier). Known tiers include `:efficiency`, `:balance`, `:intelligence`, and the integrator-only latency preset `:fast`; provider-defined identifiers such as `:premium-v2` are also accepted. The complete keyword spelling, including a namespace, is preserved as `capi.autoTier`. Identifiers cannot be empty or contain whitespace/control characters; `nil` is invalid. Omission uses or restores the persisted preference. The runtime validates explicit create/resume preferences against its enabled catalog; it preserves a removed historical preference on resume rather than silently replacing it. WebSocket responses default to `true`; set `:enable-web-socket-responses false` to force HTTP. `COPILOT_CLI_DISABLE_WEBSOCKET_RESPONSES` has the opposite polarity. Experimental discovery, live setters, nullable reset, and recommendation APIs are not exposed. |
 | `:feature-flags` | map | Host-resolved feature flag overrides as string keys and boolean values. Omission sends no wire key; an explicit `{}` is forwarded and remains distinct from omission. Valid on create, resume, and join. ([upstream PR #2451](https://github.com/github/copilot-sdk/pull/2451)) |
 | `:excluded-builtin-agents` | vector | Names of built-in agents to hide/exclude from the session. Serialized as wire `excludedBuiltinAgents`. (upstream PR #1865) |
 | `:enable-citations` | boolean | (Experimental) Opt into native model citations. Gated on `some?` — an explicit `false` is forwarded; an absent key is omitted. Serialized as wire `enableCitations`. (upstream PR #1865) |
 | `:enable-file-change-tracking?` | boolean | Opt into file-change capture for cumulative session diffs. Omission sends no key; explicit `false` and `true` are preserved as `enableFileChangeTracking` on create, resume, and join. On resume, tracking starts only when the runtime still has a valid baseline and cannot reconstruct earlier untracked turns. Observe stable file-change and snapshot events through the normal event APIs; experimental low-level rewind RPCs are intentionally not exposed. |
 | `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
 | `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
-| `:managed-settings` | map | Structured enterprise managed-settings payload, supplied by the caller instead of (or alongside) `:enable-managed-settings?`. Optional key `:permissions`: `{:disable-bypass-permissions-mode :disable, :deny [...], :ask [...], :allow [...]}`. The policy accepts any wire string or a simple keyword; strings pass through unchanged and keywords use `name`. Known values are `:disable` and `:allow-auto-only`. It is serialized as `managedSettings.permissions.disableBypassPermissionsMode`; `:deny`/`:ask`/`:allow` are vectors of non-blank permission-rule strings forwarded verbatim. Presence of this key (or `:enable-managed-settings? true`) sets the permission-handler context's `:managed-settings-enabled?` to `true` — see [`approve-all`](#approve-all). Valid on `create-session`, `resume-session`, and `join-session`. ([upstream PR #2139](https://github.com/github/copilot-sdk/pull/2139)) |
+| `:enforce-managed-model-defaults?` | boolean | Enforce locked managed model controls. Locked startup values replace conflicting session options, and conflicting model changes are rejected; overridable defaults remain mutable. Forwarded as `enforceManagedModelDefaults` on create, resume, and join, never through mutable options updates. Omission and explicit `false` are distinct; `nil` is invalid. |
+| `:managed-settings` | map | Host-injected enterprise policy, supplied instead of or alongside `:enable-managed-settings?`. Optional `:permissions` accepts `:disable-bypass-permissions-mode`, `:disable-assisted-permissions-mode?`, `:deny`, `:ask`, `:allow`, and `:limit-to`. Bypass policy accepts a wire string or simple keyword; known values are `:disable` and `:allow-auto-only`. Explicit `:disable-assisted-permissions-mode? true` prevents Assisted Permissions; false imposes no restriction. Rule lists are vectors of non-blank strings. `:limit-to` restricts hosts through `Domain(hostname)`, `Domain(IP)`, or `Domain(*.example.com)` rules; an explicit `[]` denies all hosts. The runtime validates rules and intersects managed layers. Optional values cannot be `nil`. Valid on create, resume, and join, not mutable updates. Policy is not persisted: re-supply it on resume; omission clears the injected layer. Presence sets the permission-handler context's `:managed-settings-enabled?` to true; see [`approve-all`](#approve-all). |
 | `:request-extensions?` | boolean | Opt into extension management tools and per-extension dispatch for this connection. Explicit `false` is preserved as `requestExtensions: false`; omission sends no wire key. Valid on create, resume, and join. Explicit `nil` is invalid. ([upstream PR #1401](https://github.com/github/copilot-sdk/pull/1401)) |
 | `:extension-sdk-path` | string | Override the `copilot-sdk/` folder injected into extension subprocesses. The runtime falls back to its bundled SDK when the path is invalid. Serialized as `extensionSdkPath` on create and resume; not accepted by `join-session` because the extension process has already started. Explicit `nil` is invalid. ([upstream PR #1494](https://github.com/github/copilot-sdk/pull/1494)) |
 | `:extension-info` | map | Stable extension identity `{:source string :name string}`. Serialized exactly as `extensionInfo.{source,name}` on create, resume, and join. Both strings are required; unknown nested keys and explicit `nil` are invalid. This config shape is distinct from the richer `session.extensions_loaded` event items. ([upstream PR #1401](https://github.com/github/copilot-sdk/pull/1401)) |
@@ -1264,6 +1265,10 @@ Get the core.async `mult` for session events. Use `tap` to subscribe:
       (recur))))
 ```
 
+This borrowed mult requires caller-owned tap cleanup. Retrieving it after
+disconnection throws `ExceptionInfo`; prefer `subscribe-events` or
+`events->chan` for lifecycle-aware subscription admission.
+
 #### `events->chan`
 
 ```clojure
@@ -1272,6 +1277,7 @@ Get the core.async `mult` for session events. Use `tap` to subscribe:
 ```
 
 Subscribe to session events with optional buffer size and transducer.
+Subscribing after disconnection throws `ExceptionInfo`.
 
 #### `subscribe-events`
 
@@ -1280,7 +1286,9 @@ Subscribe to session events with optional buffer size and transducer.
 ```
 
 Subscribe to session events. Returns a channel (sliding buffer, size 1024) that receives events.
-This is a convenience wrapper around `(tap (copilot/events session) ch)`.
+Subscribing after disconnection throws `ExceptionInfo`. If teardown wins while
+a subscription is being registered, the SDK closes the provisional channel
+and rejects the subscription rather than returning a channel that cannot close.
 
 ##### Event Drop Behavior
 
@@ -1306,7 +1314,7 @@ reading. For most use cases, this is not a concern.
 (copilot/unsubscribe-events! session ch)
 ```
 
-Unsubscribe a channel from session events.
+Unsubscribe and close the channel. This remains safe after session teardown.
 
 #### `abort!`
 
@@ -2014,6 +2022,15 @@ that result does not add permission-granting authority to the SDK.
 New AHP transport-selection and Connector-account type exports, sessionless
 managed-settings composition/resolution, environment management, and provider
 withdrawal also remain outside the stable API.
+Session-scoped skill providers, image-generation consent, tool-invocation
+agent/request identity, compute-scoped AHP catalogs, provider quota observations,
+managed-plugin progress/retry, and configured-MCP inventory remain excluded.
+Passive experimental provider accounting and internal accounting snapshots
+retain their wire data without becoming curated stable APIs.
+Fast remains an integrator-only Auto preset and does not require dynamic tier
+catalog discovery. Runtime rejection is propagated without substituting another
+tier. A skill's `:allowed-tools` metadata does not automatically approve tools
+in SDK sessions; the permission handler still decides.
 
 ### `evt` — Event Keyword Helper
 
@@ -2035,6 +2052,36 @@ Copilot-managed, local user-managed, or remote user-managed models as
 `"local_managed"`, `"local_user"`, and `"remote_user"`. Both fields are absent
 for Copilot-served models. Live and historical events use the same conversion.
 
+Start, resume, model-change, and assistant-message events may carry a non-null
+string `:provider-id`; model changes may also carry `:previous-provider-id`.
+This is the identity captured for that selection or response, not an identity
+inferred from the current model. Matching model IDs alone do not establish that
+opaque reasoning state is portable between providers. Start, resume, and model
+changes may also carry boolean `:auto-tier-managed`, `:context-tier-managed`,
+and `:reasoning-effort-managed`; omission and explicit false remain distinct.
+
+Usage and compaction token details may include `:ai-credits-status`:
+`"complete"` means every observed call supplied an amount, `"partial"` means
+the amount is only a reported subtotal, and `"unavailable"` means none was
+reported. Missing billing is not a zero-cost claim. Optional
+`:model-display-name` is captured at call time.
+
+Usage events may include `:accounting {:source-session-id string,
+:sequence positive-integer, :usage-id string}`. The sequence is at most
+9007199254740991. Shutdown and usage-checkpoint events may include
+`:usage-accounting-watermarks`, mapping source-session keywords to non-negative
+integer sequence watermarks; source-defined key spelling is preserved.
+Legacy `:total-premium-requests` is a non-negative, potentially fractional
+premium-request cost, not an integer count of calls.
+
+Usage and model-call failures may include non-negative integer
+`:request-body-bytes` and `:websocket-fallback-after-ms`, plus
+`:websocket-fallback-reason`: `"connect_failed"`, `"connection_unavailable"`,
+`"send_failed"`, `"api_error"`, or `"transport_failed"`. Failures may also
+include non-negative `:retry-attempt` and request-fingerprint
+`:encrypted-content-bytes`, `:image-bytes`, and `:reasoning-item-count`.
+These are content-free diagnostics, not copies of the request.
+
 Curated `::specs/result` and `::specs/error` values accept recursive JSON:
 `nil`, strings, booleans, finite non-ratio numbers, vectors, and maps whose keys
 are strings or keywords and whose values recursively satisfy the same contract.
@@ -2044,7 +2091,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 
 | Event Type | Description |
 |------------|-------------|
-| `:copilot/session.start` | Session created; optional `:auto-tier` is coerced to `:efficiency`, `:balance`, `:intelligence`, or `:fast`. Optional string `:reasoning-effort-model` identifies the model that owns effort embedded in an authored selection. |
+| `:copilot/session.start` | Session created; optional `:auto-tier` is coerced to an extensible keyword identifier, retaining its full spelling. Optional string `:reasoning-effort-model` identifies the model that owns effort embedded in an authored selection. |
 | `:copilot/session.resume` | Session resumed; optional `:auto-tier` uses the same idiomatic keyword domain as session start. Optional `:reasoning-effort-model` retains the authored effort owner. |
 | `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:url`, and `:remediation`. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, and `"allow_sandbox_outbound"`. |
 | `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
@@ -2075,7 +2122,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.autopilot_objective_changed` | Autopilot objective lifecycle events; data: `{:operation #{"create" "update" "delete"}}` (required) with optional `:id` (integer) and `:status` (upstream schema 1.0.56). The `:status` enum is widened to include `"active"`, `"paused"`, `"cap_reached"`, `"completed"`. |
 | `:copilot/session.permissions_changed` | **Experimental.** Per-session permission mode changed; data: `{:mode <mode> :previous-mode <mode>}` with optional `:assisted-approval-model`, where mode is one of `"manual"`, `"assisted"`, or `"allow-all"` (upstream schema 1.0.81-5). |
 | `:copilot/session.session_limits_changed` | Session limits changed; data: `{:session-limits {:max-ai-credits <number>}}`, where a `nil` `:session-limits` clears the active limits (upstream schema 1.0.67) |
-| `:copilot/session.usage_checkpoint` | Durable usage checkpoint for reconstructing aggregate accounting on resume; data: `{:total-nano-aiu <number>}` with optional `:total-premium-requests <number>` (upstream schema 1.0.67) |
+| `:copilot/session.usage_checkpoint` | Durable accounting checkpoint; data requires non-negative `:total-nano-aiu` and may include `:total-premium-requests` and `:usage-accounting-watermarks`. Internal accounting snapshots and experimental provider/model aggregates remain wire-only. |
 | `:copilot/session.auto_mode_resolved` | Auto model-selection resolved the model for the first prompt of an auto-mode session; data includes `:chosen-model`, optional `:candidate-models`, `:category-scores`, `:confidence`, `:predicted-label`, `:reasoning-bucket` (experimental; upstream schema 1.0.70-0) |
 | `:copilot/session.managed_settings_enforced` | Experimental ephemeral enforcement of enterprise managed settings for a concrete user- or host-initiated governed action. Data: `{:action "bypass_permissions_blocked" :setting <string> :fail-closed <boolean> :message <string>}` with optional `:escalation` in `#{"allow_all" "approve_all" "auto_approval" "unrestricted_paths" "unrestricted_urls"}`. |
 | `:copilot/session.managed_settings_resolved` | Experimental ephemeral snapshot of effective enterprise managed settings and their authority, emitted when policy is applied or reapplied at session start, on resume, or on account switch. Data: `{:source #{"server" "device" "none"} :server-managed <boolean> :device-managed <boolean> :fail-closed <boolean> :bypass-permissions-disabled <boolean> :managed-keys [<string> ...]}` with optional opaque JSON `:settings`. |
@@ -2102,7 +2149,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/model.call_finished` | Completed model dispatch metadata; data requires `:turn-id`, non-negative `:dispatch-duration-ms`, `:outcome` (`"success"`, `"error"`, `"cancelled"`, or `"rejected"`), and positive `:edit-classifier-version`. Optional fields: `:interaction-id` and `:contains-built-in-file-edit-request`. The payload remains open for additive runtime fields. |
 | `:copilot/abort` | Current message aborted |
 | `:copilot/tool.user_requested` | Tool execution requested by user |
-| `:copilot/tool.execution_start` | Tool execution started; data requires `:tool-call-id` and `:tool-name`. Optional fields are `:tool-title` (human-readable display title), `:arguments` (opaque JSON with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. An absent title stays absent; the spec accepts any string, including empty, but not `nil`. Transport metadata was added in runtime schema `1.0.84-5`; configured-server provenance was introduced in runtime schema `1.0.84-8` by [upstream PR #2658](https://github.com/github/copilot-sdk/pull/2658). |
+| `:copilot/tool.execution_start` | Tool execution started; data requires `:tool-call-id` and `:tool-name`. Optional fields are `:tool-title` (human-readable display title), `:arguments` (opaque JSON with source-defined, non-kebab-cased keys), `:parent-tool-call-id`, `:mcp-server-name`, `:mcp-tool-name`, `:mcp-config-server-name`, `:mcp-config-source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, `"managed"`, or `"account"`), `:mcp-transport` (`"stdio"`, `"http"`, `"sse"`, or `"memory"`), and `:model`. Account-contributed servers remain subject to enablement and organization policy. An absent title stays absent; the spec accepts any string, including empty, but not `nil`. |
 | `:copilot/tool.execution_progress` | Tool execution progress update |
 | `:copilot/tool.execution_partial_result` | **Deprecated.** Bounded cumulative replacement snapshot of merged shell output, not an append-only chunk. Use `tool.shell_output` for live output. |
 | `:copilot/tool.shell_output` | Live-only append-only shell output. Data requires string `:tool-call-id`, string `:text`, and non-negative integer `:sequence`. Optional `:stream` is `"stdout"`, `"stderr"`, or `"terminal"`; omission means stdout. See [Shell output](#shell-output). |
@@ -3319,6 +3366,21 @@ The `:permission-kind` field in permission requests identifies the type of actio
 Custom-tool permission requests may include boolean `:skip-permission`, recording
 that the tool declaration asked the runtime to bypass its normal prompt.
 
+Write requests may include a non-empty `:file-edits` vector in both the
+permission request and its event's `:prompt-request`:
+
+```clojure
+{:file-edits [{:before {:path "/workspace/before.clj" :content "(+ 1 1)"}
+               :after {:path "/workspace/after.clj" :content "(+ 1 2)"}}]}
+```
+
+Each edit has at least one complete UTF-8 snapshot. Missing `:before` means
+creation; missing `:after` means deletion; empty `:content` means an empty
+file. Different paths describe a move. These are planned-operation previews,
+not later reads of live files. The runtime omits the vector when a complete
+preview is unavailable, including pre-read sandbox requests and non-UTF-8
+files. Do not infer deletion from an empty legacy `:new-file-contents`.
+
 Memory permission events include additional data fields:
 
 | Field | Type | Description |
@@ -3576,6 +3638,16 @@ When `:on-elicitation-request` is set, the session advertises `requestElicitatio
 ### Session Filesystem
 
 Virtualize per-session storage with custom filesystem handlers. The runtime routes all session-scoped file I/O (event logs, large outputs, checkpoints) through the provided callbacks.
+
+Remembered permission choices also use this storage: `permissions.json` holds
+location approvals, `settings.json` holds permanent URL approvals and sandbox
+preferences, and `config.json` holds folder trust and onboarding state under
+`:session-state-path`. Sessions sharing these backing files share remembered
+grants; use separate, authorized provider namespaces for isolation and reconnect
+resumed sessions to their original namespace. The runtime does not fall back to
+host approval files on provider errors. Coordinate writes across separate
+provider endpoints/processes and protect backing storage from writable aliases
+or shell access; shell execution does not run through SessionFS.
 
 Configure the client with `:session-fs`:
 

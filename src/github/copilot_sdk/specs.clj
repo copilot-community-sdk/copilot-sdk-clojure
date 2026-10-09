@@ -1079,7 +1079,10 @@
 ;; runtime side); set false to force the HTTP Responses transport. Sent verbatim
 ;; under the `capi` wire key.
 (s/def ::enable-web-socket-responses boolean?)
-(s/def ::auto-tier #{:efficiency :balance :intelligence :fast})
+(s/def ::auto-tier
+  (s/and keyword?
+         #(boolean (re-matches #"[^\u0000-\u0020\u007F-\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+"
+                               (subs (str %) 1)))))
 (s/def ::capi (s/keys :opt-un [::auto-tier ::enable-web-socket-responses]))
 
 ;; Selects the model-facing shape of the built-in ask_user tool.
@@ -1238,6 +1241,7 @@
 ;; self-fetch enterprise managed settings (bypass-permissions policy) at session
 ;; bootstrap using the session's github token. Forwarded on create + resume/join.
 (s/def ::enable-managed-settings? boolean?)
+(s/def ::enforce-managed-model-defaults? boolean?)
 
 ;; v1.0.9 session configuration additions.
 (s/def ::enable-experimental-mode? boolean?)
@@ -1282,14 +1286,18 @@
 (s/def ::disable-bypass-permissions-mode
   (s/or :wire string?
         :idiom (s/and keyword? #(nil? (namespace %)))))
+(s/def ::disable-assisted-permissions-mode? boolean?)
 (s/def ::deny (s/coll-of ::non-blank-string :kind vector?))
 (s/def ::ask (s/coll-of ::non-blank-string :kind vector?))
 (s/def ::allow (s/coll-of ::non-blank-string :kind vector?))
+(s/def ::limit-to (s/coll-of ::non-blank-string :kind vector?))
 (def ^:private managed-settings-permissions-keys
-  #{:disable-bypass-permissions-mode :deny :ask :allow})
+  #{:disable-bypass-permissions-mode :disable-assisted-permissions-mode?
+    :deny :ask :allow :limit-to})
 (s/def ::managed-settings-permissions
   (closed-keys
-   (s/keys :opt-un [::disable-bypass-permissions-mode ::deny ::ask ::allow])
+   (s/keys :opt-un [::disable-bypass-permissions-mode ::disable-assisted-permissions-mode?
+                    ::deny ::ask ::allow ::limit-to])
    managed-settings-permissions-keys))
 (s/def ::permissions ::managed-settings-permissions)
 (s/def ::managed-settings
@@ -1415,7 +1423,7 @@
     :excluded-builtin-agents :enable-citations :session-limits
     :providers :models :exp-assignments :feature-flags
     :include-sub-agent-streaming-events?
-    :enable-managed-settings? :managed-settings
+    :enable-managed-settings? :enforce-managed-model-defaults? :managed-settings
     :enable-experimental-mode? :additional-directories :disabled-mcp-servers
     :github-mcp-tool-config
     :request-extensions? :extension-sdk-path :extension-info
@@ -1467,7 +1475,7 @@
                     ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments ::feature-flags
                     ::include-sub-agent-streaming-events?
-                    ::enable-managed-settings? ::managed-settings
+                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions? ::extension-sdk-path
@@ -1515,7 +1523,7 @@
     :include-sub-agent-streaming-events?
     ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
     :open-canvases
-    :enable-managed-settings? :managed-settings
+    :enable-managed-settings? :enforce-managed-model-defaults? :managed-settings
     :enable-experimental-mode? :additional-directories :disabled-mcp-servers
     :github-mcp-tool-config
     :request-extensions? :extension-sdk-path :extension-info
@@ -1566,7 +1574,7 @@
                     ::providers ::models ::exp-assignments ::feature-flags
                     ::include-sub-agent-streaming-events?
                     ::open-canvases
-                    ::enable-managed-settings? ::managed-settings
+                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions? ::extension-sdk-path
@@ -1626,7 +1634,7 @@
                     ::providers ::models ::exp-assignments ::feature-flags
                     ::include-sub-agent-streaming-events?
                     ::open-canvases
-                    ::enable-managed-settings? ::managed-settings
+                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions?
@@ -1885,7 +1893,8 @@
     :copilot/session.handoff
     :copilot/session.truncation :copilot/session.snapshot_rewind :copilot/session.usage_info
     :copilot/session.compaction_start :copilot/session.compaction_complete
-    :copilot/session.shutdown :copilot/session.task_complete :copilot/session.context_cleared
+    :copilot/session.shutdown :copilot/session.usage_checkpoint
+    :copilot/session.task_complete :copilot/session.context_cleared
     :copilot/session.title_changed :copilot/session.warning :copilot/session.context_changed
     :copilot/session.mode_changed :copilot/session.plan_changed :copilot/session.todos_changed
     :copilot/session.workspace_file_changed
@@ -1989,29 +1998,39 @@
 
 (s/def ::detached-from-spawning-parent-session-id string?)
 (s/def ::reasoning-effort-model string?)
-;; upstream schema 1.0.83-1: `autoTier` echoes the auto-routing preference
-;; active at session start/resume. The coercion layer converts the wire enum
-;; string to the same idiomatic keyword domain used by ::capi options.
+;; External-tool provider IDs permit null; model provenance does not.
+(s/def ::model-event-provider-id string?)
+(s/def ::previous-provider-id string?)
+(s/def ::auto-tier-managed boolean?)
+(s/def ::context-tier-managed boolean?)
+(s/def ::reasoning-effort-managed boolean?)
+;; Start/resume Auto-tier identifiers use the same keywords as ::capi options.
 (s/def ::session.start-data
   ;; Note: ::version is intentionally omitted from this hand-written spec.
   ;; The upstream schema types it as `number` while the global `::version`
   ;; spec (used by ::model-info) is `string?`. The generated wire spec
   ;; (github.copilot-sdk.generated.event-specs/session.start-data) is the
   ;; canonical contract for this field.
-  (s/keys :req-un [::session-id]
-          :opt-un [::producer ::copilot-version ::start-time ::selected-model
-                   ::reasoning-effort ::reasoning-effort-model
-                   ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit
-                   ::detached-from-spawning-parent-session-id ::auto-tier]))
+  (s/and
+   (s/keys :req-un [::session-id]
+           :opt-un [::producer ::copilot-version ::start-time ::selected-model
+                    ::reasoning-effort ::reasoning-effort-model
+                    ::auto-tier-managed ::context-tier-managed ::reasoning-effort-managed
+                    ::already-in-use? ::remote-steerable? ::host-type ::head-commit ::base-commit
+                    ::detached-from-spawning-parent-session-id ::auto-tier])
+   #(optional-field? % :provider-id (partial s/valid? ::model-event-provider-id))))
 
 (s/def ::event-count nat-int?)
 (s/def ::events-file-size-bytes nat-int?)
 (s/def ::session.resume-data
-  (s/keys :req-un [::event-count]
-          :opt-un [::selected-model ::reasoning-effort ::reasoning-effort-model
-                   ::already-in-use? ::remote-steerable?
-                   ::host-type ::head-commit ::base-commit ::events-file-size-bytes
-                   ::auto-tier]))
+  (s/and
+   (s/keys :req-un [::event-count]
+           :opt-un [::selected-model ::reasoning-effort ::reasoning-effort-model
+                    ::auto-tier-managed ::context-tier-managed ::reasoning-effort-managed
+                    ::already-in-use? ::remote-steerable?
+                    ::host-type ::head-commit ::base-commit ::events-file-size-bytes
+                    ::auto-tier])
+   #(optional-field? % :provider-id (partial s/valid? ::model-event-provider-id))))
 
 (s/def ::status-code integer?)
 (s/def ::provider-call-id string?)
@@ -2192,13 +2211,15 @@
   (s/coll-of ::assistant-message-tool-request :kind vector?))
 (s/def ::originating-message-id string?)
 (s/def ::assistant.message-data
-  (s/keys :req-un [::message-id ::content]
-          :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
-                   ::interaction-id ::output-tokens ::phase ::reasoning-opaque
-                   ::reasoning-text ::request-id ::api-call-id
-                   ::server-tools ::service-request-id ::turn-id ::model
-                   ::chunk-index ::chunk-count ::rte
-                   ::originating-message-id]))
+  (s/and
+   (s/keys :req-un [::message-id ::content]
+           :opt-un [::tool-requests ::parent-tool-call-id ::encrypted-content
+                    ::interaction-id ::output-tokens ::phase ::reasoning-opaque
+                    ::reasoning-text ::request-id ::api-call-id
+                    ::server-tools ::service-request-id ::turn-id ::model
+                    ::chunk-index ::chunk-count ::rte
+                    ::originating-message-id])
+   #(optional-field? % :provider-id (partial s/valid? ::model-event-provider-id))))
 
 (s/def ::total-response-size-bytes nat-int?)
 (s/def ::turn-id ::non-blank-string)
@@ -2286,6 +2307,19 @@
 (s/def ::byok-kind string?)
 (s/def ::byok-model-provider string?)
 (s/def ::assistant-usage-transport #{"http" "websocket"})
+(s/def ::model-display-name string?)
+(s/def ::ai-credits-status #{"complete" "partial" "unavailable"})
+(s/def ::request-body-bytes nat-int?)
+(s/def ::retry-attempt nat-int?)
+(s/def ::websocket-fallback-after-ms nat-int?)
+(s/def ::websocket-fallback-reason
+  #{"connect_failed" "connection_unavailable" "send_failed" "api_error" "transport_failed"})
+(s/def ::usage-accounting-identity
+  (s/and map?
+         #(required-value? % :source-session-id string?)
+         #(required-value? % :sequence
+                           (fn [value] (and (pos-int? value) (<= value 9007199254740991))))
+         #(required-value? % :usage-id string?)))
 
 (s/def ::assistant.usage-data
   (s/and
@@ -2299,7 +2333,10 @@
                     ::quota-snapshots ::reasoning-effort ::reasoning-tokens
                     ::rejected-prediction-tokens ::service-request-id
                     ::time-to-first-token-ms ::ttft-ms ::output-ttft-ms
-                    ::content-filter-triggered ::finish-reason ::rte])
+                    ::content-filter-triggered ::finish-reason ::rte
+                    ::model-display-name ::ai-credits-status ::request-body-bytes
+                    ::websocket-fallback-after-ms ::websocket-fallback-reason])
+   #(optional-field? % :accounting (partial s/valid? ::usage-accounting-identity))
    #(optional-field? % :model-provider (partial s/valid? ::byok-model-provider))
    #(or (not (contains? % :reasoning-summary))
         (contains? #{"none" "concise" "detailed"}
@@ -2311,7 +2348,7 @@
 (s/def ::mcp-tool-name string?)
 (s/def ::mcp-config-server-name string?)
 (s/def ::mcp-config-source
-  #{"user" "workspace" "plugin" "builtin" "managed"})
+  #{"user" "workspace" "plugin" "builtin" "managed" "account"})
 (s/def ::mcp-transport #{"stdio" "http" "sse" "memory"})
 
 (s/def ::tool.execution_start-data
@@ -2403,7 +2440,7 @@
 ;; Session shutdown event
 (s/def ::shutdown-type #{"routine" "error"})
 (s/def ::error-reason string?)
-(s/def ::total-premium-requests nat-int?)
+(s/def ::total-premium-requests (s/and json-number? #(<= 0 %)))
 (s/def ::total-api-duration-ms nat-int?)
 (s/def ::session-start-time number?)
 (s/def ::code-changes map?)
@@ -2414,12 +2451,18 @@
   (s/keys :req-un [::model-metrics ::total-api-duration-ms ::total-nano-aiu]
           :opt-un [::agent-name ::agent-display-name]))
 (s/def ::agent-metrics (s/map-of keyword? ::shutdown-agent-metric))
+(s/def ::usage-accounting-watermarks (s/map-of keyword? nat-int?))
 
 (s/def ::session.shutdown-data
   (s/keys :req-un [::shutdown-type ::total-api-duration-ms
                    ::session-start-time ::code-changes ::model-metrics]
           :opt-un [::error-reason ::current-model ::total-premium-requests
-                   ::events-file-size-bytes ::agent-metrics ::total-nano-aiu]))
+                   ::events-file-size-bytes ::agent-metrics ::total-nano-aiu
+                   ::usage-accounting-watermarks]))
+
+(s/def ::session.usage_checkpoint-data
+  (s/keys :req-un [::total-nano-aiu]
+          :opt-un [::total-premium-requests ::usage-accounting-watermarks]))
 
 ;; Session title changed event
 (s/def ::title string?)
@@ -2449,7 +2492,10 @@
   (s/and
    (s/keys :req-un [::new-model]
            :opt-un [::previous-model ::previous-reasoning-effort
-                    ::reasoning-effort ::reasoning-effort-model ::source])
+                    ::reasoning-effort ::reasoning-effort-model ::source
+                    ::previous-provider-id
+                    ::auto-tier-managed ::context-tier-managed ::reasoning-effort-managed])
+   #(optional-field? % :provider-id (partial s/valid? ::model-event-provider-id))
    #(or (not (contains? % :source))
         (s/valid? ::model-change-source (:source %)))))
 
@@ -2540,11 +2586,13 @@
 ;; :behavior-model-id — upstream schema 1.0.83-1. Identifies the behavior
 ;; model used to drive compaction, when applicable.
 (s/def ::behavior-model-id string?)
+(s/def ::compaction-tokens-used
+  (s/keys :opt-un [::ai-credits-status ::model-display-name]))
 (s/def ::session.compaction_complete-data
   (s/and
    (s/keys :req-un [::success]
            :opt-un [::status-code ::token-limit ::trigger ::behavior-model-id
-                    ::responses-reasoning])
+                    ::responses-reasoning ::compaction-tokens-used])
    #(optional-field? % :error string?)))
 
 ;; Transient indexed-search lifecycle and diagnostics (schema 1.0.87-0).
@@ -2904,9 +2952,22 @@
          #(optional-field? % :content string?)))
 
 (s/def ::model-call-failure-source #{"top_level" "subagent" "mcp_sampling"})
+(s/def ::model-call-failure-request-fingerprint
+  (s/and
+   map?
+   #(every? (fn [key] (required-value? % key nat-int?))
+            [:image-part-count :image-parts-missing-media-type :message-count
+             :nameless-tool-call-count :tool-call-count :tool-result-message-count])
+   #(optional-field? % :last-message-role string?)
+   #(every? (fn [key] (optional-field? % key nat-int?))
+            [:encrypted-content-bytes :image-bytes :reasoning-item-count])))
 (s/def ::model.call_failure-data
   (s/and (s/keys :req-un [::source]
-                 :opt-un [::interaction-type ::parent-tool-call-id ::byok-kind])
+                 :opt-un [::interaction-type ::parent-tool-call-id ::byok-kind
+                          ::request-body-bytes ::retry-attempt
+                          ::websocket-fallback-after-ms ::websocket-fallback-reason])
+         #(optional-field? % :request-fingerprint
+                           (partial s/valid? ::model-call-failure-request-fingerprint))
          #(optional-field? % :model-provider (partial s/valid? ::byok-model-provider))
          #(s/valid? ::model-call-failure-source (:source %))))
 
@@ -3220,6 +3281,24 @@
 (s/def ::request-sandbox-bypass-reason string?)
 (s/def ::request-sandbox-permissive boolean?)
 
+(s/def ::permission-write-file-content
+  (s/and map?
+         #(required-value? % :path string?)
+         #(required-value? % :content string?)))
+(s/def ::permission-write-file-edit
+  (s/and map?
+         #(or (contains? % :before) (contains? % :after))
+         #(optional-field? % :before (partial s/valid? ::permission-write-file-content))
+         #(optional-field? % :after (partial s/valid? ::permission-write-file-content))))
+(s/def ::permission-write-file-edits
+  (s/coll-of ::permission-write-file-edit :kind vector? :min-count 1))
+
+(defn- permission-write-previews?
+  [request]
+  (and (map? request)
+       (optional-field? request :file-edits
+                        (partial s/valid? ::permission-write-file-edits))))
+
 (s/def ::permission-request
   (s/and
    (s/keys :req-un [::permission-kind]
@@ -3236,6 +3315,7 @@
                     ::can-offer-server-wide-approval
                     ::request-sandbox-bypass ::request-sandbox-bypass-reason
                     ::request-sandbox-permissive])
+   permission-write-previews?
    #(or (not= :workflow (:permission-kind %))
         (and (s/valid? ::workflow-operation (:operation %))
              (s/valid? ::non-blank-string (:name %))
@@ -3256,7 +3336,7 @@
              (s/valid? ::environment-variables
                        (:environment-variables %))))))
 
-(s/def ::permission-prompt-request map?)
+(s/def ::permission-prompt-request permission-write-previews?)
 (s/def ::resolved-by-hook boolean?)
 (s/def ::risk-assessment opaque-json-value?)
 (s/def ::recovery-episode-id string?)
@@ -3264,8 +3344,8 @@
   (s/and
    map?
    #(required-value? % :request-id string?)
-   #(required-value? % :permission-request map?)
-   #(optional-field? % :prompt-request map?)
+   #(required-value? % :permission-request permission-write-previews?)
+   #(optional-field? % :prompt-request permission-write-previews?)
    #(optional-field? % :resolved-by-hook boolean?)
    #(optional-field? % :risk-assessment opaque-json-value?)
    #(optional-field? % :agent-mode session-modes)
