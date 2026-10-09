@@ -31,7 +31,7 @@
    :sha256
    "6f8e48c5980b955f02604e6d9ba5a7fe6116894e8a40d2c7d06e6bd4005df988"},
   :local-artifact-seal
-  {:commit "d84350da026a0566953a1ed961a2c882d79364ab",
+  {:commit "525748f70d3a11a7df1f53515a9d5492c4f1418a",
    :status :sealed}},
  :changed-paths
  {:classification-counts
@@ -497,7 +497,7 @@
    "schemas/session-events.schema.json"
    "cc8ccea45a7889d4a2d24af31e032e14da10c32c206d7aec5e81faf07264d459",
    "src/github/copilot_sdk/generated/coerce.clj"
-   "94e7ffd94da5c296249c16117c413ca30b90dde39901c35bb7e2a1e594d2e812",
+   "7a1828befbf45381f49f0c426dc383869016921fe18493ae137ea5e45b814ee4",
    "src/github/copilot_sdk/generated/event_metadata.clj"
    "8b41075e5762caf6bd74e529d7543473b4212b2b0e72ba46a2f7ecc300cc6fb0",
    "src/github/copilot_sdk/generated/event_specs.clj"
@@ -509,13 +509,13 @@
   ".github/workflows/ci.yml"
   "189dfa8a2c7b2b90b5b138528e5abe0fccf57fae002ecc6415c3e31513528f6f",
   "CHANGELOG.md"
-  "0809c22b03a1f9861d913aa240c573427f7e61e5d70096543d82dc78d6dde5b0",
+  "96cf65a397d0aca9d3d5721ada5cda20f47b708e83746176be913609396b4081",
   "build.clj"
   "72620df06be0beaf56b9a005a81755713561e526875f89405ca04a3ea94a1cfb",
   "deps.edn"
   "ec07cf3d799dcb354766ff7af7b0565cff218e1ecc7811a3a342b8689b06b33b",
   "doc/adr/2026-10-09-extensible-routing-and-event-contracts.md"
-  "b6a90c45b2d8433f0f773111c9d986ad4003c7ca28f1183bb689a98f1169c22a",
+  "716495e15e587e096bc54cd4c5bbb82f2763d81757cd238bf25ae86a6c460ff6",
   "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
   "b674d516c2bac1d7b2bd88ca343a1d47da27543c233d8942a886c3de3757eba7",
   "doc/api/2026-08-10-host-owned-inference-boundary.html"
@@ -531,9 +531,9 @@
   "doc/api/2026-10-05-callback-and-event-contracts.html"
   "03d612d32b9e127b62980a9c06e998bdbf47506bd3684a1b9c051f3cf8c9d931",
   "doc/api/2026-10-09-extensible-routing-and-event-contracts.html"
-  "8d5f370654415baf84678a185a4ffb4e14f20291fee9550879fc8670c9e3bfdb",
+  "4c5422b4f994eae76fef9b6c0b0c13fbedda43aa64766d2a469812c939be2f7a",
   "doc/api/API.html"
-  "d928f8ceb84129759c4f0526f04ba57c910da62a8c382509ccbc6b4224af822d",
+  "3a3e91cb22a1556596ded3a7f93e490f3bab96648ccda0b7f002beb149d03c16",
   "doc/api/azure-managed-identity.html"
   "ae2244881539bfb332057b06fc7b272a2abaf2b8f4f1eb9f967c01fd10161871",
   "doc/api/byok.html"
@@ -555,7 +555,7 @@
   "doc/api/github.copilot-sdk.client.html"
   "8adf63eba0b54bf196717e6c19e8aa83ba7453e61abcde1c25c2f9d009e4bcde",
   "doc/api/github.copilot-sdk.generated.coerce.html"
-  "7130fdaeda258276867a79a008e35fe6633e2c8d719cf596b1ca24e3cb54e37a",
+  "1bd4f5cb0b294680c4d400fe0b90633fdd2e315c57921a3db8fa21118bed03e5",
   "doc/api/github.copilot-sdk.generated.event-metadata.html"
   "6837aab45a868fa17457dc5622444dd831a4459e49af298abc672a9c133000b1",
   "doc/api/github.copilot-sdk.generated.event-specs.html"
@@ -605,7 +605,7 @@
   "doc/mcp/overview.md"
   "fbc57dc506a016c12fcf9a3efdd199141a17c9aa3a11ef3737b0aa15bc47f5e4",
   "doc/reference/API.md"
-  "3dd174adf959921ecfa5176ed3115451c0368846bf4ddf0cefafd25368088915",
+  "b2b2822af16f7c5741b919520c2ebddaec8155e2a4e52cf9db0494e5dd0b404b",
   "resources/github/copilot_sdk/api_surface.edn"
   "265912631ebef63632a2dbe2927beb3aed771b46600dd8fe6d1c14e4167b58f7",
   "schemas/README.md"
@@ -615,7 +615,7 @@
   "schemas/session-events.schema.json"
   "cc8ccea45a7889d4a2d24af31e032e14da10c32c206d7aec5e81faf07264d459",
   "script/codegen/emit_coerce.clj"
-  "a76eaf4a657e5555815a3a64ff3c02bc8b5bea80857bbe5651397d758f1107eb",
+  "165f40815fd168b565461dcec57750789d34c3297ad7980e5d9254b1c6708a6f",
   "script/codegen/emit_specs.clj"
   "69f5d046f23e2a7ad1873d770a9b92c3b450c10f3a1e2b2e41f82784e8826ffc",
   "src/github/copilot_sdk.clj"
@@ -623,7 +623,7 @@
   "src/github/copilot_sdk/client.clj"
   "373e3d4fc2d3144e5cabd67d618ffb96c2e15b1f6cfaebb0ebf4b0ce5a333b04",
   "src/github/copilot_sdk/generated/coerce.clj"
-  "94e7ffd94da5c296249c16117c413ca30b90dde39901c35bb7e2a1e594d2e812",
+  "7a1828befbf45381f49f0c426dc383869016921fe18493ae137ea5e45b814ee4",
   "src/github/copilot_sdk/generated/event_metadata.clj"
   "8b41075e5762caf6bd74e529d7543473b4212b2b0e72ba46a2f7ecc300cc6fb0",
   "src/github/copilot_sdk/generated/event_specs.clj"
@@ -633,9 +633,11 @@
   "src/github/copilot_sdk/session.clj"
   "cdab31b528712c63c1cab1e3c51effb68a6dbb45a5834a64c53b0655ce43f39d",
   "src/github/copilot_sdk/specs.clj"
-  "0e62b8c1d307195e3fbf9750f65bdb817b719deb240d51c7e4928358b79d3a99",
+  "784ce7d6aa9a3e2bb451db7c0ba4c43550f359bee7a4e9eaa4f650b4143efae6",
+  "src/github/copilot_sdk/util.clj"
+  "516d95e178eadb947e89e67e151d5a776ce357d604244d88d0f2dfa62886ef02",
   "test/github/copilot_sdk/codegen_test.clj"
-  "a14bd34e935517832b04b1381d5320e948a01007b28f3dc83e93777886b8d643",
+  "c439af31580d58baf3c905419afc91aa562e8c717d7bfb95d3b042a0c332dd0a",
   "test/github/copilot_sdk/e2e_test.clj"
   "570347168d188a282f3d1f41c0a6e2940365f37e35d34ec06b7ac45f97b0e6ef",
   "test/github/copilot_sdk/force_stop_test.clj"
@@ -647,17 +649,17 @@
   "test/github/copilot_sdk/integration/stable_sync_2980c78_test.clj"
   "a0b645b3dd09a7dc89a0d52fe81dd561a49d6367991cdb1b39b1acb679cdeed7",
   "test/github/copilot_sdk/integration/stable_sync_341a526_test.clj"
-  "67ba22fda5fee47588297c7661b7c810fa09b27ac45edca6f160aa05dbfe8df3",
+  "aa54c17394ea9da67e4c8cbd6eb316d3d6845febe222802d0e78c8ea2fb82519",
   "test/github/copilot_sdk/integration/stable_sync_bba92dd_test.clj"
   "00fbd92762d2c90eb839a2187dc00bea5e3910a171a58f4598177bdfcd0ebcfb",
   "test/github/copilot_sdk/integration/stable_sync_f45c46fd_test.clj"
   "b056445cbb1fb859aaeff187c1268cf8d524faa23e00317b4a1f60b79ff07027",
   "test/github/copilot_sdk/integration/upstream_1_0_95_2_test.clj"
-  "bc727475e30091a2679d4cf6f56e2b9497be64eb1a3cfc63d6e20edad5f5c4b4",
+  "cf5a95076533e483adeee9aaaf4ffae884d1cf88ba429bbf38ce869c492d5010",
   "test/github/copilot_sdk/optional_wire_contract_test.clj"
   "ba1c168a343a8d285c8fceb40ee26c8a2ac2cc9cc48d4fa883fc34e22af73bb4",
   "test/resources/stable_upstream_delta_341a526.edn"
-  "a8e7513bea221c5bc1c5e8380a5872e21db1055b1cb3807929c0417892045dbf"},
+  "a0fbcb27988e95338b65f5e80d7ec5c5838acb596b517950d876a440072b0b9c"},
  :stable-deltas
  [{:authority
    ["nodejs/src/generated/session-events.ts:AutoTier"
@@ -686,9 +688,11 @@
     :qualified-id
     :nil
     :false
-    :invalid-whitespace],
+    :invalid-whitespace
+    :converter-nil-safety
+    :malformed-wire-raw-retention],
    :semantics
-   "Preserve complete keyword identifiers, including namespace/case/punctuation. Reject empty, whitespace/control characters and explicit nil. Runtime owns discovery, eligibility and persisted removed tiers; no fallback or live setter.",
+   "Preserve complete keyword identifiers, including namespace/case/punctuation. Share spelling validation between config specs and generated coercion; reject malformed non-null values before keywordization in both directions. Config nil is invalid; converters remain nil-safe. Incoming conversion failures are logged and retain raw event data. Runtime owns discovery, eligibility and persisted removed tiers; no fallback or live setter.",
    :specs
    [:github.copilot-sdk.specs/auto-tier
     :github.copilot-sdk.specs/capi
@@ -696,7 +700,9 @@
     :github.copilot-sdk.specs/session.resume-data],
    :tests
    [github.copilot-sdk.integration.upstream-1-0-95-2-test/provider-defined-auto-tier-identities-survive-every-builder
-    github.copilot-sdk.integration.upstream-1-0-95-2-test/stable-event-fields-round-trip-through-live-and-history-paths],
+    github.copilot-sdk.integration.upstream-1-0-95-2-test/stable-event-fields-round-trip-through-live-and-history-paths
+    github.copilot-sdk.integration.upstream-1-0-95-2-test/malformed-auto-tier-events-retain-raw-values-on-coercion-failure
+    github.copilot-sdk.codegen-test/auto-tier-coercion-rejects-malformed-spellings],
    :wire {:path ["capi" "autoTier"], :shape :string}}
   {:authority
    ["nodejs/src/types.ts:enforceManagedModelDefaults"
