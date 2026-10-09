@@ -3541,11 +3541,16 @@
    (disconnect! client session-id)))
 
 (defn- require-event-io
-  [{:keys [session-id client]}]
+  [{:keys [session-id client] :as copilot-session}]
   (let [state @(:state client)
+        token (registration-token copilot-session)
+        registration (get-in state [:sessions session-id])
         io (get-in state [:session-io session-id])]
-    (when (or (not (false? (get-in state [:sessions session-id :destroyed?])))
-              (async-protocols/closed? (:event-chan io)))
+    (when-not (and token
+                   (identical? token (:registration-token registration))
+                   (identical? token (:registration-token io))
+                   (false? (:destroyed? registration))
+                   (not (async-protocols/closed? (:event-chan io))))
       (throw (ex-info "Session has been disconnected" {:session-id session-id})))
     io))
 
@@ -3573,8 +3578,8 @@
          (recur))))
    
    Remember to untap and close your channel when done.
-   Throws if the session is disconnected. Prefer subscribe-events for
-   lifecycle-aware subscription admission."
+   Throws if the session is disconnected or this handle's registration was
+   superseded. Prefer subscribe-events for lifecycle-aware subscription admission."
   [session]
   (:event-mult (require-event-io session)))
 
@@ -3582,7 +3587,7 @@
   "Subscribe to session events. Returns a channel that receives events.
    
    The channel will receive nil (close) when the session is disconnected.
-   Subscribing to a disconnected session throws ExceptionInfo.
+   Subscribing with a disconnected or superseded handle throws ExceptionInfo.
    For explicit cleanup before session disconnection, call unsubscribe-events!.
    
    Drop behavior: the returned channel uses a sliding buffer of 1024 events.
@@ -3604,8 +3609,8 @@
    Drop behavior: the returned channel uses a sliding buffer of `:buffer`
    events. If this subscriber falls behind and its buffer fills, the oldest
    buffered events are dropped for this subscriber only — delivery to other
-   subscribers is never blocked. Subscribing to a disconnected session
-   throws ExceptionInfo."
+   subscribers is never blocked. Subscribing with a disconnected or superseded
+   handle throws ExceptionInfo."
   ([session]
    (events->chan session {}))
   ([session {:keys [buffer xf] :or {buffer 1024}}]

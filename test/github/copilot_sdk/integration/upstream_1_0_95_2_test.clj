@@ -327,6 +327,52 @@
       (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Session has been disconnected"
                             (subscribe copilot-session))))))
 
+(deftest event-subscriptions-reject-replaced-session-handles
+  (doseq [disconnect-first? [false true]]
+    (let [original (sdk/create-session *test-client* {})
+          session-id (sdk/session-id original)]
+      (when disconnect-first?
+        (sdk/disconnect! original))
+      (let [replacement (sdk/resume-session *test-client* session-id {})
+            events (sdk/subscribe-events replacement)]
+        (try
+          (is (not (identical? (session/registration-token original)
+                               (session/registration-token replacement))))
+          (doseq [subscribe [sdk/subscribe-events session/events->chan session/events]]
+            (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Session has been disconnected"
+                                  (subscribe original))))
+          (mock/send-session-event! *mock-server* session-id :copilot/session.info
+                                    {:infoType "registration" :message "replacement"})
+          (is (= (get-in (await-event-type! events :copilot/session.info 5000) [:data :message])
+                 "replacement"))
+          (finally
+            (sdk/unsubscribe-events! replacement events)
+            (sdk/disconnect! replacement)))))))
+
+(deftest failed-resume-preserves-original-subscription-admission
+  (let [original (sdk/create-session *test-client* {})
+        session-id (sdk/session-id original)]
+    (try
+      (mock/set-request-hook!
+       *mock-server*
+       (fn [method _]
+         (when (= method "session.resume")
+           (throw (ex-info "resume rejected" {:code -32000})))))
+      (is (thrown-with-msg? clojure.lang.ExceptionInfo #"resume rejected"
+                            (sdk/resume-session *test-client* session-id {})))
+      (mock/set-request-hook! *mock-server* nil)
+      (let [events (sdk/subscribe-events original)]
+        (try
+          (mock/send-session-event! *mock-server* session-id :copilot/session.info
+                                    {:infoType "registration" :message "original"})
+          (is (= (get-in (await-event-type! events :copilot/session.info 5000) [:data :message])
+                 "original"))
+          (finally
+            (sdk/unsubscribe-events! original events))))
+      (finally
+        (mock/set-request-hook! *mock-server* nil)
+        (sdk/disconnect! original)))))
+
 (deftest subscription-admission-racing-retirement-does-not-leak-a-channel
   (doseq [subscribe [sdk/subscribe-events session/events->chan]]
     (let [copilot-session (sdk/create-session *test-client* {})

@@ -835,7 +835,7 @@
       (println event)
       (recur))))
 </code></pre>
-<p>This borrowed mult requires caller-owned tap cleanup. Retrieving it after disconnection throws <code>ExceptionInfo</code>; prefer <code>subscribe-events</code> or <code>events-&gt;chan</code> for lifecycle-aware subscription admission.</p>
+<p>This borrowed mult requires caller-owned tap cleanup. Retrieving it after disconnection throws <code>ExceptionInfo</code>; prefer <code>subscribe-events</code> or <code>events-&gt;chan</code> for lifecycle-aware subscription admission. All three event APIs require the handle’s current registration. Use the handle returned by <code>resume-session</code>: reusing a session ID does not let a superseded handle observe the replacement’s events. A failed resume restores the original registration and its event access.</p>
 <h4><a href="#events-chan" id="events-chan"></a><code>events-&gt;chan</code></h4>
 <pre><code class="language-clojure">(copilot/events-&gt;chan session {:buffer 256
                                :xf (filter #(= :copilot/assistant.message (:type %)))})

@@ -40,7 +40,8 @@ missing billing must never be interpreted as a free call. Internal accounting
 snapshots and experimental provider references remain wire-only.
 
 Reject event subscriptions after retirement. Capture one coherent session-I/O
-snapshot, register the tap, and check source closure so teardown cannot leave
+snapshot and require the handle, session, and I/O registration tokens to match.
+Register the tap and check source closure so teardown cannot leave
 a late subscriber stranded. Failed admission closes the provisional channel;
 unsubscription remains safe after teardown. Existing bounded response-wait
 cancellation and failed-resume rollback remain unchanged.

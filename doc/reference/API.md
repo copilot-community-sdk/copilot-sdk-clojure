@@ -1268,6 +1268,10 @@ Get the core.async `mult` for session events. Use `tap` to subscribe:
 This borrowed mult requires caller-owned tap cleanup. Retrieving it after
 disconnection throws `ExceptionInfo`; prefer `subscribe-events` or
 `events->chan` for lifecycle-aware subscription admission.
+All three event APIs require the handle's current registration. Use the handle
+returned by `resume-session`: reusing a session ID does not let a superseded
+handle observe the replacement's events. A failed resume restores the original
+registration and its event access.
 
 #### `events->chan`
 

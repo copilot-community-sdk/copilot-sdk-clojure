@@ -16,7 +16,8 @@ All notable changes to this project will be documented in this file. This change
 
 ### Fixed (post-v1.0.18 sync)
 - Event subscriptions reject disconnected sessions and close provisional taps
-  when admission races teardown; unsubscription is safe after teardown.
+  when admission races teardown. Superseded handles cannot attach to a same-ID
+  replacement; unsubscription is safe after teardown.
 - Oversized generated object validators split into bounded specs, preserving
   per-property error diagnostics and the existing JVM source-size guard.
 - Checkpoint and shutdown event specs accept fractional legacy premium-request
