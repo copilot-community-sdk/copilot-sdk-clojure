@@ -1081,8 +1081,7 @@
 (s/def ::enable-web-socket-responses boolean?)
 (s/def ::auto-tier
   (s/and keyword?
-         #(boolean (re-matches #"[^\u0000-\u0020\u007F-\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+"
-                               (subs (str %) 1)))))
+         #(util/auto-tier-identifier? (subs (str %) 1))))
 (s/def ::capi (s/keys :opt-un [::auto-tier ::enable-web-socket-responses]))
 
 ;; Selects the model-facing shape of the built-in ask_user tool.

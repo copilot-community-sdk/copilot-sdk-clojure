@@ -22,6 +22,9 @@ All notable changes to this project will be documented in this file. This change
   per-property error diagnostics and the existing JVM source-size guard.
 - Checkpoint and shutdown event specs accept fractional legacy premium-request
   costs instead of requiring integer request counts.
+- Auto-tier coercion shares identifier validation with configuration specs.
+  Malformed event values remain raw through the logged fail-open path rather
+  than becoming invalid keywords.
 
 ### Changed (post-v1.0.18 sync)
 - Advanced CLI compatibility and schema provenance to `1.0.95-2` and recertified

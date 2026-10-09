@@ -77,11 +77,11 @@
          "AUTO-GENERATED — do not edit. Run `bb codegen`.
 
    Per-event-type coercion between the upstream wire shape and the
-   Clojure-idiomatic public API. Source: script/codegen/coercions.edn"))
+   Clojure-idiomatic public API. Source: script/codegen/coercions.edn"
+         (:require [~'github.copilot-sdk.util :as ~'util])))
 
 (defn- emit-converter-defs
-  "Emit the static converter functions. These are hand-coded but lifted into
-   the generated file so the runtime has a single self-contained namespace."
+  "Emit converter functions, sharing identifier validation with API-boundary specs."
   []
   (list
    ;; iso-string ⇄ instant ────────────────────────────────────────────────
@@ -113,12 +113,18 @@
 
    ;; auto-tier-string <-> auto-tier-keyword
    `(~'defn ~'auto-tier-string->keyword
-            "Convert an extensible wire Auto-tier identifier to an idiomatic keyword."
+            "Validate an extensible Auto-tier identifier before keywordization. nil-safe."
             [~'v]
             (~'cond
-             (~'nil? ~'v)     ~'nil
-             (~'keyword? ~'v) ~'v
-             (~'string? ~'v)  (~'keyword ~'v)
+             (~'nil? ~'v) ~'nil
+             (~'or (~'keyword? ~'v) (~'string? ~'v))
+             (~'let [~'identifier (~'if (~'keyword? ~'v)
+                                        (~'subs (~'str ~'v) 1)
+                                        ~'v)]
+                    (~'when-not (~'util/auto-tier-identifier? ~'identifier)
+                                (~'throw (~'ex-info "Invalid Auto-tier identifier"
+                                                    {:value ~'v :value-class (~'class ~'v)})))
+                    (~'if (~'keyword? ~'v) ~'v (~'keyword ~'identifier)))
              :else
              (~'throw (~'ex-info "Expected auto-tier string or keyword"
                                  {:value ~'v :value-class (~'class ~'v)}))))

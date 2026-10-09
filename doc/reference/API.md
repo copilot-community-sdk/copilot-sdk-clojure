@@ -2063,6 +2063,9 @@ inferred from the current model. Matching model IDs alone do not establish that
 opaque reasoning state is portable between providers. Start, resume, and model
 changes may also carry boolean `:auto-tier-managed`, `:context-tier-managed`,
 and `:reasoning-effort-managed`; omission and explicit false remain distinct.
+Malformed non-null Auto-tier values trigger the existing logged coercion-failure
+path. Live and historical event delivery retains the original raw payload
+instead of manufacturing an invalid keyword.
 
 Usage and compaction token details may include `:ai-credits-status`:
 `"complete"` means every observed call supplied an amount, `"partial"` means

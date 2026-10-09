@@ -266,6 +266,30 @@
           (sdk/unsubscribe-events! copilot-session events)
           (sdk/disconnect! copilot-session))))))
 
+(deftest malformed-auto-tier-events-retain-raw-values-on-coercion-failure
+  (let [started (promise)
+        copilot-session
+        (sdk/create-session *test-client*
+                            {:on-event (fn [event]
+                                         (when (= (:type event) :copilot/session.start)
+                                           (deliver started true)))})
+        session-id (sdk/session-id copilot-session)]
+    (await-value! started "initial session.start" 5000)
+    (let [events (sdk/subscribe-events copilot-session)]
+      (try
+        (doseq [[type base] [[:copilot/session.start {:sessionId session-id}]
+                             [:copilot/session.resume {:eventCount 0}]]
+                tier ["" "with space" (str "tier" (char 0x00a0) "suffix") "premium-v2"]
+                :let [wire (assoc base :autoTier tier)
+                      expected (if (= tier "premium-v2") :premium-v2 tier)]]
+          (mock/send-session-event! *mock-server* session-id type wire)
+          (is (= (get-in (await-event-type! events type 5000) [:data :auto-tier]) expected))
+          (mock/set-session-messages! *mock-server* session-id [{:type (name type) :data wire}])
+          (is (= (get-in (first (sdk/get-messages copilot-session)) [:data :auto-tier]) expected)))
+        (finally
+          (sdk/unsubscribe-events! copilot-session events)
+          (sdk/disconnect! copilot-session))))))
+
 (def ^:private write-previews
   [[{:after {:path "/new" :content ""}}]
    [{:before {:path "/old" :content ""}}]

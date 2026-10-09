@@ -1147,6 +1147,18 @@
                (select-keys (ex-data failure)
                             [:event-type :field :direction :value])))))))
 
+(deftest auto-tier-coercion-rejects-malformed-spellings
+  (doseq [direction [:wire->idiom :idiom->wire]
+          spelling ["" "with space" (str "tier" (char 0x00a0) "suffix")]
+          value [spelling (keyword spelling)]]
+    (let [failure (try
+                    (coerce/coerce-data "session.start" {:auto-tier value} direction)
+                    nil
+                    (catch clojure.lang.ExceptionInfo error error))]
+      (is (instance? clojure.lang.ExceptionInfo failure) (pr-str value))
+      (is (= (select-keys (ex-data failure) [:event-type :field :direction :value])
+             {:event-type "session.start" :field :auto-tier :direction direction :value value})))))
+
 (deftest coerced-data-satisfies-hand-spec
   (testing "after wire->idiom, hand-written spec accepts the data"
     (doseq [[event-type payload] fixtures]

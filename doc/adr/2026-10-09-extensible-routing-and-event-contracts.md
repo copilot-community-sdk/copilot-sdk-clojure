@@ -22,6 +22,10 @@ it, including any keyword namespace, case, punctuation, and underscores. Reject
 empty identifiers and whitespace/control characters. The runtime owns catalog
 discovery, eligibility, persisted preferences, and routing; this SDK does not
 choose a fallback tier or expose experimental live setters.
+Share identifier spelling validation between boundary specs and generated
+coercion. Validate before keywordization in both conversion directions.
+Coercion remains nil-safe; malformed non-null values follow the logged,
+fail-open event path and retain their original raw data.
 
 Forward managed-model enforcement and managed permission restrictions through
 create, resume, and join. Keep omission distinct from false and empty rule

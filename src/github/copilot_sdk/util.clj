@@ -101,6 +101,14 @@
   [m]
   (->wire-keys m))
 
+(defn ^:no-doc auto-tier-identifier?
+  "True for nonempty identifiers without ECMAScript whitespace or control characters."
+  [value]
+  (and (string? value)
+       (boolean
+        (re-matches #"[^\u0000-\u0020\u007F-\u00A0\u1680\u2000-\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF]+"
+                    value))))
+
 (defn ^:no-doc opaque-json->wire
   "Prepare opaque JSON for transport without camel-casing caller-defined keys.
    Rejects keyword and string keys that collapse to the same JSON member name."

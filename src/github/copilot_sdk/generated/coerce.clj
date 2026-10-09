@@ -1,13 +1,13 @@
 ;; AUTO-GENERATED — do not edit. Run `bb codegen`.
 ;; Source: schemas/  (schema version pinned in .copilot-schema-version)
 
-(ns github.copilot-sdk.generated.coerce "AUTO-GENERATED — do not edit. Run `bb codegen`.\n\n   Per-event-type coercion between the upstream wire shape and the\n   Clojure-idiomatic public API. Source: script/codegen/coercions.edn")
+(ns github.copilot-sdk.generated.coerce "AUTO-GENERATED — do not edit. Run `bb codegen`.\n\n   Per-event-type coercion between the upstream wire shape and the\n   Clojure-idiomatic public API. Source: script/codegen/coercions.edn" (:require [github.copilot-sdk.util :as util]))
 
 (defn iso-string->instant "Parse an ISO-8601 timestamp string to a java.time.Instant. nil-safe and\n      idempotent: returns nil for nil, the same Instant for an Instant input,\n      and throws ex-info for any other value class." [v] (cond (nil? v) nil (instance? java.time.Instant v) v (string? v) (java.time.Instant/parse v) :else (throw (ex-info "Expected ISO string or Instant" {:value v, :value-class (class v)}))))
 
 (defn instant->iso-string "Render a java.time.Instant as an ISO-8601 string. nil-safe and\n      idempotent: returns nil for nil, the same string for a string input,\n      and throws ex-info for any other value class." [v] (cond (nil? v) nil (string? v) v (instance? java.time.Instant v) (.toString v) :else (throw (ex-info "Expected Instant or ISO string" {:value v, :value-class (class v)}))))
 
-(defn auto-tier-string->keyword "Convert an extensible wire Auto-tier identifier to an idiomatic keyword." [v] (cond (nil? v) nil (keyword? v) v (string? v) (keyword v) :else (throw (ex-info "Expected auto-tier string or keyword" {:value v, :value-class (class v)}))))
+(defn auto-tier-string->keyword "Validate an extensible Auto-tier identifier before keywordization. nil-safe." [v] (cond (nil? v) nil (or (keyword? v) (string? v)) (let [identifier (if (keyword? v) (subs (str v) 1) v)] (when-not (util/auto-tier-identifier? identifier) (throw (ex-info "Invalid Auto-tier identifier" {:value v, :value-class (class v)}))) (if (keyword? v) v (keyword identifier))) :else (throw (ex-info "Expected auto-tier string or keyword" {:value v, :value-class (class v)}))))
 
 (defn auto-tier-keyword->string "Preserve the complete Auto-tier identifier, including a keyword namespace." [v] (let [tier (auto-tier-string->keyword v)] (when tier (subs (str tier) 1))))
 
