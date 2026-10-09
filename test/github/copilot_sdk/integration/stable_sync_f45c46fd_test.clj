@@ -259,7 +259,7 @@
       (is (.isFile (io/file path)) (str "missing Clojure evidence: " path)))
     (doseq [{delta-id :id :keys [clojure-evidence]} (:stable-deltas report)
             {:keys [path contains]} clojure-evidence
-            :let [source (slurp path)]
+            :let [source (git-output "." "show" (str expected-certification-commit ":" path))]
             expected contains]
       (is (str/includes? source expected)
           (str delta-id " is missing documented evidence "

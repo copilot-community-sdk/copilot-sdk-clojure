@@ -77,11 +77,11 @@
          "AUTO-GENERATED — do not edit. Run `bb codegen`.
 
    Per-event-type coercion between the upstream wire shape and the
-   Clojure-idiomatic public API. Source: script/codegen/coercions.edn"))
+   Clojure-idiomatic public API. Source: script/codegen/coercions.edn"
+         (:require [~'github.copilot-sdk.util :as ~'util])))
 
 (defn- emit-converter-defs
-  "Emit the static converter functions. These are hand-coded but lifted into
-   the generated file so the runtime has a single self-contained namespace."
+  "Emit converter functions, sharing identifier validation with API-boundary specs."
   []
   (list
    ;; iso-string ⇄ instant ────────────────────────────────────────────────
@@ -112,28 +112,28 @@
                                  {:value ~'v :value-class (~'class ~'v)}))))
 
    ;; auto-tier-string <-> auto-tier-keyword
-   `(~'def ~(with-meta 'auto-tiers {:private true})
-           #{:efficiency :balance :intelligence :fast})
-
    `(~'defn ~'auto-tier-string->keyword
-            "Convert a wire auto-tier string to its closed idiomatic keyword domain."
+            "Validate an extensible Auto-tier identifier before keywordization. nil-safe."
             [~'v]
-            (~'let [~'tier (~'cond
-                            (~'nil? ~'v)     ~'nil
-                            (~'keyword? ~'v) ~'v
-                            (~'string? ~'v)  (~'keyword ~'v)
-                            :else
-                            (~'throw (~'ex-info "Expected auto-tier string or keyword"
-                                                {:value ~'v :value-class (~'class ~'v)})))]
-                   (~'when-not (~'or (~'nil? ~'tier) (~'contains? ~'auto-tiers ~'tier))
-                               (~'throw (~'ex-info "Unknown auto-tier value" {:value ~'v})))
-                   ~'tier))
+            (~'cond
+             (~'nil? ~'v) ~'nil
+             (~'or (~'keyword? ~'v) (~'string? ~'v))
+             (~'let [~'identifier (~'if (~'keyword? ~'v)
+                                        (~'subs (~'str ~'v) 1)
+                                        ~'v)]
+                    (~'when-not (~'util/auto-tier-identifier? ~'identifier)
+                                (~'throw (~'ex-info "Invalid Auto-tier identifier"
+                                                    {:value ~'v :value-class (~'class ~'v)})))
+                    (~'if (~'keyword? ~'v) ~'v (~'keyword ~'identifier)))
+             :else
+             (~'throw (~'ex-info "Expected auto-tier string or keyword"
+                                 {:value ~'v :value-class (~'class ~'v)}))))
 
    `(~'defn ~'auto-tier-keyword->string
-            "Convert an idiomatic auto-tier keyword to its closed wire enum domain."
+            "Preserve the complete Auto-tier identifier, including a keyword namespace."
             [~'v]
             (~'let [~'tier (~'auto-tier-string->keyword ~'v)]
-                   (~'when ~'tier (~'name ~'tier))))
+                   (~'when ~'tier (~'subs (~'str ~'tier) 1))))
 
    ;; attachment-type-strings <-> attachment-type-keywords
    `(~'def ~(with-meta 'attachment-type-wire->idiom {:private true})

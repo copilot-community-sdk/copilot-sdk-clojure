@@ -3,6 +3,37 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.18 sync)
+- Added provider-defined Auto-tier keyword identifiers, preserving their full
+  spelling on create, resume, join, and start/resume events.
+- Added `:enforce-managed-model-defaults?` and managed permission
+  `:disable-assisted-permissions-mode?` / `:limit-to`, preserving omitted,
+  false, and empty values without exposing mutable policy updates.
+- Added complete write-permission previews and stable provider provenance,
+  credit availability, usage-accounting identities/watermarks, request-size
+  and WebSocket-fallback diagnostics, and account-contributed MCP provenance.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/341a526b26ccc170f6a1c6c5651b51f4ba9d3691))
+
+### Fixed (post-v1.0.18 sync)
+- Event subscriptions reject disconnected sessions and close provisional taps
+  when admission races teardown. Superseded handles cannot attach to a same-ID
+  replacement; unsubscription is safe after teardown.
+- Oversized generated object validators split into bounded specs, preserving
+  per-property error diagnostics and the existing JVM source-size guard.
+- Checkpoint and shutdown event specs accept fractional legacy premium-request
+  costs instead of requiring integer request counts.
+- Auto-tier coercion shares identifier validation with configuration specs.
+  Malformed event values remain raw through the logged fail-open path rather
+  than becoming invalid keywords.
+
+### Changed (post-v1.0.18 sync)
+- Advanced CLI compatibility and schema provenance to `1.0.95-2` and recertified
+  the complete Node SDK surface at
+  [`341a526b26ccc170f6a1c6c5651b51f4ba9d3691`](https://github.com/github/copilot-sdk/commit/341a526b26ccc170f6a1c6c5651b51f4ba9d3691).
+  Documented provider-backed remembered permissions and Workflow execution
+  eligibility. New experimental subsystems remain excluded. The library
+  version remains `1.0.16.0`; no release, tag, or deployment is cut.
+
 ### Fixed (async callbacks)
 - Filesystem mutations are not retried when a channel, promise, or future
   fails with an `ArityException` (wrong argument count). Legacy call-shape

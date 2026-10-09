@@ -176,6 +176,11 @@ Statuses are `"connected"`, `"failed"`, `"needs-auth"`, `"pending"`,
 `mcp_server_needs_reconnect` as a host-facing signal; the runtime does not imply
 that the SDK reconfigures or restarts the server automatically.
 
+Server `:source` and tool-call `:mcp-config-source` may be `"account"` for
+servers contributed by a signed-in account. Enablement and organization policy
+still apply. The experimental configured-server inventory and explicit
+start/restart RPCs are not exposed by the Clojure SDK.
+
 ### Built-in GitHub MCP Tool Configuration
 
 `:github-mcp-tool-config` tunes the runtime's **built-in** GitHub MCP server. It is independent of manually configuring a `"github"` entry under `:mcp-servers`, as in [Remote MCP Server (HTTP)](#remote-mcp-server-http) above:

@@ -521,10 +521,10 @@
          "session-1"
          {:capi {:auto-tier :fast}})]
     (doseq [params [create-params resume-params]]
-      (is (= :fast (get-in params [:capi :autoTier])))
-      (is (str/includes?
-           (json/write-str (util/clj->wire params))
-           "\"autoTier\":\"fast\""))))
+      (is (= (get-in (json/read-str (json/write-str (util/clj->wire params))
+                                    :key-fn keyword)
+                     [:capi :autoTier])
+             "fast"))))
   (doseq [project-url
           ["https://resource.services.ai.azure.com/api/projects/project"
            "https://resource.services.ai.azure.com/api/projects/project/"]

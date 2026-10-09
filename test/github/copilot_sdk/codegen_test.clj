@@ -83,10 +83,19 @@
             "                             :properties {:knownValue {:type \"string\"}} "
             "                             :required [\"knownValue\"] "
             "                             :additionalProperties {:type \"integer\"}})) "
+            "      presence-spec "
+            "      (eval (emit/emit-type {} "
+            "                            {:type \"object\" "
+            "                             :properties {:requiredFlag {:type \"boolean\"} "
+            "                                          :optionalValue {:type [\"string\" \"null\"]}} "
+            "                             :required [\"requiredFlag\"] "
+            "                             :additionalProperties false})) "
             "      root (core/load-schema \"schemas/session-events.schema.json\") "
             "      first-emission (emit/emit-event-specs-ns root) "
             "      _ (dotimes [_ 50] (gensym)) "
-            "      second-emission (emit/emit-event-specs-ns root)] "
+            "      second-emission (emit/emit-event-specs-ns root) "
+            "      bounded-print-emission (binding [*print-length* 1 *print-level* 1] "
+            "                               (emit/emit-event-specs-ns root))] "
             "  (prn {:keys (mapv core/wire-key->kebab "
             "                    [\"_meta\" \"sessionId\" \"tool_efficiency\" "
             "                     \"URLValue\" \"someURLValue\" \"__foo_bar\"]) "
@@ -104,8 +113,17 @@
             "              [{:known-value \"ok\" :extra 1} "
             "               {:known-value \"ok\" :extra \"bad\"} "
             "               {:known-value 1 :extra 1}]) "
+            "        :presence "
+            "        (mapv #(s/valid? presence-spec %) "
+            "              [{:required-flag false} "
+            "               {:required-flag true :optional-value nil} "
+            "               {:required-flag false :optional-value \"\"} "
+            "               {} {:required-flag nil} "
+            "               {:required-flag true :optional-value 0} "
+            "               {:required-flag true :unknown 1}]) "
             "        :closed-object-form closed-object-form "
-            "        :repeatable (= first-emission second-emission)}))"))]
+            "        :repeatable (= first-emission second-emission) "
+            "        :print-context-independent (= first-emission bounded-print-emission)}))"))]
       (when-not (zero? exit)
         (throw (ex-info "Codegen probe failed" {:exit exit :stderr err})))
       (edn/read-string out))))
@@ -131,9 +149,36 @@
 (deftest codegen-output-is-independent-of-reader-gensym-state
   (is (:repeatable @codegen-probe)))
 
+(deftest codegen-shape-budget-is-independent-of-print-limits
+  (is (:print-context-independent @codegen-probe)))
+
 (deftest codegen-validates-dictionary-values
   (is (= [true false false] (:string-dictionary @codegen-probe)))
   (is (= [true false false] (:mixed-object @codegen-probe))))
+
+(deftest generated-object-predicates-preserve-presence-and-nullability
+  (is (= (:presence @codegen-probe) [true true true false false false false])))
+
+(deftest generated-object-explanations-identify-the-failing-property
+  (doseq [[payload field expected-form]
+          [[{:model "model" :transport "quic"} :transport "websocket"]
+           [{:model "model" :accounting {}} :accounting "usage-accounting-identity-shape"]]]
+    (let [problems (::s/problems (s/explain-data ::gen/assistant-usage-data-shape payload))
+          predicate (pr-str (:pred (first problems)))]
+      (is (seq problems))
+      (is (str/includes? predicate (str field)) predicate)
+      (is (str/includes? predicate expected-form) predicate))))
+
+(deftest bounded-object-parts-preserve-closed-nonconforming-shapes
+  (let [payload {:model "model" :is-auto false :cache-read-tokens 0
+                 :accounting {:source-session-id "" :sequence 1 :usage-id ""}}]
+    (is (= (s/conform ::gen/assistant-usage-data-shape payload) payload))
+    (doseq [invalid [(dissoc payload :model)
+                     (assoc payload :model nil)
+                     (assoc payload :is-auto nil)
+                     (assoc payload :unexpected true)
+                     (assoc-in payload [:accounting :sequence] 0)]]
+      (is (not (s/valid? ::gen/assistant-usage-data-shape invalid))))))
 
 (deftest generated-object-shape-definitions-are-canonical
   (let [source    (slurp "src/github/copilot_sdk/generated/event_specs.clj")
@@ -253,6 +298,8 @@
     "session.fusion_resolved"
     "session.fusion_route_failed"
     "session.fusion_route_started"
+    "session.managed_plugin_progress"
+    "session.quota_observation"
     "ui.ephemeral_query"})
 
 (def ^:private sdk-experimental-events-without-schema-marker
@@ -303,6 +350,10 @@
     ;; ShutdownCodeChanges requires all three fields (additionalProperties false).
     :code-changes {:lines-added 0 :lines-removed 0 :files-modified []}
     :model-metrics {}}
+
+   "session.usage_checkpoint"
+   {:total-nano-aiu 0
+    :usage-accounting-watermarks {:Source_Session 0}}
 
    "session.model_change"
    {:new-model "gpt-4o"
@@ -1044,12 +1095,13 @@
                 (str "round-trip lost equality for "
                      event-type "/" field))))))))
 
-(deftest fast-auto-tier-coercion-round-trips
-  (let [event {:type "session.start"
-               :data {:auto-tier "fast"}}
-        idiom (coerce/event-wire->idiom event)]
-    (is (= :fast (get-in idiom [:data :auto-tier])))
-    (is (= event (coerce/event-idiom->wire idiom)))))
+(deftest extensible-auto-tier-coercion-round-trips
+  (doseq [event-type ["session.start" "session.resume"]
+          tier ["fast" "premium-v2" "Vendor/Premium_v2"]]
+    (let [event {:type event-type :data {:auto-tier tier}}
+          idiom (coerce/event-wire->idiom event)]
+      (is (= (get-in idiom [:data :auto-tier]) (keyword tier)))
+      (is (= (coerce/event-idiom->wire idiom) event)))))
 
 (deftest attachment-type-coercion-round-trips
   (let [wire-types ["file"
@@ -1074,12 +1126,12 @@
            (mapv :type (get-in idiom-event [:data :attachments]))))
     (is (= wire-event (coerce/event-idiom->wire idiom-event)))))
 
-(deftest enum-coercion-rejects-values-outside-the-idiom-domain
+(deftest auto-tier-coercion-rejects-non-identifiers
   (doseq [[direction value]
-          [[:wire->idiom "efficiencyPlus"]
-           [:wire->idiom :efficiencyPlus]
-           [:idiom->wire "efficiencyPlus"]
-           [:idiom->wire :efficiencyPlus]]]
+          [[:wire->idiom 1]
+           [:wire->idiom false]
+           [:idiom->wire []]
+           [:idiom->wire {}]]]
     (testing (str (name direction) " rejects " (pr-str value))
       (let [failure
             (try
@@ -1094,6 +1146,18 @@
                 :value value}
                (select-keys (ex-data failure)
                             [:event-type :field :direction :value])))))))
+
+(deftest auto-tier-coercion-rejects-malformed-spellings
+  (doseq [direction [:wire->idiom :idiom->wire]
+          spelling ["" "with space" (str "tier" (char 0x00a0) "suffix")]
+          value [spelling (keyword spelling)]]
+    (let [failure (try
+                    (coerce/coerce-data "session.start" {:auto-tier value} direction)
+                    nil
+                    (catch clojure.lang.ExceptionInfo error error))]
+      (is (instance? clojure.lang.ExceptionInfo failure) (pr-str value))
+      (is (= (select-keys (ex-data failure) [:event-type :field :direction :value])
+             {:event-type "session.start" :field :auto-tier :direction direction :value value})))))
 
 (deftest coerced-data-satisfies-hand-spec
   (testing "after wire->idiom, hand-written spec accepts the data"
@@ -1267,8 +1331,9 @@
                  "instead of aggregating every payload schema. Found "
                  (count large) ": "
                  (pr-str (map (comp second :form) large))
-                 ". A jump here likely means a structural schema was inlined "
-                 "instead of registered or checked variant-locally."))))))
+                 ". Registered object shapes should be split by "
+                 "register-bounded-shape!; leaf, data, and envelope forms "
+                 "require changes in their respective emitters."))))))
 
 (deftest generated-data-leaf-stays-variant-local
   (let [valid {:asset-id "asset-1"

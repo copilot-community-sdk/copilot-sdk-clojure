@@ -42,6 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
+- [ADR: Preserve extensible identifiers and policy boundaries](adr/2026-10-09-extensible-routing-and-event-contracts.md) -- Dynamic Auto tiers, managed policy, write previews, accounting metadata, and bounded generated validators.
 - [ADR: Preserve callback, filesystem, and event authority boundaries](adr/2026-10-05-callback-and-event-contracts.md) -- Subagent hooks, exact binary I/O, scoped cloud cleanup, and passive response provenance.
 - [ADR: Separate BYOK configuration identity from runtime telemetry](adr/2026-10-04-byok-provider-telemetry.md) -- Closed provider keywords, extensible event strings, and shared builder translation.
 - [ADR: Expose transcript recovery and bound owned-runtime disconnection](adr/2026-10-02-transcript-recovery-and-owned-exit.md) -- Resume recovery contracts and process-exit cleanup without new experimental controls.

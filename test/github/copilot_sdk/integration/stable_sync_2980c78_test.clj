@@ -1216,21 +1216,21 @@
     (is (not (s/valid? ::specs/tool-call-id nil)))))
 
 (deftest session-auto-tier-accepted-on-start-and-resume-data
-  (testing "session.start autoTier accepts the pinned enum and rejects other values"
+  (testing "session.start autoTier accepts baseline identifiers and rejects malformed values"
     (let [base {:session-id "session-1"}]
       (doseq [tier [:balance :intelligence :efficiency]]
         (is (s/valid? ::specs/session.start-data (assoc base :auto-tier tier))))
       (is (s/valid? ::specs/session.start-data base)
           "auto-tier remains optional")
-      (is (not (s/valid? ::specs/session.start-data (assoc base :auto-tier :turbo))))
+      (is (not (s/valid? ::specs/session.start-data (assoc base :auto-tier (keyword "invalid tier")))))
       (is (not (s/valid? ::specs/session.start-data (assoc base :auto-tier "balance"))))))
-  (testing "session.resume autoTier accepts the pinned enum and rejects other values"
+  (testing "session.resume autoTier accepts baseline identifiers and rejects malformed values"
     (let [base {:event-count 0}]
       (doseq [tier [:balance :intelligence :efficiency]]
         (is (s/valid? ::specs/session.resume-data (assoc base :auto-tier tier))))
       (is (s/valid? ::specs/session.resume-data base)
           "auto-tier remains optional")
-      (is (not (s/valid? ::specs/session.resume-data (assoc base :auto-tier :turbo))))
+      (is (not (s/valid? ::specs/session.resume-data (assoc base :auto-tier (keyword "invalid tier")))))
       (is (not (s/valid? ::specs/session.resume-data (assoc base :auto-tier "balance")))))))
 
 (deftest assistant-message-reasoning-blocks-remain-generated-only

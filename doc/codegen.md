@@ -166,6 +166,17 @@ Opaque dictionary values remain opaque when their schema is referenced with
 `$ref`, so both their field names and nested JSON keys survive live and history
 conversion unchanged.
 
+Oversized registered object shapes are split into bounded, named parts without
+losing per-property validation errors. Part identifiers use a `.shape-parts`
+suffix on the generated spec keyword namespace and numeric suffixes on the
+shape name. They are registry entries in `event_specs.clj`, not namespaces to
+require. The parent combines them with `s/and`, whose lazy references permit
+canonical emission before the parts themselves.
+
+The 8000-character source-size guard covers every generated top-level form;
+automatic splitting covers only registered object shapes. Large leaf unions,
+event-data specs, and envelopes require changes in their respective emitters.
+
 Wire keys (`sessionId`, `parentId`, ...) are converted to kebab-case
 (`session-id`, `parent-id`) before being emitted as spec keywords. This matches
 the convention enforced at runtime by `util/wire->clj`.

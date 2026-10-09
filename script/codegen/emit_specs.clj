@@ -219,9 +219,8 @@
    populate a named registered spec for `$ref`'d object nodes. Handles
    arbitrary nesting depth through ordinary recursion into `emit-type`:
 
-   - one predicate per declared property enforcing recursive validity via
-     `emit-type` — required properties are checked unconditionally
-     (`contains?` + `s/valid?`), optional properties only when present
+   - one predicate per declared property enforcing required-key presence and
+     recursive validity while retaining the field and expected form in explain
    - when the schema declares `additionalProperties: false` (checked with
      `false?`, so an absent `additionalProperties` — meaning \"open\" per
      JSON Schema — is correctly left alone), an extra predicate rejecting
@@ -282,6 +281,28 @@
               ~@(when excluded-required-pred [excluded-required-pred])
               ~@(when additional-pred [additional-pred]))))
 
+(defn- register-bounded-shape!
+  "Bound registered object shapes using the 8000-character codegen-test guard.
+   Repeatedly halve oversized predicate lists into internal .shape-parts specs.
+   Keep the s/and aggregate: its lazy references allow canonical emission before
+   the parts. Leaf, data, and envelope forms are bounded by the separate guard."
+  [kw form]
+  (let [size (binding [*print-length* nil *print-level* nil *print-meta* false]
+               (count (pr-str `(~'s/def ~kw ~form))))]
+    (if (<= size 8000)
+      (swap! object-defs conj [kw form])
+      (let [predicates (vec (drop 2 form))]
+        (when (< (count predicates) 2)
+          (throw (ex-info "Object predicate exceeds the generated form size limit"
+                          {:spec kw :characters size})))
+        (let [parts (partition-all (quot (inc (count predicates)) 2) predicates)
+              part-keys (mapv #(keyword (str ns-name ".shape-parts")
+                                        (str (name kw) "-" %))
+                              (range (count parts)))]
+          (doseq [[part-key predicates] (map vector part-keys parts)]
+            (register-bounded-shape! part-key `(~'s/and map? ~@predicates)))
+          (register-bounded-shape! kw `(~'s/and map? ~@part-keys)))))))
+
 (defn- register-object-shape!
   "Look up or register a named shape spec for a `$ref`'d object node with
    declared `:properties`, returning its spec keyword. Reserves the keyword
@@ -292,7 +313,7 @@
   (or (get @object-registry ref)
       (let [kw (ref->shape-kw ref)]
         (swap! object-registry assoc ref kw)
-        (swap! object-defs conj [kw (emit-object root node)])
+        (register-bounded-shape! kw (emit-object root node))
         kw)))
 
 (defn emit-type
@@ -724,6 +745,9 @@
    Nested `$ref`'d object definitions (reached via properties on the above)
    are registered once each under `::<definition>-shape`
    (e.g. `::assistant-message-tool-request-caller-shape`).
+   Oversized shapes compose internal spec keywords in the .shape-parts
+   namespace. These are entries in this file, not namespaces to require;
+   explanations retain both the part identifier and the failing property.
 
    Source: schemas/session-events.schema.json"
              (:require [clojure.spec.alpha :as ~'s]))]

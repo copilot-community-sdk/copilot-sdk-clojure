@@ -439,6 +439,7 @@
     :github.copilot-sdk.specs/agent-tools
     :github.copilot-sdk.specs/agent-type
     :github.copilot-sdk.specs/agents
+    :github.copilot-sdk.specs/ai-credits-status
     :github.copilot-sdk.specs/allow
     :github.copilot-sdk.specs/allow-transcript-recovery?
     :github.copilot-sdk.specs/allowed-models
@@ -484,6 +485,7 @@
     :github.copilot-sdk.specs/auto-restart?
     :github.copilot-sdk.specs/auto-start?
     :github.copilot-sdk.specs/auto-tier
+    :github.copilot-sdk.specs/auto-tier-managed
     :github.copilot-sdk.specs/available-tools
     :github.copilot-sdk.specs/azure-api-version
     :github.copilot-sdk.specs/azure-options
@@ -538,6 +540,7 @@
     :github.copilot-sdk.specs/command-name
     :github.copilot-sdk.specs/command-segments
     :github.copilot-sdk.specs/commands
+    :github.copilot-sdk.specs/compaction-tokens-used
     :github.copilot-sdk.specs/config-dir
     :github.copilot-sdk.specs/config-directory
     :github.copilot-sdk.specs/config-source
@@ -550,6 +553,7 @@
     :github.copilot-sdk.specs/context
     :github.copilot-sdk.specs/context-max
     :github.copilot-sdk.specs/context-tier
+    :github.copilot-sdk.specs/context-tier-managed
     :github.copilot-sdk.specs/continue-pending-work?
     :github.copilot-sdk.specs/conventions
     :github.copilot-sdk.specs/copilot-home
@@ -581,6 +585,7 @@
     :github.copilot-sdk.specs/description
     :github.copilot-sdk.specs/detached-from-spawning-parent-session-id
     :github.copilot-sdk.specs/detail
+    :github.copilot-sdk.specs/disable-assisted-permissions-mode?
     :github.copilot-sdk.specs/disable-bypass-permissions-mode
     :github.copilot-sdk.specs/disable-form-deferral?
     :github.copilot-sdk.specs/disable-model-invocation
@@ -621,6 +626,7 @@
     :github.copilot-sdk.specs/encrypted-content
     :github.copilot-sdk.specs/end
     :github.copilot-sdk.specs/ends-at
+    :github.copilot-sdk.specs/enforce-managed-model-defaults?
     :github.copilot-sdk.specs/entitlement-requests
     :github.copilot-sdk.specs/env
     :github.copilot-sdk.specs/environment-variables
@@ -744,6 +750,7 @@
     :github.copilot-sdk.specs/lifecycle-event
     :github.copilot-sdk.specs/lifecycle-event-type
     :github.copilot-sdk.specs/lifecycle-handler
+    :github.copilot-sdk.specs/limit-to
     :github.copilot-sdk.specs/limits
     :github.copilot-sdk.specs/line
     :github.copilot-sdk.specs/line-range
@@ -813,10 +820,13 @@
     :github.copilot-sdk.specs/model
     :github.copilot-sdk.specs/model-billing
     :github.copilot-sdk.specs/model-billing-promo
+    :github.copilot-sdk.specs/model-call-failure-request-fingerprint
     :github.copilot-sdk.specs/model-call-failure-source
     :github.copilot-sdk.specs/model-capabilities
     :github.copilot-sdk.specs/model-change-source
     :github.copilot-sdk.specs/model-deselected-reason
+    :github.copilot-sdk.specs/model-display-name
+    :github.copilot-sdk.specs/model-event-provider-id
     :github.copilot-sdk.specs/model-id
     :github.copilot-sdk.specs/model-info
     :github.copilot-sdk.specs/model-limits
@@ -899,6 +909,9 @@
     :github.copilot-sdk.specs/permission-request
     :github.copilot-sdk.specs/permission-result
     :github.copilot-sdk.specs/permission-result-kind
+    :github.copilot-sdk.specs/permission-write-file-content
+    :github.copilot-sdk.specs/permission-write-file-edit
+    :github.copilot-sdk.specs/permission-write-file-edits
     :github.copilot-sdk.specs/permission.completed-data
     :github.copilot-sdk.specs/permission.requested-data
     :github.copilot-sdk.specs/permissions
@@ -915,6 +928,7 @@
     :github.copilot-sdk.specs/preview?
     :github.copilot-sdk.specs/previous-mode
     :github.copilot-sdk.specs/previous-model
+    :github.copilot-sdk.specs/previous-provider-id
     :github.copilot-sdk.specs/previous-reasoning-effort
     :github.copilot-sdk.specs/progress-message
     :github.copilot-sdk.specs/promo
@@ -935,6 +949,7 @@
     :github.copilot-sdk.specs/readdir-with-types
     :github.copilot-sdk.specs/reason
     :github.copilot-sdk.specs/reasoning-effort
+    :github.copilot-sdk.specs/reasoning-effort-managed
     :github.copilot-sdk.specs/reasoning-effort-model
     :github.copilot-sdk.specs/reasoning-id
     :github.copilot-sdk.specs/reasoning-opaque
@@ -962,6 +977,7 @@
     :github.copilot-sdk.specs/rename
     :github.copilot-sdk.specs/repo-nwo
     :github.copilot-sdk.specs/repository
+    :github.copilot-sdk.specs/request-body-bytes
     :github.copilot-sdk.specs/request-extensions?
     :github.copilot-sdk.specs/request-handler-queue-size
     :github.copilot-sdk.specs/request-handler-threads
@@ -982,6 +998,7 @@
     :github.copilot-sdk.specs/resumable
     :github.copilot-sdk.specs/resume-session-config
     :github.copilot-sdk.specs/retry-after-seconds
+    :github.copilot-sdk.specs/retry-attempt
     :github.copilot-sdk.specs/revision
     :github.copilot-sdk.specs/risk-assessment
     :github.copilot-sdk.specs/rm
@@ -1054,6 +1071,7 @@
     :github.copilot-sdk.specs/session.start-data
     :github.copilot-sdk.specs/session.task_complete-data
     :github.copilot-sdk.specs/session.title_changed-data
+    :github.copilot-sdk.specs/session.usage_checkpoint-data
     :github.copilot-sdk.specs/session.warning-data
     :github.copilot-sdk.specs/session.workspace_file_changed-data
     :github.copilot-sdk.specs/shutdown-agent-metric
@@ -1162,6 +1180,8 @@
     :github.copilot-sdk.specs/tz
     :github.copilot-sdk.specs/ui
     :github.copilot-sdk.specs/url
+    :github.copilot-sdk.specs/usage-accounting-identity
+    :github.copilot-sdk.specs/usage-accounting-watermarks
     :github.copilot-sdk.specs/use-logged-in-user?
     :github.copilot-sdk.specs/use-stdio?
     :github.copilot-sdk.specs/used-requests
@@ -1173,6 +1193,8 @@
     :github.copilot-sdk.specs/vision-capabilities
     :github.copilot-sdk.specs/warning-type
     :github.copilot-sdk.specs/warnings
+    :github.copilot-sdk.specs/websocket-fallback-after-ms
+    :github.copilot-sdk.specs/websocket-fallback-reason
     :github.copilot-sdk.specs/wire-api
     :github.copilot-sdk.specs/wire-model
     :github.copilot-sdk.specs/workflow-limit-overrides

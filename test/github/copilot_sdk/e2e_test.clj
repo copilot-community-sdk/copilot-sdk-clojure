@@ -440,6 +440,41 @@
         ;; Clean up
        (sdk/destroy! session)))))
 
+(deftest ^:e2e test-e2e-managed-policy-and-usage-accounting
+  (when-e2e
+   (call-with-capturing-provider
+    (fn [base-url requests]
+      (let [session
+            (sdk/create-session
+             *e2e-client*
+             {:available-tools []
+              :enable-config-discovery false
+              :model "instruction-cache-fixture"
+              :enforce-managed-model-defaults? true
+              :managed-settings {:permissions {:disable-assisted-permissions-mode? false
+                                               :limit-to ["Domain(127.0.0.1)"]}}
+              :provider {:provider-type :openai :base-url base-url :wire-api :completions}})
+            events (sdk/subscribe-events session)]
+        (teardown/call-with-cleanup
+         (fn []
+           (is (= (get-in (sdk/send-and-wait! session {:prompt "Say OK."} 30000)
+                          [:data :content])
+                  "OK"))
+           (is (= (count @requests) 1))
+           (let [usage (:data (await-event-type! events :copilot/assistant.usage 5000))
+                 accounting (:accounting usage)]
+             (is (= (:ai-credits-status usage) "unavailable"))
+             (is (pos-int? (:request-body-bytes usage)))
+             (is (= (:source-session-id accounting) (sdk/session-id session)))
+             (is (pos-int? (:sequence accounting)))
+             (is (string? (:usage-id accounting)))
+             (is (not (contains? usage :websocket-fallback-reason)))))
+         #(do
+            (sdk/unsubscribe-events! session events)
+            (throw-cleanup-failures!
+             "Failed to disconnect accounting session"
+             (disconnect-session-failures :accounting-session session)))))))))
+
 (deftest ^:e2e test-e2e-list-sessions
   (when-e2e
    (testing "List sessions with real CLI"

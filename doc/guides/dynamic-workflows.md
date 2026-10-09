@@ -287,6 +287,19 @@ All functions below live on the public `github.copilot-sdk` facade (aliased `cop
 | `get-workflow-run-progress` / `<get-workflow-run-progress` | `[session run-id]` or with `{:phase-id string :after-seq integer :before-seq integer :limit integer}` — page durable progress records |
 | `cancel-workflow-run!` / `<cancel-workflow-run!` | `[session run-id]` — request cancellation and return the terminal envelope |
 
+Observation does not depend on current execution eligibility: a valid,
+non-disposed session can inspect already-admitted runs and terminal history,
+including an empty registry. Starting, resuming, cancelling, and workflow-owned
+execution operations still require eligible credentials (token-based billing
+or trusted HMAC authentication). Ineligible requests preserve the runtime's
+JSON-RPC `-32601` error with `data.code: "dynamic_workflows_unavailable"`.
+
+Workflow storage requires SQLite capability from a custom session filesystem.
+Without it, the runtime reports `workflow_storage_unavailable`; it does not
+return an empty registry or fall back to local storage. Compaction's optional
+active-workflow summary has a separate five-second bound and may be omitted
+with a warning, without changing explicit observation errors.
+
 ## Progress paging
 
 ```clojure

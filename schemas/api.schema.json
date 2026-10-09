@@ -58,6 +58,19 @@
         },
         "stability": "experimental"
       },
+      "listSessions": {
+        "rpcMethod": "host.listSessions",
+        "description": "Reads the complete advertised live and dormant session catalog of an existing host owned by this connection. Does not start hosting, subscribe to sessions, or guarantee resumability.",
+        "params": {
+          "$ref": "#/definitions/HostListSessionsRequest",
+          "description": "Reads a running host's catalog or the runtime's saved default catalog."
+        },
+        "result": {
+          "$ref": "#/definitions/HostListSessionsResult",
+          "description": "The complete live and dormant advertised catalog, without subscribing to sessions."
+        },
+        "stability": "experimental"
+      },
       "createSession": {
         "rpcMethod": "host.createSession",
         "description": "Requests app-owned materialization over the owning SDK participant.",
@@ -1044,6 +1057,82 @@
           "description": "Canonical locations where custom agents can be created so the runtime will recognize them."
         },
         "stability": "experimental"
+      },
+      "getBuiltins": {
+        "rpcMethod": "agents.getBuiltins",
+        "description": "Lists the agents this runtime ships, by name. A consumer separating shipped agents from ones the user or a plugin authored should compare against these names rather than against `AgentInfo.source`: an authored agent may carry the `builtin` source while not being one of these, and the runtime treats the two as separate questions. `disableableNames` is the subset a user may turn off, which a client needs to decide whether to offer a toggle. `yamlBasedNames` is the subset backed by a shipped YAML definition, which a client needs before asking the runtime to load one.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/AgentsGetBuiltinsResult",
+          "description": "The agents this runtime ships, named so a consumer can tell them apart from authored ones.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "getAvailableBuiltins": {
+        "rpcMethod": "agents.getAvailableBuiltins",
+        "description": "Lists the shipped agents a client should offer right now, filtered by the feature flags it passes. `getBuiltins` names every agent the runtime knows about; some of those are gated, so a client rendering a picker wants this narrower list together with the description to show beside each name.",
+        "params": {
+          "$ref": "#/definitions/AgentsGetAvailableBuiltinsRequest",
+          "description": "The feature flags to evaluate shipped agents against.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/AgentsGetAvailableBuiltinsResult",
+          "description": "The shipped agents available under the requested flags.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "getBuiltinDefinition": {
+        "rpcMethod": "agents.getBuiltinDefinition",
+        "description": "Loads one shipped agent's YAML definition, for a client that needs what the agent declares rather than only its name. `getBuiltins` reports which names have a definition to load: a name outside its `yamlBasedNames` is special-cased in code and has none. The definition crosses as its own JSON rather than as contract-typed fields, because the runtime parses it with the agent schema's tolerant shape and re-typing it here would drop the keys that shape accepts and this one does not. The projected `__nativeCustomAgent` view the runtime derives is included, so a caller reading the declared model and a caller rendering the agent see the same definition.",
+        "params": {
+          "$ref": "#/definitions/AgentsGetBuiltinDefinitionRequest",
+          "description": "The shipped agent whose definition to load.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/AgentsGetBuiltinDefinitionResult",
+          "description": "One shipped agent's definition.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "getBuiltinListingDefinition": {
+        "rpcMethod": "agents.getBuiltinListingDefinition",
+        "description": "Projects one shipped agent the way a picker lists it, reading only the metadata at the head of the definition file and stopping before the prompt body. `getBuiltinDefinition` answers the whole definition instead, so a client listing every shipped agent should prefer this one: the cost of a listing grows with the number of agents, and the prompt body is the part a listing never shows. The two also differ in shape. This returns the projected custom agent on its own, whereas `getBuiltinDefinition` returns the authored definition with that projection nested under `__nativeCustomAgent`.",
+        "params": {
+          "$ref": "#/definitions/AgentsGetBuiltinListingDefinitionRequest",
+          "description": "The shipped agent whose listing entry to load.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/AgentsGetBuiltinListingDefinitionResult",
+          "description": "One shipped agent, projected for a listing.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "customAgentInitialModelDecision": {
+        "rpcMethod": "agents.customAgentInitialModelDecision",
+        "description": "Resolves the model a custom agent asks for against the models actually available, and answers both the model to switch to and the warning a user should see when the agent's preference cannot be met. A custom agent may name several acceptable models in preference order, so the decision is a match rather than a lookup, and an agent whose preference is unavailable is a normal outcome that produces a warning rather than an error. A host must call this rather than pick the first available name itself, because the preference order and the wording of the warning are what keep one installation's agent selection the same as another's.",
+        "params": {
+          "$ref": "#/definitions/AgentsCustomAgentInitialModelDecisionParams",
+          "description": "The models a custom agent asks for, and the models actually available.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/AgentsCustomAgentInitialModelDecisionResult",
+          "description": "The model to switch to, and the warning to show when the agent's preference could not be met.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
       }
     },
     "instructions": {
@@ -1074,6 +1163,50 @@
         "stability": "experimental"
       }
     },
+    "globalState": {
+      "load": {
+        "rpcMethod": "globalState.load",
+        "description": "Reads the host's machine-wide state: which plugins are installed and the one-off flags and timestamps that record what the user has already been shown or migrated. This is the state that outlives a single session and a single workspace, so a host reads it to decide whether to run a first-launch step, offer an onboarding prompt, or skip one it has already completed. The stored credentials are deliberately not part of this result; a caller that needs an authenticated identity asks the account methods for it instead. Reading is non-destructive and every field is optional, because a fresh install has recorded nothing yet.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/GlobalStateLoadResult",
+          "description": "The host's machine-wide state. Every field is optional because a fresh install has recorded nothing yet, so a reader must treat an absent field as `not yet`, never as a negative answer. Stored credentials are deliberately absent from this shape.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "loadForConfigDir": {
+        "rpcMethod": "globalState.loadForConfigDir",
+        "description": "Reads the host's machine-wide state exactly as `globalState.load` does, but from a caller-supplied configuration directory instead of the one the server resolved for itself. Use this when a consumer scopes a session to its own Copilot home — the SDK's per-session `configDir` override — so the state read matches the directory that session actually uses. An absent or empty `configDir` resolves the server's own home, making this identical to `globalState.load`. The stored credentials are omitted here for the same reason they are omitted from `globalState.load`: a caller that needs an authenticated identity asks the account methods instead, so pointing this at another directory cannot be used to read the credentials kept in it.",
+        "params": {
+          "$ref": "#/definitions/GlobalStateLoadForConfigDirRequest",
+          "description": "Selects the configuration directory whose machine-wide state to read.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/GlobalStateLoadResult",
+          "description": "The host's machine-wide state. Every field is optional because a fresh install has recorded nothing yet, so a reader must treat an absent field as `not yet`, never as a negative answer. Stored credentials are deliberately absent from this shape.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "writeKey": {
+        "rpcMethod": "globalState.writeKey",
+        "description": "Records one top-level key in the host's machine-wide state, the counterpart to `globalState.load`. A host calls this to remember that it has shown an onboarding step, asked a one-off question, or completed a migration, so the next run can skip it. Only the named key is replaced and the rest of the document is preserved, which lets two writers record different flags without overwriting each other; passing no value removes the key instead. Only the keys a host records itself are writable: `appInstallNudgeResponded`, `appTipShown`, `askedSetupTerminals`, `autoFeedbackLastPromptedAt`, `firstLaunchAt`, `recentModelIds`, `sandboxCredentialProxyCaDeclined` and `sandboxOnboardingShown`. Every other key is refused, including `installedPlugins`, the stored credentials, `trustedFolders`, the staff flags and the signed-in accounts. Plugin enablement must use the plugin APIs, which apply repository and managed-policy checks.",
+        "params": {
+          "$ref": "#/definitions/GlobalStateWriteKeyRequest",
+          "description": "A single top-level key to record in the host's machine-wide state. The write replaces only that key and leaves the rest of the document untouched, so two writers recording different one-off flags do not overwrite each other. The stored credential keys cannot be written through this method.",
+          "visibility": "internal"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      }
+    },
     "commands": {
       "list": {
         "rpcMethod": "commands.list",
@@ -1088,38 +1221,141 @@
     },
     "user": {
       "settings": {
-        "reload": {
-          "rpcMethod": "user.settings.reload",
-          "description": "Drops this runtime process's in-memory user settings cache so the next settings read observes disk.",
-          "params": null,
-          "result": {
-            "type": "null"
-          },
-          "stability": "experimental"
-        },
         "get": {
           "rpcMethod": "user.settings.get",
-          "description": "Lists every known user setting (settings.json overlaid with the legacy config.json, config.json wins), each with its effective value, its default, and whether it is at the default — so settings the user has never set still appear with their default value. Does not include repository- or enterprise-managed overrides that the runtime layers on top at session time.",
+          "description": "Lists every known user setting from settings.json, each with its effective value, its default, and whether it is at the default — so settings the user has never set still appear with their default value. Does not include repository- or enterprise-managed overrides that the runtime layers on top at session time.",
           "params": null,
           "result": {
             "$ref": "#/definitions/UserSettingsGetResult",
-            "description": "Per-key metadata for every known user setting (settings.json overlaid with the legacy config.json, config.json wins), including settings left at their default. Excludes repository- and enterprise-managed overrides."
+            "description": "Per-key metadata for every known user setting in settings.json, including settings left at their default. Excludes repository- and enterprise-managed overrides."
           },
           "stability": "experimental"
         },
         "set": {
           "rpcMethod": "user.settings.set",
-          "description": "Writes one or more user settings to settings.json, replacing each provided top-level key. A key whose value is null is removed. Returns the keys whose new value is shadowed by a legacy config.json entry (config.json wins on read), which the runtime leaves in place — such writes do not take effect until the legacy value is removed.",
+          "description": "Writes one or more user settings to settings.json, replacing each provided top-level key. A key whose value is null is removed.",
           "params": {
             "$ref": "#/definitions/UserSettingsSetRequest",
             "description": "Partial user settings to write to settings.json. Each top-level key is written individually, replacing the existing value; a key whose value is null is removed."
           },
           "result": {
-            "$ref": "#/definitions/UserSettingsSetResult",
-            "description": "Outcome of writing user settings."
+            "type": "null"
           },
           "stability": "experimental"
         }
+      }
+    },
+    "gitHubRepository": {
+      "atPath": {
+        "rpcMethod": "gitHubRepository.atPath",
+        "description": "Resolves the GitHub repository that owns a working-tree path by reading the selected git remote configured for it, preferring `origin`. Returns a null `repository` when the path is inside a git working tree but that selected remote does not resolve to a GitHub host. Fails when the path is not inside a git working tree at all, so a caller can tell 'not a repository' apart from 'a repository with no GitHub remote'.",
+        "params": {
+          "$ref": "#/definitions/GitHubRepositoryAtPathRequest",
+          "description": "Working-tree path whose owning GitHub repository should be resolved.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/GitHubRepositoryAtPathResult",
+          "description": "The GitHub repository that owns the requested path, when the selected remote (`origin`, else the first) is on a GitHub host.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      }
+    },
+    "gitHubOwners": {
+      "nextRequestId": {
+        "rpcMethod": "gitHubOwners.nextRequestId",
+        "description": "Registers a cancellable owner listing and returns its request id. Separate from `gitHubOwners.list` so the id exists before the listing starts: a caller that abandons the listing the moment it begins would otherwise have nothing to name in `gitHubOwners.cancel`. The id serves one listing only. Long-abandoned unused ids can be released by later allocations.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/GitHubOwnersRequestIdResult",
+          "description": "A freshly registered request id. Registering it before the listing starts is what lets a cancel that races the request still find the owner listing slot. The id serves one listing only. Long-abandoned unused ids can be released by later allocations.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "list": {
+        "rpcMethod": "gitHubOwners.list",
+        "description": "Lists the logins the authenticated user may act as — their own account first, then the organizations they belong to — by asking the GitHub API under the supplied credential. No credential travels in the request: `authInfo` selects one the runtime already holds, and the runtime resolves the token and the GitHub host from it. A failure the caller should render arrives as `message`; one it should raise arrives as `throwError`.",
+        "params": {
+          "$ref": "#/definitions/GitHubOwnersListRequest",
+          "description": "Credential to list owners under, and the request id that makes the listing cancellable.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/GitHubOwnersListResult",
+          "description": "Outcome of an owner listing. Exactly one of `owners` and `message` is present, except that `throwError` reports a failure the caller is expected to raise rather than render.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "cancel": {
+        "rpcMethod": "gitHubOwners.cancel",
+        "description": "Abandons an owner listing started with the given request id. Answers `canceled: true` while a listing with that id is running. Answers `canceled: false` when the id was never registered, was registered but not used, was released after being abandoned, or its listing has ended. Canceling an unused id releases it, and a later `list` with that id is refused. The cancel acts only on owner listings and never reaches another request of the host.",
+        "params": {
+          "$ref": "#/definitions/GitHubOwnersCancelRequest",
+          "description": "The owner listing to abandon.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/GitHubOwnersCancelResult",
+          "description": "Whether the id named a running owner listing.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      }
+    },
+    "git": {
+      "currentBranchRemote": {
+        "rpcMethod": "git.currentBranchRemote",
+        "description": "Reads the remote that the branch checked out in a working tree tracks, as `branch.<name>.remote` configures it. Reports `origin` rather than failing whenever there is no tracking configuration to read — on a detached HEAD, on a branch with no upstream, or when git itself fails — because a caller asking which remote to talk to needs an answer it can act on, not an error. Marked internal because it exists to carry a CLI call site off the napi boundary onto the SDK contract; it is migration plumbing, not a surface consumers are meant to depend on.",
+        "params": {
+          "$ref": "#/definitions/GitCwdRequest",
+          "description": "Working-tree path a git query applies to.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/GitCurrentBranchRemoteResult",
+          "description": "The remote the checked-out branch tracks.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "workingDirectoryContext": {
+        "rpcMethod": "git.workingDirectoryContext",
+        "description": "Collects the repository context of a working directory in one call: working tree root, repository identifier and host, current branch, and the HEAD and base commits. Every repository field is omitted when the path is not inside a git working tree, and the requested path is echoed back as `cwd`. The answer is the same `SessionWorkingDirectoryContext` that `session.metadata.recordContextChange` accepts, so a caller polling for a context change can forward the result unchanged. Marked internal because it exists to carry a CLI call site off the napi boundary onto the SDK contract; it is migration plumbing, not a surface consumers are meant to depend on. It can become public once an SDK consumer needs to derive session context from a directory itself.",
+        "params": {
+          "$ref": "#/definitions/GitCwdRequest",
+          "description": "Working-tree path a git query applies to.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/SessionWorkingDirectoryContext",
+          "description": "Updated working directory and git context. Emitted as the new payload of `session.context_changed`."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "reposFromRemotes": {
+        "rpcMethod": "git.reposFromRemotes",
+        "description": "Lists the GitHub repositories a working tree's remotes point at, one entry per distinct repository, so a caller can resolve a base and head repository without parsing remote URLs itself. When several remotes name the same repository, only the first is listed, and the entry keeps that remote name. Remotes pointing at no GitHub host are left out, so an empty list means the tree reaches GitHub through no remote. Failing to read the remotes is reported as an error rather than as an empty list, because the two mean different things to a caller. Marked internal because it exists to carry a CLI call site off the napi boundary onto the SDK contract; it is migration plumbing, not a surface consumers are meant to depend on.",
+        "params": {
+          "$ref": "#/definitions/GitReposFromRemotesRequest",
+          "description": "Git working tree whose GitHub remotes should be listed.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/GitReposFromRemotesResult",
+          "description": "The GitHub repositories a working tree's remotes point at.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
       }
     },
     "managedSettings": {
@@ -1544,6 +1780,48 @@
         },
         "stability": "experimental"
       },
+      "createWorkspace": {
+        "rpcMethod": "sessions.createWorkspace",
+        "description": "Creates the workspace record for a session that has not been opened yet. A host that hands a session off to another application — writing the record and then launching that application against the session ID — needs the record on disk before any session exists to carry it, which the session-scoped workspace methods cannot do. Replaces any existing record and resets the checkpoint index. When writing to the local filesystem, a stored `fork_count` survives on disk. Returns the record it built, so a surviving stored `fork_count` can differ from the answer.",
+        "params": {
+          "$ref": "#/definitions/SessionsCreateWorkspaceRequest",
+          "description": "Identity, state location and starting context for a workspace record."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionsCreateWorkspaceResult",
+          "description": "The workspace record that was written."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "loadWorkspace": {
+        "rpcMethod": "sessions.loadWorkspace",
+        "description": "Reads a session's workspace record straight from disk, without opening the session. Resuming by session ID has to know where the session lives before it can connect, so the lookup cannot come from the session-scoped workspace methods, which resolve their location from a live session's context. Returns no record when the file is absent.",
+        "params": {
+          "$ref": "#/definitions/SessionsLoadWorkspaceRequest",
+          "description": "Where the session's state lives, as a root directory and the session ID under it."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionsLoadWorkspaceResult",
+          "description": "The workspace record on disk, omitted when the session has none."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "updateWorkspaceFields": {
+        "rpcMethod": "sessions.updateWorkspaceFields",
+        "description": "Merges fields into a session's workspace record on disk, creating the record when it is absent. The counterpart to `sessions.loadWorkspace`, for the same before-the-session-exists case. It preserves stored workspace-schema fields the request does not supply, does not preserve stored keys outside the workspace schema, and never replaces a stored `fork_count`.",
+        "params": {
+          "$ref": "#/definitions/SessionsUpdateWorkspaceFieldsRequest",
+          "description": "Where the session's state lives, plus workspace-schema fields to merge into its workspace record. Stored keys outside the schema are not preserved, and a stored `fork_count` is never replaced."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionsUpdateWorkspaceFieldsResult",
+          "description": "The merge completed. The record carries the supplied workspace-schema fields, but a stored `fork_count` stays."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
       "reloadPluginHooks": {
         "rpcMethod": "sessions.reloadPluginHooks",
         "description": "Reloads user, plugin, and (optionally) repo hooks on the active session.",
@@ -1685,6 +1963,54 @@
         "result": {
           "$ref": "#/definitions/AgentRegistrySpawnResult",
           "description": "Outcome of an agentRegistry.spawn call."
+        },
+        "stability": "experimental"
+      }
+    },
+    "connectors": {
+      "getCapabilities": {
+        "rpcMethod": "connectors.getCapabilities",
+        "description": "Returns feature availability.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/ConnectorDiscoveryCapabilities",
+          "description": "Feature availability."
+        },
+        "stability": "experimental"
+      },
+      "getAccounts": {
+        "rpcMethod": "connectors.getAccounts",
+        "description": "Returns eligible accounts.",
+        "params": null,
+        "result": {
+          "$ref": "#/definitions/ConnectorDiscoveryAccountList",
+          "description": "Eligible accounts."
+        },
+        "stability": "experimental"
+      },
+      "list": {
+        "rpcMethod": "connectors.list",
+        "description": "Lists entries for the selected account.",
+        "params": {
+          "$ref": "#/definitions/ConnectorDiscoveryAccountRequest",
+          "description": "Selected account."
+        },
+        "result": {
+          "$ref": "#/definitions/ConnectorDiscoveryCatalogResult",
+          "description": "Entries for the selected account."
+        },
+        "stability": "experimental"
+      },
+      "refresh": {
+        "rpcMethod": "connectors.refresh",
+        "description": "Refreshes entries for the selected account.",
+        "params": {
+          "$ref": "#/definitions/ConnectorDiscoveryAccountRequest",
+          "description": "Selected account."
+        },
+        "result": {
+          "$ref": "#/definitions/ConnectorDiscoveryCatalogResult",
+          "description": "Entries for the selected account."
         },
         "stability": "experimental"
       }
@@ -3659,13 +3985,17 @@
             },
             "modelId": {
               "type": "string",
-              "description": "Model selection id to switch to, as returned by `list`. A bare id (e.g. `claude-sonnet-4.6`) names a Copilot (CAPI) model; a provider-qualified id (`provider/id`, e.g. `acme/claude-sonnet`) targets a registry BYOK model."
+              "description": "Model id to switch to, as returned by `list`. Include providerId to select an exact catalog entry when providers share the id. Without providerId, a bare id retains incumbent selection behavior; a registry-qualified id (`provider/id`, e.g. `acme/claude-sonnet`) targets a BYOK model."
+            },
+            "providerId": {
+              "type": "string",
+              "description": "Provider id from the selected list entry's provider reference. Selects this exact provider/model pair; an unavailable pair fails rather than using another provider. Omit for deterministic legacy bare-model selection."
             },
             "autoTier": {
               "anyOf": [
                 {
                   "$ref": "#/definitions/AutoTier",
-                  "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+                  "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
                 },
                 {
                   "type": "null"
@@ -3740,7 +4070,24 @@
           "additionalProperties": false,
           "description": "Target model identifier and optional reasoning effort, summary, capability overrides, and context tier.",
           "title": "ModelSwitchToRequest",
-          "stability": "experimental"
+          "stability": "experimental",
+          "x-legacy-parameters": [
+            "modelId",
+            "autoTier",
+            "reasoningEffort",
+            "reasoningSummary",
+            "verbosity",
+            "modelCapabilities",
+            "contextTier",
+            "source",
+            "deferIfModelChangeQueued",
+            "compactionDecision",
+            "runCompactionPreflight",
+            "repoScope",
+            "modelChangeScope",
+            "requireAvailable",
+            "pickerPersistence"
+          ]
         },
         "result": {
           "$ref": "#/definitions/ModelSwitchToResult",
@@ -3762,7 +4109,7 @@
               "anyOf": [
                 {
                   "$ref": "#/definitions/AutoTier",
-                  "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+                  "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
                 },
                 {
                   "type": "null"
@@ -3820,6 +4167,10 @@
               "type": "string",
               "description": "Model selected by repository settings, when configured."
             },
+            "repoModelProviderId": {
+              "type": "string",
+              "description": "Provider owning the repository-selected model. Omitted repository provider identity retains legacy bare-model behavior."
+            },
             "repoReasoningEffort": {
               "type": "string",
               "description": "Reasoning effort selected by repository settings, when configured."
@@ -3860,6 +4211,39 @@
         "result": {
           "$ref": "#/definitions/ModelSwitchToResult",
           "description": "The model identifier active on the session after the switch."
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
+      "clearStartupSeed": {
+        "rpcMethod": "session.model.clearStartupSeed",
+        "description": "Clears an unchanged startup model/provider seed before default-model resolution. Never clears a resumed or user-selected model.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "expectedModel": {
+              "type": "string"
+            },
+            "expectedProviderId": {
+              "type": "string",
+              "description": "Provider captured with the startup seed; omission matches only an unqualified seed."
+            }
+          },
+          "required": [
+            "sessionId",
+            "expectedModel"
+          ],
+          "additionalProperties": false,
+          "visibility": "internal",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/ModelClearStartupSeedResult",
+          "visibility": "internal"
         },
         "stability": "experimental",
         "visibility": "internal"
@@ -4024,6 +4408,10 @@
             "planModel": {
               "type": "string",
               "description": "Dedicated model to use in plan mode, when configured."
+            },
+            "planModelProviderId": {
+              "type": "string",
+              "description": "Provider owning planModel. Omit for legacy bare-model selection."
             },
             "planReasoningEffort": {
               "type": "string",
@@ -4851,6 +5239,10 @@
             "ignoreWhitespace": {
               "type": "boolean",
               "description": "When true, ignore whitespace-only changes (git `--ignore-all-space`). Defaults to false."
+            },
+            "includeContents": {
+              "type": "boolean",
+              "description": "Include the full before/after text used to compute each session diff. Defaults to false; true is accepted only for session mode. Existing capture/read limits still apply, and binary or unavailable contents are not returned. This can substantially increase response size."
             }
           },
           "required": [
@@ -4860,7 +5252,11 @@
           "additionalProperties": false,
           "description": "Parameters for computing a workspace diff.",
           "title": "WorkspacesDiffRequest",
-          "stability": "experimental"
+          "stability": "experimental",
+          "x-legacy-parameters": [
+            "mode",
+            "ignoreWhitespace"
+          ]
         },
         "result": {
           "$ref": "#/definitions/WorkspaceDiffResult",
@@ -5822,9 +6218,46 @@
       }
     },
     "mcp": {
+      "setConnectedIdeInfo": {
+        "rpcMethod": "session.mcp.setConnectedIdeInfo",
+        "description": "Records the IDE the host is connected to, so the agent's system prompt can name it and its workspace folder. Null or an omitted `ide` clears the recorded value, which is how a host reports that it is disconnected; there is no separate clear method. Both `ideName` and `workspaceFolder` are required together, because half a state cannot be attributed to a project.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "ide": {
+              "anyOf": [
+                {
+                  "$ref": "#/definitions/SessionConnectedIdeInfo",
+                  "description": "The IDE a host is connected to, as reported to the session."
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The connected IDE. Null or omitted clears the recorded IDE, which is how a host reports that it is disconnected."
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Records which IDE the host is connected to, or clears it.",
+          "title": "SessionMcpSetConnectedIdeInfoParams",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      },
       "list": {
         "rpcMethod": "session.mcp.list",
-        "description": "Lists MCP servers configured for the session, their connection status, and host-level state. The host-level state (disabled/filtered servers, failed/needs-auth/pending connections, mcp3p policy, full config) is empty/zero when no MCP host has been initialized for the session.",
+        "description": "Lists materialized MCP servers and their connection status. Cache misses may start and wait for MCP servers.",
         "params": {
           "type": "object",
           "properties": {
@@ -5842,6 +6275,29 @@
         "result": {
           "$ref": "#/definitions/McpServerList",
           "description": "MCP servers configured for the session, with their connection status and host-level state."
+        },
+        "stability": "experimental"
+      },
+      "listConfigured": {
+        "rpcMethod": "session.mcp.listConfigured",
+        "description": "Lists effective MCP configuration without starting, restarting, authenticating, or waiting for servers. An optional live observation is from an already materialized matching server; this is not a readiness guarantee.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/McpConfiguredServerList",
+          "description": "Effective MCP configuration with optional live observations from matching already materialized servers."
         },
         "stability": "experimental"
       },
@@ -8090,6 +8546,45 @@
           "type": "null"
         },
         "stability": "experimental"
+      },
+      "retryManaged": {
+        "rpcMethod": "session.plugins.retryManaged",
+        "description": "Installs or updates the plugins the session's managed settings require now, without waiting for the next automatic attempt after a failure, then reloads plugins. Reports progress and failures with the same `session.info` and `session.warning` events as automatic preparation. Fails when the runtime does not prepare managed plugins for the session.",
+        "params": {
+          "anyOf": [
+            {
+              "not": {}
+            },
+            {
+              "type": "object",
+              "properties": {
+                "sessionId": {
+                  "type": "string",
+                  "description": "Target session identifier"
+                },
+                "plugins": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "description": "\"plugin@marketplace\" specs to retry. Omit to retry every plugin the session's managed settings require."
+                }
+              },
+              "required": [
+                "sessionId"
+              ],
+              "additionalProperties": false
+            }
+          ],
+          "description": "Plugins required by the session's managed settings to install or update again.",
+          "title": "SessionPluginsRetryManagedRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/SessionPluginsRetryManagedResult",
+          "description": "Per-plugin outcomes of retrying the plugins required by the session's managed settings."
+        },
+        "stability": "experimental"
       }
     },
     "provider": {
@@ -8647,7 +9142,7 @@
       },
       "enable": {
         "rpcMethod": "session.extensions.enable",
-        "description": "Enables an extension for the session.",
+        "description": "Enables an extension for the session and persists the preference when the session has a settings store. Hosts synchronizing effective membership should use extensions.reconcile instead.",
         "params": {
           "type": "object",
           "properties": {
@@ -8676,7 +9171,7 @@
       },
       "disable": {
         "rpcMethod": "session.extensions.disable",
-        "description": "Disables an extension for the session.",
+        "description": "Disables an extension for the session and persists the preference when the session has a settings store. Hosts synchronizing effective membership should use extensions.reconcile instead.",
         "params": {
           "type": "object",
           "properties": {
@@ -8722,6 +9217,29 @@
         },
         "result": {
           "type": "null"
+        },
+        "stability": "experimental"
+      },
+      "reconcile": {
+        "rpcMethod": "session.extensions.reconcile",
+        "description": "Host-only reconciliation of authoritative session-effective extension membership and enablement. Refreshes runtime-owned discovery and preferences without persisting settings, installing plugins, or restarting unchanged activations. Returns ExtensionList only after required starts and process/contribution cleanup settle. Takes no caller inventory or overrides. Missing controllers, unready/incomplete discovery, unavailable workspaces, superseded inputs, and lifecycle failures are errors, not empty membership. Independently proven revocations may be applied before an error; retry converges without restarting healthy activations. Error data contains lifecycleChangesApplied and code: extension_reconciliation_host_required, extension_reconciliation_unavailable, extension_reconciliation_not_ready, extension_reconciliation_discovery_failed, extension_reconciliation_workspace_unavailable, extension_reconciliation_superseded, or extension_reconciliation_lifecycle_failed. Mark host reconciliation state applied only on success. On older runtimes, method-not-found must not fall back to global discovery and persistent extension disables.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/ExtensionList",
+          "description": "Extensions discovered for the session, with their current status."
         },
         "stability": "experimental"
       },
@@ -8926,6 +9444,31 @@
         "result": {
           "$ref": "#/definitions/HandlePendingToolCallResult",
           "description": "Indicates whether the external tool call result was handled successfully."
+        },
+        "stability": "experimental"
+      },
+      "listPendingRequests": {
+        "rpcMethod": "session.tools.listPendingRequests",
+        "description": "Lists the external tool calls of the session and its sub-agents that are still waiting for session.tools.handlePendingToolCall.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "No parameters; returns the external tool calls of the session and its sub-agents that are still waiting for a result.",
+          "title": "ToolsListPendingRequestsRequest",
+          "stability": "experimental"
+        },
+        "result": {
+          "$ref": "#/definitions/PendingExternalToolRequestList",
+          "description": "External tool calls still waiting for a result."
         },
         "stability": "experimental"
       },
@@ -10715,16 +11258,20 @@
             "promptTokenLimit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Maximum prompt tokens allowed by the target model. Pass 0 to use the runtime default."
+              "description": "Advertised prompt allowance. Pass 0 to resolve the selected model and context tier from the session."
             },
             "outputTokenLimit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Maximum output tokens allowed by the target model. Pass 0 if unknown."
+              "description": "Requested output allowance to reserve against the combined context ceiling. Pass 0 to resolve the session's request cap, falling back to the model's advertised output limit."
             },
             "selectedModel": {
               "type": "string",
               "description": "Model identifier used for tokenization. Omit to use the session default. Used both for token counting and to compute display values."
+            },
+            "providerId": {
+              "type": "string",
+              "description": "Provider owning selectedModel. Omit to use the current provider for the current model, or deterministic legacy lookup for a different model."
             }
           },
           "required": [
@@ -12186,6 +12733,116 @@
           "description": "Accumulated session usage metrics, including premium request cost, token counts, model breakdown, and code-change totals."
         },
         "stability": "experimental"
+      },
+      "setCodeChanges": {
+        "rpcMethod": "session.usage.setCodeChanges",
+        "description": "Internal host-only replacement of absolute code-change totals reported by a relay host.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            },
+            "linesAdded": {
+              "type": "number",
+              "description": "Absolute added-line total, replacing the previous reading."
+            },
+            "linesRemoved": {
+              "type": "number",
+              "description": "Absolute removed-line total, replacing the previous reading."
+            },
+            "filesCount": {
+              "type": "number",
+              "description": "Absolute changed-file count; omission preserves the previous count."
+            }
+          },
+          "required": [
+            "sessionId",
+            "linesAdded",
+            "linesRemoved"
+          ],
+          "additionalProperties": false,
+          "description": "Internal absolute code-change totals reported by the owning host.",
+          "visibility": "internal",
+          "stability": "experimental"
+        },
+        "result": {
+          "type": "null"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
+      }
+    },
+    "quota": {
+      "get": {
+        "rpcMethod": "session.quota.get",
+        "description": "Gets the session's current quota and account projection without making a network request.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionQuotaProjection",
+          "description": "The incumbent session-owned quota and account projection."
+        },
+        "stability": "experimental"
+      },
+      "refresh": {
+        "rpcMethod": "session.quota.refresh",
+        "description": "Refreshes the session's provider model catalog bypassing its cache, folds quota snapshots into session state, and returns the updated projection. Failures leave the last known quota intact.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/SessionQuotaProjection",
+          "description": "The incumbent session-owned quota and account projection."
+        },
+        "stability": "experimental"
+      },
+      "takeWarnings": {
+        "rpcMethod": "session.quota.takeWarnings",
+        "description": "Returns and clears the session's pending quota warnings. Reading or refreshing quota does not drain warnings.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/QuotaTakeWarningsResult",
+          "description": "Pending warnings returned and cleared by session.quota.takeWarnings."
+        },
+        "stability": "experimental"
       }
     },
     "limitPrediction": {
@@ -12734,7 +13391,7 @@
         },
         "result": {
           "$ref": "#/definitions/SkillProviderReadResult",
-          "description": "Complete text-only SKILL.md content returned by an SDK session's skill provider. Related files and assets are not supported.",
+          "description": "Text-only SKILL.md content returned by an SDK session's skill provider. YAML frontmatter is optional: fields it omits come from the catalog descriptor, fields it declares must match the descriptor, and `allowed-tools` is read only from frontmatter. Related files and assets are not supported.",
           "visibility": "internal"
         },
         "stability": "experimental",
@@ -13895,6 +14552,32 @@
       "description": "Authenticated account entry returned by `account.getAllUsers`.",
       "title": "AccountAllUsers"
     },
+    "AccountAuthInfo": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "account",
+          "description": "Provider-owned account authentication."
+        },
+        "host": {
+          "type": "string",
+          "description": "Host coordinate owned by the account's model provider."
+        },
+        "login": {
+          "type": "string",
+          "description": "Login identifying the provider-owned account."
+        }
+      },
+      "required": [
+        "type",
+        "host",
+        "login"
+      ],
+      "additionalProperties": false,
+      "description": "An interactive account whose model provider owns its credentials. It carries no GitHub credential.",
+      "title": "AccountAuthInfo"
+    },
     "AccountGetCurrentAuthResult": {
       "type": "object",
       "properties": {
@@ -14902,6 +15585,48 @@
       "description": "Custom agents available to the session after reloading definitions from disk.",
       "title": "AgentReloadResult"
     },
+    "AgentsCustomAgentInitialModelDecisionParams": {
+      "type": "object",
+      "properties": {
+        "agentModelsJson": {
+          "type": "string",
+          "description": "The agent's declared `model:` entry, serialized. A single name or an ordered list of acceptable names."
+        },
+        "availableModelsJson": {
+          "type": "string",
+          "description": "The models available to this session, serialized in the shape the model list carries."
+        }
+      },
+      "required": [
+        "agentModelsJson",
+        "availableModelsJson"
+      ],
+      "additionalProperties": false,
+      "description": "The models a custom agent asks for, and the models actually available.",
+      "title": "AgentsCustomAgentInitialModelDecisionParams",
+      "visibility": "internal"
+    },
+    "AgentsCustomAgentInitialModelDecisionResult": {
+      "type": "object",
+      "properties": {
+        "targetModel": {
+          "type": "string",
+          "description": "The first available model that matches the agent's preferences. Absent when none of the requested models is available."
+        },
+        "reasoningEffort": {
+          "type": "string",
+          "description": "The reasoning effort attached to the selected model preference. Absent when that preference does not specify an effort."
+        },
+        "warning": {
+          "type": "string",
+          "description": "What to tell the user about an unmet preference. Absent when the preference was met. A warning with no `targetModel` means the agent's models are all unavailable."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The model to switch to, and the warning to show when the agent's preference could not be met.",
+      "title": "AgentsCustomAgentInitialModelDecisionResult",
+      "visibility": "internal"
+    },
     "AgentsDiscoverRequest": {
       "type": "object",
       "properties": {
@@ -14973,6 +15698,172 @@
       "title": "AgentSetPromptRequest",
       "stability": "experimental"
     },
+    "AgentsGetAvailableBuiltinsRequest": {
+      "type": "object",
+      "properties": {
+        "featureFlags": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Feature flag values keyed by name, evaluated with the runtime's truthiness rules. Omit or pass null for no flags."
+        },
+        "overrides": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {},
+              "additionalProperties": true
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Flag overrides keyed by name. A null entry uses the corresponding base flag; false explicitly disables it. Omit or pass null for no overrides."
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The surface asking, which gates agents that only apply to one client. Omit or pass null to apply no client filter."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The feature flags to evaluate shipped agents against.",
+      "title": "AgentsGetAvailableBuiltinsRequest",
+      "visibility": "internal"
+    },
+    "AgentsGetAvailableBuiltinsResult": {
+      "type": "object",
+      "properties": {
+        "agents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/BuiltinAgentSummary",
+            "description": "A shipped agent, named and described.",
+            "visibility": "internal"
+          },
+          "description": "Available shipped agents, in the runtime's own order."
+        }
+      },
+      "required": [
+        "agents"
+      ],
+      "additionalProperties": false,
+      "description": "The shipped agents available under the requested flags.",
+      "title": "AgentsGetAvailableBuiltinsResult",
+      "visibility": "internal"
+    },
+    "AgentsGetBuiltinDefinitionRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The agent name, which must be one of `getBuiltins`'s `yamlBasedNames`. A name outside that list is special-cased in code and has no definition, and is reported as an error rather than as an empty definition."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "The shipped agent whose definition to load.",
+      "title": "AgentsGetBuiltinDefinitionRequest",
+      "visibility": "internal"
+    },
+    "AgentsGetBuiltinDefinitionResult": {
+      "type": "object",
+      "properties": {
+        "definitionJson": {
+          "type": "string",
+          "description": "The agent's definition, serialized as JSON. It carries the authored keys plus the runtime's projected `__nativeCustomAgent` view of the same agent. It is a string rather than an object because the runtime parses it with the agent schema's tolerant shape, which accepts keys this contract does not name."
+        }
+      },
+      "required": [
+        "definitionJson"
+      ],
+      "additionalProperties": false,
+      "description": "One shipped agent's definition.",
+      "title": "AgentsGetBuiltinDefinitionResult",
+      "visibility": "internal"
+    },
+    "AgentsGetBuiltinListingDefinitionRequest": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The agent name, taken from `getAvailableBuiltins`. Unlike `getBuiltinDefinition`, the agent that `getBuiltins` reports as special-cased rather than YAML-based is answered here too, from its in-code definition."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "The shipped agent whose listing entry to load.",
+      "title": "AgentsGetBuiltinListingDefinitionRequest",
+      "visibility": "internal"
+    },
+    "AgentsGetBuiltinListingDefinitionResult": {
+      "type": "object",
+      "properties": {
+        "definitionJson": {
+          "type": "string",
+          "description": "The agent projected as a custom agent, serialized as JSON. It is a string rather than an object for the same reason as `getBuiltinDefinition`: the runtime parses the underlying definition with the agent schema's tolerant shape, which accepts keys this contract does not name."
+        }
+      },
+      "required": [
+        "definitionJson"
+      ],
+      "additionalProperties": false,
+      "description": "One shipped agent, projected for a listing.",
+      "title": "AgentsGetBuiltinListingDefinitionResult",
+      "visibility": "internal"
+    },
+    "AgentsGetBuiltinsResult": {
+      "type": "object",
+      "properties": {
+        "names": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Every agent name this runtime ships."
+        },
+        "disableableNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The subset of `names` a user is allowed to turn off. A shipped agent outside this list is always active and a client should not offer a toggle for it."
+        },
+        "yamlBasedNames": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The subset of `names` defined by a shipped YAML definition. The remainder are special-cased in code and have no definition to load."
+        }
+      },
+      "required": [
+        "names",
+        "disableableNames",
+        "yamlBasedNames"
+      ],
+      "additionalProperties": false,
+      "description": "The agents this runtime ships, named so a consumer can tell them apart from authored ones.",
+      "title": "AgentsGetBuiltinsResult",
+      "visibility": "internal"
+    },
     "AgentsGetDiscoveryPathsRequest": {
       "type": "object",
       "properties": {
@@ -14991,6 +15882,20 @@
       "additionalProperties": false,
       "description": "Optional project paths to include when enumerating agent discovery directories.",
       "title": "AgentsGetDiscoveryPathsRequest"
+    },
+    "AiCreditsStatus": {
+      "type": "string",
+      "enum": [
+        "complete",
+        "partial",
+        "unavailable"
+      ],
+      "description": "Whether the accumulated numeric AI-credit subtotal covers the observed calls.",
+      "x-enumDescriptions": {
+        "complete": "Every observed call supplied an AI-credit amount, including an explicit zero.",
+        "partial": "Some calls supplied amounts and some did not; the numeric value is only a reported subtotal.",
+        "unavailable": "No AI-credit amount was reported for the observed calls. Numeric zero is not a zero-cost claim."
+      }
     },
     "ApiKeyAuthInfo": {
       "type": "object",
@@ -15968,6 +16873,10 @@
           "description": "Authentication-info variant for OAuth user auth, with host and login; the token remains in the runtime secret store."
         },
         {
+          "$ref": "#/definitions/AccountAuthInfo",
+          "description": "An interactive account whose model provider owns its credentials. It carries no GitHub credential."
+        },
+        {
           "$ref": "#/definitions/GhCliAuthInfo",
           "description": "Authentication-info input variant for GitHub CLI credentials, carrying host, login, and the `gh auth token` value."
         },
@@ -15985,6 +16894,7 @@
         "hmac",
         "env",
         "user",
+        "account",
         "gh-cli",
         "api-key",
         "token",
@@ -15997,12 +16907,44 @@
         "hmac": "Authentication provided by a GitHub App HMAC credential.",
         "env": "Authentication resolved from environment-provided credentials.",
         "user": "Authentication from an interactive user sign-in.",
+        "account": "Authentication from a selected provider-owned account, without a GitHub credential.",
         "gh-cli": "Authentication delegated to the GitHub CLI.",
         "api-key": "Authentication from an API key credential.",
         "token": "Authentication from a GitHub token.",
         "token-provider": "Authentication from an SDK GitHub token callback.",
         "copilot-api-token": "Authentication from a Copilot API token."
       }
+    },
+    "AuthLoginAccount": {
+      "type": "object",
+      "properties": {
+        "selectionId": {
+          "type": "string",
+          "description": "Opaque identifier supplied to the next login step to select this account."
+        },
+        "host": {
+          "type": "string",
+          "description": "Host coordinate owned by the selected account's provider."
+        },
+        "login": {
+          "type": "string",
+          "description": "Human-readable login for the account choice."
+        },
+        "kind": {
+          "$ref": "#/definitions/AccountKind",
+          "description": "Provider kind that owns this account choice."
+        }
+      },
+      "required": [
+        "selectionId",
+        "host",
+        "login",
+        "kind"
+      ],
+      "additionalProperties": false,
+      "description": "A credential-free account choice after sign-in.",
+      "title": "AuthLoginAccount",
+      "stability": "experimental"
     },
     "AuthLoginAdvanceRequest": {
       "type": "object",
@@ -16082,7 +17024,7 @@
       "properties": {
         "status": {
           "$ref": "#/definitions/AuthLoginResultStatus",
-          "description": "Terminal disposition of the login."
+          "description": "Current disposition of the login, including pending user decisions."
         },
         "host": {
           "type": "string",
@@ -16092,13 +17034,22 @@
         "login": {
           "type": "string",
           "description": "Login that was signed in, when completed."
+        },
+        "accounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AuthLoginAccount",
+            "description": "A credential-free account choice after sign-in."
+          },
+          "description": "Available accounts when sign-in is awaiting account selection, ordered with Microsoft 365 first.",
+          "x-copilot-sdk-append-last": true
         }
       },
       "required": [
         "status"
       ],
       "additionalProperties": false,
-      "description": "Terminal result of an interactive login flow.",
+      "description": "Result of an interactive login flow. Pending consent or account selection is not terminal.",
       "title": "AuthLoginResultDto",
       "stability": "experimental"
     },
@@ -16107,13 +17058,15 @@
       "enum": [
         "completed",
         "needs-plaintext-consent",
+        "needs-account-selection",
         "declined"
       ],
-      "description": "Terminal disposition of a login persistence attempt.",
+      "description": "Disposition of a login attempt, including pending user decisions.",
       "title": "AuthLoginResultStatus",
       "x-enumDescriptions": {
-        "completed": "The credential was persisted and the account is signed in.",
+        "completed": "The credential was persisted and the selected account is signed in.",
         "needs-plaintext-consent": "Persistence needs explicit consent to store the token in plaintext.",
+        "needs-account-selection": "Credentials are saved; select an account using a returned selectionId as advance input to complete sign-in.",
         "declined": "The user declined plaintext persistence."
       },
       "stability": "experimental"
@@ -16191,7 +17144,7 @@
           "properties": {
             "result": {
               "$ref": "#/definitions/AuthLoginResultDto",
-              "description": "The terminal login result."
+              "description": "Login result. When status is needs-plaintext-consent or needs-account-selection, advance with the user's decision to continue."
             },
             "kind": {
               "type": "string",
@@ -16283,6 +17236,11 @@
             "account": {
               "$ref": "#/definitions/AccountStatus",
               "description": "The active account, or absent when not logged in."
+            },
+            "authInfo": {
+              "$ref": "#/definitions/AuthIdentity",
+              "description": "Credential-free identity metadata for the active account, including resolved Copilot user information when available.",
+              "x-copilot-sdk-append-last": true
             },
             "kind": {
               "type": "string",
@@ -16617,20 +17575,123 @@
     },
     "AutoTier": {
       "type": "string",
-      "enum": [
-        "efficiency",
-        "balance",
-        "intelligence",
-        "fast"
-      ],
-      "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference.",
+      "minLength": 1,
+      "pattern": "^[^\\s\\u0000-\\u001F\\u007F-\\u009F]+$",
+      "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset.",
       "title": "AutoTier",
       "x-enumDescriptions": {
         "efficiency": "Optimize for efficiency.",
         "balance": "Balance efficiency and intelligence.",
         "intelligence": "Optimize for intelligence.",
         "fast": "Integrator-only preset that optimizes for latency."
-      }
+      },
+      "x-extensible-enum": [
+        "efficiency",
+        "balance",
+        "intelligence",
+        "fast"
+      ]
+    },
+    "AutoTierDescriptor": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Opaque routing identifier transmitted unchanged to the provider."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable label, not a routing identifier."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description displayed beside the preference."
+        },
+        "type": {
+          "type": "string",
+          "description": "Execution kind; this client supports `auto` preferences on the Auto model."
+        },
+        "status": {
+          "$ref": "#/definitions/AutoTierStatus",
+          "description": "Current account-specific availability."
+        }
+      },
+      "required": [
+        "id",
+        "displayName",
+        "description",
+        "type",
+        "status"
+      ],
+      "description": "A server-advertised routing preference. Identifiers and execution types are extensible."
+    },
+    "AutoTierMetadata": {
+      "type": "object",
+      "properties": {
+        "defaultTier": {
+          "type": "string",
+          "description": "Provider-default preference, used only when no explicit preference exists."
+        },
+        "tiers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AutoTierDescriptor",
+            "description": "A server-advertised routing preference. Identifiers and execution types are extensible."
+          },
+          "description": "Routing preferences in the server's presentation order."
+        },
+        "providerId": {
+          "type": "string",
+          "description": "Provider that supplied this metadata, when the catalog is provider-attributed."
+        }
+      },
+      "required": [
+        "defaultTier",
+        "tiers"
+      ],
+      "description": "Account-bound discovery metadata for the virtual `auto` model."
+    },
+    "AutoTierStatus": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether the provider permits selecting this preference."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Extensible machine-readable unavailability reason."
+        },
+        "message": {
+          "type": "string",
+          "description": "Human-readable explanation of availability."
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "description": "Availability of a server-advertised routing preference."
+    },
+    "BuiltinAgentSummary": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The agent name, as it appears in `getBuiltins`."
+        },
+        "description": {
+          "type": "string",
+          "description": "One-line description of what the agent does."
+        }
+      },
+      "required": [
+        "name",
+        "description"
+      ],
+      "additionalProperties": false,
+      "description": "A shipped agent, named and described.",
+      "title": "BuiltinAgentSummary",
+      "visibility": "internal"
     },
     "BuiltInModelCatalog": {
       "type": "object",
@@ -20455,6 +21516,226 @@
       "title": "ConnectorDisconnectResult",
       "stability": "experimental"
     },
+    "ConnectorDiscoveryAccount": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "description": "Opaque account ID."
+        },
+        "authInfo": {
+          "$ref": "#/definitions/ConnectorDiscoveryAuthInfo",
+          "description": "Account metadata."
+        }
+      },
+      "required": [
+        "accountId",
+        "authInfo"
+      ],
+      "additionalProperties": false,
+      "description": "Eligible account.",
+      "title": "ConnectorDiscoveryAccount",
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryAccountList": {
+      "type": "object",
+      "properties": {
+        "availability": {
+          "$ref": "#/definitions/ConnectorDiscoveryAvailability",
+          "description": "Availability."
+        },
+        "accounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectorDiscoveryAccount",
+            "description": "Eligible account."
+          },
+          "description": "Eligible accounts."
+        }
+      },
+      "required": [
+        "availability",
+        "accounts"
+      ],
+      "additionalProperties": false,
+      "description": "Eligible accounts.",
+      "title": "ConnectorDiscoveryAccountList",
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryAccountRequest": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2048,
+          "pattern": "^\\S+$",
+          "description": "Opaque account ID."
+        }
+      },
+      "required": [
+        "accountId"
+      ],
+      "additionalProperties": false,
+      "description": "Selected account.",
+      "title": "ConnectorDiscoveryAccountRequest",
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryAuthInfo": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "$ref": "#/definitions/AuthInfoType",
+          "description": "Authentication type."
+        },
+        "host": {
+          "type": "string",
+          "description": "Host."
+        },
+        "login": {
+          "type": "string",
+          "description": "Login."
+        }
+      },
+      "required": [
+        "type",
+        "host",
+        "login"
+      ],
+      "additionalProperties": false,
+      "description": "Account metadata.",
+      "title": "ConnectorDiscoveryAuthInfo",
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryAvailability": {
+      "type": "string",
+      "enum": [
+        "enabled",
+        "disabled",
+        "unavailable"
+      ],
+      "description": "Availability.",
+      "title": "ConnectorDiscoveryAvailability",
+      "x-enumDescriptions": {
+        "enabled": "Enabled.",
+        "disabled": "Disabled.",
+        "unavailable": "Unavailable."
+      },
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryCapabilities": {
+      "type": "object",
+      "properties": {
+        "apiVersion": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "API version."
+        },
+        "availability": {
+          "$ref": "#/definitions/ConnectorDiscoveryAvailability",
+          "description": "Availability."
+        },
+        "opaqueAccountSelection": {
+          "type": "boolean",
+          "description": "Whether accounts are selected by opaque ID."
+        },
+        "conditionalCache": {
+          "type": "boolean",
+          "description": "Whether results are cached."
+        }
+      },
+      "required": [
+        "apiVersion",
+        "availability",
+        "opaqueAccountSelection",
+        "conditionalCache"
+      ],
+      "additionalProperties": false,
+      "description": "Feature availability.",
+      "title": "ConnectorDiscoveryCapabilities",
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryCatalogEntry": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description."
+        },
+        "logo": {
+          "type": "string",
+          "description": "Logo."
+        },
+        "tier": {
+          "type": "string",
+          "description": "Tier."
+        },
+        "releaseTag": {
+          "type": "string",
+          "description": "Release tag."
+        },
+        "status": {
+          "$ref": "#/definitions/ConnectorCatalogStatus",
+          "description": "Status."
+        }
+      },
+      "required": [
+        "name",
+        "displayName",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Entry.",
+      "title": "ConnectorDiscoveryCatalogEntry",
+      "stability": "experimental"
+    },
+    "ConnectorDiscoveryCatalogResult": {
+      "type": "object",
+      "properties": {
+        "accountId": {
+          "type": "string",
+          "description": "Opaque account ID."
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Revision."
+        },
+        "refreshedAtMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991,
+          "description": "Refresh time in Unix epoch milliseconds."
+        },
+        "connectors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectorDiscoveryCatalogEntry",
+            "description": "Entry."
+          },
+          "description": "Entries."
+        }
+      },
+      "required": [
+        "accountId",
+        "revision",
+        "refreshedAtMs",
+        "connectors"
+      ],
+      "additionalProperties": false,
+      "description": "Entries for the selected account.",
+      "title": "ConnectorDiscoveryCatalogResult",
+      "stability": "experimental"
+    },
     "ConnectorMcpStatus": {
       "type": "string",
       "enum": [
@@ -21365,9 +22646,17 @@
           "type": "string",
           "description": "Currently active model identifier"
         },
+        "providerId": {
+          "type": "string",
+          "description": "Provider selected for this model. Together with modelId, identifies a catalog entry even when providers serve the same model. Omitted for unattributed legacy selections."
+        },
         "planBaseModelId": {
           "type": "string",
           "description": "Captured base model to restore when leaving plan mode. Omitted outside plan mode or when no plan override has captured a base model. Persistent agent model requirements apply to this model rather than the temporary plan model."
+        },
+        "planBaseProviderId": {
+          "type": "string",
+          "description": "Provider of planBaseModelId, when that saved selection is provider-qualified."
         },
         "reasoningEffort": {
           "type": "string",
@@ -21385,7 +22674,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -21397,7 +22686,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -22611,7 +23900,8 @@
       "required": [
         "features"
       ],
-      "description": "Hosting capabilities and session capacity advertised by an environment."
+      "description": "Hosting capabilities and session capacity advertised by an environment.",
+      "stability": "experimental"
     },
     "EnvironmentKind": {
       "type": "string",
@@ -22629,7 +23919,8 @@
         "managed-actions": "A GitHub-managed environment backed by GitHub Actions.",
         "managed-sandbox": "A GitHub-managed sandbox environment.",
         "managed-cca": "A GitHub-managed cloud coding agent environment."
-      }
+      },
+      "stability": "experimental"
     },
     "EnvironmentsDeleteRequest": {
       "type": "object",
@@ -22643,13 +23934,15 @@
         "environmentId"
       ],
       "additionalProperties": false,
-      "description": "Identify a user-managed Mission Control environment to delete."
+      "description": "Identify a user-managed Mission Control environment to delete.",
+      "stability": "experimental"
     },
     "EnvironmentsDeleteResult": {
       "type": "object",
       "properties": {},
       "additionalProperties": false,
-      "description": "Acknowledgement that the requested environment was deleted."
+      "description": "Acknowledgement that the requested environment was deleted.",
+      "stability": "experimental"
     },
     "EnvironmentsGetRequest": {
       "type": "object",
@@ -22663,7 +23956,8 @@
         "environmentId"
       ],
       "additionalProperties": false,
-      "description": "Identify a Mission Control environment to retrieve."
+      "description": "Identify a Mission Control environment to retrieve.",
+      "stability": "experimental"
     },
     "EnvironmentsGetResult": {
       "type": "object",
@@ -22676,7 +23970,8 @@
       "required": [
         "environment"
       ],
-      "description": "Safe discovery information for the requested environment."
+      "description": "Safe discovery information for the requested environment.",
+      "stability": "experimental"
     },
     "EnvironmentsListRequest": {
       "type": "object",
@@ -22691,7 +23986,8 @@
         }
       },
       "additionalProperties": false,
-      "description": "Optional discovery filters supported by GitHub Mission Control."
+      "description": "Optional discovery filters supported by GitHub Mission Control.",
+      "stability": "experimental"
     },
     "EnvironmentsListResult": {
       "type": "object",
@@ -22708,7 +24004,8 @@
       "required": [
         "environments"
       ],
-      "description": "Environments visible to the authenticated caller and matching the supplied filters."
+      "description": "Environments visible to the authenticated caller and matching the supplied filters.",
+      "stability": "experimental"
     },
     "EventLogReadRequest": {
       "type": "object",
@@ -23714,6 +25011,40 @@
       "description": "Authentication-info input variant for GitHub CLI credentials, carrying host, login, and the `gh auth token` value.",
       "title": "GhCliAuthInfo"
     },
+    "GitCurrentBranchRemoteResult": {
+      "type": "object",
+      "properties": {
+        "remote": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Name of the tracked remote. Reports `origin` whenever the working tree has no tracking configuration to read, including on a detached HEAD, so this is never null and never empty."
+        }
+      },
+      "required": [
+        "remote"
+      ],
+      "additionalProperties": false,
+      "description": "The remote the checked-out branch tracks.",
+      "title": "GitCurrentBranchRemoteResult",
+      "visibility": "internal"
+    },
+    "GitCwdRequest": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute path to a directory inside the git working tree to query."
+        }
+      },
+      "required": [
+        "cwd"
+      ],
+      "additionalProperties": false,
+      "description": "Working-tree path a git query applies to.",
+      "title": "GitCwdRequest",
+      "visibility": "internal"
+    },
     "GitHubEnvironment": {
       "type": "object",
       "properties": {
@@ -23767,7 +25098,136 @@
         "kind",
         "status"
       ],
-      "description": "Safe discovery information. Host-side relay bootstrap credentials are never included."
+      "description": "Safe discovery information. Host-side relay bootstrap credentials are never included.",
+      "stability": "experimental"
+    },
+    "GitHubOwnerOption": {
+      "type": "object",
+      "properties": {
+        "login": {
+          "type": "string",
+          "description": "The owner's GitHub login."
+        },
+        "type": {
+          "type": "string",
+          "description": "Which kind of owner this is. The authenticated user's own account is always reported as `user`."
+        }
+      },
+      "required": [
+        "login",
+        "type"
+      ],
+      "additionalProperties": false,
+      "description": "A GitHub login the authenticated user may act as: their own account, or an organization they belong to.",
+      "title": "GitHubOwnerOption",
+      "visibility": "internal"
+    },
+    "GitHubOwnersCancelRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request id the listing was started with."
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "The owner listing to abandon.",
+      "title": "GitHubOwnersCancelRequest",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "GitHubOwnersCancelResult": {
+      "type": "object",
+      "properties": {
+        "canceled": {
+          "type": "boolean",
+          "description": "True when a listing with the id was running and the cancel stopped it. False when the id was never registered, was registered but unused, was released after being abandoned, or its listing had ended. An unused id is released and cannot start a later listing."
+        }
+      },
+      "required": [
+        "canceled"
+      ],
+      "additionalProperties": false,
+      "description": "Whether the id named a running owner listing.",
+      "title": "GitHubOwnersCancelResult",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "GitHubOwnersListRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request id from `gitHubOwners.nextRequestId`. An id that was never registered, canceled before use, released after being abandoned, or already used is refused rather than silently running uncancellable."
+        },
+        "authInfo": {
+          "description": "The credential the listing runs under, carried opaquely because its shape is the host's own and the runtime only resolves a token and a GitHub host from it. No credential travels: this selects one the runtime already holds.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "requestId",
+        "authInfo"
+      ],
+      "additionalProperties": false,
+      "description": "Credential to list owners under, and the request id that makes the listing cancellable.",
+      "title": "GitHubOwnersListRequest",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "GitHubOwnersListResult": {
+      "type": "object",
+      "properties": {
+        "owners": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GitHubOwnerOption",
+            "description": "A GitHub login the authenticated user may act as: their own account, or an organization they belong to.",
+            "visibility": "internal"
+          },
+          "description": "The owners, on success: the authenticated user first, then the organizations they belong to."
+        },
+        "message": {
+          "type": "string",
+          "description": "Why no owners could be listed, phrased for a user. Present when the listing failed in a way the caller should render rather than raise."
+        },
+        "warning": {
+          "type": "string",
+          "description": "A line the caller should log. Present only alongside `message`, and only for failures worth recording."
+        },
+        "throwError": {
+          "type": "string",
+          "description": "A malformed request or an unreadable credential, which the caller raises instead of rendering. Kept a field rather than a dispatch error so it stays distinct from `message`, which the caller renders."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Outcome of an owner listing. Exactly one of `owners` and `message` is present, except that `throwError` reports a failure the caller is expected to raise rather than render.",
+      "title": "GitHubOwnersListResult",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "GitHubOwnersRequestIdResult": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request id to pass to `gitHubOwners.list` and, to abandon it, `gitHubOwners.cancel`."
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "A freshly registered request id. Registering it before the listing starts is what lets a cancel that races the request still find the owner listing slot. The id serves one listing only. Long-abandoned unused ids can be released by later allocations.",
+      "title": "GitHubOwnersRequestIdResult",
+      "visibility": "internal",
+      "stability": "experimental"
     },
     "GitHubRepoRef": {
       "type": "object",
@@ -23793,6 +25253,70 @@
       "additionalProperties": false,
       "description": "Pointer to a GitHub repository.",
       "title": "GitHubRepoRef"
+    },
+    "GitHubRepositoryAtPathRequest": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute path to a directory inside the git working tree to resolve."
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "additionalProperties": false,
+      "description": "Working-tree path whose owning GitHub repository should be resolved.",
+      "title": "GitHubRepositoryAtPathRequest",
+      "visibility": "internal"
+    },
+    "GitHubRepositoryAtPathResult": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/GitHubRepositoryIdentity",
+              "description": "Owner, name, and host of a GitHub repository, as resolved from a git remote URL."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Resolved repository identity, or null when the selected remote resolves to no GitHub host."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The GitHub repository that owns the requested path, when the selected remote (`origin`, else the first) is on a GitHub host.",
+      "title": "GitHubRepositoryAtPathResult",
+      "visibility": "internal"
+    },
+    "GitHubRepositoryIdentity": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Repository owner login (user or organization)."
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name, without the owner prefix or the `.git` suffix."
+        },
+        "host": {
+          "type": "string",
+          "description": "Host the remote points at, for example `github.com` or a GitHub Enterprise hostname."
+        }
+      },
+      "required": [
+        "owner",
+        "name",
+        "host"
+      ],
+      "additionalProperties": false,
+      "description": "Owner, name, and host of a GitHub repository, as resolved from a git remote URL.",
+      "title": "GitHubRepositoryIdentity"
     },
     "GitHubTelemetryClientInfo": {
       "type": "object",
@@ -24037,6 +25561,221 @@
       "description": "SDK host response to a GitHub credential request.",
       "title": "GitHubTokenAcquireResult",
       "stability": "experimental"
+    },
+    "GitRemoteRepository": {
+      "type": "object",
+      "properties": {
+        "owner": {
+          "type": "string",
+          "description": "Account or organization owning the repository."
+        },
+        "name": {
+          "type": "string",
+          "description": "Repository name, without the owner."
+        },
+        "host": {
+          "type": "string",
+          "description": "GitHub host serving the repository, which is not `github.com` for a GitHub Enterprise remote."
+        },
+        "remoteName": {
+          "type": "string",
+          "description": "Name of the first remote that produced this distinct repository entry, such as `origin` or `upstream`."
+        }
+      },
+      "required": [
+        "owner",
+        "name",
+        "host",
+        "remoteName"
+      ],
+      "additionalProperties": false,
+      "description": "A GitHub repository one of a working tree's remotes points at.",
+      "title": "GitRemoteRepository",
+      "visibility": "internal"
+    },
+    "GitReposFromRemotesRequest": {
+      "type": "object",
+      "properties": {
+        "gitRoot": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Absolute path to the root of the git working tree."
+        }
+      },
+      "required": [
+        "gitRoot"
+      ],
+      "additionalProperties": false,
+      "description": "Git working tree whose GitHub remotes should be listed.",
+      "title": "GitReposFromRemotesRequest",
+      "visibility": "internal"
+    },
+    "GitReposFromRemotesResult": {
+      "type": "object",
+      "properties": {
+        "repositories": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/GitRemoteRepository",
+            "description": "A GitHub repository one of a working tree's remotes points at.",
+            "visibility": "internal"
+          },
+          "description": "One entry per distinct GitHub repository, in the order git reports the first remote for each repository. Empty when no remote points at a GitHub host, which a caller should read as `not connected to GitHub`. Failing to read the remotes is an error, not an empty list."
+        }
+      },
+      "required": [
+        "repositories"
+      ],
+      "additionalProperties": false,
+      "description": "The GitHub repositories a working tree's remotes point at.",
+      "title": "GitReposFromRemotesResult",
+      "visibility": "internal"
+    },
+    "GlobalStateLoadForConfigDirRequest": {
+      "type": "object",
+      "properties": {
+        "configDir": {
+          "type": "string",
+          "description": "Copilot configuration directory to read the state document from, taking precedence over the server's own `COPILOT_HOME` and default home. Omit it, or pass an empty string, to read the directory the server resolved for itself."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Selects the configuration directory whose machine-wide state to read.",
+      "title": "GlobalStateLoadForConfigDirRequest",
+      "visibility": "internal"
+    },
+    "GlobalStateLoadResult": {
+      "type": "object",
+      "properties": {
+        "installedPlugins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InstalledPlugin",
+            "description": "Installed plugin record from global state, with marketplace, version, install time, enabled state, cache path, and source."
+          },
+          "description": "Plugins installed on this machine."
+        },
+        "recentModelIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Models the user selected recently, most recent first."
+        },
+        "firstLaunchAt": {
+          "type": "string",
+          "description": "When the host first ran on this machine."
+        },
+        "askedSetupTerminals": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Terminals the user has already been asked to set up, so the host does not ask twice."
+        },
+        "suppressInitFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Folders where the user declined the init prompt, so it stays hidden there."
+        },
+        "sandboxOnboardingShown": {
+          "type": "boolean",
+          "description": "Whether the sandbox onboarding has been shown."
+        },
+        "sandboxCredentialProxyCaDeclined": {
+          "type": "boolean",
+          "description": "Whether the user declined to trust the sandbox credential proxy CA."
+        },
+        "appTipShown": {
+          "type": "boolean",
+          "description": "Whether the app tip has been shown."
+        },
+        "reasoningSummariesCleanupDone": {
+          "type": "boolean",
+          "description": "Whether the one-off cleanup of stored reasoning summaries has run."
+        },
+        "lastLoggedInUser": {
+          "$ref": "#/definitions/LoggedInUser",
+          "description": "Account used for the most recent sign-in."
+        },
+        "loggedInUsers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/LoggedInUser",
+            "description": "An account the host has signed in to, identified by the server it lives on and the login it uses there. The same person can appear more than once when they use both github.com and an Enterprise server.",
+            "visibility": "internal"
+          },
+          "description": "Every account the host has signed in to on this machine."
+        },
+        "staff": {
+          "type": "boolean",
+          "description": "Whether the user is a GitHub or Microsoft staff member, which unlocks internal-only behavior."
+        },
+        "staffGithub": {
+          "type": "boolean",
+          "description": "Whether the user was recognized as GitHub staff."
+        },
+        "staffMicrosoft": {
+          "type": "boolean",
+          "description": "Whether the user was recognized as Microsoft staff."
+        },
+        "staffModelResetAt": {
+          "type": "string",
+          "description": "When the staff-only model reset last ran."
+        },
+        "staffLogLevelMigrationAt": {
+          "type": "string",
+          "description": "When the staff-only log level migration last ran."
+        },
+        "staffUpdateChannelMigrationAt": {
+          "type": "string",
+          "description": "When the staff-only update channel migration last ran."
+        },
+        "trustedFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Folders the user has marked as trusted."
+        },
+        "appInstallNudgeResponded": {
+          "type": "boolean",
+          "description": "Whether the user has answered the prompt suggesting they install the desktop app."
+        },
+        "autoFeedbackLastPromptedAt": {
+          "type": "string",
+          "description": "When the Auto-feedback hint was last shown, as an ISO 8601 timestamp. It enforces the once-per-day cap for non-staff users across restarts."
+        }
+      },
+      "description": "The host's machine-wide state. Every field is optional because a fresh install has recorded nothing yet, so a reader must treat an absent field as `not yet`, never as a negative answer. Stored credentials are deliberately absent from this shape.",
+      "title": "GlobalStateLoadResult",
+      "visibility": "internal"
+    },
+    "GlobalStateWriteKeyRequest": {
+      "type": "object",
+      "properties": {
+        "configDir": {
+          "type": "string",
+          "description": "Copilot configuration directory to write the state document in, taking precedence over the server's own `COPILOT_HOME` and default home. Omit it, or pass an empty string, to write the directory the server resolved for itself. Mirrors `globalState.loadForConfigDir`, so a caller can read and write the same directory."
+        },
+        "key": {
+          "type": "string",
+          "description": "Top-level key to write, named as it appears in the result of `globalState.load`. It must be one of the writable keys that `globalState.writeKey` lists."
+        },
+        "value": {
+          "description": "Value to store for the key. Omit it, or pass null, to remove the key instead.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "key"
+      ],
+      "additionalProperties": false,
+      "description": "A single top-level key to record in the host's machine-wide state. The write replaces only that key and leaves the rest of the document untouched, so two writers recording different one-off flags do not overwrite each other. The stored credential keys cannot be written through this method.",
+      "title": "GlobalStateWriteKeyRequest",
+      "visibility": "internal"
     },
     "HandlePendingToolCallRequest": {
       "type": "object",
@@ -24848,7 +26587,8 @@
         "sessionFactory",
         "resumeFactory"
       ],
-      "description": "Normalized listener settings delivered only to the supervised hosting participant."
+      "description": "Normalized listener settings delivered only to the supervised hosting participant.",
+      "stability": "experimental"
     },
     "HostDisposeRequest": {
       "type": "object",
@@ -24861,13 +26601,15 @@
       "required": [
         "hostId"
       ],
-      "description": "Stops a connection-owned listener and joins its teardown."
+      "description": "Stops a connection-owned listener and joins its teardown.",
+      "stability": "experimental"
     },
     "HostEmptyResult": {
       "type": "object",
       "properties": {},
       "additionalProperties": false,
-      "description": "Empty acknowledgement for a completed host lifecycle operation."
+      "description": "Empty acknowledgement for a completed host lifecycle operation.",
+      "stability": "experimental"
     },
     "HostEnvironmentCredentials": {
       "type": "object",
@@ -24896,7 +26638,8 @@
         "missionControlUrl"
       ],
       "additionalProperties": false,
-      "description": "Private credentials delivered only to a runtime-owned Mission Control hosting participant."
+      "description": "Private credentials delivered only to a runtime-owned Mission Control hosting participant.",
+      "stability": "experimental"
     },
     "HostExitedNotification": {
       "type": "object",
@@ -24928,7 +26671,8 @@
         "hostId",
         "reason"
       ],
-      "description": "Reports a supervised listener's hosting-task termination and cleanup outcome."
+      "description": "Reports a supervised listener's hosting-task termination and cleanup outcome.",
+      "stability": "experimental"
     },
     "HostExitReason": {
       "type": "string",
@@ -24943,7 +26687,8 @@
         "exited": "The hosting task or its SDK transport exited; this does not mean the runtime process exited.",
         "ownerDisconnected": "The owning SDK connection disconnected.",
         "runtimeShutdown": "The runtime is shutting down."
-      }
+      },
+      "stability": "experimental"
     },
     "HostGithubEnvironmentOptions": {
       "type": "object",
@@ -24955,6 +26700,10 @@
         "computeId": {
           "type": "string",
           "description": "Stable application installation identity, reused across host restarts."
+        },
+        "requireConnectionBinding": {
+          "type": "boolean",
+          "description": "Require sealed, connection-bound authentication (default true), independent of listener address. False permits unsealed direct credentials and unbound sealed relay credentials; use only when the caller fully controls and trusts the direct transport. Relay token encryption remains mandatory."
         }
       },
       "required": [
@@ -24962,7 +26711,39 @@
         "computeId"
       ],
       "additionalProperties": false,
-      "description": "GitHub Mission Control registration options. The compute ID is application-owned and stable."
+      "description": "GitHub Mission Control registration options. The compute ID is application-owned and stable.",
+      "stability": "experimental"
+    },
+    "HostListSessionsRequest": {
+      "type": "object",
+      "properties": {
+        "hostId": {
+          "type": "string",
+          "description": "Listener UUID returned by host.start; the caller must own it. Omit to read\nthe saved default compute-identity catalog without starting a listener."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Reads a running host's catalog or the runtime's saved default catalog.",
+      "stability": "experimental"
+    },
+    "HostListSessionsResult": {
+      "type": "object",
+      "properties": {
+        "sessions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/HostSessionSummary",
+            "description": "Metadata advertised by the AHP host, not a guarantee that history can be resumed."
+          },
+          "description": "Complete advertised session summaries, in the host's catalog order."
+        }
+      },
+      "required": [
+        "sessions"
+      ],
+      "additionalProperties": false,
+      "description": "The complete live and dormant advertised catalog, without subscribing to sessions.",
+      "stability": "experimental"
     },
     "HostLocalServerConfiguration": {
       "type": "object",
@@ -24991,7 +26772,8 @@
         "port",
         "requireConnectionToken"
       ],
-      "description": "Normalized local WebSocket listener settings."
+      "description": "Normalized local WebSocket listener settings.",
+      "stability": "experimental"
     },
     "HostLocalServerOptions": {
       "type": "object",
@@ -25016,7 +26798,8 @@
         }
       },
       "additionalProperties": false,
-      "description": "Local WebSocket transport options."
+      "description": "Local WebSocket transport options.",
+      "stability": "experimental"
     },
     "HostPublishSessionRequest": {
       "type": "object",
@@ -25035,7 +26818,8 @@
         "sessionId"
       ],
       "additionalProperties": false,
-      "description": "Publishes a resident session attached to the listener's owning connection."
+      "description": "Publishes a resident session attached to the listener's owning connection.",
+      "stability": "experimental"
     },
     "HostPublishSessionResult": {
       "type": "object",
@@ -25054,7 +26838,8 @@
         "sessionUri"
       ],
       "additionalProperties": false,
-      "description": "The existing runtime identity and its resource on the listener."
+      "description": "The existing runtime identity and its resource on the listener.",
+      "stability": "experimental"
     },
     "HostReadyRequest": {
       "type": "object",
@@ -25073,7 +26858,8 @@
         }
       },
       "additionalProperties": false,
-      "description": "Readiness reported by the supervised hosting participant on its own SDK connection."
+      "description": "Readiness reported by the supervised hosting participant on its own SDK connection.",
+      "stability": "experimental"
     },
     "HostRegisterSessionRequest": {
       "type": "object",
@@ -25113,7 +26899,8 @@
         "workingDirectory"
       ],
       "additionalProperties": false,
-      "description": "Listener-scoped registration, not a copy or durable adoption of a session."
+      "description": "Listener-scoped registration, not a copy or durable adoption of a session.",
+      "stability": "experimental"
     },
     "HostSessionCreateCallback": {
       "type": "object",
@@ -25143,7 +26930,8 @@
         "handoffId",
         "config"
       ],
-      "description": "Application callback routed over its existing SDK connection."
+      "description": "Application callback routed over its existing SDK connection.",
+      "stability": "experimental"
     },
     "HostSessionCreateRequest": {
       "type": "object",
@@ -25157,6 +26945,11 @@
           "default": false,
           "description": "Resume an app-owned durable session instead of creating a new session."
         },
+        "preferResident": {
+          "type": "boolean",
+          "default": false,
+          "description": "For an explicit publication, borrow an existing owning-connection resident\ninstead of invoking the resume factory. Cold sessions still use the factory."
+        },
         "config": {
           "type": "object",
           "properties": {},
@@ -25169,7 +26962,8 @@
         "config"
       ],
       "additionalProperties": false,
-      "description": "One application-owned session handoff, requested by the supervised hosting participant."
+      "description": "One application-owned session handoff, requested by the supervised hosting participant.",
+      "stability": "experimental"
     },
     "HostSessionCreateResult": {
       "type": "object",
@@ -25183,7 +26977,8 @@
         "sessionId"
       ],
       "additionalProperties": false,
-      "description": "The resident session the application has materialized on its own connection."
+      "description": "The resident session the application has materialized on its own connection.",
+      "stability": "experimental"
     },
     "HostSessionReleasedNotification": {
       "type": "object",
@@ -25201,7 +26996,8 @@
         "hostId",
         "handoffId"
       ],
-      "description": "Releases the original application session object retained for one handoff."
+      "description": "Releases the original application session object retained for one handoff.",
+      "stability": "experimental"
     },
     "HostSessionReleaseRequest": {
       "type": "object",
@@ -25215,7 +27011,48 @@
         "handoffId"
       ],
       "additionalProperties": false,
-      "description": "Ends one participation, not the application's session lifetime."
+      "description": "Ends one participation, not the application's session lifetime.",
+      "stability": "experimental"
+    },
+    "HostSessionSummary": {
+      "type": "object",
+      "properties": {
+        "resource": {
+          "type": "string",
+          "description": "Stable AHP resource URI identifying the session on this host."
+        },
+        "title": {
+          "type": "string",
+          "description": "Authoritative title advertised by the host."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Session creation time as an ISO 8601 timestamp."
+        },
+        "modifiedAt": {
+          "type": "string",
+          "description": "Last modification time as an ISO 8601 timestamp."
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4294967295,
+          "description": "Unsigned 32-bit AHP session status bitset (0..=4294967295); unknown bits must be preserved."
+        },
+        "activity": {
+          "type": "string",
+          "description": "Optional activity description advertised by the host."
+        }
+      },
+      "required": [
+        "resource",
+        "title",
+        "createdAt",
+        "modifiedAt",
+        "status"
+      ],
+      "description": "Metadata advertised by the AHP host, not a guarantee that history can be resumed.",
+      "stability": "experimental"
     },
     "HostStartRequest": {
       "type": "object",
@@ -25223,6 +27060,10 @@
         "hostId": {
           "type": "string",
           "description": "Caller-generated UUID identifying this connection-owned listener."
+        },
+        "computeId": {
+          "type": "string",
+          "description": "Stable application identity selecting its durable host catalog. Defaults to the persisted runtime compute GUID; must agree with githubEnvironment.computeId when both are supplied."
         },
         "localServer": {
           "$ref": "#/definitions/HostLocalServerOptions",
@@ -25245,7 +27086,15 @@
         "hostId"
       ],
       "additionalProperties": false,
-      "description": "Starts a supervised AHP host with at least one explicitly selected transport."
+      "description": "Starts a supervised AHP host with at least one explicitly selected transport.",
+      "x-legacy-parameters": [
+        "hostId",
+        "localServer",
+        "githubEnvironment",
+        "sessionFactory",
+        "resumeFactory"
+      ],
+      "stability": "experimental"
     },
     "HostStartResult": {
       "type": "object",
@@ -25275,7 +27124,8 @@
       "required": [
         "hostId"
       ],
-      "description": "Listener readiness, returned only after binding and the supervised participant's SDK handshake."
+      "description": "Listener readiness, returned only after binding and the supervised participant's SDK handshake.",
+      "stability": "experimental"
     },
     "IndexedSearchState": {
       "type": "string",
@@ -26285,6 +28135,35 @@
       "description": "Persisted local session metadata, including identifiers, timestamps, summary/name, client, context, detached state, and task ID.",
       "title": "LocalSessionMetadataValue"
     },
+    "LoggedInUser": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Host the account belongs to, such as `github.com` or an Enterprise server."
+        },
+        "login": {
+          "type": "string",
+          "description": "Account login on that host."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Account kind, when the host recorded one. Consumers must tolerate new strings."
+        },
+        "derivedFrom": {
+          "type": "string",
+          "description": "Source account this account was derived from, when one was recorded."
+        }
+      },
+      "required": [
+        "host",
+        "login"
+      ],
+      "additionalProperties": false,
+      "description": "An account the host has signed in to, identified by the server it lives on and the login it uses there. The same person can appear more than once when they use both github.com and an Enterprise server.",
+      "title": "LoggedInUser",
+      "visibility": "internal"
+    },
     "LoginProviderKind": {
       "type": "string",
       "enum": [
@@ -26414,6 +28293,53 @@
       "description": "Non-secret host-managed HTTP MCP server configuration. The containing map key is the stable managed identity; credentials are supplied dynamically by the host.",
       "title": "ManagedMcpServerConfig"
     },
+    "ManagedPluginRetryEntry": {
+      "type": "object",
+      "properties": {
+        "spec": {
+          "type": "string",
+          "description": "Plugin spec in \"plugin@marketplace\" form."
+        },
+        "status": {
+          "$ref": "#/definitions/ManagedPluginRetryStatus",
+          "description": "What the retry did for this plugin."
+        },
+        "error": {
+          "type": "string",
+          "description": "Why the plugin was not prepared. Present when `status` is `failed` or `deferred`."
+        }
+      },
+      "required": [
+        "spec",
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Retry outcome for one plugin required by managed settings.",
+      "title": "ManagedPluginRetryEntry",
+      "stability": "experimental"
+    },
+    "ManagedPluginRetryStatus": {
+      "type": "string",
+      "enum": [
+        "installed",
+        "updated",
+        "already_present",
+        "failed",
+        "deferred",
+        "not_required"
+      ],
+      "description": "What retrying did for one plugin required by managed settings.",
+      "title": "ManagedPluginRetryStatus",
+      "x-enumDescriptions": {
+        "installed": "The plugin was missing and is now installed.",
+        "updated": "An update was available and is now installed.",
+        "already_present": "The plugin was already installed and current, so nothing was done.",
+        "failed": "Checking, installing, or updating the plugin failed. See `error`.",
+        "deferred": "The plugin was not prepared because another session was changing plugins or the managed settings changed during the retry. It is prepared again before a later message.",
+        "not_required": "The session's managed settings do not require this plugin, so nothing was done."
+      },
+      "stability": "experimental"
+    },
     "ManagedSettingMeta": {
       "type": "object",
       "properties": {
@@ -26424,6 +28350,10 @@
         "source": {
           "type": "string",
           "description": "Channel that supplied this scalar value, matching a `layers[].source`: `device`, `server`, or `policyHelper`. These scalar defaults select one winning channel, not a mixed source. Treat unknown values as additional channels; more may be added."
+        },
+        "requested": {
+          "type": "string",
+          "description": "Original managed value when the runtime adjusted it to a supported effective value. Omitted when no adjustment was needed."
         }
       },
       "required": [
@@ -26603,6 +28533,14 @@
         "autoTier": {
           "$ref": "#/definitions/ManagedSettingMeta",
           "description": "Lock state and provenance of `values.autoTier`."
+        },
+        "effortLevel": {
+          "$ref": "#/definitions/ManagedSettingMeta",
+          "description": "Lock state and provenance of `values.effortLevel`."
+        },
+        "contextTier": {
+          "$ref": "#/definitions/ManagedSettingMeta",
+          "description": "Lock state and provenance of `values.contextTier`."
         }
       },
       "additionalProperties": false,
@@ -26730,6 +28668,10 @@
             "clientName": {
               "type": "string",
               "description": "Embedding client identity for server policy requests, as in session creation. Omit for the CLI identity."
+            },
+            "workingDirectory": {
+              "type": "string",
+              "description": "Working directory used to run an organization policy helper. When omitted, sessionless resolution does not run the helper."
             }
           },
           "additionalProperties": false
@@ -26860,11 +28802,19 @@
       "properties": {
         "model": {
           "type": "string",
-          "description": "Managed default model identifier, as configured. New sessions start with it; it can name a model the account cannot use, so hosts match it against the listed models."
+          "description": "Managed default model identifier. When model availability was resolved, aliases and family names are projected to a concrete available model ID; otherwise the configured value is returned."
         },
         "autoTier": {
           "$ref": "#/definitions/AutoTier",
           "description": "Managed Auto routing preference, used when the selected model is `auto`."
+        },
+        "effortLevel": {
+          "type": "string",
+          "description": "Managed reasoning-effort default for the managed concrete model. The runtime clamps it to an entitled effort when model availability is known."
+        },
+        "contextTier": {
+          "$ref": "#/definitions/ContextTier",
+          "description": "Managed context-tier default for the managed concrete model."
         }
       },
       "additionalProperties": false,
@@ -27750,6 +29700,90 @@
       "additionalProperties": false,
       "description": "MCP server name and replacement configuration to write to user configuration.",
       "title": "McpConfigUpdateRequest"
+    },
+    "McpConfiguredServer": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[^\\x00-\\x1f/\\x7f-\\x9f}]+(?:\\/[^\\x00-\\x1f/\\x7f-\\x9f}]+)*$",
+          "description": "Server name (config key)"
+        },
+        "enabled": {
+          "type": "boolean",
+          "description": "Whether this configured server is enabled after session configuration and policy filtering."
+        },
+        "source": {
+          "$ref": "#/definitions/McpServerSource",
+          "description": "Configuration provenance: user, workspace, plugin, builtin, or managed."
+        },
+        "sourcePlugin": {
+          "type": "string",
+          "description": "Plugin name that provided this server, when source is plugin."
+        },
+        "sourcePluginVersion": {
+          "type": "string",
+          "description": "Plugin version that provided this server, when source is plugin."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Human-readable display name supplied by configuration."
+        },
+        "live": {
+          "$ref": "#/definitions/McpConfiguredServerState",
+          "description": "Observed state from an already materialized matching server. Omitted when no live graph has this configured server; it never determines configuration enablement."
+        }
+      },
+      "required": [
+        "name",
+        "enabled",
+        "live"
+      ],
+      "additionalProperties": false,
+      "description": "Effective MCP configuration entry. Configuration enablement is distinct from the optional live observation.",
+      "title": "McpConfiguredServer",
+      "stability": "experimental"
+    },
+    "McpConfiguredServerList": {
+      "type": "object",
+      "properties": {
+        "servers": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/McpConfiguredServer",
+            "description": "Effective MCP configuration entry. Configuration enablement is distinct from the optional live observation."
+          },
+          "description": "Effective configured MCP servers."
+        }
+      },
+      "required": [
+        "servers"
+      ],
+      "additionalProperties": false,
+      "description": "Effective MCP configuration with optional live observations from matching already materialized servers.",
+      "title": "McpConfiguredServerList",
+      "stability": "experimental"
+    },
+    "McpConfiguredServerState": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "$ref": "#/definitions/McpServerStatus",
+          "description": "Observed connection status. This is not a configuration or readiness guarantee."
+        },
+        "error": {
+          "type": "string",
+          "description": "Observed connection error, when the materialized server failed."
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "additionalProperties": false,
+      "description": "Observational state for a matching already materialized MCP server.",
+      "title": "McpConfiguredServerState",
+      "stability": "experimental"
     },
     "McpConfigureGitHubRequest": {
       "type": "object",
@@ -31649,6 +33683,10 @@
           "$ref": "#/definitions/McpServerSource",
           "description": "Configuration source: user, workspace, plugin, builtin, or managed"
         },
+        "url": {
+          "type": "string",
+          "description": "Configured URL for an HTTP/SSE server, regardless of configuration source. Omitted for local and in-memory servers."
+        },
         "sourcePlugin": {
           "type": "string",
           "description": "Plugin name that provided this server, when source is plugin."
@@ -32422,16 +34460,18 @@
         "workspace",
         "plugin",
         "builtin",
-        "managed"
+        "managed",
+        "account"
       ],
-      "description": "Configuration source: user, workspace, plugin, builtin, or managed",
+      "description": "Configuration source: user, workspace, plugin, builtin, managed, or account",
       "title": "McpServerSource",
       "x-enumDescriptions": {
         "user": "Server configured in the user's global MCP configuration.",
         "workspace": "Server configured by the current workspace.",
         "plugin": "Server contributed by an installed plugin.",
         "builtin": "Server bundled with the runtime.",
-        "managed": "Server supplied by a trusted host-managed catalog."
+        "managed": "Server supplied by a trusted host-managed catalog.",
+        "account": "Server contributed by a signed-in account; enablement and organization policy still apply."
       }
     },
     "McpServerStatus": {
@@ -32874,16 +34914,20 @@
         "promptTokenLimit": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum prompt tokens allowed by the target model. Pass 0 to use the runtime default."
+          "description": "Advertised prompt allowance. Pass 0 to resolve the selected model and context tier from the session."
         },
         "outputTokenLimit": {
           "type": "integer",
           "minimum": 0,
-          "description": "Maximum output tokens allowed by the target model. Pass 0 if unknown."
+          "description": "Requested output allowance to reserve against the combined context ceiling. Pass 0 to resolve the session's request cap, falling back to the model's advertised output limit."
         },
         "selectedModel": {
           "type": "string",
           "description": "Model identifier used for tokenization. Omit to use the session default. Used both for token counting and to compute display values."
+        },
+        "providerId": {
+          "type": "string",
+          "description": "Provider owning selectedModel. Omit to use the current provider for the current model, or deterministic legacy lookup for a different model."
         }
       },
       "required": [
@@ -33155,6 +35199,10 @@
           },
           "description": "Provider-supplied model metadata. Keys and JSON-compatible values are preserved unchanged. This is factual metadata published by the model provider; it carries no picker or UX semantics."
         },
+        "vendor": {
+          "type": "string",
+          "description": "Model vendor as the Copilot API reports it, for example \"Anthropic\" or \"Azure OpenAI\". Open vocabulary, passed through unchanged. It can name the vendor that serves the model instead of the one that built it, or a label that is not a vendor, such as \"Experimental\". Absent when the Copilot API reports no vendor."
+        },
         "policy": {
           "$ref": "#/definitions/ModelPolicy",
           "description": "Policy state (if applicable)"
@@ -33245,6 +35293,10 @@
         "repoModel": {
           "type": "string",
           "description": "Model selected by repository settings, when configured."
+        },
+        "repoModelProviderId": {
+          "type": "string",
+          "description": "Provider owning the repository-selected model. Omitted repository provider identity retains legacy bare-model behavior."
         },
         "repoReasoningEffort": {
           "type": "string",
@@ -33708,6 +35760,38 @@
         "sdk": "An SDK or RPC caller selected the model.",
         "auto_tier_recommendation": "The user accepted a CAPI-issued Auto tier recommendation."
       }
+    },
+    "ModelClearStartupSeedRequest": {
+      "type": "object",
+      "properties": {
+        "expectedModel": {
+          "type": "string"
+        },
+        "expectedProviderId": {
+          "type": "string",
+          "description": "Provider captured with the startup seed; omission matches only an unqualified seed."
+        }
+      },
+      "required": [
+        "expectedModel"
+      ],
+      "additionalProperties": false,
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "ModelClearStartupSeedResult": {
+      "type": "object",
+      "properties": {
+        "cleared": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "cleared"
+      ],
+      "additionalProperties": false,
+      "visibility": "internal",
+      "stability": "experimental"
     },
     "ModelList": {
       "type": "object",
@@ -34611,7 +36695,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -34647,7 +36731,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -34659,7 +36743,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -34671,7 +36755,7 @@
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -34730,13 +36814,17 @@
       "properties": {
         "modelId": {
           "type": "string",
-          "description": "Model selection id to switch to, as returned by `list`. A bare id (e.g. `claude-sonnet-4.6`) names a Copilot (CAPI) model; a provider-qualified id (`provider/id`, e.g. `acme/claude-sonnet`) targets a registry BYOK model."
+          "description": "Model id to switch to, as returned by `list`. Include providerId to select an exact catalog entry when providers share the id. Without providerId, a bare id retains incumbent selection behavior; a registry-qualified id (`provider/id`, e.g. `acme/claude-sonnet`) targets a BYOK model."
+        },
+        "providerId": {
+          "type": "string",
+          "description": "Provider id from the selected list entry's provider reference. Selects this exact provider/model pair; an unavailable pair fails rather than using another provider. Omit for deterministic legacy bare-model selection."
         },
         "autoTier": {
           "anyOf": [
             {
               "$ref": "#/definitions/AutoTier",
-              "description": "Routing preference used when the session model is `auto`. `fast` is an integrator-only latency preset and is not a first-party GitHub Copilot product preference."
+              "description": "Extensible routing preference for the virtual `auto` model. New identifiers must be advertised and enabled by the provider. `fast` is an integrator-only latency preset."
             },
             {
               "type": "null"
@@ -34810,7 +36898,24 @@
       "additionalProperties": false,
       "description": "Target model identifier and optional reasoning effort, summary, capability overrides, and context tier.",
       "title": "ModelSwitchToRequest",
-      "stability": "experimental"
+      "stability": "experimental",
+      "x-legacy-parameters": [
+        "modelId",
+        "autoTier",
+        "reasoningEffort",
+        "reasoningSummary",
+        "verbosity",
+        "modelCapabilities",
+        "contextTier",
+        "source",
+        "deferIfModelChangeQueued",
+        "compactionDecision",
+        "runCompactionPreflight",
+        "repoScope",
+        "modelChangeScope",
+        "requireAvailable",
+        "pickerPersistence"
+      ]
     },
     "ModelSwitchToResult": {
       "type": "object",
@@ -34898,6 +37003,10 @@
         "planModel": {
           "type": "string",
           "description": "Dedicated model to use in plan mode, when configured."
+        },
+        "planModelProviderId": {
+          "type": "string",
+          "description": "Provider owning planModel. Omit for legacy bare-model selection."
         },
         "planReasoningEffort": {
           "type": "string",
@@ -35341,6 +37450,62 @@
         "available": "If availableTools is set, it is the only constraint that applies (excludedTools is ignored). Preserves CLI / pre-existing client behavior. Default.",
         "excluded": "A tool is enabled if and only if it matches the allowlist (or the allowlist is unset) AND it does not match the denylist. Makes 'all except X' expressible by combining the two lists."
       }
+    },
+    "PendingExternalToolRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID to pass to session.tools.handlePendingToolCall"
+        },
+        "toolCallId": {
+          "type": "string",
+          "description": "Tool call ID assigned to this external tool invocation"
+        },
+        "toolName": {
+          "type": "string",
+          "description": "Name of the external tool to invoke"
+        },
+        "arguments": {
+          "description": "Arguments to pass to the external tool",
+          "x-opaque-json": true
+        },
+        "providerId": {
+          "type": "string",
+          "description": "Stable identity of the provider that offered the tool, for hosts that route extension-owned tools by provider"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier (the envelope agentId of its events) of the agent that issued the call; absent for calls issued by the root agent"
+        }
+      },
+      "required": [
+        "requestId",
+        "toolCallId",
+        "toolName"
+      ],
+      "additionalProperties": false,
+      "description": "External tool call of the session or one of its sub-agents that is still waiting for session.tools.handlePendingToolCall.",
+      "title": "PendingExternalToolRequest"
+    },
+    "PendingExternalToolRequestList": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PendingExternalToolRequest",
+            "description": "External tool call of the session or one of its sub-agents that is still waiting for session.tools.handlePendingToolCall."
+          },
+          "description": "External tool calls of the session and its sub-agents that session.tools.handlePendingToolCall would still accept, in the order they were requested. Includes calls that were pending when the session was last suspended and resumed with pending work continued, so a host that did not observe the original external_tool.requested event can answer them."
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false,
+      "description": "External tool calls still waiting for a result.",
+      "title": "PendingExternalToolRequestList"
     },
     "PendingPermissionRequest": {
       "type": "object",
@@ -39181,6 +41346,295 @@
       "description": "A BYOK model definition referencing a named provider.",
       "title": "ProviderModelConfig"
     },
+    "ProviderQuotaAccessState": {
+      "type": "string",
+      "enum": [
+        "allowed",
+        "denied",
+        "not_required",
+        "unknown",
+        "unavailable"
+      ],
+      "description": "Access policy reported by the quota service.",
+      "x-enumDescriptions": {
+        "allowed": "Access is allowed.",
+        "denied": "Access is denied.",
+        "not_required": "Quota is not required for this access.",
+        "unknown": "The service did not supply a recognized access state.",
+        "unavailable": "Client-only compatibility placeholder when acquisitionStatus is unavailable or failed; not an observed service verdict."
+      }
+    },
+    "ProviderQuotaAcquisitionStatus": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "unavailable",
+        "failed"
+      ],
+      "description": "Acquisition state, independent of the service's business access/capacity verdict.",
+      "x-enumDescriptions": {
+        "succeeded": "A service quota observation was received.",
+        "unavailable": "No service snapshot is available for this caller or surface.",
+        "failed": "Acquisition failed; inspect httpStatus/acquisitionError without inferring a business verdict."
+      }
+    },
+    "ProviderQuotaBudgetMetadata": {
+      "type": "object",
+      "properties": {
+        "unlimited": {
+          "type": "boolean",
+          "description": "Whether the budget has unlimited entitlement."
+        },
+        "entitlement": {
+          "type": "number",
+          "description": "Exact budget entitlement, retaining incumbent fractional-unit compatibility."
+        },
+        "consumed": {
+          "type": "number",
+          "description": "Exact measured consumption in the budget's unit."
+        },
+        "remainingPercentage": {
+          "type": "number",
+          "description": "Service-reported remaining percentage for authoritative budget presentation."
+        },
+        "usageAllowedWhenExhausted": {
+          "type": "boolean",
+          "description": "Whether service policy allows continued usage after exhaustion."
+        },
+        "overage": {
+          "type": "number",
+          "description": "Usage beyond entitlement, in the budget's unit."
+        },
+        "overageAllowedWhenExhausted": {
+          "type": "boolean",
+          "description": "Whether additional usage is allowed when the budget is exhausted."
+        },
+        "resetAtEpochMs": {
+          "type": "number",
+          "description": "Reset instant in epoch milliseconds when this budget actually defines a window."
+        },
+        "resetEstimated": {
+          "type": "boolean",
+          "description": "Whether the reset instant is an estimate."
+        },
+        "tokenBasedBilling": {
+          "type": "boolean",
+          "description": "Whether this budget uses token-based billing."
+        },
+        "overageLimit": {
+          "type": "number",
+          "description": "Optional additional-usage budget cap."
+        }
+      },
+      "required": [
+        "unlimited",
+        "entitlement",
+        "consumed",
+        "remainingPercentage",
+        "usageAllowedWhenExhausted",
+        "overage",
+        "overageAllowedWhenExhausted"
+      ],
+      "additionalProperties": false,
+      "description": "Authoritative budget measurements and policy metadata, independent of provider."
+    },
+    "ProviderQuotaCapacityState": {
+      "type": "string",
+      "enum": [
+        "available",
+        "exhausted",
+        "unlimited",
+        "not_required",
+        "not_applicable",
+        "unknown",
+        "unavailable"
+      ],
+      "description": "Capacity is independent of whether a numeric balance was supplied.",
+      "x-enumDescriptions": {
+        "available": "Capacity is available.",
+        "exhausted": "The service explicitly reports exhaustion.",
+        "unlimited": "The reported entitlement is unlimited.",
+        "not_required": "No billable quota is required.",
+        "not_applicable": "The service reports that capacity is not applicable.",
+        "unknown": "No recognized capacity state was supplied.",
+        "unavailable": "Client-only compatibility placeholder when acquisitionStatus is unavailable or failed; not an observed service verdict."
+      }
+    },
+    "ProviderQuotaObservationKind": {
+      "type": "string",
+      "enum": [
+        "account_snapshot",
+        "admission_state"
+      ],
+      "description": "Timing and purpose of a provider quota observation.",
+      "x-enumDescriptions": {
+        "account_snapshot": "An explicit account read; consumption may still be subject to service aggregation delay.",
+        "admission_state": "A verdict attached before an inference response. May be cached; never a post-charge balance."
+      }
+    },
+    "ProviderQuotaQuantityKind": {
+      "type": "string",
+      "enum": [
+        "authoritative_budget",
+        "advisory_balance",
+        "none"
+      ],
+      "description": "Interpretation permitted for independently reported quantities.",
+      "x-enumDescriptions": {
+        "authoritative_budget": "Quantities form an authoritative available-of-entitled budget suitable for percentage presentation.",
+        "advisory_balance": "Raw advisory quantities; do not infer permission, usage percentage, reset cadence, or post-charge balance.",
+        "none": "No quantity measurement, as with admission-only response headers."
+      }
+    },
+    "ProviderQuotaState": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "$ref": "#/definitions/ModelProviderRef",
+          "description": "Provider/account whose service reported this state."
+        },
+        "quotaId": {
+          "type": "string",
+          "description": "Service-owned quota identifier within this provider."
+        },
+        "unit": {
+          "$ref": "#/definitions/ProviderQuotaUnit",
+          "description": "Unit of entitledQuantity and availableQuantity."
+        },
+        "accessState": {
+          "$ref": "#/definitions/ProviderQuotaAccessState",
+          "description": "Whether the service permits access, independently of balance."
+        },
+        "capacityState": {
+          "$ref": "#/definitions/ProviderQuotaCapacityState",
+          "description": "Service capacity state; missing quantities do not imply exhaustion."
+        },
+        "observationKind": {
+          "$ref": "#/definitions/ProviderQuotaObservationKind",
+          "description": "Whether this is a GET account reading or a pre-response admission observation. Observations are never merged across kinds."
+        },
+        "quantityKind": {
+          "$ref": "#/definitions/ProviderQuotaQuantityKind",
+          "description": "Whether quantities are authoritative budget measurements, advisory balances, or absent. Only authoritative budgets support percentage presentation."
+        },
+        "acquisitionStatus": {
+          "$ref": "#/definitions/ProviderQuotaAcquisitionStatus",
+          "description": "Acquisition outcome. Unavailable/failed readings have no service verdict; access/capacity unavailable are compatibility placeholders only."
+        },
+        "observedAt": {
+          "type": "string",
+          "description": "When the runtime observed this reading, not a charge timestamp or guarantee that consumption has settled."
+        },
+        "httpStatus": {
+          "type": "integer",
+          "description": "HTTP status from acquisition, when available."
+        },
+        "acquisitionError": {
+          "type": "string",
+          "description": "Service error code or client acquisition category, separate from the business-state reason."
+        },
+        "budgetMetadata": {
+          "$ref": "#/definitions/ProviderQuotaBudgetMetadata",
+          "description": "Optional metadata for an authoritative budget. Advisory balances and admission-only observations do not populate this."
+        },
+        "compatibilityKey": {
+          "type": "string",
+          "description": "Key for the backwards-compatible snapshots projection, when the authoritative budget supports that contract."
+        },
+        "hasQuota": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Explicit service admission flag, when reported."
+        },
+        "entitledQuantity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Independently reported signed 64-bit entitlement. -1 is an unlimited sentinel, not a capacity-state rewrite; omission and null are preserved."
+        },
+        "availableQuantity": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Independently reported signed 64-bit available quantity. Zero does not override the service access/capacity verdict; omission and null are preserved."
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Service-reported explanation for the state."
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Service-reported quota source."
+        },
+        "service": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Service name owning this reading."
+        }
+      },
+      "required": [
+        "provider",
+        "quotaId",
+        "unit",
+        "accessState",
+        "capacityState"
+      ],
+      "additionalProperties": false,
+      "description": "An account quota reading. Absence of a quantity is unknown, never zero.",
+      "stability": "experimental"
+    },
+    "ProviderQuotaUnit": {
+      "type": "string",
+      "enum": [
+        "ai_credits",
+        "requests",
+        "tokens",
+        "unknown"
+      ],
+      "description": "Units explicitly reported by a quota provider.",
+      "x-enumDescriptions": {
+        "ai_credits": "AI credits, not tokens or currency.",
+        "requests": "Requests charged against an entitlement.",
+        "tokens": "Model tokens.",
+        "unknown": "The observation does not establish a quantity unit."
+      }
+    },
     "ProviderSessionToken": {
       "type": "object",
       "properties": {
@@ -40766,6 +43220,37 @@
       "title": "QueueWithdrawMessageResult",
       "stability": "experimental"
     },
+    "QuotaTakeWarningsResult": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/QuotaWarningProjection",
+        "description": "A pending session quota warning, consumed once by takeWarnings."
+      },
+      "description": "Pending warnings returned and cleared by session.quota.takeWarnings."
+    },
+    "QuotaWarningProjection": {
+      "type": "object",
+      "properties": {
+        "warningType": {
+          "type": "string",
+          "description": "Existing warning category."
+        },
+        "message": {
+          "type": "string",
+          "description": "User-facing warning text."
+        },
+        "url": {
+          "type": "string",
+          "description": "Related account or upgrade link."
+        }
+      },
+      "required": [
+        "warningType",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "A pending session quota warning, consumed once by takeWarnings."
+    },
     "ReasoningSummary": {
       "type": "string",
       "enum": [
@@ -41736,7 +44221,7 @@
       "properties": {
         "name": {
           "$ref": "#/definitions/SandboxHostCapabilityName",
-          "description": "The policy feature, as an extensible string: ignore names you do not recognize. Known values: `network` (sandboxed commands can reach the network; on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns), `network_filtering` (host rules and the sandbox proxy; on Linux this needs the same tooling as `network`; on Windows it needs Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`), `denied_paths` (native enforcement of `filesystem.deniedPaths`), `shell` (shell commands inside the sandbox), and `filesystem_enumeration` (enumerate-only filesystem grants; on Windows this needs Process Security Environment 1.1 filesystem enumeration support, and without it sandboxed PowerShell still runs but cannot resolve its current location; other platforms always report it)."
+          "description": "The policy feature, as an extensible string: ignore names you do not recognize. Known values: `network` (sandboxed commands can reach the network; on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns), `network_filtering` (host rules and the sandbox proxy; on Linux this needs the same tooling as `network`; on Windows it needs Process Security Environment 1.1 host-loopback support or MXC's PSEC 1.0-only proxy-loopback compatibility capability, and a policy that uses it must also set `network.allowLocalNetwork`; compatibility applies only to an explicit identity-less runtime proxy, not general host-loopback access, and other policy restrictions still apply), `denied_paths` (native enforcement of `filesystem.deniedPaths`), `shell` (shell commands inside the sandbox), and `filesystem_enumeration` (enumerate-only filesystem grants; on Windows this needs Process Security Environment 1.1 filesystem enumeration support, and without it sandboxed PowerShell still runs but cannot resolve its current location; other platforms always report it)."
         },
         "supported": {
           "type": "boolean",
@@ -41760,7 +44245,7 @@
       "minLength": 1,
       "maxLength": 64,
       "pattern": "^[a-z][a-z0-9]*(?:_[a-z0-9]+)*$",
-      "description": "Extensible identifier of a sandbox policy feature whose availability varies between hosts. A plain string, so an older client decodes a name added by a newer runtime; ignore names you do not recognize. Known values: `network` — sandboxed commands can reach the network (`network.allowOutbound`, on by default); on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns. `network_filtering` — host rules and the sandbox proxy (`network.allowedHosts`, `network.blockedHosts`, `network.proxy`); on Linux this needs the same tooling as `network`; on Windows it needs a version with Process Security Environment 1.1 host-loopback support, and a policy that uses it must also set `network.allowLocalNetwork`, because Windows reaches the local proxy only together with private-network access. `denied_paths` — native enforcement of `filesystem.deniedPaths`; on Windows this needs a version whose sandbox contract reports denied-path support. `shell` — shell commands inside the sandbox: bash on macOS and Linux, PowerShell on Windows. `filesystem_enumeration` — enumerate-only filesystem grants, which PowerShell's drive roots use on Windows; this needs a version with Process Security Environment 1.1 filesystem enumeration support. Without it, sandboxed PowerShell still runs, but `Get-Location` may report the drive root, `Set-Location` may fail, and relative paths may resolve against the drive root; the session also receives a `session.warning` with `warningType` `sandbox`. Other platforms always report it.",
+      "description": "Extensible identifier of a sandbox policy feature whose availability varies between hosts. A plain string, so an older client decodes a name added by a newer runtime; ignore names you do not recognize. Known values: `network` — sandboxed commands can reach the network (`network.allowOutbound`, on by default); on Linux this needs the tooling for Bubblewrap's private network namespace, such as slirp4netns. `network_filtering` — host rules and the sandbox proxy (`network.allowedHosts`, `network.blockedHosts`, `network.proxy`); on Linux this needs the same tooling as `network`; on Windows it needs Process Security Environment 1.1 host-loopback support or MXC's PSEC 1.0-only proxy-loopback compatibility capability, and a policy that uses it must also set `network.allowLocalNetwork`, because Windows reaches the local proxy only together with private-network access. Compatibility applies only to an explicit identity-less runtime proxy, not general host-loopback access, and other policy restrictions still apply. `denied_paths` — native enforcement of `filesystem.deniedPaths`; on Windows this needs a version whose sandbox contract reports denied-path support. `shell` — shell commands inside the sandbox: bash on macOS and Linux, PowerShell on Windows. `filesystem_enumeration` — enumerate-only filesystem grants, which PowerShell's drive roots use on Windows; this needs a version with Process Security Environment 1.1 filesystem enumeration support. Without it, sandboxed PowerShell still runs, but `Get-Location` may report the drive root, `Set-Location` may fail, and relative paths may resolve against the drive root; the session also receives a `session.warning` with `warningType` `sandbox`. Other platforms always report it.",
       "title": "SandboxHostCapabilityName"
     },
     "SandboxHostSupport": {
@@ -42817,6 +45302,27 @@
       "description": "A single host-driven completion. Accepting an item replaces `[rangeStart, rangeEnd)` (UTF-16 code units) in the composer with `insertText`; when the range is absent, the active token around the cursor is replaced.",
       "title": "SessionCompletionItem"
     },
+    "SessionConnectedIdeInfo": {
+      "type": "object",
+      "properties": {
+        "ideName": {
+          "type": "string",
+          "description": "Display name of the connected IDE, for example `VS Code`."
+        },
+        "workspaceFolder": {
+          "type": "string",
+          "description": "Absolute path of the workspace folder the IDE has open."
+        }
+      },
+      "required": [
+        "ideName",
+        "workspaceFolder"
+      ],
+      "additionalProperties": false,
+      "description": "The IDE a host is connected to, as reported to the session.",
+      "title": "SessionConnectedIdeInfo",
+      "stability": "experimental"
+    },
     "SessionContext": {
       "type": "object",
       "properties": {
@@ -42869,17 +45375,17 @@
             "promptTokenLimit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Maximum prompt tokens the resolved model accepts — the denominator for a `##k/###k` context-usage display. Mirrors `SessionContextInfo.promptTokenLimit`."
+              "description": "Effective input budget after reserving requested output against the combined context ceiling. Mirrors `SessionContextInfo.promptTokenLimit`."
             },
             "limit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Prompt limit plus the model's output reserve: the full context window `categories.freeSpace` and `categories.buffer` are measured against. Mirrors `SessionContextInfo.limit`."
+              "description": "Advertised prompt allowance for the selected context tier: the denominator for context-usage displays and capacity for `categories.freeSpace` and `categories.buffer`. Mirrors `SessionContextInfo.limit`."
             },
             "bufferTokens": {
               "type": "integer",
               "minimum": 0,
-              "description": "Output reserve plus the tokens past the buffer-exhaustion blocking threshold. Mirrors `SessionContextInfo.bufferTokens`."
+              "description": "Output reservation overlapping the displayed prompt allowance plus the tokens past the effective input budget's buffer-exhaustion blocking threshold. Mirrors `SessionContextInfo.bufferTokens`."
             },
             "compactionThreshold": {
               "type": "integer",
@@ -42922,7 +45428,7 @@
                 "buffer": {
                   "type": "integer",
                   "minimum": 0,
-                  "description": "Output reserve plus post-blocking-threshold buffer."
+                  "description": "Overlapping output reservation plus post-blocking-threshold buffer."
                 }
               },
               "required": [
@@ -43041,6 +45547,14 @@
               "type": "string",
               "description": "The model used for token counting"
             },
+            "provider": {
+              "$ref": "#/definitions/ModelProviderRef",
+              "description": "Provider whose catalog supplies this context window. Omitted when provider identity is unavailable."
+            },
+            "displayModelName": {
+              "type": "string",
+              "description": "Provider-owned model display label, or the Auto routing label. Presentation only; modelName remains the tokenization identity."
+            },
             "systemTokens": {
               "type": "integer",
               "minimum": 0,
@@ -43069,7 +45583,7 @@
             "promptTokenLimit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Maximum prompt tokens allowed by the model (or DEFAULT_TOKEN_LIMIT if unspecified)"
+              "description": "Effective input budget: the selected tier's prompt allowance bounded by the combined context ceiling minus the requested output allowance. Uses DEFAULT_TOKEN_LIMIT when limits are unspecified."
             },
             "compactionThreshold": {
               "type": "integer",
@@ -43079,12 +45593,12 @@
             "limit": {
               "type": "integer",
               "minimum": 0,
-              "description": "Prompt token limit plus the model's full output token limit."
+              "description": "Advertised prompt allowance for the selected context tier, without adding output tokens. The denominator for context-usage displays."
             },
             "bufferTokens": {
               "type": "integer",
               "minimum": 0,
-              "description": "Output reserve plus tokens after the buffer-exhaustion blocking threshold (default 95%)"
+              "description": "Output reservation overlapping the displayed prompt allowance plus tokens after the effective input budget's buffer-exhaustion blocking threshold (default 95%)."
             }
           },
           "required": [
@@ -44368,6 +46882,10 @@
           "type": "string",
           "description": "When set to `disable`, prevents bypass/allow-all permission modes. Advisory auto-approval remains available because normal prompt paths stay active. Any other value is accepted rather than failing the session, but is enforced as `disable`: the key is only present to restrict something, so a mode this runtime cannot interpret fails closed to the most restrictive one it knows. Omit the key entirely to impose no restriction."
         },
+        "disableAssistedPermissionsMode": {
+          "type": "boolean",
+          "description": "When true, prevents Assisted Permissions from being activated. An actively Assisted session falls back to Manual Approval while the policy is in force. Omit the key or set it to false to impose no restriction."
+        },
         "deny": {
           "type": "array",
           "items": {
@@ -44388,6 +46906,13 @@
             "type": "string"
           },
           "description": "Permission rules that allow matching operations unless another managed source, deny, or ask rule restricts them."
+        },
+        "limitTo": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Closed-world host boundary expressed as `Domain(hostname)`, `Domain(IP)`, or `Domain(*.example.com)` rules. Schemes, ports, paths, queries, and fragments are rejected because every network request must be enforceable at host-level egress. Multiple managed sources intersect their lists; an empty list denies all hosts."
         }
       },
       "additionalProperties": false,
@@ -44405,6 +46930,27 @@
       "additionalProperties": false,
       "description": "Managed settings an SDK host may inject at session startup. Only permissions are accepted in this initial contract.",
       "title": "SessionManagedSettings"
+    },
+    "SessionMcpSetConnectedIdeInfoParams": {
+      "type": "object",
+      "properties": {
+        "ide": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/SessionConnectedIdeInfo",
+              "description": "The IDE a host is connected to, as reported to the session."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The connected IDE. Null or omitted clears the recorded IDE, which is how a host reports that it is disconnected."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Records which IDE the host is connected to, or clears it.",
+      "title": "SessionMcpSetConnectedIdeInfoParams",
+      "stability": "experimental"
     },
     "SessionMetadataSnapshot": {
       "type": "object",
@@ -44550,6 +47096,10 @@
             "x-opaque-json": true
           },
           "description": "Per-quota snapshots returned alongside the model list, keyed by quota type."
+        },
+        "auto": {
+          "$ref": "#/definitions/AutoTierMetadata",
+          "description": "Ordered Auto routing preferences discovered for this session's account."
         }
       },
       "required": [
@@ -44635,6 +47185,10 @@
           "type": "boolean",
           "description": "Opt-in: self-fetch and enforce enterprise managed settings, including managed hook policies, at session bootstrap."
         },
+        "enforceManagedModelDefaults": {
+          "type": "boolean",
+          "description": "Opt in to enforcing non-overridable managed model controls on session model, Auto-tier, reasoning-effort, and context-tier changes. Managed defaults still apply when omitted; this option only turns conflicting changes into errors."
+        },
         "managedSettings": {
           "$ref": "#/definitions/SessionManagedSettings",
           "description": "Permissions-only enterprise policy injected by the SDK host at session create or resume. Composes restrictively with self-fetched and device policy and is not persisted."
@@ -44665,6 +47219,11 @@
         "capi": {
           "$ref": "#/definitions/CapiSessionOptions",
           "description": "Options scoped to the built-in CAPI (Copilot API) provider."
+        },
+        "autoTierIsExplicit": {
+          "type": "boolean",
+          "description": "Whether a CLI host explicitly requested the initial Auto preference. False preserves a settings-derived preference without validating availability during creation; execution still validates it. Defaults to true and is ignored for non-CLI callers.",
+          "visibility": "internal"
         },
         "providers": {
           "type": "array",
@@ -45221,6 +47780,49 @@
       "title": "SessionPluginsInstallRequest",
       "stability": "experimental"
     },
+    "SessionPluginsRetryManagedRequest": {
+      "anyOf": [
+        {
+          "not": {}
+        },
+        {
+          "type": "object",
+          "properties": {
+            "plugins": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "\"plugin@marketplace\" specs to retry. Omit to retry every plugin the session's managed settings require."
+            }
+          },
+          "additionalProperties": false
+        }
+      ],
+      "description": "Plugins required by the session's managed settings to install or update again.",
+      "title": "SessionPluginsRetryManagedRequest",
+      "stability": "experimental"
+    },
+    "SessionPluginsRetryManagedResult": {
+      "type": "object",
+      "properties": {
+        "plugins": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedPluginRetryEntry",
+            "description": "Retry outcome for one plugin required by managed settings."
+          },
+          "description": "One entry per requested plugin, in request order. When no plugins were requested, one entry per plugin the managed settings require."
+        }
+      },
+      "required": [
+        "plugins"
+      ],
+      "additionalProperties": false,
+      "description": "Per-plugin outcomes of retrying the plugins required by the session's managed settings.",
+      "title": "SessionPluginsRetryManagedResult",
+      "stability": "experimental"
+    },
     "SessionPruneResult": {
       "type": "object",
       "properties": {
@@ -45265,6 +47867,192 @@
       "additionalProperties": false,
       "description": "Outcome of the prune operation: deleted IDs, dry-run candidates, skipped IDs, total bytes freed, and the dry-run flag.",
       "title": "SessionPruneResult"
+    },
+    "SessionQuotaDelegateWarning": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "User-facing guidance."
+        },
+        "url": {
+          "type": "string",
+          "description": "Link to upgrade the account."
+        }
+      },
+      "required": [
+        "text",
+        "url"
+      ],
+      "additionalProperties": false,
+      "description": "Existing delegation guidance for an account without delegation access."
+    },
+    "SessionQuotaPlanTier": {
+      "type": "string",
+      "enum": [
+        "free",
+        "edu",
+        "pro",
+        "pro_plus",
+        "business",
+        "enterprise",
+        "max",
+        "unknown"
+      ],
+      "description": "Copilot plan tier used by the session quota projection.",
+      "x-enumDescriptions": {
+        "free": "Copilot Free.",
+        "edu": "Copilot education entitlement.",
+        "pro": "Copilot Pro.",
+        "pro_plus": "Copilot Pro+.",
+        "business": "Copilot Business.",
+        "enterprise": "Copilot Enterprise.",
+        "max": "Copilot Max.",
+        "unknown": "The account's plan tier is not known."
+      }
+    },
+    "SessionQuotaProjection": {
+      "type": "object",
+      "properties": {
+        "snapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/SessionQuotaSnapshot",
+            "description": "Session quota snapshot, preserving the incumbent numeric units and reset metadata."
+          },
+          "description": "Known quota snapshots, keyed by the provider's quota type."
+        },
+        "providerQuotas": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ProviderQuotaState",
+            "description": "An account quota reading. Absence of a quantity is unknown, never zero."
+          },
+          "description": "Provider-owned account quota state, including snapshots without numeric balances."
+        },
+        "isFreeUser": {
+          "type": "boolean",
+          "description": "Whether the account uses the free limited Copilot plan."
+        },
+        "isTbbUser": {
+          "type": "boolean",
+          "description": "Whether the account uses token-based billing."
+        },
+        "planTier": {
+          "$ref": "#/definitions/SessionQuotaPlanTier",
+          "description": "Resolved Copilot plan tier."
+        },
+        "premiumRequestsBillable": {
+          "type": "boolean",
+          "description": "Whether premium-request costs are billable."
+        },
+        "modelCostColumnVisible": {
+          "type": "boolean",
+          "description": "Whether model cost columns should be shown."
+        },
+        "delegateAvailable": {
+          "type": "boolean",
+          "description": "Whether the account can delegate tasks to GitHub."
+        },
+        "canSignupForCopilotFree": {
+          "type": "boolean",
+          "description": "Whether the account can sign up for Copilot Free."
+        },
+        "dynamicWorkflowsEnabled": {
+          "type": "boolean",
+          "description": "Whether dynamic workflows are enabled for the active account."
+        },
+        "dynamicWorkflowsUiVisible": {
+          "type": "boolean",
+          "description": "Whether dynamic workflows are visible under the session's feature flags."
+        },
+        "upgradeUrl": {
+          "type": "string",
+          "description": "Upgrade link for a free account."
+        },
+        "delegateWarning": {
+          "$ref": "#/definitions/SessionQuotaDelegateWarning",
+          "description": "Existing delegation warning for a free account."
+        }
+      },
+      "required": [
+        "snapshots",
+        "isFreeUser",
+        "isTbbUser",
+        "planTier",
+        "premiumRequestsBillable",
+        "modelCostColumnVisible",
+        "delegateAvailable",
+        "canSignupForCopilotFree",
+        "dynamicWorkflowsEnabled",
+        "dynamicWorkflowsUiVisible"
+      ],
+      "additionalProperties": false,
+      "description": "The incumbent session-owned quota and account projection."
+    },
+    "SessionQuotaSnapshot": {
+      "type": "object",
+      "properties": {
+        "isUnlimitedEntitlement": {
+          "type": "boolean",
+          "description": "Whether the entitlement is unlimited."
+        },
+        "entitlementRequests": {
+          "type": "number",
+          "description": "Entitled quantity in this quota's units."
+        },
+        "usedRequests": {
+          "type": "number",
+          "description": "Consumed quantity in this quota's units."
+        },
+        "usageAllowedWithExhaustedQuota": {
+          "type": "boolean",
+          "description": "Whether usage is allowed after quota exhaustion."
+        },
+        "overage": {
+          "type": "number",
+          "description": "Additional usage in this quota's units."
+        },
+        "overageAllowedWithExhaustedQuota": {
+          "type": "boolean",
+          "description": "Whether additional usage is allowed after quota exhaustion."
+        },
+        "remainingPercentage": {
+          "type": "number",
+          "description": "Percentage of the entitlement remaining."
+        },
+        "resetDateEpochMs": {
+          "type": "number",
+          "description": "Quota reset time in milliseconds since the Unix epoch, when known."
+        },
+        "resetDateEstimated": {
+          "type": "boolean",
+          "description": "Whether the reset time is estimated."
+        },
+        "hasQuota": {
+          "type": "boolean",
+          "description": "Whether the provider reports available quota."
+        },
+        "tokenBasedBilling": {
+          "type": "boolean",
+          "description": "Whether this quota uses token-based billing."
+        },
+        "overageEntitlement": {
+          "type": "number",
+          "description": "Additional-usage budget cap, when provided."
+        }
+      },
+      "required": [
+        "isUnlimitedEntitlement",
+        "entitlementRequests",
+        "usedRequests",
+        "usageAllowedWithExhaustedQuota",
+        "overage",
+        "overageAllowedWithExhaustedQuota",
+        "remainingPercentage"
+      ],
+      "additionalProperties": false,
+      "description": "Session quota snapshot, preserving the incumbent numeric units and reset metadata."
     },
     "SessionsBulkDeleteRequest": {
       "type": "object",
@@ -45457,6 +48245,54 @@
       "additionalProperties": false,
       "description": "Closes a session: emits shutdown, flushes pending events to disk, releases the in-use lock, disposes the active session. Idempotent: succeeds even if the session is not currently active.",
       "title": "SessionsCloseResult"
+    },
+    "SessionsCreateWorkspaceRequest": {
+      "type": "object",
+      "properties": {
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID the workspace record belongs to"
+        },
+        "sessionStatePath": {
+          "type": "string",
+          "description": "Directory the session's state is written under when no session filesystem provider is configured. Ignored when a provider is configured; the provider's session state path is used instead."
+        },
+        "convention": {
+          "type": "string",
+          "description": "`windows` (any letter case) selects Windows path rules. Any other value selects POSIX path rules."
+        },
+        "context": {
+          "$ref": "#/definitions/SessionWorkingDirectoryContextWithClient",
+          "description": "Starting working-directory context. The record keeps `cwd`, `gitRoot`, `repository`, `hostType`, `branch`, and `clientName`. Other fields, including `repositoryHost`, `headCommit`, and `baseCommit`, are ignored. `hostType` must be `github` or `ado`."
+        },
+        "name": {
+          "type": "string",
+          "description": "User-supplied display name for the workspace"
+        }
+      },
+      "required": [
+        "sessionId",
+        "sessionStatePath",
+        "convention"
+      ],
+      "additionalProperties": false,
+      "description": "Identity, state location and starting context for a workspace record.",
+      "title": "SessionsCreateWorkspaceRequest"
+    },
+    "SessionsCreateWorkspaceResult": {
+      "type": "object",
+      "properties": {
+        "workspaceJson": {
+          "type": "string",
+          "description": "The created workspace record, as JSON"
+        }
+      },
+      "required": [
+        "workspaceJson"
+      ],
+      "additionalProperties": false,
+      "description": "The workspace record that was written.",
+      "title": "SessionsCreateWorkspaceResult"
     },
     "SessionsDeleteRequest": {
       "type": "object",
@@ -46209,6 +49045,38 @@
       "description": "Active session ID whose deferred repo-level hooks should be loaded.",
       "title": "SessionsLoadDeferredRepoHooksRequest"
     },
+    "SessionsLoadWorkspaceRequest": {
+      "type": "object",
+      "properties": {
+        "sessionsHome": {
+          "type": "string",
+          "description": "Root directory every session's state directory sits under"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID naming the state directory under the sessions home. Rejected when it is absolute or contains a parent component, so it cannot escape the sessions home."
+        }
+      },
+      "required": [
+        "sessionsHome",
+        "sessionId"
+      ],
+      "additionalProperties": false,
+      "description": "Where the session's state lives, as a root directory and the session ID under it.",
+      "title": "SessionsLoadWorkspaceRequest"
+    },
+    "SessionsLoadWorkspaceResult": {
+      "type": "object",
+      "properties": {
+        "workspaceJson": {
+          "type": "string",
+          "description": "The workspace record, as JSON. Omitted when the record does not exist."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The workspace record on disk, omitted when the session has none.",
+      "title": "SessionsLoadWorkspaceResult"
+    },
     "SessionsOpenAttach": {
       "type": "object",
       "properties": {
@@ -46754,6 +49622,38 @@
       "description": "Parameters for atomically rebinding the remote-control singleton.",
       "title": "SessionsTransferRemoteControlRequest"
     },
+    "SessionsUpdateWorkspaceFieldsRequest": {
+      "type": "object",
+      "properties": {
+        "sessionsHome": {
+          "type": "string",
+          "description": "Root directory every session's state directory sits under"
+        },
+        "sessionId": {
+          "type": "string",
+          "description": "Session ID naming the state directory under the sessions home. Rejected when it is absolute or contains a parent component, so it cannot escape the sessions home."
+        },
+        "fieldsJson": {
+          "type": "string",
+          "description": "Workspace-schema fields to merge into the record, as a JSON object. Fields the object omits keep their stored values, except stored keys outside the schema are not preserved and a stored `fork_count` is never replaced."
+        }
+      },
+      "required": [
+        "sessionsHome",
+        "sessionId",
+        "fieldsJson"
+      ],
+      "additionalProperties": false,
+      "description": "Where the session's state lives, plus workspace-schema fields to merge into its workspace record. Stored keys outside the schema are not preserved, and a stored `fork_count` is never replaced.",
+      "title": "SessionsUpdateWorkspaceFieldsRequest"
+    },
+    "SessionsUpdateWorkspaceFieldsResult": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "The merge completed. The record carries the supplied workspace-schema fields, but a stored `fork_count` stays.",
+      "title": "SessionsUpdateWorkspaceFieldsResult"
+    },
     "SessionTelemetryEngagement": {
       "type": "object",
       "properties": {
@@ -47175,6 +50075,53 @@
         "ado": "The working directory repository is hosted on Azure DevOps."
       }
     },
+    "SessionWorkingDirectoryContextWithClient": {
+      "type": "object",
+      "properties": {
+        "cwd": {
+          "type": "string",
+          "description": "Current working directory path"
+        },
+        "gitRoot": {
+          "type": "string",
+          "description": "Root directory of the git repository"
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository identifier derived from the git remote URL"
+        },
+        "hostType": {
+          "type": "string",
+          "description": "Hosting platform type of the repository"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Current git branch name"
+        },
+        "repositoryHost": {
+          "type": "string",
+          "description": "Raw host string from the git remote URL"
+        },
+        "headCommit": {
+          "type": "string",
+          "description": "Head commit of the current git branch"
+        },
+        "baseCommit": {
+          "type": "string",
+          "description": "Merge-base commit SHA"
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Name of the client that created the session"
+        }
+      },
+      "required": [
+        "cwd"
+      ],
+      "additionalProperties": false,
+      "description": "A working-directory context together with the client that produced it.",
+      "title": "SessionWorkingDirectoryContextWithClient"
+    },
     "SettableAuthInfo": {
       "anyOf": [
         {
@@ -47196,6 +50143,10 @@
         {
           "$ref": "#/definitions/UserAuthInfo",
           "description": "Authentication-info variant for OAuth user auth, with host and login; the token remains in the runtime secret store."
+        },
+        {
+          "$ref": "#/definitions/AccountAuthInfo",
+          "description": "An interactive account whose model provider owns its credentials. It carries no GitHub credential."
         },
         {
           "$ref": "#/definitions/GhCliAuthInfo",
@@ -48829,7 +51780,7 @@
         "description"
       ],
       "additionalProperties": false,
-      "description": "Catalog-only metadata for one SDK-provided skill. The complete SKILL.md is fetched separately and lazily.",
+      "description": "Authoritative catalog metadata for one SDK-provided skill. The skill's SKILL.md text is fetched separately and lazily.",
       "title": "SkillProviderDescriptor"
     },
     "SkillProviderListResult": {
@@ -48839,7 +51790,7 @@
           "type": "array",
           "items": {
             "$ref": "#/definitions/SkillProviderDescriptor",
-            "description": "Catalog-only metadata for one SDK-provided skill. The complete SKILL.md is fetched separately and lazily."
+            "description": "Authoritative catalog metadata for one SDK-provided skill. The skill's SKILL.md text is fetched separately and lazily."
           },
           "maxItems": 1024,
           "description": "Skill descriptors in provider order. Invocation names must be unique under case-insensitive comparison."
@@ -48874,15 +51825,18 @@
       "type": "object",
       "properties": {
         "markdown": {
-          "type": "string",
-          "description": "Complete SKILL.md text. The runtime enforces a 1 MiB UTF-8 byte limit."
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "SKILL.md text, with or without YAML frontmatter, or null when the provider has no skill with the requested name. The runtime enforces a 1 MiB UTF-8 byte limit."
         }
       },
       "required": [
         "markdown"
       ],
       "additionalProperties": false,
-      "description": "Complete text-only SKILL.md content returned by an SDK session's skill provider. Related files and assets are not supported.",
+      "description": "Text-only SKILL.md content returned by an SDK session's skill provider. YAML frontmatter is optional: fields it omits come from the catalog descriptor, fields it declares must match the descriptor, and `allowed-tools` is read only from frontmatter. Related files and assets are not supported.",
       "title": "SkillProviderReadResult",
       "visibility": "internal"
     },
@@ -51509,6 +54463,14 @@
       "description": "Resolve, build, and validate the runtime tool list for this session. Subagent sessions and consumer flows that need an initialized tool set before `send` invoke this. Default base-class implementation is a no-op for sessions that don't support tool validation.",
       "title": "ToolsInitializeAndValidateResult"
     },
+    "ToolsListPendingRequestsRequest": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false,
+      "description": "No parameters; returns the external tool calls of the session and its sub-agents that are still waiting for a result.",
+      "title": "ToolsListPendingRequestsRequest",
+      "stability": "experimental"
+    },
     "ToolsListRequest": {
       "type": "object",
       "properties": {
@@ -52601,6 +55563,10 @@
     "UsageGetMetricsResult": {
       "type": "object",
       "properties": {
+        "aiCreditsStatus": {
+          "$ref": "#/definitions/AiCreditsStatus",
+          "description": "Completeness of totalNanoAiu. Numeric totals remain the reported subtotal; zero is not a claim of free usage when unavailable."
+        },
         "totalPremiumRequestCost": {
           "type": "number",
           "description": "Total user-initiated premium request cost across all models (may be fractional due to multipliers)"
@@ -52645,6 +55611,14 @@
             "description": "Per-model usage metrics, including request counts/costs, token usage, nano-AI units, and per-token-type details."
           },
           "description": "Per-model token and request metrics, keyed by model identifier"
+        },
+        "providerModelMetrics": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/UsageMetricsProviderModelMetric",
+            "description": "Usage for one recorded provider and model, without merging identical model IDs across providers."
+          },
+          "description": "Provider-attributed model metrics, ordered by first observed provider and model.\nNull attribution preserves historical usage whose provider or model was not recorded."
         },
         "agentMetrics": {
           "type": "object",
@@ -52762,6 +55736,10 @@
     "UsageMetricsModelMetric": {
       "type": "object",
       "properties": {
+        "aiCreditsStatus": {
+          "$ref": "#/definitions/AiCreditsStatus",
+          "description": "Completeness of this model's reported AI-credit subtotal. Explicitly reported zero is complete, not unavailable."
+        },
         "requests": {
           "$ref": "#/definitions/UsageMetricsModelMetricRequests",
           "description": "Request count and cost metrics for this model"
@@ -52873,6 +55851,45 @@
       "description": "Token usage metrics for this model",
       "title": "UsageMetricsModelMetricUsage"
     },
+    "UsageMetricsProviderModelMetric": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/ModelProviderRef",
+              "description": "A neutral reference to the model provider that produced a model: an opaque id, a human-readable label, and the provider kind. Carried on each enumerated Model so consumers can group by provider without reaching into a provider-shaped internal type."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Provider identity and product label captured when the call was dispatched; null when unknown."
+        },
+        "modelId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Model identity, or null for legacy aggregate-only usage."
+        },
+        "modelDisplayName": {
+          "type": "string",
+          "description": "Model display name captured at call time, when known."
+        },
+        "metrics": {
+          "$ref": "#/definitions/UsageMetricsModelMetric",
+          "description": "Request, token, and cost totals for this provider/model."
+        }
+      },
+      "required": [
+        "provider",
+        "modelId",
+        "metrics"
+      ],
+      "additionalProperties": false,
+      "description": "Usage for one recorded provider and model, without merging identical model IDs across providers."
+    },
     "UsageMetricsTokenDetail": {
       "type": "object",
       "properties": {
@@ -52888,6 +55905,31 @@
       "additionalProperties": false,
       "description": "Session-wide token-detail entry containing the accumulated token count for one token type.",
       "title": "UsageMetricsTokenDetail"
+    },
+    "UsageSetCodeChangesRequest": {
+      "type": "object",
+      "properties": {
+        "linesAdded": {
+          "type": "number",
+          "description": "Absolute added-line total, replacing the previous reading."
+        },
+        "linesRemoved": {
+          "type": "number",
+          "description": "Absolute removed-line total, replacing the previous reading."
+        },
+        "filesCount": {
+          "type": "number",
+          "description": "Absolute changed-file count; omission preserves the previous count."
+        }
+      },
+      "required": [
+        "linesAdded",
+        "linesRemoved"
+      ],
+      "additionalProperties": false,
+      "description": "Internal absolute code-change totals reported by the owning host.",
+      "visibility": "internal",
+      "stability": "experimental"
     },
     "UserAuthInfo": {
       "type": "object",
@@ -53000,7 +56042,7 @@
         "settings"
       ],
       "additionalProperties": false,
-      "description": "Per-key metadata for every known user setting (settings.json overlaid with the legacy config.json, config.json wins), including settings left at their default. Excludes repository- and enterprise-managed overrides.",
+      "description": "Per-key metadata for every known user setting in settings.json, including settings left at their default. Excludes repository- and enterprise-managed overrides.",
       "title": "UserSettingsGetResult"
     },
     "UserSettingsSetRequest": {
@@ -53017,24 +56059,6 @@
       "additionalProperties": false,
       "description": "Partial user settings to write to settings.json. Each top-level key is written individually, replacing the existing value; a key whose value is null is removed.",
       "title": "UserSettingsSetRequest"
-    },
-    "UserSettingsSetResult": {
-      "type": "object",
-      "properties": {
-        "shadowedKeys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Top-level keys whose write landed in settings.json but is shadowed by a value still present in the legacy config.json (config.json wins on read). The write does not take effect until the legacy value is removed."
-        }
-      },
-      "required": [
-        "shadowedKeys"
-      ],
-      "additionalProperties": false,
-      "description": "Outcome of writing user settings.",
-      "title": "UserSettingsSetResult"
     },
     "UserToolSessionApproval": {
       "anyOf": [
@@ -55095,6 +58119,22 @@
       "visibility": "internal",
       "stability": "experimental"
     },
+    "WorkspaceDiffContents": {
+      "type": "object",
+      "properties": {
+        "before": {
+          "type": "string",
+          "description": "Complete text before the session first changed the file. Omitted when the file did not exist; an empty string represents an existing empty file."
+        },
+        "after": {
+          "type": "string",
+          "description": "Complete current text read when computing the diff. Omitted for a deleted file; an empty string represents an existing empty file."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Complete text used to generate one session diff. These are display contents, with the same text decoding as the patch, not a file-restore contract.",
+      "title": "WorkspaceDiffContents"
+    },
     "WorkspaceDiffFileChange": {
       "type": "object",
       "properties": {
@@ -55117,6 +58157,10 @@
         "isTruncated": {
           "type": "boolean",
           "description": "Whether the diff content was omitted because it exceeded the per-file size limit."
+        },
+        "contents": {
+          "$ref": "#/definitions/WorkspaceDiffContents",
+          "description": "Full text used for this patch, only when includeContents was requested for session mode. Omitted for binary, oversized or unavailable contents, and for fallback results. Read isFallback and isTruncated before treating an absent value as a missing file."
         }
       },
       "required": [
@@ -55126,7 +58170,14 @@
       ],
       "additionalProperties": false,
       "description": "A single changed file and its unified diff.",
-      "title": "WorkspaceDiffFileChange"
+      "title": "WorkspaceDiffFileChange",
+      "x-legacy-parameters": [
+        "path",
+        "diff",
+        "changeType",
+        "oldPath",
+        "isTruncated"
+      ]
     },
     "WorkspaceDiffFileChangeType": {
       "type": "string",
@@ -55350,6 +58401,10 @@
         "ignoreWhitespace": {
           "type": "boolean",
           "description": "When true, ignore whitespace-only changes (git `--ignore-all-space`). Defaults to false."
+        },
+        "includeContents": {
+          "type": "boolean",
+          "description": "Include the full before/after text used to compute each session diff. Defaults to false; true is accepted only for session mode. Existing capture/read limits still apply, and binary or unavailable contents are not returned. This can substantially increase response size."
         }
       },
       "required": [
@@ -55358,7 +58413,11 @@
       "additionalProperties": false,
       "description": "Parameters for computing a workspace diff.",
       "title": "WorkspacesDiffRequest",
-      "stability": "experimental"
+      "stability": "experimental",
+      "x-legacy-parameters": [
+        "mode",
+        "ignoreWhitespace"
+      ]
     },
     "WorkspacesEnsureRequest": {
       "type": "object",

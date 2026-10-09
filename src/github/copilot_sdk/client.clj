@@ -3225,9 +3225,19 @@
                (assoc :disableBypassPermissionsMode
                       (let [policy (:disable-bypass-permissions-mode permissions)]
                         (if (keyword? policy) (name policy) policy)))
+               (contains? permissions :disable-assisted-permissions-mode?)
+               (assoc :disableAssistedPermissionsMode
+                      (:disable-assisted-permissions-mode? permissions))
                (contains? permissions :deny) (assoc :deny (:deny permissions))
                (contains? permissions :ask) (assoc :ask (:ask permissions))
-               (contains? permissions :allow) (assoc :allow (:allow permissions)))))))
+               (contains? permissions :allow) (assoc :allow (:allow permissions))
+               (contains? permissions :limit-to) (assoc :limitTo (:limit-to permissions)))))))
+
+(defn- capi->wire
+  [config]
+  (cond-> (util/clj->wire config)
+    (contains? config :auto-tier)
+    (assoc :autoTier (subs (str (:auto-tier config)) 1))))
 
 (defn- config-defaults-for-mode
   "Mode-specific session config defaults spread UNDER the caller's config
@@ -3799,7 +3809,7 @@
       (some? (:enable-experimental-mode? config))
       (assoc :isExperimentalMode (:enable-experimental-mode? config))
       true (assoc :request-permission (boolean (:on-permission-request config)))
-      (:capi config) (assoc :capi (util/clj->wire (:capi config)))
+      (:capi config) (assoc :capi (capi->wire (:capi config)))
 
       ;; Session options (upstream PR #1865).
       (:excluded-builtin-agents config)
@@ -3906,6 +3916,8 @@
       ;; verbatim, so forward the actual boolean (an explicit false is sent).
       (some? (:enable-managed-settings? config))
       (assoc :enable-managed-settings (:enable-managed-settings? config))
+      (contains? config :enforce-managed-model-defaults?)
+      (assoc :enforce-managed-model-defaults (:enforce-managed-model-defaults? config))
       (:managed-settings config)
       (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
       (some? (:request-extensions? config))
@@ -4018,7 +4030,7 @@
       true (assoc :request-permission
                   (not (identical? (:on-permission-request config)
                                    default-join-session-permission-handler)))
-      (:capi config) (assoc :capi (util/clj->wire (:capi config)))
+      (:capi config) (assoc :capi (capi->wire (:capi config)))
 
       ;; Session options (upstream PR #1865).
       (:excluded-builtin-agents config)
@@ -4128,6 +4140,8 @@
       ;; (upstream PRs #1925, #1847), honored on resume/join as well as create.
       (some? (:enable-managed-settings? config))
       (assoc :enable-managed-settings (:enable-managed-settings? config))
+      (contains? config :enforce-managed-model-defaults?)
+      (assoc :enforce-managed-model-defaults (:enforce-managed-model-defaults? config))
       (:managed-settings config)
       (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
       (some? (:request-extensions? config))
@@ -4475,11 +4489,15 @@
                            :lm-studio, :foundry-local, or :llama-cpp.
                            Omission is preserved; nil is invalid.
    - :capi               - Copilot API options {:enable-web-socket-responses boolean
-                                                :auto-tier :efficiency|:balance|:intelligence|:fast}.
+                                                :auto-tier keyword}.
+                           Auto-tier identifiers are extensible, such as :balance,
+                           :fast, or :premium-v2. Full keyword spelling is preserved.
                            On resident resume, a supplied different tier requests
                            a safe runtime switch; omission restores the persisted
                            preference.
    - :feature-flags      - String-to-boolean feature flag map. Omission and {} are distinct.
+   - :enforce-managed-model-defaults? - Boolean. Enforce locked managed model controls.
+                                        Omission and explicit false remain distinct.
    - :streaming?         - Enable streaming
    - :mcp-servers        - MCP server configs map
    - :custom-agents      - Custom agent configs
@@ -4818,7 +4836,9 @@
    - :tool-search        - Tool discovery config {:enabled :defer-threshold}
    - :provider           - Custom provider configuration (BYOK)
    - :capi               - Copilot API options {:enable-web-socket-responses boolean
-                                                :auto-tier :efficiency|:balance|:intelligence|:fast}.
+                                                :auto-tier keyword}.
+                           Auto-tier identifiers are extensible, such as :balance,
+                           :fast, or :premium-v2. Full keyword spelling is preserved.
                            On resident resume, a supplied different tier requests
                            a safe runtime switch; omission restores the persisted
                            preference.
@@ -4876,6 +4896,7 @@
                                      earlier untracked turns cannot be reconstructed.
    - :session-limits     - Map (@experimental). See `create-session` (upstream PR #1865).
    - :enable-managed-settings? - Boolean. See `create-session` (upstream PR #1925).
+   - :enforce-managed-model-defaults? - Boolean. See `create-session`; also accepted on join.
    - :managed-settings   - Structured enterprise policy. See `create-session`.
    - :request-extensions? - Boolean. See `create-session`; explicit false is forwarded.
    - :extension-sdk-path - String path override for extension subprocesses. See `create-session`.
