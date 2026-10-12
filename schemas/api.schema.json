@@ -490,6 +490,52 @@
           "stability": "experimental"
         }
       },
+      "registry": {
+        "allocateRequestId": {
+          "rpcMethod": "mcp.registry.allocateRequestId",
+          "description": "Allocates an ID for one cancellable MCP registry search. The ID exists before the search starts, so callers can cancel before it starts. The networking stack supplies the cancellation namespace. The runtime retains at most 1,024 unused IDs. At capacity, another allocation can reclaim an unused ID. Active searches retain their IDs until they finish.",
+          "params": null,
+          "result": {
+            "$ref": "#/definitions/McpRegistryRequestIdResult",
+            "description": "Request id naming a cancellable registry search.",
+            "visibility": "internal"
+          },
+          "stability": "experimental",
+          "visibility": "internal"
+        },
+        "search": {
+          "rpcMethod": "mcp.registry.search",
+          "description": "Searches the MCP registry the supplied credential may read, resolving the registry endpoint from policy first. Hosts usually send credential-free `AuthIdentity`; a `token` identity can be resolved only when it embeds a token, while `env` and `gh-cli` identities can use a token embedded in the request first. The runtime follows registry pages, keeps the newest entry per server name, cuts the list to `limit`, and sorts an empty-query result by GitHub stars. Each server object is carried opaquely.",
+          "params": {
+            "$ref": "#/definitions/McpRegistrySearchRequest",
+            "description": "Registry search terms, the credential to search under, and the request id that makes the search cancellable.",
+            "visibility": "internal"
+          },
+          "result": {
+            "$ref": "#/definitions/McpRegistrySearchResult",
+            "description": "Servers selected from the registry response.",
+            "visibility": "internal"
+          },
+          "stability": "experimental",
+          "visibility": "internal"
+        },
+        "cancel": {
+          "rpcMethod": "mcp.registry.cancel",
+          "description": "Abandons the registry search that uses the given request ID. It acts only on IDs from `mcp.registry.allocateRequestId`, so it never cancels another component's request. Answers `canceled: true` when it stops a running search. Answers `canceled: false` for unknown or reclaimed IDs, completed or canceled searches, and unused reservations. It releases an unused reservation, so a later search with that ID is refused.",
+          "params": {
+            "$ref": "#/definitions/McpRegistryCancelRequest",
+            "description": "Registry search to abandon.",
+            "visibility": "internal"
+          },
+          "result": {
+            "$ref": "#/definitions/McpRegistryCancelResult",
+            "description": "Whether the cancel reached a live search.",
+            "visibility": "internal"
+          },
+          "stability": "experimental",
+          "visibility": "internal"
+        }
+      },
       "discover": {
         "rpcMethod": "mcp.discover",
         "description": "Discovers MCP servers from user, workspace, plugin, and builtin sources.",
@@ -502,6 +548,22 @@
           "description": "MCP servers discovered from user, workspace, plugin, and built-in sources."
         },
         "stability": "experimental"
+      },
+      "shouldExcludeGitHubTools": {
+        "rpcMethod": "mcp.shouldExcludeGitHubTools",
+        "description": "Reports whether the gh-replaceable GitHub MCP tools may be clipped for a session, which a host feeds back as the `excludeGhReplaceableTools` build option. The tools are redundant only when the session can reach a shell *and* the host has the `gh` that would replace them, so both halves are decided here. The shell half runs the platform shell tool through the runtime's own tool-filter matcher, so entry forms like `builtin:bash` and `builtin:*` behave exactly as they do when a session builds its tool catalog. The host half probes for `gh`, and is skipped entirely when the filters already rule the shell out. Host presence alone is not enough: a session restricted to, say, `view` would otherwise lose the built-in issue-read fallback while having no shell to replace it with. The answer describes the host the runtime runs on, so it is never forwarded to a remote engine.",
+        "params": {
+          "$ref": "#/definitions/McpShouldExcludeGitHubToolsRequest",
+          "description": "The session tool filters that decide whether the session still has a shell to run `gh` with.",
+          "visibility": "internal"
+        },
+        "result": {
+          "$ref": "#/definitions/McpShouldExcludeGitHubToolsResult",
+          "description": "Whether the gh-replaceable GitHub MCP tools may be clipped for the session described by the request.",
+          "visibility": "internal"
+        },
+        "stability": "experimental",
+        "visibility": "internal"
       },
       "planInstall": {
         "rpcMethod": "mcp.planInstall",
@@ -1194,7 +1256,7 @@
       },
       "writeKey": {
         "rpcMethod": "globalState.writeKey",
-        "description": "Records one top-level key in the host's machine-wide state, the counterpart to `globalState.load`. A host calls this to remember that it has shown an onboarding step, asked a one-off question, or completed a migration, so the next run can skip it. Only the named key is replaced and the rest of the document is preserved, which lets two writers record different flags without overwriting each other; passing no value removes the key instead. Only the keys a host records itself are writable: `appInstallNudgeResponded`, `appTipShown`, `askedSetupTerminals`, `autoFeedbackLastPromptedAt`, `firstLaunchAt`, `recentModelIds`, `sandboxCredentialProxyCaDeclined` and `sandboxOnboardingShown`. Every other key is refused, including `installedPlugins`, the stored credentials, `trustedFolders`, the staff flags and the signed-in accounts. Plugin enablement must use the plugin APIs, which apply repository and managed-policy checks.",
+        "description": "Records one top-level key in the host's machine-wide state, the counterpart to `globalState.load`. A host calls this to remember that it has shown an onboarding step, asked a one-off question, or completed a migration, so the next run can skip it. Only the named key is replaced and the rest of the document is preserved, which lets two writers record different flags without overwriting each other; passing no value removes the key instead. Only the keys a host records itself are writable: `appTipShown`, `askedSetupTerminals`, `autoFeedbackLastPromptedAt`, `firstLaunchAt`, `recentModelIds`, `sandboxCredentialProxyCaDeclined` and `sandboxOnboardingShown`. Every other key is refused, including `installedPlugins`, the stored credentials, `trustedFolders`, the staff flags and the signed-in accounts. Plugin enablement must use the plugin APIs, which apply repository and managed-policy checks.",
         "params": {
           "$ref": "#/definitions/GlobalStateWriteKeyRequest",
           "description": "A single top-level key to record in the host's machine-wide state. The write replaces only that key and leaves the rest of the document untouched, so two writers recording different one-off flags do not overwrite each other. The stored credential keys cannot be written through this method.",
@@ -1390,6 +1452,21 @@
           "description": "Effective enterprise managed settings for an account, resolved without a session."
         },
         "stability": "experimental"
+      },
+      "permissions": {
+        "evaluate": {
+          "rpcMethod": "managedSettings.permissions.evaluate",
+          "description": "Pure, sessionless evaluation of operations against a supplied permissionsContext. Performs no policy discovery, I/O, prompting, navigation, permission grants, or sandbox changes. Obtain the context from managedSettings.resolve or session.managedSettings.get, or reuse an in-memory context. Results preserve input order and duplicates. Consumers must block deny, obtain approval for ask, and use their normal permission flow for unmanaged. Unknown policy returns failClosed with every operation denied. This is not a substitute for user permissions or other security controls.",
+          "params": {
+            "$ref": "#/definitions/ManagedPermissionsEvaluateRequest",
+            "description": "Managed policy context and ordered operations for pure, sessionless evaluation."
+          },
+          "result": {
+            "$ref": "#/definitions/ManagedPermissionsEvaluateResult",
+            "description": "Ordered managed permission verdicts and the supplied policy's fail-closed posture."
+          },
+          "stability": "experimental"
+        }
       },
       "schema": {
         "rpcMethod": "managedSettings.schema",
@@ -2376,6 +2453,29 @@
         "result": {
           "$ref": "#/definitions/SandboxEnforcementStatus",
           "description": "Managed sandbox enforcement state for a session."
+        },
+        "stability": "experimental"
+      },
+      "getCredentialSuggestions": {
+        "rpcMethod": "session.sandbox.getCredentialSuggestions",
+        "description": "Lists possible secret-bearing environment variables available to new sandboxed shells that are not already covered by credential masking. Uses local name rules and known-provider host suggestions, never returns secret values, and changes no settings or network permissions. Returns no suggestions while the session is not sandboxed.",
+        "params": {
+          "type": "object",
+          "properties": {
+            "sessionId": {
+              "type": "string",
+              "description": "Target session identifier"
+            }
+          },
+          "required": [
+            "sessionId"
+          ],
+          "additionalProperties": false,
+          "description": "Identifies the target session."
+        },
+        "result": {
+          "$ref": "#/definitions/SandboxCredentialSuggestionsResult",
+          "description": "Possible unconfigured secrets in the sandbox shell environment, sorted by variable name, with no secret values."
         },
         "stability": "experimental"
       },
@@ -14858,6 +14958,10 @@
           "$ref": "#/definitions/AccountKind",
           "description": "The provider kind of this account."
         },
+        "authSource": {
+          "type": "string",
+          "description": "Human-readable credential source used to authenticate this account, such as `gh` or `GITHUB_TOKEN`."
+        },
         "derivedFrom": {
           "type": "string",
           "description": "Opaque id of the account this one was derived from (e.g. an EMU account's base Entra identity); absent for a root account. Matches the base identity account's selectionId, forming the derivation edge."
@@ -25740,10 +25844,6 @@
           },
           "description": "Folders the user has marked as trusted."
         },
-        "appInstallNudgeResponded": {
-          "type": "boolean",
-          "description": "Whether the user has answered the prompt suggesting they install the desktop app."
-        },
         "autoFeedbackLastPromptedAt": {
           "type": "string",
           "description": "When the Auto-feedback hint was last shown, as an ISO 8601 timestamp. It enforces the once-per-day cap for non-staff users across restarts."
@@ -28293,6 +28393,125 @@
       "description": "Non-secret host-managed HTTP MCP server configuration. The containing map key is the stable managed identity; credentials are supplied dynamically by the host.",
       "title": "ManagedMcpServerConfig"
     },
+    "ManagedPermissionEvaluation": {
+      "type": "object",
+      "properties": {
+        "operation": {
+          "$ref": "#/definitions/ManagedPermissionOperation",
+          "description": "Original input operation associated with this verdict."
+        },
+        "verdict": {
+          "$ref": "#/definitions/ManagedPermissionVerdict",
+          "description": "Managed-policy decision only; never bypasses user permissions or other security controls."
+        }
+      },
+      "required": [
+        "operation",
+        "verdict"
+      ],
+      "additionalProperties": false
+    },
+    "ManagedPermissionOperation": {
+      "anyOf": [
+        {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "description": "Absolute HTTP(S) URL with a host. Invalid URLs reject the entire evaluation batch."
+            },
+            "kind": {
+              "type": "string",
+              "const": "url",
+              "description": "Operation to evaluate. Currently only url is supported."
+            }
+          },
+          "required": [
+            "kind",
+            "url"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "ManagedPermissionsContext": {
+      "type": "object",
+      "properties": {
+        "permissions": {
+          "description": "Runtime-owned composed permissions object. Absent when no permission policy is configured.",
+          "x-opaque-json": true
+        },
+        "failClosed": {
+          "type": "boolean",
+          "description": "Policy could not be determined; evaluation must deny every operation."
+        }
+      },
+      "required": [
+        "failClosed"
+      ],
+      "additionalProperties": false,
+      "description": "Reusable managed permission evaluation context. Treat permissions as runtime-owned policy data and retain it verbatim; it includes source-aware composition metadata. This is a snapshot, not a capability or approval token; only use contexts obtained from trusted policy sources."
+    },
+    "ManagedPermissionsEvaluateRequest": {
+      "type": "object",
+      "properties": {
+        "context": {
+          "$ref": "#/definitions/ManagedPermissionsContext",
+          "description": "Trusted, reusable managed permission policy snapshot; no policy is discovered during evaluation."
+        },
+        "operations": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedPermissionOperation"
+          },
+          "description": "Operations to evaluate, preserving input order and duplicates. An empty batch is valid."
+        }
+      },
+      "required": [
+        "context",
+        "operations"
+      ],
+      "additionalProperties": false,
+      "description": "Managed policy context and ordered operations for pure, sessionless evaluation."
+    },
+    "ManagedPermissionsEvaluateResult": {
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ManagedPermissionEvaluation"
+          },
+          "description": "One verdict per input operation, in the same order, including duplicates."
+        },
+        "failClosed": {
+          "type": "boolean",
+          "description": "Managed permission policy could not be determined; every operation is denied."
+        }
+      },
+      "required": [
+        "results",
+        "failClosed"
+      ],
+      "additionalProperties": false,
+      "description": "Ordered managed permission verdicts and the supplied policy's fail-closed posture."
+    },
+    "ManagedPermissionVerdict": {
+      "type": "string",
+      "enum": [
+        "deny",
+        "ask",
+        "allow",
+        "unmanaged"
+      ],
+      "description": "Managed-policy verdict only: deny blocks the URL, ask requires approval, allow approves under managed policy, and unmanaged leaves the normal consumer permission flow in effect. No verdict bypasses other security controls.",
+      "x-enumDescriptions": {
+        "deny": "Managed policy prohibits the operation; do not offer approval.",
+        "ask": "Managed policy requires the consumer to obtain approval.",
+        "allow": "Managed policy allows the operation, subject to other security controls.",
+        "unmanaged": "Managed policy does not decide the operation; use the consumer's normal permission flow."
+      }
+    },
     "ManagedPluginRetryEntry": {
       "type": "object",
       "properties": {
@@ -28567,6 +28786,10 @@
     "ManagedSettingsResolvedData": {
       "type": "object",
       "properties": {
+        "permissionsContext": {
+          "$ref": "#/definitions/ManagedPermissionsContext",
+          "description": "Reusable retained managed permission policy for managedSettings.permissions.evaluate, including source composition and session-local injection. Provided by live session snapshots; absent in older events. Refresh the context when managed policy changes."
+        },
         "source": {
           "$ref": "#/definitions/ManagedSettingsResolvedSource",
           "description": "Channel summary: `server`, `device`, `client`, or `policyHelper` when exactly one channel contributed; `mixed` when multiple channels contributed; otherwise `none`. Consult the per-channel booleans for exact provenance."
@@ -28589,7 +28812,7 @@
         },
         "failClosed": {
           "type": "boolean",
-          "description": "Whether managed policy could not be determined (e.g. a failed server fetch) and the session fell back to the fail-closed restriction. When true, restrictions such as disabling bypass-permissions are enforced even though `settings` may be absent."
+          "description": "Whether managed policy could not be determined (e.g. a failed server fetch) and unresolved-policy safeguards remain active. This does not by itself disable bypass-permissions; `bypassPermissionsDisabled` reports only an explicit policy restriction."
         },
         "sandboxEnabledByUndeterminedPolicy": {
           "type": "boolean",
@@ -28597,7 +28820,7 @@
         },
         "bypassPermissionsDisabled": {
           "type": "boolean",
-          "description": "Whether enterprise policy disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers, and forced on when `failClosed` is true."
+          "description": "Whether an explicit enterprise policy restriction disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers; an unresolved policy does not force this on by itself."
         },
         "permissionsAllowIntersected": {
           "type": "boolean",
@@ -28684,6 +28907,10 @@
     "ManagedSettingsResolveResult": {
       "type": "object",
       "properties": {
+        "permissionsContext": {
+          "$ref": "#/definitions/ManagedPermissionsContext",
+          "description": "Reusable source-composed permission policy for managedSettings.permissions.evaluate. Unlike resolved.settings.permissions, this retains every source's allowlist and default-prompt semantics. Refresh through resolve when account/device policy changes. Absent on runtimes that do not support permission evaluation."
+        },
         "account": {
           "type": "string",
           "description": "Printable opaque identity of the account the settings were resolved for, suitable for comparison and storage, not an account selectionId. Absent when no account was available, in which case only device policy is reported."
@@ -33094,6 +33321,113 @@
       "title": "McpRegisterExternalClientRequest",
       "visibility": "internal"
     },
+    "McpRegistryCancelRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request ID from `mcp.registry.allocateRequestId` that the search uses."
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "Registry search to abandon.",
+      "title": "McpRegistryCancelRequest",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "McpRegistryCancelResult": {
+      "type": "object",
+      "properties": {
+        "canceled": {
+          "type": "boolean",
+          "description": "True when the cancel stopped a running search. False for unknown or reclaimed IDs, completed or canceled searches, and unused reservations. The cancel releases an unused reservation."
+        }
+      },
+      "required": [
+        "canceled"
+      ],
+      "additionalProperties": false,
+      "description": "Whether the cancel reached a live search.",
+      "title": "McpRegistryCancelResult",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "McpRegistryRequestIdResult": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request ID for `mcp.registry.search` and `mcp.registry.cancel`. It serves one search. Allocation can reclaim unused IDs at the 1,024-ID reservation limit."
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "Request id naming a cancellable registry search.",
+      "title": "McpRegistryRequestIdResult",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "McpRegistrySearchRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Request ID from `mcp.registry.allocateRequestId`. The search refuses unknown, reclaimed, or canceled IDs and IDs that another search or request already uses."
+        },
+        "authInfo": {
+          "description": "The credential the search runs under, carried opaquely. Hosts usually send credential-free `AuthIdentity`; a `token` identity can be resolved only when it embeds a token, while `env` and `gh-cli` identities can use a token embedded in the request first.",
+          "x-opaque-json": true
+        },
+        "query": {
+          "type": "string",
+          "description": "Free-text query. Omitted or empty asks the registry for its top servers rather than searching. A value that is not a string is refused."
+        },
+        "repository": {
+          "type": "string",
+          "description": "Repository used for the policy lookup, as `owner/name`. The policy selects the registry URL and whether the user token goes to the registry. The registry receives this repository only when the policy entry lists it as required context. A value that is not a string is refused."
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of servers to return."
+        }
+      },
+      "required": [
+        "requestId",
+        "authInfo",
+        "limit"
+      ],
+      "additionalProperties": false,
+      "description": "Registry search terms, the credential to search under, and the request id that makes the search cancellable.",
+      "title": "McpRegistrySearchRequest",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "McpRegistrySearchResult": {
+      "type": "object",
+      "properties": {
+        "servers": {
+          "description": "The server objects, carried opaquely. The runtime follows pages, keeps the newest entry per server name, cuts the list to `limit`, and sorts an empty-query result by GitHub stars. Each server object remains unchanged because the registry owns that shape.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "servers"
+      ],
+      "additionalProperties": false,
+      "description": "Servers selected from the registry response.",
+      "title": "McpRegistrySearchResult",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
     "McpReloadConfig": {
       "type": "object",
       "properties": {
@@ -34540,6 +34874,59 @@
       "additionalProperties": false,
       "description": "Env-value mode recorded on the session after the update.",
       "title": "McpSetEnvValueModeResult"
+    },
+    "McpShouldExcludeGitHubToolsRequest": {
+      "type": "object",
+      "properties": {
+        "availableTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The session's tool allowlist, when it set one. Omitted means the session constrains nothing this way."
+        },
+        "excludedTools": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "The session's tool denylist, when it set one. Omitted means the session constrains nothing this way."
+        },
+        "toolFilterPrecedence": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/OptionsUpdateToolFilterPrecedence",
+              "description": "Controls how availableTools (allowlist) and excludedTools (denylist) combine when both are set."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "How the allowlist and denylist combine when both are set. Omitted means the default every session gets, so a caller that never chose a precedence is answered as its sessions behave."
+        }
+      },
+      "additionalProperties": false,
+      "description": "The session tool filters that decide whether the session still has a shell to run `gh` with.",
+      "title": "McpShouldExcludeGitHubToolsRequest",
+      "visibility": "internal",
+      "stability": "experimental"
+    },
+    "McpShouldExcludeGitHubToolsResult": {
+      "type": "object",
+      "properties": {
+        "excludeGhReplaceableTools": {
+          "type": "boolean",
+          "description": "True only when both halves hold: the session's filters still reach the platform shell tool, and the host actually has the `gh` those tools would be replaced by. Feed it straight back as the `excludeGhReplaceableTools` build option."
+        }
+      },
+      "required": [
+        "excludeGhReplaceableTools"
+      ],
+      "additionalProperties": false,
+      "description": "Whether the gh-replaceable GitHub MCP tools may be clipped for the session described by the request.",
+      "title": "McpShouldExcludeGitHubToolsResult",
+      "visibility": "internal",
+      "stability": "experimental"
     },
     "McpSourceFile": {
       "type": "object",
@@ -41346,6 +41733,75 @@
       "description": "A BYOK model definition referencing a named provider.",
       "title": "ProviderModelConfig"
     },
+    "ProviderMonthlyUsage": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/definitions/ProviderMonthlyUsageState",
+          "description": "Availability of monthly consumption. Missing or unavailable usage must never be interpreted as zero."
+        },
+        "unit": {
+          "$ref": "#/definitions/ProviderQuotaUnit",
+          "description": "Unit of consumedQuantity; independent of the parent observation's balance unit."
+        },
+        "scope": {
+          "$ref": "#/definitions/ProviderMonthlyUsageScope",
+          "description": "Identity scope of the reading within its provider and service."
+        },
+        "consumedQuantity": {
+          "type": "number",
+          "description": "Nonnegative finite consumption reported by the service, preserving zero and fractions. Present only when state is available; never computed from tokens or balance differences."
+        },
+        "queriedAt": {
+          "type": "string",
+          "description": "Service read time in UTC RFC 3339, not a ledger reconciliation watermark or confirmation of the latest inference charge."
+        },
+        "cycleStart": {
+          "type": "string",
+          "description": "Start of the service-reported monthly billing cycle, in UTC RFC 3339."
+        },
+        "resetOn": {
+          "type": "string",
+          "description": "End of the service-reported monthly billing cycle, in UTC RFC 3339."
+        }
+      },
+      "required": [
+        "state",
+        "unit",
+        "scope"
+      ],
+      "additionalProperties": false,
+      "description": "An authoritative monthly usage reading for the observation's provider, account, and service.",
+      "stability": "experimental"
+    },
+    "ProviderMonthlyUsageScope": {
+      "type": "string",
+      "enum": [
+        "user",
+        "unknown"
+      ],
+      "description": "Identity scope of a monthly usage reading.",
+      "x-enumDescriptions": {
+        "user": "Consumption of the authenticated user within the parent observation's service and returned cycle.",
+        "unknown": "The service did not establish a recognized usage scope."
+      }
+    },
+    "ProviderMonthlyUsageState": {
+      "type": "string",
+      "enum": [
+        "available",
+        "no_policy",
+        "unavailable",
+        "unknown"
+      ],
+      "description": "Availability of a service's monthly consumption reading.",
+      "x-enumDescriptions": {
+        "available": "The service reported a usable consumption reading, including an explicit zero.",
+        "no_policy": "The service found no usage policy; no consumption amount is known.",
+        "unavailable": "The read failed or its data could not be used; consumption is unknown.",
+        "unknown": "The service reported an unrecognized usage state."
+      }
+    },
     "ProviderQuotaAccessState": {
       "type": "string",
       "enum": [
@@ -41536,6 +41992,10 @@
         "budgetMetadata": {
           "$ref": "#/definitions/ProviderQuotaBudgetMetadata",
           "description": "Optional metadata for an authoritative budget. Advisory balances and admission-only observations do not populate this."
+        },
+        "monthlyUsage": {
+          "$ref": "#/definitions/ProviderMonthlyUsage",
+          "description": "Service-reported monthly consumption, independent of quota balances and per-call or session cost. Omitted when the service does not report monthly usage."
         },
         "compatibilityKey": {
           "type": "string",
@@ -44115,6 +44575,50 @@
       "additionalProperties": false,
       "description": "Whole-value environment credential masking for sandboxed children.",
       "title": "SandboxCredentialsConfig"
+    },
+    "SandboxCredentialSuggestion": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Environment variable name. The secret value is never returned."
+        },
+        "suggestedInjectHosts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "HTTPS hostnames suggested by a local known-provider mapping. An empty list requires the user to supply injection hosts before adding a masking entry. These suggestions do not allow network access."
+        }
+      },
+      "required": [
+        "name",
+        "suggestedInjectHosts"
+      ],
+      "additionalProperties": false,
+      "description": "A possible secret-bearing environment variable and optional locally suggested HTTPS injection hosts. This is a draft for user review, not an active grant.",
+      "title": "SandboxCredentialSuggestion",
+      "stability": "experimental"
+    },
+    "SandboxCredentialSuggestionsResult": {
+      "type": "object",
+      "properties": {
+        "suggestions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/SandboxCredentialSuggestion",
+            "description": "A possible secret-bearing environment variable and optional locally suggested HTTPS injection hosts. This is a draft for user review, not an active grant."
+          },
+          "description": "Candidates for user review. Empty when sandboxing is disabled or no unconfigured candidates are present."
+        }
+      },
+      "required": [
+        "suggestions"
+      ],
+      "additionalProperties": false,
+      "description": "Possible unconfigured secrets in the sandbox shell environment, sorted by variable name, with no secret values.",
+      "title": "SandboxCredentialSuggestionsResult",
+      "stability": "experimental"
     },
     "SandboxDisableForSessionRequest": {
       "type": "object",

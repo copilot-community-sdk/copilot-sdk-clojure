@@ -1,0 +1,1222 @@
+{:unchanged-local-artifacts
+ #{"src/github/copilot_sdk.clj"
+   "src/github/copilot_sdk/tool_set.clj"
+   "README.md"
+   "src/github/copilot_sdk/helpers.clj"
+   "src/github/copilot_sdk/protocol.clj"
+   "src/github/copilot_sdk/workflow.clj"
+   "script/codegen/coercions.edn"
+   "src/github/copilot_sdk/instrument.clj"
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "build.clj"
+   "src/github/copilot_sdk/util.clj"
+   "doc/getting-started.md"
+   "src/github/copilot_sdk/session.clj"
+   "src/github/copilot_sdk/client.clj"
+   "src/github/copilot_sdk/tools.clj"},
+ :schema
+ {:runtime-pin "1.0.96-2",
+  :source :checksummed-github-cli-release,
+  :artifacts
+  {"schemas/api.schema.json"
+   "e097216f866cc9215ce9e1ebfd64b5fb3e7eea4ea10e1f8650902c3fc940e526",
+   "schemas/session-events.schema.json"
+   "3d4d826b3a748b902d626ceb82046fff70db2b3bb6449f4c977a38094e275e35",
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "7a1828befbf45381f49f0c426dc383869016921fe18493ae137ea5e45b814ee4",
+   "src/github/copilot_sdk/generated/event_metadata.clj"
+   "ab5e17a75f0972bc516f7983b9614b755805f5e5896601aefac29d9646fe6e15",
+   "src/github/copilot_sdk/generated/event_specs.clj"
+   "5d6ef0fbffe7e7f88da30a212053f50b157e57755339245e8f811754d3d268ef"},
+  :coercions-changed? false,
+  :stable-enums
+  {"ModelCallRequestBodyEncoding"
+   {:spec :github.copilot-sdk.specs/request-body-encoding,
+    :values #{"gzip" "identity" "zstd"}},
+   "ModelCallWebSocketFallbackErrorKind"
+   {:spec :github.copilot-sdk.specs/websocket-fallback-error-kind,
+    :values
+    #{"closed_by_peer"
+      "protocol"
+      "http_status"
+      "connection_reset"
+      "configuration"
+      "tls"
+      "dns"
+      "timeout"
+      "other"
+      "closed_locally"
+      "connection_refused"
+      "not_connected"}}},
+  :stable-fields
+  {"AssistantUsageData"
+   {"websocketFallbackErrorKind"
+    {"$ref" "#/definitions/ModelCallWebSocketFallbackErrorKind",
+     "description"
+     "Normalized cause of the WebSocket failure that triggered the HTTP fallback; absent when no fallback occurred or the cause is unknown"},
+    "requestBodyWireBytes"
+    {"type" "integer",
+     "minimum" 0,
+     "description"
+     "Byte length of the request body actually sent on the wire for the attempt that produced this outcome, after any Content-Encoding. Equals requestBodyBytes when the body was not compressed."},
+    "websocketFallbackStatusCode"
+    {"type" "integer",
+     "minimum" 0,
+     "maximum" 999,
+     "description"
+     "HTTP status of the WebSocket upgrade rejection or WebSocket API error that triggered the HTTP fallback"},
+    "websocketFallbackReconnectAttempted"
+    {"type" "boolean",
+     "description"
+     "Whether a WebSocket reconnect was attempted before falling back to HTTP"},
+    "websocketFallbackCloseCode"
+    {"type" "integer",
+     "minimum" 0,
+     "maximum" 4999,
+     "description"
+     "WebSocket close code received before the HTTP fallback"},
+    "requestBodyEncoding"
+    {"$ref" "#/definitions/ModelCallRequestBodyEncoding",
+     "description"
+     "Content-Encoding applied to the request body of the attempt that produced this outcome; identity when uncompressed"},
+    "websocketFallbackStartedThisCall"
+    {"type" "boolean",
+     "description"
+     "Whether the HTTP fallback started during this model call, rather than being inherited from an earlier call"}},
+   "ModelCallFailureData"
+   {"websocketFallbackErrorKind"
+    {"$ref" "#/definitions/ModelCallWebSocketFallbackErrorKind",
+     "description"
+     "Normalized cause of the WebSocket failure that triggered the HTTP fallback; absent when no fallback occurred or the cause is unknown"},
+    "requestBodyWireBytes"
+    {"type" "integer",
+     "minimum" 0,
+     "description"
+     "Byte length of the failed request body actually sent on the wire, after any Content-Encoding. Equals requestBodyBytes when the body was not compressed."},
+    "websocketFallbackStatusCode"
+    {"type" "integer",
+     "minimum" 0,
+     "maximum" 999,
+     "description"
+     "HTTP status of the WebSocket upgrade rejection or WebSocket API error that triggered the HTTP fallback"},
+    "websocketFallbackReconnectAttempted"
+    {"type" "boolean",
+     "description"
+     "Whether a WebSocket reconnect was attempted before falling back to HTTP"},
+    "websocketFallbackCloseCode"
+    {"type" "integer",
+     "minimum" 0,
+     "maximum" 4999,
+     "description"
+     "WebSocket close code received before the HTTP fallback"},
+    "requestBodyEncoding"
+    {"$ref" "#/definitions/ModelCallRequestBodyEncoding",
+     "description"
+     "Content-Encoding applied to the failed request body; identity when uncompressed"},
+    "websocketFallbackStartedThisCall"
+    {"type" "boolean",
+     "description"
+     "Whether the HTTP fallback started during this model call, rather than being inherited from an earlier call"}}}},
+ :commit-classifications
+ [{:commit "24f386ae7b5ce63e601eed3f0f669aca4e05fb2f",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.95-3",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/24f386ae7b5ce63e601eed3f0f669aca4e05fb2f",
+   :changed-path-count 10,
+   :changed-paths-sha256
+   "520304e6937cfb4ea33d1cc874db135f332d683578c9425761cd3a50b161e336",
+   :classifications #{:language-specific :experimental :internal},
+   :reason
+   "Runtime snapshot: stable event diagnostics, experimental controls, generated wire shapes, native-runtime login plumbing, and foreign-SDK/build changes classified separately."}
+  {:commit "24e9638db1bf292beb02efd375ce51e535c3d066",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.96-0",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/24e9638db1bf292beb02efd375ce51e535c3d066",
+   :changed-path-count 94,
+   :changed-paths-sha256
+   "85a3b805ce49775f9e94b1e923e2f2d1174c5a712774ad4001aef4222b0841ba",
+   :classifications
+   #{:language-specific
+     :generated-only
+     :experimental
+     :internal
+     :stable-public},
+   :reason
+   "Runtime snapshot: stable event diagnostics, experimental controls, generated wire shapes, native-runtime login plumbing, and foreign-SDK/build changes classified separately."}
+  {:commit "0f7ab2dc70d23b51379a159176e6c833a30c0e57",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.96-1",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/0f7ab2dc70d23b51379a159176e6c833a30c0e57",
+   :changed-path-count 38,
+   :changed-paths-sha256
+   "7a1cd594d706d03a0ba6de14485c3362e21a576963a45dfd953ee0e53744a5fa",
+   :classifications
+   #{:language-specific
+     :generated-only
+     :experimental
+     :internal
+     :stable-public},
+   :reason
+   "Runtime snapshot: stable event diagnostics, experimental controls, generated wire shapes, native-runtime login plumbing, and foreign-SDK/build changes classified separately."}
+  {:commit "6be623b01b194a61466385e3f708639ec98ce8ac",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.96-2",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/6be623b01b194a61466385e3f708639ec98ce8ac",
+   :changed-path-count 2,
+   :changed-paths-sha256
+   "4b04f001dd9fe1efbd1da4423f3f92211aaead6fc85295d225529eb931e1da74",
+   :classifications #{:internal},
+   :reason
+   "Runtime snapshot: stable event diagnostics, experimental controls, generated wire shapes, native-runtime login plumbing, and foreign-SDK/build changes classified separately."}],
+ :generated-rpc-methods
+ {:fingerprint
+  [487
+   "a62b56be25d3f76728ce58b1af732e0f3700b850b2ecbc84ed51c38e4dc9d07a"],
+  :added
+  {"managedSettings.permissions.evaluate" :experimental,
+   "session.sandbox.getCredentialSuggestions" :experimental,
+   "mcp.registry.allocateRequestId" :internal,
+   "mcp.registry.cancel" :internal,
+   "mcp.registry.search" :internal,
+   "mcp.shouldExcludeGitHubTools" :internal},
+  :removed #{}},
+ :sealed-local-artifacts
+ {".copilot-schema-version"
+  "0a74611841198d33536fcb66310dc6d618da1fe6a582583eef020e9a122ac159",
+  ".github/workflows/ci.yml"
+  "fe16441a50c4480c9c8a0c7e6aba8ba18a479818fe7944df3c9046c2740886e8",
+  "CHANGELOG.md"
+  "fbd8e48567529fba3fb51a62227a54a19328326952e1871cdb82d3a6db24833c",
+  "README.md"
+  "b213e585c9aa1876ea956d5cb25c5de5085f9278b3a2f5cfb8aecee8f571c695",
+  "build.clj"
+  "72620df06be0beaf56b9a005a81755713561e526875f89405ca04a3ea94a1cfb",
+  "doc/adr/2026-10-12-transport-diagnostics-and-opaque-policy.md"
+  "0ffa37b87cc93c5e8f0884c67c7b95bebe473f91e4c73ae50860a081b91cd74f",
+  "doc/api/2026-08-08-query-seq-scoped-lifecycle.html"
+  "9ac9ef19acc3baa31629699e1ae3a3adec3b00bde6bdbaacb363f82bfabeaada",
+  "doc/api/2026-08-10-host-owned-inference-boundary.html"
+  "20fd0592a91a6629c006f42d8493138714748a15af25375528ad0e817152d35c",
+  "doc/api/2026-09-27-dynamic-workflow-migration.html"
+  "5b1502fb67e15e55ffd1ecb599448f9d6cb16b08eade6f5622e526bfd077322e",
+  "doc/api/2026-09-30-model-policy-and-lifecycle-sync.html"
+  "a629525ac179a8c7d8fa525699305b1979127cbfacbe80deed2b9d060a94b96e",
+  "doc/api/2026-10-02-transcript-recovery-and-owned-exit.html"
+  "c8e130cb6156e5f692c208e35bc4bf37317c4f0bf536e90b38554fcd31f5d04e",
+  "doc/api/2026-10-04-byok-provider-telemetry.html"
+  "739923aff5476ed95ccb04852b9652dd171692ede836f528819303b7fc466125",
+  "doc/api/2026-10-05-callback-and-event-contracts.html"
+  "64531da135c63966531fff0cbfdbf0108b4355dae20479cd6b614ef091464286",
+  "doc/api/2026-10-09-extensible-routing-and-event-contracts.html"
+  "2556f1f0dec9577b93055ab88902e2b95552c1865853fceb7a89f3b64419984f",
+  "doc/api/2026-10-12-transport-diagnostics-and-opaque-policy.html"
+  "c297e3dd6daf55f836d5c2ece820c8999fa3977a95eec2a105b853d6d8b3a255",
+  "doc/api/API.html"
+  "c6ce31e3efe72ac85804da06924eaafd85d46d9e47d9331cc9cc43f33d1d89d1",
+  "doc/api/azure-managed-identity.html"
+  "5ebb97bb75a143c763faecf3cf01b00200bd5aacc69e4baaf45bdd9132316f85",
+  "doc/api/byok.html"
+  "099644d2833439a4df26e41f1b9c0c571158e2a7c576fdcd7b83247b317da515",
+  "doc/api/codegen.html"
+  "c897d9e497afdc441a80f17bf85dc9752662a4db03b4b9431714dc217ad1740f",
+  "doc/api/custom-agents.html"
+  "3f832b4792bf6e5ced22898334769e7f1562767562422be3a5c7398632c31772",
+  "doc/api/debugging.html"
+  "eb30e614e9f358db0b651a5f8166f723ff40d7d3f22bb538125b70dadff746d9",
+  "doc/api/doc-auth-index.html"
+  "f385c4294c74e238b26e21b9fbe49fb80e3c8528c25a13c0cf6de1870421f17e",
+  "doc/api/doc-index.html"
+  "f04e340084b5659702e764c3f564faf3442fd1ea2d27502001f6ab8fe629ee88",
+  "doc/api/dynamic-workflows.html"
+  "e5689ec96a241603210481ae6068729bd3ef2d037ed8a791a1f313a8245c23a6",
+  "doc/api/getting-started.html"
+  "c5826d41ea97519e8dcf3ec944ad0486497e14aa045d4daf0885c95f75a1be74",
+  "doc/api/github.copilot-sdk.client.html"
+  "40994f6f28a24d9ea0de3b91747ead6cf109aca1d9831e60d8d617cd2c3bea52",
+  "doc/api/github.copilot-sdk.generated.coerce.html"
+  "e26cce81c1ac65b1e431bca6dddd8200e485b5358706abde6a7f764bae5c946b",
+  "doc/api/github.copilot-sdk.generated.event-metadata.html"
+  "3e71ce79ef6a35ac4100be63340207839553a4c7d8b345fc5c4c6def80b5f554",
+  "doc/api/github.copilot-sdk.generated.event-specs.html"
+  "20f28258069a04f39550666c9d2df6817f5ecfd172c2033e0814644f3fba1150",
+  "doc/api/github.copilot-sdk.helpers.html"
+  "293ca31aa42162f3cf0d54a6868f284e4308df37026f70f870599ee9b45a1cb7",
+  "doc/api/github.copilot-sdk.html"
+  "25243e891bd9ab64e87d2273a3fd16ca24ce64d90e3afd7645fc6424201ffade",
+  "doc/api/github.copilot-sdk.instrument.html"
+  "186d6bc9466c66c6b00573fed4a3dbfa0f3b997f96331ce434d99d076cabc2c4",
+  "doc/api/github.copilot-sdk.logging.html"
+  "14b10e1d6b9f5fbe9e83ad77ef96b6edca6f44d4b1e21c321fb76a6b3bc470c8",
+  "doc/api/github.copilot-sdk.process.html"
+  "824ef878c1ceff1f95051858504b9635538fb03ec7ea3a1e7226edcadb7f27b3",
+  "doc/api/github.copilot-sdk.protocol.html"
+  "306b153fddef524cf93db01d4440ec72c36cb695b1c456eac9a4edebc1f73be6",
+  "doc/api/github.copilot-sdk.session.html"
+  "02a8e7b2c202f246fc1deacc69b3b7df3921d301166a1e05f0d163273dbc623a",
+  "doc/api/github.copilot-sdk.specs.html"
+  "b3dedb0e95ecf354d2b365ac1d30ba4ab54a244ae27a81b45df45202a95905e5",
+  "doc/api/github.copilot-sdk.teardown.html"
+  "8424cd4a252735fb624a22f2912096b8d21ec67454489ef8ae4153671cd1ff7a",
+  "doc/api/github.copilot-sdk.tool-set.html"
+  "67fcfbfddd495d33cc673d25e375134f860e2e5782f0f4b5c14eda8ee4d5efc3",
+  "doc/api/github.copilot-sdk.tools.html"
+  "040a0ce4d63a3fe049aa65cf094ed7ae03a14a7e68ca18d76be748f3cdee7595",
+  "doc/api/github.copilot-sdk.util.html"
+  "2327a61f096c2ac75dfc8cc025d470c4f42b6f0f4b298de3d9753639e1ee8137",
+  "doc/api/github.copilot-sdk.workflow.html"
+  "52ff3ffd71b6ddf6f30c2f7a90ed584e03a808142180bac65a248c1b84e738f2",
+  "doc/api/index.html"
+  "c9f67cd09c2678610e891a5e9059bd73d2a5b6c8445157e8d2446764f3c63d59",
+  "doc/api/overview.html"
+  "b7770d2ebbfee5c65db3d44825c6d6f8e1c25dc077fdb79f7204bdd32c9b4baf",
+  "doc/api/style.html"
+  "7b0767997f6103eddd082d324a179150739f06d2dbddd6d62553ee04d54d1a21",
+  "doc/api/topic-manifest.edn"
+  "6a54c63529df99375cf795461a76e909bc2659523b23b3da6ca3e5519416cd4f",
+  "doc/api/upstream-doc-gap-matrix.html"
+  "9ad0a479702470e0a171302d0d06dfc601a55009bfe23f86b6fccb2c5ee2cb67",
+  "doc/getting-started.md"
+  "ea7fb1a396843256e707e1bd4f99a7b156cf7da308e22c7beffb1ace349558eb",
+  "doc/index.md"
+  "e3f8b2f6b86b77d9e8eeb69c5c4cf3e09542316883d319e361b7ba9daf89fe6e",
+  "doc/reference/API.md"
+  "2507200e840b71c519f165c856d4db95ed04ebcb4cbefcc3539b621351ce744b",
+  "resources/github/copilot_sdk/api_surface.edn"
+  "eb22019ac51b9d5a9ec7ce995db04e1464cb74ddb2f8ea3778e751eef7193891",
+  "schemas/README.md"
+  "3d44bb82a890f68d7b9168a15814a9ae604526b5cd71413fdd4abaca00dcef20",
+  "schemas/api.schema.json"
+  "e097216f866cc9215ce9e1ebfd64b5fb3e7eea4ea10e1f8650902c3fc940e526",
+  "schemas/session-events.schema.json"
+  "3d4d826b3a748b902d626ceb82046fff70db2b3bb6449f4c977a38094e275e35",
+  "script/codegen/coercions.edn"
+  "737c72c477c31d1a2592b19c56ac9418b09e76f3927c0b0bd0531d72d128c6af",
+  "src/github/copilot_sdk.clj"
+  "f9165dd74571e0043ac4fbe7a6b5d5e2ad0c7ed099514a3ae6a46947321e5a49",
+  "src/github/copilot_sdk/client.clj"
+  "373e3d4fc2d3144e5cabd67d618ffb96c2e15b1f6cfaebb0ebf4b0ce5a333b04",
+  "src/github/copilot_sdk/generated/coerce.clj"
+  "7a1828befbf45381f49f0c426dc383869016921fe18493ae137ea5e45b814ee4",
+  "src/github/copilot_sdk/generated/event_metadata.clj"
+  "ab5e17a75f0972bc516f7983b9614b755805f5e5896601aefac29d9646fe6e15",
+  "src/github/copilot_sdk/generated/event_specs.clj"
+  "5d6ef0fbffe7e7f88da30a212053f50b157e57755339245e8f811754d3d268ef",
+  "src/github/copilot_sdk/helpers.clj"
+  "c212bc4f79ac4fd15f30d1e7d45e220b9ab8f44f542d046def1986b14cb94620",
+  "src/github/copilot_sdk/instrument.clj"
+  "1a34501d1792596f5e39d2c02b17d77cc4a4ba28eafb3a15e0f3dc9fc4cc2713",
+  "src/github/copilot_sdk/protocol.clj"
+  "734a4422980d0a58e17c0c917f3144aaf89ffccf8d662db3ba1cdebf344be0d3",
+  "src/github/copilot_sdk/session.clj"
+  "cdab31b528712c63c1cab1e3c51effb68a6dbb45a5834a64c53b0655ce43f39d",
+  "src/github/copilot_sdk/specs.clj"
+  "a9a305dab47511dff31eed14b2f23f8395ed4cab2c43c452afb9c6a2d4ad1b4f",
+  "src/github/copilot_sdk/tool_set.clj"
+  "a166e1a2554d20d5fd636ce4c6372f3d04a7f3620a745e96ba4ae1ced65e2dd8",
+  "src/github/copilot_sdk/tools.clj"
+  "aa2f5c77b74c1e1d56aff7466b5fd30fbe45dbf98beff16d693a6f839f9ddee0",
+  "src/github/copilot_sdk/util.clj"
+  "516d95e178eadb947e89e67e151d5a776ce357d604244d88d0f2dfa62886ef02",
+  "src/github/copilot_sdk/workflow.clj"
+  "7c6a81f46cdc8793883aab481c9575beeac873d2ec7c9d9d85ef799979e02c4d",
+  "test/github/copilot_sdk/e2e_test.clj"
+  "a7aba650c25be01b8196e6ee40d9ff44b01c74bac57cb64d35a41e97497832e6",
+  "test/github/copilot_sdk/integration/upstream_1_0_96_2_test.clj"
+  "eb83d0126a8a2251c78d16bad5443dc82fd746186233172394ad60d8fd778fa8"},
+ :implementation-deltas
+ [{:path "nodejs/src/client.ts",
+   :symbol "CopilotClient.startInProcessFfi",
+   :classification :language-specific,
+   :decision :no-clojure-counterpart,
+   :reason
+   "Forward the trimmed CLI login-sync integration ID to Node's in-process native runtime; Clojure has no in-process native-runtime connection."}],
+ :test-inventory
+ {"nodejs/test/computer-use-oauth-fixture.test.ts"
+  {:blobs [nil "419563d9dd9e8b761da1e3f7590411536a02d656"],
+   :classification :internal,
+   :review
+   "OAuth fixture client registration and token-exchange validation, not an SDK contract."},
+  "nodejs/test/e2e/accounts_login.e2e.test.ts"
+  {:blobs
+   ["f0b08e77596575e5396dd4aa95ade79e598a0aec"
+    "2440111bca77ce8644a5886c1624d3d2c369f6d6"],
+   :classification :experimental,
+   :review
+   "Entra account login is unsupported on Linux; account-provider APIs remain excluded."},
+  "nodejs/test/e2e/accounts_platform.e2e.test.ts"
+  {:blobs [nil "ae9bf937266517ab08d0cbd440721523d2b10b08"],
+   :classification :experimental,
+   :review
+   "Account catalog, login and credential replacement respect platform support before mutations."},
+  "nodejs/test/e2e/assisted_autopilot_permission.e2e.test.ts"
+  {:blobs
+   ["9349d0091d95b4446bb6ef07d50160954e3fa9d0"
+    "5577d03761d4d2d807e156376eff05f27b4daf07"],
+   :classification :experimental,
+   :review
+   "Runtime Assisted permission recommendations precede Autopilot recovery and eligible host callbacks."},
+  "nodejs/test/e2e/auto_fusion_routing.e2e.test.ts"
+  {:blobs [nil "798b450028c80e9dd5fa53ca1377c530027fbe66"],
+   :classification :experimental,
+   :review
+   "Fusion routing, staged selection, cancellation and cold-resume contracts remain excluded."},
+  "nodejs/test/e2e/browser_shadow_reload.e2e.test.ts"
+  {:blobs [nil "82a005528d8b62ffb43e5fa6afddb862982e6c4c"],
+   :classification :experimental,
+   :review
+   "Built-in browser plugin shadowing and cross-process plugin reload use experimental catalog controls."},
+  "nodejs/test/e2e/compaction.e2e.test.ts"
+  {:blobs
+   ["4c8141b5e64d487cf89140a1aff822919c1b1e97"
+    "fa9cc328fe2527d37171e342e253d12a7ac88662"],
+   :classification :stable-public,
+   :review
+   "Runtime-owned Anthropic caching preserves reusable prefixes during compaction and avoids disposable writes; no SDK builder change. Fusion and request-handler plumbing remain experimental."},
+  "nodejs/test/e2e/computer_use_oauth.e2e.test.ts"
+  {:blobs [nil "76bdd90390248899877f5974b082adada4e310ce"],
+   :classification :experimental,
+   :review
+   "Computer Use plugin OAuth isolation and cancellation do not add a stable client API."},
+  "nodejs/test/e2e/entra_identity_first.e2e.test.ts"
+  {:blobs
+   ["2a6e49fff272eaef7a83e3986a4df088da6eaa49"
+    "38da660fb7bdfba3cdf89978d6672f7d8e328c61"],
+   :classification :experimental,
+   :review
+   "Entra identity-first platform gating; no stable auth configuration change."},
+  "nodejs/test/e2e/entra_renewal.e2e.test.ts"
+  {:blobs
+   ["e040d8a905f94a6cddb0a534906b6315ea20c24a"
+    "82f20c6a270593b4f76220874a2fbb69930f24f6"],
+   :classification :experimental,
+   :review
+   "Entra credential renewal platform gating; no stable token-provider change."},
+  "nodejs/test/e2e/harness/webSocketResponsesServer.ts"
+  {:blobs
+   ["219100a97f56c8412782661389c5acd4cbfa2563"
+    "de4810802c7eb88c3bbd83e1304e72e38af0134c"],
+   :classification :internal,
+   :review
+   "Controlled provider fixture supplies HTTP responses after WebSocket failures."},
+  "nodejs/test/e2e/image_edits.e2e.test.ts"
+  {:blobs [nil "952a61fb0cbe640804c4608501fe78f3c2dbc0f4"],
+   :classification :experimental,
+   :review
+   "Native image editing, attachment provenance and hook behavior depend on the excluded image-generation subsystem."},
+  "nodejs/test/e2e/managed_permissions_limit_to.e2e.test.ts"
+  {:blobs
+   ["1d02686699936fc2554aa86b675bd8e70caff716"
+    "1ec520429d1710d1fffd51587839da24944cfe62"],
+   :classification :experimental,
+   :review
+   "Added tests exercise pure managedSettings.permissions.evaluate and retained contexts, not a change to stable limitTo builders."},
+  "nodejs/test/e2e/mcp_scoped_sign_in.e2e.test.ts"
+  {:blobs
+   ["4139e17bfe6551e9ab0374e4432fee0dd247a315"
+    "d872e2c1c2d5997b20bfd2a15c0bdde909e72191"],
+   :classification :experimental,
+   :review
+   "Scoped account sign-in respects unsupported platforms; no new stable MCP authentication surface."},
+  "nodejs/test/e2e/memory_tool_overrides.e2e.test.ts"
+  {:blobs [nil "9bec5aad9240b2f4af4b59f60522433c15079033"],
+   :classification :stable-public,
+   :review
+   "Existing tools, overridesBuiltInTool and permission callbacks route memory overrides through create/resume; runtime owns execution and rejection."},
+  "nodejs/test/e2e/monthly_usage.e2e.test.ts"
+  {:blobs [nil "b0704efa3304ad8da9965148f473ed82f196d95a"],
+   :classification :experimental,
+   :review
+   "Monthly provider consumption preserves zero/fractions/unknown and is separate from session spend; no quota API is added."},
+  "nodejs/test/e2e/rpc_server.e2e.test.ts"
+  {:blobs
+   ["07d7ffcf51e8805159dabc6063af379136ff3b73"
+    "0b8049225e6eaf350d0f965967d01837712f7b99"],
+   :classification :experimental,
+   :review
+   "Added raw-RPC coverage is for experimental managed permission evaluation."},
+  "nodejs/test/e2e/rpc_server_plugins.e2e.test.ts"
+  {:blobs
+   ["20575a9114b4b07abe36603abccc2d22b65639de"
+    "2ce0800f4a53791911328128847a8e8429d8c41e"],
+   :classification :experimental,
+   :review
+   "Computer Use plugin toggles must not restart unrelated MCP servers; plugin control remains excluded."},
+  "nodejs/test/e2e/rpc_shell_and_fleet.e2e.test.ts"
+  {:blobs
+   ["4f8061c9605f01abafb5182c1cb0c3a7ed0c1449"
+    "5df5024b14fb28668ccb48cd632f7470e2907459"],
+   :classification :generated-only,
+   :review
+   "Raw shell RPC verifies runtime-owned post-root-exit pipe cleanup and rewind admission; no SDK wrapper delta."},
+  "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts"
+  {:blobs
+   ["9d6836f6315c964b8d8064b215e74fcce901e838"
+    "1b71849db71da5440c0f9fd85ced96ebcfc03a42"],
+   :classification :generated-only,
+   :review
+   "Generated RPC method coverage tracks managed evaluation, sandbox suggestions and internal MCP additions."},
+  "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
+  {:blobs
+   ["5f926f120ca25882ab7b54d4d10885dec230d181"
+    "e6e6a18c8fefb577af90a526478988f439ae025f"],
+   :classification :generated-only,
+   :review
+   "Raw task cancellation releases attached-shell idle and queued messages; existing event and send contracts remain unchanged."},
+  "nodejs/test/e2e/session_fs.e2e.test.ts"
+  {:blobs
+   ["61d15b9b26b693094ab2bcce12aab95d43a33eee"
+    "81309ee5a85de08e31e9d64e1d17886142f464eb"],
+   :classification :stable-public,
+   :review
+   "Native plan edits and write failures remain in the existing filesystem provider rather than escaping to host files."},
+  "nodejs/test/e2e/skill_provider.e2e.test.ts"
+  {:blobs
+   ["82d584809c579a795f443d5e006a98deff33a568"
+    "e8f2560625ce7d2aa90d69ffc1a47ca7166962f2"],
+   :classification :experimental,
+   :review
+   "Excluded SkillProvider preserves prompt bytes across cold resume and reordered discovery."},
+  "nodejs/test/e2e/subagent_prompt_resume.e2e.test.ts"
+  {:blobs
+   ["2e82470012e597ae29415878ee1f3cb7046c285b"
+    "00d04696470967c5670d2beba508b92373b85d15"],
+   :classification :stable-public,
+   :review
+   "Runtime reconciles composed or separately declared child reasoning effort with model capabilities on initial and resumed requests."},
+  "nodejs/test/e2e/websocket_http_fallback.e2e.test.ts"
+  {:blobs [nil "d8cd382285f366a1b5c4f6eb9539ae4d29a5be6a"],
+   :classification :stable-public,
+   :review
+   "Stable usage diagnostics distinguish the fallback-initiating call from later inherited fallback, preserving false and omitted close codes."},
+  "nodejs/test/e2e/workiq_discovery.e2e.test.ts"
+  {:blobs
+   ["249d982770fdb979a1c308627a2189c6ec746a49"
+    "1d30226112e276eacf86f0247d654438f9364a25"],
+   :classification :experimental,
+   :review
+   "WorkIQ discovery and sign-in platform support do not expose new stable APIs."},
+  "nodejs/test/ffiRuntimeHost.test.ts"
+  {:blobs
+   ["b5badfb27c835668407dbddb9a10f0ab48d916fd"
+    "f7e19686fde22bd10856e8fdbdcde347bb1fea06"],
+   :classification :language-specific,
+   :review
+   "Node in-process native runtime forwards the trimmed CLI login-sync integration ID."},
+  "nodejs/test/python-codegen.test.ts"
+  {:blobs
+   ["e87cefb5c96b755efb0cb8d618833d2cee943fbf"
+    "36cb7e31339c920ad376e6f3be0a5b2a5a1d8d4d"],
+   :classification :internal,
+   :review
+   "Python generator discriminator coverage for managed permission types."},
+  "nodejs/test/rust-codegen.test.ts"
+  {:blobs
+   ["5f34d804b16d07d2960be0b9a0ad4cd5ee28f72e"
+    "53c471b104203d764934297d32a9f7751dc6d102"],
+   :classification :internal,
+   :review
+   "Rust generator reuse of named managed permission operation/kind types."}},
+ :target-public-surface
+ {:source-blobs
+  {"nodejs/src/host.ts"
+   ["40b1060f69c3fde5e010951edbb73d865b35def3"
+    "40b1060f69c3fde5e010951edbb73d865b35def3"],
+   "nodejs/src/extension.ts"
+   ["f6adc32745128af9c42cf16041f0d09ae0384653"
+    "f6adc32745128af9c42cf16041f0d09ae0384653"],
+   "nodejs/src/schema.ts"
+   ["29d94267588a8835d0b0db0623fb6d5ac0508721"
+    "29d94267588a8835d0b0db0623fb6d5ac0508721"],
+   "nodejs/src/copilotRequestHandler.ts"
+   ["d36deb5e3d2e04bfc2de91a1e13d145cbf1e40a8"
+    "d36deb5e3d2e04bfc2de91a1e13d145cbf1e40a8"],
+   "nodejs/src/telemetry.ts"
+   ["f9d331678111330ec259237a2940085b5b2888aa"
+    "f9d331678111330ec259237a2940085b5b2888aa"],
+   "nodejs/src/types.ts"
+   ["80588c2627a72ff81b98ef7c473f3e367ee09ce0"
+    "80588c2627a72ff81b98ef7c473f3e367ee09ce0"],
+   "nodejs/src/ffiRuntimeHost.ts"
+   ["947417871a284d6d679e64c253a3ce8fc1bd280b"
+    "947417871a284d6d679e64c253a3ce8fc1bd280b"],
+   "nodejs/src/installationConfirmation.ts"
+   ["897c81915f4a398a66bfaffe9d93b0da09955767"
+    "897c81915f4a398a66bfaffe9d93b0da09955767"],
+   "nodejs/src/workflow.ts"
+   ["f7c0abe2d1b819154d284132a7b83f98fecb6c78"
+    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"],
+   "nodejs/src/cliVersion.ts"
+   ["833739e796da35070ff64b2f06fb8af1692c2603"
+    "884f2a267e4d667ac5524c6eb648715130eda04d"],
+   "nodejs/src/session.ts"
+   ["02e60dfbcf2f1d4ebd2aa8e76fd56f861a34b531"
+    "02e60dfbcf2f1d4ebd2aa8e76fd56f861a34b531"],
+   "nodejs/src/client.ts"
+   ["fd82d52adab96fe9dace098ffb2f51fc88689046"
+    "ed10b482b2e3934c0a395db72ffcb0745a23ae2c"],
+   "nodejs/src/index.ts"
+   ["ad9e427287eabc89ba391583af38068d93ea80e3"
+    "ad9e427287eabc89ba391583af38068d93ea80e3"],
+   "nodejs/package.json"
+   ["5af5d28093bf767f36c2fa110540b2a804cbbcee"
+    "4e68a1b0eb459b554c2b00e952c80f29c54c38a2"],
+   "nodejs/src/sdkProtocolVersion.ts"
+   ["0e5314374ab92487f2714a615181d68b32ac9e69"
+    "0e5314374ab92487f2714a615181d68b32ac9e69"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534"
+    "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/runtimeArtifacts.ts"
+   ["9f749486ac51f8c9c40a248cd87f9bd19edaff00"
+    "9f749486ac51f8c9c40a248cd87f9bd19edaff00"],
+   "nodejs/src/generated/rpc.ts"
+   ["bccd27643bd11ef5ab513cd6209b3267ab27b9d6"
+    "68d1021d1fa4762164af27ffc7e5fab1e7c86b63"],
+   "nodejs/src/canvas.ts"
+   ["b7c2254c4f3d9c96946d0947c73c68eed50dd713"
+    "b7c2254c4f3d9c96946d0947c73c68eed50dd713"],
+   "nodejs/src/sessionFsProvider.ts"
+   ["ee9908682da545908cabb3ed9861fe25fd05c903"
+    "ee9908682da545908cabb3ed9861fe25fd05c903"],
+   "nodejs/src/generated/session-events.ts"
+   ["0938ae97447084d236008d198adf9525b6217aac"
+    "3b15ae7d4f58afa90bbd9ffae10672d2ee0baffd"]},
+  :trees
+  {"nodejs/src"
+   ["7e4292285d877b7770050945d8dc9784d6e664a0"
+    "46e69ecabdec14c62282dfa8294d3abd799a16dc"],
+   "nodejs/src/generated"
+   ["478a9059cfa237cf5fcf17d7b1299efd07cbc69b"
+    "a8c68af4ba5864435bd90c1ce15fecddd28133a6"],
+   "nodejs/test"
+   ["70d555709e7332c91e0d35655c2289c1fcc5bfbc"
+    "fd97174ce219c9febb7ab9f92f0fbcce6b3407a6"]},
+  :modules
+  {"nodejs/src/canvas.ts"
+   {:fingerprint
+    [9
+     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/cliVersion.ts"
+   {:fingerprint
+    [2
+     "e6042134f27f7a648f66f14564fee077dbc0dc1b1f108bc5f027c0f2dcabf3f5"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/client.ts"
+   {:fingerprint
+    [1
+     "a5431bbd92ac780f6179f17f47c4e9a9227510a9f3682f56a6893c7db8d90dba"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/copilotRequestHandler.ts"
+   {:fingerprint
+    [6
+     "c93bb9e5250504432640afb2521135dcccfc13090190aac28fc689d1f3751766"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/extension.ts"
+   {:fingerprint
+    [40
+     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/ffiRuntimeHost.ts"
+   {:fingerprint
+    [1
+     "fea0bbe2fd3afeb4e248f3d6bff0345a005350debb99f3f57768d026a77774c1"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/generated/rpc.ts"
+   {:fingerprint
+    [1645
+     "7249e394054b3f7c9f83ad6872a8ff85cb3765b3e2f3b7d0703b00794e513848"],
+    :added
+    {:experimental
+     #{"SandboxCredentialSuggestionsResult"
+       "ManagedSettingsPermissionsEvaluateResult"
+       "ManagedPermissionEvaluation"
+       "ManagedSettingsPermissionsEvaluateRequest"
+       "ManagedPermissionsEvaluateResult"
+       "SandboxCredentialSuggestion"
+       "ManagedPermissionOperation"
+       "ManagedPermissionVerdict"
+       "ManagedPermissionsEvaluateRequest"},
+     :internal
+     #{"McpRegistryCancelResult"
+       "McpShouldExcludeGitHubToolsResult"
+       "McpRegistryCancelRequest"
+       "McpRegistryRequestIdResult"
+       "McpShouldExcludeGitHubToolsRequest"
+       "McpRegistrySearchRequest"
+       "McpRegistrySearchResult"}},
+    :removed {},
+    :changed
+    {:internal #{"GlobalStateLoadResult"},
+     :experimental #{"AccountStatus" "ManagedSettingsResolveResult"}}},
+   "nodejs/src/generated/session-events.ts"
+   {:fingerprint
+    [622
+     "2696d1bc19741be0051c2ee0dd8acd623ba1bfc2aef94dff71ad5efe2899e4fa"],
+    :added
+    {:experimental
+     #{"ManagedPermissionsContext"
+       "ProviderMonthlyUsage"
+       "ProviderMonthlyUsageScope"
+       "ProviderMonthlyUsageState"},
+     :stable-public
+     #{"ModelCallWebSocketFallbackErrorKind"
+       "ModelCallRequestBodyEncoding"}},
+    :removed {},
+    :changed
+    {:stable-public #{"ModelCallFailureData" "AssistantUsageData"},
+     :experimental
+     #{"ManagedSettingsResolvedData" "ProviderQuotaState"}}},
+   "nodejs/src/host.ts"
+   {:fingerprint
+    [5
+     "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/index.ts"
+   {:fingerprint
+    [251
+     "862a86b4b834ad68736503ff20dd5a946a2e5f3f5ccac5ab0f90a92f124b292e"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/installationConfirmation.ts"
+   {:fingerprint
+    [3
+     "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/runtimeArtifacts.ts"
+   {:fingerprint
+    [11
+     "fd2488d89925326e38efdd0b47ddaf8b3b57c9d9229eb097f6ec38ca15bc4921"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/schema.ts"
+   {:fingerprint
+    [3
+     "dd598ca6081134e447dfcdf10a79286380beca166c09199d8f84a537e5430b15"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/sdkProtocolVersion.ts"
+   {:fingerprint
+    [2
+     "42d26b4df33f9c866247ee6f00931b63c055b4510fa7b89293cf765e7f539b7b"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/session.ts"
+   {:fingerprint
+    [2
+     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/sessionFsProvider.ts"
+   {:fingerprint
+    [10
+     "fda7afb30d8f2a19837a65093efa5d12644668754a1374749a4dfcbf3e56b48a"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/telemetry.ts"
+   {:fingerprint
+    [1
+     "4fa0ad2e0638ed4cd3e40e836bd1df43ab7d3c980ad228dcfbd7d6e85ec29b1c"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/toolSet.ts"
+   {:fingerprint
+    [2
+     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/types.ts"
+   {:fingerprint
+    [249
+     "e7cb779c064c076df54adb1d5e45f8560138d5fc2c1ee5c0c9148ce8130fda9c"],
+    :added {},
+    :removed {},
+    :changed {}},
+   "nodejs/src/workflow.ts"
+   {:fingerprint
+    [31
+     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :added {},
+    :removed {},
+    :changed {}}},
+  :package-root
+  {:fingerprint
+   [863
+    "b1b0dc4e928906dad04ee0da3e3df2ecea375f1509cd205959553fedbf278859"],
+   :star-exports #{"./generated/session-events.js"},
+   :added
+   #{"ManagedPermissionsContext"
+     "ProviderMonthlyUsage"
+     "ModelCallWebSocketFallbackErrorKind"
+     "ProviderMonthlyUsageScope"
+     "ModelCallRequestBodyEncoding"
+     "ProviderMonthlyUsageState"},
+   :removed #{}},
+  :interfaces
+  {:fingerprint
+   [112
+    "e57fb490a155e647541e31bc5cc964176e613277b9bf6d746da8e8aff9980a91"],
+   :added #{},
+   :removed #{},
+   :changed #{}},
+  :classes
+  {:client
+   {:path "nodejs/src/client.ts",
+    :class-name "CopilotClient",
+    :fingerprint
+    [22
+     "99a26a2d6e0e3f0f7c2ccbc5f24586a052dd7ad17ef171e79847f8a228692030"],
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async createSession(config: SessionConfig): Promise<CopilotSession>"
+     "async deleteSession(sessionId: string): Promise<void>"
+     "async forceStop(): Promise<void>"
+     "async getAuthStatus(): Promise<GetAuthStatusResponse>"
+     "async getForegroundSessionId(): Promise<string | undefined>"
+     "async getLastSessionId(): Promise<string | undefined>"
+     "async getSessionMetadata(sessionId: string): Promise<SessionMetadata | undefined>"
+     "async getStatus(): Promise<GetStatusResponse>"
+     "async listModels(): Promise<ModelInfo[]>"
+     "async listSessions(filter?: SessionListFilter): Promise<SessionMetadata[]>"
+     "async ping(message?: string): Promise<{ message: string; timestamp: string; protocolVersion?: number }>"
+     "async resumeSession(sessionId: string, config: ResumeSessionConfig): Promise<CopilotSession>"
+     "async setForegroundSessionId(sessionId: string): Promise<void>"
+     "async start(): Promise<void>"
+     "async startAhpHost(options: AhpHostOptions): Promise<AhpHost>"
+     "async stop(): Promise<Error[]>"
+     "constructor(options: CopilotClientOptions = {})"
+     "get rpc(): ReturnType<typeof createServerRpc>"
+     "onLifecycle(handler: SessionLifecycleHandler): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventType: K, handler: TypedSessionLifecycleHandler<K>): () => void"
+     "onLifecycle<K extends SessionLifecycleEventType>(eventTypeOrHandler: K | SessionLifecycleHandler, handler?: TypedSessionLifecycleHandler<K>): () => void"],
+    :fields #{},
+    :added-signatures #{},
+    :removed-signatures #{}},
+   :host
+   {:path "nodejs/src/host.ts",
+    :class-name "AhpHost",
+    :fingerprint
+    [4
+     "24c39da74e271339ff73d1fd1360e7540c81a4d65ccf9d3e60792f79cdd48c1e"],
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "dispose(): Promise<void>"
+     "listSessions(): Promise<HostListSessionsResult>"
+     "publishSession(sessionId: string): Promise<HostPublishSessionResult>"],
+    :fields
+    #{"readonly url: string | undefined"
+      "readonly token: string | undefined"
+      "readonly hostId: string"
+      "readonly environmentId: string | undefined"
+      "readonly pid: number | undefined"},
+    :added-signatures #{},
+    :removed-signatures #{}},
+   :session
+   {:path "nodejs/src/session.ts",
+    :class-name "CopilotSession",
+    :fingerprint
+    [24
+     "23b083f5d3694a6e7766afd572529fa56f82e91e085d76e18950e984f32db98c"],
+    :signatures
+    ["async [Symbol.asyncDispose](): Promise<void>"
+     "async abort(): Promise<void>"
+     "async disconnect(): Promise<void>"
+     "async getEvents(): Promise<SessionEvent[]>"
+     "async log(message: string, options?: { level?: \"info\" | \"warning\" | \"error\"; ephemeral?: boolean }): Promise<void>"
+     "async send(options: MessageOptions): Promise<string>"
+     "async send(optionsOrPrompt: MessageOptions | string): Promise<string>"
+     "async send(prompt: string): Promise<string>"
+     "async sendAndWait(options: MessageOptions, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait(optionsOrPrompt: MessageOptions | string, schemaOrTimeout?: ResponseSchema | number, timeout?: number): Promise<unknown>"
+     "async sendAndWait(prompt: string, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+     "async sendAndWait<TResult>(options: MessageOptions | string, responseSchema: ResponseSchema<TResult>, timeout?: number): Promise<TResult>"
+     "async setAutoTier(autoTier: AutoTier | null): Promise<ModelSwitchAutoTierResult>"
+     "async setModel(model: string, options?: { reasoningEffort?: ReasoningEffort; reasoningSummary?: ReasoningSummary; contextTier?: ContextTier; modelCapabilities?: ModelCapabilitiesOverride; autoTier?: AutoTier | null; }): Promise<void>"
+     "async setTools(tools: Tool[]): Promise<void>"
+     "get capabilities(): SessionCapabilities"
+     "get openCanvases(): OpenCanvasInstance[]"
+     "get rpc(): ReturnType<typeof createSessionRpc>"
+     "get transcriptRecovery(): TranscriptRecovery | undefined"
+     "get ui(): SessionUiApi"
+     "get workspacePath(): string | undefined"
+     "on(handler: SessionEventHandler): () => void"
+     "on<K extends SessionEventType>(eventType: K, handler: TypedSessionEventHandler<K>): () => void"
+     "on<K extends SessionEventType>(eventTypeOrHandler: K | SessionEventHandler, handler?: TypedSessionEventHandler<K>): () => void"],
+    :fields
+    #{"readonly workflow: SessionWorkflowApi"
+      "public readonly sessionId: string"
+      "clientSessionApis: ClientSessionApiHandlers"},
+    :added-signatures #{},
+    :removed-signatures #{}}},
+  :unchanged-authority-paths
+  #{"nodejs/src/host.ts"
+    "nodejs/src/extension.ts"
+    "nodejs/src/schema.ts"
+    "nodejs/src/copilotRequestHandler.ts"
+    "nodejs/src/telemetry.ts"
+    "nodejs/src/types.ts"
+    "nodejs/src/ffiRuntimeHost.ts"
+    "nodejs/src/installationConfirmation.ts"
+    "nodejs/src/workflow.ts"
+    "nodejs/src/session.ts"
+    "nodejs/src/index.ts"
+    "nodejs/src/sdkProtocolVersion.ts"
+    "nodejs/src/toolSet.ts"
+    "nodejs/src/runtimeArtifacts.ts"
+    "nodejs/src/canvas.ts"
+    "nodejs/src/sessionFsProvider.ts"},
+  :event-field-deltas
+  {"AssistantUsageData"
+   {:classification :stable-public,
+    :added
+    #{"websocketFallbackErrorKind"
+      "requestBodyWireBytes"
+      "websocketFallbackStatusCode"
+      "websocketFallbackReconnectAttempted"
+      "websocketFallbackCloseCode"
+      "requestBodyEncoding"
+      "websocketFallbackStartedThisCall"},
+    :removed #{}},
+   "ModelCallFailureData"
+   {:classification :stable-public,
+    :added
+    #{"websocketFallbackErrorKind"
+      "requestBodyWireBytes"
+      "websocketFallbackStatusCode"
+      "websocketFallbackReconnectAttempted"
+      "websocketFallbackCloseCode"
+      "requestBodyEncoding"
+      "websocketFallbackStartedThisCall"},
+    :removed #{}},
+   "ProviderQuotaState"
+   {:classification :experimental,
+    :added #{"monthlyUsage"},
+    :removed #{}},
+   "ManagedSettingsResolvedData"
+   {:classification :experimental,
+    :added #{"permissionsContext"},
+    :removed #{}}}},
+ :semantic-note-deltas
+ [{:classification :stable-public,
+   :authority
+   "nodejs/src/generated/session-events.ts:AssistantUsageData",
+   :text
+   "Serialized (uncompressed) byte length of the request body, before any Content-Encoding.",
+   :decision
+   "Distinguish pre-encoding request size from the transmitted size in the event contract and API reference."}
+  {:classification :stable-public,
+   :authority
+   "nodejs/src/generated/session-events.ts:ModelCallFailureData",
+   :text
+   "Serialized (uncompressed) byte length of the failed request body, before any Content-Encoding.",
+   :decision
+   "Apply the same pre-encoding versus transmitted distinction to failed attempts."}
+  {:classification :experimental,
+   :authority
+   "nodejs/src/generated/session-events.ts:ManagedSettingsResolvedData",
+   :text "an unresolved policy does not force this on by itself.",
+   :decision
+   "Preserve runtime-reported policy data; do not infer a bypass restriction from failClosed or add an evaluator."}],
+ :intentional-exclusions
+ [{:id :quota/monthly-usage,
+   :classification :experimental,
+   :decision :passive-wire-only,
+   :authority
+   ["nodejs/src/generated/session-events.ts:ProviderMonthlyUsage"],
+   :reason
+   "Provider/account/service consumption is distinct from per-call and session cost; preserve raw optional quantities/timestamps without new quota APIs.",
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-96-2-test/passive-monthly-usage-preserves-zero-fractions-and-unknown-consumption}}
+  {:id :permissions/browser-evaluation,
+   :classification :experimental,
+   :decision :passive-wire-only,
+   :authority
+   ["nodejs/src/generated/rpc.ts:ManagedSettingsPermissionsEvaluateRequest"
+    "nodejs/src/generated/rpc.ts:ManagedPermissionsEvaluateRequest"
+    "nodejs/src/generated/rpc.ts:ManagedSettingsResolveResult"
+    "nodejs/src/generated/session-events.ts:ManagedSettingsResolvedData"
+    "nodejs/src/generated/session-events.ts:ManagedPermissionsContext"],
+   :experimental-references
+   {"nodejs/src/generated/session-events.ts"
+    #{"ManagedSettingsResolvedData"},
+    "nodejs/src/generated/rpc.ts"
+    #{"ManagedSettingsPermissionsEvaluateRequest"
+      "ManagedSettingsResolveResult"
+      "ManagedPermissionsEvaluateRequest"}},
+   :reason
+   "ManagedPermissionsContext has no direct experimental annotation, but every public declaration referencing it is explicitly experimental. Keep opaque JSON intact without promoting the containing subsystem or exposing a permission evaluator.",
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-96-2-test/passive-managed-context-preserves-opaque-policy-keys}}
+  {:id :sandbox/credential-suggestions,
+   :classification :experimental,
+   :decision :no-new-api,
+   :authority
+   ["nodejs/src/generated/rpc.ts:SandboxCredentialSuggestion"],
+   :reason
+   "Credential-discovery suggestions are part of the excluded sandbox management subsystem."}
+  {:id :mcp/registry-and-tool-selection,
+   :classification :internal,
+   :decision :no-new-api,
+   :authority ["nodejs/src/generated/rpc.ts:createInternalServerRpc"],
+   :reason
+   "Registry cancellation/search and gh-replaceable tool selection are explicitly internal RPCs."}
+  {:id :accounts/auth-source-and-platform-support,
+   :classification :experimental,
+   :decision :no-new-api,
+   :authority ["nodejs/src/generated/rpc.ts:AccountStatus"],
+   :reason
+   "Credential provenance and Entra/WorkIQ platform support belong to excluded account-provider APIs."}
+  {:id :host/global-state,
+   :classification :internal,
+   :decision :no-new-api,
+   :authority ["nodejs/src/generated/rpc.ts:GlobalStateLoadResult"],
+   :reason
+   "Retired app-install nudge state is host-internal and was not exposed by the Clojure SDK."}
+  {:id :runtime/native-login-sync,
+   :classification :language-specific,
+   :decision :no-clojure-counterpart,
+   :authority
+   ["nodejs/src/client.ts:startInProcessFfi"
+    "nodejs/test/ffiRuntimeHost.test.ts"],
+   :reason
+   "Node native-runtime argv/environment plumbing has no Clojure in-process equivalent."}
+  {:id :runtime/experimental-subsystems,
+   :classification :experimental,
+   :decision :no-new-api,
+   :reason
+   "Fusion routing, image editing, SkillProvider, Computer Use/plugin controls, and Assisted permission internals retain existing exclusions. Supported Dynamic Workflows are unchanged."}
+  {:id :foreign-sdks-and-build,
+   :classification :language-specific,
+   :decision :no-clojure-counterpart,
+   :reason
+   "Foreign-language generated bindings, router internals and build integration do not create independent Node SDK parity requirements."}],
+ :certification
+ {:clojure-base-commit "9c1b06ba692d544710b779108d592b92e3f3baf8",
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_341a526.edn",
+   :sha256
+   "b0763ebc178e3e0eae4540f962c8eca49839f4ec0d704a903b6931410b03c823"},
+  :local-artifact-seal
+  {:status :sealed,
+   :commit "759f4639c4f6dbbf76cc1e1fa7d199d48d71293c"}},
+ :class-method-deltas [],
+ :changed-paths
+ {:count 124,
+  :sha256
+  "24af077ba15fb43ba25241118db78a9cf5b9cabb9a1428580fd54f5bef7b8c19",
+  :rename-policy :no-renames,
+  :hash-format :newline-joined-without-trailing-newline,
+  :exact-classifications
+  {"nodejs/test/e2e/rpc_server_plugins.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/accounts_login.e2e.test.ts" :experimental,
+   "nodejs/test/python-codegen.test.ts" :internal,
+   "nodejs/README.md" :experimental,
+   "nodejs/test/e2e/subagent_prompt_resume.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/computer_use_oauth.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/entra_identity_first.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/rpc_tasks_and_handlers.e2e.test.ts"
+   :generated-only,
+   "nodejs/src/cliVersion.ts" :internal,
+   "nodejs/test/e2e/mcp_scoped_sign_in.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/rpc_server.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/entra_renewal.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/image_edits.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/rpc_surface_coverage.e2e.test.ts" :generated-only,
+   "nodejs/test/e2e/harness/webSocketResponsesServer.ts" :internal,
+   "nodejs/test/e2e/managed_permissions_limit_to.e2e.test.ts"
+   :experimental,
+   "nodejs/src/client.ts" :language-specific,
+   "nodejs/test/e2e/assisted_autopilot_permission.e2e.test.ts"
+   :experimental,
+   "nodejs/test/e2e/browser_shadow_reload.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/session_fs.e2e.test.ts" :stable-public,
+   "nodejs/test/rust-codegen.test.ts" :internal,
+   "nodejs/package.json" :internal,
+   "nodejs/test/e2e/websocket_http_fallback.e2e.test.ts"
+   :stable-public,
+   "nodejs/test/e2e/monthly_usage.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/accounts_platform.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/workiq_discovery.e2e.test.ts" :experimental,
+   "nodejs/test/ffiRuntimeHost.test.ts" :language-specific,
+   "nodejs/src/generated/rpc.ts" :generated-only,
+   "nodejs/test/e2e/skill_provider.e2e.test.ts" :experimental,
+   "nodejs/test/e2e/auto_fusion_routing.e2e.test.ts" :experimental,
+   "nodejs/src/generated/session-events.ts" :stable-public,
+   "nodejs/test/e2e/memory_tool_overrides.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/compaction.e2e.test.ts" :stable-public,
+   "nodejs/test/e2e/rpc_shell_and_fleet.e2e.test.ts" :generated-only,
+   "nodejs/test/computer-use-oauth-fixture.test.ts" :internal},
+  :language-specific-prefixes
+  ["dotnet/" "go/" "java/" "python/" "rust/"],
+  :prefix-classifications
+  [{:prefix ".github/",
+    :classification :internal,
+    :reason "Foreign SDK CI/runtime packaging."}
+   {:prefix "scripts/",
+    :classification :internal,
+    :reason "Foreign-language code generation."}
+   {:prefix "nodejs/",
+    :classification :internal,
+    :reason
+    "Packaging/test-runner metadata; public sources and changed tests are classified explicitly."}
+   {:prefix "test/harness/",
+    :classification :internal,
+    :reason "Shared capture/replay and OAuth fixtures."}
+   {:prefix "test/snapshots/rpc_tasks_and_handlers/",
+    :classification :generated-only,
+    :reason
+    "Raw attached-shell task cancellation and session-idle snapshots."}
+   {:prefix "test/snapshots/skill_provider/",
+    :classification :experimental,
+    :reason "Excluded skill-provider cold-resume snapshots."}],
+  :classification-counts
+  {:internal 21,
+   :language-specific 73,
+   :experimental 18,
+   :generated-only 6,
+   :stable-public 6}},
+ :stable-deltas
+ [{:wire #{"requestBodyWireBytes" "requestBodyEncoding"},
+   :semantics
+   ["Optional, non-null fields; omission is not a default value."
+    "Live and historical conversion preserves values and normalizes only SDK field names."
+    "Idiom event maps remain open; generated wire specs are not re-exported."],
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-96-2-test/transport-fields-have-exact-optional-wire-and-idiom-contracts
+     github.copilot-sdk.e2e-test/test-e2e-managed-policy-and-usage-accounting
+     github.copilot-sdk.integration.upstream-1-0-96-2-test/transport-fields-preserve-values-and-omission-on-live-and-history-paths},
+   :authority
+   ["nodejs/src/generated/session-events.ts:AssistantUsageData"
+    "nodejs/src/generated/session-events.ts:ModelCallFailureData"
+    "nodejs/src/index.ts:generated/session-events.js"],
+   :idiom #{:request-body-encoding :request-body-wire-bytes},
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   #{github.copilot-sdk.session/get-messages
+     github.copilot-sdk.session/subscribe-events},
+   :classification :stable-public,
+   :configuration-impact :none,
+   :proof-states
+   #{:valid
+     :zero
+     :nil-rejected
+     :bounds
+     :enum-members
+     :unknown-enum-rejected
+     :absent
+     :invalid-type},
+   :details
+   ["identity/gzip/zstd are strings. Transmitted byte counts are non-negative integers."
+    "Serialized versus wire bytes refer to the attempt producing the outcome, not aggregated retries."
+    "Real-runtime identity encoding is checked against the provider's actual received byte count."],
+   :examples ["doc/reference/API.md:Event Reference"],
+   :id :events/request-compression,
+   :specs
+   #{:github.copilot-sdk.specs/request-body-encoding
+     :github.copilot-sdk.specs/request-body-wire-bytes},
+   :builders [:live-session-event :session-get-messages]}
+  {:wire
+   #{"websocketFallbackErrorKind"
+     "websocketFallbackStatusCode"
+     "websocketFallbackReconnectAttempted"
+     "websocketFallbackCloseCode"
+     "websocketFallbackStartedThisCall"},
+   :semantics
+   ["Optional, non-null fields; omission is not a default value."
+    "Live and historical conversion preserves values and normalizes only SDK field names."
+    "Idiom event maps remain open; generated wire specs are not re-exported."],
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-96-2-test/transport-fields-have-exact-optional-wire-and-idiom-contracts
+     github.copilot-sdk.integration.upstream-1-0-96-2-test/transport-fields-preserve-values-and-omission-on-live-and-history-paths},
+   :authority
+   ["nodejs/src/generated/session-events.ts:AssistantUsageData"
+    "nodejs/src/generated/session-events.ts:ModelCallFailureData"
+    "nodejs/src/index.ts:generated/session-events.js"],
+   :idiom
+   #{:websocket-fallback-status-code
+     :websocket-fallback-error-kind
+     :websocket-fallback-started-this-call
+     :websocket-fallback-close-code
+     :websocket-fallback-reconnect-attempted},
+   :docs ["doc/reference/API.md" "CHANGELOG.md"],
+   :fdefs
+   #{github.copilot-sdk.session/get-messages
+     github.copilot-sdk.session/subscribe-events},
+   :classification :stable-public,
+   :configuration-impact :none,
+   :proof-states
+   #{:valid
+     :zero
+     :nil-rejected
+     :true
+     :false
+     :bounds
+     :enum-members
+     :unknown-enum-rejected
+     :absent
+     :invalid-type},
+   :details
+   ["Status codes are integers 0-999; close codes are integers 0-4999."
+    "Normalized error kinds remain the exact closed upstream string set."
+    "False reconnect-attempted and started-this-call values are not omission."
+    "Fallback descriptors may be inherited; metadata alone does not count a new failure."],
+   :examples ["doc/reference/API.md:Event Reference"],
+   :id :events/websocket-fallback-diagnostics,
+   :specs
+   #{:github.copilot-sdk.specs/websocket-fallback-error-kind
+     :github.copilot-sdk.specs/websocket-fallback-reconnect-attempted
+     :github.copilot-sdk.specs/websocket-fallback-status-code
+     :github.copilot-sdk.specs/websocket-fallback-close-code
+     :github.copilot-sdk.specs/websocket-fallback-started-this-call},
+   :builders [:live-session-event :session-get-messages]}],
+ :version {:sdk "1.0.16.0", :changed? false, :release-required? false},
+ :unclassified-deltas [],
+ :upstream
+ {:base-commit "341a526b26ccc170f6a1c6c5651b51f4ba9d3691",
+  :target-commit "6be623b01b194a61466385e3f708639ec98ce8ac",
+  :release-tag
+  {:name "v1.0.19",
+   :commit "f0b503aae1ba151d29d117088de4238d1983e33e"},
+  :target-package-version "0.0.0-dev",
+  :runtime-version "1.0.96-2",
+  :commit-count 4,
+  :commits-sha256
+  "8ca93c3624a44e2112e3ff892a63e4bc83f8def013d4d8d9c81393b5bb5acb63",
+  :hash-format :newline-joined-without-trailing-newline},
+ :decision
+ "doc/adr/2026-10-12-transport-diagnostics-and-opaque-policy.md",
+ :api-snapshot-impact
+ {:added-functions #{},
+  :added-fdefs #{},
+  :added-spec-keys
+  #{:github.copilot-sdk.specs/request-body-encoding
+    :github.copilot-sdk.specs/websocket-fallback-error-kind
+    :github.copilot-sdk.specs/websocket-fallback-reconnect-attempted
+    :github.copilot-sdk.specs/websocket-fallback-status-code
+    :github.copilot-sdk.specs/request-body-wire-bytes
+    :github.copilot-sdk.specs/websocket-fallback-close-code
+    :github.copilot-sdk.specs/websocket-fallback-started-this-call}}}

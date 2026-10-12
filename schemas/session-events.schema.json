@@ -2008,7 +2008,16 @@
         "requestBodyBytes": {
           "type": "integer",
           "minimum": 0,
-          "description": "Serialized (uncompressed) byte length of the request body. A content-free size signal."
+          "description": "Serialized (uncompressed) byte length of the request body, before any Content-Encoding. A content-free size signal."
+        },
+        "requestBodyWireBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte length of the request body actually sent on the wire for the attempt that produced this outcome, after any Content-Encoding. Equals requestBodyBytes when the body was not compressed."
+        },
+        "requestBodyEncoding": {
+          "$ref": "#/definitions/ModelCallRequestBodyEncoding",
+          "description": "Content-Encoding applied to the request body of the attempt that produced this outcome; identity when uncompressed"
         },
         "websocketFallbackReason": {
           "$ref": "#/definitions/ModelCallWebSocketFallbackReason",
@@ -2019,6 +2028,30 @@
           "minimum": 0,
           "format": "duration",
           "description": "Milliseconds spent on the WebSocket attempt before falling back to HTTP"
+        },
+        "websocketFallbackErrorKind": {
+          "$ref": "#/definitions/ModelCallWebSocketFallbackErrorKind",
+          "description": "Normalized cause of the WebSocket failure that triggered the HTTP fallback; absent when no fallback occurred or the cause is unknown"
+        },
+        "websocketFallbackStatusCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "HTTP status of the WebSocket upgrade rejection or WebSocket API error that triggered the HTTP fallback"
+        },
+        "websocketFallbackCloseCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4999,
+          "description": "WebSocket close code received before the HTTP fallback"
+        },
+        "websocketFallbackReconnectAttempted": {
+          "type": "boolean",
+          "description": "Whether a WebSocket reconnect was attempted before falling back to HTTP"
+        },
+        "websocketFallbackStartedThisCall": {
+          "type": "boolean",
+          "description": "Whether the HTTP fallback started during this model call, rather than being inherited from an earlier call"
         },
         "apiCallId": {
           "type": "string",
@@ -9908,6 +9941,24 @@
       "description": "Session event \"session.info\". Informational message for timeline display with categorization",
       "title": "InfoEvent"
     },
+    "ManagedPermissionsContext": {
+      "type": "object",
+      "properties": {
+        "permissions": {
+          "description": "Runtime-owned composed permissions object. Absent when no permission policy is configured.",
+          "x-opaque-json": true
+        },
+        "failClosed": {
+          "type": "boolean",
+          "description": "Policy could not be determined; evaluation must deny every operation."
+        }
+      },
+      "required": [
+        "failClosed"
+      ],
+      "additionalProperties": false,
+      "description": "Reusable managed permission evaluation context. Treat permissions as runtime-owned policy data and retain it verbatim; it includes source-aware composition metadata. This is a snapshot, not a capability or approval token; only use contexts obtained from trusted policy sources."
+    },
     "ManagedPluginProgressData": {
       "type": "object",
       "properties": {
@@ -10134,6 +10185,10 @@
     "ManagedSettingsResolvedData": {
       "type": "object",
       "properties": {
+        "permissionsContext": {
+          "$ref": "#/definitions/ManagedPermissionsContext",
+          "description": "Reusable retained managed permission policy for managedSettings.permissions.evaluate, including source composition and session-local injection. Provided by live session snapshots; absent in older events. Refresh the context when managed policy changes."
+        },
         "source": {
           "$ref": "#/definitions/ManagedSettingsResolvedSource",
           "description": "Channel summary: `server`, `device`, `client`, or `policyHelper` when exactly one channel contributed; `mixed` when multiple channels contributed; otherwise `none`. Consult the per-channel booleans for exact provenance."
@@ -10156,7 +10211,7 @@
         },
         "failClosed": {
           "type": "boolean",
-          "description": "Whether managed policy could not be determined (e.g. a failed server fetch) and the session fell back to the fail-closed restriction. When true, restrictions such as disabling bypass-permissions are enforced even though `settings` may be absent."
+          "description": "Whether managed policy could not be determined (e.g. a failed server fetch) and unresolved-policy safeguards remain active. This does not by itself disable bypass-permissions; `bypassPermissionsDisabled` reports only an explicit policy restriction."
         },
         "sandboxEnabledByUndeterminedPolicy": {
           "type": "boolean",
@@ -10164,7 +10219,7 @@
         },
         "bypassPermissionsDisabled": {
           "type": "boolean",
-          "description": "Whether enterprise policy disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers, and forced on when `failClosed` is true."
+          "description": "Whether an explicit enterprise policy restriction disables bypass-permissions (\"yolo\") mode for this session. Deny-wins across layers; an unresolved policy does not force this on by itself."
         },
         "permissionsAllowIntersected": {
           "type": "boolean",
@@ -11734,7 +11789,16 @@
         "requestBodyBytes": {
           "type": "integer",
           "minimum": 0,
-          "description": "Serialized (uncompressed) byte length of the failed request body. A content-free size signal."
+          "description": "Serialized (uncompressed) byte length of the failed request body, before any Content-Encoding. A content-free size signal."
+        },
+        "requestBodyWireBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Byte length of the failed request body actually sent on the wire, after any Content-Encoding. Equals requestBodyBytes when the body was not compressed."
+        },
+        "requestBodyEncoding": {
+          "$ref": "#/definitions/ModelCallRequestBodyEncoding",
+          "description": "Content-Encoding applied to the failed request body; identity when uncompressed"
         },
         "retryAttempt": {
           "type": "integer",
@@ -11750,6 +11814,30 @@
           "minimum": 0,
           "format": "duration",
           "description": "Milliseconds spent on the WebSocket attempt before falling back to HTTP"
+        },
+        "websocketFallbackErrorKind": {
+          "$ref": "#/definitions/ModelCallWebSocketFallbackErrorKind",
+          "description": "Normalized cause of the WebSocket failure that triggered the HTTP fallback; absent when no fallback occurred or the cause is unknown"
+        },
+        "websocketFallbackStatusCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "HTTP status of the WebSocket upgrade rejection or WebSocket API error that triggered the HTTP fallback"
+        },
+        "websocketFallbackCloseCode": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4999,
+          "description": "WebSocket close code received before the HTTP fallback"
+        },
+        "websocketFallbackReconnectAttempted": {
+          "type": "boolean",
+          "description": "Whether a WebSocket reconnect was attempted before falling back to HTTP"
+        },
+        "websocketFallbackStartedThisCall": {
+          "type": "boolean",
+          "description": "Whether the HTTP fallback started during this model call, rather than being inherited from an earlier call"
         },
         "maxPromptTokens": {
           "type": "integer",
@@ -12214,6 +12302,21 @@
         "rejected": "The provider response was rejected during post-response acceptance processing."
       }
     },
+    "ModelCallRequestBodyEncoding": {
+      "type": "string",
+      "enum": [
+        "identity",
+        "gzip",
+        "zstd"
+      ],
+      "description": "Content-Encoding applied to the request body sent on the wire",
+      "title": "ModelCallRequestBodyEncoding",
+      "x-enumDescriptions": {
+        "identity": "The request body was sent uncompressed (including every WebSocket request).",
+        "gzip": "The request body was sent gzip-compressed.",
+        "zstd": "The request body was sent zstd-compressed."
+      }
+    },
     "ModelCallStartData": {
       "type": "object",
       "properties": {
@@ -12303,6 +12406,39 @@
       "description": "Session event \"model.call_start\". Model API dispatch metadata for internal telemetry",
       "title": "ModelCallStartEvent",
       "visibility": "internal"
+    },
+    "ModelCallWebSocketFallbackErrorKind": {
+      "type": "string",
+      "enum": [
+        "dns",
+        "tls",
+        "timeout",
+        "connection_refused",
+        "connection_reset",
+        "closed_by_peer",
+        "closed_locally",
+        "not_connected",
+        "http_status",
+        "protocol",
+        "configuration",
+        "other"
+      ],
+      "description": "Normalized cause of the WebSocket failure that triggered the HTTP fallback",
+      "title": "ModelCallWebSocketFallbackErrorKind",
+      "x-enumDescriptions": {
+        "dns": "DNS resolution of the WebSocket host failed.",
+        "tls": "The TLS handshake or a TLS record failed.",
+        "timeout": "A WebSocket connect or read timed out.",
+        "connection_refused": "The peer refused the TCP connection.",
+        "connection_reset": "The connection was reset, aborted, or ended mid-stream without a close.",
+        "closed_by_peer": "The peer closed the WebSocket.",
+        "closed_locally": "The runtime closed the WebSocket itself.",
+        "not_connected": "The socket was already closed before it was used.",
+        "http_status": "The upgrade or request was rejected with an HTTP status.",
+        "protocol": "A WebSocket protocol violation or an undecodable frame.",
+        "configuration": "The WebSocket request could not be built.",
+        "other": "A failure that maps onto none of the other kinds."
+      }
     },
     "ModelCallWebSocketFallbackReason": {
       "type": "string",
@@ -16481,6 +16617,75 @@
       "title": "PromptCacheBreakEvent",
       "visibility": "internal"
     },
+    "ProviderMonthlyUsage": {
+      "type": "object",
+      "properties": {
+        "state": {
+          "$ref": "#/definitions/ProviderMonthlyUsageState",
+          "description": "Availability of monthly consumption. Missing or unavailable usage must never be interpreted as zero."
+        },
+        "unit": {
+          "$ref": "#/definitions/ProviderQuotaUnit",
+          "description": "Unit of consumedQuantity; independent of the parent observation's balance unit."
+        },
+        "scope": {
+          "$ref": "#/definitions/ProviderMonthlyUsageScope",
+          "description": "Identity scope of the reading within its provider and service."
+        },
+        "consumedQuantity": {
+          "type": "number",
+          "description": "Nonnegative finite consumption reported by the service, preserving zero and fractions. Present only when state is available; never computed from tokens or balance differences."
+        },
+        "queriedAt": {
+          "type": "string",
+          "description": "Service read time in UTC RFC 3339, not a ledger reconciliation watermark or confirmation of the latest inference charge."
+        },
+        "cycleStart": {
+          "type": "string",
+          "description": "Start of the service-reported monthly billing cycle, in UTC RFC 3339."
+        },
+        "resetOn": {
+          "type": "string",
+          "description": "End of the service-reported monthly billing cycle, in UTC RFC 3339."
+        }
+      },
+      "required": [
+        "state",
+        "unit",
+        "scope"
+      ],
+      "additionalProperties": false,
+      "description": "An authoritative monthly usage reading for the observation's provider, account, and service.",
+      "stability": "experimental"
+    },
+    "ProviderMonthlyUsageScope": {
+      "type": "string",
+      "enum": [
+        "user",
+        "unknown"
+      ],
+      "description": "Identity scope of a monthly usage reading.",
+      "x-enumDescriptions": {
+        "user": "Consumption of the authenticated user within the parent observation's service and returned cycle.",
+        "unknown": "The service did not establish a recognized usage scope."
+      }
+    },
+    "ProviderMonthlyUsageState": {
+      "type": "string",
+      "enum": [
+        "available",
+        "no_policy",
+        "unavailable",
+        "unknown"
+      ],
+      "description": "Availability of a service's monthly consumption reading.",
+      "x-enumDescriptions": {
+        "available": "The service reported a usable consumption reading, including an explicit zero.",
+        "no_policy": "The service found no usage policy; no consumption amount is known.",
+        "unavailable": "The read failed or its data could not be used; consumption is unknown.",
+        "unknown": "The service reported an unrecognized usage state."
+      }
+    },
     "ProviderQuotaAccessState": {
       "type": "string",
       "enum": [
@@ -16600,7 +16805,7 @@
       "properties": {
         "observation": {
           "$ref": "#/definitions/ProviderQuotaState",
-          "description": "The admitted provider's state observation. Admission observations never contain quantities or reset/percentage semantics."
+          "description": "The admitted provider's state observation. Admission balances and percentages remain absent; separate monthly usage may report its own amount and cycle."
         }
       },
       "required": [
@@ -16743,6 +16948,10 @@
         "budgetMetadata": {
           "$ref": "#/definitions/ProviderQuotaBudgetMetadata",
           "description": "Optional metadata for an authoritative budget. Advisory balances and admission-only observations do not populate this."
+        },
+        "monthlyUsage": {
+          "$ref": "#/definitions/ProviderMonthlyUsage",
+          "description": "Service-reported monthly consumption, independent of quota balances and per-call or session cost. Omitted when the service does not report monthly usage."
         },
         "compatibilityKey": {
           "type": "string",

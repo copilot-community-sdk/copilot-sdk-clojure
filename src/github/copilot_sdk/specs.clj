@@ -2309,10 +2309,20 @@
 (s/def ::model-display-name string?)
 (s/def ::ai-credits-status #{"complete" "partial" "unavailable"})
 (s/def ::request-body-bytes nat-int?)
+(s/def ::request-body-wire-bytes nat-int?)
+(s/def ::request-body-encoding #{"identity" "gzip" "zstd"})
 (s/def ::retry-attempt nat-int?)
 (s/def ::websocket-fallback-after-ms nat-int?)
+(s/def ::websocket-fallback-close-code (s/and nat-int? #(<= % 4999)))
+(s/def ::websocket-fallback-error-kind
+  #{"dns" "tls" "timeout" "connection_refused" "connection_reset"
+    "closed_by_peer" "closed_locally" "not_connected" "http_status"
+    "protocol" "configuration" "other"})
 (s/def ::websocket-fallback-reason
   #{"connect_failed" "connection_unavailable" "send_failed" "api_error" "transport_failed"})
+(s/def ::websocket-fallback-reconnect-attempted boolean?)
+(s/def ::websocket-fallback-started-this-call boolean?)
+(s/def ::websocket-fallback-status-code (s/and nat-int? #(<= % 999)))
 (s/def ::usage-accounting-identity
   (s/and map?
          #(required-value? % :source-session-id string?)
@@ -2334,7 +2344,11 @@
                     ::time-to-first-token-ms ::ttft-ms ::output-ttft-ms
                     ::content-filter-triggered ::finish-reason ::rte
                     ::model-display-name ::ai-credits-status ::request-body-bytes
-                    ::websocket-fallback-after-ms ::websocket-fallback-reason])
+                    ::request-body-wire-bytes ::request-body-encoding
+                    ::websocket-fallback-after-ms ::websocket-fallback-close-code
+                    ::websocket-fallback-error-kind ::websocket-fallback-reason
+                    ::websocket-fallback-reconnect-attempted ::websocket-fallback-started-this-call
+                    ::websocket-fallback-status-code])
    #(optional-field? % :accounting (partial s/valid? ::usage-accounting-identity))
    #(optional-field? % :model-provider (partial s/valid? ::byok-model-provider))
    #(or (not (contains? % :reasoning-summary))
@@ -2963,8 +2977,11 @@
 (s/def ::model.call_failure-data
   (s/and (s/keys :req-un [::source]
                  :opt-un [::interaction-type ::parent-tool-call-id ::byok-kind
-                          ::request-body-bytes ::retry-attempt
-                          ::websocket-fallback-after-ms ::websocket-fallback-reason])
+                          ::request-body-bytes ::request-body-wire-bytes ::request-body-encoding
+                          ::retry-attempt ::websocket-fallback-after-ms ::websocket-fallback-close-code
+                          ::websocket-fallback-error-kind ::websocket-fallback-reason
+                          ::websocket-fallback-reconnect-attempted ::websocket-fallback-started-this-call
+                          ::websocket-fallback-status-code])
          #(optional-field? % :request-fingerprint
                            (partial s/valid? ::model-call-failure-request-fingerprint))
          #(optional-field? % :model-provider (partial s/valid? ::byok-model-provider))

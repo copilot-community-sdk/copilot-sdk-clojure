@@ -978,6 +978,8 @@
     :github.copilot-sdk.specs/repo-nwo
     :github.copilot-sdk.specs/repository
     :github.copilot-sdk.specs/request-body-bytes
+    :github.copilot-sdk.specs/request-body-encoding
+    :github.copilot-sdk.specs/request-body-wire-bytes
     :github.copilot-sdk.specs/request-extensions?
     :github.copilot-sdk.specs/request-handler-queue-size
     :github.copilot-sdk.specs/request-handler-threads
@@ -1194,7 +1196,12 @@
     :github.copilot-sdk.specs/warning-type
     :github.copilot-sdk.specs/warnings
     :github.copilot-sdk.specs/websocket-fallback-after-ms
+    :github.copilot-sdk.specs/websocket-fallback-close-code
+    :github.copilot-sdk.specs/websocket-fallback-error-kind
     :github.copilot-sdk.specs/websocket-fallback-reason
+    :github.copilot-sdk.specs/websocket-fallback-reconnect-attempted
+    :github.copilot-sdk.specs/websocket-fallback-started-this-call
+    :github.copilot-sdk.specs/websocket-fallback-status-code
     :github.copilot-sdk.specs/wire-api
     :github.copilot-sdk.specs/wire-model
     :github.copilot-sdk.specs/workflow-limit-overrides
