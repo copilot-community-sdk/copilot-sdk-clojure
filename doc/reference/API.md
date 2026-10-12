@@ -2081,13 +2081,57 @@ integer sequence watermarks; source-defined key spelling is preserved.
 Legacy `:total-premium-requests` is a non-negative, potentially fractional
 premium-request cost, not an integer count of calls.
 
-Usage and model-call failures may include non-negative integer
-`:request-body-bytes` and `:websocket-fallback-after-ms`, plus
-`:websocket-fallback-reason`: `"connect_failed"`, `"connection_unavailable"`,
-`"send_failed"`, `"api_error"`, or `"transport_failed"`. Failures may also
-include non-negative `:retry-attempt` and request-fingerprint
+Usage and model-call failures expose content-free transport diagnostics:
+
+```clojure
+(require '[clojure.spec.alpha :as s]
+         '[github.copilot-sdk.specs])
+
+(def usage
+  {:model "example-model"
+   :request-body-bytes 4096
+   :request-body-wire-bytes 1024
+   :request-body-encoding "gzip"
+   :websocket-fallback-error-kind "http_status"
+   :websocket-fallback-status-code 503
+   :websocket-fallback-reconnect-attempted false
+   :websocket-fallback-started-this-call true})
+
+(s/valid? :github.copilot-sdk.specs/assistant.usage-data usage)
+;; => true
+```
+
+All fields below are optional and non-null. Omission means unreported, not zero
+or false; explicit zero and false are preserved on both live and historical
+paths. The enum values remain strings, not configuration keywords.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `:request-body-bytes` | Non-negative integer | Serialized request size before compression. |
+| `:request-body-wire-bytes` | Non-negative integer | Body bytes sent for the attempt that produced this outcome, after compression. Equal to `:request-body-bytes` when uncompressed. |
+| `:request-body-encoding` | `"identity"`, `"gzip"`, or `"zstd"` | Encoding of that attempt's body; `"identity"` means uncompressed, including WebSocket requests. |
+| `:websocket-fallback-after-ms` | Non-negative integer | Time spent on the WebSocket attempt before HTTP fallback. |
+| `:websocket-fallback-reason` | String | `"connect_failed"`, `"connection_unavailable"`, `"send_failed"`, `"api_error"`, or `"transport_failed"`. |
+| `:websocket-fallback-error-kind` | String | Normalized cause: `"dns"`, `"tls"`, `"timeout"`, `"connection_refused"`, `"connection_reset"`, `"closed_by_peer"`, `"closed_locally"`, `"not_connected"`, `"http_status"`, `"protocol"`, `"configuration"`, or `"other"`. |
+| `:websocket-fallback-status-code` | Integer, 0-999 | HTTP status of the rejected WebSocket upgrade or API request. |
+| `:websocket-fallback-close-code` | Integer, 0-4999 | WebSocket close code received before fallback. |
+| `:websocket-fallback-reconnect-attempted` | Boolean | Whether the runtime attempted a WebSocket reconnect before falling back. |
+| `:websocket-fallback-started-this-call` | Boolean | True when this call initiated fallback; false when it inherited fallback from an earlier call. |
+
+Fallback descriptors can persist across calls. Do not count every event with
+fallback metadata as a new transport failure. Missing error-kind or status/close
+codes do not establish that no failure occurred.
+
+Failures may also include non-negative `:retry-attempt` and request-fingerprint
 `:encrypted-content-bytes`, `:image-bytes`, and `:reasoning-item-count`.
 These are content-free diagnostics, not copies of the request.
+
+Experimental monthly quota readings are not per-call or session spending.
+Their amounts, availability, and cycle timestamps pass through without deriving
+missing consumption from balances. Managed-policy event contexts preserve the
+runtime-owned opaque `:permissions` JSON verbatim; they are snapshots, not
+approval tokens. Monthly quota APIs and managed-browser policy evaluation
+remain outside the stable Clojure API.
 
 Curated `::specs/result` and `::specs/error` values accept recursive JSON:
 `nil`, strings, booleans, finite non-ratio numbers, vectors, and maps whose keys

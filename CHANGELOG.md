@@ -3,6 +3,23 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.19 sync)
+- Added optional request-body encoding and transmitted-byte counts, plus
+  WebSocket fallback causes, status/close codes, reconnect attempts, and
+  current-call attribution to usage and model-call failure event specs.
+  Live and historical paths preserve omitted, zero, and false values.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/6be623b01b194a61466385e3f708639ec98ce8ac))
+
+### Fixed (post-v1.0.19 sync)
+- Preserve runtime-owned nested managed-policy JSON keys in passive event
+  contexts instead of normalizing them as SDK field names.
+
+### Changed (post-v1.0.19 sync)
+- Advanced CLI compatibility and schema provenance to `1.0.96-2`, with a
+  complete exact-pin public-surface inventory. Monthly quota APIs, managed
+  browser-policy evaluation, and new sandbox/MCP internals remain excluded.
+  The library version remains `1.0.16.0`; no release, tag, or deployment is cut.
+
 ### Added (post-v1.0.18 sync)
 - Added provider-defined Auto-tier keyword identifiers, preserving their full
   spelling on create, resume, join, and start/resume events.

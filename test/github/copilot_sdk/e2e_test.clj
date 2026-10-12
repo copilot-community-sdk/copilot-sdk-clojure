@@ -117,8 +117,9 @@
             (handle [_ exchange]
               (teardown/call-with-cleanup
                (fn []
-                 (let [request (json/read-str (slurp (.getRequestBody exchange) :encoding "UTF-8")
-                                              :key-fn keyword)
+                 (let [body (.readAllBytes (.getRequestBody exchange))
+                       request (with-meta (json/read-str (String. body "UTF-8") :key-fn keyword)
+                                 {::request-body-bytes (alength body)})
                        _ (swap! requests conj request)
                        message (respond request)
                        response (.getBytes
@@ -465,6 +466,10 @@
                  accounting (:accounting usage)]
              (is (= (:ai-credits-status usage) "unavailable"))
              (is (pos-int? (:request-body-bytes usage)))
+             (is (= (:request-body-encoding usage) "identity"))
+             (is (= (:request-body-wire-bytes usage)
+                    (::request-body-bytes (meta (first @requests)))
+                    (:request-body-bytes usage)))
              (is (= (:source-session-id accounting) (sdk/session-id session)))
              (is (pos-int? (:sequence accounting)))
              (is (string? (:usage-id accounting)))
