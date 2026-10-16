@@ -17,6 +17,7 @@
     (let [session (copilot/create-session
                    client
                    {:on-permission-request copilot/approve-all
+                    :name "Code word example"
                     :model "claude-haiku-4.5"
                     :available-tools []})]
       (println "Sending code word:" code-word)

@@ -3,6 +3,32 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unreleased]
 
+### Added (post-v1.0.22 sync)
+- Added creation-time session names; discovery-only agent and hook directories;
+  interactive-user telemetry and read-only GitHub-cache-store options; and
+  declarative custom-agent hooks with preserved JSON keys.
+- Added derived permission prompt context, hook actor metadata and prompt-block
+  output support, compaction correlation/outcome details, provider error
+  metadata, and permission-recovery ownership.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/404304416ac5358651e3877a33bc9e8f4e482162))
+
+### Fixed (post-v1.0.22 sync)
+- Forward discovery-root strings unchanged so the runtime can trim whitespace
+  and ignore blank entries consistently across skills, instructions, agents,
+  and file hooks.
+- Normalize object-valued errors in session-end and error-occurred hooks to
+  their string message, or JSON when no string message is available, without
+  changing opaque member names.
+
+### Changed (post-v1.0.22 sync)
+- **BREAKING**: Removed the retired `::specs/factory-run-id` contract; use
+  `:workflow-run-id` for subagent Workflow attribution. Historical event maps
+  still pass through unknown fields.
+- Advanced CLI compatibility and schema provenance to `1.0.99-2`, preserving
+  historical certification and explicitly inventorying source-only snapshots
+  without upstream tests. New experimental and internal APIs remain excluded.
+  The library version remains `1.0.16.0`; no release, tag, or deployment is cut.
+
 ### Added (post-v1.0.19 sync)
 - Added optional request-body encoding and transmitted-byte counts, plus
   WebSocket fallback causes, status/close codes, reconnect attempts, and

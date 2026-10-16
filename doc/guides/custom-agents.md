@@ -85,6 +85,25 @@ The helpers API also accepts `:custom-agents` via session options:
 | `:agent-prompt` | string | ✅ | System prompt for the agent |
 | `:mcp-servers` | map | | MCP server configurations specific to this agent |
 | `:agent-infer?` | boolean | | Whether the runtime can auto-select this agent (default: `true`) |
+| `:agent-hooks` | map | | Declarative hook actions scoped to this agent. Exact string event names map to vectors of string-keyed JSON objects; unlike session `:hooks`, these are data, not Clojure callbacks. Empty maps/vectors are preserved; `nil` and non-JSON values are invalid. |
+
+```clojure
+{:agent-name "reviewer"
+ :agent-prompt "Review the requested changes."
+ :agent-hooks
+ {"userPromptSubmitted"
+  [{"type" "command"
+    "exec" "node"
+    "args" ["-e" "process.stdout.write(JSON.stringify({additionalContext:'Read the project guidance first.'}))"]}]}}
+```
+
+This example requires Node.js on `PATH`.
+
+The SDK preserves action keys recursively, including case, underscores, and
+empty collections. The runtime interprets and authorizes these actions.
+To discover file-defined agents instead, supply `:agent-directories` on
+create, resume, or join. These directories do not grant general filesystem
+access or replace `:custom-agents`.
 
 > **Tip:** A good `:agent-description` helps the runtime match user intent to the right agent. Be specific about the agent's expertise and capabilities.
 

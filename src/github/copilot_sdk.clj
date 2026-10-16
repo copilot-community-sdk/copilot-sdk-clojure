@@ -574,6 +574,7 @@
                              When omitted, permission requests surface as
                              `:copilot/permission.requested` events and stay pending.
    - :session-id           - Custom session ID
+   - :name                 - Local creation-time name; permits persistence without a turn.
    - :model                - Model to use (e.g., \"gpt-5.4\", \"claude-sonnet-4.5\")
    - :allowed-models       - Vector of exact model IDs allowed by the host.
                              Omit to preserve runtime policy; nil is invalid.
@@ -596,6 +597,8 @@
    - :custom-agents        - Custom agent configs
    - :default-agent        - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :skill-directories    - Additional skill directories to load
+   - :agent-directories    - Discovery-only agent roots.
+   - :hook-directories     - Discovery-only file-hook roots, not filesystem grants.
    - :disabled-skills      - Disable specific skills by name
    - :working-directory    - Working directory for the session (tool operations relative to this)
 

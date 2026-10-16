@@ -42,6 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
+- [ADR: Preserve session, hook, and compaction contracts](adr/2026-10-16-session-hooks-and-compaction.md) -- Session naming/discovery, callback context, and stable event metadata without new experimental authority.
 - [ADR: Preserve transport diagnostics and opaque policy](adr/2026-10-12-transport-diagnostics-and-opaque-policy.md) -- Request compression, WebSocket fallback attribution, and passive policy/usage metadata.
 - [ADR: Preserve extensible identifiers and policy boundaries](adr/2026-10-09-extensible-routing-and-event-contracts.md) -- Dynamic Auto tiers, managed policy, write previews, accounting metadata, and bounded generated validators.
 - [ADR: Preserve callback, filesystem, and event authority boundaries](adr/2026-10-05-callback-and-event-contracts.md) -- Subagent hooks, exact binary I/O, scoped cloud cleanup, and passive response provenance.

@@ -5287,6 +5287,11 @@
     "CompactionCompleteCompactionTokensUsed": {
       "type": "object",
       "properties": {
+        "requestCount": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Number of model requests represented by this aggregated compaction usage"
+        },
         "aiCreditsStatus": {
           "$ref": "#/definitions/AiCreditsStatus",
           "description": "Whether the compaction's credit amount was reported for all, some, or none of its calls."
@@ -5414,6 +5419,30 @@
           "type": "boolean",
           "description": "Whether compaction completed successfully"
         },
+        "outcome": {
+          "type": "string",
+          "description": "Typed terminal outcome for this observed compaction completion. Unknown future values are preserved."
+        },
+        "outcomeReason": {
+          "type": "string",
+          "description": "Bounded reason for an expected non-application outcome such as cancellation or no applicable history. Unknown future values are preserved."
+        },
+        "failureReason": {
+          "type": "string",
+          "description": "Bounded reason for a typed failed outcome. Unknown future values are preserved."
+        },
+        "compactionAttemptId": {
+          "type": "string",
+          "description": "Identifier shared with the matching compaction start event"
+        },
+        "model": {
+          "type": "string",
+          "description": "Model identifier used for compaction when provider usage does not already supply it"
+        },
+        "initialModel": {
+          "type": "string",
+          "description": "Model identifier at admission when routing later changed to the reported compaction model"
+        },
         "error": {
           "type": "string",
           "description": "Error message if compaction failed"
@@ -5443,6 +5472,10 @@
           "minimum": 0,
           "description": "Number of tokens removed during compaction"
         },
+        "tokenAccountingBasis": {
+          "type": "string",
+          "description": "Open accounting-basis identifier for trustworthy paired pre/post token measurements. The current runtime emits local_full_context_estimate."
+        },
         "customInstructions": {
           "type": "string",
           "description": "User-supplied focus instructions provided to a manual `/compact` invocation. Omitted for automatic compaction and for manual compaction with no focus text."
@@ -5458,11 +5491,6 @@
         "activeWorkflowSummary": {
           "type": "string",
           "description": "Authoritative active-workflow reminder appended to the compacted context",
-          "visibility": "internal"
-        },
-        "activeFactorySummary": {
-          "type": "string",
-          "description": "Legacy active-workflow reminder retained for replay compatibility",
           "visibility": "internal"
         },
         "behaviorModelId": {
@@ -5514,6 +5542,15 @@
           "type": "integer",
           "minimum": 0,
           "description": "Model context window token limit the compaction was targeting, when known"
+        },
+        "targetPromptTokenLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Destination prompt-token budget when it differs from the effective compaction token limit"
+        },
+        "switchTargetModel": {
+          "type": "string",
+          "description": "Destination model for a model-switch compaction when it differs from the compacting model"
         },
         "trigger": {
           "$ref": "#/definitions/CompactionTrigger",
@@ -5584,6 +5621,10 @@
     "CompactionStartData": {
       "type": "object",
       "properties": {
+        "compactionAttemptId": {
+          "type": "string",
+          "description": "Identifier shared with the matching compaction completion event"
+        },
         "model": {
           "type": "string",
           "description": "Model identifier used for compaction, when known"
@@ -5612,6 +5653,15 @@
           "type": "integer",
           "minimum": 0,
           "description": "Model context window token limit the compaction is targeting, when known"
+        },
+        "targetPromptTokenLimit": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Destination prompt-token budget when it differs from the effective compaction token limit"
+        },
+        "switchTargetModel": {
+          "type": "string",
+          "description": "Destination model for a model-switch compaction when it differs from the compacting model"
         },
         "trigger": {
           "$ref": "#/definitions/CompactionTrigger",
@@ -6593,11 +6643,19 @@
       "properties": {
         "errorType": {
           "type": "string",
-          "description": "Category of error (e.g., \"authentication\", \"authorization\", \"quota\", \"rate_limit\", \"context_limit\", \"query\")"
+          "description": "Category of error (e.g., \"authentication\", \"authorization\", \"policy\", \"quota\", \"rate_limit\", \"context_limit\", \"query\")"
         },
         "errorCode": {
           "type": "string",
           "description": "Fine-grained error code from the upstream provider, when available. For `errorType: \"rate_limit\"`, this is one of the `RateLimitErrorCode` values (e.g., `\"user_weekly_rate_limited\"`, `\"user_global_rate_limited\"`, `\"rate_limited\"`, `\"user_model_rate_limited\"`, `\"integration_rate_limited\"`). For `errorType: \"quota\"`, this is the CAPI quota error code (e.g., `\"quota_exceeded\"`, `\"session_quota_exceeded\"`, `\"billing_not_configured\"`)."
+        },
+        "providerErrorType": {
+          "type": "string",
+          "description": "Provider-defined error type preserved from a structured upstream error envelope, when available (for example, `invalid_request_error`)."
+        },
+        "providerErrorParam": {
+          "type": "string",
+          "description": "Sanitized provider-defined error parameter preserved from a structured upstream error envelope, when available."
         },
         "eligibleForAutoSwitch": {
           "type": "boolean",
@@ -8349,6 +8407,11 @@
         "ruleId": {
           "type": "string",
           "description": "Identifier of the local policy rule that matched."
+        },
+        "selectedRuleId": {
+          "type": "string",
+          "description": "Identifier of the server policy rule whose workflow the plan's steps describe, when CAPI's sticky root routing replaced the workflow of `ruleId`'s rule to keep the previous turn's root model. Absent when no substitution occurred.",
+          "stability": "experimental"
         },
         "ruleIndex": {
           "type": "integer",
@@ -14954,6 +15017,14 @@
           "type": "string",
           "description": "Stable identifier shared by every transition in this recovery episode"
         },
+        "ownerSessionId": {
+          "type": "string",
+          "description": "Root or child execution-session identifier that owns this recovery episode; omitted for legacy snapshots"
+        },
+        "ownerAgentId": {
+          "type": "string",
+          "description": "Subagent identifier that owns this recovery episode when the request was delegated through a parent permission service"
+        },
         "status": {
           "$ref": "#/definitions/PermissionRecoveryStatus",
           "description": "Current lifecycle state of the recovery episode"
@@ -15213,6 +15284,14 @@
           "$ref": "#/definitions/SessionMode",
           "description": "Agent mode captured from the owning turn when permission evaluation began."
         },
+        "ownerSessionId": {
+          "type": "string",
+          "description": "Execution session that owns permission recovery for this request. Absent on historical events."
+        },
+        "ownerAgentId": {
+          "type": "string",
+          "description": "Delegated agent that owns permission recovery when the owner session multiplexes remote agents. Absent otherwise."
+        },
         "riskAssessment": {
           "description": "Neutral risk metadata supplied by the tool host. Consumers may display this value but must not use it to bypass the permission decision.",
           "x-opaque-json": true
@@ -15224,6 +15303,11 @@
         "recoveryEpisodeId": {
           "type": "string",
           "description": "Permission-recovery episode that authorized this request to surface for interactive attention"
+        },
+        "fusion": {
+          "$ref": "#/definitions/FusionAttribution",
+          "description": "Experimental HydraFusion attribution of the staged phase whose tool call raised this request. Absent outside a staged phase.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -17089,7 +17173,8 @@
         "switch_account",
         "show_account",
         "review_sandbox_policy",
-        "allow_sandbox_outbound"
+        "allow_sandbox_outbound",
+        "rewind_conversation"
       ],
       "description": "What the user must do to recover from a failure, named as an action rather than as one client's affordance. The runtime cannot know which affordance a client offers — a slash command, a settings pane, a link — so the accompanying message stays host-agnostic and each client renders its own copy from this value. Absent when the runtime knows of no action the user can take.",
       "title": "RemediationAction",
@@ -17098,7 +17183,8 @@
         "switch_account": "Authenticate as a different account. The current account exists but lacks access to the requested resource.",
         "show_account": "Inspect which account is currently authenticated before deciding what to change.",
         "review_sandbox_policy": "Review or widen the sandbox policy. The blocked path or host is named by the accompanying message or by the tool result the action arrived with.",
-        "allow_sandbox_outbound": "Permit outbound network access in the sandbox policy."
+        "allow_sandbox_outbound": "Permit outbound network access in the sandbox policy.",
+        "rewind_conversation": "Discard conversation history back through the blocked request before continuing."
       }
     },
     "RemoteSteerableChangedData": {
@@ -19855,6 +19941,14 @@
     "ShutdownData": {
       "type": "object",
       "properties": {
+        "toolUsageRequestIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Runtime tool-operation identities already included in the final accounting snapshot.",
+          "visibility": "internal"
+        },
         "accountingSnapshot": {
           "$ref": "#/definitions/UsageGetMetricsResult",
           "description": "Complete accounting state captured atomically with receipt watermarks.",
@@ -21564,10 +21658,6 @@
           "$ref": "#/definitions/SubagentModelSelectionSource",
           "description": "Authority or runtime mechanism responsible for sub-agent model selection, when known at start."
         },
-        "factoryRunId": {
-          "type": "string",
-          "description": "Legacy root id of the workflow run that spawned this sub-agent. New consumers should use workflowRunId."
-        },
         "workflowRunId": {
           "type": "string",
           "description": "Root id of the workflow run that spawned this sub-agent, when it was spawned by one."
@@ -22901,6 +22991,11 @@
           "type": "string",
           "description": "Model identifier that generated this tool call"
         },
+        "toolUsage": {
+          "$ref": "#/definitions/ToolExecutionUsage",
+          "description": "Provider-reported usage of a separately metered runtime-owned tool operation, independent of the conversation model. Present on success or failure when usage is known. Experimental.",
+          "stability": "experimental"
+        },
         "mcpMeta": {
           "description": "FIDES IFC label projected from tool ingress metadata (MCP `CallToolResult._meta` or synthesized built-in ingress labels). Persisted as `{ ifc: ... }` so the label survives session resume, including model-visible failure results. Experimental.",
           "x-opaque-json": true,
@@ -23775,6 +23870,92 @@
         "app": "Tool is callable by the MCP App view (iframe) via session.mcp.apps.callTool"
       }
     },
+    "ToolExecutionUsage": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Runtime-generated identifier for this metered operation. Deduplicates repeated delivery or replay; not an upstream billing identifier."
+        },
+        "model": {
+          "type": "string",
+          "description": "Requested model for the tool operation, independent of the conversation model. Not a provider-confirmed serving model."
+        },
+        "provider": {
+          "$ref": "#/definitions/ModelProviderRef",
+          "description": "Provider responsible for the tool operation, captured independently of the conversation provider."
+        },
+        "accounting": {
+          "$ref": "#/definitions/UsageAccountingIdentity",
+          "description": "Runtime-owned accounting order, preserved across session checkpoints and replay."
+        },
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total provider-reported input tokens across all modalities."
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Total provider-reported output tokens across all modalities."
+        },
+        "totalTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Provider-reported sum of input and output tokens."
+        },
+        "inputTokensDetails": {
+          "$ref": "#/definitions/ToolExecutionUsageTokenDetails",
+          "description": "Optional input modality breakdown; these counts are already included in inputTokens."
+        },
+        "outputTokensDetails": {
+          "$ref": "#/definitions/ToolExecutionUsageTokenDetails",
+          "description": "Optional output modality breakdown; these counts are already included in outputTokens."
+        },
+        "copilotUsage": {
+          "$ref": "#/definitions/AssistantUsageCopilotUsage",
+          "description": "Server-reported charge. Divide totalNanoAiu by 1,000,000,000 for AI credits; do not calculate customer cost from token prices."
+        },
+        "quotaSnapshots": {
+          "type": "object",
+          "additionalProperties": {
+            "x-opaque-json": true
+          },
+          "description": "Account quota snapshots, not per-operation cost deltas.",
+          "visibility": "internal"
+        }
+      },
+      "required": [
+        "requestId",
+        "model"
+      ],
+      "additionalProperties": false,
+      "description": "Authoritative usage reported by a separately metered runtime-owned tool operation. May be present on a failed tool when the service reported usage before local result processing failed. Missing token counts or billing mean unavailable, not zero.",
+      "title": "ToolExecutionUsage",
+      "stability": "experimental"
+    },
+    "ToolExecutionUsageTokenDetails": {
+      "type": "object",
+      "properties": {
+        "imageTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Image tokens included in the corresponding input or output total."
+        },
+        "textTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Text tokens included in the corresponding input or output total."
+        }
+      },
+      "required": [
+        "imageTokens",
+        "textTokens"
+      ],
+      "additionalProperties": false,
+      "description": "Provider-reported image and text token counts, which are subsets of the corresponding total rather than additional tokens.",
+      "title": "ToolExecutionUsageTokenDetails"
+    },
     "ToolSearchActivatedData": {
       "type": "object",
       "properties": {
@@ -23872,6 +24053,11 @@
           "type": "integer",
           "minimum": 0,
           "description": "Zero-based publication sequence across all output streams for this tool call. Not a byte offset or an OS write-order guarantee."
+        },
+        "fusion": {
+          "$ref": "#/definitions/FusionAttribution",
+          "description": "Experimental HydraFusion attribution of the staged phase whose tool call produced this output. Absent outside a staged phase.",
+          "stability": "experimental"
         }
       },
       "required": [
@@ -24422,6 +24608,14 @@
     "UsageCheckpointData": {
       "type": "object",
       "properties": {
+        "toolUsageRequestIds": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Runtime tool-operation identities already included in this checkpoint. Prevents duplicate charges when an operation is delivered again with a newer sequence.",
+          "visibility": "internal"
+        },
         "totalNanoAiu": {
           "type": "number",
           "minimum": 0,

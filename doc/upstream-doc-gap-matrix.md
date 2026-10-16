@@ -77,6 +77,13 @@ provider reasoning blocks remain wire-only. Provider discovery, plan-base-model
 snapshots, thinking-capability discovery, proxy-CA controls, and trusted-human
 response submission do not add public wrappers or host authority.
 
+Reasoning-summary presentation policy, AHP publication withdrawal, metered
+tool-operation billing, catalog/plugin installation, sandbox policy helpers,
+and internal user/repository settings APIs remain excluded. Their appearance
+in package exports or generated RPC code does not make them stable.
+Passive tool-usage and quota data preserves source-defined JSON keys without
+adding billing APIs or treating missing usage as zero.
+
 ## auth/
 
 | Upstream page | Decision | Clojure coverage |

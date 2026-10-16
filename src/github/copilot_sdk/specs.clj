@@ -531,12 +531,14 @@
 ;; Per-agent override of the model's reasoning effort. The nested API key keeps
 ;; the established agent prefix; the wire serializer emits `reasoningEffort`.
 (s/def ::agent-reasoning-effort ::reasoning-effort)
+(s/def ::agent-hooks
+  (s/map-of string? (s/coll-of ::json-object :kind vector?)))
 
 (s/def ::custom-agent
   (s/keys :req-un [::agent-name ::agent-prompt]
           :opt-un [::agent-display-name ::agent-description ::agent-tools
                    ::mcp-servers ::agent-infer? ::agent-skills ::agent-model
-                   ::agent-reasoning-effort]))
+                   ::agent-reasoning-effort ::agent-hooks]))
 
 (s/def ::custom-agents (s/coll-of ::custom-agent))
 
@@ -839,10 +841,12 @@
 ;; `configDir`; only the idiom-layer key changed. `:config-directory` is the
 ;; new spelling; `:config-dir` remains accepted as a deprecated alias.
 (s/def ::config-directory ::non-blank-string)
-(s/def ::skill-directories (s/coll-of ::non-blank-string))
+(s/def ::skill-directories (s/coll-of string?))
+(s/def ::agent-directories (s/coll-of string?))
+(s/def ::hook-directories (s/coll-of string?))
 ;; instructionDirectories — additional directories to search for custom
 ;; instruction files. Upstream PR #1190 (@github/copilot-sdk).
-(s/def ::instruction-directories (s/coll-of ::non-blank-string))
+(s/def ::instruction-directories (s/coll-of string?))
 ;; pluginDirectories — extra directories to load plugins from, loaded even
 ;; when `enableConfigDiscovery` is false (upstream PR #1482).
 (s/def ::plugin-directories (s/coll-of ::non-blank-string))
@@ -1050,6 +1054,7 @@
 (s/def ::enable-file-change-tracking? boolean?)
 (s/def ::enable-host-git-operations boolean?)
 (s/def ::enable-session-store boolean?)
+(s/def ::enable-github-cache-store? boolean?)
 (s/def ::enable-skills boolean?)
 
 ;; Client-mode session option flags (upstream PR #1428). Sent via
@@ -1241,6 +1246,7 @@
 ;; bootstrap using the session's github token. Forwarded on create + resume/join.
 (s/def ::enable-managed-settings? boolean?)
 (s/def ::enforce-managed-model-defaults? boolean?)
+(s/def ::interactive-user? boolean?)
 
 ;; v1.0.9 session configuration additions.
 (s/def ::enable-experimental-mode? boolean?)
@@ -1380,7 +1386,7 @@
 (s/def ::canvas-provider (s/keys :req-un [::id] :opt-un [::name]))
 
 (def session-config-keys
-  #{:session-id :client-name :model :allowed-models :tools :commands :system-message
+  #{:session-id :name :client-name :model :allowed-models :tools :commands :system-message
     :available-tools :excluded-tools :tool-search :provider
     :on-permission-request :streaming? :mcp-servers
     :on-mcp-auth-request
@@ -1388,7 +1394,7 @@
     ;; Directory rename (PR #1482): :config-directory is the new spelling;
     ;; :config-dir is accepted as a deprecated alias.
     :config-dir :config-directory
-    :skill-directories
+    :skill-directories :agent-directories :hook-directories
     :instruction-directories
     :plugin-directories
     :disabled-skills :large-output :infinite-sessions
@@ -1411,7 +1417,7 @@
     :enable-file-hooks
     :enable-file-change-tracking?
     :enable-host-git-operations
-    :enable-session-store
+    :enable-session-store :enable-github-cache-store?
     :enable-skills
     :skip-custom-instructions
     :custom-agents-local-only
@@ -1422,7 +1428,7 @@
     :excluded-builtin-agents :enable-citations :session-limits
     :providers :models :exp-assignments :feature-flags
     :include-sub-agent-streaming-events?
-    :enable-managed-settings? :enforce-managed-model-defaults? :managed-settings
+    :enable-managed-settings? :enforce-managed-model-defaults? :interactive-user? :managed-settings
     :enable-experimental-mode? :additional-directories :disabled-mcp-servers
     :github-mcp-tool-config
     :request-extensions? :extension-sdk-path :extension-info
@@ -1435,12 +1441,12 @@
    ;; consumer to resolve via `handle-pending-permission-request!`.
    (s/keys :opt-un [::on-permission-request
                     ::on-mcp-auth-request
-                    ::session-id ::client-name ::model ::allowed-models ::tools ::commands ::system-message
+                    ::session-id ::name ::client-name ::model ::allowed-models ::tools ::commands ::system-message
                     ::available-tools ::excluded-tools ::tool-search ::provider
                     ::streaming? ::mcp-servers
                     ::custom-agents ::default-agent
                     ::config-dir ::config-directory
-                    ::skill-directories
+                    ::skill-directories ::agent-directories ::hook-directories
                     ::instruction-directories
                     ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
@@ -1463,7 +1469,7 @@
                     ::enable-file-hooks
                     ::enable-file-change-tracking?
                     ::enable-host-git-operations
-                    ::enable-session-store
+                    ::enable-session-store ::enable-github-cache-store?
                     ::enable-skills
                     ::skip-custom-instructions
                     ::custom-agents-local-only
@@ -1474,7 +1480,7 @@
                     ::excluded-builtin-agents ::enable-citations ::session-limits
                     ::providers ::models ::exp-assignments ::feature-flags
                     ::include-sub-agent-streaming-events?
-                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::managed-settings
+                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::interactive-user? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions? ::extension-sdk-path
@@ -1487,7 +1493,7 @@
     :on-mcp-auth-request
     :mcp-servers :custom-agents :default-agent
     :config-dir :config-directory
-    :skill-directories
+    :skill-directories :agent-directories :hook-directories
     :instruction-directories
     :plugin-directories
     :disabled-skills :large-output :infinite-sessions
@@ -1509,7 +1515,7 @@
     :enable-file-hooks
     :enable-file-change-tracking?
     :enable-host-git-operations
-    :enable-session-store
+    :enable-session-store :enable-github-cache-store?
     :enable-skills
     :skip-custom-instructions
     :custom-agents-local-only
@@ -1522,7 +1528,7 @@
     :include-sub-agent-streaming-events?
     ;; Upstream PR #1604: resume/join may seed the open-canvases snapshot.
     :open-canvases
-    :enable-managed-settings? :enforce-managed-model-defaults? :managed-settings
+    :enable-managed-settings? :enforce-managed-model-defaults? :interactive-user? :managed-settings
     :enable-experimental-mode? :additional-directories :disabled-mcp-servers
     :github-mcp-tool-config
     :request-extensions? :extension-sdk-path :extension-info
@@ -1538,7 +1544,7 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
                     ::config-dir ::config-directory
-                    ::skill-directories
+                    ::skill-directories ::agent-directories ::hook-directories
                     ::instruction-directories
                     ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
@@ -1561,7 +1567,7 @@
                     ::enable-file-hooks
                     ::enable-file-change-tracking?
                     ::enable-host-git-operations
-                    ::enable-session-store
+                    ::enable-session-store ::enable-github-cache-store?
                     ::enable-skills
                     ::skip-custom-instructions
                     ::custom-agents-local-only
@@ -1573,7 +1579,7 @@
                     ::providers ::models ::exp-assignments ::feature-flags
                     ::include-sub-agent-streaming-events?
                     ::open-canvases
-                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::managed-settings
+                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::interactive-user? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions? ::extension-sdk-path
@@ -1598,7 +1604,7 @@
                     ::provider ::streaming?
                     ::mcp-servers ::custom-agents ::default-agent
                     ::config-dir ::config-directory
-                    ::skill-directories
+                    ::skill-directories ::agent-directories ::hook-directories
                     ::instruction-directories
                     ::plugin-directories
                     ::disabled-skills ::large-output ::infinite-sessions
@@ -1621,7 +1627,7 @@
                     ::enable-file-hooks
                     ::enable-file-change-tracking?
                     ::enable-host-git-operations
-                    ::enable-session-store
+                    ::enable-session-store ::enable-github-cache-store?
                     ::enable-skills
                     ::skip-custom-instructions
                     ::custom-agents-local-only
@@ -1633,7 +1639,7 @@
                     ::providers ::models ::exp-assignments ::feature-flags
                     ::include-sub-agent-streaming-events?
                     ::open-canvases
-                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::managed-settings
+                    ::enable-managed-settings? ::enforce-managed-model-defaults? ::interactive-user? ::managed-settings
                     ::enable-experimental-mode? ::additional-directories ::disabled-mcp-servers
                     ::github-mcp-tool-config
                     ::request-extensions?
@@ -2033,6 +2039,8 @@
 
 (s/def ::status-code integer?)
 (s/def ::provider-call-id string?)
+(s/def ::provider-error-param string?)
+(s/def ::provider-error-type string?)
 (s/def ::error-type string?)
 (s/def ::stack string?)
 (s/def ::remediation-action
@@ -2040,7 +2048,8 @@
     "switch_account"
     "show_account"
     "review_sandbox_policy"
-    "allow_sandbox_outbound"})
+    "allow_sandbox_outbound"
+    "rewind_conversation"})
 (s/def ::remediation ::remediation-action)
 ;; Upstream schema 1.0.83-1: `parentToolCallId` links a nested tool-call chain
 ;; (assistant messages, tool execution, hooks) back to the invoking tool call.
@@ -2049,7 +2058,7 @@
 
 (s/def ::session.error-data
   (s/keys :req-un [::error-type ::message]
-          :opt-un [::stack ::status-code ::provider-call-id ::url
+          :opt-un [::stack ::status-code ::provider-call-id ::provider-error-param ::provider-error-type ::url
                    ::remediation]))
 
 (def ^:no-doc autopilot-session-mode "autopilot")
@@ -2594,18 +2603,33 @@
   #{"threshold" "context_limit_retry" "manual" "memory_pressure" "model_switch"})
 (s/def ::current-tokens nat-int?)
 (s/def ::token-limit nat-int?)
+(s/def ::compaction-attempt-id string?)
+(s/def ::switch-target-model string?)
+(s/def ::target-prompt-token-limit nat-int?)
+(s/def ::initial-model string?)
+(s/def ::failure-reason string?)
+(s/def ::compaction-outcome string?)
+(s/def ::outcome-reason string?)
+(s/def ::token-accounting-basis string?)
 (s/def ::session.compaction_start-data
-  (s/keys :opt-un [::model ::current-tokens ::token-limit ::trigger]))
+  (s/keys :opt-un [::model ::current-tokens ::token-limit ::trigger
+                   ::compaction-attempt-id ::switch-target-model ::target-prompt-token-limit]))
 ;; :behavior-model-id — upstream schema 1.0.83-1. Identifies the behavior
 ;; model used to drive compaction, when applicable.
 (s/def ::behavior-model-id string?)
+(s/def ::request-count nat-int?)
 (s/def ::compaction-tokens-used
-  (s/keys :opt-un [::ai-credits-status ::model-display-name]))
+  (s/keys :opt-un [::ai-credits-status ::model-display-name ::request-count]))
 (s/def ::session.compaction_complete-data
   (s/and
    (s/keys :req-un [::success]
            :opt-un [::status-code ::token-limit ::trigger ::behavior-model-id
-                    ::responses-reasoning ::compaction-tokens-used])
+                    ::responses-reasoning ::compaction-tokens-used
+                    ::compaction-attempt-id ::initial-model ::switch-target-model
+                    ::failure-reason ::outcome-reason ::token-accounting-basis
+                    ::target-prompt-token-limit])
+   #(optional-field? % :model string?)
+   #(optional-field? % :outcome (partial s/valid? ::compaction-outcome))
    #(optional-field? % :error string?)))
 
 ;; Transient indexed-search lifecycle and diagnostics (schema 1.0.87-0).
@@ -2703,6 +2727,8 @@
    (required-value? data :on-blocked permission-recovery-on-blocked-values)
    (required-value? data :reason permission-recovery-reasons)
    (required-value? data :max-attempts pos-int?)
+   (optional-field? data :owner-session-id string?)
+   (optional-field? data :owner-agent-id string?)
    (required-value? data :attempts
                     (partial vector-of? permission-recovery-attempt?))))
 
@@ -2797,7 +2823,6 @@
 (s/def ::total-tokens nat-int?)
 (s/def ::duration-ms nat-int?)
 (s/def ::cancelled boolean?)
-(s/def ::factory-run-id string?)
 (s/def ::workflow-run-id string?)
 
 ;; Additive subagent fields (upstream schema 1.0.83-1, stable 2980c78 sync).
@@ -2837,7 +2862,7 @@
   (s/and
    (s/keys :req-un [::tool-call-id ::agent-name ::agent-display-name
                     ::agent-description]
-           :opt-un [::factory-run-id ::workflow-run-id ::model ::resumable
+           :opt-un [::workflow-run-id ::model ::resumable
                     ::agent-type ::execution-mode ::task-model-source
                     ::model-selection-source])
    #(or (not (contains? % :parent-id))
@@ -3352,7 +3377,18 @@
              (s/valid? ::environment-variables
                        (:environment-variables %))))))
 
-(s/def ::permission-prompt-request permission-write-previews?)
+(s/def ::permission-prompt-request
+  (s/and permission-write-previews?
+         #(optional-field? % :managed-approval-required boolean?)))
+(s/def ::permission-handler-invocation
+  (closed-keys
+   (s/and
+    (s/keys :req-un [::session-id])
+    #(optional-field? % :managed-settings-enabled? boolean?)
+    #(optional-field? % :prompt-request (partial s/valid? ::permission-prompt-request)))
+   #{:session-id :managed-settings-enabled? :prompt-request}))
+(s/def ::owner-session-id string?)
+(s/def ::owner-agent-id string?)
 (s/def ::resolved-by-hook boolean?)
 (s/def ::risk-assessment opaque-json-value?)
 (s/def ::recovery-episode-id string?)
@@ -3361,10 +3397,12 @@
    map?
    #(required-value? % :request-id string?)
    #(required-value? % :permission-request permission-write-previews?)
-   #(optional-field? % :prompt-request permission-write-previews?)
+   #(optional-field? % :prompt-request (partial s/valid? ::permission-prompt-request))
    #(optional-field? % :resolved-by-hook boolean?)
    #(optional-field? % :risk-assessment opaque-json-value?)
    #(optional-field? % :agent-mode session-modes)
+   #(optional-field? % :owner-session-id (partial s/valid? ::owner-session-id))
+   #(optional-field? % :owner-agent-id (partial s/valid? ::owner-agent-id))
    #(optional-field? % :recovery-episode-id string?)))
 
 (s/def ::permission.completed-data

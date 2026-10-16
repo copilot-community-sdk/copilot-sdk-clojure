@@ -1913,33 +1913,38 @@
    - **v3 (broadcast path):** skip the `handlePendingPermissionRequest` RPC
      entirely so the extension does not answer this permission request.
    - **v2 (request-handler path):** propagate as a JSON-RPC internal error
-     (code -32603) so the CLI knows the request was not handled."
-  [client session-id request]
-  (async/thread-call
-   (fn []
-     (let [handler (:permission-handler (session-state client session-id))]
-       (if-not handler
-         {:result {:kind :user-not-available}}
-         (try
-           (let [result (handler request
-                                 {:session-id session-id
-                                  :managed-settings-enabled?
-                                  (:managed-settings-enabled?
-                                   (session-state client session-id))})
-                 ;; If handler returns a channel, await it
-                 result (if (channel? result)
-                          (<!! result)
-                          result)
-                 response (normalize-permission-handler-result result)]
-             (if response
-               response
-               (do
-                 (log/warn "Invalid permission response for session " session-id ": " result)
-                 {:result {:kind :user-not-available}})))
-           (catch Exception e
-             (log/error "Permission handler error for session " session-id ": " (ex-message e))
-             {:result {:kind :user-not-available}})))))
-   :io))
+     (code -32603) so the CLI knows the request was not handled.
+
+   Optional prompt-context carries the runtime's :prompt-request into the
+   callback invocation without changing the raw permission request."
+  ([client session-id request]
+   (handle-permission-request! client session-id request {}))
+  ([client session-id request prompt-context]
+   (async/thread-call
+    (fn []
+      (let [state (session-state client session-id)
+            handler (:permission-handler state)]
+        (if-not handler
+          {:result {:kind :user-not-available}}
+          (try
+            (let [invocation (merge {:session-id session-id
+                                     :managed-settings-enabled? (:managed-settings-enabled? state)}
+                                    (select-keys prompt-context [:prompt-request]))
+                  result (handler request invocation)
+                  ;; If handler returns a channel, await it
+                  result (if (channel? result)
+                           (<!! result)
+                           result)
+                  response (normalize-permission-handler-result result)]
+              (if response
+                response
+                (do
+                  (log/warn "Invalid permission response for session " session-id ": " result)
+                  {:result {:kind :user-not-available}})))
+            (catch Exception e
+              (log/error "Permission handler error for session " session-id ": " (ex-message e))
+              {:result {:kind :user-not-available}})))))
+    :io)))
 
 (defn- mcp-auth-result->wire
   "Map an McpAuthResult returned by an :on-mcp-auth-request handler to the wire
@@ -2073,6 +2078,16 @@
                       :message "Bearer-token provider error"}})))))
    :io))
 
+(defn- normalize-hook-error [hook-type input]
+  (if (and (#{"errorOccurred" "sessionEnd"} hook-type)
+           (map? (:error input)))
+    (update input :error
+            (fn [error]
+              (if (string? (:message error))
+                (:message error)
+                (json/write-str (util/opaque-json->wire error)))))
+    input))
+
 (defn handle-hooks-invoke!
   "Handle an incoming hooks invocation. Returns a channel with the result.
    PR #269 feature."
@@ -2105,7 +2120,7 @@
                  ;; wire-provided :session-id when present (it may identify a
                  ;; sub-agent session distinct from the outer session-id);
                  ;; otherwise fall back to the outer session-id.
-                     input (cond-> input
+                     input (cond-> (normalize-hook-error hook-type input)
                              (not (contains? input :session-id))
                              (assoc :session-id session-id))
                      result (handler input {:session-id session-id})

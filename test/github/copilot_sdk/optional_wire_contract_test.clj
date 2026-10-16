@@ -66,6 +66,12 @@
       slurp
       edn/read-string))
 
+(def stable-delta-4043044-report
+  (-> "resources/stable_upstream_delta_4043044.edn"
+      io/resource
+      slurp
+      edn/read-string))
+
 (def post-2980-session-config
   {:auth/github-token-provider
    {:key :github-token-provider :scopes #{:create :resume}}
@@ -106,6 +112,10 @@
    (->> (:stable-deltas stable-delta-341a526-report)
         (keep (fn [{:keys [id idiom]}]
                 (when (= :session/managed-model-defaults id)
+                  (select-keys idiom [:key :scopes])))))
+   (->> (:stable-deltas stable-delta-4043044-report)
+        (keep (fn [{:keys [configuration-impact idiom]}]
+                (when (= configuration-impact :new-option)
                   (select-keys idiom [:key :scopes])))))))
 
 (def fixtures

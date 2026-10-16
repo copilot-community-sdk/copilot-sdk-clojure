@@ -17,11 +17,16 @@ pin.
 | `nodejs/src/toolSet.ts` | Public tool-filter helpers |
 | `nodejs/src/workflow.ts` | Experimental orchestration contracts and the shared `JsonValue` export |
 | `nodejs/src/host.ts`, `nodejs/src/installationConfirmation.ts` | Experimental runtime-host and installation-review exports; classify before exposing |
-| `nodejs/test/` | Stable unit and end-to-end behavior, especially omission and lifecycle semantics |
+| `nodejs/test/`, when included in the snapshot | Stable unit and end-to-end behavior, especially omission and lifecycle semantics |
 | `nodejs/src/generated/` | Wire signatures and event schemas; informative, not independently a stable parity requirement |
 
 Treat Python as secondary corroboration. Treat CLI/runtime implementation as
 wire evidence, not public API authority.
+
+Source-only snapshots may omit upstream tests. Record that absence explicitly;
+retain historical tests at their original pin rather than presenting them as
+target-pin evidence. Prove new behavior with local real-protocol and runtime
+tests, and inventory removed test paths alongside source deltas.
 
 ## Clojure Mapping
 
