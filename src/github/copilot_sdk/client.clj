@@ -653,7 +653,8 @@
       (go
         (try
           (let [perm-response (<! (session/handle-permission-request!
-                                   client session-id permission-request))
+                                   client session-id permission-request
+                                   (select-keys data [:prompt-request])))
                 result (:result perm-response)]
             ;; :no-result — extension declines to answer; skip the RPC call
             (when-not (= :no-result result)
@@ -3189,7 +3190,8 @@
                      :agent-prompt :prompt
                      :agent-infer? :infer
                      :agent-skills :skills
-                     :agent-model :model}
+                     :agent-model :model
+                     :agent-hooks :hooks}
         renamed (reduce-kv (fn [result key value]
                              (assoc result (get key-renames key key) value))
                            {}
@@ -3783,6 +3785,7 @@
                       (mapv provider-model->wire ms))]
     (cond-> {}
       (:session-id config) (assoc :session-id (:session-id config))
+      (contains? config :name) (assoc :name (:name config))
       (:client-name config) (assoc :client-name (:client-name config))
       (:model config) (assoc :model (:model config))
       (contains? config :allowed-models) (assoc :allowed-models (:allowed-models config))
@@ -3834,6 +3837,8 @@
       wire-default-agent (assoc :default-agent wire-default-agent)
       config-dir (assoc :config-dir config-dir)
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+      (:agent-directories config) (assoc :agent-directories (:agent-directories config))
+      (:hook-directories config) (assoc :hook-directories (:hook-directories config))
       (:instruction-directories config) (assoc :instruction-directories (:instruction-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
       (:plugin-directories config) (assoc :plugin-directories (:plugin-directories config))
@@ -3900,6 +3905,8 @@
       (assoc :enable-host-git-operations (:enable-host-git-operations config))
       (some? (:enable-session-store config))
       (assoc :enable-session-store (:enable-session-store config))
+      (contains? config :enable-github-cache-store?)
+      (assoc :enableGitHubCacheStore (:enable-github-cache-store? config))
       (some? (:enable-skills config))
       (assoc :enable-skills (:enable-skills config))
       true (assoc :include-sub-agent-streaming-events
@@ -3918,6 +3925,8 @@
       (assoc :enable-managed-settings (:enable-managed-settings? config))
       (contains? config :enforce-managed-model-defaults?)
       (assoc :enforce-managed-model-defaults (:enforce-managed-model-defaults? config))
+      (contains? config :interactive-user?)
+      (assoc :interactive-user (:interactive-user? config))
       (:managed-settings config)
       (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
       (some? (:request-extensions? config))
@@ -4055,6 +4064,8 @@
       wire-default-agent (assoc :default-agent wire-default-agent)
       config-dir (assoc :config-dir config-dir)
       (:skill-directories config) (assoc :skill-directories (:skill-directories config))
+      (:agent-directories config) (assoc :agent-directories (:agent-directories config))
+      (:hook-directories config) (assoc :hook-directories (:hook-directories config))
       (:instruction-directories config) (assoc :instruction-directories (:instruction-directories config))
       (:disabled-skills config) (assoc :disabled-skills (:disabled-skills config))
       (:plugin-directories config) (assoc :plugin-directories (:plugin-directories config))
@@ -4116,6 +4127,8 @@
       (assoc :enable-host-git-operations (:enable-host-git-operations config))
       (some? (:enable-session-store config))
       (assoc :enable-session-store (:enable-session-store config))
+      (contains? config :enable-github-cache-store?)
+      (assoc :enableGitHubCacheStore (:enable-github-cache-store? config))
       (some? (:enable-skills config))
       (assoc :enable-skills (:enable-skills config))
       ;; Upstream PR #1604: seed the open-canvases snapshot on resume/join.
@@ -4142,6 +4155,8 @@
       (assoc :enable-managed-settings (:enable-managed-settings? config))
       (contains? config :enforce-managed-model-defaults?)
       (assoc :enforce-managed-model-defaults (:enforce-managed-model-defaults? config))
+      (contains? config :interactive-user?)
+      (assoc :interactive-user (:interactive-user? config))
       (:managed-settings config)
       (assoc :managed-settings (managed-settings->wire (:managed-settings config)))
       (some? (:request-extensions? config))
@@ -4471,6 +4486,8 @@
                               `:copilot/permission.requested` events and remain
                               pending until resolved by the application.
    - :session-id         - Custom session ID
+   - :name               - Local session name at creation, validated by the runtime.
+                           Persists the session without requiring a model turn.
    - :client-name        - Client name to identify the application (included in User-Agent header)
    - :model              - Model to use (e.g., \"gpt-5.4\")
    - :allowed-models     - Vector of exact model IDs permitted by the host.
@@ -4498,13 +4515,22 @@
    - :feature-flags      - String-to-boolean feature flag map. Omission and {} are distinct.
    - :enforce-managed-model-defaults? - Boolean. Enforce locked managed model controls.
                                         Omission and explicit false remain distinct.
+   - :interactive-user?  - Boolean. Declare human-authored conversation telemetry.
+                           Defaults to false; ignored for cloud or already-active sessions.
+   - :enable-github-cache-store? - Boolean. Request the read-only github_sql cache tool;
+                                  the runtime also requires its GITHUB_CACHE_STORE flag.
    - :streaming?         - Enable streaming
    - :mcp-servers        - MCP server configs map
-   - :custom-agents      - Custom agent configs
+   - :custom-agents      - Custom agent configs. :agent-hooks contains declarative,
+                           string-keyed JSON actions, separate from callback :hooks.
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-directory   - Override config directory for CLI (configDir).
                            :config-dir remains a deprecated alias.
-   - :skill-directories  - Additional skill directories to load
+   - :skill-directories  - Discovery-only skill roots, without general filesystem grants.
+   - :agent-directories  - Discovery-only agent roots, separate from :custom-agents.
+   - :hook-directories   - Discovery-only file-hook roots, independent of :enable-file-hooks.
+                           Explicit [] clears the SDK contribution; nil is invalid.
+                           Relative roots resolve against the request's working directory.
    - :disabled-skills    - Disable specific skills by name
    - :included-builtin-skills - Allowlist of runtime-bundled skill names. Empty client mode
                                 defaults to []; CLI mode omits it unless explicitly provided.
@@ -4843,13 +4869,21 @@
                            a safe runtime switch; omission restores the persisted
                            preference.
    - :feature-flags      - String-to-boolean feature flag map. Omission and {} are distinct.
+   - :interactive-user?  - Boolean. Declare human-authored conversation telemetry;
+                           ignored when resuming a session that is already active.
+   - :enable-github-cache-store? - Boolean. Request the read-only GitHub cache capability;
+                                  the runtime also requires its GITHUB_CACHE_STORE flag.
    - :streaming?         - Enable streaming responses
    - :mcp-servers        - MCP server configurations, applied as part of session.resume.
-   - :custom-agents      - Custom agent configurations
+   - :custom-agents      - Custom agent configurations, including :agent-hooks JSON actions.
    - :default-agent      - Built-in agent config, e.g. {:excluded-tools [\"private_tool\"]}
    - :config-directory   - Override configuration directory.
                            :config-dir remains a deprecated alias.
-   - :skill-directories  - Directories to load skills from
+   - :skill-directories  - Discovery-only skill roots.
+   - :agent-directories  - Discovery-only agent roots.
+   - :hook-directories   - Discovery-only file-hook roots, independent of :enable-file-hooks.
+                           Also accepted by join-session. [] clears explicit SDK roots;
+                           omission leaves them unchanged, and nil is invalid.
    - :disabled-skills    - Skills to disable
    - :included-builtin-skills - Allowlist of runtime-bundled skill names. Empty client mode
                                 defaults to []; CLI mode omits it unless explicitly provided.

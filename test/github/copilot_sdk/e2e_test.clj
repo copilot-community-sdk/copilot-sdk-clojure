@@ -187,6 +187,100 @@
        (is (some? (java.time.Instant/parse (:timestamp result)))
            ":timestamp parses as ISO 8601 instant on real CLI ≥ 1.0.51")))))
 
+(deftest ^:e2e test-e2e-named-session-and-prompt-blocking
+  (when-e2e
+   (call-with-capturing-provider
+    (fn [base-url requests]
+      (let [config {:name (apply str (repeat 100 "n"))
+                    :model "instruction-cache-fixture"
+                    :available-tools []
+                    :interactive-user? false
+                    :enable-github-cache-store? false
+                    :agent-directories []
+                    :hook-directories []
+                    :provider {:provider-type :openai
+                               :base-url base-url
+                               :api-key "fixture"
+                               :wire-api :completions}
+                    :hooks {:on-user-prompt-submitted
+                            (fn [input _]
+                              (when (= (:prompt input) "blocked")
+                                {:decision "block" :reason "Needs human review."}))}}
+            seed (sdk/create-session *e2e-client* config)
+            id (sdk/session-id seed)]
+        (teardown/call-with-cleanup
+         #(is (empty? @requests))
+         #(sdk/disconnect! seed))
+        (throw-cleanup-failures! "Failed to stop before cold resume"
+                                 (stop-client-failures :named-session-client *e2e-client*))
+        (sdk/start! *e2e-client*)
+        (is (= (select-keys (sdk/get-session-metadata *e2e-client* id) [:session-id :summary])
+               {:session-id id :summary (:name config)}))
+        (is (some (fn [metadata] (= (:session-id metadata) id))
+                  (sdk/list-sessions *e2e-client*)))
+        (let [resumed (sdk/resume-session *e2e-client* id (dissoc config :name))]
+          (teardown/call-with-cleanup
+           #(let [events (sdk/subscribe-events resumed)]
+              (teardown/call-with-cleanup
+               (fn []
+                 (sdk/send! resumed {:prompt "blocked"})
+                 (let [warning (await-event-type! events :copilot/session.warning 30000)]
+                   (is (= (get-in warning [:data :warning-type]) "policy_blocked"))
+                   (is (= (get-in warning [:data :message]) "Needs human review.")))
+                 (is (= (get-in (sdk/send-and-wait! resumed {:prompt "allowed"} 60000)
+                                [:data :content])
+                        "OK"))
+                 (is (= (count @requests) 1))
+                 (is (= (->> (sdk/get-messages resumed)
+                             (filter (fn [event] (= (:type event) :copilot/user.message)))
+                             (mapv (fn [event] (get-in event [:data :content]))))
+                        ["allowed"])))
+               (fn [] (sdk/unsubscribe-events! resumed events))))
+           #(sdk/disconnect! resumed)))
+        (let [emoji (String. (Character/toChars 0x1f680))]
+          (doseq [name ["" " leading" "trailing " "double\"quote" "line\nbreak"
+                        (apply str (repeat 101 "n")) (apply str (repeat 51 emoji))]]
+            (is (thrown? clojure.lang.ExceptionInfo
+                         (sdk/create-session *e2e-client* (assoc config :name name)))))
+          (let [session (sdk/create-session *e2e-client*
+                                            (assoc config :name (apply str (repeat 50 emoji))))
+                id (sdk/session-id session)]
+            (teardown/call-with-cleanup
+             #(is (string? id))
+             #(sdk/disconnect! session))
+            (is (= (:summary (sdk/get-session-metadata *e2e-client* id))
+                   (apply str (repeat 50 emoji)))))))))))
+
+(deftest ^:e2e test-e2e-declarative-agent-hooks
+  (when-e2e
+   (let [rewritten (str "HOOK_EXECUTED_" (random-uuid))]
+     (call-with-capturing-provider
+      (fn [base-url requests]
+        (let [session
+              (sdk/create-session
+               *e2e-client*
+               {:model "instruction-cache-fixture"
+                :available-tools []
+                :agent "reviewer"
+                :on-permission-request sdk/approve-all
+                :custom-agents
+                [{:agent-name "reviewer" :agent-prompt "Respond to the prompt."
+                  :agent-hooks
+                  {"userPromptSubmitted"
+                   [{"type" "command" "exec" "node"
+                     "args" ["-e" (str "process.stdout.write(JSON.stringify({modifiedPrompt:"
+                                       (json/write-str rewritten) "}));")]}]}}]
+                :provider {:provider-type :openai :base-url base-url :wire-api :completions}})]
+          (teardown/call-with-cleanup
+           #(do
+              (is (= (get-in (sdk/send-and-wait! session {:prompt "original"} 60000) [:data :content])
+                     "OK"))
+              (is (= (count @requests) 1))
+              (let [content (-> @requests first :messages last :content)]
+                (is (= (last (str/split-lines content)) rewritten))
+                (is (not (str/includes? content "original")))))
+           #(sdk/disconnect! session))))))))
+
 (deftest ^:e2e test-e2e-shell-output-and-automated-input
   (when-e2e
    (let [turn (atom 0)

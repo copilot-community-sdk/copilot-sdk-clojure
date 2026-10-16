@@ -263,6 +263,14 @@ still enable logging. Existing-server and child-process connections do not
 spawn or reconfigure a runtime. An older explicitly selected CLI may ignore
 the setting.
 
+For a native standalone runtime, `:env {"COPILOT_GITHUB_TELEMETRY_DISABLED"
+"true"}` disables direct GitHub telemetry uploads for the entire host.
+The value must be exactly `"true"` before startup; restart the runtime after
+changing it. Authentication, SDK telemetry forwarding, and user-configured
+OpenTelemetry exports are unaffected. This is distinct from
+`:enable-session-telemetry? false`, which disables one session's telemetry
+pipeline. The Node CLI host does not use this environment variable.
+
 ### Methods
 
 #### `start!`
@@ -355,6 +363,27 @@ Get the options that were used to create this client.
 
 Create a new conversation session.
 
+```clojure
+(require '[github.copilot-sdk.client :as copilot])
+
+(copilot/with-client [client {}]
+  (copilot/with-session [session client {:name "Plan review"}]
+    (:session-id session)))
+```
+
+A name allows a local session to survive disconnect and runtime restart
+without sending a prompt. Resume it by ID; `:name` is not a rename option.
+
+Explicit skill, agent, hook, and instruction directories are discovery roots,
+not general filesystem grants. Relative paths resolve once against the
+request's effective `:working-directory`; retained roots do not move when that
+directory changes. Create, resume, and join preserve omission and `[]`
+separately: omission leaves the explicit SDK contribution unchanged, while
+`[]` clears it. Directory strings are forwarded unchanged; the runtime trims
+surrounding whitespace and ignores blank entries. `nil` is invalid. Active SDK
+skills may receive read-only access to their resources under the runtime's
+skill-resource policy, not general filesystem access.
+
 #### `with-session`
 
 ```clojure
@@ -410,6 +439,7 @@ failures.
 | Key | Type | Description |
 |-----|------|-------------|
 | `:session-id` | string | Custom session ID (optional) |
+| `:name` | string | Name a local session at creation. The runtime requires a non-empty name with no surrounding whitespace, control characters, or double quotes, and at most 100 UTF-16 code units. Naming makes a session persistable without a model turn; metadata publication need not be synchronous with the create response. Disconnect before relying on completed persistence. Not accepted on resume/join; cloud creation rejects it. |
 | `:client-name` | string | Client name to identify the application (included in User-Agent header) |
 | `:model` | string | Model to use (`"gpt-5.4"`, `"claude-sonnet-4.5"`, etc.) |
 | `:allowed-models` | vector of strings | Exact model IDs permitted by the host on create, resume, and join. Omission preserves runtime policy; an explicit `[]` is forwarded unchanged rather than treated as omission. The runtime validates the allowlist and its intersection with repository policy. Order, duplicates, and string spelling are preserved on the wire as `allowedModels`; `nil` is invalid. This does not expose the experimental live model-policy setter. |
@@ -429,6 +459,8 @@ failures.
 | `:session-limits` | map | (Experimental) Session AI-credit limits. `{:max-ai-credits <number>}` — serialized as wire `sessionLimits.maxAiCredits`. (upstream PR #1865) |
 | `:enable-managed-settings?` | boolean | Opt-in. When true, the runtime self-fetches enterprise managed settings (bypass-permissions policy) at session bootstrap using the session's `:github-token` (required; the runtime fails closed if omitted). Gated on `some?` — an explicit `false` is forwarded verbatim; an absent key is omitted. Serialized as wire `enableManagedSettings`. (upstream PR #1925) |
 | `:enforce-managed-model-defaults?` | boolean | Enforce locked managed model controls. Locked startup values replace conflicting session options, and conflicting model changes are rejected; overridable defaults remain mutable. Forwarded as `enforceManagedModelDefaults` on create, resume, and join, never through mutable options updates. Omission and explicit `false` are distinct; `nil` is invalid. |
+| `:interactive-user?` | boolean | Declare that a human drives the conversation, enabling user-message analysis telemetry for human-authored messages, not automated messages. Defaults to false for SDK sessions; re-supply it on cold resume. Ignored for cloud sessions and already-active resumes. Forwarded as `interactiveUser` on create, resume, and join. Omission and explicit false are distinct; `nil` is invalid. |
+| `:enable-github-cache-store?` | boolean | Request the read-only GitHub cache capability. The runtime registers `github_sql` only when its `GITHUB_CACHE_STORE` flag is also enabled. Defaults to disabled; false and omission remain distinct on create, resume, and join. `nil` is invalid. This is not a mutable settings API. |
 | `:managed-settings` | map | Host-injected enterprise policy, supplied instead of or alongside `:enable-managed-settings?`. Optional `:permissions` accepts `:disable-bypass-permissions-mode`, `:disable-assisted-permissions-mode?`, `:deny`, `:ask`, `:allow`, and `:limit-to`. Bypass policy accepts a wire string or simple keyword; known values are `:disable` and `:allow-auto-only`. Explicit `:disable-assisted-permissions-mode? true` prevents Assisted Permissions; false imposes no restriction. Rule lists are vectors of non-blank strings. `:limit-to` restricts hosts through `Domain(hostname)`, `Domain(IP)`, or `Domain(*.example.com)` rules; an explicit `[]` denies all hosts. The runtime validates rules and intersects managed layers. Optional values cannot be `nil`. Valid on create, resume, and join, not mutable updates. Policy is not persisted: re-supply it on resume; omission clears the injected layer. Presence sets the permission-handler context's `:managed-settings-enabled?` to true; see [`approve-all`](#approve-all). |
 | `:request-extensions?` | boolean | Opt into extension management tools and per-extension dispatch for this connection. Explicit `false` is preserved as `requestExtensions: false`; omission sends no wire key. Valid on create, resume, and join. Explicit `nil` is invalid. ([upstream PR #1401](https://github.com/github/copilot-sdk/pull/1401)) |
 | `:extension-sdk-path` | string | Override the `copilot-sdk/` folder injected into extension subprocesses. The runtime falls back to its bundled SDK when the path is invalid. Serialized as `extensionSdkPath` on create and resume; not accepted by `join-session` because the extension process has already started. Explicit `nil` is invalid. ([upstream PR #1494](https://github.com/github/copilot-sdk/pull/1494)) |
@@ -440,13 +472,15 @@ failures.
 | `:disabled-mcp-servers` | vector | Names of configured MCP servers (from `:mcp-servers` or on-disk `.mcp.json`) to suppress for this session. Vector of non-blank strings. Serialized as wire `disabledMcpServers`. ([upstream PR #2260](https://github.com/github/copilot-sdk/pull/2260)) |
 | `:github-mcp-tool-config` | map | Configures the built-in GitHub MCP server's tool surface. Optional keys: `:enable-all-tools?` (boolean, gated on `some?`), `:additional-toolsets` (vector of strings), `:additional-tools` (vector of strings), `:enable-insiders-mode?` (boolean, gated on `some?`), `:disable-form-deferral?` (boolean, gated on `some?`). Serialized as wire `githubMcpToolConfig.{enableAllTools,additionalToolsets,additionalTools,enableInsidersMode,disableFormDeferral}`. ([upstream PR #2112](https://github.com/github/copilot-sdk/pull/2112)) |
 | `:commands` | vector | Command definitions (slash commands). An omitted command `:description` is sent as `""`. See [Commands](#commands) |
-| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"`), `:mcp-servers`. The disambiguating Clojure prefixes are removed on the wire (`:agent-name` becomes `name`, `:agent-prompt` becomes `prompt`, and so on); `:agent-reasoning-effort` becomes `reasoningEffort`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. When reasoning effort is omitted, the runtime resolves it from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
+| `:custom-agents` | vector | Custom agent configs. Each agent map: `:agent-name` (required), `:agent-prompt` (required), `:agent-display-name`, `:agent-description`, `:agent-tools`, `:agent-infer?`, `:agent-skills` (vector of strings), `:agent-model` (string, e.g. `"claude-haiku-4.5"`; when set the runtime tries this model for the agent, falling back to the parent session model — upstream PR #1309), `:agent-reasoning-effort` (`"low"`, `"medium"`, `"high"`, `"xhigh"`, or `"max"`), `:mcp-servers`, and `:agent-hooks`. Declarative `:agent-hooks` maps exact string event names to vectors of string-keyed JSON objects; recursive keys and values are preserved without case conversion. Empty maps/vectors are preserved; `nil`, functions, keyword keys, and non-JSON values are invalid. These actions run only for that agent and are separate from session callback `:hooks`. The disambiguating Clojure prefixes are removed on the wire (`:agent-name` becomes `name`, `:agent-prompt` becomes `prompt`, and so on); `:agent-reasoning-effort` becomes `reasoningEffort`. Nested `:mcp-servers` follow the same config and opaque server-ID rules as session-level MCP servers. When reasoning effort is omitted, the runtime resolves it from the selected model's configuration; the parent session's reasoning effort is inherited only when the custom agent uses the same model as the parent. ([upstream PR #2064](https://github.com/github/copilot-sdk/pull/2064)) |
 | `:default-agent` | map | Built-in/default agent config. Use `{:excluded-tools [...]}` to hide tools from the default agent while leaving them available to custom agents |
 | `:on-permission-request` | fn | Permission handler function. **Optional** (upstream PR #1308). On create, omission sends `requestPermission: false`; providing a handler sends `true`. Resolve surfaced pending requests manually via `handle-pending-permission-request!`. Use `copilot/approve-all` to approve everything. |
 | `:streaming?` | boolean | Enable streaming deltas. Explicit `false` is forwarded; omission leaves the runtime default unchanged. |
 | `:config-directory` | string | Override the CLI config directory. `:config-dir` remains accepted as a deprecated alias. |
-| `:skill-directories` | vector | Additional skill directories to load |
-| `:instruction-directories` | vector | Additional directories to search for custom instruction files. Forwarded as `instructionDirectories` on `session.create` and `session.resume`. (upstream PR #1190) |
+| `:skill-directories` | vector | Explicit discovery-only skill roots. Available without `:enable-config-discovery`; skill and managed-policy disables still apply. |
+| `:agent-directories` | vector | Explicit discovery-only agent roots, separate from `:custom-agents`. Available without `:enable-config-discovery`; source and managed-policy disables still apply. |
+| `:hook-directories` | vector | Explicit discovery-only file-hook roots, separate from callback `:hooks`. Available without `:enable-config-discovery` or `:enable-file-hooks`; the latter controls repository-origin hooks only. Hook and managed-policy disables still apply. |
+| `:instruction-directories` | vector | Explicit discovery-only instruction roots, using the existing SDK instruction formats. Available without `:enable-config-discovery`; instruction and managed-policy disables still apply. |
 | `:additional-directories` | vector | Extra directories the runtime is allowed to read/write outside the session's working directory. Vector of non-blank strings. Serialized as wire `additionalDirectories`. Re-supply the vector when resuming a session. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
 | `:disabled-skills` | vector | Disable specific skills by name |
 | `:included-builtin-skills` | vector | Allowlist of runtime-bundled skill names, applied through `session.options.update` after create/resume. `:empty` client mode defaults this to `[]`; an explicit vector overrides that default. `:copilot-cli` mode omits it unless explicitly supplied, including an explicit `[]`. Custom skill loading remains controlled separately. ([upstream PR #2410](https://github.com/github/copilot-sdk/pull/2410)) |
@@ -2081,6 +2115,17 @@ integer sequence watermarks; source-defined key spelling is preserved.
 Legacy `:total-premium-requests` is a non-negative, potentially fractional
 premium-request cost, not an integer count of calls.
 
+Compaction start and completion events may share `:compaction-attempt-id` and
+report `:switch-target-model` / `:target-prompt-token-limit` when compacting
+for a different destination model or prompt budget. Completion may also
+include `:model`, `:initial-model`, `:outcome`, `:outcome-reason`,
+`:failure-reason`, and `:token-accounting-basis`. Outcome, reason, and accounting
+basis are extensible strings; preserve unknown future values rather than
+guessing a result from `:success` alone. Nested `:compaction-tokens-used` may
+include non-negative integer `:request-count`, the number of aggregated model
+requests. Token limits and request counts preserve zero; all these fields are
+optional and non-null.
+
 Usage and model-call failures expose content-free transport diagnostics:
 
 ```clojure
@@ -2144,7 +2189,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 |------------|-------------|
 | `:copilot/session.start` | Session created; optional `:auto-tier` is coerced to an extensible keyword identifier, retaining its full spelling. Optional string `:reasoning-effort-model` identifies the model that owns effort embedded in an authored selection. |
 | `:copilot/session.resume` | Session resumed; optional `:auto-tier` uses the same idiomatic keyword domain as session start. Optional `:reasoning-effort-model` retains the authored effort owner. |
-| `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:url`, and `:remediation`. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, and `"allow_sandbox_outbound"`. |
+| `:copilot/session.error` | Session error occurred; data requires `:error-type` and `:message`, with optional `:stack`, `:status-code`, `:provider-call-id`, `:provider-error-type`, `:provider-error-param`, `:url`, and `:remediation`. Provider error strings retain sanitized structured provider details. Remediation values are `"sign_in"`, `"switch_account"`, `"show_account"`, `"review_sandbox_policy"`, `"allow_sandbox_outbound"`, and `"rewind_conversation"`. The latter asks the host to discard history through a blocked request; it does not add a rewind API. |
 | `:copilot/session.idle` | Session finished processing. When the event's `:data` includes `:mode "autopilot"`, this idle is a nonterminal turn boundary rather than the end of processing — see [`send-and-wait!`](#send-and-wait), [`query-seq!`](#query-seq), and [`query-chan`](#query-chan) for how the SDK's blocking/streaming helpers treat autopilot idle events. |
 | `:copilot/session.info` | Informational session update |
 | `:copilot/session.model_change` | Session model changed; data requires `:new-model` and may include `:previous-model`, `:previous-reasoning-effort`, `:reasoning-effort`, `:reasoning-effort-model`, and `:source`. The effort owner is an optional non-null string, omitted for independent effort overrides and legacy events; empty strings remain distinct from omission. Known sources include `"model_command"`, `"config_command"`, `"model_picker"`, `"automatic"`, `"startup"`, `"managed_settings"`, `"agent"`, `"sdk"`, `"changeboarding_shortcut"` and `"auto_tier_recommendation"`. |
@@ -2158,10 +2203,10 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.truncation` | Context window truncated |
 | `:copilot/session.snapshot_rewind` | Session state rolled back. Data requires string `:up-to-event-id` and non-negative integer `:events-removed`. Optional `:event-ids` is an ordered vector of the removed event IDs; later events not listed remain, including interleaved background-agent events. Without `:event-ids`, `:up-to-event-id` and every later event were removed. Empty vectors are preserved; explicit `nil` is invalid. |
 | `:copilot/session.context_cleared` | Conversation context cleared and restarted with a new prompt (via `history-clear-context!`); data: `{:messages-cleared N}` (required) with optional `:initial-message` (the prompt used to start the new context) (upstream PR #2129) |
-| `:copilot/session.compaction_start` | Context compaction started (infinite sessions); data: `{:model "..." :current-tokens N :token-limit N :trigger "..."}` (all optional). `:trigger` is one of `"threshold"`, `"context_limit_retry"`, `"manual"`, `"memory_pressure"`, `"model_switch"` (upstream schema 1.0.79-5/6) |
-| `:copilot/session.compaction_complete` | Context compaction completed (infinite sessions); data: `{:success bool}` (required) with optional `:error "..."`, `:status-code N`, `:token-limit N`, `:trigger "..."` (same `:trigger` enum as `compaction_start`), `:behavior-model-id`, and `:responses-reasoning {:model "..." :initial-effort "..." :effort "..."}`. |
+| `:copilot/session.compaction_start` | Context compaction started (infinite sessions); optional `:model`, `:current-tokens`, `:token-limit`, `:compaction-attempt-id`, `:switch-target-model`, and `:target-prompt-token-limit`. `:trigger` is one of `"threshold"`, `"context_limit_retry"`, `"manual"`, `"memory_pressure"`, `"model_switch"`. |
+| `:copilot/session.compaction_complete` | Context compaction completed; requires `:success`. Optional fields include the correlation, model, outcome, reason, and accounting fields described above, plus `:error`, `:status-code`, `:token-limit`, `:trigger`, `:behavior-model-id`, `:responses-reasoning`, and `:compaction-tokens-used`. |
 | `:copilot/session.indexed_search` | Transient indexed-search lifecycle and diagnostics. `:kind` is `"status"`, `"startup"`, `"server_error"`, or `"incremental"`; each variant carries its corresponding state, outcome, error, count, or duration fields. |
-| `:copilot/session.permission_recovery` | Authoritative snapshot of a bounded Autopilot permission-recovery episode, including `:episode-id`, lifecycle `:status`, `:on-blocked` policy, transition `:reason`, `:max-attempts`, and ordered privacy-safe `:attempts`. |
+| `:copilot/session.permission_recovery` | Authoritative snapshot of a bounded Autopilot permission-recovery episode, including `:episode-id`, lifecycle `:status`, `:on-blocked` policy, transition `:reason`, `:max-attempts`, and ordered privacy-safe `:attempts`. Optional string `:owner-session-id` and `:owner-agent-id` identify the execution session and delegated agent that own recovery, not the observer's session. Permission-request events may carry the same ownership metadata. |
 | `:copilot/session.mode_changed` | Session agent mode changed; data: `{:previous-mode "...", :new-mode "..."}` |
 | `:copilot/session.mode_notice_delivered` | A mode notice was delivered to the model; data requires `:mode` (`"interactive"`, `"plan"`, or `"autopilot"`) and may include string `:content`. The payload remains open for additive runtime fields. |
 | `:copilot/session.plan_changed` | Session plan created/updated/deleted; data: `{:operation "create"/"update"/"delete"}` |
@@ -3463,7 +3508,7 @@ data fields describing the run or authoring request awaiting approval:
 | `:can-persist-approval` | boolean | Whether `:approve-for-session`/`:approve-for-location` are meaningful for this request |
 | `:max-concurrent-subagents`, `:max-total-subagents`, `:timeout-seconds`, `:max-ai-credits` | number (optional) | Effective runtime limits for this run |
 | `:declared-max-concurrent-subagents`, `:declared-max-total-subagents`, `:declared-timeout-seconds`, `:declared-max-ai-credits` | number (optional) | The limits as declared by the workflow definition, shown to approvers alongside the effective limits above |
-| `:managed-approval-required` | boolean (optional) | Managed policy requires a human response and forbids automatic host approval. Explicit false remains distinct from omission. |
+| `:managed-approval-required` | boolean (optional) | Raw managed-policy provenance and one-shot restrictions. Consult the callback's derived prompt context below to determine whether a human response is still required. Explicit false remains distinct from omission. |
 
 For fine-grained control, provide your own handler. When the CLI needs
 approval, it sends a JSON-RPC `permission.request` to the SDK. Your
@@ -3478,6 +3523,15 @@ request payload) and a `ctx` map with:
 |-----|------|-------------|
 | `:session-id` | string | The session the request originated from |
 | `:managed-settings-enabled?` | boolean | `true` when the session has enterprise-managed settings active (`:managed-settings` config or `:enable-managed-settings?`); `false` otherwise |
+| `:prompt-request` | map (optional) | Runtime-derived, user-facing permission prompt. Preserves `:kind`, raw prompt fields, and an explicit false `:managed-approval-required` marker. Absent on older runtimes or requests without a derived prompt. |
+
+The raw request is not rewritten. For standard prompt kinds `"commands"`,
+`"read"`, `"write"`, `"url"`, and `"workflow"`, the derived prompt can clear the
+human requirement after Assisted approval. For those kinds, a true derived
+managed marker requires a human response; false or absence does not, even when
+the raw marker remains true. For a missing prompt or other prompt kinds, retain
+the raw marker as authoritative. Neither a prompt snapshot nor a recovery
+owner ID is an approval grant.
 
 `ctx` is passed to every `:on-permission-request` handler, including
 `approve-all` and `default-join-session-permission-handler`.
@@ -4017,6 +4071,23 @@ Lifecycle hooks allow custom logic at various points during the session:
 All hooks receive an `input` map (contents vary by hook type) and an `invocation` map
 containing `{:session-id ...}`. Hooks may return `nil` to proceed normally, or in some
 cases return a modified value.
+
+Base hook inputs may include string `:agent-id`, `:agent-type`, and
+`:parent-agent-id`. They remain absent for root hooks or older runtimes that do
+not provide them. The input's `:session-id` retains the runtime's execution
+session; the invocation map still identifies the SDK session handling the hook.
+
+For `:on-error-occurred` and `:on-session-end`, an object-valued `:error` becomes
+its string `:message`, including an empty string. If the object has no string
+message, it becomes JSON with its original member names. Strings, scalars,
+arrays, and absent errors pass through; other hook types are not normalized.
+
+`:on-user-prompt-submitted` may return
+`{:decision "block" :reason "Needs human review."}`. The runtime refuses that
+prompt without starting a model turn or recording a user message, and emits
+an ephemeral `:copilot/session.warning` with `:warning-type "policy_blocked"`
+and the reason. This is different from an agent-stop block, which requests
+another model turn.
 
 `:on-agent-stop` fires when the top-level agent reaches a natural terminal stop. Its
 input contains base `:timestamp` (Unix milliseconds) and `:cwd` (string), SDK-added

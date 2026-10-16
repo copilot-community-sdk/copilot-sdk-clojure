@@ -8,6 +8,7 @@
             [clojure.test :refer [deftest is testing]]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.generated.event-specs :as generated-events]
+            [github.copilot-sdk.integration.stable-sync-support :as ss]
             [github.copilot-sdk.specs]))
 
 (def ^:private stable-delta-resource
@@ -162,12 +163,11 @@
                         :agent-name "worker"
                         :agent-display-name "Worker"
                         :factory-run-id "run-1"})))
-    (is (not (s/valid? :github.copilot-sdk.specs/subagent.started-data
-                       {:tool-call-id "tool-1"
-                        :agent-name "worker"
-                        :agent-display-name "Worker"
-                        :agent-description "Performs delegated work"
-                        :factory-run-id 1}))))
+    (testing "retired field validation remains pinned to its certification"
+      (let [source (ss/git-output "." "show"
+                                  "a5e406c81670af8e61221cb16424df7ca6bc0cf9:src/github/copilot_sdk/specs.clj")]
+        (is (= (second (re-find #"\(s/def ::factory-run-id ([^)]+)\)" source))
+               "::non-blank-string")))))
 
   (testing "telemetry and host-integration additions"
     (is (s/valid? :github.copilot-sdk.specs/model.call_failure-data

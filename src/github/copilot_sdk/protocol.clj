@@ -628,6 +628,12 @@
            (contains? params :args))
       (assoc-in converted [:params :args] (:args params))
 
+      ;; Hook error objects can become JSON strings; retain their source keys.
+      (and (= "hooks.invoke" method)
+           (#{"errorOccurred" "sessionEnd"} (:hookType params))
+           (map? (get-in params [:input :error])))
+      (assoc-in converted [:params :input :error] (get-in params [:input :error]))
+
       ;; Upstream PR #1366: preMcpToolCall hook input has two opaque
       ;; fields that must NOT be recursively kebab-cased:
       ;; - `:arguments`: MCP tool call arguments (source-defined keys)

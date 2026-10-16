@@ -256,7 +256,7 @@
     handle-mcp-auth-request! {:kind :fn, :arglists ([client session-id request])}
     handle-pending-permission-request! {:kind :fn, :arglists ([session {:as opts, :keys [request-id result]}]), :experimental true}
     handle-pending-tool-call! {:kind :fn, :arglists ([session {:as opts, :keys [request-id result error]}])}
-    handle-permission-request! {:kind :fn, :arglists ([client session-id request])}
+    handle-permission-request! {:kind :fn, :arglists ([client session-id request] [client session-id request prompt-context])}
     handle-provider-token-request! {:kind :fn, :arglists ([client session-id provider-name])}
     handle-session-fs-request! {:kind :fn, :arglists ([client session-id method params])}
     handle-system-message-transform {:kind :fn, :arglists ([client session-id sections])}
@@ -353,6 +353,7 @@
     github.copilot-sdk.session/get-messages (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret (clojure.spec.alpha/coll-of clojure.core/map?) :fn nil)
     github.copilot-sdk.session/handle-pending-permission-request! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/request-id])) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/handle-pending-tool-call! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/request-id])) :ret clojure.core/any? :fn nil)
+    github.copilot-sdk.session/handle-permission-request! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :session-id :github.copilot-sdk.specs/session-id :request clojure.core/map? :prompt-context (clojure.spec.alpha/? (clojure.spec.alpha/map-of #{:prompt-request} :github.copilot-sdk.specs/permission-prompt-request))) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.session/history-clear-context! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :prompt :github.copilot-sdk.specs/non-blank-string) :ret (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/messages-cleared]) :fn nil)
     github.copilot-sdk.session/history-truncate! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.session/input! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :message clojure.core/string? :opts (clojure.spec.alpha/? (clojure.spec.alpha/nilable :github.copilot-sdk.specs/input-options))) :ret (clojure.spec.alpha/nilable clojure.core/string?) :fn nil)
@@ -423,7 +424,9 @@
     :github.copilot-sdk.specs/additional-toolsets
     :github.copilot-sdk.specs/agent
     :github.copilot-sdk.specs/agent-description
+    :github.copilot-sdk.specs/agent-directories
     :github.copilot-sdk.specs/agent-display-name
+    :github.copilot-sdk.specs/agent-hooks
     :github.copilot-sdk.specs/agent-id
     :github.copilot-sdk.specs/agent-infer?
     :github.copilot-sdk.specs/agent-metrics
@@ -540,6 +543,8 @@
     :github.copilot-sdk.specs/command-name
     :github.copilot-sdk.specs/command-segments
     :github.copilot-sdk.specs/commands
+    :github.copilot-sdk.specs/compaction-attempt-id
+    :github.copilot-sdk.specs/compaction-outcome
     :github.copilot-sdk.specs/compaction-tokens-used
     :github.copilot-sdk.specs/config-dir
     :github.copilot-sdk.specs/config-directory
@@ -613,6 +618,7 @@
     :github.copilot-sdk.specs/enable-experimental-mode?
     :github.copilot-sdk.specs/enable-file-change-tracking?
     :github.copilot-sdk.specs/enable-file-hooks
+    :github.copilot-sdk.specs/enable-github-cache-store?
     :github.copilot-sdk.specs/enable-host-git-operations
     :github.copilot-sdk.specs/enable-insiders-mode?
     :github.copilot-sdk.specs/enable-managed-settings?
@@ -668,7 +674,7 @@
     :github.copilot-sdk.specs/extensions
     :github.copilot-sdk.specs/external-server?
     :github.copilot-sdk.specs/external_tool.requested-data
-    :github.copilot-sdk.specs/factory-run-id
+    :github.copilot-sdk.specs/failure-reason
     :github.copilot-sdk.specs/family
     :github.copilot-sdk.specs/feature-flags
     :github.copilot-sdk.specs/features
@@ -693,6 +699,7 @@
     :github.copilot-sdk.specs/handled?
     :github.copilot-sdk.specs/head-commit
     :github.copilot-sdk.specs/headers
+    :github.copilot-sdk.specs/hook-directories
     :github.copilot-sdk.specs/hook-end-error
     :github.copilot-sdk.specs/hook-invocation-id
     :github.copilot-sdk.specs/hook-type
@@ -714,6 +721,7 @@
     :github.copilot-sdk.specs/infinite-sessions
     :github.copilot-sdk.specs/initial-cwd
     :github.copilot-sdk.specs/initial-message
+    :github.copilot-sdk.specs/initial-model
     :github.copilot-sdk.specs/initiator
     :github.copilot-sdk.specs/input
     :github.copilot-sdk.specs/input-options
@@ -729,6 +737,7 @@
     :github.copilot-sdk.specs/inter-token-latency-ms
     :github.copilot-sdk.specs/interaction-id
     :github.copilot-sdk.specs/interaction-type
+    :github.copilot-sdk.specs/interactive-user?
     :github.copilot-sdk.specs/interval-ms
     :github.copilot-sdk.specs/invalid-line-numbers
     :github.copilot-sdk.specs/invoked-at-turn
@@ -883,6 +892,7 @@
     :github.copilot-sdk.specs/otlp-endpoint
     :github.copilot-sdk.specs/otlp-protocol
     :github.copilot-sdk.specs/outcome
+    :github.copilot-sdk.specs/outcome-reason
     :github.copilot-sdk.specs/output-dir
     :github.copilot-sdk.specs/output-directory
     :github.copilot-sdk.specs/output-price
@@ -892,6 +902,8 @@
     :github.copilot-sdk.specs/overage-allowed-with-exhausted-quota?
     :github.copilot-sdk.specs/overrides-built-in-tool
     :github.copilot-sdk.specs/owner
+    :github.copilot-sdk.specs/owner-agent-id
+    :github.copilot-sdk.specs/owner-session-id
     :github.copilot-sdk.specs/parameters
     :github.copilot-sdk.specs/parent-id
     :github.copilot-sdk.specs/parent-tool-call-id
@@ -902,6 +914,7 @@
     :github.copilot-sdk.specs/permission-decision-outcome
     :github.copilot-sdk.specs/permission-decision-source
     :github.copilot-sdk.specs/permission-decision-surface
+    :github.copilot-sdk.specs/permission-handler-invocation
     :github.copilot-sdk.specs/permission-handler-result
     :github.copilot-sdk.specs/permission-kind
     :github.copilot-sdk.specs/permission-mode
@@ -937,6 +950,8 @@
     :github.copilot-sdk.specs/protocol-version
     :github.copilot-sdk.specs/provider
     :github.copilot-sdk.specs/provider-call-id
+    :github.copilot-sdk.specs/provider-error-param
+    :github.copilot-sdk.specs/provider-error-type
     :github.copilot-sdk.specs/provider-id
     :github.copilot-sdk.specs/provider-model
     :github.copilot-sdk.specs/provider-type
@@ -980,6 +995,7 @@
     :github.copilot-sdk.specs/request-body-bytes
     :github.copilot-sdk.specs/request-body-encoding
     :github.copilot-sdk.specs/request-body-wire-bytes
+    :github.copilot-sdk.specs/request-count
     :github.copilot-sdk.specs/request-extensions?
     :github.copilot-sdk.specs/request-handler-queue-size
     :github.copilot-sdk.specs/request-handler-threads
@@ -1119,6 +1135,7 @@
     :github.copilot-sdk.specs/supported-reasoning-efforts
     :github.copilot-sdk.specs/supports-reasoning-effort
     :github.copilot-sdk.specs/supports-vision
+    :github.copilot-sdk.specs/switch-target-model
     :github.copilot-sdk.specs/system-message
     :github.copilot-sdk.specs/system-message-content
     :github.copilot-sdk.specs/system-message-content-block
@@ -1128,6 +1145,7 @@
     :github.copilot-sdk.specs/system-prompt-section
     :github.copilot-sdk.specs/system.message-data
     :github.copilot-sdk.specs/system.notification-data
+    :github.copilot-sdk.specs/target-prompt-token-limit
     :github.copilot-sdk.specs/task-model-source
     :github.copilot-sdk.specs/tcp-connection-token
     :github.copilot-sdk.specs/telemetry
@@ -1140,6 +1158,7 @@
     :github.copilot-sdk.specs/timeout-seconds
     :github.copilot-sdk.specs/timestamp
     :github.copilot-sdk.specs/title
+    :github.copilot-sdk.specs/token-accounting-basis
     :github.copilot-sdk.specs/token-count
     :github.copilot-sdk.specs/token-details
     :github.copilot-sdk.specs/token-limit

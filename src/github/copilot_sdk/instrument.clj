@@ -208,6 +208,14 @@
 ;; Function specs for session namespace
 ;; -----------------------------------------------------------------------------
 
+(register-fdef! github.copilot-sdk.session/handle-permission-request!
+                :args (s/cat :client ::specs/client
+                             :session-id ::specs/session-id
+                             :request map?
+                             :prompt-context (s/? (s/map-of #{:prompt-request}
+                                                            ::specs/permission-prompt-request)))
+                :ret ::specs/events-ch)
+
 (register-fdef! github.copilot-sdk.session/send!
                 :args (s/cat :session ::specs/session
                              :opts ::specs/send-options)

@@ -1,9 +1,12 @@
 (ns github.copilot-sdk.integration.upstream-1-0-89-5-test
-  (:require [clojure.java.io :as io]
+  (:require [clojure.data.json :as json]
+            [clojure.java.io :as io]
             [clojure.spec.alpha :as s]
+            [clojure.string :as str]
             [clojure.test :refer [deftest is testing use-fixtures]]
             [github.copilot-sdk :as sdk]
             [github.copilot-sdk.generated.event-specs :as wire]
+            [github.copilot-sdk.integration.stable-sync-support :as ss]
             [github.copilot-sdk.integration.support
              :refer [*mock-server* *test-client* await-event-type! with-mock-server]]
             [github.copilot-sdk.mock-server :as mock]
@@ -42,15 +45,23 @@
 
 (deftest workflow-run-correlation-preserves-the-legacy-history-field
   (doseq [spec [::specs/subagent.started-data ::wire/subagent.started-data]
-          field [:workflow-run-id :factory-run-id]
           [run-id expected] [[::absent true] ["" true] ["run" true]
                              [nil false] [false false] [[] false] [{} false]]]
     (let [data (cond-> {:tool-call-id "task" :agent-name "reviewer"
                         :agent-display-name "Reviewer" :agent-description "Review"
                         :factory-run-id "legacy-run"}
-                 (= field :factory-run-id) (dissoc :factory-run-id)
-                 (not= run-id ::absent) (assoc field run-id))]
+                 (not= run-id ::absent) (assoc :workflow-run-id run-id))]
       (is (= (valid? spec data) expected) (str spec " " data)))))
+
+(deftest retired-factory-field-contract-is-pinned-to-its-implementation
+  (let [pin "4a8a6cd012e59bd15a05e9e3d042bd0a3c3dcbf5"
+        source (ss/git-output "." "show" (str pin ":src/github/copilot_sdk/specs.clj"))
+        schema (json/read-str (ss/git-output "." "show" (str pin ":schemas/session-events.schema.json")))
+        data (get-in schema ["definitions" "SubagentStartedData"])]
+    (is (str/includes? source "(s/def ::factory-run-id string?)"))
+    (is (= (dissoc (get-in data ["properties" "factoryRunId"]) "description")
+           {"type" "string"}))
+    (is (not (some #{"factoryRunId"} (get data "required"))))))
 
 (deftest parent-call-metadata-is-optional-and-non-null
   (doseq [[event-type base idiom wire] parent-call-events
