@@ -216,6 +216,12 @@
                                                             ::specs/permission-prompt-request)))
                 :ret ::specs/events-ch)
 
+(register-fdef! github.copilot-sdk.session/handle-mcp-auth-request!
+                :args (s/cat :client ::specs/client
+                             :session-id ::specs/session-id
+                             :request ::specs/mcp.oauth_required-data)
+                :ret ::specs/events-ch)
+
 (register-fdef! github.copilot-sdk.session/send!
                 :args (s/cat :session ::specs/session
                              :opts ::specs/send-options)

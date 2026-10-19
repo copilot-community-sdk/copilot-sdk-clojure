@@ -256,9 +256,10 @@ MCP server tools work alongside custom tools defined with `define-tool`:
 
 ## Interactive OAuth
 
-Remote MCP servers may require OAuth. By default the runtime uses a browserless,
-cached-token flow. To drive an interactive (browser-based) authorization, supply
-an `:on-mcp-auth-request` handler on `create-session` / `resume-session`:
+Remote MCP servers may require OAuth. Without a handler, authorization remains
+runtime-owned, including cached credentials. To provide host-acquired tokens
+or delegate supported refreshes, supply an `:on-mcp-auth-request` handler on
+create, resume, or join:
 
 ```clojure
 (copilot/with-client-session [session
@@ -269,19 +270,38 @@ an `:on-mcp-auth-request` handler on `create-session` / `resume-session`:
                                "https://host.example.com/.well-known/oauth-client"
                                :on-mcp-auth-request
                                (fn [request _ctx]
-                                 (let [token (acquire-oauth-token! (:server-url request))]
-                                   (if token
-                                     {:access-token token :token-type "Bearer" :expires-in 3600}
-                                     {:kind :cancelled})))}]
+                                 (if (true? (:runtime-refresh-supported request))
+                                   {:kind :runtime-refresh}
+                                   (let [token (acquire-oauth-token! (:server-url request))]
+                                     (if token
+                                       {:access-token token :token-type "Bearer" :expires-in 3600}
+                                       {:kind :cancelled}))))}]
   ;; The handler fires when an MCP server emits mcp.oauth_required.
   )
 ```
 
 The handler receives the `McpAuthRequest` map and a `{:session-id ...}` context,
-and may return a `core.async` channel. Return a map with `:access-token` to
-answer with a token, or `nil` / `{:kind :cancelled}` / throw to cancel. See
-[MCP OAuth Handler](../reference/API.md#mcp-oauth-handler) for the full request
-shape and result mapping. (upstream PR #1669)
+and may return a `core.async` channel. Return a nonempty string `:access-token`
+to supply a token, or `nil` / `{:kind :cancelled}` to cancel. Explicit
+cancellation takes precedence over a token; a token takes precedence over
+`:runtime-refresh`. Malformed results and thrown errors are logged and cancel.
+See [MCP OAuth Handler](../reference/API.md#mcp-oauth-handler) for the full request
+shape and result mapping.
+
+Return `{:kind :runtime-refresh}` only when the request advertises
+`:runtime-refresh-supported true`. Omission or `false` means unsupported, and
+the SDK cancels such a handoff rather than leaving it pending. The runtime
+renews its saved grant within the original authorization attempt, without
+starting another consent flow.
+
+Acceptance does not mean renewal, reconnect, or tool execution succeeded.
+Observe the persisted `:copilot/mcp.oauth_recovery_completed` event, correlated
+by `:request-id` and `:server-name`, for `"succeeded"`, `"cancelled"`, or `"failed"`.
+For an accepted handoff, the existing `mcp.oauth_completed` event fires once at
+that terminal outcome and retains its `"token"` / `"cancelled"` values.
+Stopping the turn prevents its invocation from later retrying; already-issued
+token-storage work may still settle. Do not treat cancellation as storage
+completion.
 
 Set `:auth-client-id-metadata-url` when the OAuth flow must identify the host
 through an OAuth Client ID Metadata Document. The SDK forwards the string on
@@ -294,6 +314,15 @@ It applies when the server challenge omits scope or provides an empty scope.
 The SDK preserves this string, including `""`, without splitting or rewriting
 it. This callback metadata does not expose the CLI-only `oauthScopes` server
 configuration option.
+
+## Tool readiness
+
+A `"connected"` server can still be loading its tools. Observe the live-only
+`:copilot/session.mcp_server_tools_loaded` event for `:server-name` and
+`:tool-count` (including zero), once per connection. A cached tool snapshot can
+produce this event before the connected-status notification. Clear readiness
+when the server leaves `"connected"`; `get-messages` does not replay this
+ephemeral event.
 
 ## Troubleshooting
 

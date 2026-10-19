@@ -1977,6 +1977,11 @@
           "type": "string",
           "description": "Fixed-set provider family serving the bring-your-own-key model (for example \"openai\", \"anthropic\", \"azure_openai\", \"ollama\", \"llama_cpp\", or \"other\"). Never the caller-supplied provider name. Absent for Copilot-served models."
         },
+        "providerType": {
+          "type": "string",
+          "description": "Fixed-set configured provider type of the bring-your-own-key model: \"openai\", \"azure\", \"anthropic\", \"local_model\" (a user-configured local model), \"winml\" (a Copilot-managed Windows ML model), or \"other\". Never the caller-supplied provider name. Absent for Copilot-served models.",
+          "visibility": "internal"
+        },
         "isAuto": {
           "type": "boolean",
           "description": "Whether Auto mode was selected for this model call"
@@ -2018,6 +2023,20 @@
         "requestBodyEncoding": {
           "$ref": "#/definitions/ModelCallRequestBodyEncoding",
           "description": "Content-Encoding applied to the request body of the attempt that produced this outcome; identity when uncompressed"
+        },
+        "requestBodyCompressionFallback": {
+          "$ref": "#/definitions/ModelCallRequestBodyCompressionFallback",
+          "description": "Uncompressed fallback that produced this outcome; absent when the body was sent with the requested encoding"
+        },
+        "requestBodyCompressionFallbackFrom": {
+          "$ref": "#/definitions/ModelCallRequestBodyEncoding",
+          "description": "Content-Encoding the request asked for before the uncompressed fallback; present only with requestBodyCompressionFallback"
+        },
+        "requestBodyCompressionRejectedStatus": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "HTTP status that rejected the compressed body before the uncompressed resend; present only when requestBodyCompressionFallback is retried"
         },
         "websocketFallbackReason": {
           "$ref": "#/definitions/ModelCallWebSocketFallbackReason",
@@ -10761,7 +10780,7 @@
         },
         "outcome": {
           "$ref": "#/definitions/McpOauthCompletionOutcome",
-          "description": "How the pending OAuth request was completed"
+          "description": "How the pending OAuth request was completed. An accepted runtimeRefresh handoff completes once at its authorization terminal: token when recovery succeeded, cancelled when it was cancelled or failed; see mcp.oauth_recovery_completed for the exact outcome."
         }
       },
       "required": [
@@ -10871,6 +10890,100 @@
       "description": "Raw HTTP response details from the OAuth auth challenge, as observed by the runtime.",
       "title": "McpOauthHttpResponse"
     },
+    "McpOauthRecoveryCompletedData": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Request ID of the MCP OAuth request whose runtimeRefresh handoff was accepted"
+        },
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server whose authorization recovery completed"
+        },
+        "outcome": {
+          "$ref": "#/definitions/McpOauthRecoveryCompletedOutcome",
+          "description": "Terminal outcome of the original authorization reservation, including reconnect"
+        }
+      },
+      "required": [
+        "requestId",
+        "serverName",
+        "outcome"
+      ],
+      "additionalProperties": false,
+      "description": "Terminal outcome of a runtime-owned MCP OAuth recovery accepted through a runtimeRefresh handoff",
+      "title": "McpOauthRecoveryCompletedData"
+    },
+    "McpOauthRecoveryCompletedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "mcp.oauth_recovery_completed",
+          "description": "Type discriminator. Always \"mcp.oauth_recovery_completed\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpOauthRecoveryCompletedData",
+          "description": "Terminal outcome of a runtime-owned MCP OAuth recovery accepted through a runtimeRefresh handoff"
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"mcp.oauth_recovery_completed\". Terminal outcome of a runtime-owned MCP OAuth recovery accepted through a runtimeRefresh handoff",
+      "title": "McpOauthRecoveryCompletedEvent"
+    },
+    "McpOauthRecoveryCompletedOutcome": {
+      "type": "string",
+      "enum": [
+        "succeeded",
+        "cancelled",
+        "failed"
+      ],
+      "description": "Terminal outcome of the original authorization reservation, including reconnect",
+      "title": "McpOauthRecoveryCompletedOutcome",
+      "x-enumDescriptions": {
+        "succeeded": "Credentials were renewed and the server reconnected.",
+        "cancelled": "The recovery was cancelled before it completed.",
+        "failed": "Credential renewal or reconnect failed, or the server was dropped."
+      }
+    },
     "McpOauthRequestReason": {
       "type": "string",
       "enum": [
@@ -10922,6 +11035,10 @@
         "reason": {
           "$ref": "#/definitions/McpOauthRequestReason",
           "description": "Why the runtime is requesting host-provided OAuth credentials."
+        },
+        "runtimeRefreshSupported": {
+          "type": "boolean",
+          "description": "Whether this Refresh request accepts kind runtimeRefresh to continue noninteractive grant renewal within its original authorization reservation. Missing or false means unsupported; the host must retain its legacy response behavior."
         }
       },
       "required": [
@@ -11569,6 +11686,82 @@
       "description": "Session event \"session.mcp_server_status_changed\". Payload of `session.mcp_server_status_changed` for one MCP server's status and optional failure error.",
       "title": "McpServerStatusChangedEvent"
     },
+    "McpServerToolsLoadedData": {
+      "type": "object",
+      "properties": {
+        "serverName": {
+          "type": "string",
+          "description": "Name of the MCP server whose tools loaded"
+        },
+        "toolCount": {
+          "type": "integer",
+          "description": "Number of tools the server listed"
+        }
+      },
+      "required": [
+        "serverName",
+        "toolCount"
+      ],
+      "additionalProperties": false,
+      "description": "Payload of `session.mcp_server_tools_loaded`, emitted once per connection when an MCP server's tools first become available from tools/list or a cached snapshot. A connected server is still loading tools if this event has not fired since the server last left connected; it can precede connected when the tools come from a cached snapshot.",
+      "title": "McpServerToolsLoadedData"
+    },
+    "McpServerToolsLoadedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "const": true,
+          "description": "Always true for events that are transient and not persisted to the session event log on disk."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.mcp_server_tools_loaded",
+          "description": "Type discriminator. Always \"session.mcp_server_tools_loaded\"."
+        },
+        "data": {
+          "$ref": "#/definitions/McpServerToolsLoadedData",
+          "description": "Payload of `session.mcp_server_tools_loaded`, emitted once per connection when an MCP server's tools first become available from tools/list or a cached snapshot. A connected server is still loading tools if this event has not fired since the server last left connected; it can precede connected when the tools come from a cached snapshot."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "ephemeral",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.mcp_server_tools_loaded\". Payload of `session.mcp_server_tools_loaded`, emitted once per connection when an MCP server's tools first become available from tools/list or a cached snapshot. A connected server is still loading tools if this event has not fired since the server last left connected; it can precede connected when the tools come from a cached snapshot.",
+      "title": "McpServerToolsLoadedEvent"
+    },
     "McpServerTransport": {
       "type": "string",
       "enum": [
@@ -11863,6 +12056,20 @@
           "$ref": "#/definitions/ModelCallRequestBodyEncoding",
           "description": "Content-Encoding applied to the failed request body; identity when uncompressed"
         },
+        "requestBodyCompressionFallback": {
+          "$ref": "#/definitions/ModelCallRequestBodyCompressionFallback",
+          "description": "Uncompressed fallback that produced this outcome; absent when the body was sent with the requested encoding"
+        },
+        "requestBodyCompressionFallbackFrom": {
+          "$ref": "#/definitions/ModelCallRequestBodyEncoding",
+          "description": "Content-Encoding the request asked for before the uncompressed fallback; present only with requestBodyCompressionFallback"
+        },
+        "requestBodyCompressionRejectedStatus": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 999,
+          "description": "HTTP status that rejected the compressed body before the uncompressed resend; present only when requestBodyCompressionFallback is retried"
+        },
         "retryAttempt": {
           "type": "integer",
           "minimum": 0,
@@ -11923,6 +12130,11 @@
         "modelProvider": {
           "type": "string",
           "description": "Fixed-set provider family serving the bring-your-own-key model for the failed call (for example \"openai\", \"anthropic\", \"azure_openai\", \"ollama\", \"llama_cpp\", or \"other\"). Never the caller-supplied provider name. Absent for Copilot-served models."
+        },
+        "providerType": {
+          "type": "string",
+          "description": "Fixed-set configured provider type of the bring-your-own-key model for the failed call: \"openai\", \"azure\", \"anthropic\", \"local_model\" (a user-configured local model), \"winml\" (a Copilot-managed Windows ML model), or \"other\". Never the caller-supplied provider name. Absent for Copilot-served models.",
+          "visibility": "internal"
         },
         "isAuto": {
           "type": "boolean",
@@ -12363,6 +12575,19 @@
         "error": "The dispatch ended with a provider or transport error.",
         "cancelled": "The dispatch was cancelled before an accepted response was produced.",
         "rejected": "The provider response was rejected during post-response acceptance processing."
+      }
+    },
+    "ModelCallRequestBodyCompressionFallback": {
+      "type": "string",
+      "enum": [
+        "retried",
+        "disabled"
+      ],
+      "description": "How the runtime fell back to an uncompressed request body after a compressed body was rejected",
+      "title": "ModelCallRequestBodyCompressionFallback",
+      "x-enumDescriptions": {
+        "retried": "A compressed body was rejected with HTTP 400 or 415 and this outcome comes from the single uncompressed resend.",
+        "disabled": "Request body compression was already turned off for the session by an earlier rejection, so the body was sent uncompressed."
       }
     },
     "ModelCallRequestBodyEncoding": {
@@ -17256,6 +17481,74 @@
       "description": "Session event \"session.remote_steerable_changed\". Notifies that the session's remote steering capability has changed",
       "title": "RemoteSteerableChangedEvent"
     },
+    "RequestBodyCompressionDisabledData": {
+      "type": "object",
+      "properties": {
+        "encoding": {
+          "$ref": "#/definitions/ModelCallRequestBodyEncoding",
+          "description": "Content-Encoding the rejected request asked for, when the call that observed the fallback reported it"
+        }
+      },
+      "additionalProperties": false,
+      "description": "Internal durable marker that the server rejected a compressed model request body, so the session sends uncompressed bodies from now on, including after resume.",
+      "title": "RequestBodyCompressionDisabledData",
+      "visibility": "internal"
+    },
+    "RequestBodyCompressionDisabledEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid",
+          "description": "Unique event identifier (UUID v4), generated when the event is emitted"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 timestamp when the event was created"
+        },
+        "parentId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "ID of the chronologically preceding event in the session, forming a linked chain. Null for the first event."
+        },
+        "ephemeral": {
+          "type": "boolean",
+          "description": "When true, the event is transient and not persisted to the session event log on disk"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Sub-agent instance identifier. Absent for events from the root/main agent and session-level events."
+        },
+        "type": {
+          "type": "string",
+          "const": "session.request_body_compression_disabled",
+          "description": "Type discriminator. Always \"session.request_body_compression_disabled\"."
+        },
+        "data": {
+          "$ref": "#/definitions/RequestBodyCompressionDisabledData",
+          "description": "Internal durable marker that the server rejected a compressed model request body, so the session sends uncompressed bodies from now on, including after resume."
+        }
+      },
+      "required": [
+        "id",
+        "timestamp",
+        "parentId",
+        "type",
+        "data"
+      ],
+      "additionalProperties": false,
+      "description": "Session event \"session.request_body_compression_disabled\". Internal durable marker that the server rejected a compressed model request body, so the session sends uncompressed bodies from now on, including after resume.",
+      "title": "RequestBodyCompressionDisabledEvent",
+      "visibility": "internal"
+    },
     "ResponsesReasoning": {
       "type": "object",
       "properties": {
@@ -19045,6 +19338,11 @@
           "visibility": "internal"
         },
         {
+          "$ref": "#/definitions/RequestBodyCompressionDisabledEvent",
+          "description": "Session event \"session.request_body_compression_disabled\". Internal durable marker that the server rejected a compressed model request body, so the session sends uncompressed bodies from now on, including after resume.",
+          "visibility": "internal"
+        },
+        {
           "$ref": "#/definitions/ContextChangedEvent",
           "description": "Session event \"session.context_changed\". Updated working directory and git context after the change"
         },
@@ -19380,6 +19678,10 @@
           "description": "Session event \"mcp.oauth_completed\". MCP OAuth request completion notification"
         },
         {
+          "$ref": "#/definitions/McpOauthRecoveryCompletedEvent",
+          "description": "Session event \"mcp.oauth_recovery_completed\". Terminal outcome of a runtime-owned MCP OAuth recovery accepted through a runtimeRefresh handoff"
+        },
+        {
           "$ref": "#/definitions/McpHeadersRefreshRequiredEvent",
           "description": "Session event \"mcp.headers_refresh_required\". Dynamic headers refresh request for a remote MCP server"
         },
@@ -19502,6 +19804,10 @@
         {
           "$ref": "#/definitions/McpServerStatusChangedEvent",
           "description": "Session event \"session.mcp_server_status_changed\". Payload of `session.mcp_server_status_changed` for one MCP server's status and optional failure error."
+        },
+        {
+          "$ref": "#/definitions/McpServerToolsLoadedEvent",
+          "description": "Session event \"session.mcp_server_tools_loaded\". Payload of `session.mcp_server_tools_loaded`, emitted once per connection when an MCP server's tools first become available from tools/list or a cached snapshot. A connected server is still loading tools if this event has not fired since the server last left connected; it can precede connected when the tools come from a cached snapshot."
         },
         {
           "$ref": "#/definitions/McpServerRemovedEvent",

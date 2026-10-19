@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 
 ### Added (post-v1.0.22 sync)
+- Added capability-gated MCP OAuth runtime refresh handoff, persisted recovery
+  outcomes, live-only MCP tool-readiness events, and request-compression fallback
+  diagnostics on usage and failure events.
+  ([upstream snapshot](https://github.com/github/copilot-sdk/commit/b96cd2b54f7eb87458fd50f485a751c712e88f62))
 - Added creation-time session names; discovery-only agent and hook directories;
   interactive-user telemetry and read-only GitHub-cache-store options; and
   declarative custom-agent hooks with preserved JSON keys.
@@ -13,6 +17,8 @@ All notable changes to this project will be documented in this file. This change
   ([upstream snapshot](https://github.com/github/copilot-sdk/commit/404304416ac5358651e3877a33bc9e8f4e482162))
 
 ### Fixed (post-v1.0.22 sync)
+- Explicit MCP OAuth cancellation takes precedence over a supplied token;
+  empty or non-string tokens cancel rather than reaching the runtime as tokens.
 - Forward discovery-root strings unchanged so the runtime can trim whitespace
   and ignore blank entries consistently across skills, instructions, agents,
   and file hooks.
@@ -24,7 +30,9 @@ All notable changes to this project will be documented in this file. This change
 - **BREAKING**: Removed the retired `::specs/factory-run-id` contract; use
   `:workflow-run-id` for subagent Workflow attribution. Historical event maps
   still pass through unknown fields.
-- Advanced CLI compatibility and schema provenance to `1.0.99-2`, preserving
+- Documented additional startup directories as authorization for repository
+  hooks, including containing Git roots, cold-resume scope, and hook controls.
+- Advanced CLI compatibility and schema provenance to `1.0.100-1`, preserving
   historical certification and explicitly inventorying source-only snapshots
   without upstream tests. New experimental and internal APIs remain excluded.
   The library version remains `1.0.16.0`; no release, tag, or deployment is cut.

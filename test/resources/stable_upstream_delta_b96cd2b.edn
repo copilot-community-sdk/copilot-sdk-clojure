@@ -1,0 +1,882 @@
+{:api-snapshot-impact
+ {:added-spec-keys
+  #{:github.copilot-sdk.specs/mcp-oauth-recovery-outcome
+    :github.copilot-sdk.specs/mcp.oauth_recovery_completed-data
+    :github.copilot-sdk.specs/request-body-compression-fallback
+    :github.copilot-sdk.specs/request-body-compression-fallback-from
+    :github.copilot-sdk.specs/request-body-compression-rejected-status
+    :github.copilot-sdk.specs/runtime-refresh-supported
+    :github.copilot-sdk.specs/session.mcp_server_tools_loaded-data
+    :github.copilot-sdk.specs/tool-count},
+  :fdefs
+  {github.copilot-sdk.session
+   {:added #{github.copilot-sdk.session/handle-mcp-auth-request!},
+    :changed #{},
+    :removed #{}}},
+  :removed-spec-keys #{},
+  :vars {}},
+ :certification
+ {:clojure-base-commit "3de1059b0d3582ab13e42b526a8902e2b503f8cb",
+  :historical-oracle
+  {:resource "resources/stable_upstream_delta_4043044.edn",
+   :sha256
+   "5d91818324e21ae26b750f6ebafc1fa06f5fac5e301b852b2982eec40d07ed46"},
+  :local-artifact-seal {:status :unsealed}},
+ :changed-paths
+ {:classification-counts
+  {:experimental 2,
+   :generated-only 1,
+   :internal 2,
+   :language-specific 111,
+   :stable-public 6},
+  :count 122,
+  :exact-classifications
+  {"docs/features/hooks.md" :stable-public,
+   "docs/features/mcp.md" :stable-public,
+   "docs/features/skills.md" :experimental,
+   "docs/hooks/hooks-overview.md" :stable-public,
+   "nodejs/README.md" :experimental,
+   "nodejs/package.json" :internal,
+   "nodejs/src/cliVersion.ts" :internal,
+   "nodejs/src/generated/rpc.ts" :generated-only,
+   "nodejs/src/generated/session-events.ts" :stable-public,
+   "nodejs/src/session.ts" :stable-public,
+   "nodejs/src/types.ts" :stable-public},
+  :hash-format :newline-joined-without-trailing-newline,
+  :language-specific-prefixes
+  ["dotnet/" "go/" "java/" "python/" "rust/"],
+  :prefix-classifications
+  [{:classification :internal,
+    :prefix "nodejs/",
+    :reason
+    "Node packaging and implementation scaffolding; public deltas are explicit."}],
+  :rename-policy :no-renames,
+  :sha256
+  "ce8b494ec1c610b632d0e204df310f0f307c108495161cca152989b69e1cba53"},
+ :commit-classifications
+ [{:changed-path-count 36,
+   :changed-paths-sha256
+   "6417b7f917e9a70eb211a51c14c8bffcbded941daf3ded8df230de9ff0b181ea",
+   :classifications
+   #{:generated-only :internal :language-specific :stable-public},
+   :commit "b04171f698fd80bfd5988505fd93d4a9b80a3934",
+   :reason
+   "Stable callback/event contracts, excluded experimental surfaces, generated wire reconciliation, and foreign-language implementations are classified separately.",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/b04171f698fd80bfd5988505fd93d4a9b80a3934",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.99-3"}
+  {:changed-path-count 99,
+   :changed-paths-sha256
+   "e8c73d559d44fed95298e5c6abe260bf6694954d873ca504dfa026457523b297",
+   :classifications
+   #{:experimental
+     :generated-only
+     :internal
+     :language-specific
+     :stable-public},
+   :commit "18f0730b6d7976c6fb774785a03df87269564a9f",
+   :reason
+   "Stable callback/event contracts, excluded experimental surfaces, generated wire reconciliation, and foreign-language implementations are classified separately.",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/18f0730b6d7976c6fb774785a03df87269564a9f",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.100-0"}
+  {:changed-path-count 8,
+   :changed-paths-sha256
+   "6768c94899e60bc03a7defced0036605b9e99f27d36cc506ac2877d4cb6d7a6d",
+   :classifications #{:generated-only :internal :language-specific},
+   :commit "b96cd2b54f7eb87458fd50f485a751c712e88f62",
+   :reason
+   "Stable callback/event contracts, excluded experimental surfaces, generated wire reconciliation, and foreign-language implementations are classified separately.",
+   :source-url
+   "https://github.com/github/copilot-sdk/commit/b96cd2b54f7eb87458fd50f485a751c712e88f62",
+   :subject "Update SDK snapshot for Copilot CLI 1.0.100-1"}],
+ :decision "doc/adr/2026-10-19-mcp-recovery-and-readiness.md",
+ :generated-rpc-methods
+ {:added
+  {"azureMl.acquireFamily" :experimental,
+   "azureMl.cancel" :experimental,
+   "azureMl.catalog" :experimental,
+   "azureMl.discard" :experimental,
+   "azureMl.download" :experimental,
+   "azureMl.latest" :experimental,
+   "azureMl.releaseFamily" :experimental,
+   "azureMl.resolve" :experimental,
+   "azureMl.status" :experimental},
+  :fingerprint
+  [581
+   "b78d3fa703d3d60bf5047049d5980ef2dceaba353c549e0ebd5a5285f44f53f9"],
+  :removed #{}},
+ :intentional-exclusions
+ [{:authority
+   ["nodejs/src/types.ts:SessionConfigBase.skillProvider"
+    "nodejs/src/generated/rpc.ts:SkillProviderDescriptor.directory"],
+   :classification :experimental,
+   :decision :no-new-api,
+   :id :skills/provider-assets,
+   :reason
+   "The provider subsystem remains explicitly experimental; supporting directories do not promote it to stable."}
+  {:authority
+   ["nodejs/src/generated/rpc.ts:AzureMlCatalogRequest"
+    "nodejs/src/generated/rpc.ts:createServerRpc.azureMl"],
+   :classification :experimental,
+   :decision :no-new-api,
+   :id :azure-ml/acquisition,
+   :reason
+   "The 29 new AzureMl declarations and nine RPC methods are experimental."}
+  {:authority
+   ["nodejs/src/generated/rpc.ts:CatalogSearchRequest"
+    "nodejs/src/generated/rpc.ts:EnvironmentsListResult"],
+   :classification :experimental,
+   :decision :no-new-api,
+   :id :catalog-and-hosting/controls,
+   :reason
+   "Catalog categories/capabilities and hosting discovery backoff do not enlarge stable wrappers."}
+  {:authority
+   ["nodejs/src/generated/rpc.ts:McpConfiguredServerState.toolsLoaded"],
+   :classification :generated-only,
+   :decision :no-new-api,
+   :id :mcp/configured-observation,
+   :reason
+   "The passive stable readiness event is supported; experimental configuration RPC observations are not independently ported."}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:AssistantUsageData.providerType"
+    "nodejs/src/generated/session-events.ts:ModelCallFailureData.providerType"],
+   :classification :internal,
+   :decision :passive-wire-only,
+   :id :events/provider-type,
+   :reason
+   "Both fields carry @internal; generated specs preserve them without promoting them to curated usage/failure fields."}
+  {:authority
+   ["schemas/session-events.schema.json:RequestBodyCompressionDisabledEvent"],
+   :classification :internal,
+   :decision :passive-wire-only,
+   :id :events/compression-state,
+   :reason
+   "The CLI-only durable marker has visibility internal and is absent from the Node SDK's public event export.",
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-100-1-test/internal-compression-state-remains-wire-only}}
+  {:authority
+   ["python/copilot/session.py"
+    "go/session.go"
+    "dotnet/src/Session.cs"
+    "java/sdk/src/main/java/com/github/copilot/CopilotSession.java"
+    "rust/src/session.rs"],
+   :classification :language-specific,
+   :decision :no-independent-parity-requirement,
+   :id :foreign-bindings,
+   :reason
+   "Foreign implementations corroborate behavior but do not create additional public Node requirements."}],
+ :retained-tests
+ {:base-test-tree-absent? true,
+  :historical-review-resource
+  "resources/stable_upstream_delta_4043044.edn",
+  :pin "206b49eee92f37a6d5a69eeba16fa5b123b1ddd0",
+  :scope
+  "Historical Node tests are not retargeted. New contracts use local protocol fixtures and the pinned runtime; Python session.py corroborates callback precedence.",
+  :target-test-tree-absent? true,
+  :tree "bcffc055ac001ee252ce3aa227b1f81345244889"},
+ :schema
+ {:added-definitions
+  #{"McpOauthRecoveryCompletedData"
+    "McpOauthRecoveryCompletedEvent"
+    "McpOauthRecoveryCompletedOutcome"
+    "McpServerToolsLoadedData"
+    "McpServerToolsLoadedEvent"
+    "ModelCallRequestBodyCompressionFallback"
+    "RequestBodyCompressionDisabledData"
+    "RequestBodyCompressionDisabledEvent"},
+  :artifacts
+  {"schemas/README.md"
+   "3513f4b717e14fdb903611431fb9f63a283a0eecc3ff0e72d55f09259a404dd7",
+   "schemas/api.schema.json"
+   "596a1c4699be476e181f0f4e9a997337870fa7962de4e5bb2368e24806948723",
+   "schemas/session-events.schema.json"
+   "75b8c1a49cfa780be6c1613774efe74cd2da2b11277335512b66bea4f5cd5bdc",
+   "src/github/copilot_sdk/generated/coerce.clj"
+   "7a1828befbf45381f49f0c426dc383869016921fe18493ae137ea5e45b814ee4",
+   "src/github/copilot_sdk/generated/event_metadata.clj"
+   "4800c284e656f2db13512baabe661f8c265f9bf390d210ac60b202e812956b64",
+   "src/github/copilot_sdk/generated/event_specs.clj"
+   "7aef893926b8352fd2a276c40a84f5b93f8ceb0f53d78a9fd49c7e32351ec9db"},
+  :coercions-changed? false,
+  :internal-events #{"session.request_body_compression_disabled"},
+  :public-events
+  #{"mcp.oauth_recovery_completed" "session.mcp_server_tools_loaded"},
+  :runtime-pin "1.0.100-1"},
+ :stable-deltas
+ [{:authority
+   ["nodejs/src/types.ts:McpAuthRequest"
+    "nodejs/src/types.ts:McpAuthResult"
+    "nodejs/src/session.ts:CopilotSession._executeMcpAuthAndRespond"],
+   :builders #{:create :create-channel :join :resume :resume-channel},
+   :classification :stable-public,
+   :configuration-impact :none,
+   :docs #{"doc/mcp/overview.md" "doc/reference/API.md"},
+   :examples
+   #{"doc/mcp/overview.md#interactive-oauth"
+     "doc/reference/API.md#mcp-oauth-handler"},
+   :fdefs #{github.copilot-sdk.session/handle-mcp-auth-request!},
+   :id :mcp/runtime-refresh,
+   :idiom
+   {:request :runtime-refresh-supported,
+    :result {:kind :runtime-refresh}},
+   :proof-states
+   #{:absent
+     :cancellation-precedence
+     :channel-result
+     :closed-channel
+     :empty-token
+     :exception
+     :false
+     :nil-invalid
+     :non-string-token
+     :token-precedence
+     :true},
+   :semantics
+   ["Explicit cancellation wins over a token; a nonempty string token wins over handoff."
+    "Only exact true advertises handoff; missing and false preserve legacy cancellation."
+    "Keep bare-token maps, omit nil optional token fields, preserve empty token-type and zero expires-in."
+    "Existing callback worker and channel result handling are reused; no grant storage or reconnect runs in the SDK."],
+   :specs
+   #{:github.copilot-sdk.specs/mcp.oauth_required-data
+     :github.copilot-sdk.specs/runtime-refresh-supported},
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-100-1-test/oauth-refresh-capability-is-optional-non-null-event-data
+     github.copilot-sdk.integration.upstream-1-0-100-1-test/oauth-response-precedence-and-capability-gating-in-every-builder},
+   :wire
+   {:absent-means :unsupported,
+    :kind "runtimeRefresh",
+    :request "runtimeRefreshSupported",
+    :response "session.mcp.oauth.handlePendingRequest"}}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:McpOauthRecoveryCompletedEvent"
+    "nodejs/src/generated/session-events.ts:McpOauthRecoveryCompletedData"
+    "nodejs/src/generated/session-events.ts:McpOauthRecoveryCompletedOutcome"],
+   :builders #{:history :live-notification},
+   :classification :stable-public,
+   :configuration-impact :none,
+   :docs #{"doc/mcp/overview.md" "doc/reference/API.md"},
+   :examples
+   #{"doc/reference/API.md#mcp-oauth-handler"
+     "examples/session_events.clj"},
+   :fdefs
+   #{github.copilot-sdk.session/get-messages
+     github.copilot-sdk.session/subscribe-events},
+   :id :mcp/recovery-completion,
+   :idiom
+   {:event :copilot/mcp.oauth_recovery_completed,
+    :fields #{:outcome :request-id :server-name}},
+   :proof-states
+   #{:all-outcomes
+     :empty-strings
+     :future-fields
+     :history
+     :invalid-outcome
+     :live
+     :nil-invalid
+     :required-fields},
+   :semantics
+   ["Acceptance is not renewal, reconnect, or invocation completion."
+    "Existing mcp.oauth_completed emits token/cancelled at an accepted handoff's terminal outcome."
+    "The runtime owns cancellation and grant-storage settlement; no SDK retry or artificial completion."],
+   :specs
+   #{:github.copilot-sdk.specs/mcp-oauth-recovery-outcome
+     :github.copilot-sdk.specs/mcp.oauth_recovery_completed-data},
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-100-1-test/mcp-events-preserve-payloads-and-ephemeral-status
+     github.copilot-sdk.integration.upstream-1-0-100-1-test/new-mcp-events-have-open-typed-payloads},
+   :wire
+   {:event "mcp.oauth_recovery_completed",
+    :fields #{"outcome" "requestId" "serverName"},
+    :outcomes #{"cancelled" "failed" "succeeded"},
+    :persisted? true}}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:McpServerToolsLoadedEvent"
+    "nodejs/src/generated/session-events.ts:McpServerToolsLoadedData"],
+   :builders #{:live-notification},
+   :classification :stable-public,
+   :configuration-impact :none,
+   :docs #{"doc/mcp/overview.md" "doc/reference/API.md"},
+   :examples
+   #{"doc/mcp/overview.md#tool-readiness"
+     "examples/session_events.clj"},
+   :fdefs
+   #{github.copilot-sdk.session/get-messages
+     github.copilot-sdk.session/subscribe-events},
+   :id :mcp/tool-readiness,
+   :idiom
+   {:event :copilot/session.mcp_server_tools_loaded,
+    :fields #{:server-name :tool-count}},
+   :proof-states
+   #{:ephemeral
+     :fraction-invalid
+     :future-fields
+     :integer
+     :nil-invalid
+     :not-in-history
+     :required-fields
+     :zero},
+   :semantics
+   ["Once per connection; cached snapshots may precede connected status."
+    "Integer toolCount follows the schema without inventing a lower bound."
+    "Live-only; no SDK synthesis of history or readiness ordering."],
+   :specs
+   #{:github.copilot-sdk.specs/session.mcp_server_tools_loaded-data
+     :github.copilot-sdk.specs/tool-count},
+   :tests
+   #{github.copilot-sdk.e2e-test/test-e2e-mcp-tools-loaded-is-live-only
+     github.copilot-sdk.integration.upstream-1-0-100-1-test/mcp-events-preserve-payloads-and-ephemeral-status
+     github.copilot-sdk.integration.upstream-1-0-100-1-test/new-mcp-events-have-open-typed-payloads},
+   :wire
+   {:ephemeral true,
+    :event "session.mcp_server_tools_loaded",
+    :fields #{"serverName" "toolCount"}}}
+  {:authority
+   ["nodejs/src/generated/session-events.ts:AssistantUsageData"
+    "nodejs/src/generated/session-events.ts:ModelCallFailureData"
+    "nodejs/src/generated/session-events.ts:ModelCallRequestBodyCompressionFallback"],
+   :builders #{:history :live-notification},
+   :classification :stable-public,
+   :configuration-impact :none,
+   :docs #{"doc/reference/API.md"},
+   :examples
+   #{"doc/reference/API.md#event-types" "examples/session_events.clj"},
+   :fdefs
+   #{github.copilot-sdk.session/get-messages
+     github.copilot-sdk.session/subscribe-events},
+   :id :events/compression-fallback,
+   :idiom
+   {:fields
+    #{:request-body-compression-fallback
+      :request-body-compression-fallback-from
+      :request-body-compression-rejected-status}},
+   :proof-states
+   #{:absent
+     :all-enums
+     :bounds
+     :empty-invalid
+     :fraction-invalid
+     :history
+     :live
+     :nil-invalid
+     :nonfinite-invalid
+     :zero},
+   :semantics
+   ["Optional non-null fields on both events, with exact string enums and integer bounds."
+    "Retried describes one uncompressed resend after HTTP 400/415; disabled describes retained session state."
+    "No cross-field constraints or compression policy are invented by the SDK."],
+   :specs
+   #{:github.copilot-sdk.specs/request-body-compression-fallback
+     :github.copilot-sdk.specs/request-body-compression-fallback-from
+     :github.copilot-sdk.specs/request-body-compression-rejected-status},
+   :tests
+   #{github.copilot-sdk.integration.upstream-1-0-100-1-test/compression-diagnostics-have-exact-optional-contracts
+     github.copilot-sdk.integration.upstream-1-0-100-1-test/compression-diagnostics-preserve-omission-and-values-live-and-in-history},
+   :wire
+   {:encoding #{"gzip" "identity" "zstd"},
+    :fallback #{"disabled" "retried"},
+    :fields
+    #{"requestBodyCompressionFallback"
+      "requestBodyCompressionFallbackFrom"
+      "requestBodyCompressionRejectedStatus"},
+    :status-range [0 999]}}
+  {:authority
+   ["docs/features/hooks.md:Repository hooks from additional directories"
+    "nodejs/src/types.ts:SessionConfigBase.additionalDirectories"
+    "nodejs/src/types.ts:SessionConfigBase.enableFileHooks"
+    "nodejs/src/client.ts:CopilotClient.createSession"
+    "nodejs/src/client.ts:CopilotClient.resumeSession"],
+   :builders #{:cold-resume :create :existing-join},
+   :classification :stable-public,
+   :configuration-impact :existing-options,
+   :docs #{"doc/reference/API.md"},
+   :examples #{"doc/reference/API.md#session-hooks"},
+   :fdefs
+   #{github.copilot-sdk.client/create-session
+     github.copilot-sdk.client/join-session
+     github.copilot-sdk.client/resume-session},
+   :id :hooks/startup-directory-trust,
+   :idiom {:fields #{:additional-directories :enable-file-hooks}},
+   :proof-states
+   #{:cold-resume-with-roots
+     :cold-resume-without-roots
+     :containing-git-root
+     :false
+     :omitted-gate
+     :true},
+   :semantics
+   ["Startup roots authorize hooks at containing Git roots; no later file grant extends authorization."
+    "Cold resume must resupply roots. False disables repository hooks independently of explicit roots/callbacks."
+    "DISABLE_ADDITIONAL_DIRECTORY_HOOKS=true captures primary-only scope at startup."
+    "SessionOpenOptions now declares enableFileHooks already sent by unchanged public builders."],
+   :specs
+   #{:github.copilot-sdk.specs/additional-directories
+     :github.copilot-sdk.specs/enable-file-hooks},
+   :tests
+   #{github.copilot-sdk.e2e-test/test-e2e-additional-directory-repository-hooks},
+   :wire
+   {:fields #{"additionalDirectories" "enableFileHooks"},
+    :new-builder-fields #{}}}],
+ :target-public-surface
+ {:builder-review
+  {:create
+   {:authority "CopilotClient.createSession",
+    :handler-field "onMcpAuthRequest",
+    :interest :after-create},
+   :join
+   {:authority "joinSession -> resumeSessionForExtension",
+    :excluded-options
+    #{"extensionSdkPath" "imageGeneration" "skillProvider"},
+    :handler-field "onMcpAuthRequest",
+    :interest :before-resume},
+   :resume
+   {:authority "CopilotClient.resumeSession",
+    :handler-field "onMcpAuthRequest",
+    :interest :before-resume}},
+  :classes
+  {:client
+   {:added #{},
+    :class-name "CopilotClient",
+    :classification :stable-public,
+    :fields #{},
+    :fingerprint
+    [22
+     "99a26a2d6e0e3f0f7c2ccbc5f24586a052dd7ad17ef171e79847f8a228692030"],
+    :path "nodejs/src/client.ts",
+    :removed #{},
+    :signatures
+    #{"async [Symbol.asyncDispose](): Promise<void>"
+      "async createSession(config: SessionConfig): Promise<CopilotSession>"
+      "async deleteSession(sessionId: string): Promise<void>"
+      "async forceStop(): Promise<void>"
+      "async getAuthStatus(): Promise<GetAuthStatusResponse>"
+      "async getForegroundSessionId(): Promise<string | undefined>"
+      "async getLastSessionId(): Promise<string | undefined>"
+      "async getSessionMetadata(sessionId: string): Promise<SessionMetadata | undefined>"
+      "async getStatus(): Promise<GetStatusResponse>"
+      "async listModels(): Promise<ModelInfo[]>"
+      "async listSessions(filter?: SessionListFilter): Promise<SessionMetadata[]>"
+      "async ping(message?: string): Promise<{ message: string; timestamp: string; protocolVersion?: number }>"
+      "async resumeSession(sessionId: string, config: ResumeSessionConfig): Promise<CopilotSession>"
+      "async setForegroundSessionId(sessionId: string): Promise<void>"
+      "async start(): Promise<void>"
+      "async startAhpHost(options: AhpHostOptions): Promise<AhpHost>"
+      "async stop(): Promise<Error[]>"
+      "constructor(options: CopilotClientOptions = {})"
+      "get rpc(): ReturnType<typeof createServerRpc>"
+      "onLifecycle(handler: SessionLifecycleHandler): () => void"
+      "onLifecycle<K extends SessionLifecycleEventType>(eventType: K, handler: TypedSessionLifecycleHandler<K>): () => void"
+      "onLifecycle<K extends SessionLifecycleEventType>(eventTypeOrHandler: K | SessionLifecycleHandler, handler?: TypedSessionLifecycleHandler<K>): () => void"}},
+   :host
+   {:added #{},
+    :class-name "AhpHost",
+    :classification :experimental,
+    :fields
+    #{"readonly environmentId: string | undefined"
+      "readonly hostId: string"
+      "readonly pid: number | undefined"
+      "readonly token: string | undefined"
+      "readonly url: string | undefined"},
+    :fingerprint
+    [5
+     "89d14eabc61053771bbca63ad13c0fb893b74dda53ed11a987c03ee210ab8c53"],
+    :path "nodejs/src/host.ts",
+    :removed #{},
+    :signatures
+    #{"async [Symbol.asyncDispose](): Promise<void>"
+      "dispose(): Promise<void>"
+      "listSessions(): Promise<HostListSessionsResult>"
+      "publishSession(sessionId: string): Promise<HostPublishSessionResult>"
+      "unpublishSession(sessionId: string): Promise<HostUnpublishSessionResult>"}},
+   :session
+   {:added #{},
+    :class-name "CopilotSession",
+    :classification :stable-public,
+    :fields
+    #{"clientSessionApis: ClientSessionApiHandlers"
+      "public readonly sessionId: string"
+      "readonly workflow: SessionWorkflowApi"},
+    :fingerprint
+    [24
+     "23b083f5d3694a6e7766afd572529fa56f82e91e085d76e18950e984f32db98c"],
+    :path "nodejs/src/session.ts",
+    :removed #{},
+    :signatures
+    #{"async [Symbol.asyncDispose](): Promise<void>"
+      "async abort(): Promise<void>"
+      "async disconnect(): Promise<void>"
+      "async getEvents(): Promise<SessionEvent[]>"
+      "async log(message: string, options?: { level?: \"info\" | \"warning\" | \"error\"; ephemeral?: boolean }): Promise<void>"
+      "async send(options: MessageOptions): Promise<string>"
+      "async send(optionsOrPrompt: MessageOptions | string): Promise<string>"
+      "async send(prompt: string): Promise<string>"
+      "async sendAndWait(options: MessageOptions, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+      "async sendAndWait(optionsOrPrompt: MessageOptions | string, schemaOrTimeout?: ResponseSchema | number, timeout?: number): Promise<unknown>"
+      "async sendAndWait(prompt: string, timeout?: number): Promise<AssistantMessageEvent | undefined>"
+      "async sendAndWait<TResult>(options: MessageOptions | string, responseSchema: ResponseSchema<TResult>, timeout?: number): Promise<TResult>"
+      "async setAutoTier(autoTier: AutoTier | null): Promise<ModelSwitchAutoTierResult>"
+      "async setModel(model: string, options?: { reasoningEffort?: ReasoningEffort; reasoningSummary?: ReasoningSummary; contextTier?: ContextTier; modelCapabilities?: ModelCapabilitiesOverride; autoTier?: AutoTier | null; }): Promise<void>"
+      "async setTools(tools: Tool[]): Promise<void>"
+      "get capabilities(): SessionCapabilities"
+      "get openCanvases(): OpenCanvasInstance[]"
+      "get rpc(): ReturnType<typeof createSessionRpc>"
+      "get transcriptRecovery(): TranscriptRecovery | undefined"
+      "get ui(): SessionUiApi"
+      "get workspacePath(): string | undefined"
+      "on(handler: SessionEventHandler): () => void"
+      "on<K extends SessionEventType>(eventType: K, handler: TypedSessionEventHandler<K>): () => void"
+      "on<K extends SessionEventType>(eventTypeOrHandler: K | SessionEventHandler, handler?: TypedSessionEventHandler<K>): () => void"}}},
+  :event-field-classifications
+  {"AssistantUsageData"
+   {"providerType" :internal,
+    "requestBodyCompressionFallback" :stable-public,
+    "requestBodyCompressionFallbackFrom" :stable-public,
+    "requestBodyCompressionRejectedStatus" :stable-public},
+   "McpOauthRequiredData" {"runtimeRefreshSupported" :stable-public},
+   "ModelCallFailureData"
+   {"providerType" :internal,
+    "requestBodyCompressionFallback" :stable-public,
+    "requestBodyCompressionFallbackFrom" :stable-public,
+    "requestBodyCompressionRejectedStatus" :stable-public}},
+  :event-field-deltas
+  {"AssistantUsageData"
+   {:added
+    #{"providerType"
+      "requestBodyCompressionFallback"
+      "requestBodyCompressionFallbackFrom"
+      "requestBodyCompressionRejectedStatus"},
+    :removed #{}},
+   "McpOauthRecoveryCompletedData"
+   {:added #{"outcome" "requestId" "serverName"}, :removed #{}},
+   "McpOauthRecoveryCompletedEvent"
+   {:added
+    #{"agentId" "data" "ephemeral" "id" "parentId" "timestamp" "type"},
+    :removed #{}},
+   "McpOauthRequiredData"
+   {:added #{"runtimeRefreshSupported"}, :removed #{}},
+   "McpServerToolsLoadedData"
+   {:added #{"serverName" "toolCount"}, :removed #{}},
+   "McpServerToolsLoadedEvent"
+   {:added
+    #{"agentId" "data" "ephemeral" "id" "parentId" "timestamp" "type"},
+    :removed #{}},
+   "ModelCallFailureData"
+   {:added
+    #{"providerType"
+      "requestBodyCompressionFallback"
+      "requestBodyCompressionFallbackFrom"
+      "requestBodyCompressionRejectedStatus"},
+    :removed #{}}},
+  :interface-field-deltas
+  {"McpAuthRequest"
+   {:added #{"runtimeRefreshSupported"}, :removed #{}}},
+  :interfaces-fingerprint
+  [113
+   "fade2661191760165aa0d18993406c7837558946a2a253845b11e3558c3ea1dd"],
+  :modules
+  {"nodejs/src/canvas.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [9
+     "f4f4eca176099939645b76c30d1ab46468766d58c2600371ef9a68b029887a9b"],
+    :removed {}},
+   "nodejs/src/cliVersion.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "e6042134f27f7a648f66f14564fee077dbc0dc1b1f108bc5f027c0f2dcabf3f5"],
+    :removed {}},
+   "nodejs/src/client.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [1
+     "a5431bbd92ac780f6179f17f47c4e9a9227510a9f3682f56a6893c7db8d90dba"],
+    :removed {}},
+   "nodejs/src/copilotRequestHandler.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [6
+     "c93bb9e5250504432640afb2521135dcccfc13090190aac28fc689d1f3751766"],
+    :removed {}},
+   "nodejs/src/extension.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [40
+     "d422309d43c0652dfe081e6c26f3b5bf10cb7821639a8cea1567efadd0077cda"],
+    :removed {}},
+   "nodejs/src/ffiRuntimeHost.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [1
+     "fea0bbe2fd3afeb4e248f3d6bff0345a005350debb99f3f57768d026a77774c1"],
+    :removed {}},
+   "nodejs/src/generated/rpc.ts"
+   {:added
+    {:experimental
+     #{"AzureMlAcquireFamilyRequest"
+       "AzureMlAcquireFamilyResult"
+       "AzureMlCancelRequest"
+       "AzureMlCancelResult"
+       "AzureMlCatalogRequest"
+       "AzureMlCatalogResult"
+       "AzureMlCatalogRetryMode"
+       "AzureMlCatalogWarning"
+       "AzureMlDiscardRequest"
+       "AzureMlDiscardResult"
+       "AzureMlDownloadIdRequest"
+       "AzureMlDownloadRequest"
+       "AzureMlDownloadResult"
+       "AzureMlDownloadStatus"
+       "AzureMlFamilyLeaseResult"
+       "AzureMlFamilyReleaseRequest"
+       "AzureMlFamilyRequest"
+       "AzureMlLatestRequest"
+       "AzureMlLatestResult"
+       "AzureMlLicense"
+       "AzureMlModel"
+       "AzureMlProfile"
+       "AzureMlRegistry"
+       "AzureMlReleaseFamilyRequest"
+       "AzureMlReleaseFamilyResult"
+       "AzureMlResolveRequest"
+       "AzureMlResolveResult"
+       "AzureMlStatusRequest"
+       "AzureMlStatusResult"}},
+    :changed
+    {:experimental
+     #{"CatalogCapability"
+       "CatalogInvalidRequestField"
+       "CatalogSearchRequest"
+       "EnvironmentsListResult"
+       "McpConfiguredServerState"
+       "McpOauthPendingRequestResponse"
+       "SessionOpenOptions"
+       "SkillProviderDescriptor"}},
+    :fingerprint
+    [1886
+     "876fb02beade878fc9b77e2ff7f1ee427add3321c297582a4a032c3eb2d15dce"],
+    :removed {}},
+   "nodejs/src/generated/session-events.ts"
+   {:added
+    {:stable-public
+     #{"McpOauthRecoveryCompletedData"
+       "McpOauthRecoveryCompletedEvent"
+       "McpOauthRecoveryCompletedOutcome"
+       "McpServerToolsLoadedData"
+       "McpServerToolsLoadedEvent"
+       "ModelCallRequestBodyCompressionFallback"}},
+    :changed
+    {:stable-public
+     #{"AssistantUsageData"
+       "McpOauthRequiredData"
+       "ModelCallFailureData"
+       "SessionEvent"}},
+    :fingerprint
+    [630
+     "d281407d00594726a561cf9f0871abde8f9ebc4c99b8064b5b6b0bb0dfe432ce"],
+    :removed {}},
+   "nodejs/src/host.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [5
+     "0c64549753490967d9b9feaba3e48852c868da9b5e2664a4be5f548071e79a77"],
+    :removed {}},
+   "nodejs/src/index.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [253
+     "7495ac172b2954f9e9bf4a6e49d8aa3676929b392d4b6f98395136893ffd795f"],
+    :removed {}},
+   "nodejs/src/installationConfirmation.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [3
+     "abd074760790b258b93ed3c153d7e4dd6d5a1bbeaede37cd3a14deccc91e876e"],
+    :removed {}},
+   "nodejs/src/runtimeArtifacts.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [11
+     "fd2488d89925326e38efdd0b47ddaf8b3b57c9d9229eb097f6ec38ca15bc4921"],
+    :removed {}},
+   "nodejs/src/schema.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [3
+     "dd598ca6081134e447dfcdf10a79286380beca166c09199d8f84a537e5430b15"],
+    :removed {}},
+   "nodejs/src/sdkProtocolVersion.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "42d26b4df33f9c866247ee6f00931b63c055b4510fa7b89293cf765e7f539b7b"],
+    :removed {}},
+   "nodejs/src/session.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "6bdbce67e395f534e6b0d90794d85094b60ba322d04ff7dbb74f1ac7d4b03278"],
+    :removed {}},
+   "nodejs/src/sessionFsProvider.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [10
+     "fda7afb30d8f2a19837a65093efa5d12644668754a1374749a4dfcbf3e56b48a"],
+    :removed {}},
+   "nodejs/src/telemetry.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [1
+     "4fa0ad2e0638ed4cd3e40e836bd1df43ab7d3c980ad228dcfbd7d6e85ec29b1c"],
+    :removed {}},
+   "nodejs/src/toolSet.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [2
+     "99ef0910d8d65bfb0074e664122cd7d9642aa6c89d8d476bb26d0a9ce1d748ca"],
+    :removed {}},
+   "nodejs/src/types.ts"
+   {:added {},
+    :changed {:stable-public #{"McpAuthRequest" "McpAuthResult"}},
+    :fingerprint
+    [250
+     "4356be9ab6fe3f4c729fec30853e5a6c9784672a9fe12ac6d079e468ab816343"],
+    :removed {}},
+   "nodejs/src/workflow.ts"
+   {:added {},
+    :changed {},
+    :fingerprint
+    [31
+     "3f5bb32de12c333c6a1dd2f08ef617a76341306ad353626f19f0d4b92bd9c823"],
+    :removed {}}},
+  :package-root
+  {:added
+   #{"McpOauthRecoveryCompletedData"
+     "McpOauthRecoveryCompletedEvent"
+     "McpOauthRecoveryCompletedOutcome"
+     "McpServerToolsLoadedData"
+     "McpServerToolsLoadedEvent"
+     "ModelCallRequestBodyCompressionFallback"},
+   :fingerprint
+   [873
+    "4f4cbb293bdc295f4a1b0977125bc82a0b11c89cefb2bd01e481c14c7e61be50"],
+   :removed #{},
+   :star-exports #{"./generated/session-events.js"}},
+  :source-blobs
+  {"nodejs/package.json"
+   ["838b474319ca5073ed02aed5c522841854d1fc49"
+    "f654ddf4657026da1aee0453c0c5ac6b6a3bcd68"],
+   "nodejs/src/canvas.ts"
+   ["b7c2254c4f3d9c96946d0947c73c68eed50dd713"
+    "b7c2254c4f3d9c96946d0947c73c68eed50dd713"],
+   "nodejs/src/cliVersion.ts"
+   ["140c6b1919e5654b6ee980d933bc0a85e01e89c7"
+    "a3e9b450a4a1c0eac9276bdff75fdbceba2db01e"],
+   "nodejs/src/client.ts"
+   ["3b7f86344ef7d0a9de28b8f38b061d6ced7e3bd0"
+    "3b7f86344ef7d0a9de28b8f38b061d6ced7e3bd0"],
+   "nodejs/src/copilotRequestHandler.ts"
+   ["99d9102a0d7717fd5e34c545bd656e47675aec63"
+    "99d9102a0d7717fd5e34c545bd656e47675aec63"],
+   "nodejs/src/extension.ts"
+   ["f6adc32745128af9c42cf16041f0d09ae0384653"
+    "f6adc32745128af9c42cf16041f0d09ae0384653"],
+   "nodejs/src/ffiRuntimeHost.ts"
+   ["947417871a284d6d679e64c253a3ce8fc1bd280b"
+    "947417871a284d6d679e64c253a3ce8fc1bd280b"],
+   "nodejs/src/generated/rpc.ts"
+   ["de7d3790620eea7ed70174e76caaf23f366e6e80"
+    "6948383a8394b77d7cb2f7b4ffd879bc01006b05"],
+   "nodejs/src/generated/session-events.ts"
+   ["a34b3a3a138d9d51f2f9a3b1f62ed08631300c4d"
+    "04289b46d721ed9ed860b7b9086ae370d64e1a11"],
+   "nodejs/src/host.ts"
+   ["afea079934b75481453e877a9fa9874625f1c3a2"
+    "afea079934b75481453e877a9fa9874625f1c3a2"],
+   "nodejs/src/index.ts"
+   ["e95b5362ded29d5a57c6f4a91bf8a9dac2401e1b"
+    "e95b5362ded29d5a57c6f4a91bf8a9dac2401e1b"],
+   "nodejs/src/installationConfirmation.ts"
+   ["897c81915f4a398a66bfaffe9d93b0da09955767"
+    "897c81915f4a398a66bfaffe9d93b0da09955767"],
+   "nodejs/src/runtimeArtifacts.ts"
+   ["9f749486ac51f8c9c40a248cd87f9bd19edaff00"
+    "9f749486ac51f8c9c40a248cd87f9bd19edaff00"],
+   "nodejs/src/schema.ts"
+   ["29d94267588a8835d0b0db0623fb6d5ac0508721"
+    "29d94267588a8835d0b0db0623fb6d5ac0508721"],
+   "nodejs/src/sdkProtocolVersion.ts"
+   ["0e5314374ab92487f2714a615181d68b32ac9e69"
+    "0e5314374ab92487f2714a615181d68b32ac9e69"],
+   "nodejs/src/session.ts"
+   ["61c793907c3730e4a47f519ff621d0595395a9d7"
+    "36909d96914b1793980fe6af69cbd0df34c6b324"],
+   "nodejs/src/sessionFsProvider.ts"
+   ["ee9908682da545908cabb3ed9861fe25fd05c903"
+    "ee9908682da545908cabb3ed9861fe25fd05c903"],
+   "nodejs/src/telemetry.ts"
+   ["f9d331678111330ec259237a2940085b5b2888aa"
+    "f9d331678111330ec259237a2940085b5b2888aa"],
+   "nodejs/src/toolSet.ts"
+   ["559e9234e5b178036d88a7045a632bd16a97f534"
+    "559e9234e5b178036d88a7045a632bd16a97f534"],
+   "nodejs/src/types.ts"
+   ["528fc972914a10e9ced01d7268d5d49970a1a37f"
+    "dac00b3bb11ab41360dac8184d31d6f2a0db83d5"],
+   "nodejs/src/workflow.ts"
+   ["f7c0abe2d1b819154d284132a7b83f98fecb6c78"
+    "f7c0abe2d1b819154d284132a7b83f98fecb6c78"]},
+  :trees
+  {"nodejs/src"
+   ["eb4b60d15d7d3be89e7fe3e85b524f9357a1bb89"
+    "d7376f49d9fc818cd920bb82531790e76b7fad44"],
+   "nodejs/src/generated"
+   ["adf5ccbe67efa0d100973e464842a0c97b6fde5c"
+    "e188641eedf0c55fda34dede2004fc7809ed6582"],
+   "nodejs/test" [nil nil]},
+  :unchanged-authority-paths
+  #{"nodejs/src/canvas.ts"
+    "nodejs/src/client.ts"
+    "nodejs/src/copilotRequestHandler.ts"
+    "nodejs/src/extension.ts"
+    "nodejs/src/ffiRuntimeHost.ts"
+    "nodejs/src/host.ts"
+    "nodejs/src/index.ts"
+    "nodejs/src/installationConfirmation.ts"
+    "nodejs/src/runtimeArtifacts.ts"
+    "nodejs/src/schema.ts"
+    "nodejs/src/sdkProtocolVersion.ts"
+    "nodejs/src/sessionFsProvider.ts"
+    "nodejs/src/telemetry.ts"
+    "nodejs/src/toolSet.ts"
+    "nodejs/src/workflow.ts"}},
+ :unclassified-deltas [],
+ :upstream
+ {:base-commit "404304416ac5358651e3877a33bc9e8f4e482162",
+  :commit-count 3,
+  :commits-sha256
+  "f115f7ec0eb70a246a8750f9978ef41bae5558828409368d059542f18ae545c0",
+  :hash-format :newline-joined-without-trailing-newline,
+  :release-tag
+  {:commit "b96cd2b54f7eb87458fd50f485a751c712e88f62",
+   :name "v1.0.23-preview.5"},
+  :runtime-version "1.0.100-1",
+  :target-commit "b96cd2b54f7eb87458fd50f485a751c712e88f62",
+  :target-package-version "0.0.0-dev"},
+ :version {:changed? false, :release-required? false, :sdk "1.0.16.0"}}

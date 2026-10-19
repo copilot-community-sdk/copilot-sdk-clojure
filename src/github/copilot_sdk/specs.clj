@@ -809,13 +809,9 @@
 (s/def ::excluded-tools (s/coll-of string?))
 (s/def ::streaming? boolean?)
 (s/def ::on-permission-request fn?)
-;; MCP OAuth lifecycle (upstream PR #1669). The :on-mcp-auth-request handler is
-;; a fn receiving an McpAuthRequest (the `mcp.oauth_required` event data,
-;; kebab-cased: {:request-id :server-name :server-url :reason ...}) and a
-;; context map {:session-id ...}. It returns an McpAuthResult — either
-;;   {:kind :token :access-token "..." :token-type "Bearer"? :expires-in 3600?}
-;; or {:kind :cancelled}. Returning nil or throwing also cancels the request.
 (s/def ::on-mcp-auth-request fn?)
+(s/def ::runtime-refresh-supported boolean?)
+(s/def ::mcp-oauth-recovery-outcome #{"succeeded" "cancelled" "failed"})
 (s/def ::mcp-auth-static-client-config
   (closed-keys
    (s/and
@@ -828,13 +824,18 @@
    #{:client-id :client-secret :grant-type :public-client :scope}))
 (s/def ::mcp.oauth_required-data
   (s/and
-   map?
+   (s/keys :opt-un [::runtime-refresh-supported])
    #(required-value? % :request-id string?)
    #(required-value? % :server-name string?)
    #(required-value? % :server-url string?)
    #(required-value? % :reason #{"initial" "refresh" "reauth" "upscope"})
    #(optional-field? % :static-client-config
                      (partial s/valid? ::mcp-auth-static-client-config))))
+(s/def ::mcp.oauth_recovery_completed-data
+  (s/and map?
+         #(required-value? % :request-id string?)
+         #(required-value? % :server-name string?)
+         #(required-value? % :outcome (partial s/valid? ::mcp-oauth-recovery-outcome))))
 (s/def ::config-dir ::non-blank-string)
 ;; Upstream PR #1482 (post-v1.0.0-beta.4): `configDir` was renamed to
 ;; `configDirectory` in the official TypeScript SDK API. The wire stays
@@ -1924,7 +1925,7 @@
     :copilot/elicitation.requested :copilot/elicitation.completed
     :copilot/external_tool.requested :copilot/external_tool.completed
     ;; MCP OAuth events
-    :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+    :copilot/mcp.oauth_required :copilot/mcp.oauth_completed :copilot/mcp.oauth_recovery_completed
     ;; MCP dynamic-header refresh lifecycle
     :copilot/mcp.headers_refresh_required
     :copilot/mcp.headers_refresh_completed
@@ -1940,6 +1941,7 @@
     :copilot/session.tools_updated :copilot/session.background_tasks_changed
     :copilot/session.skills_loaded :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
+    :copilot/session.mcp_server_tools_loaded
     :copilot/session.mcp_server_removed
     :copilot/session.mcp_server_needs_reconnect
     :copilot/session.extensions_loaded
@@ -2320,6 +2322,9 @@
 (s/def ::request-body-bytes nat-int?)
 (s/def ::request-body-wire-bytes nat-int?)
 (s/def ::request-body-encoding #{"identity" "gzip" "zstd"})
+(s/def ::request-body-compression-fallback #{"retried" "disabled"})
+(s/def ::request-body-compression-fallback-from ::request-body-encoding)
+(s/def ::request-body-compression-rejected-status (s/and nat-int? #(<= % 999)))
 (s/def ::retry-attempt nat-int?)
 (s/def ::websocket-fallback-after-ms nat-int?)
 (s/def ::websocket-fallback-close-code (s/and nat-int? #(<= % 4999)))
@@ -2354,6 +2359,8 @@
                     ::content-filter-triggered ::finish-reason ::rte
                     ::model-display-name ::ai-credits-status ::request-body-bytes
                     ::request-body-wire-bytes ::request-body-encoding
+                    ::request-body-compression-fallback ::request-body-compression-fallback-from
+                    ::request-body-compression-rejected-status
                     ::websocket-fallback-after-ms ::websocket-fallback-close-code
                     ::websocket-fallback-error-kind ::websocket-fallback-reason
                     ::websocket-fallback-reconnect-attempted ::websocket-fallback-started-this-call
@@ -2958,6 +2965,9 @@
                  :opt-un [::config-source ::error-classification])
          #(optional-field? % :error string?)
          #(s/valid? ::mcp-server-status (:status %))))
+(s/def ::tool-count integer?)
+(s/def ::session.mcp_server_tools_loaded-data
+  (s/keys :req-un [::server-name ::tool-count]))
 (s/def ::session.mcp_server_removed-data
   (s/keys :req-un [::server-name]))
 (s/def ::session.mcp_server_needs_reconnect-data
@@ -3003,6 +3013,8 @@
   (s/and (s/keys :req-un [::source]
                  :opt-un [::interaction-type ::parent-tool-call-id ::byok-kind
                           ::request-body-bytes ::request-body-wire-bytes ::request-body-encoding
+                          ::request-body-compression-fallback ::request-body-compression-fallback-from
+                          ::request-body-compression-rejected-status
                           ::retry-attempt ::websocket-fallback-after-ms ::websocket-fallback-close-code
                           ::websocket-fallback-error-kind ::websocket-fallback-reason
                           ::websocket-fallback-reconnect-attempted ::websocket-fallback-started-this-call
