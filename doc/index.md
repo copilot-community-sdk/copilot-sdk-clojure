@@ -42,6 +42,7 @@ Quick links to the major SDK capabilities (see the [API Reference](reference/API
 
 ## Architecture Decisions
 
+- [ADR: Preserve MCP recovery and readiness contracts](adr/2026-10-19-mcp-recovery-and-readiness.md) -- Capability-gated OAuth renewal, terminal outcomes, tool readiness, and compression diagnostics.
 - [ADR: Preserve session, hook, and compaction contracts](adr/2026-10-16-session-hooks-and-compaction.md) -- Session naming/discovery, callback context, and stable event metadata without new experimental authority.
 - [ADR: Preserve transport diagnostics and opaque policy](adr/2026-10-12-transport-diagnostics-and-opaque-policy.md) -- Request compression, WebSocket fallback attribution, and passive policy/usage metadata.
 - [ADR: Preserve extensible identifiers and policy boundaries](adr/2026-10-09-extensible-routing-and-event-contracts.md) -- Dynamic Auto tiers, managed policy, write previews, accounting metadata, and bounded generated validators.

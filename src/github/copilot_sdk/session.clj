@@ -1947,32 +1947,39 @@
     :io)))
 
 (defn- mcp-auth-result->wire
-  "Map an McpAuthResult returned by an :on-mcp-auth-request handler to the wire
-   `result` shape for session.mcp.oauth.handlePendingRequest (upstream PR #1669).
-  A map carrying a non-nil :access-token yields {:kind \"token\" ...}; anything
-  else (nil, {:access-token nil}, {:kind :cancelled}, or a malformed value)
-  yields {:kind \"cancelled\"}. Token fields stay kebab-cased — util/clj->wire
-  camelCases the keys when the enclosing RPC params are converted, and the
-  string :kind value is preserved."
-  [result]
-  (if (and (map? result) (some? (:access-token result)))
+  [result request]
+  (cond
+    (or (nil? result) (= (:kind result) :cancelled))
+    {:kind "cancelled"}
+
+    (and (map? result) (string? (:access-token result)) (seq (:access-token result)))
     (cond-> {:kind "token" :access-token (:access-token result)}
       (some? (:token-type result)) (assoc :token-type (:token-type result))
       (some? (:expires-in result)) (assoc :expires-in (:expires-in result)))
-    {:kind "cancelled"}))
+
+    (= (:kind result) :runtime-refresh)
+    {:kind (if (true? (:runtime-refresh-supported request)) "runtimeRefresh" "cancelled")}
+
+    :else
+    (do
+      (log/warn "Invalid MCP OAuth handler result " {:request-id (:request-id request)})
+      {:kind "cancelled"})))
 
 (defn handle-mcp-auth-request!
-  "Handle an `mcp.oauth_required` MCP OAuth request (upstream PR #1669).
+  "Handle an `mcp.oauth_required` MCP OAuth request.
    Returns a channel yielding the wire `result` map for
    session.mcp.oauth.handlePendingRequest.
 
    The configured :on-mcp-auth-request handler is invoked with the idiomatic
    McpAuthRequest map (the event data — {:request-id :server-name :server-url
    :reason ...}) and a context map {:session-id ...}; it may return a channel.
-   A result carrying :access-token answers with a token; nil, {:kind
-   :cancelled}, or a thrown exception cancels the request (matching upstream's
-   error-swallowing behavior, so a transient handler failure never wedges the
-   pending request)."
+   Explicit {:kind :cancelled} takes precedence over any token. Otherwise a
+   nonempty string :access-token answers with a token, including bare-token
+   maps. {:kind :runtime-refresh} hands renewal to the runtime only when
+   :runtime-refresh-supported is true on the request. Omitted or false support
+   cancels that handoff; nil, malformed results, and handler errors also cancel.
+   Handoff acceptance is not completion: observe mcp.oauth_recovery_completed
+   for the terminal outcome, including reconnect."
   [client session-id request]
   (async/thread-call
    (fn []
@@ -1982,9 +1989,9 @@
          (try
            (let [result (handler request {:session-id session-id})
                  result (if (channel? result) (<!! result) result)]
-             (mcp-auth-result->wire result))
+             (mcp-auth-result->wire result request))
            (catch Exception e
-             (log/error "MCP auth handler error for session " session-id ": " (ex-message e))
+             (log/error e "MCP OAuth handler failed " {:session-id session-id})
              {:kind "cancelled"})))))
    :io))
 

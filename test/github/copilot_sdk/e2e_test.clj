@@ -9,9 +9,11 @@
   (:require [clojure.core.async :refer [alts!! timeout]]
             [clojure.data.json :as json]
             [clojure.java.io :as io]
+            [clojure.java.shell :as sh]
             [clojure.string :as str]
             [clojure.test :refer [deftest testing is use-fixtures]]
             [github.copilot-sdk :as sdk]
+            [github.copilot-sdk.integration.support :refer [await-value!]]
             [github.copilot-sdk.teardown :as teardown])
   (:import [com.sun.net.httpserver HttpHandler HttpServer]
            [java.net InetSocketAddress]
@@ -280,6 +282,110 @@
                 (is (= (last (str/split-lines content)) rewritten))
                 (is (not (str/includes? content "original")))))
            #(sdk/disconnect! session))))))))
+
+(deftest ^:e2e test-e2e-additional-directory-repository-hooks
+  (when-e2e
+   (let [root (.toFile
+               (Files/createTempDirectory
+                "copilot-sdk-hook-roots-"
+                (make-array java.nio.file.attribute.FileAttribute 0)))
+         project (io/file root "project")
+         repository (io/file root "additional")
+         nested (io/file repository "packages" "core")
+         hook (io/file repository ".github" "hooks" "fixture.json")
+         marker (str "ADDITIONAL_HOOK_" (random-uuid))]
+     (teardown/call-with-cleanup
+      (fn []
+        (.mkdirs project)
+        (.mkdirs nested)
+        (let [{:keys [exit err]} (sh/sh "git" "init" "--quiet" (.getPath repository))]
+          (when-not (zero? exit)
+            (throw (ex-info "Could not initialize hook fixture repository" {:exit exit :stderr err}))))
+        (io/make-parents hook)
+        (spit hook
+              (json/write-str
+               {:version 1
+                :hooks {"userPromptSubmitted"
+                        [{:type "command" :exec "node"
+                          :args ["-e" (str "process.stdout.write(JSON.stringify({modifiedPrompt:"
+                                           (json/write-str marker) "}));")]}]}}))
+        (call-with-capturing-provider
+         (fn [base-url requests]
+           (let [base {:working-directory (.getCanonicalPath project)
+                       :model "instruction-cache-fixture"
+                       :available-tools []
+                       :on-permission-request sdk/approve-all
+                       :enable-config-discovery true
+                       :provider {:provider-type :openai :base-url base-url :wire-api :completions}}
+                 extra {:additional-directories [(.getCanonicalPath nested)]}
+                 run-turn! (fn [session expected]
+                             (reset! requests [])
+                             (is (= (get-in (sdk/send-and-wait! session {:prompt "original"} 60000)
+                                            [:data :content])
+                                    "OK"))
+                             (is (= (count @requests) 1))
+                             (is (= (-> @requests first :messages last :content str/split-lines last)
+                                    expected)))]
+             (doseq [[config expected] [[extra marker]
+                                        [(assoc extra :enable-file-hooks true) marker]
+                                        [(assoc extra :enable-file-hooks false) "original"]]]
+               (let [session (sdk/create-session *e2e-client* (merge base config))]
+                 (teardown/call-with-cleanup
+                  #(run-turn! session expected)
+                  #(sdk/disconnect! session))))
+             (doseq [resupply? [false true]]
+               (let [seed (sdk/create-session *e2e-client* (merge base extra))
+                     id (sdk/session-id seed)]
+                 (teardown/call-with-cleanup
+                  #(run-turn! seed marker)
+                  #(sdk/disconnect! seed))
+                 (throw-cleanup-failures! "Failed to stop before hook cold resume"
+                                          (stop-client-failures :hook-client *e2e-client*))
+                 (sdk/start! *e2e-client*)
+                 (let [session (sdk/resume-session *e2e-client* id
+                                                   (merge base (when resupply? extra)))]
+                   (teardown/call-with-cleanup
+                    #(run-turn! session (if resupply? marker "original"))
+                    #(sdk/disconnect! session)))))))))
+      #(throw-cleanup-failures! "Failed to clean up repository hook fixtures"
+                                (delete-tree-failures :hook-roots root))))))
+
+(deftest ^:e2e test-e2e-mcp-tools-loaded-is-live-only
+  (when-e2e
+   (call-with-capturing-provider
+    (fn [base-url _]
+      (let [loaded (promise)
+            server-script
+            (str "require('readline').createInterface({input:process.stdin}).on('line',line=>{"
+                 "const r=JSON.parse(line);if(r.id===undefined)return;"
+                 "const result=r.method==='initialize'?"
+                 "{protocolVersion:'2024-11-05',capabilities:{tools:{}},serverInfo:{name:'fixture',version:'1'}}:"
+                 "r.method==='tools/list'?{tools:[{name:'fixture_tool',description:'Fixture',"
+                 "inputSchema:{type:'object',properties:{}}}]}:{};"
+                 "process.stdout.write(JSON.stringify({jsonrpc:'2.0',id:r.id,result})+'\\n');});")
+            session
+            (sdk/create-session
+             *e2e-client*
+             {:model "instruction-cache-fixture"
+              :available-tools ["mcp:*"]
+              :enable-config-discovery false
+              :provider {:provider-type :openai :base-url base-url :wire-api :completions}
+              :on-permission-request sdk/approve-all
+              :mcp-servers {"readiness-fixture" {:mcp-command "node" :mcp-args ["-e" server-script]
+                                                 :mcp-tools ["*"]}}
+              :on-event #(when (and (= (:type %) :copilot/session.mcp_server_tools_loaded)
+                                    (= (get-in % [:data :server-name]) "readiness-fixture"))
+                           (deliver loaded %))})]
+        (teardown/call-with-cleanup
+         #(do
+            (is (= (get-in (sdk/send-and-wait! session {:prompt "Reply OK."} 60000) [:data :content])
+                   "OK"))
+            (let [event (await-value! loaded "MCP tool readiness" 30000)]
+              (is (= (:data event) {:server-name "readiness-fixture" :tool-count 1}))
+              (is (true? (:ephemeral event)))
+              (is (not-any? (fn [event] (= (:type event) :copilot/session.mcp_server_tools_loaded))
+                            (sdk/get-messages session)))))
+         #(sdk/disconnect! session)))))))
 
 (deftest ^:e2e test-e2e-shell-output-and-automated-input
   (when-e2e

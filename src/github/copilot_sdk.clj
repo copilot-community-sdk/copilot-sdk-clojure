@@ -108,6 +108,7 @@
     :copilot/external_tool.completed
     :copilot/mcp.oauth_required
     :copilot/mcp.oauth_completed
+    :copilot/mcp.oauth_recovery_completed
     :copilot/command.queued
     :copilot/command.execute
     :copilot/command.completed
@@ -122,6 +123,7 @@
     :copilot/session.skills_loaded
     :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
+    :copilot/session.mcp_server_tools_loaded
     :copilot/session.mcp_server_removed
     :copilot/session.mcp_server_needs_reconnect
     :copilot/session.extensions_loaded
@@ -232,6 +234,7 @@
     :copilot/session.skills_loaded
     :copilot/session.mcp_servers_loaded
     :copilot/session.mcp_server_status_changed
+    :copilot/session.mcp_server_tools_loaded
     :copilot/session.mcp_server_removed
     :copilot/session.mcp_server_needs_reconnect
     :copilot/session.extensions_loaded
@@ -295,6 +298,7 @@
     :copilot/elicitation.requested :copilot/elicitation.completed
     :copilot/external_tool.requested :copilot/external_tool.completed
     :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+    :copilot/mcp.oauth_recovery_completed
     ;; v1.0.5-preview.0 sync (pinned schema 1.0.66-2): MCP dynamic-header refresh lifecycle.
     :copilot/mcp.headers_refresh_required :copilot/mcp.headers_refresh_completed
     :copilot/command.queued :copilot/command.execute :copilot/command.completed

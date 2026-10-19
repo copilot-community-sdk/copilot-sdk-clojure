@@ -351,6 +351,7 @@
     github.copilot-sdk.session/fleet-start! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :params clojure.core/map?) :ret clojure.core/map? :fn nil)
     github.copilot-sdk.session/get-current-model (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret :github.copilot-sdk.specs/model-id :fn nil)
     github.copilot-sdk.session/get-messages (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session) :ret (clojure.spec.alpha/coll-of clojure.core/map?) :fn nil)
+    github.copilot-sdk.session/handle-mcp-auth-request! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :session-id :github.copilot-sdk.specs/session-id :request :github.copilot-sdk.specs/mcp.oauth_required-data) :ret :github.copilot-sdk.specs/events-ch :fn nil)
     github.copilot-sdk.session/handle-pending-permission-request! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/request-id])) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/handle-pending-tool-call! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :session :github.copilot-sdk.specs/session :opts (clojure.spec.alpha/keys :req-un [:github.copilot-sdk.specs/request-id])) :ret clojure.core/any? :fn nil)
     github.copilot-sdk.session/handle-permission-request! (clojure.spec.alpha/fspec :args (clojure.spec.alpha/cat :client :github.copilot-sdk.specs/client :session-id :github.copilot-sdk.specs/session-id :request clojure.core/map? :prompt-context (clojure.spec.alpha/? (clojure.spec.alpha/map-of #{:prompt-request} :github.copilot-sdk.specs/permission-prompt-request))) :ret :github.copilot-sdk.specs/events-ch :fn nil)
@@ -796,6 +797,7 @@
     :github.copilot-sdk.specs/mcp-http-server
     :github.copilot-sdk.specs/mcp-loaded-server
     :github.copilot-sdk.specs/mcp-local-server
+    :github.copilot-sdk.specs/mcp-oauth-recovery-outcome
     :github.copilot-sdk.specs/mcp-oauth-token-storage
     :github.copilot-sdk.specs/mcp-remote-server
     :github.copilot-sdk.specs/mcp-server
@@ -811,6 +813,7 @@
     :github.copilot-sdk.specs/mcp-url
     :github.copilot-sdk.specs/mcp.headers_refresh_completed-data
     :github.copilot-sdk.specs/mcp.headers_refresh_required-data
+    :github.copilot-sdk.specs/mcp.oauth_recovery_completed-data
     :github.copilot-sdk.specs/mcp.oauth_required-data
     :github.copilot-sdk.specs/memory
     :github.copilot-sdk.specs/memory-action
@@ -993,6 +996,9 @@
     :github.copilot-sdk.specs/repo-nwo
     :github.copilot-sdk.specs/repository
     :github.copilot-sdk.specs/request-body-bytes
+    :github.copilot-sdk.specs/request-body-compression-fallback
+    :github.copilot-sdk.specs/request-body-compression-fallback-from
+    :github.copilot-sdk.specs/request-body-compression-rejected-status
     :github.copilot-sdk.specs/request-body-encoding
     :github.copilot-sdk.specs/request-body-wire-bytes
     :github.copilot-sdk.specs/request-count
@@ -1025,6 +1031,7 @@
     :github.copilot-sdk.specs/rte
     :github.copilot-sdk.specs/rules
     :github.copilot-sdk.specs/run-id
+    :github.copilot-sdk.specs/runtime-refresh-supported
     :github.copilot-sdk.specs/scope
     :github.copilot-sdk.specs/section-action
     :github.copilot-sdk.specs/section-override
@@ -1072,6 +1079,7 @@
     :github.copilot-sdk.specs/session.mcp_server_needs_reconnect-data
     :github.copilot-sdk.specs/session.mcp_server_removed-data
     :github.copilot-sdk.specs/session.mcp_server_status_changed-data
+    :github.copilot-sdk.specs/session.mcp_server_tools_loaded-data
     :github.copilot-sdk.specs/session.mcp_servers_loaded-data
     :github.copilot-sdk.specs/session.mode_changed-data
     :github.copilot-sdk.specs/session.mode_notice_delivered-data
@@ -1166,6 +1174,7 @@
     :github.copilot-sdk.specs/token-type
     :github.copilot-sdk.specs/tool
     :github.copilot-sdk.specs/tool-call-id
+    :github.copilot-sdk.specs/tool-count
     :github.copilot-sdk.specs/tool-description
     :github.copilot-sdk.specs/tool-handler
     :github.copilot-sdk.specs/tool-info-entry

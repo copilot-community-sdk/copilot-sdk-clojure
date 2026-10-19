@@ -481,7 +481,7 @@ failures.
 | `:agent-directories` | vector | Explicit discovery-only agent roots, separate from `:custom-agents`. Available without `:enable-config-discovery`; source and managed-policy disables still apply. |
 | `:hook-directories` | vector | Explicit discovery-only file-hook roots, separate from callback `:hooks`. Available without `:enable-config-discovery` or `:enable-file-hooks`; the latter controls repository-origin hooks only. Hook and managed-policy disables still apply. |
 | `:instruction-directories` | vector | Explicit discovery-only instruction roots, using the existing SDK instruction formats. Available without `:enable-config-discovery`; instruction and managed-policy disables still apply. |
-| `:additional-directories` | vector | Extra directories the runtime is allowed to read/write outside the session's working directory. Vector of non-blank strings. Serialized as wire `additionalDirectories`. Re-supply the vector when resuming a session. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
+| `:additional-directories` | vector | Extra trusted directories the runtime may access outside the working directory. Startup directories also authorize repository-origin hooks from their containing Git roots. Supply only trusted repositories; see [Session Hooks](#session-hooks). Vector of non-blank strings, sent as `additionalDirectories`; re-supply on cold resume. ([upstream PR #2180](https://github.com/github/copilot-sdk/pull/2180)) |
 | `:disabled-skills` | vector | Disable specific skills by name |
 | `:included-builtin-skills` | vector | Allowlist of runtime-bundled skill names, applied through `session.options.update` after create/resume. `:empty` client mode defaults this to `[]`; an explicit vector overrides that default. `:copilot-cli` mode omits it unless explicitly supplied, including an explicit `[]`. Custom skill loading remains controlled separately. ([upstream PR #2410](https://github.com/github/copilot-sdk/pull/2410)) |
 | `:large-output` | map | Tool output handling config. Supports `:enabled`, `:max-size-bytes`, and `:output-directory` (`:output-dir` remains a deprecated alias). The official SDK exposes the same config as `largeOutput`. |
@@ -514,7 +514,7 @@ failures.
 | `:skip-embedding-retrieval` | boolean | Skip embedding-based context retrieval. (upstream PR #1474) |
 | `:organization-custom-instructions` | string | Organization-wide instructions injected by the host. (upstream PR #1474) |
 | `:enable-on-demand-instruction-discovery` | boolean | Auto-discover instruction files on demand. (upstream PR #1474) |
-| `:enable-file-hooks` | boolean | Enable file-watcher-style lifecycle hooks. (upstream PR #1474) |
+| `:enable-file-hooks` | boolean | Controls repository-origin hooks from the primary repository and eligible additional startup directories. `false` suppresses them; explicit `:hook-directories` and SDK callback `:hooks` are independent. Omission preserves the runtime default; `nil` is invalid. See [Session Hooks](#session-hooks). |
 | `:enable-host-git-operations` | boolean | Allow the CLI to run git operations through the host. (upstream PR #1474) |
 | `:enable-session-store` | boolean | Enable the disk-backed session store. (upstream PR #1474) |
 | `:enable-skills` | boolean | Enable skills discovery and loading. (upstream PR #1474) |
@@ -1925,30 +1925,26 @@ Raw elicitation request for custom JSON schemas. `params` is a map with `:messag
 
 ## MCP OAuth Handler
 
-Some MCP servers require interactive (browser-based) OAuth. Register an
-`:on-mcp-auth-request` handler to take over that flow; without it, the runtime
-falls back to a browserless cached-token path and never prompts. (upstream PR #1669)
+Register an `:on-mcp-auth-request` handler to supply MCP OAuth credentials or
+hand supported refresh requests back to the runtime. Without a handler,
+authorization remains runtime-owned, including cached-credential handling.
 
 ```clojure
 (require '[github.copilot-sdk :as copilot])
 
-(def session
-  (copilot/create-session
-    client
-    {:on-permission-request copilot/approve-all
-     :on-mcp-auth-request
-     (fn [request ctx]
-       ;; request is the McpAuthRequest; ctx is {:session-id "..."}
-       (let [token (acquire-oauth-token! (:server-url request))]
-         (if token
-           {:access-token token :token-type "Bearer" :expires-in 3600}
-           {:kind :cancelled})))}))
+(copilot/with-client-session
+  [session {:on-mcp-auth-request
+            (fn [request _context]
+              (if (true? (:runtime-refresh-supported request))
+                {:kind :runtime-refresh}
+                {:kind :cancelled}))}]
+  (copilot/session-id session))
 ```
 
 When the handler is provided, the SDK registers interest in the
-`mcp.oauth_required` event (before the `session.create`/`session.resume` runtime
-work begins) so the runtime delegates the OAuth request to your handler. The
-handler is invoked with two arguments:
+`mcp.oauth_required` event after `session.create`, and before `session.resume`
+on resume or join. Registration failures fail the session operation rather than
+silently falling back. The handler is invoked with two arguments:
 
 1. An `McpAuthRequest` map (the event data).
 2. A context map `{:session-id "..."}`.
@@ -1963,6 +1959,7 @@ The handler may return the result directly or a `core.async` channel yielding it
 | `:server-name` | string | Configured name of the MCP server. |
 | `:server-url` | string | URL of the MCP server requiring auth. |
 | `:reason` | string | Why authentication is needed. |
+| `:runtime-refresh-supported` | boolean | Optional, non-null capability for noninteractive runtime renewal. Omission or `false` means unsupported. |
 | `:www-authenticate-params` | map | (optional) Parsed `WWW-Authenticate` challenge params. |
 | `:resource-metadata` | string | (optional) Raw OAuth protected-resource metadata document. |
 | `:static-client-config` | map | (optional) Pre-registered OAuth client config. |
@@ -1975,11 +1972,28 @@ absence and `""` remain distinct, and explicit `nil` is invalid. The same shape
 appears in live `:copilot/mcp.oauth_required` events and `get-messages` history.
 This does not add CLI-only `oauthScopes` to SDK MCP server configuration.
 
-**Result mapping:** Return a map with `:access-token` (plus optional
-`:token-type` and `:expires-in`) to answer with a token. Return `nil`,
-`{:kind :cancelled}`, or throw to cancel the request — a thrown handler never
-wedges the pending request (errors are swallowed and treated as a cancel,
-matching upstream).
+**Result mapping, in precedence order:**
+
+| Handler result | Response |
+|----------------|----------|
+| `nil` or `{:kind :cancelled}` | Cancel, even when the map also contains a token. |
+| Nonempty string `:access-token`, with optional `:token-type` and `:expires-in` | Supply a token, including bare-token maps. A token takes precedence over a refresh handoff. Empty optional values and zero are preserved; `nil` optional values are omitted. |
+| `{:kind :runtime-refresh}` | Send wire kind `"runtimeRefresh"` only when the request's capability is exactly `true`; otherwise cancel. |
+| Malformed result or thrown exception | Log the failure and cancel, without leaving the host request unanswered. |
+
+A supported handoff renews the runtime's saved grant within the original
+authorization attempt; it does not start an independent refresh or consent flow.
+**Acceptance is not reconnect or tool completion.** The persisted
+`:copilot/mcp.oauth_recovery_completed` event carries the same `:request-id`,
+plus `:server-name` and `:outcome` (`"succeeded"`, `"cancelled"`, or `"failed"`).
+For an accepted handoff, `mcp.oauth_completed` is emitted once at that terminal
+outcome: `"token"` on success, `"cancelled"` otherwise.
+
+The runtime owns grant storage, reconnect, and cancellation. A stopped
+invocation cannot later resume, but an already-issued token exchange may still
+settle its storage work. Neither handoff acceptance nor cancellation proves
+that storage settlement has finished. Ordinary cancellation without an accepted
+handoff retains its existing meaning; it is not reclassified as stopping a turn.
 
 ---
 
@@ -2013,6 +2027,7 @@ copilot/interaction-events
 ;;      :copilot/elicitation.requested :copilot/elicitation.completed
 ;;      :copilot/external_tool.requested :copilot/external_tool.completed
 ;;      :copilot/mcp.oauth_required :copilot/mcp.oauth_completed
+;;      :copilot/mcp.oauth_recovery_completed
 ;;      :copilot/command.queued :copilot/command.execute
 ;;      :copilot/command.completed :copilot/commands.changed
 ;;      :copilot/exit_plan_mode.requested :copilot/exit_plan_mode.completed}
@@ -2025,9 +2040,12 @@ For schema 1.0.92-0, `:copilot/assistant.server_tool_progress` also belongs to
 belong to `copilot/session-events`.
 `:copilot/tool_search.activated` intentionally belongs only to the master
 `copilot/event-types` set, not `copilot/interaction-events` or `copilot/tool-events`.
+`:copilot/session.mcp_server_tools_loaded` belongs to `copilot/session-events`;
+`:copilot/mcp.oauth_recovery_completed` belongs to `copilot/interaction-events`.
 
 The generated wire schemas also contain internal events such as
-`assistant.turn_retry`, `model.call_start`, `model.call_final_result`, and the durable skill-context
+`assistant.turn_retry`, `model.call_start`, `model.call_final_result`,
+`session.request_body_compression_disabled`, and the durable skill-context
 reference events. They are wire-only and intentionally excluded from every
 curated public event set. Experimental HydraFusion routing events likewise
 remain generated wire evidence and are not curated as public idiom events.
@@ -2135,8 +2153,11 @@ Usage and model-call failures expose content-free transport diagnostics:
 (def usage
   {:model "example-model"
    :request-body-bytes 4096
-   :request-body-wire-bytes 1024
-   :request-body-encoding "gzip"
+   :request-body-wire-bytes 4096
+   :request-body-encoding "identity"
+   :request-body-compression-fallback "retried"
+   :request-body-compression-fallback-from "gzip"
+   :request-body-compression-rejected-status 415
    :websocket-fallback-error-kind "http_status"
    :websocket-fallback-status-code 503
    :websocket-fallback-reconnect-attempted false
@@ -2155,6 +2176,9 @@ paths. The enum values remain strings, not configuration keywords.
 | `:request-body-bytes` | Non-negative integer | Serialized request size before compression. |
 | `:request-body-wire-bytes` | Non-negative integer | Body bytes sent for the attempt that produced this outcome, after compression. Equal to `:request-body-bytes` when uncompressed. |
 | `:request-body-encoding` | `"identity"`, `"gzip"`, or `"zstd"` | Encoding of that attempt's body; `"identity"` means uncompressed, including WebSocket requests. |
+| `:request-body-compression-fallback` | `"retried"` or `"disabled"` | `"retried"` describes the single uncompressed resend after HTTP 400/415 rejected compression. `"disabled"` means an earlier rejection already disabled compression for this session. |
+| `:request-body-compression-fallback-from` | `"identity"`, `"gzip"`, or `"zstd"` | Requested encoding before fallback; reported with the fallback outcome. |
+| `:request-body-compression-rejected-status` | Integer, 0-999 | Status that rejected compression; reported for the `"retried"` outcome. |
 | `:websocket-fallback-after-ms` | Non-negative integer | Time spent on the WebSocket attempt before HTTP fallback. |
 | `:websocket-fallback-reason` | String | `"connect_failed"`, `"connection_unavailable"`, `"send_failed"`, `"api_error"`, or `"transport_failed"`. |
 | `:websocket-fallback-error-kind` | String | Normalized cause: `"dns"`, `"tls"`, `"timeout"`, `"connection_refused"`, `"connection_reset"`, `"closed_by_peer"`, `"closed_locally"`, `"not_connected"`, `"http_status"`, `"protocol"`, `"configuration"`, or `"other"`. |
@@ -2166,6 +2190,8 @@ paths. The enum values remain strings, not configuration keywords.
 Fallback descriptors can persist across calls. Do not count every event with
 fallback metadata as a new transport failure. Missing error-kind or status/close
 codes do not establish that no failure occurred.
+Compression fallback follows the same rule: `"disabled"` is retained session
+state, including after resume, not a new rejection on each call.
 
 Failures may also include non-negative `:retry-attempt` and request-fingerprint
 `:encrypted-content-bytes`, `:image-bytes`, and `:reasoning-item-count`.
@@ -2177,6 +2203,9 @@ missing consumption from balances. Managed-policy event contexts preserve the
 runtime-owned opaque `:permissions` JSON verbatim; they are snapshots, not
 approval tokens. Monthly quota APIs and managed-browser policy evaluation
 remain outside the stable Clojure API.
+Provider-type telemetry remains internal. Experimental skill-provider supporting
+files, Azure ML acquisition, catalog category filters, and hosting discovery
+controls do not add stable Clojure APIs.
 
 Curated `::specs/result` and `::specs/error` values accept recursive JSON:
 `nil`, strings, booleans, finite non-ratio numbers, vectors, and maps whose keys
@@ -2270,8 +2299,9 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/elicitation.completed` | Elicitation request resolved |
 | `:copilot/external_tool.requested` | External tool call requested (v3); data includes `:request-id`, `:session-id`, `:tool-call-id`, `:tool-name`, and optional string-or-nil `:provider-id` for host routing. |
 | `:copilot/external_tool.completed` | External tool call completed (v3) |
-| `:copilot/mcp.oauth_required` | MCP server requires OAuth authentication |
-| `:copilot/mcp.oauth_completed` | MCP OAuth authentication completed |
+| `:copilot/mcp.oauth_required` | MCP server requests OAuth credentials; optional boolean `:runtime-refresh-supported` permits a noninteractive runtime handoff. |
+| `:copilot/mcp.oauth_completed` | OAuth host request completed. For an accepted runtime handoff, emitted once at the authorization terminal outcome: `"token"` on success, `"cancelled"` otherwise. |
+| `:copilot/mcp.oauth_recovery_completed` | Persisted terminal result of an accepted runtime refresh, including reconnect. Required `:request-id`, `:server-name`, and `:outcome` (`"succeeded"`, `"cancelled"`, or `"failed"`). |
 | `:copilot/mcp.headers_refresh_required` | Dynamic headers refresh request for a remote MCP server. Data requires `:request-id`, `:server-name`, `:server-url`, and `:reason` (`"auth-failed"`, `"startup"`, or `"ttl-expired"`). |
 | `:copilot/mcp.headers_refresh_completed` | MCP headers refresh request completed. Data requires `:request-id` and `:outcome` (`"headers"`, `"none"`, `"error"`, or `"timeout"`); `"error"` was added in runtime schema `1.0.84-6`. |
 | `:copilot/mcp.tools.list_changed` | Remote MCP server signalled its tool list changed; data includes `:server-name` (upstream schema 1.0.70) |
@@ -2291,6 +2321,7 @@ nested schema objects marked closed by upstream reject unknown keys.
 | `:copilot/session.skills_loaded` | Skills loaded for the session |
 | `:copilot/session.mcp_servers_loaded` | MCP servers loaded for the session. Each server may include a managed-catalog `:display-name`, `:source` (`"user"`, `"workspace"`, `"plugin"`, `"builtin"`, or `"managed"`), plugin identity, `:error`, and `:server-metadata {:instructions <string-or-nil>}`. |
 | `:copilot/session.mcp_server_status_changed` | MCP server status changed. Optional `:error`, `:config-source`, and `:error-classification` are non-null strings. `:config-source` describes connected or failed servers. Provenance and failure classifications are extensible strings, not closed enums; omission, empty strings, and future runtime values remain distinct in live events and history. |
+| `:copilot/session.mcp_server_tools_loaded` | Ephemeral notification that an MCP connection's initial tool list is available. Requires string `:server-name` and integer `:tool-count`, including zero. Emitted once per connection, possibly before `"connected"` when using a cached snapshot. |
 | `:copilot/session.mcp_server_removed` | MCP server was removed; data: `{:server-name "..."}` |
 | `:copilot/session.mcp_server_needs_reconnect` | MCP server requires reconnection; data: `{:server-name "..."}` |
 | `:copilot/session.extensions_loaded` | Extensions loaded for the session |
@@ -3962,6 +3993,21 @@ Notes:
   `SessionFsError`).
 
 ### Session Hooks
+
+**Additional-directory trust:** `:additional-directories` supplied at local
+creation or cold resume also authorize repository hooks, not just file access.
+Discovery uses each directory's containing Git root, or the directory itself
+outside Git. For example, adding `/srv/project-b/packages/core` can authorize
+commands and prompts in `/srv/project-b/.github/hooks` without another approval.
+Supply only trusted repositories.
+
+`:enable-file-hooks false` suppresses repository-origin hooks, independently
+of explicit `:hook-directories` and SDK callback `:hooks`.
+`DISABLE_ADDITIONAL_DIRECTORY_HOOKS=true` restores primary-only repository scope
+when the runtime captures startup authorization. Later file-access grants or
+changes to that environment variable do not expand the retained hook scope.
+Re-supply additional directories on cold resume. Managed policy, hook-disable
+settings, and sandbox rules still apply; they do not make untrusted hooks safe.
 
 Lifecycle hooks allow custom logic at various points during the session:
 

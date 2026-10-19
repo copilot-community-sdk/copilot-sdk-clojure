@@ -515,9 +515,15 @@
     :server-name "server"
     :server-url "https://mcp.example"
     :reason "initial"
+    :runtime-refresh-supported false
     :static-client-config {:client-id "client"
                            :public-client false
                            :scope "configured.read"}}
+
+   "mcp.oauth_recovery_completed"
+   {:request-id "oauth"
+    :server-name "server"
+    :outcome "succeeded"}
 
    "session.context_cleared"
    {:messages-cleared 3}
@@ -612,6 +618,10 @@
    "session.mcp_server_status_changed"
    {:server-name "server-1"
     :status "connected"}
+
+   "session.mcp_server_tools_loaded"
+   {:server-name "server-1"
+    :tool-count 0}
 
    "mcp.headers_refresh_required"
    {:request-id "refresh-1"

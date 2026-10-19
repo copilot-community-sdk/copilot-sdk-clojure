@@ -1395,6 +1395,125 @@
         "stability": "experimental"
       }
     },
+    "azureMl": {
+      "catalog": {
+        "rpcMethod": "azureMl.catalog",
+        "description": "Lists eligible Azure ML local models and redacted warnings before a chat session exists.",
+        "params": {
+          "$ref": "#/definitions/AzureMlCatalogRequest",
+          "description": "Lists models eligible for local use before a chat session exists."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlCatalogResult",
+          "description": "Eligible models and redacted validation warnings."
+        },
+        "stability": "experimental"
+      },
+      "latest": {
+        "rpcMethod": "azureMl.latest",
+        "description": "Revalidates the newest eligible version of one Azure ML model family.",
+        "params": {
+          "$ref": "#/definitions/AzureMlLatestRequest",
+          "description": "Selects an Azure ML model family."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlModel",
+          "description": "Eligible Azure ML model version and its provider metadata."
+        },
+        "stability": "experimental"
+      },
+      "resolve": {
+        "rpcMethod": "azureMl.resolve",
+        "description": "Resolves immutable artifact facts without returning signed access URLs.",
+        "params": {
+          "$ref": "#/definitions/AzureMlResolveRequest",
+          "description": "Selects an immutable model version."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlResolveResult",
+          "description": "Resolved artifact facts without signed download URLs."
+        },
+        "stability": "experimental"
+      },
+      "download": {
+        "rpcMethod": "azureMl.download",
+        "description": "Downloads and verifies a connection-owned model version, returning only after placement and manifest publication.",
+        "params": {
+          "$ref": "#/definitions/AzureMlDownloadRequest",
+          "description": "Downloads a model version to its configured local library."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlDownloadResult",
+          "description": "Completed and verified Azure ML model files."
+        },
+        "stability": "experimental"
+      },
+      "acquireFamily": {
+        "rpcMethod": "azureMl.acquireFamily",
+        "description": "Acquires a connection-owned model-family mutation lease across transfer, activation, registration, and cleanup.",
+        "params": {
+          "$ref": "#/definitions/AzureMlFamilyRequest",
+          "description": "Identifies a family in the server's Azure ML model library."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlFamilyLeaseResult",
+          "description": "Opaque handle to a connection-owned family mutation interval."
+        },
+        "stability": "experimental"
+      },
+      "releaseFamily": {
+        "rpcMethod": "azureMl.releaseFamily",
+        "description": "Releases a connection-owned family lease after its active download and cleanup operations complete.",
+        "params": {
+          "$ref": "#/definitions/AzureMlFamilyReleaseRequest",
+          "description": "Releases a family mutation interval owned by this SDK connection."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "stability": "experimental"
+      },
+      "status": {
+        "rpcMethod": "azureMl.status",
+        "description": "Returns progress for an active download owned by this connection, or null after completion.",
+        "params": {
+          "$ref": "#/definitions/AzureMlDownloadIdRequest",
+          "description": "Selects an active connection-owned download."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlStatusResult",
+          "description": "Active Azure ML download progress or null."
+        },
+        "stability": "experimental"
+      },
+      "cancel": {
+        "rpcMethod": "azureMl.cancel",
+        "description": "Cancels a connection-owned download; the download call reports terminal cleanup separately.",
+        "params": {
+          "$ref": "#/definitions/AzureMlDownloadIdRequest",
+          "description": "Selects an active connection-owned download."
+        },
+        "result": {
+          "$ref": "#/definitions/AzureMlCancelResult",
+          "description": "Whether an active connection-owned transfer accepted cancellation."
+        },
+        "stability": "experimental"
+      },
+      "discard": {
+        "rpcMethod": "azureMl.discard",
+        "description": "Discards an inactive model version under the server-owned Azure ML library.",
+        "params": {
+          "$ref": "#/definitions/AzureMlDiscardRequest",
+          "description": "Selects an inactive Azure ML version for cleanup."
+        },
+        "result": {
+          "$ref": "#/definitions/HostEmptyResult",
+          "description": "Empty acknowledgement for a completed host lifecycle operation."
+        },
+        "stability": "experimental"
+      }
+    },
     "contentExclusion": {
       "validatePolicies": {
         "rpcMethod": "contentExclusion.validatePolicies",
@@ -8295,7 +8414,7 @@
       "oauth": {
         "handlePendingRequest": {
           "rpcMethod": "session.mcp.oauth.handlePendingRequest",
-          "description": "Resolves a pending MCP OAuth request with a host-provided token or cancellation. The pending request is emitted as mcp.oauth_required with the data necessary to authorize the request.",
+          "description": "Resolves a pending MCP OAuth request with a host-provided token, cancellation, or a noninteractive runtime refresh handoff when the request advertises runtimeRefreshSupported. Acceptance resolves the host response, not credential installation, reconnect, or the original tool invocation.",
           "params": {
             "type": "object",
             "properties": {
@@ -8318,7 +8437,7 @@
               "result"
             ],
             "additionalProperties": false,
-            "description": "Pending MCP OAuth request ID and host-provided token or cancellation response.",
+            "description": "Pending MCP OAuth request ID and host token, cancellation, or advertised runtime refresh response.",
             "title": "McpOauthHandlePendingRequest",
             "stability": "experimental"
           },
@@ -14827,7 +14946,7 @@
         },
         "result": {
           "$ref": "#/definitions/SkillProviderReadResult",
-          "description": "Text-only SKILL.md content returned by an SDK session's skill provider. YAML frontmatter is optional: fields it omits come from the catalog descriptor, fields it declares must match the descriptor, and `allowed-tools` is read only from frontmatter. Related files and assets are not supported.",
+          "description": "SKILL.md content returned by an SDK session's skill provider. YAML frontmatter is optional: fields it omits come from the catalog descriptor, fields it declares must match the descriptor, and `allowed-tools` is read only from frontmatter. Supporting files come from the descriptor's `directory`.",
           "visibility": "internal"
         },
         "stability": "experimental",
@@ -19377,6 +19496,613 @@
       ],
       "description": "Availability of a server-advertised routing preference."
     },
+    "AzureMlCancelResult": {
+      "type": "boolean",
+      "description": "Whether an active connection-owned transfer accepted cancellation.",
+      "stability": "experimental"
+    },
+    "AzureMlCatalogRequest": {
+      "type": "object",
+      "properties": {
+        "includeDev": {
+          "type": "boolean",
+          "description": "Ask for the staff registry; the server also verifies its own authenticated identity."
+        },
+        "retryMode": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AzureMlCatalogRetryMode",
+              "description": "How catalog discovery handles a recent sign-in failure."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "An explicit user refresh retries a cached sign-in failure."
+        }
+      },
+      "required": [
+        "includeDev"
+      ],
+      "additionalProperties": false,
+      "description": "Lists models eligible for local use before a chat session exists.",
+      "stability": "experimental"
+    },
+    "AzureMlCatalogResult": {
+      "type": "object",
+      "properties": {
+        "models": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AzureMlModel",
+            "description": "Eligible Azure ML model version and its provider metadata."
+          },
+          "description": "Model versions suitable for local use."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/AzureMlCatalogWarning",
+            "description": "Redacted warning for a skipped model or registry."
+          },
+          "description": "Skipped model and catalog errors without sensitive access details."
+        }
+      },
+      "required": [
+        "models",
+        "warnings"
+      ],
+      "description": "Eligible models and redacted validation warnings.",
+      "stability": "experimental"
+    },
+    "AzureMlCatalogRetryMode": {
+      "type": "string",
+      "enum": [
+        "background",
+        "explicit"
+      ],
+      "description": "How catalog discovery handles a recent sign-in failure.",
+      "title": "AzureMlCatalogRetryMode",
+      "x-enumDescriptions": {
+        "background": "Reuse a recent failure for automatic background discovery.",
+        "explicit": "Retry sign-in after an explicit refresh."
+      }
+    },
+    "AzureMlCatalogWarning": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry associated with the warning."
+        },
+        "modelName": {
+          "type": "string",
+          "description": "Model family, or `catalog` for registry-wide errors."
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Version, if one was available."
+        },
+        "kind": {
+          "type": "string",
+          "description": "Safe reason without signed access details."
+        }
+      },
+      "required": [
+        "registry",
+        "modelName",
+        "kind"
+      ],
+      "description": "Redacted warning for a skipped model or registry.",
+      "stability": "experimental"
+    },
+    "AzureMlDiscardRequest": {
+      "type": "object",
+      "properties": {
+        "destination": {
+          "type": "string",
+          "description": "Version directory under this server's Azure ML library."
+        },
+        "leaseId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional connection-owned lease that spans the caller's complete family mutation."
+        }
+      },
+      "required": [
+        "destination"
+      ],
+      "additionalProperties": false,
+      "description": "Selects an inactive Azure ML version for cleanup.",
+      "stability": "experimental"
+    },
+    "AzureMlDownloadIdRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Identifier supplied when this connection started the download."
+        }
+      },
+      "required": [
+        "requestId"
+      ],
+      "additionalProperties": false,
+      "description": "Selects an active connection-owned download.",
+      "stability": "experimental"
+    },
+    "AzureMlDownloadRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string",
+          "description": "Unique request identifier for progress and explicit cancellation."
+        },
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry that owns the model."
+        },
+        "name": {
+          "type": "string",
+          "description": "Exact model-family name."
+        },
+        "version": {
+          "type": "string",
+          "description": "Exact published version."
+        },
+        "destination": {
+          "type": "string",
+          "description": "Version directory under this server's Azure ML library."
+        },
+        "leaseId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Optional connection-owned lease that spans the caller's complete family mutation."
+        }
+      },
+      "required": [
+        "requestId",
+        "registry",
+        "name",
+        "version",
+        "destination"
+      ],
+      "additionalProperties": false,
+      "description": "Downloads a model version to its configured local library.",
+      "stability": "experimental"
+    },
+    "AzureMlDownloadResult": {
+      "type": "object",
+      "properties": {
+        "primaryPath": {
+          "type": "string",
+          "description": "Installed GGUF path."
+        },
+        "manifestPath": {
+          "type": "string",
+          "description": "Published manifest path."
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact bytes across the model version."
+        },
+        "reused": {
+          "type": "boolean",
+          "description": "Whether all prior verified files were reused."
+        },
+        "serveOptions": {
+          "description": "Validated local runtime settings.",
+          "x-opaque-json": true
+        },
+        "maxConcurrent": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum supported local concurrency."
+        },
+        "extraFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Installed companion file paths."
+        },
+        "totalFailures": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Transient transfer failures retried during this run."
+        },
+        "receivedBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Bytes received over the network during this run, including discarded bytes."
+        },
+        "resumed": {
+          "type": [
+            "boolean",
+            "null"
+          ],
+          "description": "Whether a partial from a prior run continued after the server accepted its range."
+        }
+      },
+      "required": [
+        "primaryPath",
+        "manifestPath",
+        "totalBytes",
+        "reused",
+        "serveOptions",
+        "maxConcurrent",
+        "extraFiles"
+      ],
+      "description": "Completed and verified Azure ML model files.",
+      "stability": "experimental"
+    },
+    "AzureMlDownloadStatus": {
+      "type": "object",
+      "properties": {
+        "phase": {
+          "type": "string",
+          "description": "Current transfer phase."
+        },
+        "completedBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Bytes completed across all files."
+        },
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact bytes expected across all files."
+        },
+        "retryAttempt": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Next retry attempt, if the transfer is retrying."
+        },
+        "maxAttempts": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Configured retry limit, if the transfer is retrying."
+        },
+        "retryReason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Redacted failure reason, if the transfer is retrying."
+        },
+        "retryDelayMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Planned delay before retry, if the transfer is retrying."
+        }
+      },
+      "required": [
+        "phase",
+        "completedBytes",
+        "totalBytes"
+      ],
+      "description": "Progress and retry facts for one active download.",
+      "stability": "experimental"
+    },
+    "AzureMlFamilyLeaseResult": {
+      "type": "object",
+      "properties": {
+        "leaseId": {
+          "type": "string",
+          "description": "Server-generated handle, valid only on the originating SDK connection."
+        }
+      },
+      "required": [
+        "leaseId"
+      ],
+      "description": "Opaque handle to a connection-owned family mutation interval.",
+      "stability": "experimental"
+    },
+    "AzureMlFamilyReleaseRequest": {
+      "type": "object",
+      "properties": {
+        "leaseId": {
+          "type": "string",
+          "description": "Server-generated handle from `azureMl.acquireFamily`."
+        },
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry that owns the acquired family."
+        },
+        "name": {
+          "type": "string",
+          "description": "Exact model-family name."
+        }
+      },
+      "required": [
+        "leaseId",
+        "registry",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Releases a family mutation interval owned by this SDK connection.",
+      "stability": "experimental"
+    },
+    "AzureMlFamilyRequest": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry that owns the model family."
+        },
+        "name": {
+          "type": "string",
+          "description": "Exact model-family name."
+        }
+      },
+      "required": [
+        "registry",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Identifies a family in the server's Azure ML model library.",
+      "stability": "experimental"
+    },
+    "AzureMlLatestRequest": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry that owns the model."
+        },
+        "name": {
+          "type": "string",
+          "description": "Exact model-family name."
+        }
+      },
+      "required": [
+        "registry",
+        "name"
+      ],
+      "additionalProperties": false,
+      "description": "Selects an Azure ML model family.",
+      "stability": "experimental"
+    },
+    "AzureMlLicense": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Bounded display label for the model license."
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "description": "License published with an eligible Azure ML model.",
+      "stability": "experimental"
+    },
+    "AzureMlModel": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry that owns this model version."
+        },
+        "name": {
+          "type": "string",
+          "description": "Stable model-family name."
+        },
+        "version": {
+          "type": "string",
+          "description": "Exact published model version."
+        },
+        "profile": {
+          "$ref": "#/definitions/AzureMlProfile",
+          "description": "Validated Windows ML requirements."
+        },
+        "metadata": {
+          "description": "Provider metadata retained for registration.",
+          "x-opaque-json": true
+        }
+      },
+      "required": [
+        "registry",
+        "name",
+        "version",
+        "profile",
+        "metadata"
+      ],
+      "description": "Eligible Azure ML model version and its provider metadata.",
+      "stability": "experimental"
+    },
+    "AzureMlProfile": {
+      "type": "object",
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "description": "Sanitized model-picker display label."
+        },
+        "downloadBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Published download size, when available."
+        },
+        "peakDiskBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Peak disk use during installation, when available."
+        },
+        "recommendedVramBytes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Recommended graphics memory, when available."
+        },
+        "maxPromptTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum input tokens accepted by the model."
+        },
+        "maxContextWindowTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum context window accepted by the model."
+        },
+        "maxOutputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum output tokens produced by the model."
+        },
+        "supportsToolCalls": {
+          "type": "boolean",
+          "description": "Whether the model supports tool calls."
+        },
+        "serveOptions": {
+          "description": "Validated local runtime configuration.",
+          "x-opaque-json": true
+        },
+        "license": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/AzureMlLicense",
+              "description": "License published with an eligible Azure ML model."
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Published license, when available."
+        }
+      },
+      "required": [
+        "displayName",
+        "maxPromptTokens",
+        "maxContextWindowTokens",
+        "maxOutputTokens",
+        "supportsToolCalls",
+        "serveOptions"
+      ],
+      "description": "Validated local runtime requirements for an Azure ML model.",
+      "stability": "experimental"
+    },
+    "AzureMlRegistry": {
+      "type": "string",
+      "enum": [
+        "azureml",
+        "azureml-dev"
+      ],
+      "description": "Registry that owns an Azure ML model version.",
+      "title": "AzureMlRegistry",
+      "x-enumDescriptions": {
+        "azureml": "Public Azure ML model registry.",
+        "azureml-dev": "Microsoft staff development registry."
+      }
+    },
+    "AzureMlResolveRequest": {
+      "type": "object",
+      "properties": {
+        "registry": {
+          "$ref": "#/definitions/AzureMlRegistry",
+          "description": "Registry that owns the model."
+        },
+        "name": {
+          "type": "string",
+          "description": "Exact model-family name."
+        },
+        "version": {
+          "type": "string",
+          "description": "Exact published version."
+        }
+      },
+      "required": [
+        "registry",
+        "name",
+        "version"
+      ],
+      "additionalProperties": false,
+      "description": "Selects an immutable model version.",
+      "stability": "experimental"
+    },
+    "AzureMlResolveResult": {
+      "type": "object",
+      "properties": {
+        "totalBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Exact bytes across all files in this version."
+        },
+        "primaryPath": {
+          "type": "string",
+          "description": "GGUF path relative to the version directory."
+        },
+        "extraFiles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Other paths relative to the version directory."
+        },
+        "serveOptions": {
+          "description": "Validated local runtime settings.",
+          "x-opaque-json": true
+        },
+        "maxConcurrent": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Maximum supported local concurrency."
+        }
+      },
+      "required": [
+        "totalBytes",
+        "primaryPath",
+        "extraFiles",
+        "serveOptions",
+        "maxConcurrent"
+      ],
+      "description": "Resolved artifact facts without signed download URLs.",
+      "stability": "experimental"
+    },
+    "AzureMlStatusResult": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/AzureMlDownloadStatus",
+          "description": "Progress and retry facts for one active download."
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Active Azure ML download progress or null.",
+      "title": "AzureMlStatusResult",
+      "stability": "experimental"
+    },
     "BuiltinAgentSummary": {
       "type": "object",
       "properties": {
@@ -20837,7 +21563,8 @@
         "skill-confirmed-installation",
         "agent-plugin-confirmed-installation",
         "catalog-reference-installation",
-        "catalog-feeds"
+        "catalog-feeds",
+        "catalog-search-categories"
       ],
       "description": "A wire feature a caller can require of the catalog surface, negotiated per request. A grant means the runtime understands the feature's contract, not that the deployment has enabled the operation; typed unavailable results report availability separately.",
       "title": "CatalogCapability",
@@ -20859,7 +21586,8 @@
         "skill-confirmed-installation": "Understands verified Agent Finder Skill install, uninstall, recovery and installation-scoped enablement APIs. Advertised only by runtimes with the Skill installation engine linked; acquisition may still be refused as feature-disabled per selected session.",
         "agent-plugin-confirmed-installation": "Understands `installability`, the reviewable `installPlan` and the optional materialisation `handle` on Agent Plugin candidates, and the verified Agent Plugin installation APIs plugins.planInstall and plugins.applyInstall, and Agent Plugin plans from catalog.planInstallFromReference. Requires agent-plugin-discovery; without it, plugin candidates are unchanged. Advertised only by runtimes with the plugin installer linked; acquisition may still be refused as feature-disabled per selected session.",
         "catalog-reference-installation": "Understands catalog.planInstallFromReference, which plans installing whatever resource an Agent Finder materialisation reference pins. It plans only kinds whose installation capability the caller also requires: skill-confirmed-installation for Skills, agent-plugin-confirmed-installation for Agent Plugins. Advertised only by runtimes with the Skill installation engine linked.",
-        "catalog-feeds": "Understands catalog.getSavedFeed and catalog.getGeneratedFeed, which retrieve a saved or generated feed with entries projected exactly like catalog.search candidates. Requires catalog-search-credential-required; add catalog-search-session-bound to bind the retrieval to a selected session."
+        "catalog-feeds": "Understands catalog.getSavedFeed and catalog.getGeneratedFeed, which retrieve a saved or generated feed with entries projected exactly like catalog.search candidates. Requires catalog-search-credential-required; add catalog-search-session-bound to bind the retrieval to a selected session.",
+        "catalog-search-categories": "Understands the optional `categories` filter on catalog.search, which the runtime forwards to the catalog authority. Required to send the filter, so an older runtime refuses the request instead of silently returning unfiltered results."
       }
     },
     "CatalogCapabilityId": {
@@ -21401,7 +22129,8 @@
         "selectionRef",
         "outcome",
         "feed",
-        "trustTiers"
+        "trustTiers",
+        "categories"
       ],
       "description": "Which request field was rejected locally or by the catalog authority",
       "title": "CatalogInvalidRequestField",
@@ -21419,7 +22148,8 @@
         "selectionRef": "The opaque selection reference was missing or malformed.",
         "outcome": "The terminal selection outcome was missing or unsupported.",
         "feed": "The saved feed ID, or the generated feed strategy or key, was missing or malformed.",
-        "trustTiers": "The trust tier filter was empty, repeated a tier or named an unknown tier."
+        "trustTiers": "The trust tier filter was empty, repeated a tier or named an unknown tier.",
+        "categories": "The category filter was empty, too long, repeated a category or contained a value that is not a lowercase slug."
       }
     },
     "CatalogMalformedCardError": {
@@ -22384,9 +23114,22 @@
           "uniqueItems": true,
           "description": "Restrict results to these candidate kinds. Agent Plugins are opt-in and require the `agent-plugin-discovery` capability so protocol-v3 clients generated before that variant cannot receive an unknown result; when omitted, the backwards-compatible MCP server and AI skill kinds are searched."
         },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64,
+            "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+          },
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "description": "Restrict results to resources in at least one of these server-defined workflow categories, such as `design` or `test`. Requires the `catalog-search-categories` capability. Each value is a lowercase slug; the known set is not exhaustive, and a category the server does not recognise matches nothing. Omit to search every category."
+        },
         "page": {
           "$ref": "#/definitions/CatalogSearchPage",
-          "description": "Numbered navigation using metadata from an earlier response. Requires catalog-search-pagination and the same query, kinds and effective limit. Omit for a fresh first-page search."
+          "description": "Numbered navigation using metadata from an earlier response. Requires catalog-search-pagination and the same query, kinds, categories and effective limit. Omit for a fresh first-page search."
         }
       },
       "required": [
@@ -26810,6 +27553,11 @@
             "description": "Safe discovery information. Host-side relay bootstrap credentials are never included."
           },
           "description": "Safe discovery records without relay bootstrap credentials."
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Server-requested minimum delay before automatically listing again, in milliseconds."
         }
       },
       "required": [
@@ -34218,6 +34966,10 @@
         "error": {
           "type": "string",
           "description": "Observed connection error, when the materialized server failed."
+        },
+        "toolsLoaded": {
+          "type": "boolean",
+          "description": "Whether the server's current connection has loaded its tool list (from tools/list or a cached snapshot). A connected server without loaded tools is still loading them; the change is signalled by session.mcp_server_tools_loaded. Absent when the runtime does not report it."
         }
       },
       "required": [
@@ -35992,7 +36744,7 @@
         "result"
       ],
       "additionalProperties": false,
-      "description": "Pending MCP OAuth request ID and host-provided token or cancellation response.",
+      "description": "Pending MCP OAuth request ID and host token, cancellation, or advertised runtime refresh response.",
       "title": "McpOauthHandlePendingRequest",
       "stability": "experimental"
     },
@@ -36194,6 +36946,20 @@
           "required": [
             "kind"
           ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "runtimeRefresh",
+              "description": "OAuth response variant discriminator."
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "description": "Delegate noninteractive refresh to the original runtime authorization operation.\nValid only for a Refresh request advertising runtimeRefreshSupported."
         }
       ],
       "description": "Host response to the pending OAuth request.",
@@ -53833,6 +54599,10 @@
           "description": "Additional content-exclusion policies to merge into the session policy set.",
           "stability": "experimental"
         },
+        "enableFileHooks": {
+          "type": "boolean",
+          "description": "Live gate for repository-origin file hooks, including the primary repository, trusted repository-configured roots, and accepted startup additional directories (including CLI --add-dir). False suppresses these hooks; explicit hookDirectories and SDK callbacks are independent. Additional-root eligibility and the DISABLE_ADDITIONAL_DIRECTORY_HOOKS escape hatch are captured at create/cold resume, not expanded by later grants or feature-flag changes. Discovery uses containing Git roots, so supply only trusted repositories: commands and prompts need no further approval. Policy, hook-disable settings, and sandbox rules still apply. Provider-backed sessions skip repository hooks with a warning on omission, skip silently on false, and reject explicit true."
+        },
         "memory": {
           "$ref": "#/definitions/MemoryConfiguration",
           "description": "Memory configuration for this session."
@@ -58205,6 +58975,11 @@
           "type": "string",
           "maxLength": 1024,
           "description": "Optional freeform argument hint used by slash-command catalogs."
+        },
+        "directory": {
+          "type": "string",
+          "maxLength": 4096,
+          "description": "Absolute path to the folder that holds the skill's supporting files (scripts, references, templates, assets), in the session's path conventions: the host OS for local disk, or the registered SessionFs conventions. When the skill is activated the runtime lists the folder's files for the model through the session's filesystem, with the same rules as a file-based skill's folder; it never reads or copies them. On local disk the folder becomes a read-only skill root, like a configured skill directory. It is not shown in skill catalogs."
         }
       },
       "required": [
@@ -58268,7 +59043,7 @@
         "markdown"
       ],
       "additionalProperties": false,
-      "description": "Text-only SKILL.md content returned by an SDK session's skill provider. YAML frontmatter is optional: fields it omits come from the catalog descriptor, fields it declares must match the descriptor, and `allowed-tools` is read only from frontmatter. Related files and assets are not supported.",
+      "description": "SKILL.md content returned by an SDK session's skill provider. YAML frontmatter is optional: fields it omits come from the catalog descriptor, fields it declares must match the descriptor, and `allowed-tools` is read only from frontmatter. Supporting files come from the descriptor's `directory`.",
       "title": "SkillProviderReadResult",
       "visibility": "internal"
     },
