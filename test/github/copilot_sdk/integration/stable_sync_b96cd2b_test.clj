@@ -12,6 +12,7 @@
 (def ^:private base "404304416ac5358651e3877a33bc9e8f4e482162")
 (def ^:private target "b96cd2b54f7eb87458fd50f485a751c712e88f62")
 (def ^:private clojure-base "3de1059b0d3582ab13e42b526a8902e2b503f8cb")
+(def ^:private implementation "b2674f2cc3b906ce6dcfcb49ef3b3f9ff5619629")
 (def ^:private classifications
   #{:stable-public :experimental :internal :generated-only :language-specific})
 
@@ -20,7 +21,7 @@
       (throw (ex-info "Missing exact-pin certification" {:resource resource}))))
 
 (defn- local-source [path]
-  (slurp path))
+  (ss/git-output "." "show" (str implementation ":" path)))
 
 (defn- fingerprint [items]
   [(count items) (ss/sha256-lines (sort items))])
@@ -65,6 +66,31 @@
           start (.lastIndexOf prefix "/*")]
       (and (>= start 0) (str/ends-with? prefix "*/")
            (str/includes? (subs prefix start) "@experimental")))))
+
+(defn- without-local-seal [r]
+  (-> r
+      (dissoc :sealed-local-artifacts :unchanged-local-artifacts :certification-artifacts)
+      (update :certification dissoc :local-artifact-seal)))
+
+(deftest every-implementation-artifact-is-sealed
+  (let [r (report)
+        artifacts (:sealed-local-artifacts r)
+        unchanged (:unchanged-local-artifacts r)
+        changed (set (ss/git-lines "." "diff" "--no-renames" "--name-only" clojure-base implementation))]
+    (is (= (get-in r [:certification :local-artifact-seal])
+           {:status :sealed :commit implementation}))
+    (is (= (ss/git-output "." "merge-base" "--is-ancestor" implementation "HEAD") ""))
+    (is (= (:certification-artifacts r) #{report-path}))
+    (is (= changed (conj (set/difference (set (keys artifacts)) unchanged) report-path)))
+    (is (empty? (set/intersection changed unchanged)))
+    (doseq [[path expected] artifacts]
+      (is (= (ss/git-file-sha256 implementation path) expected) path))
+    (doseq [path unchanged]
+      (is (= (ss/git-file-sha256 clojure-base path)
+             (ss/git-file-sha256 implementation path)) path))
+    (is (contains? artifacts (:decision r)))
+    (is (= (without-local-seal r)
+           (without-local-seal (edn/read-string (local-source report-path)))))))
 
 (deftest historical-evidence-and-library-version-are-preserved
   (let [r (report)
@@ -248,7 +274,7 @@
       (is (not (str/blank? (:reason entry)))))
     (is (false? (get-in r [:schema :coercions-changed?])))
     (doseq [[path hash] (get-in r [:schema :artifacts])]
-      (is (= (ss/sha256-file path) hash) path))
+      (is (= (ss/git-file-sha256 implementation path) hash) path))
     (is (= (set/difference (set (keys (get schema "definitions")))
                            (set (keys (get old-schema "definitions"))))
            (get-in r [:schema :added-definitions])))
