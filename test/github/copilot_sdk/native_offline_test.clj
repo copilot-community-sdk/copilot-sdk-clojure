@@ -89,23 +89,36 @@
           {:ack (sdk/respond!! s :permission {:request-id id :result {:kind :approve-once}})
            :content (get-in (sdk/await!! turn) [:data :content])})))))
 
+(defn- check-detached-waiter! [waiter session-id]
+  (let [deadline (a/timeout 5000)
+        [outcome port] (a/alts!! [waiter deadline] :priority true)
+        cause (:error outcome)
+        {:keys [type method error] :as data} (ex-data cause)]
+    (when-not (= port waiter)
+      (throw (ex-info "Detached waiter did not settle" {:session-id session-id})))
+    ;; The native wait can reject before session.detach acknowledges and retires the local handle.
+    (when-not (or (and (= type :session-closed) (= (:session-id data) session-id))
+                  (and (= method "session.sendAndWait") (= (:code error) -32603)
+                       (= (:message error) "The session was closed or replaced while waiting for the response")))
+      (throw (ex-info "Expected a detach failure from the original wait" {:outcome outcome} cause)))
+    (when-not (= [nil waiter] (a/alts!! [waiter deadline] :priority true))
+      (throw (ex-info "Detached waiter did not close after one outcome" {:session-id session-id})))))
+
 (defn- continue-permission! [base-url prompt]
   (let [[call-id ticket result] (first tickets)
         calls (atom [])
         opts (assoc (session-options base-url) :tools
                     (fixture-tools (fn [args ctx] (swap! calls conj [(:tool-call-id ctx) args]) result)))
-        [session-id request-id waiter-error closed?]
+        [session-id request-id]
         (sdk/with-client [c (client-options)]
           (let [requested (a/promise-chan)
                 [sid rid waiter]
                 (sdk/with-session [s c (-> opts (assoc :permissions {:on-request (constantly {:kind :no-result})})
                                            (assoc-in [:events :on-event] (permission-observer requested)))]
                   (let [turn (sdk/send-and-wait! s {:prompt prompt :timeout-ms 15000})]
-                    [(sdk/session-id s) (request-id!! requested turn call-id ticket) turn]))
-                deadline (a/timeout 5000)
-                [outcome] (a/alts!! [waiter deadline] :priority true)]
-            [sid rid (-> outcome :error ex-data :type)
-             (= [nil waiter] (a/alts!! [waiter deadline] :priority true))]))
+                    [(sdk/session-id s) (request-id!! requested turn call-id ticket) turn]))]
+            (check-detached-waiter! waiter sid)
+            [sid rid]))
         replayed (atom [])
         done (promise)
         observe (fn [{:keys [type data]}]
@@ -121,7 +134,7 @@
                           (let [ack (sdk/respond!! s :permission {:request-id request-id :result {:kind :approve-once}})]
                             (when-not (deref done 15000 false) (throw (ex-info "Restored turn did not finish" {})))
                             [ack (sdk/await!! (sdk/history s))])))]
-    {:waiter-error waiter-error :closed? closed? :ack ack :calls @calls :replayed @replayed
+    {:ack ack :calls @calls :replayed @replayed
      :permission-history (mapv :type (filter #(= request-id (get-in % [:data :request-id])) history))
      :content (->> history (filter #(= :copilot/assistant.message (:type %))) last :data :content)}))
 
@@ -195,7 +208,7 @@
                          ["-m" "github.copilot-sdk.native-offline-test" "continue-permission"]
                          (partial tool-model (take 1 tickets)))
         [call-id ticket] (first tickets)]
-    (is (= event {:waiter-error :session-closed :closed? true :ack {:success true}
+    (is (= event {:ack {:success true}
                   :calls [[call-id {:ticketCode ticket}]] :replayed []
                   :permission-history [:copilot/permission.requested :copilot/permission.completed]
                   :content "Lookup confirmed."}))))
